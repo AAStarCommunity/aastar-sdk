@@ -163,11 +163,38 @@ function sigSet(abi: any[], kind: string): Set<string> {
 
 function findUpstreamArtifact(name: string): string | null {
   for (const out of OUT_DIRS) {
-    const p = path.join(out, `${name}.sol`, `${name}.json`);
-    if (fs.existsSync(p)) return p;
+    const dir = path.join(out, `${name}.sol`);
+    const exact = path.join(dir, `${name}.json`);
+    if (fs.existsSync(exact)) return exact;
+
+    // FU-20. Foundry writes `<C>.<profile>.json` instead of `<C>.json` when the build ran under a
+    // named profile, and `out/` keeps both shapes side by side. Measured: two checkouts of
+    // SuperPaymaster at the SAME revision with a byte-identical root foundry.toml produced
+    // `SuperPaymaster.json` in one and `SuperPaymaster.default.json` in the other, purely from how
+    // the build was invoked. Only the second was invisible here.
+    //
+    // The old failure told the reader "the upstream needs `forge build`" — which had already been
+    // run twice, including after `rm -rf out`. The advice was not merely unhelpful, it was wrong
+    // about what was missing: not the build, the filename. So recognise the shape rather than
+    // improve the wording; a gate that names the wrong cause sends people to fix the wrong thing.
+    if (!fs.existsSync(dir)) continue;
+    const profiled = fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith(`${name}.`) && f.endsWith('.json'))
+      .sort();
+    // Exactly one candidate is unambiguous. Several means the profiles disagree about what this
+    // contract IS, and picking one silently would make the gate's answer depend on readdir order —
+    // so say so and let the caller treat it as missing.
+    if (profiled.length === 1) return path.join(dir, profiled[0]);
+    if (profiled.length > 1) {
+      profiledAmbiguity.set(name, profiled);
+    }
   }
   return null;
 }
+
+/** Contracts whose out/ dir holds several `<C>.<profile>.json` and no unambiguous `<C>.json`. */
+const profiledAmbiguity = new Map<string, string[]>();
 
 // Upstream SOURCE trees (sibling checkouts), used to decide whether an SDK ABI is EXPECTED to have
 // an upstream artifact. Sources are the right oracle here because `forge clean` removes `out/` but
@@ -1084,7 +1111,13 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     skippedEntries.push({
       name,
       reason: repo
-        ? `NO ARTIFACT, but ${repo}/src declares this contract — the upstream needs \`forge build\``
+        ? profiledAmbiguity.has(name)
+          ? `NO UNAMBIGUOUS ARTIFACT: ${repo}/out has ${profiledAmbiguity.get(name)!.join(', ')} but no ` +
+            `${name}.json. Several build profiles wrote this contract and they may not agree; ` +
+            'rebuild with the default profile, or pick one deliberately — do NOT let readdir order decide.'
+          : `NO ARTIFACT, but ${repo}/src declares this contract — the upstream needs \`forge build\` ` +
+            '(if out/ DOES contain <C>.<profile>.json, the build ran under a named profile; that shape is ' +
+            'now recognised, so this message means the artifact is genuinely absent)'
         : 'no upstream artifact and no upstream source declares it (external/standard contract)',
       // Expected == the upstream repo IS checked out and declares the contract, so an artifact
       // should exist. That is the state a clean/failed build produces, and the one that used to

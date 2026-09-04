@@ -50,7 +50,85 @@ const WHITELISTED_KEYS = new Set([
 ]);
 
 // Improved regex with capture group for the hex part
-const SECRET_REGEX = /(key|secret|pk|private).{0,15}(0x[a-fA-F0-9]{64})/gi;
+// `mnemonic` and `seed phrase` were in the VETO list but not here, so `mnemonic: 0x<64hex>` was
+// invisible to the scanner outright — the exemption never even got consulted. Found by the
+// distance-axis test below, which paired every veto term with a value and found one that produced
+// no finding at all. The two lists are now the same words in both directions.
+const SECRET_REGEX = /(key|secret|pk|private|mnemonic|seed[-_ ]?phrase).{0,15}(0x[a-fA-F0-9]{64})/gi;
+
+/**
+ * FU-4. Markers that make a 64-hex value PUBLIC BY DEFINITION, so a `key`-adjacent match is not a
+ * leak: P-256 public-key coordinates and transaction hashes.
+ *
+ * Why this shape and not a file allowlist. The scanner was blocking on six files — every finding a
+ * P-256 *public* key coordinate or a tx hash sitting next to the word "Key" (`keyX = 0x…`,
+ * `getGuardianP256Key(0).x = 0x…`, `setP256Key tx 0x…`). Exempting those files would have muted the
+ * scanner over whole directories that also carry real evidence, which is the "exemption that reads
+ * like coverage" failure this repo keeps finding. Keying on the marker instead means a genuine
+ * private key dropped into the very same file is still caught.
+ *
+ * A private key never legitimately carries these markers, so this narrows the rule without
+ * weakening it — and `hasSecretWord` below refuses the exemption outright when the line also says
+ * private/secret/mnemonic/seed, so `privateKeyX = 0x…` cannot buy its way out.
+ */
+const PUBLIC_BY_DEFINITION = [
+  /pub(lic)?[-_ ]?key/i,          // pubkey / publicKey / public-key
+  /key[XY]\b/,                    // keyX / keyY — P-256 coordinates
+  /\.\s*[xy]\s*=/i,               // .x = / .y =  (coordinate accessors)
+  // Coordinate markers, allowing the punctuation that sits between the marker and the value in
+  // real evidence files: `x = 0x…`, `x=\`0x…\``, and the markdown-table form `| … x | \`0x…\``.
+  // Written to end at the value because the whole point of the proximity scoping above is that a
+  // marker only vouches for the hex it is attached to.
+  /\b[xy]\s*[=|]\s*[`|\s]*$/i,
+  /\btx\b|txhash|transaction hash/i,
+];
+
+/**
+ * Words that mean "this really is a secret" — they veto any public-marker exemption.
+ *
+ * This list must be AT LEAST as wide as the detection regex above, or the gap between them is the
+ * hole. The first version was narrower: detection matches `(key|secret|pk|private)` with NO word
+ * boundary, while the veto knew `private key` but not a bare `pk`. Measured bypasses:
+ *
+ *   deployerPk = 0x<64hex>  // funded via tx 0x…      → exempted by the `tx` marker, veto silent
+ *   signing key 0x<64hex> for the passkey flow        → exempted by `passkey`, veto silent
+ *
+ * `pk\b` deliberately has NO leading \b: `deployerPk` has a word character before `Pk`, so `\bpk\b`
+ * does not match it and the hole stays open. The detection regex has no leading boundary either —
+ * an asymmetry between the two is exactly what produced this.
+ */
+const SECRET_WORDS = /private[-_ ]?key|secret|mnemonic|seed[-_ ]?phrase|privkey|pk\b|signing[-_ ]?key/i;
+
+/**
+ * True when THIS match is public data by definition.
+ *
+ * Scoped to the text immediately before the matched hex, not the whole line. Per-line scoping was
+ * wrong in a way that took three rounds to see: a marker anywhere on the line exempted every hex on
+ * it, so `deployerPk = 0x<secret>  // funded via tx 0x<hash>` was excused by the `tx` that belongs
+ * to the OTHER value. A marker vouches for the value next to it and nothing else.
+ *
+ * That also dissolves the "veto must be as wide as detection" problem. It cannot be: detection
+ * fires on `key`, and every public-key line contains `key` — a veto that wide would make the
+ * exemption vacuous. What actually separates them is proximity. `keyX = 0x…` has the marker on the
+ * value; `my key 0x…  // see tx 0x…` does not, and is now caught.
+ */
+const CONTEXT_BEFORE = 40;
+
+function isPublicByDefinition(line: string, hexIndex: number): boolean {
+  // The veto scans the WHOLE line; the marker only the text next to the value. The asymmetry is
+  // deliberate and is the third shape this bug took: with both sharing one 40-char window, pushing
+  // the veto word out while keeping a marker inside walked through —
+  //   `deployerPk backup, see the guardian coordinate keyX = 0x…`     (pk evicted, keyX inside)
+  //   `the private key … is stored elsewhere; pubkey = 0x…`           (private key evicted)
+  // and the second shape is ordinary prose in an evidence file, not a contrived string.
+  //
+  // The two halves say different things, so they cannot share a scope. A marker claims "THIS value
+  // is a public key" — only adjacency can support that. A veto observes "this line is discussing a
+  // secret" — that is true of the line, wherever the word sits.
+  if (SECRET_WORDS.test(line)) return false;
+  const ctx = line.slice(Math.max(0, hexIndex - CONTEXT_BEFORE), hexIndex);
+  return PUBLIC_BY_DEFINITION.some((re) => re.test(ctx));
+}
 
 function scanFile(filePath: string): boolean {
     const content = fs.readFileSync(filePath, 'utf8');
@@ -65,7 +143,8 @@ function scanFile(filePath: string): boolean {
         const lineRegex = new RegExp(SECRET_REGEX.source, 'gi');
         while ((match = lineRegex.exec(line)) !== null) {
             const hex = match[2].toLowerCase();
-            if (!WHITELISTED_KEYS.has(hex)) {
+            const hexIndex = match.index + match[0].lastIndexOf(match[2]);
+            if (!WHITELISTED_KEYS.has(hex) && !isPublicByDefinition(line, hexIndex)) {
                 if (!fileHasLeak) {
                     console.log(`${RED}❌ [CRITICAL] Potential Secret detected in: ${filePath}${NC}`);
                     fileHasLeak = true;
@@ -104,7 +183,11 @@ function walkDir(dir: string, callback: (file: string) => void) {
 
 function main() {
     console.log(`${BLUE}🔒 Local Security Scan: Checking for private keys...${NC}\n`);
-    const rootDir = process.cwd();
+    // Optional directory argument. The pre-commit hook and CI both call this with no args and get
+    // the old behaviour (scan the repo). It exists so the exemption in isPublicByDefinition() can
+    // be tested against throwaway fixtures — an exemption whose bypass-resistance is never executed
+    // is the same as no exemption at all, and this one was added precisely to let a hook be enabled.
+    const rootDir = process.argv[2] ?? process.cwd();
     let totalFilesWithFindings = 0;
     let fileCount = 0;
 
