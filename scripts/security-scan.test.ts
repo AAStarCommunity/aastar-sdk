@@ -62,6 +62,30 @@ describe('secrets are still caught (the exemption is narrow)', () => {
     expect(flags(`deployer pk ${HEX('4')}`)).toBe(true);
   });
 
+  // ── the class my first five cases missed ──────────────────────────────────────────────────
+  //
+  // Those five were all "secret word + public marker", so they only ever exercised veto terms the
+  // veto already knew. The detection regex is `(key|secret|pk|private)` with no word boundary; the
+  // veto was narrower. Anything detection recognises but the veto does not, paired with a public
+  // marker, walked straight through — and no test could see it, because the tests had the same
+  // blind spot as the code. (Found in review, not by me.)
+  it('BYPASS CLASS: `pk` — recognised by detection, once unknown to the veto', () => {
+    expect(flags(`deployerPk = ${HEX('1')}  // funded via tx ${HEX('2')}`)).toBe(true);
+  });
+
+  it('BYPASS CLASS: `signing key` — same shape, different term', () => {
+    expect(flags(`signing key ${HEX('3')} for the passkey flow`)).toBe(true);
+  });
+
+  it('every detection term is also a veto term (the asymmetry IS the hole)', () => {
+    // A structural check rather than another example: pair each word the detector reacts to with a
+    // public marker and require a hit. New detection terms added later without a matching veto term
+    // fail here instead of quietly opening the next hole.
+    for (const word of ['key', 'secret', 'pk', 'private']) {
+      expect(flags(`my ${word} ${HEX('7')} // see tx ${HEX('8')}`), `detection term "${word}" escaped`).toBe(true);
+    }
+  });
+
   it('a real private key inside a file that ALSO contains exempt public data', () => {
     // The case a file-level allowlist would have missed entirely, and the reason this exemption is
     // keyed on the line rather than the path.

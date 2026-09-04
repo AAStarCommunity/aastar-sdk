@@ -71,21 +71,49 @@ const PUBLIC_BY_DEFINITION = [
   /pub(lic)?[-_ ]?key/i,          // pubkey / publicKey / public-key
   /key[XY]\b/,                    // keyX / keyY — P-256 coordinates
   /\.\s*[xy]\s*=/i,               // .x = / .y =  (coordinate accessors)
-  /\b[xy]\s*[=|]\s*`?0x/i,        // x=`0x…` and markdown-table form `| passkey x | \`0x…\``
-  /passkey/i,                     // a passkey is a public credential by definition
+  // Coordinate markers, allowing the punctuation that sits between the marker and the value in
+  // real evidence files: `x = 0x…`, `x=\`0x…\``, and the markdown-table form `| … x | \`0x…\``.
+  // Written to end at the value because the whole point of the proximity scoping above is that a
+  // marker only vouches for the hex it is attached to.
+  /\b[xy]\s*[=|]\s*[`|\s]*$/i,
   /\btx\b|txhash|transaction hash/i,
 ];
 
-/** Words that mean "this really is a secret" — they veto any public-marker exemption. */
-const SECRET_WORDS = /private[-_ ]?key|secret|mnemonic|seed[-_ ]?phrase|privkey/i;
+/**
+ * Words that mean "this really is a secret" — they veto any public-marker exemption.
+ *
+ * This list must be AT LEAST as wide as the detection regex above, or the gap between them is the
+ * hole. The first version was narrower: detection matches `(key|secret|pk|private)` with NO word
+ * boundary, while the veto knew `private key` but not a bare `pk`. Measured bypasses:
+ *
+ *   deployerPk = 0x<64hex>  // funded via tx 0x…      → exempted by the `tx` marker, veto silent
+ *   signing key 0x<64hex> for the passkey flow        → exempted by `passkey`, veto silent
+ *
+ * `pk\b` deliberately has NO leading \b: `deployerPk` has a word character before `Pk`, so `\bpk\b`
+ * does not match it and the hole stays open. The detection regex has no leading boundary either —
+ * an asymmetry between the two is exactly what produced this.
+ */
+const SECRET_WORDS = /private[-_ ]?key|secret|mnemonic|seed[-_ ]?phrase|privkey|pk\b|signing[-_ ]?key/i;
 
 /**
- * True when the line is public data by definition AND says nothing that implies a secret.
- * The veto is the load-bearing half: without it the exemption is a bypass.
+ * True when THIS match is public data by definition.
+ *
+ * Scoped to the text immediately before the matched hex, not the whole line. Per-line scoping was
+ * wrong in a way that took three rounds to see: a marker anywhere on the line exempted every hex on
+ * it, so `deployerPk = 0x<secret>  // funded via tx 0x<hash>` was excused by the `tx` that belongs
+ * to the OTHER value. A marker vouches for the value next to it and nothing else.
+ *
+ * That also dissolves the "veto must be as wide as detection" problem. It cannot be: detection
+ * fires on `key`, and every public-key line contains `key` — a veto that wide would make the
+ * exemption vacuous. What actually separates them is proximity. `keyX = 0x…` has the marker on the
+ * value; `my key 0x…  // see tx 0x…` does not, and is now caught.
  */
-function isPublicByDefinition(line: string): boolean {
-  if (SECRET_WORDS.test(line)) return false;
-  return PUBLIC_BY_DEFINITION.some((re) => re.test(line));
+const CONTEXT_BEFORE = 40;
+
+function isPublicByDefinition(line: string, hexIndex: number): boolean {
+  const ctx = line.slice(Math.max(0, hexIndex - CONTEXT_BEFORE), hexIndex);
+  if (SECRET_WORDS.test(ctx)) return false;
+  return PUBLIC_BY_DEFINITION.some((re) => re.test(ctx));
 }
 
 function scanFile(filePath: string): boolean {
@@ -101,7 +129,8 @@ function scanFile(filePath: string): boolean {
         const lineRegex = new RegExp(SECRET_REGEX.source, 'gi');
         while ((match = lineRegex.exec(line)) !== null) {
             const hex = match[2].toLowerCase();
-            if (!WHITELISTED_KEYS.has(hex) && !isPublicByDefinition(line)) {
+            const hexIndex = match.index + match[0].lastIndexOf(match[2]);
+            if (!WHITELISTED_KEYS.has(hex) && !isPublicByDefinition(line, hexIndex)) {
                 if (!fileHasLeak) {
                     console.log(`${RED}❌ [CRITICAL] Potential Secret detected in: ${filePath}${NC}`);
                     fileHasLeak = true;
