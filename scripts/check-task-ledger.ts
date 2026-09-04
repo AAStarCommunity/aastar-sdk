@@ -131,17 +131,37 @@ export function reconcile(
  * CI is asked through the EVENT, not through git: the workflow knows which PR it is running for, and
  * that answer needs no subprocess and cannot be defeated by how the repo was checked out.
  */
-function currentBranchPr(): number | undefined {
-  // GitHub Actions: prefer what the event says.
-  const fromEnv = process.env.PR_NUMBER || /^refs\/pull\/(\d+)\//.exec(process.env.GITHUB_REF ?? '')?.[1];
+/**
+ * Decide from the ENVIRONMENT alone which PR this run belongs to.
+ *
+ * Split out from the subprocess work so the decision can be tested by calling it, not by reading the
+ * file it lives in. That distinction is the whole reason this function exists: an earlier version of
+ * this rule was "pinned" by asserting the source contained a particular string, and review
+ * demonstrated the hole by commenting the real check out — the characters survived in the comment,
+ * the behaviour did not, and all fifteen tests stayed green.
+ *
+ * A text assertion carries weight only when the property IS textual (banning a spelling, say). The
+ * moment the property is "what happens at run time", asserting on source text is a comment written
+ * inside a test.
+ *
+ * Returns a PR number, `null` for "definitely no PR", or `'ask-git'` when the environment cannot say.
+ */
+export function resolveSelfPrFromEnv(env: Record<string, string | undefined>): number | null | 'ask-git' {
+  const fromEnv = env.PR_NUMBER || /^refs\/pull\/(\d+)\//.exec(env.GITHUB_REF ?? '')?.[1];
   if (fromEnv && Number.isFinite(Number(fromEnv))) return Number(fromEnv);
 
-  // A `push` run belongs to no PR, and that is knowable directly. Raised in review on #354 as a
-  // prediction rather than a reading: on push-to-main `PR_NUMBER` renders empty, so control reaches
-  // the branch check below — and if that checkout happens to be detached, this would throw and
-  // redden main. Whether HEAD is attached is an INCIDENTAL fact about how the runner checked the
-  // repo out; the event name is the direct answer to the question actually being asked.
-  if (process.env.GITHUB_EVENT_NAME === 'push') return undefined;
+  // A `push` run belongs to no PR, and that is knowable directly. On push-to-main `PR_NUMBER`
+  // renders empty, so without this control reaches the branch check below — and if that checkout is
+  // detached, the run throws and reddens main. Whether HEAD is attached is an INCIDENTAL fact about
+  // how the runner checked the repo out; the event name is the direct answer to the question.
+  if (env.GITHUB_EVENT_NAME === 'push') return null;
+
+  return 'ask-git';
+}
+
+function currentBranchPr(): number | undefined {
+  const fromEnv = resolveSelfPrFromEnv(process.env);
+  if (fromEnv !== 'ask-git') return fromEnv ?? undefined;
 
   // A DETACHED HEAD cannot answer this question, and `gh` does not say so — it reports "no pull
   // requests found for branch", which reads like "there is no PR" and is really "there is no branch

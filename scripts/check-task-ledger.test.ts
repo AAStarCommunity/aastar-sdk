@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { extractClaims, reconcile, type Claim } from './check-task-ledger.js';
+import { extractClaims, reconcile, resolveSelfPrFromEnv, type Claim } from './check-task-ledger.js';
 
 const states = (m: Record<number, 'MERGED' | 'OPEN' | 'CLOSED'>) =>
   new Map(Object.entries(m).map(([k, v]) => [Number(k), v] as const));
@@ -108,24 +108,52 @@ describe('the self-PR exemption is narrow', () => {
   });
 });
 
-describe('determining WHICH pr this run is', () => {
-  it('a failure to answer must not be reported as "no PR"', () => {
-    // Not a unit test of the function — it shells out — but a pin on the property, stated where the
-    // next person edits the rules. Measured on this PR's own CI: `actions/checkout@v5` leaves a
-    // detached HEAD, `gh pr view` had no branch to resolve, the catch turned that into "this branch
-    // has no PR", the self-PR exemption never applied, and the gate reddened the PR that introduced
-    // it. Identical to the `ghState` bug fixed in the same file the same hour.
+describe('the source-level rule that IS textual', () => {
+  it('no gh call may discard stderr', () => {
+    // This one carries weight, and the reason is worth stating because a neighbouring assertion did
+    // not: the property being pinned IS a spelling. `stdio: ['ignore','pipe','ignore']` throws away
+    // the text that distinguishes "GitHub says no" from "the call failed", and that discarding is
+    // visible in the source and nowhere else — no runtime observation of a healthy run reveals it.
     //
-    // The regression that matters is behavioural and lives in the runner: PR_NUMBER first, then a
-    // branch check that refuses when HEAD is detached, and only GitHub's own words counting as "no".
+    // Its neighbour asserted that the source contained "GITHUB_EVENT_NAME === 'push'" and claimed to
+    // pin a RUNTIME property. Review commented the real check out; the characters survived in the
+    // comment, the behaviour did not, and every test stayed green. Deleted — the behavioural cases
+    // below replace it. Compare `@ts-expect-error` elsewhere in this repo: it also looks textual and
+    // is not — it asserts the compiler's behaviour, and goes red (TS2578) when the error stops.
     const source = readFileSync('scripts/check-task-ledger.ts', 'utf8');
-    expect(source, 'the event must be consulted before git').toContain('process.env.PR_NUMBER');
-    expect(source, 'a detached HEAD must be refused, not guessed at').toContain('HEAD is detached');
-    // A push run belongs to no PR by definition; answering that from whether HEAD happens to be
-    // attached would make the gate depend on how the runner checked the repo out.
-    expect(source, 'a push run must be recognised directly').toContain("GITHUB_EVENT_NAME === 'push'");
-    // stderr must be captured on BOTH gh calls — discarding it is what made the two bugs possible.
     expect(source.match(/stdio: \['ignore', 'pipe', 'pipe'\]/g) ?? []).toHaveLength(3);
     expect(source).not.toContain("stdio: ['ignore', 'pipe', 'ignore']");
+  });
+});
+
+
+describe('which PR this run belongs to — decided from the environment', () => {
+  // Behavioural, not textual. Commenting out any branch below makes one of these red; commenting it
+  // out used to make nothing red.
+  it('a push run belongs to no PR, whatever the checkout looks like', () => {
+    // The case that would otherwise fall through to the branch check and throw on a detached
+    // checkout — reddening main after merge, which is not something to discover after merging.
+    expect(resolveSelfPrFromEnv({ GITHUB_EVENT_NAME: 'push' })).toBeNull();
+    expect(resolveSelfPrFromEnv({ GITHUB_EVENT_NAME: 'push', PR_NUMBER: '' })).toBeNull();
+  });
+
+  it('PR_NUMBER wins when the event supplies it', () => {
+    expect(resolveSelfPrFromEnv({ PR_NUMBER: '354', GITHUB_EVENT_NAME: 'pull_request' })).toBe(354);
+  });
+
+  it('GITHUB_REF is the fallback for pull_request runs', () => {
+    expect(resolveSelfPrFromEnv({ GITHUB_REF: 'refs/pull/354/merge' })).toBe(354);
+    expect(resolveSelfPrFromEnv({ GITHUB_REF: 'refs/heads/main' })).toBe('ask-git');
+  });
+
+  it('an empty or nonsense PR_NUMBER does not become a PR number', () => {
+    // `''` is what the workflow renders on a push event, and `Number('') === 0` — a falsy guard that
+    // only checked presence would turn that into PR #0.
+    expect(resolveSelfPrFromEnv({ PR_NUMBER: '' })).toBe('ask-git');
+    expect(resolveSelfPrFromEnv({ PR_NUMBER: 'nope' })).toBe('ask-git');
+  });
+
+  it('with nothing to go on, it says so rather than guessing', () => {
+    expect(resolveSelfPrFromEnv({})).toBe('ask-git');
   });
 });
