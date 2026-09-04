@@ -617,7 +617,23 @@ export class BLSSignatureService {
         const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
         if (fault) throw new Error(`${fault.message} — dropping this co-signature`);
         recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
-        const normalisedSig = canonicalSignature(sig)!;
+
+        // The canonical form is the COMPARISON KEY and stays inside the classifier. What goes back
+        // on the wire is the node's own bytes, with nothing but the prefix repaired.
+        //
+        // A first version forwarded the canonical 256-byte EIP-2537 form, and that is a wire-format
+        // change to a service outside this repo: the value is read from `signatureCompact ||
+        // signature`, so a node putting a 96-byte compressed point in the field whose NAME says
+        // compact would have had it re-encoded to 256 bytes before `/signature/aggregate` ever saw
+        // it. Nothing in this repository records what that field actually carries, and the mocks
+        // cannot tell — their fixtures are already canonical, so both implementations answer the
+        // same. Changing a format you cannot observe is not something a dedup fix gets to do.
+        //
+        // Prefix repair is kept because that IS the bug: a case-sensitive `startsWith("0x")` turned
+        // `0X…` into `0x0X…`. The hex body is passed through untouched, so a compressed point stays
+        // compressed.
+        const trimmedSig = sig.trim();
+        const normalisedSig = /^0[xX]/.test(trimmedSig) ? `0x${trimmedSig.slice(2)}` : `0x${trimmedSig}`;
 
         signerNodeSignatures.push(normalisedSig);
         signerNodeIds.push(nodeId as string);

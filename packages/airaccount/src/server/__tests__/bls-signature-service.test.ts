@@ -131,6 +131,10 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
   // `dvtSignerIdentity.test.ts` regenerates that same pair from the curve, so a drift between these
   // literals and the curve surfaces there instead of being assumed here.
   const SIG_1 = "0x00000000000000000000000000000000175a69c57a6d564f4ff83367a48ba9934bbd412f3525c6e0082809d6bd5bf9d096e39fa3b2241e0867ae3380759213cc00000000000000000000000000000000110965f0a10f515e931b1e392548b7b703f67ec44c5a1d9ddf23678fd0e516c8390e8d327f09da831f23d18d46730fc100000000000000000000000000000000153f6322e9cfa0c5a2e6b713030e9646fe3d92b4270be45b885dca1137c32ccf7aa4c1c9df86923c97be3f428bdf6c990000000000000000000000000000000003a4521d85995eca308a743ad14bac4c3584d09e458ea319587c977b027a7cab4b484f226011c50cdbda73d5af24f8b5";
+  // The 96-byte compressed form of SIG_1 — deliberately NOT canonical, so the forwarding test can
+  // tell a pass-through from a re-encoding. (dvtSignerIdentity.test.ts asserts these two
+  // canonicalise to the same key, so this constant cannot drift away from SIG_1 unnoticed.)
+  const SIG_1_COMPRESSED = "0x910965f0a10f515e931b1e392548b7b703f67ec44c5a1d9ddf23678fd0e516c8390e8d327f09da831f23d18d46730fc1175a69c57a6d564f4ff83367a48ba9934bbd412f3525c6e0082809d6bd5bf9d096e39fa3b2241e0867ae3380759213cc";
   const SIG_2 = "0x00000000000000000000000000000000118959a06fbeb7d6126b08699328f4a49dca5c18ea284bf5b4945f4284eca7daf96a1d2d37f634f5226f51c8d5ae4f36000000000000000000000000000000000bda85398521c3c7232dfe2a4ebb4e76f2588c8d58dfc8ea3f06e9508c5a4a6fe7808fac4fd00a37997f27f1bd81578b0000000000000000000000000000000018ac2b257bce5b112722e23fe2f8b7172138b481da5e2ebbc80f4c8ee47db5d8f9186526538dd7b81198d73a8930404a00000000000000000000000000000000179d2697b8b51201e2248ca787d7261e9c54bfde84acd631cc19679bad804a452a300300f226205ee26b7bce3981af79";
   const DVT_REQ = { userOp: { sender: "0xacc", nonce: "0x0" }, ownerAuth: "0x" + "ab".repeat(65) };
 
@@ -312,6 +316,42 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
       .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } });
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([N2]);
+  });
+
+
+  it("forwards the node's OWN bytes to /signature/aggregate, not the canonical re-encoding", async () => {
+    // The dedup key is a parsed G2 point; the value on the wire must stay whatever the node sent.
+    // A version that pushed the canonical form would silently turn a 96-byte compressed point into
+    // a 256-byte one on its way to a service outside this repo — a format change nothing here can
+    // observe, and not something a dedup fix gets to make. The existing fixtures cannot catch it
+    // because they are already canonical, so this one is deliberately NOT.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signatureCompact: SIG_1_COMPRESSED } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } })
+      .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
+
+    await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+
+    const aggregateCall = mockPost.mock.calls[2];
+    expect(String(aggregateCall[0])).toContain("/signature/aggregate");
+    const [first] = (aggregateCall[1] as { signatures: string[] }).signatures;
+    expect(first, "the compressed form must survive to the aggregator").toBe(SIG_1_COMPRESSED);
+    expect((first.length - 2) / 2, "96 bytes in, 96 bytes out").toBe(96);
+  });
+
+  it("a corrupt PREFIX is still repaired on the forwarded value", async () => {
+    // Prefix repair is the actual bug and stays: `0X…` must not reach the aggregator as `0x0X…`.
+    // The hex body is untouched, which is what keeps the case above true.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: `0X${SIG_1.slice(2)}` } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } })
+      .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
+
+    await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    const [first] = (mockPost.mock.calls[2][1] as { signatures: string[] }).signatures;
+    expect(first).toBe(SIG_1);
   });
 
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {
