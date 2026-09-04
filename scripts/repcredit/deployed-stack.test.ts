@@ -127,6 +127,15 @@ type Answers = {
   bpsAnswers: boolean;
   slashCaseWords: number;
   verifierAnswers: boolean;
+  /**
+   * Answer the verifier selector with EMPTY returndata instead of throwing.
+   *
+   * This is the codeless-address case, and it is the only one that discriminates the fix:
+   * eth_call to an address with no code SUCCEEDS and returns 0x, so a check that only asks
+   * "did it revert" is green there. `verifierAnswers: false` makes the stub throw, which both
+   * the old and the new implementation reject — so that flag cannot tell them apart.
+   */
+  verifierEmpty?: boolean;
   /** force one slashThresholds index to a different value, for the paired-red test */
   slashThresholdOverride?: { level: number; value: bigint };
 };
@@ -178,6 +187,7 @@ function stubClient(a: Answers) {
       }
       if (sel === PIN.selectors.fraudProofVerify) {
         if (!a.verifierAnswers) throw new Error('execution reverted');
+        if (a.verifierEmpty) return { data: '0x' }; // codeless address: succeeds, returns nothing
         return { data: `0x${'0'.repeat(64)}` };
       }
       if (sel === SEL_PENDING) return { data: pad(a.pending) };
@@ -283,11 +293,24 @@ describe('on-chain checks — each one has a mutated chain answer that reddens i
     expect(verdict(checks, 'aggregator:guardianSlashCases-returns-deployed-shape')).toBe(false);
   });
 
-  it('verifier:answers-domain-bound-selector reddens when the armed verifier does not answer it', async () => {
+  it('verifier:answers-domain-bound-selector reddens when the call reverts', async () => {
     const a = baseAnswers();
     a.verifierAnswers = false;
     const checks = await checkDeployedStackOnChain(PIN, stubClient(a));
     expect(verdict(checks, 'verifier:answers-domain-bound-selector')).toBe(false);
+  });
+
+  it('THE ONE THAT DISCRIMINATES: reddens on EMPTY returndata, which does not revert', async () => {
+    // eth_call to an address with NO CODE succeeds and returns 0x — measured on 0x…dEaD. The
+    // revert-only test above passes against BOTH the old implementation and the new one, so it
+    // proves nothing about this fix; this is the case that separates them. Verified by reverting
+    // deployed-stack.ts to d959742: this assertion goes red, the revert one above does not.
+    const a = baseAnswers();
+    a.verifierEmpty = true;
+    const checks = await checkDeployedStackOnChain(PIN, stubClient(a));
+    expect(verdict(checks, 'verifier:answers-domain-bound-selector')).toBe(false);
+    const detail = checks.find((c) => c.name === 'verifier:answers-domain-bound-selector')?.detail ?? '';
+    expect(detail).toMatch(/EMPTY data/);
   });
 
   it('rejected predecessors redden when the pin names one of them', async () => {
