@@ -74,15 +74,29 @@ describe('canonical.dvtValidator is what the LIVE aggregator uses', () => {
   it.runIf(RUN_ONCHAIN)('the shortcut version of this check would pass against SUPERSEDED aggregators', async () => {
     // Not a check of the SDK — a check of the CHECK. It records, executably, why the test above
     // starts at Registry: if a future edit "simplifies" hop 1 away, this documents what that costs.
-    // Should these ever stop agreeing, the shortcut becomes distinguishing and this test fails,
-    // which is the right moment to revisit the comment above rather than trust it.
+    //
+    // FU-22. The expected value is read from the LIVE aggregator here, not taken from
+    // `canonical.dvtValidator`. Using the pin dragged it into a claim it has nothing to do with —
+    // this case is about whether the aggregators AGREE. Measured: with the pin mutated by one
+    // character, BOTH cases went red and this one printed "superseded yet still answers", which
+    // answers a question nobody asked. Two reds for one fault, and the second one's message sends
+    // the reader somewhere else.
+    //
+    // Rooted this way the two faults separate cleanly, and both directions were measured:
+    //   pin wrong                 → only the case above goes red
+    //   aggregators stop agreeing → only this case goes red
+    const liveAggregator = await readAddressGetter(addrs.registry as Address, 'blsAggregator');
+    const liveDvt = await readAddressGetter(liveAggregator as Address, 'DVT_VALIDATOR');
+
     for (const superseded of SUPERSEDED_AGGREGATORS) {
       const dvt = await readAddressGetter(superseded as Address, 'DVT_VALIDATOR');
       expect(
         dvt,
-        `${superseded} is superseded yet still answers DVT_VALIDATOR() — so reading it off the ` +
-          'PINNED aggregator cannot tell live from superseded',
-      ).toBe(addrs.dvtValidator.toLowerCase());
+        `${superseded} is superseded, yet it answers DVT_VALIDATOR() with the same value as the LIVE ` +
+          `aggregator ${liveAggregator} — which is exactly why reading it off the PINNED aggregator ` +
+          'cannot tell live from superseded. If this ever stops holding, the shortcut has become ' +
+          'distinguishing and the comment above needs revisiting rather than trusting.',
+      ).toBe(liveDvt);
     }
   });
 
