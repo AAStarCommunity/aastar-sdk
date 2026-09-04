@@ -50,7 +50,11 @@ const WHITELISTED_KEYS = new Set([
 ]);
 
 // Improved regex with capture group for the hex part
-const SECRET_REGEX = /(key|secret|pk|private).{0,15}(0x[a-fA-F0-9]{64})/gi;
+// `mnemonic` and `seed phrase` were in the VETO list but not here, so `mnemonic: 0x<64hex>` was
+// invisible to the scanner outright — the exemption never even got consulted. Found by the
+// distance-axis test below, which paired every veto term with a value and found one that produced
+// no finding at all. The two lists are now the same words in both directions.
+const SECRET_REGEX = /(key|secret|pk|private|mnemonic|seed[-_ ]?phrase).{0,15}(0x[a-fA-F0-9]{64})/gi;
 
 /**
  * FU-4. Markers that make a 64-hex value PUBLIC BY DEFINITION, so a `key`-adjacent match is not a
@@ -111,8 +115,18 @@ const SECRET_WORDS = /private[-_ ]?key|secret|mnemonic|seed[-_ ]?phrase|privkey|
 const CONTEXT_BEFORE = 40;
 
 function isPublicByDefinition(line: string, hexIndex: number): boolean {
+  // The veto scans the WHOLE line; the marker only the text next to the value. The asymmetry is
+  // deliberate and is the third shape this bug took: with both sharing one 40-char window, pushing
+  // the veto word out while keeping a marker inside walked through —
+  //   `deployerPk backup, see the guardian coordinate keyX = 0x…`     (pk evicted, keyX inside)
+  //   `the private key … is stored elsewhere; pubkey = 0x…`           (private key evicted)
+  // and the second shape is ordinary prose in an evidence file, not a contrived string.
+  //
+  // The two halves say different things, so they cannot share a scope. A marker claims "THIS value
+  // is a public key" — only adjacency can support that. A veto observes "this line is discussing a
+  // secret" — that is true of the line, wherever the word sits.
+  if (SECRET_WORDS.test(line)) return false;
   const ctx = line.slice(Math.max(0, hexIndex - CONTEXT_BEFORE), hexIndex);
-  if (SECRET_WORDS.test(ctx)) return false;
   return PUBLIC_BY_DEFINITION.some((re) => re.test(ctx));
 }
 

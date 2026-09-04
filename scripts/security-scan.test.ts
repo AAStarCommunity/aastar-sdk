@@ -9,8 +9,8 @@
  *
  * The danger in any such narrowing is obvious: an exemption keyed on "the line mentions a public
  * key" is one `privateKeyX = 0x…` away from being a hole. So the exemption carries a veto —
- * private/secret/mnemonic/seed on the line refuses it outright — and this file exists to prove the
- * veto works, because the alternative is a scanner that reports clean because it stopped looking.
+ * private/secret/mnemonic/seed ANYWHERE on the line refuses it outright — and this file exists to
+ * prove the veto works, because the alternative is a scanner that reports clean because it stopped looking.
  *
  * A file allowlist was rejected for the same reason: it would mute whole directories that also
  * carry real evidence. Keying on the marker means a genuine private key dropped into one of those
@@ -83,6 +83,33 @@ describe('secrets are still caught (the exemption is narrow)', () => {
     // fail here instead of quietly opening the next hole.
     for (const word of ['key', 'secret', 'pk', 'private']) {
       expect(flags(`my ${word} ${HEX('7')} // see tx ${HEX('8')}`), `detection term "${word}" escaped`).toBe(true);
+    }
+  });
+
+  // ── the OTHER axis: distance ──────────────────────────────────────────────────────────────
+  //
+  // The loop above enumerates one coordinate (which detection term) and holds the other fixed. The
+  // seam between the two rules has two coordinates, and the second one is how FAR each word sits
+  // from the value. While the veto and the marker shared one 40-char window, evicting the veto word
+  // past that edge while leaving a marker inside walked through — twice, in prose that reads
+  // completely ordinary for an evidence file:
+  //
+  //   `deployerPk backup, see the guardian coordinate keyX = 0x…`
+  //   `the private key … is stored elsewhere; pubkey = 0x…`
+  //
+  // So enumerate distance too: every veto term, once adjacent and once pushed beyond the marker
+  // window. Both must be caught, which is only true because the veto now reads the whole line.
+  // 30s: this case spawns the scanner 12 times and blew the 5s default. Worth naming because the
+  // timeout FAILED THE TEST while looking like a detection failure — a red for the wrong reason is
+  // as misleading as a green for the wrong reason.
+  it('BYPASS CLASS: a veto word far from the value still vetoes (distance is the second axis)', { timeout: 30_000 }, () => {
+    const FAR = 'x'.repeat(60); // longer than CONTEXT_BEFORE, so the veto word lands outside it
+    for (const word of ['private key', 'secret', 'mnemonic', 'seed phrase', 'privkey', 'signing key']) {
+      expect(flags(`${word} ${HEX('1')}`), `"${word}" adjacent`).toBe(true);
+      expect(
+        flags(`${word} is stored elsewhere ${FAR}; pubkey = ${HEX('2')}`),
+        `"${word}" pushed outside the marker window — the veto must still see it`,
+      ).toBe(true);
     }
   });
 
