@@ -42,7 +42,7 @@ consumer path**.
       ```bash
       REQUIRE_UPSTREAM=1 pnpm run abi:sync && \
       REQUIRE_UPSTREAM=1 pnpm run check:abi && \
-      REQUIRE_UPSTREAM=1 pnpm run check:abi-drift
+      pnpm run check:abi-drift:strict
       ```
       These compare against the upstream repos checked out as **siblings** (`../SuperPaymaster`,
       `../airaccount-contract`, `../../mycelium/launch`), `forge build`-ed. They are **not** CI gates
@@ -51,6 +51,147 @@ consumer path**.
       `REQUIRE_UPSTREAM=1` turns that vacuous pass into a hard failure — **always use it here**, so a
       forgotten `forge build` or a missing sibling checkout fails loudly instead of green-lighting a
       release. Rationale is recorded in `.github/workflows/ci.yml`.
+
+      `check:abi-drift:strict` (`--strict`; `REQUIRE_UPSTREAM=1` implies it) closes the finer hole:
+      the flag alone only catches "**no** upstream `out/` at all", and an upstream that was
+      `forge clean`ed still leaves the other repos' `out/` in place — so `Registry` /
+      `BLSAggregator` slid into `skipped` and the gate printed PASS after checking 12 ABIs instead
+      of 30 (CC-50). Strict mode fails per contract whose upstream `src/` declares it but whose
+      artifact is missing, fails when any `MUST_VERIFY` contract was not actually compared, and
+      prints the full checked / skipped-with-reason inventory. **Read the `checked N` line** — a
+      PASS with a shrunken count is not a verification.
+
+      Strict mode additionally binds PROVENANCE (CC-50 round-4), because "checked 30, here are
+      their sha256s" still could not say *green against what*: the gate once printed all four
+      MUST_VERIFY ✅ while the SuperPaymaster worktree had 23 uncommitted changes, `Registry.sol`
+      and `BLSAggregator.sol` among them. The chain it now enforces, end to end:
+
+      | link | how |
+      |---|---|
+      | SDK ABI ⇄ upstream artifact | signature-set comparison (the original drift check) |
+      | artifact ⇄ on-disk source | solc `metadata.sources[*].keccak256` recomputed over the working tree |
+      | source ⇄ committed revision | `git status --porcelain` must be empty |
+      | revision ⇄ reviewed revision | `scripts/upstream-abi-pin.json` → `repos[].revision` |
+      | vendored copy ⇄ reviewed copy | `scripts/upstream-abi-pin.json` → `contracts[].abiSha256` |
+      | contract ⇄ reviewed source file | `scripts/upstream-abi-pin.json` → `contracts[].repo` + `contracts[].sourcePath` |
+
+      Break any link and `--strict` exits 1. **Re-syncing an ABI and updating the pin file are the
+      same commit** — that is what makes an ABI swap a reviewable diff instead of a silent one.
+
+      Round-5 closed the remaining hole: a link that is MISSING rather than broken. An artifact with
+      no `metadata.sources`, a source the artifact names but that is not on disk, an artifact that
+      records no in-repo source at all, or an `out/` that belongs to no git checkout (a tarball,
+      a `git archive`, a downloaded CI artifact) each used to be *printed* and never failed — so
+      `--strict` could exit 0 having hashed zero source bytes, print `--- upstream revisions (0) ---`,
+      tick all four MUST_VERIFY, and still claim *"every artifact hash-matches the sources it
+      records"*. Every one of those is now a hard failure for a MUST_VERIFY contract
+      (`MUST-VERIFY PROVENANCE INCOMPLETE`), and the unconditional PASS sentence is only printed when
+      the whole chain held for all of them. `scripts/repcredit/abi-drift-provenance.test.ts` builds
+      a synthetic upstream repo per case and pins both halves: that the fixture reproduces the
+      bypassed state, and that the run now fails on it.
+
+      Round-7 removed the last guess and the last overclaim. A MUST_VERIFY artifact must **declare**
+      its own source — `metadata.settings.compilationTarget` must be an object with **exactly one
+      entry** whose value is the contract name; missing / malformed / empty / naming another
+      contract / declaring extra targets / claiming it twice all fail closed
+      (`MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`), with no `sourceName` or `<Name>.sol`
+      fallback to land on an unrelated but correctly-hashed sibling. One correct claim beside an
+      extra target fails too: choosing the matching entry out of several is still a guess.
+      And because source coverage is enforced for MUST_VERIFY only, the green sentence now reads
+      *"all N must-verify artifacts hash-match every source they record"* and any other checked
+      artifact with an unestablished binding is printed as an explicit
+      `NOT RELEASE-SCOPE CAVEAT` line — **a PASS never claims more than the run enforced.**
+
+      Round-8 closed the other half of that declaration: round-7 forced the target's VALUE and never
+      looked at its KEY, so `{ "contracts/src/Unrelated.sol": "Registry" }` passed `--strict` with
+      zero bytes of the real `Registry.sol` hashed — the artifact a rename or a move leaves behind.
+      The single compilation target's path must now be **byte-exact** the reviewed
+      `contracts[<name>].sourcePath`, inside `contracts[<name>].repo`, and in that clean pinned
+      checkout's verified source set. **Moving a must-verify contract upstream means updating that
+      pin in the same commit that re-syncs the ABI** — deliberately a reviewable diff here, not a
+      basename/`sourceName`/regex guess derived from the artifact itself.
+
+      Round-9 made attribution a proof rather than an inference. "Is this source in the repo?" was a
+      `startsWith(repoRoot + sep)` string test, and the read that followed obeyed symlinks — so a
+      committed symlink to a file OUTSIDE the upstream repo exited `--strict` 0 with the
+      unconditional PASS and `Attributed to committed upstream revision(s): …`, over a revision
+      containing only the link. Each must-verify source must now be, all four at once: a **regular
+      file** in the working tree (`lstat`, so a symlink is refused whatever it points at), with a
+      **`realpath` under the repo root**, recorded in `git ls-tree -r <pinnedRevision>` as a
+      **regular blob** (mode `100644`/`100755` — `120000` symlinks and `160000` gitlinks refused),
+      whose `git cat-file blob` bytes are **byte-identical** to the file this run read. The solc
+      `keccak256` is then compared against those pinned bytes. Anything short of that keeps the
+      source out of `verified`, fails `--strict`
+      (`SOURCE NOT ATTRIBUTED TO PINNED REVISION: <label>`), and **suppresses the
+      `Attributed to committed upstream revision(s)` sentence**. Sources inside a **pinned
+      submodule** are followed through the gitlink (`superproject@rev -> gitlink oid -> blob`) —
+      still cryptographic, and required, since foundry deps live there.
+- [ ] **The RepCredit evidence-runner gates, with the real YAAA HTTP suite REQUIRED:**
+      ```bash
+      pnpm run repcredit:typecheck && \
+      pnpm run repcredit:abi:check && \
+      pnpm run lint:repcredit && \
+      REPCREDIT_YAAA_HTTP_TEST=1 \
+        REPCREDIT_YAAA_DIR=../YetAnotherAA-Validator \
+        pnpm run repcredit:test
+      ```
+      **The flag is not optional here.** Without it, a missing YAAA checkout, a missing/stale
+      `dist/main.js`, or a node that fails to boot makes the entire real-HTTP suite — the only
+      thing that proves the SDK's HMAC client gets past the upstream admission gate — `it.skip`
+      itself, and `repcredit:test` still reports green. `REPCREDIT_YAAA_HTTP_TEST=1` converts every
+      one of those into a failure. The same job runs in CI (`repcredit-yaaa-http`) against a pinned
+      upstream ref; run it here too, because the release is cut from a local checkout.
+
+      **Do NOT set `REPCREDIT_UPSTREAM_ARTIFACTS=absent` in a release run.** CI sets it because a
+      GitHub runner has no sibling contract checkouts; here the sibling repos ARE present and
+      `forge build`-ed, so the REAL must-verify pin check must measure **4/4** against real
+      artifacts. A missing artifact is a failure (round-9 LOW); the variable only converts that into
+      a visible SKIP, never into a pass, and using it here would hide the one assertion in that file
+      made against real data.
+
+      This is no longer only a checklist instruction: `check-abi-drift.ts` **exits 1 immediately**
+      when `--strict` and `REPCREDIT_UPSTREAM_ARTIFACTS=absent` are set together (round-10 LOW).
+      They assert opposite things, so the combination is now an impossible state rather than a
+      reminder someone has to read.
+
+      `repcredit:typecheck` now also covers `scripts/check-abi-drift.ts` — the release gate itself,
+      with this repo's `target/lib: ESNext`. Do not report a typecheck result for it from ad-hoc
+      `tsc` flags; that claim was not reproducible in round 8.
+
+      `lint:repcredit` is the only real lint in this repo. `pnpm run lint` also runs `pnpm -r lint`,
+      which is a **no-op** (`None of the selected packages has a "lint" script`) — do not report it
+      as an effective gate. `lint:repcredit` currently enables exactly two rules
+      (`no-restricted-imports`, `@typescript-eslint/no-unused-vars`), so a green here carries
+      correspondingly little information. It now also covers `scripts/repcredit-e2e.ts` itself
+      (16 files), and CI calls it directly rather than through the no-op wrapper (round-10 LOW).
+
+      **The reviewed YAAA revision lives in this repo**, not in your shell:
+      `scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`. In required
+      mode that pin is authoritative and `REPCREDIT_YAAA_REV` **cannot** redirect the run at another
+      commit — disagreeing with the pin is a hard failure, which also makes a drift between the pin
+      and the ref `.github/workflows/ci.yml` checks out impossible to miss. (Round-5 LOW-1: with the
+      expected revision living only in the environment, a local run with the variable unset verified
+      against whatever happened to be checked out — measurably several DVT commits past the revision
+      the report named — and reported green.) A local run may still set `REPCREDIT_YAAA_REV` to
+      narrow to another commit while a cross-repo round is in flight; the run prints the resolved
+      revision **and where it came from**. Moving the reviewed revision means editing the pin in the
+      commit that reviews it. The upstream checkout must also be **clean**: the guard pin reads the
+      committed blob via `git show`, and a dirty tree makes the built `dist/` unattributable, so
+      both are refused rather than silently accepted (CC-50).
+
+      Set `REPCREDIT_ANVIL_TEST=1` as well. It makes the real-anvil `extractRevertData` regression
+      a failure rather than a skip when `anvil` is not on PATH. That suite drives REAL viem against
+      a REAL chain because the bug it locks down — reading the contract address / decoded args
+      instead of the revert bytes on the `readContract` path — is invisible to hand-built error
+      objects, and it silently disabled one of the two accepted outcomes of the post-slash BLS
+      liveness control (CC-50 round-4 HIGH-1).
+
+      **Two prerequisites of the CI half live OUTSIDE this repo and cannot be verified from it**
+      (reviewer INFO, CC-50 round-3): the `repcredit-yaaa-http` job must be a **required** status
+      check on the branch protection rule, and `secrets.YAAA_CHECKOUT_TOKEN` must be present. The
+      main `test` job's `repcredit:test` step has no YAAA checkout, so it skips the 9 real-HTTP
+      cases and exits 0 — the strength of the whole chain is those two settings. Confirm both
+      before cutting a release.
 - [ ] **`pnpm run check:browser` (MANDATORY, run AFTER the `@aastar/sdk` build) — no Node-only builtin (`child_process`/`fs`/…) statically imported by any browser-facing subpath.** This exists because 0.42.0 shipped a `node:child_process` leak into `@aastar/sdk/operator` that broke downstream browser builds — unit tests run in Node and a narrow-import browser smoke tree-shook it out, so nothing caught it pre-publish. Never publish with this red.
 
 ## 4. On-chain E2E — FULL business-scenario set (NOT just the change), recorded

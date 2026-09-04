@@ -2,6 +2,721 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] — targeting SDK 0.46.0 (minor)
+
+> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.** CC-50 blocker **B2** is still open. The
+> `Registry` / `BLSAggregator` ABIs on this branch come from an **unmerged** SuperPaymaster branch:
+> `scripts/upstream-abi-pin.json` pins `03713feb` (`Registry` 5.7.0 / `BLSAggregator` 4.6.0), which
+> is reachable only from `codex/repcredit-e2e-evidence-20260823` and from **no `main` commit and no
+> deployed chain**. (Earlier revisions of this note named `daa1d1ec`, an ancestor of that pin, and
+> were not updated when the pin moved — round-10 LOW.)
+>
+> Upstream has since moved further: repo:sp's current candidate `e8a8ac5b` is `BLSAggregator`
+> **4.10.0**, which reshapes `guardianSlashCases` from 5 outputs to 7 (`fraudProofHash` inserted at
+> index 1, `verifier` appended). The BLS **domain** is unchanged — `DOMAIN_NAME` and every
+> `TAG_*` still carry the `.v1` suffix and `domainSeparator()` is still
+> `keccak256(abi.encode(DOMAIN_NAME, chainid, aggregator, registry))` — so
+> `scripts/repcredit/bls-domain.ts` needs no change. The **struct** does, and until the three-way
+> re-vendor lands the evidence runner fails closed on that pairing rather than recording it (see the
+> tenth-round entry). This version may only be published after repo:sp lands its fix and returns a
+> final commit/version/artifact hash.
+
+**RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
+
+### Added
+
+- **`scripts/repcredit-e2e.ts`** — the RepCredit paper evidence orchestrator. Deploys a fresh
+  Prague Anvil chain or an isolated Sepolia stack, starts real YAAA validators, and runs the true
+  cross-repository path (YAAA structured BLS co-signing → DVT → Registry → AirAccount
+  UserOperation → EntryPoint → SuperPaymaster → xPNTs burn or debt/auto-repayment), freezing the
+  evidence with a per-file `materialPassport` (bytes + sha256).
+  **Not a production API**, not exported from any package, and not in the npm bundle.
+- **`scripts/repcredit/negative-control.ts`** + reverse tests — falsifiable negative controls
+  (see Fixed/H1). New CI step `pnpm run repcredit:test`.
+- **`scripts/repcredit/sync-fixture-abis.ts`** + `pnpm run repcredit:abi:sync` /
+  `repcredit:abi:check` — generates the experiment ABI fixtures from the sibling foundry artifacts
+  and pins each by sha256 + upstream commit, with an `upstreamMerged` flag. The runner verifies the
+  pins before it touches a chain.
+
+### Second round (CC-50 / CC-49 `[from:docs]`) — YAAA auth sync, strict drift gate, RPC off argv
+
+**The ABI drift gate could still pass vacuously.** Its only hard-failure mode for missing inputs
+was "no upstream `out/` directory at all". An upstream that had been `forge clean`ed still leaves
+`out/` present for the OTHER repos, so `Registry` / `BLSAggregator` dropped into `skipped` and the
+gate printed PASS after checking 12 ABIs where a good run checks 30.
+
+- New strict mode: `pnpm run check:abi-drift:strict` (also `--strict` / `STRICT_ABI_DRIFT=1`, and
+  the existing `REQUIRE_UPSTREAM=1` now implies it). It fails **per expected contract**: any SDK
+  ABI whose contract is declared in an upstream `src/` tree but has no `out/` artifact is a
+  failure, not a skip. Sources are the right oracle — `forge clean` removes `out/`, never `src/`.
+- A `MUST_VERIFY` list (`Registry`, `BLSAggregator`, `DVTValidator`, `SuperPaymaster`) fails strict
+  mode when any of them was not actually compared, for any reason.
+- Both modes now print the full **checked / skipped-with-reason inventory** and a must-verify
+  table. A lenient run that skipped an expected artifact says so instead of printing a bare PASS.
+
+**YAAA 840bfdc made the experiment endpoints mandatory-auth; the runner had to follow.** Every
+`/repcredit/*` call now goes through `scripts/repcredit/experiment-auth.ts`:
+
+- one **CSPRNG secret per validator** (not per run — a shared secret would let a co-sign request
+  captured at one node be replayed at its peers), injected through the child process
+  **environment**, never argv;
+- HMAC over the **exact bytes sent**: the body is serialised once and that same string is both
+  signed and transmitted;
+- **every retry mints a new timestamp + token**, because the node accepts each token exactly once;
+  retries are limited to transport failures and 502/504 (a 4xx is a decision, and the gate's 503
+  cases do not heal on retry);
+- secrets are excluded from argv, manifest, evidence and errors, and are now redacted from the
+  output tree in **both** network modes (`logs/` holds each node's stdout; the previous redaction
+  ran only on Sepolia).
+- `assertHttpRejections` now rejects a **guard-level** refusal. With mandatory auth, an
+  unauthenticated control gets a 4xx from the admission guard without the service ever validating
+  it — under the old "any 4xx is a rejection" rule an entire negative-control suite could pass
+  while proving nothing.
+
+**RPC URL off the command line (CC-50 L1).** All three `forge script` invocations pass the endpoint
+through `FOUNDRY_ETH_RPC_URL` instead of `--rpc-url`, so a provider-keyed URL is no longer visible
+to every local user via `ps`. It must be `FOUNDRY_ETH_RPC_URL`: verified on foundry 1.7.1 that with
+only `ETH_RPC_URL` set, `forge script --broadcast` prints "If you wish to simulate on-chain
+transactions pass a RPC URL", writes no broadcast file and **exits 0** — a silent downgrade to a
+dry run. Each forge step is still followed by a hard existence check on its output.
+
+**Tests** — `scripts/repcredit/experiment-auth.test.ts` (19): client behaviour with the expected
+HMAC recomputed independently from `node:crypto`; a pin on the upstream guard's header names and
+`${timestamp}.${rawBody}` preimage; and a **real YAAA HTTP integration suite** that boots the
+actual `dist/main.js` against a throwaway anvil and exercises the live guard — unsigned (401),
+wrong secret (403), stale timestamp (401), body mutated after signing (403), replay (403), the
+happy path, and `ps` inspection proving the secret never reaches the command line. It skips loudly
+when the sibling checkout is absent; `REPCREDIT_YAAA_HTTP_TEST=1` turns that skip into a failure.
+
+**New optional env var** — `REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS` is forwarded to each node as
+`AUDIT_BLS_AGGREGATOR_ADDRESS`. YAAA's in-flight CC-49 round 2 refuses to arm without it. Never
+defaulted here: guessing it is the exact failure DVT closed.
+
+> ⛔️ **Still deferred, deliberately:** the SuperPaymaster aggregator **domain tag / hash schema**
+> (CC-49 HIGH-A) is not final, and the announced change will alter the on-chain slash preimage and
+> therefore the YAAA hash builder. No ABI, hash builder or domain constant is synced ahead of it.
+
+### Third round (CC-50 `[from:docs]` on 1e512187) — rejection taxonomy, revert selectors, upstream pin
+
+**A negative control was still allowed to pass on a failure that proved nothing.** An independent
+reviewer showed with a probe that YAAA's RepCredit *service* raises `ForbiddenException` (403)
+before it inspects a single caller field — for an unarmed node, an inactive validator slot, and
+(per request, transiently) for either of two RPC failures inside its audit-slot scan. Under the
+previous "any non-guard 4xx is a rejection" rule, five controls firing during a moment of RPC
+turbulence would all have been written into the evidence as "chain-id binding / message rebinding
+/ threshold / duplicate slot / bad signature verified", while the service validated nothing.
+
+- HTTP controls are now judged **positively and default-deny**. `classifyHttpRejection` sorts every
+  response into a stable taxonomy — `SERVICE_VALIDATION` (the only evidence-bearing class),
+  `GUARD_AUTH`, `SERVICE_PREREQUISITE`, `INFRASTRUCTURE`, `SERVER_FAULT`, `ACCEPTED`, `UNKNOWN` —
+  and each control declares the class **and the specific rule** it must produce. Anything else,
+  including anything unclassifiable, fails the run.
+  The structural half of the classification is the HTTP status, which upstream assigns by exception
+  type (validation → 400, prerequisite/admission → 403, guard → 401/403/413/503), so "403 is never
+  evidence" holds independently of message wording; prose only sharpens the failure message, and
+  message drift degrades to `UNKNOWN` (a failure) rather than to a false pass. `upstreamCode` is
+  wired for the structured error code YAAA has been asked to emit, and takes precedence when present.
+- The reviewer's four real 403 bodies are pinned as regressions, alongside a **mutation baseline**
+  that re-runs the old predicate and demonstrates it accepted all four.
+- **All four on-chain controls now assert the revert they exist to demonstrate**, by 4-byte
+  selector: `Registry.AggregateCreditUpliftExceeded`, `BLSAggregator.SignatureVerificationFailed`,
+  `BLSAggregator.GuardianExitBlockedBySlash`, and — for the post-slash liveness view — an explicit
+  `false` or one of the reverts that mean the signer set is no longer a valid quorum. Selectors are
+  **derived from the vendored ABI** (`errorSelector`), never hand-typed, so a renamed or removed
+  upstream error is a loud startup failure. This matters precisely because CC-50 **B2** is open: a
+  stale ABI also produces a revert, and "any revert counts" would have recorded that as the rule
+  firing. An undecodable revert, an unknown selector and an out-of-gas failure all fail.
+
+**The upstream contract pin read another repository's working tree.** It `readFileSync`-ed the
+sibling checkout's live copy of the YAAA guard, so the gate flipped red the moment DVT began its
+next round, and when green could not say which revision it was green against.
+
+- The pin now reads the guard **out of git at a committed revision** (`git show <rev>:<path>`),
+  prints that revision, and refuses a dirty upstream checkout. `REPCREDIT_YAAA_REV` declares the
+  expected commit and fails on a mismatch. The real-HTTP suite additionally refuses a `dist/` that
+  predates the pinned revision — a stale artifact runs an older guard than the one just verified.
+- CI gained a dedicated **`repcredit-yaaa-http`** job that checks out the pinned upstream ref,
+  builds it, and runs the suite with `REPCREDIT_YAAA_HTTP_TEST=1`: a missing checkout, a missing or
+  stale artifact, or a node that will not boot now **fail** instead of skipping. `docs/RELEASE-CHECKLIST.md`
+  requires the same command pre-release.
+
+**Synced to YAAA `df9c8a35`: the auth preimage is now v2.** Upstream binds the method and the
+request target into the HMAC and versions the scheme header; there is no v1 fallback. The client
+sends `X-RepCredit-Scheme: v2` and signs `v2\nMETHOD\nREQUEST-TARGET\nTIMESTAMP\nRAW-BODY`,
+byte-for-byte with `buildRepCreditAuthPreimage`. The preimage field order is pinned against the
+committed upstream source, and the real-node suite proves the client gets through the live v2 guard
+(including a token minted for a different endpoint being refused). Nothing here was anticipated
+ahead of upstream: the SDK does not invent schema versions.
+
+Also picked up upstream's **devnet escape** for key isolation: local Prague runs pass
+`REPCREDIT_NO_PRODUCTION_AGGREGATOR=true` (upstream refuses it on any chain carrying real
+deployments), while Sepolia now **hard-fails at startup** unless
+`REPCREDIT_AUDIT_BLS_AGGREGATOR_ADDRESS` is set — guessing that address is the failure mode DVT
+just closed. `REPCREDIT_FORBIDDEN_AGGREGATORS` is forwarded when set.
+
+Smaller items from the same round:
+
+- `sanitizeError` now scrubs the per-node experiment secrets explicitly. They are bare 64-character
+  hex with no `0x` prefix, so the existing `0x`-anchored rule never matched them.
+- `failure.json` is written **before** the redaction sweep instead of after — it was the one file
+  on the failure path the redactor never saw.
+- Retry tokens no longer depend on `Date.now()` advancing: two attempts inside the same millisecond
+  over the same body produced an identical preimage, hence an identical token, which the node
+  rejects as a replay — a retry that could never succeed.
+- `check:abi-drift` now prints, for every verified contract, the upstream artifact path and the
+  **sha256 of its normalised ABI**. "checked 30" only means something if the run can name its inputs.
+- The `MUST_VERIFY` failure is **no longer gated on strict mode**. `check:abi-drift` — the command
+  people actually type — could exit 0 with `Registry`, `BLSAggregator`, `DVTValidator` and
+  `SuperPaymaster` all uncompared, which is the same false signal strict mode exists to remove.
+  There is no acceptable state in which those four go unverified.
+
+### Tenth round (CC-50 `[from:docs]` on a73c8ec7) — measure the returndata, do not ask the ABI
+
+**The named decode could not see the hazard it documented (HIGH).** Round nine replaced the bare
+array in `security-controls.json` with a named object, but it still obtained the value through
+`publicClient.readContract(<old vendored ABI>)` and then checked what viem had *already* decoded.
+An independent reviewer measured that this is structurally blind to the 5 → 7 reshape it was
+written for:
+
+* the ABI-shape check compares the OLD vendored ABI against the OLD reviewed names — and they
+  match, because the ABI is exactly what this repo reviewed. It is the *contract* that changed;
+* the arity check compares viem's already-truncated 5-member result against 5 — and that matches
+  too, because viem decodes seven static words as five without erroring.
+
+Both guards passed, and the evidence file received `fraudProofHash`'s bytes under the name
+`deadline`, `deadline`'s under `status`, and so on — worse than the bare array, because the wrong
+values now carry authoritative names. Not hypothetical either: the runner deploys with
+`forge script` from the sibling `../SuperPaymaster` working tree, which already carries the
+7-output struct.
+
+`scripts/repcredit/evidence-structs.ts` (replacing `guardian-slash-case.ts`) stops asking the ABI
+what shape the answer was and measures the answer instead — `encodeFunctionData` +
+`publicClient.call` for RAW returndata, then, **before any decoding**:
+
+1. the returndata must be a whole number of 32-byte words;
+2. the vendored ABI's outputs must still be exactly the reviewed **names AND types**, in order
+   (round nine compared names only, so a `uint64 deadline` → `uint256 deadline` widening was
+   invisible to it);
+3. when every reviewed output is statically sized, the word count must **exactly equal** the
+   declared output count. Five declared against seven received aborts the whole runner;
+4. only then `decodeFunctionResult`, mapped by name, with every member checked against its
+   declared type and value domain.
+
+Step 3 is the load-bearing one, and it is the only claim that holds with certainty: the ABI
+encoding of N static outputs *is* N words. For a tuple with a dynamic member no such equality
+exists, so `roleLocks` (whose `metadata` is `bytes`) is covered by steps 2 and 4 only — stated
+here rather than implied.
+
+**The same treatment for the two neighbours in that evidence section (LOW).**
+`guardianExitRequests` and `roleLocks` no longer land in the JSON as positional arrays, and the
+post-slash negative control reads `lock.amount` instead of `lock[0]` — a positional read of a
+*negative control* silently checks the wrong member the moment the struct is reordered.
+`roleLocks.amount` is asserted to be a `uint128`-domain bigint and `metadata` even-length hex.
+
+**Regressions, including a real-chain one (26 tests in 2 new files; the provenance suite grows
+33 -> 38).** The round-9 decoder shipped broken
+precisely because it was only ever exercised with hand-built JS values, and the bug lives in what
+*viem* does with returndata the ABI does not describe. So `evidence-structs.anvil.test.ts` installs,
+via `anvil_setCode` on a real chain, a contract that always returns the seven static words of the
+4.8.0 struct, and drives real viem at it:
+
+* `readContract` with this repo's 5-output ABI is **shown to succeed** and to hand back
+  `fraudProofHash` in the `deadline` slot — the bypass, measured rather than described. If viem ever
+  starts rejecting it, that assertion fails and this paragraph stops being true;
+* `readNamedStruct` on the same address with the same ABI **throws** before decoding;
+* a matched 7-output ABI + 7-field reviewed constant reads the right values off that same contract,
+  so the refusal is about the mismatch and not about strictness — that is the positive case B2's
+  re-vendor will land, proved now rather than promised;
+* the shipped ABI still reads a real 5-word contract correctly (no false positive), and a codeless
+  address is a failure rather than an all-zero struct.
+
+**Mutation-verified** (repo file restored byte-identical, sha256 re-checked): disabling the word
+count turns 6 tests red including the real-chain one; disabling the name/type comparison turns
+exactly 3 red; disabling the per-member domain check turns exactly 1 red. Each is independently
+load-bearing. Note that the domain check *also* happens to catch this particular 5 → 7 payload (a
+`bytes32` landing in a `uint64` slot overflows), so the test that pins the failure asserts the
+word-count message specifically — a shifted value that still fits its slot would sail past the
+domain check.
+
+**Three gate-honesty fixes (LOW / INFO).**
+
+- `--strict` together with `REPCREDIT_UPSTREAM_ARTIFACTS=absent` now **exits 1 immediately**. Those
+  two assert opposite things — the variable *declares* that an environment has no sibling upstream
+  checkouts, strict mode *requires* every must-verify ABI to be compared against one from a clean
+  pinned checkout. A reviewer measured that the combination could not produce a false green today
+  (strict already fails on the missing `out/` dirs), which is exactly why it was worth fixing: the
+  exclusion was a property of the current control flow, enforced for release by one line of prose.
+  It is now an impossible state.
+- **CI runs `lint:repcredit` directly** as a required step. `pnpm run lint` wraps `pnpm -r lint`
+  first, which is a **no-op** in this monorepo, so wiring the wrapper in would have added a green
+  step that ran no linter. The scope now also includes `scripts/repcredit-e2e.ts` itself (16 files,
+  0/0). Two rules are enabled, so read the green as "these two rules hold".
+- The **realpath escape check** and the `mustVerifyFullyAttributed` guard are recorded as redundant
+  defense-in-depth, not as load-bearing links. A reviewer's mutation matrix showed neither is ever
+  the *only* failing check in any constructible shape — reverting the round-9 `lstat` fix back to
+  `stat` still leaves both symlink shapes fail-closed. The chain that carries the guarantee is:
+  pinned-and-clean checkout → the path is a regular blob in that revision → the working-tree bytes
+  equal that blob → the artifact's sole compilation target is that path.
+
+**CI now runs the strict provenance gate against a real pinned upstream.** The right fix was not to
+add `check:abi-drift` to the existing job — with no sibling checkouts it compares nothing and exits
+0, the misleading green the gate exists to remove — but to give it its inputs. The new
+`abi-provenance` job checks `AAStarCommunity/SuperPaymaster` out at the reviewed revision
+`03713feb`, initialises the `contracts/lib` submodules, `forge build`s it, asserts the checkout is
+clean and at that exact sha, and runs `pnpm run check:abi-drift:strict` with the SDK as a sibling.
+All four `MUST_VERIFY` contracts come from that one repo, so the must-verify chain is fully
+exercised. It is a separate job for the same reason as `repcredit-yaaa-http`: an upstream outage
+must read as "the upstream gate failed", never as "everything is green".
+
+**What that job has and has not been measured to do.** An earlier, interrupted round-10 session
+left a paragraph here claiming the job's steps had been reproduced locally against a fresh clone at
+`03713feb` with a quoted exit code and output. That claim is **not carried forward**: it could not
+be re-verified in this session, and reproducing it would have meant moving the sibling
+`../SuperPaymaster` checkout off its current revision, which this round is not permitted to do. So,
+precisely:
+
+* the **gate** is exercised hard — `scripts/repcredit/abi-drift-provenance.test.ts` builds real git
+  repos with real solc-shaped metadata and runs the real script against them, including a
+  clean-and-pinned baseline that passes `--strict`;
+* the **`ref` literal** is now bound to `scripts/upstream-abi-pin.json` by unit tests (below), in
+  both the SuperPaymaster and the YAAA job;
+* the **job itself has never run** — no `forge build` of `03713feb`, no GitHub-hosted execution. Its
+  first run may well need fixing (toolchain versions, submodule paths, build time). A red first run
+  should be read as this job being wrong, not as the pin being unattributable.
+
+What *is* observable about B2 from here: the strict gate is red on a developer's machine because the
+sibling working tree has moved ahead of the pin — `fc0ca825` in round 8, `fcc205ee` in round 9,
+`e8a8ac5b` now, all within a day — and not because of anything this round added.
+
+**Three unit tests bind the workflow to the pin file.** The `ref` literals in both checkout jobs
+must equal `repos.SuperPaymaster.revision` and `services["YetAnotherAA-Validator"].revision`, and
+the `abi-provenance` job must run the **strict** variant with no `REPCREDIT_UPSTREAM_ARTIFACTS` key.
+The strict gate already refuses a checkout whose HEAD is not the pinned revision, so a drift could
+never produce a false *green* — but it could only say so several minutes into a CI run, and the
+natural fix under that pressure is to edit whichever of the two literals is easier to reach. These
+make the disagreement local and immediate. Falsifiable, measured: pointing the workflow at
+`e8a8ac5b` while the pin says `03713feb` turns the first red; downgrading `check:abi-drift:strict`
+to the lenient script turns the third red.
+
+**A disabled guard was found in the inherited working tree, restored, and given the regression it
+never had.** `scripts/check-abi-drift.ts` carried `if (false && !stat.isFile())` — a mutation probe
+from the interrupted session that was never reverted. It is restored byte-identical to the committed
+form. The reason it survived is the part worth recording: **the entire 34-case provenance suite
+still passed with that link disabled.** A symlink is refused one line earlier and a regular file
+never reaches it, so no existing fixture could tell the guard was gone.
+
+`worktree-source-is-directory` is the shape that reaches it: the pinned revision holds an ordinary
+blob at the pinned path, and the working tree has a directory there. Note what the case actually
+shows — with the link removed the run *still* exits 1, because the byte comparison further down
+calls `readFileSync` on a directory, gets `EISDIR`, and reports `WORKTREE SOURCE MISSING`. So this
+link is **redundant for the verdict and load-bearing for the diagnosis**, and the test asserts the
+*label*, not the exit code. Measured: restoring the `false &&` turns that case, and only that case,
+red. It belongs in the same honest category as the realpath check below — a fourth guard that
+sharpens the message rather than a fourth independent way to fail closed.
+
+### Ninth round (CC-50 `[from:docs]` on ed662994) — the pinned revision must actually CONTAIN those bytes
+
+**"In the repo" was a string prefix, and the read followed symlinks (MEDIUM).** Round eight settled
+WHICH path a must-verify artifact must have been compiled from. Whether the pinned *revision*
+contains the bytes at that path was still decided by
+`path.resolve(repoRoot, rel).startsWith(repoRoot + path.sep)`, after which `fs.readFileSync`
+followed whatever the path pointed at. An independent reviewer committed
+`contracts/src/core/Registry.sol` as a **symlink to a file outside the repo** and measured
+`--strict` **exit 0**, the unconditional PASS, and
+`Attributed to committed upstream revision(s): SuperPaymaster@…` — over a revision that contains
+only the link. solc hashed the target, the gate re-hashed the same target, and every link in the
+chain agreed.
+
+Attribution is now **proved**, not inferred. For every source of a must-verify artifact:
+
+1. `lstat` (never `stat` — following the link is the bypass): the working-tree entry must be a
+   **regular file**. A symlink is refused for what it *is*, not for where it points, so the
+   in-repo-target variant is refused too — a `realpath`-prefix mitigation alone would pass that one.
+2. `realpath` of the file must be under `realpath` of the repo root, catching a link anywhere in
+   the chain of parent directories.
+3. `git ls-tree -r <pinnedRevision>` must record that path as a **regular blob** (mode
+   `100644`/`100755`). Mode `120000` (symlink) and `160000` (submodule gitlink) are refused: `git
+   show <rev>:<path>` prints a symlink's target text quite happily, so the mode has to be read
+   explicitly rather than inferred from content.
+4. `git cat-file blob <oid>` — what `git show <rev>:<path>` yields — must be **byte-identical** to
+   the working-tree file this run read.
+
+Only then is `metadata.sources[path].keccak256` compared, and it is compared against the **pinned
+blob's** bytes rather than whatever the working tree handed over. Any failure keeps the entry out of
+`verified`, so it never counts as coverage, the contract lands in `MUST-VERIFY PROVENANCE
+INCOMPLETE`, `--strict` fails closed, and the `Attributed to committed upstream revision(s)`
+sentence is not printed (`SOURCE NOT ATTRIBUTED TO PINNED REVISION: <label>`).
+
+- **Submodules are followed, not refused.** Foundry dependencies live in submodules and `ls-tree -r`
+  stops at the gitlink, so a direct-entry-only lookup would reject every artifact recording a
+  `contracts/lib/**` source — 1 of `SuperPaymaster`'s 31. The superproject's pinned revision *does*
+  fix those bytes, through the exact commit id in the gitlink, so the chain stays cryptographic:
+  `superproject@rev -> gitlink oid -> blob`. What is still refused is a gitlink **at** the source
+  path itself, which is not a file solc can compile.
+- **Eight new regressions (33 total in this file).** Six negative: a committed symlink pointing
+  outside the repo (the measured bypass); one pointing inside; a regular, correctly-hashing file the
+  pinned revision does not track at all (gitignored — clean checkout, HEAD *is* the pin, so the new
+  gate is provably the only failing link); a regular working-tree file whose pinned tree entry is a
+  symlink; the same with a submodule gitlink; and working-tree bytes the artifact matches exactly
+  but the pinned revision does not hold. Two positive: a regular tracked blob, and a source inside a
+  pinned submodule. The last three negatives necessarily pin a commit behind HEAD — the only way a
+  clean tree can disagree with its pinned tree — so `UNUSABLE CHECKOUT` legitimately co-fires there
+  and the assertions name the new gap specifically; the first three have no companion gap at all.
+- **Mutation-verified on a copy** (repo file untouched, sha256 re-checked after each round):
+  disabling the symlink refusal turns exactly the two symlink cases red; dropping the tree-mode
+  check turns exactly the symlink-in-tree and gitlink-in-tree cases red; dropping the byte
+  comparison turns exactly the differing-bytes case red; making an absent path resolve turns exactly
+  the untracked case red; restoring the old green tick in `--- must-verify ---` turns all six red.
+- **Two of the guards are redundant defense-in-depth, not load-bearing links** — recorded as such
+  rather than counted (round-10 INFO, from an independent reviewer's mutation matrix):
+  * the `mustVerifyFullyAttributed` guard on the attribution sentence changes no test, because
+    `--strict` already exits before reaching it. It is kept as a property of the sentence rather
+    than of the control flow above it;
+  * the **realpath escape check** was never the ONLY failing link in any shape either side could
+    construct — including a directory-symlink in the middle of the path, which the byte/pin
+    comparison catches anyway. Reverting the round-9 `lstat` fix back to `stat` still leaves both
+    symlink shapes failing closed. That redundancy is welcome, but the chain that actually carries
+    the guarantee is: pinned-and-clean checkout → the path is a regular blob in that revision →
+    the working-tree bytes equal that blob → the artifact's sole compilation target is that path.
+- **Measured on the real siblings** (SuperPaymaster `fcc205ee`, pinned `03713feb`; airaccount
+  `29caffc7`): `SuperPaymaster` now attributes **31/31** sources (the chainlink submodule source was
+  the 1 previously uncovered), `Registry` **17/17** and `DVTValidator` **7/7** — all against the
+  pinned revision, not merely against the working tree. `BLSAggregator` reports
+  `WORKTREE BYTES NOT IN PINNED REVISION` for its own source because repo:sp is mid-round on that
+  file: that is B2, correctly fail-closed, not a false positive.
+
+**Three report / gate honesty fixes.**
+
+- `--- must-verify ---` printed `✅ <name>` for a contract that had merely been **compared**, in the
+  same run whose `MUST-VERIFY PROVENANCE INCOMPLETE` block listed that same contract a few lines
+  below. It now prints `⚠️  <name> — compared, provenance INCOMPLETE (N gap(s), listed below)`, and
+  `❌ … — NOT COMPARED` when it was never checked (round-9 LOW-1). Same shape round-8 LOW-2 removed
+  from the `checked` table; this section was missed.
+- The **REAL** must-verify pin check `console.warn`-ed and continued on a missing sibling artifact,
+  so a run with no upstream checkouts reported `0/4 measured` and stayed **green** — the one
+  assertion in that file made against real data degrading into the vacuous PASS the gate exists to
+  remove. A missing artifact is now a **failure**, and `measured` is asserted to be 4. An
+  environment that genuinely has no upstreams must declare itself with
+  `REPCREDIT_UPSTREAM_ARTIFACTS=absent`, which marks the test **skipped** (visible in the vitest
+  summary) and never passed; `.github/workflows/ci.yml` sets it on both jobs, release runs do not
+  (round-9 LOW).
+- `scripts/check-abi-drift.ts` **belonged to no tsc project**, so the `tsc --noEmit --strict` pass
+  reported for it in round 8 was not reproducible: under this repo's own `target/lib: ESNext` a Node
+  `Buffer` is not assignable to viem's `Uint8Array` parameter and it errored. It is now in
+  `scripts/tsconfig.repcredit.json`, so `pnpm run repcredit:typecheck` covers it with the repo
+  settings, and the byte paths carry `Uint8Array` throughout (round-9 LOW).
+
+**`guardianSlashCases` 5 → 7 tuple, decoded by name (B2 consumption point).** Upstream reshapes this
+struct in BLSAggregator 4.8.0 — `fraudProofHash` inserted at index 1, `verifier` appended. Every
+member is statically sized, so calling the new contract with the 5-output vendored ABI would **not**
+revert: viem decodes seven words as five and `security-controls.json` records `deadline` where
+`fraudProofHash` is. The runner wrote that raw array straight into the evidence file, where nothing
+says what any slot meant. `scripts/repcredit/guardian-slash-case.ts` now decodes it into a **named**
+object and fails closed on both the ABI shape (the vendored outputs must still be the reviewed names
+in the reviewed order) and the returned arity, with five regressions including the exact 4.8.0
+layout. This does not pre-empt B2 — no upstream ABI was synced — it makes the re-vendor a reviewed
+edit in one file instead of a silent mislabelling.
+
+> **Correction (round 10).** The "fails closed on the 5 → 7 pairing" claim above was **wrong**, and
+> an independent reviewer measured it: both of those guards inspect the value viem has *already*
+> decoded with the old ABI, so neither can observe that the chain sent seven words. What round nine
+> actually delivered was the named object and a forced human review at re-vendor time — real, but
+> not the fail-closed property claimed. The file was replaced by
+> `scripts/repcredit/evidence-structs.ts`, which measures the raw returndata; see the tenth-round
+> entry above.
+
+**Honest note on `lint`.** `pnpm run lint` still runs `pnpm -r lint` first, which is a **no-op**
+(`None of the selected packages has a "lint" script`). The real lint is `lint:repcredit`: 12 files,
+0 errors, 0 warnings, and `--print-config` shows only **two** rules actually enabled
+(`no-restricted-imports`, `@typescript-eslint/no-unused-vars`). Recorded as-is, per
+[from:docs] round-9 — not widened in this round.
+
+### Eighth round (CC-50 `[from:docs]` on a9172fd1) — the declaration's PATH must be one this repo reviewed
+
+**Round seven forced the declaration's VALUE and never looked at its KEY (MEDIUM).** A must-verify
+artifact had to declare exactly one compilation target whose value is the contract name — but which
+FILE that key named was never compared with anything. An independent reviewer measured
+
+```json
+"compilationTarget": { "contracts/src/Unrelated.sol": "Registry" }
+```
+
+exiting 0 under `--strict` with the unconditional PASS, while `contracts/src/Registry.sol` was never
+hashed and did not appear anywhere in the output. This is the same failure as round-6 and round-7 —
+a green over zero verified bytes of the contract being released — entered from the key side instead
+of the value side. It is not only theoretical: a contract that MOVES leaves exactly this artifact
+behind, since the old path is still on disk, still hashes correctly, and now holds something else.
+Three such stale shells already exist in the sibling `out/` (test stubs, outside `MUST_VERIFY`).
+
+- `scripts/upstream-abi-pin.json` now pins the **canonical source** of every must-verify contract:
+  `contracts[<name>].repo` + `contracts[<name>].sourcePath` — `Registry` →
+  `contracts/src/core/Registry.sol`, `BLSAggregator` /`DVTValidator` →
+  `contracts/src/modules/monitoring/…`, `SuperPaymaster` →
+  `contracts/src/paymasters/superpaymaster/v3/SuperPaymaster.sol`.
+- `--strict` requires the artifact's single compilation target to be **byte-exact** that path, its
+  value to be the contract name, and the path to be in the **verified source set of that repo's
+  clean, pinned checkout**. A missing pin, a pin that is absolute or can escape its repo (`..`), a
+  pin whose repo declares no reviewed revision, and a pin belonging to a different checkout than the
+  artifact came from all fail closed (`NO PINNED SOURCE PATH` / `PINNED SOURCE PATH INVALID` /
+  `MAIN SOURCE PATH NOT PINNED` / `MAIN SOURCE REPO MISMATCH`).
+- **Deliberately not** a basename match, not `sourceName`, and not a `contract <Name>` regex over
+  the file: the first two are the guesses round seven removed, and a regex reads bytes the artifact
+  itself chose — a comment or a string literal satisfies it. It is fine as a sanity check (the real
+  positive test does run it) and unfit as the thing a release stands on. A human-reviewed constant
+  has no such failure mode, and it turns moving a contract into a reviewable diff in THIS repo.
+- **Seven new regressions (25 total).** Six synthetic: the right name on a wrong (but perfectly
+  hashed) path; a missing pin; a wrong pin over a correct artifact; a traversal pin; an absolute pin;
+  a pin belonging to another repo. Each keeps the whole rest of the chain intact, so the pin binding
+  is provably the only thing that fails. One **real**: the four shipped pins are held against the
+  actual sibling artifacts — same single target, byte-exact path, recorded source hash, and the file
+  on disk really declaring that contract (4/4 measured). Mutation-verified: disabling the byte-exact
+  compare turns exactly the three path cases red and restores the reported `--strict` exit 0 +
+  unconditional PASS; dropping the pin-shape check turns exactly the missing/traversal/absolute
+  cases red; dropping the repo check turns exactly that one red.
+- Re-measured on the current sibling `out/` (SuperPaymaster `fc0ca825` + airaccount `29caffc7`):
+  **996 of 996** artifacts carrying an object `compilationTarget` have exactly one entry, and the
+  four must-verify pins bind with **zero** false positives (`✅ 8 / 7 / 17 / 31 source(s) verified`,
+  no `MAIN SOURCE …` line on any of the 30 checked rows). The round-7 note's *915* was the count at
+  that time; the total moves with every upstream rebuild, the distribution does not.
+
+**Two report-honesty fixes.**
+
+- A `checked` row whose next line reads `MAIN SOURCE UNDECLARED` used to still print `✅ N source(s)
+  verified` — a green at war with its own report, the shape round-7 MEDIUM-2 removed from the PASS
+  sentence. It now degrades to `⚠️  N source(s) verified, main source NOT attributed` (LOW-2).
+- The `expectedMissing` lenient PASS — a run that already knows it verified less than it looks — was
+  the one green path that did not print the `NOT RELEASE-SCOPE CAVEAT` line. All three PASS paths now
+  name the non-must-verify gaps (LOW-3), pinned by its own regression.
+
+### Seventh round (CC-50 `[from:docs]` on b2399ebf) — the artifact must DECLARE its own source; the PASS may only speak for what it enforced
+
+**The main source was still guessable (MEDIUM-1).** Round six required a must-verify artifact to
+prove *its own* source was verified, but resolved which file that was through a fallback chain:
+`settings.compilationTarget` → a **single-key** target (whatever contract it names) → `sourceName`
+→ an unambiguous `<Name>.sol`. An independent reviewer measured **four** artifact shapes in which
+`--strict` exits 0 and prints the unconditional PASS while `contracts/src/Registry.sol` is never
+hashed, because the chain walked past the one authoritative answer and landed on a correctly-hashed
+but **unrelated** in-repo sibling:
+
+1. `compilationTarget` has one entry and it names a **different** contract;
+2. `compilationTarget` names several targets, **none** of them this contract, and `sourceName`
+   points at a verified sibling;
+3. no `compilationTarget` at all, `sourceName` points at a verified sibling;
+4. `compilationTarget` is a **string** (malformed) — a broken declaration was *weaker* than none,
+   since the whole block was skipped and `sourceName` took over.
+
+An artifact that declares a compilation target and does not claim this contract has told us it is
+not the artifact for it; guessing past that statement is the bypass.
+
+- For a `MUST_VERIFY` contract the declaration is now the **only** accepted answer:
+  `metadata.settings.compilationTarget` must be an object with **exactly one entry**, and that
+  entry's value must equal the contract name. Missing, malformed, empty, a single entry naming a
+  different contract, several entries, or the contract claimed twice each fail closed as
+  `MAIN SOURCE UNDECLARED` / `MAIN SOURCE AMBIGUOUS`. Not "at least one entry that claims it":
+  picking the matching entry out of several is the same guess in a smaller disguise, so **one
+  correct claim beside an extra unrelated target also fails** (`[from:docs]` round-7 boundary
+  correction). Measured across all **915** sibling artifacts on disk, every one has exactly one
+  entry — this rejects nothing solc actually emits. The `sourceName` and `<Name>.sol` guesses are
+  gone from that path; they survive only for contracts outside `MUST_VERIFY`, which never reach the
+  release gate.
+- **Six new synthetic regressions** (17 cases total), one per shape. Each keeps the rest of the
+  chain intact — clean, committed, pinned upstream; every recorded source in-repo, on disk and
+  correctly hashed — and asserts the run still prints `✅ N source(s) verified` with **no**
+  `SOURCE HASHES INCOMPLETE` / `NO SOURCE HASHES` / mismatch, so the declaration gate is provably
+  the only thing that fails. Mutation-verified: restoring the fallback chain turns exactly the five
+  original declaration cases red and nothing else; relaxing "exactly one entry" back to "one
+  matching claim" turns exactly the extra-target case red.
+
+**The green sentence contradicted its own report (MEDIUM-2).** Source coverage is enforced for the
+`MUST_VERIFY` set only — 26 of the 30 currently checked contracts are outside it — yet the
+unconditional PASS claimed *"every artifact hash-matches the sources it records"*. The reviewer
+reproduced a single run that printed `GasTokenFactory … ⚠️ 0 source(s) verified, 1 not covered` in
+its own `checked` table and then that sentence, exiting 0.
+
+- The unconditional PASS now says **`and all N must-verify artifacts hash-match every source they
+  record`** — the claim the run actually enforced.
+- Any **checked but non-must-verify** artifact with an unestablished artifact⇄source binding is
+  named on its own line: `NOT RELEASE-SCOPE CAVEAT: N further checked artifact(s) … compared by ABI
+  only`. It does not fail the gate (it never did), it is no longer swallowed by a blanket claim.
+- Pinned by its own regression, and the retired sentence is asserted **absent** from every case
+  including the baseline, so it cannot come back. Mutation-verified in both halves: restoring the
+  old wording turns the baseline red, dropping only the caveat line turns the scope case red.
+
+### Sixth round (CC-50 `[from:docs]` on 55979499) — source hashes are COVERAGE, not a count
+
+**`sourceCount` counted entries; it did not prove the contract was verified.** Round five made
+`sourceCount === 0` a hard failure, but any count `≥ 1` stopped the questioning — the run never
+asked *which* file that count referred to. An independent reviewer reproduced two artifacts on
+which `--strict` exits 0 and prints the unqualified *"every artifact hash-matches the sources it
+records"* while **not one byte** of the `MUST_VERIFY` contract's own source was hashed:
+
+1. **the entry carries no comparable hash.** `verifyArtifactSources` did `sourceCount++` and only
+   *then* tested `typeof entry?.keccak256 === 'string'`, so `{ "urls": [...] }` or
+   `{ "keccak256": null }` counted as one verified source and the comparison was skipped — the tick
+   `✅ 1 source(s)` was printed over a file that was never read.
+2. **the count came from an unrelated file.** A source resolving outside the repo was skipped as
+   "the dependency's problem", so an artifact whose own `Registry.sol` sits in a vendored/remapped
+   tree, next to one correctly-hashed sibling source, produced `sourceCount = 1` and a green run
+   with `Registry.sol` itself unverified.
+
+- **Every entry now lands in exactly one bucket** — `verified` / `mismatched` / `unresolved` /
+  `unverifiable` (no usable `keccak256`: absent, `null`, or not 32 bytes of hex) / `external`
+  (outside the repo the artifact is attributed to) — and **only `verified` counts**. For a
+  must-verify contract each non-empty bucket is its own named gap, so an entry that *cannot* be
+  compared is reported as un-verified rather than as verified.
+- **A must-verify artifact must prove its OWN source was verified.** The main source is taken from
+  the artifact's own metadata (`settings.compilationTarget` for this contract name, then
+  `sourceName`, then an unambiguous `<Name>.sol`) and must be present in the verified set;
+  otherwise `MAIN SOURCE NOT VERIFIED` names it and why. Verifying *a* source and verifying *this
+  contract* are different claims, and only the second one licenses the PASS sentence.
+- The `checked` table no longer prints a bare `N source(s)`: it reports `N source(s) verified` plus
+  how many were **not covered**, and lists each uncovered entry with its reason.
+- **Two independent synthetic regressions** in `scripts/repcredit/abi-drift-provenance.test.ts`
+  (10 cases total), one per bypass, each asserting *both* halves — that the fixture really
+  reproduces the counted-but-unverified state (case b asserts `NO SOURCE HASHES` is **absent**,
+  because one source genuinely was verified, which is exactly why counting let it through) and
+  that `--strict` now fails without printing the unqualified PASS.
+
+**`pnpm -r lint` was a vacuous gate (INFO-1).** No `packages/*/package.json` defines a `lint`
+script, so it printed *"None of the selected packages has a lint script"* and exited 0 — and the
+repo-root `.eslintrc.js` cannot be loaded by the installed ESLint 9 at all (CommonJS
+`module.exports` under `"type": "module"`), so there was no working lint anywhere to fall back on.
+New `scripts/eslint.repcredit.config.mjs` + `pnpm run lint:repcredit` give the files this branch
+owns a lint that actually runs (12 files, built from the two `@typescript-eslint` packages already
+in `devDependencies`, verified non-vacuous against a planted `parseAbi` import and an unused
+variable). Root `lint` now chains into it. Migrating the rest of the monorepo to flat config is out
+of scope here and remains open.
+
+### Fifth round (CC-50 `[from:docs]` on 249be89e) — strict provenance can no longer pass on MISSING provenance
+
+**The chain was enforced only where it was BROKEN, not where it was ABSENT.** An independent
+reviewer measured two states in which `check:abi-drift --strict` exited 0, ticked all four
+`MUST_VERIFY` contracts, and printed the unqualified sentence *"every artifact hash-matches the
+sources it records"* — after hashing **zero** source bytes:
+
+1. an artifact carrying no `metadata.sources` (what a tarball, a `solc --abi` dump or a
+   non-foundry build produces). `verifyArtifactSources` returned it as `unresolved`, which was
+   printed and never set `failed`;
+2. an `out/` that belongs to no git checkout at all (a `git archive`, a downloaded CI artifact).
+   `repoProvenanceFor` returns `null` for those, and the `NO UPSTREAM PIN` gate filtered on
+   `e.repo && …`, so it dropped exactly the entries with no provenance and reported
+   `--- upstream revisions (0) ---`.
+
+Dirty and stale were already red; *missing* was the one state left green — the same class as the
+`forge clean` → silent skip → vacuous PASS this gate was added to remove, one layer down.
+
+- A `MUST_VERIFY` contract must now satisfy the WHOLE chain — repo → declared pin → clean revision
+  matching that pin → artifact → a **non-empty, fully resolved** set of source hashes the artifact
+  matches → the vendored ABI sha256 this repo committed. Any missing link is named individually and
+  fails strict/release mode (`MUST-VERIFY PROVENANCE INCOMPLETE`). `sourceCount === 0` is a failure
+  in its own right: an artifact that records no in-repo source was never verified against anything.
+- The unqualified PASS sentence is now **gated on that same condition**, so a run can no longer
+  claim a verification it did not perform. Anything less prints `PASS (with caveats)` naming what
+  was not established.
+- Lenient mode says what it is: it reports the provenance gates instead of enforcing them, and
+  every run now ends with an explicit `LENIENT MODE:` line pointing at `--strict` as the release
+  gate. Its exit code means "no drift I can attribute", never "release-grade".
+- **`scripts/repcredit/abi-drift-provenance.test.ts`** — a synthetic upstream repo + synthetic SDK
+  root per case, running the REAL script. Both bypasses are covered precisely, and each case
+  asserts BOTH halves: that the fixture reproduces the bypassed state (`✅ 0 source(s)`,
+  `--- upstream revisions (0) ---`) and that the run now fails on it. The links that already
+  worked — stale artifact on a clean pinned checkout, missing must-verify artifact, real drift —
+  are pinned in the same file so a later edit cannot trade one gate away for another.
+
+**The reviewed YAAA revision moved into the repo (LOW-1).** It lived only in
+`REPCREDIT_YAAA_REV`, so a local run with the variable unset verified against whatever was checked
+out: the local DVT checkout had moved several commits past the revision the report named, all
+assertions passed, and nothing said so. It is now
+`scripts/upstream-abi-pin.json` → `services["YetAnotherAA-Validator"].revision`, and in
+required/release mode (`REPCREDIT_YAAA_HTTP_TEST=1`) that pin is **authoritative** — an env var
+that disagrees with it is a hard failure rather than a silent redirect, which also makes a drift
+between the pin and the ref CI checks out impossible to miss. A local run may still narrow with
+`REPCREDIT_YAAA_REV`, and now prints the resolved revision **and its origin**. The rule lives in
+`scripts/repcredit/upstream-pin.ts` as a pure function with its own unit tests, because a guard
+resolved once at import cannot exercise both modes.
+
+**`writeContract` joined the real-anvil revert regression (round-4 INFO).** It is the path the
+evidence runner actually submits through, it fails inside viem's pre-flight gas estimation — a
+different error graph from every read path already covered — and that graph renders the
+transaction CALLDATA, which is exactly the bait the old string-scraping extractor took. The case
+asserts the extracted bytes are the revert data, are not the calldata or the contract address, and
+that both traps really are present in the error (otherwise the assertion is vacuous).
+`estimateContractGas` is covered alongside it.
+
+**Recorded upstream staleness (LOW-2, for @repo:sp).** SuperPaymaster's hand-maintained
+`abis/DVTValidator.json` is behind its own compiler output: 16 functions vs 18 in
+`out/DVTValidator.sol/DVTValidator.json`, missing `createProposal(address,uint8,string,bytes32)`
+and `queueSlashWithProof(address,uint8,uint256,bytes)`; last touched in `050f56b3` (2026-06-15).
+The SDK vendors from `out/` (verified 18/18 identical), so it is unaffected — but any downstream
+reading `abis/` gets the short interface. Noted in the pin file next to the contract.
+
+### Fixed — the negative controls could not fail (CC-50 H1)
+
+Four "this attack must be rejected" controls wrote their sentinel `throw` **inside** the `try` that
+was meant to catch the attack's failure. When an attack actually succeeded, the sentinel was caught
+by its own `catch`, stringified, and written into the evidence file as if it were the rejection
+reason — and the run still reported `status: "passed"`. The controls verified nothing.
+
+- All four sites now decide **outside** the try (`expectCallRejected`): aggregate-uplift cap,
+  tampered-score on-chain simulation, guardian-exit-while-slash-pending.
+- **Post-slash BLS liveness** was the worst of the four: it read `BLSAggregator.verify(...)`, a
+  **bool-returning view**. A slashed guardian set that stayed BLS-eligible returns `true` and never
+  throws, so the control could not detect the failure it existed to detect. `expectViewRejected`
+  now demands a revert **or an explicit `false`**.
+- A rejection is no longer accepted if it was an out-of-gas, transport, nonce or timeout failure —
+  those prove nothing about the security property. Reverted receipts must also show refunded gas
+  (`assertRevertedNotOutOfGas`), since an out-of-gas tx also lands as `status: "reverted"`.
+- Node-side HTTP controls now require a **4xx**: a node that 500s on everything used to make all
+  five negative controls "pass".
+- `scripts/repcredit/negative-control.test.ts` (19 tests) breaks each guarded property and asserts
+  the control throws, including a test that pins the original swallowing pattern as the baseline.
+
+### Fixed — experiment mock ABIs were published to npm (CC-50 H2) and broke the drift gate (B1)
+
+`RepCreditCounterABI` and `MockAgentIdentityRegistryABI` were exported from `@aastar/core` and so
+shipped inside `@aastar/sdk/dist`. `MockAgentIdentityRegistry.json` was additionally a hand-written
+3-entry subset of a 15-entry upstream artifact, which turned `pnpm run check:abi-drift` from
+**exit 0 to exit 1** — a CI hard-gate regression.
+
+- Both ABIs moved to `scripts/repcredit/abis/`, outside every published package, and removed from
+  the `@aastar/core` public surface. Verified against the actual `npm pack` tarball: 0 occurrences.
+- Both are now **generated** from the upstream foundry artifacts rather than hand-vendored, and
+  pinned by content hash. `check:abi-drift` is back to **exit 0**.
+
+### Fixed — cleanup was not fail-safe (CC-50 M2 / M3)
+
+- The staged Sepolia deployment config inside the SuperPaymaster checkout was removed by a
+  statement that any earlier throw skipped. A stale file left behind could be silently read as the
+  current deployment on the next run, pointing the evidence at the wrong addresses. It is now
+  cleared from a shared `cleanup()` reached by every exit path, and pre-deleted before deploying.
+- **No signal handling existed.** Ctrl-C bypassed the top-level `finally` entirely, leaving the
+  ephemeral BLS node keys in `/tmp` and orphaning anvil plus every YAAA child holding ports
+  18547 / 29301+. `SIGINT` / `SIGTERM` / `SIGHUP` now run the same idempotent cleanup.
+- `git()` no longer inherits the full `process.env` (i.e. `REPCREDIT_PRIVATE_KEY` and the
+  API-keyed RPC URL); it uses the same minimal env as every other child process.
+
+### Changed — [BREAKING-INTERNAL] three Paper7 evidence scripts retired
+
+`packages/analytics/scripts/paper7-exclusive-data.ts`, `paper7_credit_loop.ts` and
+`paper7_reputation_credit.ts` now throw on invocation. Each produced invalid evidence: the
+coordinator launched a non-Prague Anvil and mixed simulated output with contract results; the
+credit loop impersonated contracts and called `recordDebt` directly, bypassing `handleOps`/`postOp`;
+the reputation script used a random, non-Registry-bound BLS proof.
+
+- **Replacement**: `REPCREDIT_OUTPUT_DIR=/absolute/new/directory pnpm repcredit:e2e`.
+- **Migration guide + output-schema mapping**: `packages/analytics/README.md` ("退役与迁移").
+- **Semver: minor, not major.** These are repo-internal scripts; `@aastar/sdk` publishes
+  `files: ["dist"]`, so no npm consumer can reach them. Nothing in CI called them either —
+  `run_paper7_exclusive_data.sh` invokes `scripts/l4-setup.ts` and
+  `scripts/06_local_test_v3_reputation.ts` and never touched the retired three.
+
+### Note — the two evidence pins are semantically identical
+
+Local evidence was frozen at `401552ab`, the Sepolia run at `4077f110`. The only commits between
+them (`54bfed13`, `4077f110`) change **where the Sepolia deployment config is written**; the local
+path (`deployments/config.anvil.json`) is untouched. The experiment semantics are the same at both
+pins — the difference is staging location, not measured behaviour.
+
 ## [0.45.0] - 2026-08-18
 **SDK Code Integrity Hash**: `691e896e7f57c01bec14ced14aaecda7dad7031e2952389db5df9ad044e403fe`
 *(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*

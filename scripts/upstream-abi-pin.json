@@ -1,0 +1,146 @@
+{
+  "$comment": "Upstream ABI provenance pin (CC-50 round-4 MEDIUM-1). `check:abi-drift --strict` binds every must-verify ABI to a CLEAN, NAMED upstream revision: repos[].revision must match the sibling checkout's HEAD, that checkout must have no uncommitted changes, and each artifact must still hash-match the sources it records in its solc metadata. contracts[].abiSha256 pins the SDK's own vendored copy, so re-syncing an ABI without updating this file is a hard failure rather than a silent swap. contracts[].repo + contracts[].sourcePath pin the CANONICAL source file that declares the contract (CC-50 round-8 MEDIUM): a must-verify artifact's single metadata.settings.compilationTarget key must be BYTE-EXACT this path and its value the contract name, and that path must be in the verified source set of that repo's clean, pinned checkout. Without it, an artifact declaring {SomeOtherFile.sol: \"Registry\"} passed strict with zero bytes of the real Registry.sol hashed. sourcePath is repo-relative, POSIX, no \"..\"/\".\"/absolute segments. Update all of this in the SAME commit that re-syncs an ABI.",
+  "$comment2": "CC-115 B4 (2026-09-04). This file now pins TWO DIFFERENT THINGS and the difference is the whole point. `repos`/`contracts` pin what upstream SOURCE says. `deployedStack` pins what is ACTUALLY ON CHAIN. For BLSAggregator these disagree by design: SuperPaymaster@d651646a carries source version 4.12.0 (#400), the contract is NOT upgradeable, and no 4.12.0 instance exists on any chain — the Sepolia address runs 4.11.0. Pinning the 4.12.0 ABI against the 4.11.0 address is silently wrong for exactly one getter (see deployedStack.sepolia.shapeGates), so the evidence run reads the deployed artifact, never out/BLSAggregator.sol/BLSAggregator.json.",
+  "repos": {
+    "SuperPaymaster": {
+      "revision": "d651646aee98e8b22c8abe5af079bd4bb0a35728",
+      "why": "CC-115 B3 reviewed merge (#423, `chore(abis): pin the ABI of the aggregator that is actually deployed`). Registry-5.8.0 on chain; contracts/src BLSAggregator is 4.12.0 but the DEPLOYED aggregator is 4.11.0 — see deployedStack."
+    },
+    "airaccount-contract": {
+      "revision": "0ac628ecb46acbbeadc7b7b66a7b4adf026f87f2",
+      "why": "AirAccount v0.33.0 (ACCOUNT/FACTORY_VERSION 0.32.0 -> 0.33.0). The B3 manifest reads router 0xA97A7527…f897 algorithm 1 -> committee validator 0x7ac7E9d4…96a9, committeeActive=true, N=3, quorum=2, epochLength=64."
+    }
+  },
+  "contracts": {
+    "Registry": {
+      "abiSha256": "a064f586bf089d3799bcb37603c299638985a18fec1c9c6a3e057c1310c760f6",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/core/Registry.sol",
+      "why": "credit policy + reputation quorum entry point. Registry-5.8.0; in-place UUPS migration (stackKind in the B3 manifest), so the proxy address is unchanged."
+    },
+    "BLSAggregator": {
+      "abiSha256": "df7e4aa77396c76d54180737f201d28fd71602c74f01118cd912d72bff3b3174",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/modules/monitoring/BLSAggregator.sol",
+      "why": "The SDK vendors the DEPLOYED 4.11.0 ABI, not upstream out/ (4.12.0). Not a skip: check-abi-drift redirects this contract's comparison to deployedStack.sepolia.aggregator.abi.vendoredAt, which is itself hash-pinned to the upstream blob, so the contract stays fully checked against the right reference. sourcePath below still names where 4.12.0 lives, for the artifact-to-source binding."
+    },
+    "DVTValidator": {
+      "abiSha256": "f5861b0563a82cf8cd6bd04528ee747bca7604bde8b97ae2486a7f63f903ab8c",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/modules/monitoring/DVTValidator.sol",
+      "why": "executeWithProof path. Vendored from SuperPaymaster's out/DVTValidator.sol/DVTValidator.json (the compiler's own output), NOT from its abis/DVTValidator.json — that hand-maintained copy has been stale since 050f56b3 (2026-06-15); reported upstream as CC-50 round-4 LOW-2."
+    },
+    "SuperPaymaster": {
+      "abiSha256": "4f5216110a509492983c0f89ce1cbac562cee43ab3f9b8c1c924d3f29c287928",
+      "repo": "SuperPaymaster",
+      "sourcePath": "contracts/src/paymasters/superpaymaster/v3/SuperPaymaster.sol",
+      "why": "gasless lifecycle sponsor"
+    }
+  },
+  "deployedStack": {
+    "$comment": "CC-115 B3 frozen successor stack (DSR commit 5bc6579, manifest SHA-256 below, block 11633485). Every value here was READ FROM CHAIN on 2026-09-04, not transcribed from a hand-off comment. A mismatch on ANY of them is a hard failure: the evidence run must refuse to produce receipts against a stack that is not the one the paper describes.",
+    "sepolia": {
+      "chainId": 11155111,
+      "manifest": {
+        "producedBy": "repo:dsr",
+        "commit": "5bc6579",
+        "path": "writing/paper7-RepCredit/evidence/route-b-cc115-20260829/b3-successor-manifest-20260904.json",
+        "sha256": "db7cdf9130cccb08cf425408db3cffd48e8acd27ddd0ed63ca7ed6f5676f405c",
+        "stackKind": "Registry in-place UUPS migration + non-upgradeable aggregator replacement"
+      },
+      "addresses": {
+        "blsAggregator": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",
+        "registry": "0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71",
+        "superPaymaster": "0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9",
+        "dvtValidator": "0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e",
+        "fraudProofVerifier": "0xa1346F1668cBf8D031Cc5D72eDA45F5788CA1cd3"
+      },
+      "legs": {
+        "$comment": "The three independent pointers at the aggregator. CC-89 aligned them; between 2026-08-26 and 2026-09-01 Registry was repointed ALONE (4.11.0) while SuperPaymaster and DVTValidator still read 4.3.0, with SP.pendingBLSAgg == 0 — a SETTLED split, not a timelock window, so nothing flagged it. They were re-aligned on 2026-09-04. Pin all three separately: a manifest with a single `blsAggregator` field cannot express that state.",
+        "Registry.blsAggregator": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",
+        "SuperPaymaster.BLS_AGGREGATOR": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",
+        "DVTValidator.BLS_AGGREGATOR": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D"
+      },
+      "aggregator": {
+        "version": "BLSAggregator-4.11.0",
+        "extcodehash": "0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c",
+        "domainSeparator": "0x79613488655ebee89c98f43ad96de45806de7cdcb182783efc2219f006e1ee2b",
+        "defaultThreshold": 2,
+        "minThreshold": 2,
+        "slashThresholds": {
+          "0": 2,
+          "1": 3,
+          "2": 3
+        },
+        "guardianSlashCaseWindowSeconds": 345600,
+        "abi": {
+          "repo": "SuperPaymaster",
+          "revision": "d651646aee98e8b22c8abe5af079bd4bb0a35728",
+          "path": "abis/BLSAggregator-4.11.0.deployed.json",
+          "sha256": "df667b4d7e59b78afda728c03259c35074ef634a7c257e7f40fa3247e81106ce",
+          "vendoredAt": "scripts/repcredit/abis/BLSAggregator-4.11.0.deployed.json",
+          "functionCount": 72,
+          "entryCount": 160,
+          "$comment": "Read via `git show <revision>:<path>`, i.e. from the git object, NOT the sibling worktree — so an unrelated uncommitted file upstream cannot change what this hash is computed over."
+        },
+        "sourceRevision": "7cba99a911ba3898869f3a241fa0756f09d54d7d",
+        "sourceNote": "4.11.0 source lives at 02066f9a^ (= this revision). 02066f9a is #400, which bumped src to 4.12.0 and inserted uint16 slashBps into GuardianSlashCase. So the source axis and the repo axis point at DIFFERENT commits on purpose.",
+        "$slashThresholdsNote": "Indices 0..2, measured on chain 2026-09-04: [0]=2, [1]=3, [2]=3. The earlier {1:3,2:3,3:0} was wrong twice — it omitted index 0, which carries a REAL value (2), and included index 3=0, which is indistinguishable from index 4=0 and from any unset index, so asserting it would have distinguished nothing. Only indices with a configured value are pinned, and they ARE checked on chain (pr-daemon, PR #329: pinned but zero checks)."
+      },
+      "thresholdNote": "defaultThreshold went 7 (4.1.0/4.3.0) -> 2 (4.11.0) while N stayed 3. The reputation path reads Registry.blsAggregator.defaultThreshold(), so the paper's m for the anti-collusion inequality is 2 on this stack, not 7. Reported on CC-115 2026-09-01.",
+      "selectors": {
+        "fraudProofVerify": "0x61077735",
+        "$fraudProofVerifySig": "verify(bytes32,uint256,address[],bytes)",
+        "rejectedLegacyVerify": "0x05579e4d",
+        "$rejectedLegacyVerifySig": "verify(uint256,address[],bytes) — the pre-domain-bound 3-arg form; MUST be absent"
+      },
+      "shapeGates": {
+        "guardianSlashCases(uint256)": {
+          "selector": "0xee02231c",
+          "deployedWords": 7,
+          "deployedReturns": [
+            "bytes32",
+            "bytes32",
+            "uint64",
+            "uint8",
+            "uint16",
+            "uint16",
+            "address"
+          ],
+          "sourceWords": 8,
+          "sourceReturns": [
+            "bytes32",
+            "bytes32",
+            "uint64",
+            "uint8",
+            "uint16",
+            "uint16",
+            "uint16",
+            "address"
+          ],
+          "why": "SAME SELECTOR, different return shape (#400 inserted uint16 slashBps). A missing function reverts and is loud; this one decodes wrongly and is quiet. Measured 2026-09-04: raw returndata is 224 bytes = 7 words; the 7-word shape decodes, the 8-word shape raises. Both directions are asserted so the gate cannot pass vacuously."
+        }
+      },
+      "rejectedAggregators": [
+        {
+          "address": "0x174b60bB462b00550F0EC7Bc35Fe39dDB6310158",
+          "version": "BLSAggregator-4.3.0",
+          "why": "CC-89 production predecessor. Its slasher authorization was revoked in the B3 cutover; it answers guardianSlashCases/queueGuardianSlash with 0 selector hits."
+        },
+        {
+          "address": "0xF51c029879685Ced8fbCfa4b647c2eAe50Cd8B13",
+          "version": "BLSAggregator-4.1.0",
+          "why": "The address the SDK's canonical addresses.ts still pins on main (CC-18 residue). It has no fraudProofVerifier() at all. Present here so re-pinning it fails loudly instead of half-working."
+        }
+      ]
+    }
+  },
+  "services": {
+    "$comment": "Non-foundry upstreams that are pinned by REVIEWED revision rather than by ABI. Read by scripts/repcredit/experiment-auth.test.ts: in required/release mode (REPCREDIT_YAAA_HTTP_TEST=1) this pin is authoritative and REPCREDIT_YAAA_REV may not contradict it; a local run may still narrow to another commit while a cross-repo round is in flight, and says so. Keep it equal to the ref .github/workflows/ci.yml checks out.",
+    "YetAnotherAA-Validator": {
+      "revision": "e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9",
+      "why": "The reviewed DVT revision for the RepCredit experiment HTTP guard: versioned v2 HMAC preimage (scheme/method/requestTarget/timestamp/rawBody) plus the structured REPCREDIT_AUTH_* error-code table.",
+      "$whyNotTheB3Revision": "CC-115 B4 pins the DVT CONTRACT/arming axis to 941f0d06 (master, the B3 manifest's revision) — see deployedStack — but this SERVICES pin deliberately stays on e0b5efe3, and the two are NOT interchangeable. Measured 2026-09-04: src/modules/repcredit/repcredit-experiment.guard.ts EXISTS at e0b5efe3 and is ABSENT at 941f0d06. The guard was added in 840bfdc and has NEVER been on master; it lives only on origin/fix/cc49-round5-node-admin-netmode-throttle and origin/codex/repcredit-e2e-evidence-20260823, and the two revisions are on different lines (neither is an ancestor of the other). Pinning this axis to 941f0d06 does not make the guard newer — it removes it, and the required-mode HTTP suite then has nothing to test. Raised with @repo:dsr on CC-115: if the intent is that the guard should be on master, that is a DVT merge, not an SDK pin change."
+    }
+  }
+}

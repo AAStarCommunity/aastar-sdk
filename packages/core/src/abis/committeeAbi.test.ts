@@ -4,6 +4,7 @@ import {
     AAStarCommitteeValidatorABI,
     BLSAggregatorABI,
     AirAccountExtensionABI,
+    RegistryABI,
 } from './index.js';
 
 type AbiEntry = { type: string; name?: string; inputs?: { type: string }[] };
@@ -80,17 +81,98 @@ describe('AAStarAirAccountV7 ABI — the KNOWN_DRIFT blind spot', () => {
     });
 });
 
-describe('guardian-slash surface (SuperPaymaster CC-89 4.3.0)', () => {
-    it('BLSAggregator carries the executeGuardianSlash / fraud-proof additions', () => {
+/**
+ * ⚠️ PROVENANCE WARNING — CC-50 B2, STILL OPEN (narrowed).
+ *
+ * The surface asserted below comes from SuperPaymaster `03713feb` (Registry 5.7.0 /
+ * BLSAggregator 4.6.0), which is a COMMITTED, PUSHED, CLEAN revision on the experiment branch
+ * `codex/repcredit-e2e-evidence-20260823` — pinned byte-for-byte in `scripts/upstream-abi-pin.json`
+ * and enforced by `pnpm run check:abi-drift:strict`. That is strictly better than the previous
+ * state (a sibling repo's WORKING TREE, unattributable to any commit), but it is still:
+ *
+ *   - NOT merged to SuperPaymaster main,
+ *   - NOT tagged (git describe: v5.4.2-7-g03713feb),
+ *   - NOT deployed to any public chain.
+ *
+ * So this block asserts the SDK matches an experiment REVISION. Drift against the eventual
+ * released surface remains invisible to it. repo:sp still owes CC-50 a merged/tagged commit;
+ * when it lands, re-copy from that tag's `out/`, update the pin, and realign these assertions.
+ *
+ * Do NOT publish a release that contains this surface until that happens.
+ */
+describe('guardian-slash surface (SuperPaymaster Registry 5.7.0 / BLSAggregator 4.6.0 @ 03713feb — EXPERIMENT REVISION, see warning above)', () => {
+    it('BLSAggregator carries the bounded exit and two-phase fraud-proof additions', () => {
         for (const f of [
             'executeGuardianSlash',
+            'queueGuardianSlash',
             'fraudProofVerifier',
-            'setFraudProofVerifier',
+            // 4.6.0 replaced the instant setter with a timelocked propose/apply rotation.
+            'proposeFraudProofVerifier',
+            'applyFraudProofVerifier',
+            'cancelFraudProofVerifierRotation',
+            'pendingFraudProofVerifier',
+            'pendingFraudProofVerifierReadyAt',
+            'VERIFIER_ROTATION_DELAY',
             'guardianSlashed',
             'proposalSignersCommitment',
+            'requestGuardianExit',
+            'cancelGuardianExit',
+            'consumeGuardianExit',
+            'guardianExitRequests',
+            'guardianSlashCases',
+            'pendingGuardianSlashCount',
         ]) {
             expect(fns(BLSAggregatorABI), `missing ${f}`).toContain(f);
         }
+        // The instant setter must be GONE: leaving it in the SDK copy would let a caller encode a
+        // selector the deployed contract no longer has, i.e. a bare revert (see CC-50 no-silent-stubs).
+        expect(fns(BLSAggregatorABI)).not.toContain('setFraudProofVerifier');
+    });
+
+    /**
+     * CC-49 HIGH-A domain separation (4.6.0). These are what bind a quorum signature to ONE
+     * aggregator and ONE purpose; without them in the SDK's copy the evidence runner cannot
+     * reconstruct — or cross-check — the preimage the contract will verify.
+     */
+    it('BLSAggregator exposes the versioned BLS domain and its path tags', () => {
+        for (const f of [
+            'DOMAIN_NAME',
+            'domainSeparator',
+            'TAG_REPUTATION',
+            'TAG_QUEUE_SLASH',
+            'TAG_EXECUTE_SLASH',
+            'TAG_POP',
+            'TAG_PROPOSAL',
+            'TAG_SIGNERS_COMMITMENT',
+            'TAG_FRAUD_PROOF',
+            'reputationMessageHash',
+            'popDigest',
+            'fraudProofDigest',
+        ]) {
+            expect(fns(BLSAggregatorABI), `missing ${f}`).toContain(f);
+        }
+        expect(sigs(BLSAggregatorABI)).toContain('reputationMessageHash(uint256,address[],uint256[],uint256)');
+    });
+
+    it('Registry carries the unified credit policy (per-proposal cap + total exposure)', () => {
+        for (const f of [
+            'maxAggregateCreditUpliftPerProposal',
+            'maxTotalCreditExposure',
+            'totalCreditExposure',
+            'setCreditPolicy',
+            'blsDomainSeparator',
+        ]) {
+            expect(fns(RegistryABI), `missing ${f}`).toContain(f);
+        }
+        // CC-115 B4: Registry 5.8.0 NARROWED this from (perProposalCap, totalCap, baseline,
+        // applyBaseline) to caps only. The dropped `applyBaseline` is why the measurement harness
+        // in scripts/repcredit-e2e.ts can no longer restore totalCreditExposure and now fails
+        // loudly instead — asserted here so a future widening is a deliberate review, not a
+        // surprise.
+        expect(sigs(RegistryABI)).toContain('setCreditPolicy(uint256,uint256)');
+        expect(sigs(RegistryABI)).not.toContain('setCreditPolicy(uint256,uint256,uint256,bool)');
+        // 5.7.0 folded the single-value setter into setCreditPolicy.
+        expect(fns(RegistryABI)).not.toContain('setMaxAggregateCreditUpliftPerProposal');
     });
 
     it('AirAccountExtension carries the P256 guardian-addition timelock', () => {

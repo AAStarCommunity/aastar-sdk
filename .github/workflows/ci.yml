@@ -49,8 +49,48 @@ jobs:
       - name: Check for silent stubs
         run: pnpm run check:stubs
 
+      # Hard gate: the RepCredit evidence runner's own sources and the ABI-provenance gate are
+      # linted directly. `pnpm run lint` wraps `pnpm -r lint` first, and that is a NO-OP in this
+      # monorepo ("None of the selected packages has a 'lint' script"), so wiring the wrapper in
+      # here would have added a green step that ran no linter at all. This calls the real one
+      # (CC-50 round-10 LOW). Its config is deliberately narrow — `no-restricted-imports` and
+      # `@typescript-eslint/no-unused-vars` are the only rules enabled — so read it as "these two
+      # rules hold", not as "the runner is linted".
+      - name: Lint the RepCredit runner and the ABI-provenance gate
+        run: pnpm run lint:repcredit
+
       - name: Run unit tests
         run: pnpm -r test
+
+      # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
+      # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
+      # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
+      # regression is worthless if it is allowed to skip — REPCREDIT_ANVIL_TEST=1 below makes a
+      # missing anvil a failure.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      # Hard gate: the RepCredit evidence runner's negative controls must be falsifiable.
+      # These tests break each guarded security property and assert the control throws — the
+      # regression they lock down is CC-50 H1, where every control had its sentinel throw inside
+      # its own try/catch, so an attack that SUCCEEDED was recorded as evidence and the run
+      # still reported "passed". `pnpm -r test` does not reach scripts/, hence a separate step.
+      #
+      # REPCREDIT_UPSTREAM_ARTIFACTS=absent: this runner has no sibling SuperPaymaster /
+      # airaccount-contract checkouts (see the rationale block below). The REAL must-verify pin
+      # check now FAILS on a missing artifact instead of reporting "0/4 measured" and staying
+      # green (CC-50 round-9 LOW), so an environment without upstreams has to declare itself.
+      # The result is a SKIPPED test, visible in the vitest summary — never a PASS. Release runs
+      # (docs/RELEASE-CHECKLIST.md) do NOT set it, so there the check must measure 4/4.
+      - name: RepCredit negative-control reverse tests
+        env:
+          REPCREDIT_ANVIL_TEST: '1'
+          REPCREDIT_UPSTREAM_ARTIFACTS: 'absent'
+        run: pnpm run repcredit:test
+
+      # Type-checks the evidence runner and its fixtures. It is not part of any package build.
+      - name: RepCredit runner typecheck
+        run: pnpm run repcredit:typecheck
 
       # ---------------------------------------------------------------------------------
       # DELIBERATELY NOT IN CI: abi:sync / check:abi / check:abi-drift
@@ -70,10 +110,226 @@ jobs:
       # it is actively misleading. (upstream-watch.yml documents the same constraint for the
       # full radar.) They stay a LOCAL / pre-release gate, per docs/RELEASE-CHECKLIST.md.
       #
-      # Two changes now make that impossible to mistake for verification:
+      # Three changes now make that impossible to mistake for verification:
       #   * with no upstream present they no longer print PASS — they say explicitly that the
       #     run compared NOTHING and is a SKIP;
-      #   * REQUIRE_UPSTREAM=1 turns "no upstream present" into a hard failure (exit 1).
-      # The release checklist sets that flag. If these are ever to become real CI gates, the
-      # runner must first check out and build the upstream repos, then set REQUIRE_UPSTREAM=1.
+      #   * REQUIRE_UPSTREAM=1 turns "no upstream present" into a hard failure (exit 1);
+      #   * `pnpm run check:abi-drift:strict` (= --strict) fails PER EXPECTED CONTRACT. The
+      #     coarse "is any out/ dir present?" test was not enough: an upstream that had been
+      #     `forge clean`ed still has its out/ dir for OTHER repos, so Registry/BLSAggregator
+      #     silently dropped into `skipped` and the gate printed PASS after checking 12 ABIs
+      #     instead of 30 (CC-50). Strict mode fails when a contract declared in an upstream
+      #     src/ tree has no artifact, and when anything in MUST_VERIFY was not compared; both
+      #     runs now print the full checked/skipped inventory either way.
+      # The release checklist sets these flags.
+      #
+      # ROUND-10 UPDATE: the last sentence used to read "if these are ever to become real CI
+      # gates, the runner must first check out and build the upstream repos, then run the strict
+      # variant." That is now the `abi-provenance` job below, for SuperPaymaster — the repo all
+      # four MUST_VERIFY contracts come from. It is a separate job for the same reason as
+      # `repcredit-yaaa-http`: an upstream outage must read as "the upstream gate failed", never
+      # as "everything is green". THIS job still does not run them, and its green still does not
+      # mean the ABIs were verified against upstream.
       # ---------------------------------------------------------------------------------
+
+  # ---------------------------------------------------------------------------------
+  # The RepCredit experiment client talks to a REAL YAAA node over HTTP. Its guard-auth
+  # suite is the only thing that proves the SDK's HMAC client actually gets past the
+  # upstream admission gate — and that suite is worthless if it is allowed to skip.
+  #
+  # CC-50 round 3 [from:docs]: "CI/RELEASE 必须设置 REPCREDIT_YAAA_HTTP_TEST=1 …
+  # 缺 YAAA checkout/artifact/HTTP 套件时 fail 而非 skip." So this job checks the
+  # upstream out at a pinned ref, builds it, and runs the suite with the require flag:
+  # a missing checkout, a missing build artifact, an artifact that predates the pinned
+  # revision, or a node that will not boot all FAIL the job instead of skipping.
+  #
+  # The checkout is a separate job (not a step of `test`) so that the SDK's own gates
+  # keep reporting independently of upstream availability — an upstream outage must be
+  # visible as "the upstream gate failed", never as "everything is green".
+  # ---------------------------------------------------------------------------------
+  repcredit-yaaa-http:
+    name: RepCredit YAAA HTTP guard (real node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: aastar-sdk
+
+      # Pinned by ref on purpose: the suite verifies the SDK against a DECLARED upstream
+      # revision, and REPCREDIT_YAAA_REV below makes a silent ref move a hard failure
+      # rather than a quietly-different verification.
+      #
+      # BOTH literals must equal scripts/upstream-abi-pin.json ->
+      # services["YetAnotherAA-Validator"].revision. In required mode that in-repo pin is
+      # authoritative (CC-50 round-5 LOW-1), so any drift between the three fails this job:
+      # move `ref` alone and the pin test reports "the checkout is at <other>"; move the env
+      # alone and it reports the same; move both and it refuses the env override outright.
+      - name: Check out the pinned YetAnotherAA-Validator revision
+        uses: actions/checkout@v5
+        with:
+          repository: AAStarCommunity/YetAnotherAA-Validator
+          ref: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
+          path: YetAnotherAA-Validator
+          # No `token:`. This job had never run before CC-115 B4, and its first run failed with
+          # "Input required and not supplied: token" — `secrets.YAAA_CHECKOUT_TOKEN` is not set on
+          # this repository (the secret list is empty). It is also not needed: the validator repo
+          # is public, so the default GITHUB_TOKEN can read it. Restoring a token input would mean
+          # provisioning a credential to fetch something already world-readable.
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: '10.32.1'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: aastar-sdk/pnpm-lock.yaml
+
+      # anvil: the suite boots a throwaway chain for the node to point at.
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install SDK dependencies
+        working-directory: aastar-sdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the pinned YAAA node
+        working-directory: YetAnotherAA-Validator
+        run: |
+          npm ci
+          npm run build
+
+      # The artifact must exist: without it the suite would skip, which is precisely the
+      # failure mode this job exists to remove.
+      - name: Assert the YAAA build artifact exists
+        run: test -f YetAnotherAA-Validator/dist/main.js
+
+      - name: RepCredit tests with the real YAAA HTTP suite REQUIRED
+        working-directory: aastar-sdk
+        env:
+          REPCREDIT_YAAA_HTTP_TEST: '1'
+          REPCREDIT_ANVIL_TEST: '1'
+          REPCREDIT_YAAA_DIR: ${{ github.workspace }}/YetAnotherAA-Validator
+          REPCREDIT_YAAA_REV: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
+          # Same reason as the unit-test job: no sibling contract checkouts on this runner.
+          REPCREDIT_UPSTREAM_ARTIFACTS: 'absent'
+        run: pnpm run repcredit:test
+
+  # ---------------------------------------------------------------------------------
+  # ABI PROVENANCE (CC-50 round-10 LOW): the strict drift gate, against a REAL upstream.
+  #
+  # The `test` job deliberately does not run `check:abi-drift` — with no sibling checkouts it
+  # compares nothing and exits 0, which is worse than no gate. The answer is not to skip the
+  # gate but to give it the inputs it needs: check SuperPaymaster out at the REVIEWED revision,
+  # `forge build` it, and run `--strict`. All four MUST_VERIFY contracts (Registry,
+  # BLSAggregator, DVTValidator, SuperPaymaster) come from that one repo, so a single checkout
+  # is enough for the must-verify chain to be fully exercised.
+  #
+  # `ref` below MUST equal scripts/upstream-abi-pin.json -> repos.SuperPaymaster.revision. The
+  # gate itself enforces the agreement in both directions: it fails if the checkout's HEAD is not
+  # the pinned revision, if the checkout is dirty, if any must-verify artifact's sole compilation
+  # target is not the pinned source path, or if the working-tree bytes of that path are not the
+  # ones the pinned revision holds. So a drift between this literal and the pin file cannot pass.
+  #
+  # WHAT IS AND IS NOT VERIFIED. The gate itself is exercised hard: the synthetic suite in
+  # scripts/repcredit/abi-drift-provenance.test.ts builds REAL git repos and runs THIS script
+  # against them, including a clean-and-pinned baseline that passes strict. The `ref` literal
+  # below is bound to scripts/upstream-abi-pin.json by unit tests, so the two cannot drift apart
+  # unnoticed. What has NOT been executed is this job: no `forge build` of 03713feb and no
+  # GitHub-hosted run has been performed in this round, so its first run may still need fixing
+  # (toolchain versions, submodule paths, build time). Treat a red first run as this job being
+  # wrong, not as the pin being unattributable — and do not read this comment as a measurement.
+  #
+  # WHEN B2 CLOSES this literal and the pin file move together, in the same commit as the
+  # re-vendored ABIs — see docs/RELEASE-CHECKLIST.md and the CHANGELOG's B2 sequence.
+  # ---------------------------------------------------------------------------------
+  abi-provenance:
+    name: ABI provenance (strict drift gate vs the pinned upstream)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: aastar-sdk
+
+      # Sibling layout: check-abi-drift.ts resolves upstreams as ../<repo> from the SDK root.
+      - name: Check out the pinned SuperPaymaster revision
+        uses: actions/checkout@v5
+        with:
+          repository: AAStarCommunity/SuperPaymaster
+          ref: d651646aee98e8b22c8abe5af079bd4bb0a35728
+          path: SuperPaymaster
+          # Only the foundry dependency submodules: `submodules: recursive` would also drag in
+          # standards/ercs and friends, which the build does not need.
+          submodules: false
+
+      - name: Initialise the foundry dependency submodules
+        working-directory: SuperPaymaster
+        run: git submodule update --init --recursive contracts/lib
+
+      # The pinned checkout must be CLEAN for the gate to attribute anything to it. Asserting it
+      # here turns "a step above dirtied the tree" into its own, readable failure rather than an
+      # UNUSABLE CHECKOUT further down.
+      - name: Assert the upstream checkout is clean and at the pinned revision
+        working-directory: SuperPaymaster
+        run: |
+          test "$(git rev-parse HEAD)" = "d651646aee98e8b22c8abe5af079bd4bb0a35728"
+          test -z "$(git status --porcelain)"
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: '10.32.1'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: aastar-sdk/pnpm-lock.yaml
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install SDK dependencies
+        working-directory: aastar-sdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the pinned upstream artifacts
+        working-directory: SuperPaymaster
+        run: forge build
+
+      # Without out/ the strict gate would fail on "no upstream out/ dir is present"; asserting
+      # the four must-verify artifacts exist names the missing input instead.
+      - name: Assert the must-verify artifacts were produced
+        run: |
+          for c in Registry BLSAggregator DVTValidator SuperPaymaster; do
+            test -f "SuperPaymaster/out/$c.sol/$c.json"
+          done
+
+      # NOTE: REPCREDIT_UPSTREAM_ARTIFACTS is deliberately NOT set here — this runner HAS the
+      # upstream. Setting it alongside --strict is now an immediate, named failure (round-10).
+      - name: Strict ABI drift + provenance gate
+        working-directory: aastar-sdk
+        run: pnpm run check:abi-drift:strict
+
+      # CC-115 B4. The step above proves the vendored ABIs match the PINNED UPSTREAM. It says
+      # nothing about whether that pin still matches the CHAIN — and "the pin and the chain quietly
+      # disagree" is precisely the failure this PR was written about: for six days Registry pointed
+      # at a new aggregator while SuperPaymaster and DVTValidator pointed at the old one, with no
+      # pending rotation to hint that anything was unfinished.
+      #
+      # The mutation tests for these checks run under `repcredit:test`, so the gate is proved
+      # falsifiable there. THIS step is the other half: does the frozen stack still read the way the
+      # pin says. Without it, nothing in CI would ever have executed the comparison (measured:
+      # `grep -rn 'deployed-stack' .github/ package.json` returned zero, while the same grep for
+      # check-abi-drift returned four).
+      #
+      # REPCREDIT_REQUIRE_ONCHAIN=1 on purpose: "the RPC was unreachable" must read as a failed
+      # gate, never as a silent pass. A public endpoint is used because the values being read are
+      # public reads on a public testnet; if it proves flaky, the fix is a keyed endpoint in the
+      # secret store, not dropping the requirement.
+      - name: Deployed-stack pin gate (does the frozen stack still read this way?)
+        working-directory: aastar-sdk
+        env:
+          REPCREDIT_REQUIRE_ONCHAIN: '1'
+          SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
+        run: pnpm run check:deployed-stack
