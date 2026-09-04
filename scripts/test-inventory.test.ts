@@ -57,7 +57,7 @@ import { readFileSync, existsSync } from 'node:fs';
  */
 const INVENTORY: { file: string; min: number; maxGated: number; why: string }[] = [
   { file: 'packages/core/src/actions/committeeTree.test.ts', maxGated: 4, min: 16, why: 'frozen-root proofs; 4 of these are skipped on CI (FU-38)' },
-  { file: 'packages/core/src/dvt.onchain.test.ts', maxGated: 4, min: 9, why: 'DVT_CONFIG vs the router, the requireStake watch (FU-34), and the entryPoint anchor (FU-35)' },
+  { file: 'packages/core/src/dvt.onchain.test.ts', maxGated: 4, min: 10, why: 'DVT_CONFIG vs the router, the requireStake watch (FU-34), and the entryPoint anchor (FU-35)' },
   { file: 'packages/core/src/addresses.threeLegs.test.ts', maxGated: 4, min: 6, why: 'the three-legs split — the check that made it visible' },
   { file: 'packages/core/src/actions/committee.onchain.test.ts', maxGated: 5, min: 5, why: 'committee framing against the mounted validator' },
   { file: 'packages/core/src/addresses.airaccount.test.ts', maxGated: 4, min: 5, why: 'AirAccount stack edges, not just addresses' },
