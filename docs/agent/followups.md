@@ -26,3 +26,6 @@
 - [ ] FU-20 · B · src=T5.1.3 · 2026-09-04 · check-abi-drift 的 'NO ARTIFACT ... needs forge build' 文案在产物名带 profile 后缀（<C>.default.json）时会误导：构建已跑过，缺的是文件名。应识别 <C>.<profile>.json 并给出准确提示
 - [ ] FU-21 · B · src=PR#332-review · 2026-09-04 · 从不可信 RPC 取读数的链上门禁可被该 RPC 欺骗；当这套断言要支撑对外证据链时，收紧方式应是多端点交叉读或 keyed endpoint，而不是校验 URL scheme
 - [ ] FU-22 · B · src=PR#335-review · 2026-09-05 · addresses.dvt.test.ts 第二条断言(捷径版本会通过)用 canonical.dvtValidator 当参照，把 pin 拖进了一个关于「聚合器之间是否同值」的事实；pin 写错时它也红且打印答非所问的消息。改成用现役聚合器当场读到的值当 expected —— pin 错只第一条红，聚合器不再同值只第二条红
+- [ ] FU-24 · B · src=T5.4.3 · 2026-09-05 · 产品决策待拍板：KMS 客户端在 kmsEnabled=true 且无 apiKey 时是否应 fail-closed。当前 fail-open（不带 x-api-key 照发，enabled 仍 true）。改成必填会破坏无认证部署（本地 TEE 模拟器/测试夹具/网络层认证内网端点），需人决定
+- [ ] FU-25 · B · src=PR#336-review · 2026-09-05 · tasks.md 任务状态与 GitHub 实况会漂且两份台账各错各的（互相对账查不出来）。应加一道以 gh pr view <N> --json state 为权威源的对账；条目标题带上 PR 号以便解析
+- [ ] FU-26 · B · src=T5.4.3 · 2026-09-05 · followups.sh 的 FU 编号按文件内容递增，两个分支并行加条目会撞号（实测：#337 分支与 T5.4.3 分支各生成了一个 FU-22，语义完全不同）。**描述已修正（2026-09-05 实测）**：两分支都在文件末尾追加时 git **会**冲突（本次 #337 合 main 就冲突了），所以不是「合并静默通过」。真正的静默点在**解冲突那一步**——解法是人工取并集，而两个同号条目取并集后就并排活着，git 不会有意见。需要一个不依赖单分支视图的编号方式

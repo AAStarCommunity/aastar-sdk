@@ -63,7 +63,7 @@
 
 ## F3.1 — 四道同步门禁常绿
 
-### T3.1.1 把 sync gate 固化进 CI（范围经实测修正）  `PR_OPEN`
+### T3.1.1 把 sync gate 固化进 CI（范围经实测修正）  `DONE`
 - **优先级**：high
 - **原目标**：四道（`abi:sync` / `check:abi` / `check:abi-drift` / `check:addresses`）全进 CI 硬门禁。
 - **⚠️ 实测推翻了原目标**：在 `git archive` 造的干净 CI checkout（无 sibling 上游仓）里跑，**三道 ABI 门禁全部 skip-and-PASS** —— `check:abi-drift` 打 "no upstream out/ dirs — skipping"、`check:abi` 三个上游全 skipped、`abi:sync` 直接打 "0 missing · 0 drifted · PASS: ABIs complete + in sync with upstream"。它们要拿 sibling 目录里 `forge build` 出来的 `out/` 比对，runner 上根本没有。**照原样接进 CI = 一个拿零个产物比出来的绿灯**，比没有门禁更坏（`upstream-watch.yml` 对 full radar 记过同一约束）。
@@ -75,13 +75,13 @@
 - **明确不做**：不在 CI 里 checkout/build 上游合约仓（成本高、部分仓私有）——若要做是独立 task
 - **验收命令**：`REQUIRE_UPSTREAM=1 pnpm run abi:sync && REQUIRE_UPSTREAM=1 pnpm run check:abi && REQUIRE_UPSTREAM=1 pnpm run check:abi-drift && pnpm run check:addresses && pnpm run check:stubs`（本机全绿）；且干净 checkout 里带 flag 跑三道 ABI 门禁必须 **exit 1**
 - **涉及文件**：`.github/workflows/ci.yml`、`scripts/{abi-sync,check-abi-completeness,check-abi-drift}.ts`、`docs/RELEASE-CHECKLIST.md`
-- **证据**：branch `chore/ci-sync-gates` / PR 待建
+- **证据**：sync gate 已在 `ci.yml` 里（`check:addresses` / `check:abi-drift:strict` 均为独立 step，`abi-provenance` job 自建上游后跑 strict）。原条目标 `PR_OPEN` 而正文写「PR 待建」——两者自相矛盾，T5.4.3 对账时按 GitHub/仓库实况改正为 DONE。
 
 ---
 
 ## F4.1 — pilot 规划层
 
-### T4.1.1 建立 .pilot.yml + docs/agent 规划层  `PR_OPEN`
+### T4.1.1 建立 .pilot.yml + docs/agent 规划层 (PR #315)  `DONE`
 - **优先级**：high
 - **目标**：让 pilot 能接管本仓库的持续开发：配置、三级规划文档、跟进账本齐备。
 - **交付物**：`.pilot.yml`、`docs/agent/{roadmap,tasks,progress,followups}.md`、`.gitignore` 忽略 `.codegraph/`
@@ -121,7 +121,7 @@
 - **留下的判据**（写进 `research.md` §2b）：断言「仓库现在是什么样」之前，先 `git log -1 -- <file>` 看那个文件最后一次是被谁改的。
 - **对 F5.1 的影响**：范围缩小成**只做地址那一半**（T5.1.1），ABI 无需再动。`architecture.md` 边界 #6「公共面只增不减」保留——本轮不触发，下次同步仍适用。
 
-### T5.1.3 SP 侧回归 + 证据回写  `PR_OPEN`
+### T5.1.3 SP 侧回归 + 证据回写 (PR #333)  `DONE`
 - **优先级**：high
 - **目标**：证明 T5.1.1/T5.1.2 之后 SP 相关业务路径没坏，并把读数写进证据索引。
 - **验收命令**：`pnpm -r build && pnpm -r test && pnpm run check:addresses && pnpm run check:abi-drift:strict`
@@ -134,7 +134,7 @@
 
 ## F5.2 — AirAccount v0.31.0 → v0.33.0
 
-### T5.2.1 canonical 12 地址切到 v0.33.0  `PR_OPEN`
+### T5.2.1 canonical 12 地址切到 v0.33.0 (PR #332)  `DONE`
 - **优先级**：high
 - **目标**：上游 v0.33.0 已部署 Sepolia 并验活（`FACTORY_VERSION="0.33.0"` / `ACCOUNT_VERSION="0.33.0"` 链上实测），canonical 停在 v0.31.0。整栈切换。
 - **开发范围**：`packages/core/src/addresses.ts` 的 AirAccount 12 地址；权威来源 = airaccount-contract `.env.sepolia` 的 `V0330` 块（精确值见 `spec.md`，**不得由截断地址补全**）。
@@ -148,20 +148,20 @@
 - **实际是 6 个键不是 5 个**：初稿漏了 `agentRegistry`（v0.31.0 `0x37fc74Ea…` → v0.33.0 `0x734625F6…`）。canonical 只跟踪 12 地址里的 9 个（`webAuthnLib`/`committeeBLSLib` 是链接库、不在册），其中 6 个变、3 个复用。
 - **证据**：PR #332。12/12 有 code、`FACTORY_VERSION`/`ACCOUNT_VERSION` 均 `"0.33.0"`、`factory.implementation()` == impl、`router.getAlgorithm(0x01/0x08)` 指向两个 validator、`committeeActive()==true` —— 全部 @ block 11634556。归因变异：钉 stale v0.31.0 committee validator 时「validator is armed」**保持绿**（v0.31.0 那个也 armed，对陈旧零区分度），红的是离线六键检查与**边**检查。
 
-### T5.2.2 committee framing 回归（v0.33.0 validator）  `PR_OPEN`
+### T5.2.2 committee framing 回归（v0.33.0 validator） (PR #334)  `DONE`
 - **优先级**：high
 - **目标**：v0.33.0 的 router `algorithm 1` 指向**新的** committee validator `0x7ac7E9d4…96a9`（v0.31.0 时是 `0x1A8Db639…`）。必须确认 SDK 的 per-signer 打包对新 validator 仍然成立——**读 `committeeActive()` 而不是猜**。
 - **验收命令**：`pnpm exec vitest run packages/core/src/actions/committee.test.ts packages/core/src/abis/committeeAbi.test.ts`
 - **依赖**：T5.2.1
 - **风险**：`requireStake=true` 在新 validator 上已开启，且三个 operator 恰好卡在 `minStake`。属他仓风险，SDK 侧只需读、不改。
 - **证据**：PR #334。编码器本就 validator-agnostic（`perSignerBytes` 从链读 `TREE_DEPTH` 推导），所以无需改代码——但「无需改」是对活合约的断言，只能靠读活合约来兑现。新增 `committee.onchain.test.ts` 5 条。
-- **⚠️ 实测发现**：`requiredQuorum` 当前是 **fail-closed 哨兵** `type(uint256).max`（epoch 滚动后未 pin 上一轮快照）→ `quorumUsable=false`，**此刻提交 committee payload 必被拒**。属 DVT 侧运维状态，非 SDK 缺陷。我第一版断言 `quorumUsable === true`，15 分钟后在未改动的树上变红——那是在钉一个瞬时状态。改成断言 SDK 自己的推导关系（`quorumUsable === (requiredQuorum !== sentinel)`），时间无关且真承重。
+- **⚠️ 观测到过（非常态）**：`requiredQuorum` 在 2026-09-04 某次采样是 **fail-closed 哨兵** `type(uint256).max` → `quorumUsable=false`；评审方在 block 11634795 采样则读到 **2**。**这个值随 epoch 摆**，所以任何「当前是 X」的写法被读到时多半已经是假的——正确的说法是「观测到过」加采样点。属 DVT 侧运维状态，非 SDK 缺陷。我第一版断言 `quorumUsable === true`，15 分钟后在未改动的树上变红——那是在钉一个瞬时状态。改成断言 SDK 自己的推导关系（`quorumUsable === (requiredQuorum !== sentinel)`），时间无关且真承重。
 
 ---
 
 ## F5.3 — DVT 对齐核验
 
-### T5.3.1 dvtValidator 与 DVT 接口对齐出证据  `PR_OPEN`
+### T5.3.1 dvtValidator 与 DVT 接口对齐出证据 (PR #335)  `DONE`
 - **优先级**：mid
 - **目标**：~~疑似未变，待核~~ → **已核验无变更**（评审方顺手跑了一条，我复核确认）：
 
@@ -183,9 +183,30 @@
 
 ## F5.4 — KMS 面扫描
 
-### T5.4.1 KMS API surface 与安全加固对齐（CC-2 / CC-19 / CC-25）  `BLOCKED`
+### T5.4.1 KMS 探测：定位仓库与接口面 (PR #336)  `DONE`
 - **优先级**：mid
-- **目标**：三条 KMS 变更通知从未处理。KMS 是 address-agnostic，风险在 API surface 与安全加固（fail-closed API key、XSS 修复）。
-- **阻塞原因**：**需要先确定本地有没有 KMS 仓库 checkout 及其权威版本**；`upstream_radar` 记的 KMS 锚点需重新解析。这不是产品决策，是探测，`run` 时第一步就能解除。
-- **验收命令**：（解除阻塞后补）`pnpm exec vitest run packages/core/src/kms/`
-- **待澄清**：KMS 当前权威版本号 / 仓库位置
+- **目标**：解除原 T5.4.1 的阻塞——原任务标 BLOCKED 的理由是「不知道 KMS 仓库在哪、权威版本是什么」。那是**探测不是产品决策**，本 task 就做这一件事。
+- **探测结果**（2026-09-05）：
+  - **服务端仓** = `~/Dev/aastar/AirAccount`（airaccount-node），本机 HEAD `4de82e4`，最新 tag **`airaccount-node-v0.30.0-beta.1`**
+  - **SDK 侧客户端面** = `packages/airaccount/src/server/services/kms-*.ts` —— **6 个文件、2165 行、37 个不同端点路径**
+  - **⚠️ 版本落差**：`kms-http-client.ts:6` 的注释写 `v0.20.0 (Beta2)`，而服务端已到 v0.30.0-beta.1。注释是否等于实际接口面**未验证**。
+  - CC-2(v0.26.1) / CC-19(v0.26.1→v0.27.4) / CC-25(v0.28.0) 三条通知的目标版本**全部已被 v0.30.0-beta.1 取代**，所以不能照着那三条逐条对——要对的是**当前**服务端。
+- **为什么拆**：37 个端点 / 2165 行，一个 PR 做不完也审不动。硬塞会做成半吊子。
+- **交付物**：本条台账记录 + T5.4.2 / T5.4.3 的拆分
+- **验收命令**：`test -d ~/Dev/aastar/AirAccount && ls packages/airaccount/src/server/services/kms-*.ts | wc -l`
+
+### T5.4.2 KMS 端点面对账（37 条 vs 服务端当前路由） (PR #337)  `PR_OPEN`
+- **优先级**：mid
+- **目标**：把 SDK 打的 37 个端点逐条对上服务端 v0.30.0-beta.1 的实际路由，产出「仍存在 / 已改名 / 已移除 / 服务端新增但 SDK 未用」四类清单。
+- **明确不做**：不改客户端实现；只出对账结果与证据。每类差异各自成为独立 task。
+- **依赖**：T5.4.1
+- **验收命令**：对账脚本退出码 + 四类清单齐全
+- **风险**：服务端是 Rust/TEE 栈，路由可能不在 TS 里。抓不到权威路由表就标 BLOCKED 说明缺什么，**不猜**。
+
+### T5.4.3 CC-19 安全加固在 SDK 侧的对应面 (PR #338)  `PR_OPEN`
+- **优先级**：mid
+- **目标**：CC-19 是 fail-closed API key + XSS 修复。确认 SDK 客户端在 API key 缺失/无效时 fail-closed（不是静默降级），并给出配对红。
+- **依赖**：T5.4.1
+- **验收命令**：`pnpm exec vitest run packages/airaccount/src/server/__tests__/kms-*.test.ts`
+- **结论**：`enabled` 是 fail-closed（`ensureEnabled()` 抛），**但 `apiKey` 完全没有门**——`kmsEnabled: true` 且 key 缺失时客户端不带 `x-api-key` 就发请求，`enabled` 仍报 `true`。所有真实调用都传 `process.env.KMS_API_KEY`，所以「忘了设环境变量」会产出一个**看起来配好了**的客户端，错误延后到服务端、表现得和吊销密钥/端点写错一模一样。
+- **⏳ 待拍板（未擅自改行为，FU-24）**：要不要让 key 必填？那是**会破坏现有部署**的行为变更（本地 TEE 模拟器 / 测试夹具 / 自带网络层认证的内网端点都可能无 key），属产品决策。本 task 只写表征测试固化现状：将来谁改成必填，这些测试会红，**逼那次变更是有意识的**。
