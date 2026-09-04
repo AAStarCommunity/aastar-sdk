@@ -27,6 +27,7 @@ import {
   classifyDvtSigner,
   recordDvtSigner,
   newDvtIdentitySeen,
+  canonicalSignature,
 } from "@aastar/core";
 import {
   AbiDecodingZeroDataError,
@@ -609,10 +610,30 @@ export class BLSSignatureService {
         // Classification lives in @aastar/core so this transport and the evidence gates cannot drift
         // apart about what "the same signer twice" means; what they do about it stays different on
         // purpose — a release gate aborts, a live transport skips.
-        const normalisedSig = sig?.startsWith("0x") ? sig : `0x${sig}`;
-        const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+        // The RAW value goes to the classifier. Prefixing it here first is what created FU-37: a
+        // case-sensitive `startsWith("0x")` rewrote `0X…` to `0x0X…`, and the dedup then compared a
+        // string this code had corrupted rather than the signature the node sent. Normalisation
+        // belongs in one place, next to the parse that can actually validate the result.
+        const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
         if (fault) throw new Error(`${fault.message} — dropping this co-signature`);
-        recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+        recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
+
+        // The canonical form is the COMPARISON KEY and stays inside the classifier. What goes back
+        // on the wire is the node's own bytes, with nothing but the prefix repaired.
+        //
+        // A first version forwarded the canonical 256-byte EIP-2537 form, and that is a wire-format
+        // change to a service outside this repo: the value is read from `signatureCompact ||
+        // signature`, so a node putting a 96-byte compressed point in the field whose NAME says
+        // compact would have had it re-encoded to 256 bytes before `/signature/aggregate` ever saw
+        // it. Nothing in this repository records what that field actually carries, and the mocks
+        // cannot tell — their fixtures are already canonical, so both implementations answer the
+        // same. Changing a format you cannot observe is not something a dedup fix gets to do.
+        //
+        // Prefix repair is kept because that IS the bug: a case-sensitive `startsWith("0x")` turned
+        // `0X…` into `0x0X…`. The hex body is passed through untouched, so a compressed point stays
+        // compressed.
+        const trimmedSig = sig.trim();
+        const normalisedSig = /^0[xX]/.test(trimmedSig) ? `0x${trimmedSig.slice(2)}` : `0x${trimmedSig}`;
 
         signerNodeSignatures.push(normalisedSig);
         signerNodeIds.push(nodeId as string);
