@@ -544,6 +544,13 @@ export class BLSSignatureService {
    * (`ownerAuth` = the owner's EIP-191 sig over userOpHash, produced by the submit flow — this layer
    * only transports it).
    *
+   * WHAT THIS LAYER CANNOT CHECK: two nodes holding the SAME BLS key but registered under two
+   * different nodeIds. Both ids are well-formed and distinct, so nothing here or in the encoder sees
+   * a problem, and the on-chain strictly-ascending rule is satisfied too — yet the aggregate carries
+   * one key twice and the threshold it appears to meet is not the threshold it actually met. Catching
+   * that needs the registered public keys, which this transport does not hold. It is named here so
+   * the checks above are not mistaken for a complete identity guarantee.
+   *
    * This is the ONLY place that talks to the DVT nodes. A future P2P deployment (nodes self-discover +
    * self-organize) provides an alternative implementation of this single method — a submit-once-to-the-
    * network transport that returns the same `{ nodeIds, signature }` — with NO change to the composite
@@ -573,11 +580,41 @@ export class BLSSignatureService {
           throw new DvtPendingConfirmationError(response.data.userOpHash ?? userOpHash, node.apiEndpoint);
         }
         const sig = response.data.signatureCompact || response.data.signature;
+        const nodeId = response.data.nodeId;
+
+        // FU-16. The id a node reports about ITSELF is checked here rather than taken on trust.
+        //
+        // It was already being caught — `encodeBLSAccountSignature` rejects a non-bytes32 id and
+        // `sortNodeIdsAscending` rejects a duplicate, both with clear messages. What it was NOT doing
+        // is failing at the right TIME, and the difference is not cosmetic:
+        //
+        //   · by encode time this node's SIGNATURE is already inside the aggregate, so one node
+        //     answering badly kills an operation the remaining nodes could still have carried —
+        //     while the identical failure from a node that simply did not answer is survivable;
+        //   · the encoder reports `nodeId[2]`, an index into an array assembled here. Which of five
+        //     endpoints produced it is not recoverable from that message.
+        //
+        // So a malformed or repeated id is treated exactly like an unreachable node: skip it, keep
+        // going, and let the quorum check downstream decide whether enough honest nodes answered.
+        // The signature is dropped WITH the id — the two arrays are positional, and keeping a
+        // signature whose id was dropped would silently produce an aggregate that cannot verify.
+        if (typeof nodeId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(nodeId)) {
+          throw new Error(
+            `node ${node.apiEndpoint} returned a nodeId that is not a 32-byte hex value ` +
+              `(${JSON.stringify(nodeId)}) — dropping this co-signature`
+          );
+        }
+        if (signerNodeIds.some((seen) => seen.toLowerCase() === nodeId.toLowerCase())) {
+          throw new Error(
+            `node ${node.apiEndpoint} reported nodeId ${nodeId}, which another node in this round ` +
+              `already claimed — dropping this co-signature (a valid M-of-N aggregate has distinct signers)`
+          );
+        }
         signerNodeSignatures.push(sig.startsWith("0x") ? sig : `0x${sig}`);
-        signerNodeIds.push(response.data.nodeId);
+        signerNodeIds.push(nodeId);
       } catch (err) {
         if (err instanceof DvtPendingConfirmationError) throw err;
-        // Node unreachable / rejected — continue with the others.
+        // Node unreachable / rejected / answered incoherently — continue with the others.
       }
     }
 
