@@ -42,14 +42,24 @@ const RUN_ONCHAIN = process.env.AASTAR_ONCHAIN_TEST === '1';
  * So they run only against an endpoint declared able to serve logs, and when that is absent they say
  * so instead of vanishing from the count.
  */
-const ARCHIVE_RPC = process.env.AASTAR_ARCHIVE_RPC_URL ?? process.env.SEPOLIA_RPC_URL;
+// ONLY the dedicated variable. The first version fell back to `SEPOLIA_RPC_URL`, and CI sets that
+// to the very public endpoint the note above says cannot serve these queries — so the gate read as
+// "an archive endpoint is available" on exactly the runs where none was. It merged and main went
+// red on the first CI run.
+//
+// The lesson is about the shape, not the typo: a gate keyed on "is a variable set" answers a
+// question about CONFIGURATION, while the thing that matters is a PROPERTY of the endpoint. A
+// fallback chain quietly widened the first to include something that fails the second. The variable
+// now has one meaning — "this endpoint is declared able to serve eth_getLogs over history" — and
+// nothing else can satisfy it.
+const ARCHIVE_RPC = process.env.AASTAR_ARCHIVE_RPC_URL;
 const RUN_LOGS = RUN_ONCHAIN && !!ARCHIVE_RPC;
 const RPC = ARCHIVE_RPC ?? 'https://ethereum-sepolia-rpc.publicnode.com';
 const client = () => createPublicClient({ transport: http(RPC) }) as never;
 
 if (RUN_ONCHAIN && !RUN_LOGS) {
   console.warn(
-    '[committeeTree] SKIPPING the event-replay cases: no AASTAR_ARCHIVE_RPC_URL / SEPOLIA_RPC_URL. ' +
+    '[committeeTree] SKIPPING the event-replay cases: AASTAR_ARCHIVE_RPC_URL is not set. ' +
       'The public fallback answers eth_getLogs inconsistently over history, so these would be flaky ' +
       'in exactly the shape of the bug they check for. The frozen-root path is therefore NOT gated ' +
       'in this run — see FU-38.',
