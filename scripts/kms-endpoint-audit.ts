@@ -76,8 +76,19 @@ function sdkPaths(): Map<string, string[]> {
       .replace(/(^|[^:])\/\/.*$/gm, '$1');
     for (const m of src.matchAll(/["'`](\/[a-zA-Z0-9/_.-]*)["'`]/g)) {
       const p = m[1];
-      // "/" alone and bare extensions are not endpoints.
-      if (p === '/' || /\.(ts|js|json|md)$/.test(p)) continue;
+      // "/" alone and source-file references are not endpoints.
+      //
+      // `.json` is deliberately NOT in this list. Two real KMS endpoints end in it —
+      // /.well-known/attestation-measurements.json and its -proof sidecar — and the SDK calls both
+      // (kms-monitor-service.ts, `this.http.get(...)`). Filtering them out did not merely lose two
+      // rows: it moved them into "spec documents it, SDK never calls it", which asserts the OPPOSITE
+      // of the truth. Upstream deleting those endpoints would then read here as "no impact" while
+      // the SDK broke.
+      //
+      // Note the pairing with the comment-stripping above: that filter was too LOOSE and invented an
+      // endpoint (/60, from a BIP-44 path in a comment); this one was too TIGHT and hid two. Both
+      // directions produce a confident, wrong audit.
+      if (p === '/' || /\.(ts|js|md)$/.test(p)) continue;
       const list = found.get(p) ?? [];
       const base = path.basename(file);
       if (!list.includes(base)) list.push(base);
@@ -152,6 +163,28 @@ function main() {
     `\nsummary: ${documented.length} documented · ${notInSpec.length} not in spec · ` +
       `${specOnly.length} spec-only · ${KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path)).length} known-missing`,
   );
+
+  // A cross-check on the instrument, not on the SDK. Every path the SDK calls must land in exactly
+  // one of the first two buckets, so their sum must equal the SDK path count — and that count was
+  // arrived at independently (37, counted by hand and by a reviewer's separate script before this
+  // tool existed).
+  //
+  // This exists because the two filters in sdkPaths() have already been wrong in both directions:
+  // comment-stripping was missing (invented "/60" from a BIP-44 path) and the extension blacklist
+  // was too broad (hid two real .well-known endpoints by filing them under "SDK never calls it").
+  // Neither showed up as an error — each produced a confident, plausible, wrong report, and the
+  // second one was only caught because 34+1 did not match a 37 living in a different document.
+  // Numbers that must agree should be made to agree HERE, where disagreeing is loud.
+  const bucketed = documented.length + notInSpec.length;
+  if (bucketed !== sdk.size) {
+    console.error(
+      `\n❌ instrument check: ${documented.length} + ${notInSpec.length} = ${bucketed}, but sdkPaths() ` +
+        `found ${sdk.size}. Every SDK path must be in exactly one bucket — a mismatch means the ` +
+        'classification dropped or duplicated something, so no other number in this report is trustworthy.',
+    );
+    process.exit(1);
+  }
+  console.log(`   (instrument check: ${documented.length} + ${notInSpec.length} = ${sdk.size} SDK paths ✅)`);
 
   // Exit non-zero only for the thing a human must act on: a documented addition the SDK never calls.
   const missing = KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path));
