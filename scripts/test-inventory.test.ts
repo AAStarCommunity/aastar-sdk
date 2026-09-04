@@ -15,6 +15,19 @@
  * A minimum count is the cheapest thing that notices either. It is deliberately a FLOOR: adding
  * cases must not require editing this file, removing them must.
  *
+ * AND A CEILING ON HOW MANY MAY BE GATED
+ * --------------------------------------
+ * The floor alone counts DECLARATIONS, which leaves the third way coverage disappears — and it is
+ * the one this file was filed over. Demonstrated in review: turning every case in a file into
+ * `it.runIf(false)` removes no declarations, so the floor stays green while nothing runs. That is
+ * precisely FU-42's origin — the four committeeTree cases were never deleted, they were switched off
+ * by a gating variable, and one rename of `AASTAR_ARCHIVE_RPC_URL` would silence all 52 at once
+ * without changing a single count.
+ *
+ * So each entry also caps how many of its cases may be conditionally gated. Converting a plain
+ * `it(` into `it.runIf(` raises that number and fails here — statically, without needing to know
+ * whether the condition was true on this particular run.
+ *
  * WHAT IT DOES NOT DO — read this before trusting a green run
  * ----------------------------------------------------------
  * It counts DECLARATIONS in source text. It cannot tell a case that ran from one that was skipped,
@@ -42,15 +55,15 @@ import { readFileSync, existsSync } from 'node:fs';
  * allowed — coverage does get deliberately removed — but it must be a deliberate edit in the same
  * commit, which is the whole point: the edit is where the reviewer gets to ask why.
  */
-const INVENTORY: { file: string; min: number; why: string }[] = [
-  { file: 'packages/core/src/actions/committeeTree.test.ts', min: 16, why: 'frozen-root proofs; 4 of these are skipped on CI (FU-38)' },
-  { file: 'packages/core/src/dvt.onchain.test.ts', min: 7, why: 'DVT_CONFIG vs the router, and the requireStake watch (FU-34)' },
-  { file: 'packages/core/src/addresses.threeLegs.test.ts', min: 6, why: 'the three-legs split — the check that made it visible' },
-  { file: 'packages/core/src/actions/committee.onchain.test.ts', min: 5, why: 'committee framing against the mounted validator' },
-  { file: 'packages/core/src/addresses.airaccount.test.ts', min: 5, why: 'AirAccount stack edges, not just addresses' },
-  { file: 'packages/core/src/addresses.gToken.test.ts', min: 3, why: 'Registry → staking → GTOKEN (FU-1)' },
-  { file: 'packages/core/src/addresses.dvt.test.ts', min: 3, why: 'live-aggregator rooting (FU-22)' },
-  { file: 'packages/airaccount/src/server/__tests__/kms-e2e.live.test.ts', min: 7, why: 'KMS live E2E, skipped without KMS_E2E=1' },
+const INVENTORY: { file: string; min: number; maxGated: number; why: string }[] = [
+  { file: 'packages/core/src/actions/committeeTree.test.ts', maxGated: 4, min: 16, why: 'frozen-root proofs; 4 of these are skipped on CI (FU-38)' },
+  { file: 'packages/core/src/dvt.onchain.test.ts', maxGated: 3, min: 7, why: 'DVT_CONFIG vs the router, and the requireStake watch (FU-34)' },
+  { file: 'packages/core/src/addresses.threeLegs.test.ts', maxGated: 4, min: 6, why: 'the three-legs split — the check that made it visible' },
+  { file: 'packages/core/src/actions/committee.onchain.test.ts', maxGated: 5, min: 5, why: 'committee framing against the mounted validator' },
+  { file: 'packages/core/src/addresses.airaccount.test.ts', maxGated: 4, min: 5, why: 'AirAccount stack edges, not just addresses' },
+  { file: 'packages/core/src/addresses.gToken.test.ts', maxGated: 2, min: 3, why: 'Registry → staking → GTOKEN (FU-1)' },
+  { file: 'packages/core/src/addresses.dvt.test.ts', maxGated: 2, min: 3, why: 'live-aggregator rooting (FU-22)' },
+  { file: 'packages/airaccount/src/server/__tests__/kms-e2e.live.test.ts', maxGated: 7, min: 7, why: 'KMS live E2E, skipped without KMS_E2E=1' },
 ];
 
 /** Count case declarations: `it(`, `it.each(`, `it.runIf(`, `it.skipIf(`, `test(`. */
@@ -58,15 +71,38 @@ function countCases(source: string): number {
   return (source.match(/^\s*(it|test)(\.(each|runIf|skipIf|concurrent|sequential)\b[^\n]*)?\s*\(/gm) ?? []).length;
 }
 
+/** Count cases whose execution depends on a condition — `it.runIf(` / `it.skipIf(`. */
+function countGatedCases(source: string): number {
+  return (source.match(/^\s*(it|test)\.(runIf|skipIf)\s*\(/gm) ?? []).length;
+}
+
 describe('test inventory', () => {
-  it.each(INVENTORY)('$file has at least $min cases', ({ file, min, why }) => {
+  it.each(INVENTORY)('$file has at least $min cases, at most $maxGated gated', ({ file, min, maxGated, why }) => {
     expect(existsSync(file), `${file} is gone — ${why}`).toBe(true);
-    const found = countCases(readFileSync(file, 'utf8'));
+    const source = readFileSync(file, 'utf8');
+
+    const found = countCases(source);
     expect(
       found,
       `${file} declares ${found} cases, floor is ${min} (${why}). If cases were deliberately removed, ` +
         'lower the floor in this file in the same commit and say why in the message.',
     ).toBeGreaterThanOrEqual(min);
+
+    const gated = countGatedCases(source);
+    expect(
+      gated,
+      `${file} has ${gated} conditionally-gated cases, ceiling is ${maxGated}. Gating a case that used ` +
+        'to run unconditionally removes coverage without removing a declaration — the floor above ' +
+        'cannot see it. Raise the ceiling deliberately if the gating is intended.',
+    ).toBeLessThanOrEqual(maxGated);
+  });
+
+  it('the gated counter distinguishes gated from ungated', () => {
+    // Instrument check for the ceiling, mirroring the one for the floor. Without it a counter that
+    // always returned 0 would let every ceiling pass.
+    expect(countGatedCases('  it("plain", () => {});')).toBe(0);
+    expect(countGatedCases('  it.runIf(x)("gated", () => {});\n  it.skipIf(y)("also", () => {});')).toBe(2);
+    expect(countGatedCases('  it.each(z)("parametrised, not gated", () => {});')).toBe(0);
   });
 
   it('the counter recognises the forms actually used, and only those', () => {
