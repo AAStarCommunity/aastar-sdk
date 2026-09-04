@@ -21,6 +21,7 @@
     "keeper:op-mainnet": "tsx scripts/keeper.ts --network op-mainnet",
     "gasless:collect": "tsx scripts/gasless-collect.ts",
     "test": "pnpm -r test",
+    "test:scripts": "vitest run scripts --exclude '**/repcredit/**'",
     "test:coverage": "vitest run --coverage",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
     "test:init": "bash run_full_regression.sh init",

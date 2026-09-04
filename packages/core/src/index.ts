@@ -5,6 +5,7 @@
  */
 
 export * from './branding.js';
+export * from './utils/eip2335-password.js'; // EIP-2335 keystore password pre-processing (pure; no node:crypto)
 export * from './contract-addresses.js'; // Single source of truth for all contract addresses
 export * from './addresses.js'; // Canonical per-chainId address book + getCanonicalAddresses() resolver
 export * from './dvt.js'; // DVT node config (environments schema) + connectivity self-test (#153)
