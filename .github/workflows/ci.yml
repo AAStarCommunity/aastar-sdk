@@ -90,6 +90,14 @@ jobs:
       - name: Check the follow-up ledger (unique ids, no conflict markers)
         run: pnpm run check:followups
 
+      # The planning docs state what a PR did; GitHub states what it is. Two hand-written ledgers
+      # cannot check each other — they drift independently, and the case that matters (both stale in
+      # the same direction) is exactly the one that comparison misses. See FU-25.
+      - name: Reconcile PR claims against GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run check:task-ledger
+
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
       # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the

@@ -23,6 +23,7 @@
     "test": "pnpm -r test",
     "test:scripts": "vitest run scripts --exclude '**/repcredit/**'",
     "check:followups": "tsx scripts/check-followups.ts",
+    "check:task-ledger": "tsx scripts/check-task-ledger.ts",
     "test:coverage": "vitest run --coverage",
     "test:fast": "ts-node scripts/99_bug_hunting_fast.ts",
     "test:init": "bash run_full_regression.sh init",
