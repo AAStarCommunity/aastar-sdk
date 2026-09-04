@@ -8,12 +8,24 @@
  */
 import { createPublicClient, http } from 'viem';
 
+import { crossCheckedClientFromUrls } from '@aastar/core';
 import { checkDeployedAbiPin, checkDeployedStackOnChain, readDeployedStackPin, summarise, type Check } from './deployed-stack.js';
 
 const argv = process.argv.slice(2);
 const network = argv.includes('--network') ? argv[argv.indexOf('--network') + 1] : 'sepolia';
 const requireOnChain = process.env.REPCREDIT_REQUIRE_ONCHAIN === '1';
 const rpc = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com';
+
+/**
+ * FU-21. This gate's readings are an outward evidence claim, and a single RPC is a single party that
+ * can be wrong, stale, or lying — with nothing downstream able to tell which. `REPCREDIT_RPC_URLS`
+ * takes a comma-separated list; every read is then made on all of them and must agree.
+ *
+ * It is opt-in and defaults to today's behaviour, because a gate that starts failing the moment a
+ * second endpoint hiccups is a gate that gets switched off. What the run always does is SAY which it
+ * did — the thing FU-21 is really about is that "read from one endpoint" was invisible in the output.
+ */
+const crossRpcs = process.env.REPCREDIT_RPC_URLS ?? '';
 
 const sdkRoot = process.cwd();
 const upstreamRoot = process.env.REPCREDIT_SP_ROOT || `${sdkRoot}/../SuperPaymaster`;
@@ -34,8 +46,15 @@ async function main() {
 
   let onChainRan = false;
   try {
-    const client = createPublicClient({ transport: http(rpc) });
+    const cross = crossCheckedClientFromUrls(crossRpcs);
+    const client = cross ? cross.client : createPublicClient({ transport: http(rpc) });
     console.log('\n-- on-chain --');
+    console.log(
+      cross && cross.sources.length > 1
+        ? `   sources: ${cross.sources.join(' + ')} (cross-checked; any disagreement fails the gate)`
+        : `   sources: ${cross ? cross.sources[0] : new URL(rpc).host} — SINGLE ENDPOINT, not corroborated. ` +
+          'Set REPCREDIT_RPC_URLS=<url,url> to cross-check (FU-21).',
+    );
     const live = await checkDeployedStackOnChain(pin, client as never);
     checks.push(...live);
     onChainRan = true;
