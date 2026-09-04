@@ -107,3 +107,22 @@ describe('the self-PR exemption is narrow', () => {
     expect(reconcile([claim(354)], states({ 354: 'CLOSED' }), 354)[0].problem).toMatch(/is CLOSED/);
   });
 });
+
+describe('determining WHICH pr this run is', () => {
+  it('a failure to answer must not be reported as "no PR"', () => {
+    // Not a unit test of the function — it shells out — but a pin on the property, stated where the
+    // next person edits the rules. Measured on this PR's own CI: `actions/checkout@v5` leaves a
+    // detached HEAD, `gh pr view` had no branch to resolve, the catch turned that into "this branch
+    // has no PR", the self-PR exemption never applied, and the gate reddened the PR that introduced
+    // it. Identical to the `ghState` bug fixed in the same file the same hour.
+    //
+    // The regression that matters is behavioural and lives in the runner: PR_NUMBER first, then a
+    // branch check that refuses when HEAD is detached, and only GitHub's own words counting as "no".
+    const source = readFileSync('scripts/check-task-ledger.ts', 'utf8');
+    expect(source, 'the event must be consulted before git').toContain('process.env.PR_NUMBER');
+    expect(source, 'a detached HEAD must be refused, not guessed at').toContain('HEAD is detached');
+    // stderr must be captured on BOTH gh calls — discarding it is what made the two bugs possible.
+    expect(source.match(/stdio: \['ignore', 'pipe', 'pipe'\]/g) ?? []).toHaveLength(3);
+    expect(source).not.toContain("stdio: ['ignore', 'pipe', 'ignore']");
+  });
+});

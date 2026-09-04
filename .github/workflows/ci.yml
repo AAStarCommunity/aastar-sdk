@@ -96,6 +96,9 @@ jobs:
       - name: Reconcile PR claims against GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # checkout leaves a detached HEAD on pull_request, so `gh pr view` has no branch to
+          # resolve. The event knows which PR this is; asking it needs no subprocess.
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:task-ledger
 
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove

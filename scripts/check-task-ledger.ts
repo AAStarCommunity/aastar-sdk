@@ -112,16 +112,69 @@ export function reconcile(
   });
 }
 
-/** The PR whose head is the current branch, if one is open. */
+/**
+ * The PR this run is part of, if any.
+ *
+ * THE SAME DISEASE THIS FILE ALREADY DOCUMENTS, A FEW LINES BELOW
+ * --------------------------------------------------------------
+ * The first version asked `gh pr view` with no number and swallowed every failure as "this branch
+ * has no PR". On CI that is always a failure: `actions/checkout@v5` leaves a DETACHED HEAD on
+ * pull_request events, so there is no branch for `gh` to resolve. The exemption therefore never
+ * applied, and this gate reddened the very PR that introduced it — which its own CI demonstrated
+ * before any human noticed.
+ *
+ * `stdio: ['ignore','pipe','ignore']` was the mechanism: stderr was discarded, so the information
+ * that distinguishes "GitHub says there is no PR" from "the call did not work" was gone before the
+ * catch could look at it. Identical to the `ghState` bug fixed below, in the same file, written the
+ * same hour. Writing a lesson down does not install it at the next place it applies.
+ *
+ * CI is asked through the EVENT, not through git: the workflow knows which PR it is running for, and
+ * that answer needs no subprocess and cannot be defeated by how the repo was checked out.
+ */
 function currentBranchPr(): number | undefined {
+  // GitHub Actions: prefer what the event says.
+  const fromEnv = process.env.PR_NUMBER || /^refs\/pull\/(\d+)\//.exec(process.env.GITHUB_REF ?? '')?.[1];
+  if (fromEnv && Number.isFinite(Number(fromEnv))) return Number(fromEnv);
+
+  // A DETACHED HEAD cannot answer this question, and `gh` does not say so — it reports "no pull
+  // requests found for branch", which reads like "there is no PR" and is really "there is no branch
+  // to ask about". Measured in a detached worktree: the run reported a false problem about its own
+  // entry, exactly the CI failure this exemption exists to prevent, just with the env var absent.
+  //
+  // So detachment is detected here and refused, with the fix in the message. `gh` is only consulted
+  // when there is a branch for its answer to be about.
+  let head = '';
+  try {
+    head = execFileSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    head = '';
+  }
+  if (!head) {
+    throw new Error(
+      'check-task-ledger: HEAD is detached and PR_NUMBER is not set, so which PR this run belongs to ' +
+        'cannot be determined. Without it the self-PR exemption is off and entries closed by THIS PR ' +
+        'are reported as problems. Set PR_NUMBER=<n> (CI does this from the event), or run from a branch.',
+    );
+  }
+
   try {
     const out = execFileSync('gh', ['pr', 'view', '--json', 'number', '-q', '.number'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
     return out ? Number(out) : undefined;
-  } catch {
-    return undefined; // no PR for this branch yet — every claim reconciles normally
+  } catch (error) {
+    const stderr = String((error as { stderr?: Buffer | string }).stderr ?? '') + String((error as Error).message ?? '');
+    // Only GitHub's own answer counts as "there is no PR here".
+    if (/no pull requests found|no open pull requests|Could not resolve to a PullRequest/i.test(stderr)) return undefined;
+    throw new Error(
+      `check-task-ledger: could not determine whether this branch has a PR — ${stderr.trim().slice(0, 200)}\n` +
+        'This is a failure of the check, not a finding about the branch. Refusing to proceed as if ' +
+        'there were no PR: that would disable the self-PR exemption and redden this very run.',
+    );
   }
 }
 
