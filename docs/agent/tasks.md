@@ -148,12 +148,14 @@
 - **实际是 6 个键不是 5 个**：初稿漏了 `agentRegistry`（v0.31.0 `0x37fc74Ea…` → v0.33.0 `0x734625F6…`）。canonical 只跟踪 12 地址里的 9 个（`webAuthnLib`/`committeeBLSLib` 是链接库、不在册），其中 6 个变、3 个复用。
 - **证据**：PR #332。12/12 有 code、`FACTORY_VERSION`/`ACCOUNT_VERSION` 均 `"0.33.0"`、`factory.implementation()` == impl、`router.getAlgorithm(0x01/0x08)` 指向两个 validator、`committeeActive()==true` —— 全部 @ block 11634556。归因变异：钉 stale v0.31.0 committee validator 时「validator is armed」**保持绿**（v0.31.0 那个也 armed，对陈旧零区分度），红的是离线六键检查与**边**检查。
 
-### T5.2.2 committee framing 回归（v0.33.0 validator）  `READY`
+### T5.2.2 committee framing 回归（v0.33.0 validator）  `PR_OPEN`
 - **优先级**：high
 - **目标**：v0.33.0 的 router `algorithm 1` 指向**新的** committee validator `0x7ac7E9d4…96a9`（v0.31.0 时是 `0x1A8Db639…`）。必须确认 SDK 的 per-signer 打包对新 validator 仍然成立——**读 `committeeActive()` 而不是猜**。
 - **验收命令**：`pnpm exec vitest run packages/core/src/actions/committee.test.ts packages/core/src/abis/committeeAbi.test.ts`
 - **依赖**：T5.2.1
 - **风险**：`requireStake=true` 在新 validator 上已开启，且三个 operator 恰好卡在 `minStake`。属他仓风险，SDK 侧只需读、不改。
+- **证据**：PR #334。编码器本就 validator-agnostic（`perSignerBytes` 从链读 `TREE_DEPTH` 推导），所以无需改代码——但「无需改」是对活合约的断言，只能靠读活合约来兑现。新增 `committee.onchain.test.ts` 5 条。
+- **⚠️ 实测发现**：`requiredQuorum` 当前是 **fail-closed 哨兵** `type(uint256).max`（epoch 滚动后未 pin 上一轮快照）→ `quorumUsable=false`，**此刻提交 committee payload 必被拒**。属 DVT 侧运维状态，非 SDK 缺陷。我第一版断言 `quorumUsable === true`，15 分钟后在未改动的树上变红——那是在钉一个瞬时状态。改成断言 SDK 自己的推导关系（`quorumUsable === (requiredQuorum !== sentinel)`），时间无关且真承重。
 
 ---
 
