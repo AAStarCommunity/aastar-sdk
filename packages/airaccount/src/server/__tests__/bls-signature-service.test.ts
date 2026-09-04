@@ -119,13 +119,26 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
   // noticed a shape check being added or removed anywhere.
   const N1 = `0x${"11".repeat(32)}`;
   const N2 = `0x${"22".repeat(32)}`;
+  // REAL G2 points, in the canonical 256-byte EIP-2537 layout. The fixtures used to be
+  // "0xsig1"/"0xsig2" — strings the dedup key (a parsed G2 point, FU-37) rejects outright, so these
+  // tests exercised a value the rest of the pipeline refuses. Same blind spot the nodeIds had before
+  // FU-16, one layer down.
+  //
+  // Written as literals rather than signed in-test: @aastar/airaccount does not resolve
+  // @noble/curves/bls12-381, and generating them here made the whole FILE fail to load — 47 tests
+  // stopped running while the suite still reported "passed", which is the quietest way a test file
+  // can die. They are BLS12-381 signatures over a fixed message under two distinct fixed keys, and
+  // `dvtSignerIdentity.test.ts` regenerates that same pair from the curve, so a drift between these
+  // literals and the curve surfaces there instead of being assumed here.
+  const SIG_1 = "0x00000000000000000000000000000000175a69c57a6d564f4ff83367a48ba9934bbd412f3525c6e0082809d6bd5bf9d096e39fa3b2241e0867ae3380759213cc00000000000000000000000000000000110965f0a10f515e931b1e392548b7b703f67ec44c5a1d9ddf23678fd0e516c8390e8d327f09da831f23d18d46730fc100000000000000000000000000000000153f6322e9cfa0c5a2e6b713030e9646fe3d92b4270be45b885dca1137c32ccf7aa4c1c9df86923c97be3f428bdf6c990000000000000000000000000000000003a4521d85995eca308a743ad14bac4c3584d09e458ea319587c977b027a7cab4b484f226011c50cdbda73d5af24f8b5";
+  const SIG_2 = "0x00000000000000000000000000000000118959a06fbeb7d6126b08699328f4a49dca5c18ea284bf5b4945f4284eca7daf96a1d2d37f634f5226f51c8d5ae4f36000000000000000000000000000000000bda85398521c3c7232dfe2a4ebb4e76f2588c8d58dfc8ea3f06e9508c5a4a6fe7808fac4fd00a37997f27f1bd81578b0000000000000000000000000000000018ac2b257bce5b112722e23fe2f8b7172138b481da5e2ebbc80f4c8ee47db5d8f9186526538dd7b81198d73a8930404a00000000000000000000000000000000179d2697b8b51201e2248ca787d7261e9c54bfde84acd631cc19679bad804a452a300300f226205ee26b7bce3981af79";
   const DVT_REQ = { userOp: { sender: "0xacc", nonce: "0x0" }, ownerAuth: "0x" + "ab".repeat(65) };
 
   it("POSTs { userOp, ownerAuth } (NOT { message }) to every node, then aggregates the collected sigs", async () => {
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig1" } }) // dvt1 /signature/sign
-      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } }) // dvt2 /signature/sign
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } }) // dvt1 /signature/sign
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } }) // dvt2 /signature/sign
       .mockResolvedValueOnce({ data: { signature: "0xAGG" } }); // /signature/aggregate
 
     const svc = makeService();
@@ -140,7 +153,7 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // aggregate call receives both collected signatures.
     const aggCall = mockPost.mock.calls[2];
     expect(String(aggCall[0])).toContain("/signature/aggregate");
-    expect(aggCall[1]).toEqual({ signatures: ["0xsig1", "0xsig2"] });
+    expect(aggCall[1]).toEqual({ signatures: [SIG_1, SIG_2] });
     // result: nodeIds come from the sign RESPONSES, signature is the aggregate.
     //
     // "authoritative" is what this line used to say, and it was not true in the sense a reader would
@@ -155,14 +168,14 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
   it("a single co-signer's signature IS the aggregate (no /signature/aggregate call)", async () => {
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsolo" } }) // dvt1 signs
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } }) // dvt1 signs
       .mockRejectedValueOnce(new Error("dvt2 down")); // dvt2 unreachable
 
     const svc = makeService();
     const out = await (svc as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
 
     expect(out.nodeIds).toEqual([N1]);
-    expect(out.signature).toBe("0xsolo");
+    expect(out.signature).toBe(SIG_1);
     expect(mockPost).toHaveBeenCalledTimes(2); // 2 sign attempts, NO aggregate call
   });
 
@@ -173,13 +186,13 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // whole operation died later inside the encoder — even though dvt2 answered perfectly well.
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { signature: "0xsig1" } }) // dvt1: no nodeId
-      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } });
+      .mockResolvedValueOnce({ data: { signature: SIG_1 } }) // dvt1: no nodeId
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } });
 
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
 
     expect(out.nodeIds).toEqual([N2]);
-    expect(out.signature).toBe("0xsig2"); // single surviving co-signer ⇒ no aggregate call
+    expect(out.signature).toBe(SIG_2); // single surviving co-signer ⇒ no aggregate call
     // and dvt1's signature is NOT in the result — dropping the id without the signature would leave
     // an aggregate that cannot verify against the ids it is paired with.
     expect(mockPost).toHaveBeenCalledTimes(2);
@@ -189,8 +202,8 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // Distinct from the missing case: a string that looks like hex still fails bytes32.
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: "0xabcd", signature: "0xsig1" } })
-      .mockResolvedValueOnce({ data: { nodeId: N2, signature: "0xsig2" } });
+      .mockResolvedValueOnce({ data: { nodeId: "0xabcd", signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } });
 
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([N2]);
@@ -201,12 +214,12 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // round alive on the honest node instead of failing an operation that had a valid co-signature.
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig1" } })
-      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xsig2" } }); // dvt2 claims dvt1's id
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_2 } }); // dvt2 claims dvt1's id
 
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([N1]);
-    expect(out.signature).toBe("0xsig1"); // the FIRST claimant's signature, paired with its own id
+    expect(out.signature).toBe(SIG_1); // the FIRST claimant's signature, paired with its own id
   });
 
   it("case-different duplicates are still duplicates", async () => {
@@ -214,8 +227,8 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // ids that the encoder sorts into a collision anyway.
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: `0x${"ab".repeat(32)}`, signature: "0xsig1" } })
-      .mockResolvedValueOnce({ data: { nodeId: `0x${"AB".repeat(32)}`, signature: "0xsig2" } });
+      .mockResolvedValueOnce({ data: { nodeId: `0x${"ab".repeat(32)}`, signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { nodeId: `0x${"AB".repeat(32)}`, signature: SIG_2 } });
 
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([`0x${"ab".repeat(32)}`]);
@@ -227,8 +240,8 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // the follow-up ledger carries the diagnosability gap rather than a comment claiming there is none.
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: "0xnope", signature: "0xsig1" } })
-      .mockResolvedValueOnce({ data: { signature: "0xsig2" } });
+      .mockResolvedValueOnce({ data: { nodeId: "0xnope", signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { signature: SIG_2 } });
 
     await expect(
       (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ)
@@ -242,7 +255,7 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // BLS is deterministic over (key, message), so one key signing one userOpHash produces the same
     // bytes wherever it runs. #343's method doc claimed this case was out of reach here; it was not.
     mockPost.mockReset();
-    const SAME = `0x${"cd".repeat(128)}`;
+    const SAME = SIG_1;
     mockPost
       .mockResolvedValueOnce({ data: { nodeId: N1, signature: SAME } })
       .mockResolvedValueOnce({ data: { nodeId: N2, signature: SAME } }); // different id, same key
@@ -259,13 +272,46 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     // worse than no check. Distinct keys cannot collide (asserted in dvtSignerIdentity.test.ts).
     mockPost.mockReset();
     mockPost
-      .mockResolvedValueOnce({ data: { nodeId: N1, signature: `0x${"11".repeat(128)}` } })
-      .mockResolvedValueOnce({ data: { nodeId: N2, signature: `0x${"22".repeat(128)}` } })
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } })
       .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
 
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([N1, N2]);
     expect(out.signature).toBe("0xAGG");
+  });
+
+
+
+  it("the SAME signature written differently is still one signer (FU-37)", async () => {
+    // Measured on this very assembly before the fix: an uppercase `0X` prefix produced TWO survivors
+    // where there was one key, because the dedup compared strings rather than points. The compressed
+    // form is the same class and needs no adversary — `signatureCompact || signature` means one node
+    // may legitimately answer compact while another answers uncompressed.
+    for (const [label, variant] of [
+      ["0X prefix", `0X${SIG_1.slice(2)}`],
+      ["uppercase body", SIG_1.toUpperCase().replace("0X", "0x")],
+    ] as const) {
+      mockPost.mockReset();
+      mockPost
+        .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } })
+        .mockResolvedValueOnce({ data: { nodeId: N2, signature: variant } });
+      const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+      expect(out.nodeIds, label).toEqual([N1]);
+      // …and the SURVIVING signature is the canonical form, not whatever the first node happened to
+      // write. Asserting only the survivor count would pass on a version that dropped the duplicate
+      // for the wrong reason (as "not a G2 point" rather than "already seen").
+      expect(out.signature).toBe(SIG_1);
+    }
+  });
+
+  it("a signature that is not a G2 point drops that node, like any other bad answer", async () => {
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: "0xdeadbeef" } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } });
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([N2]);
   });
 
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {

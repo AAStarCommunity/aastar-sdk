@@ -27,6 +27,7 @@ import {
   classifyDvtSigner,
   recordDvtSigner,
   newDvtIdentitySeen,
+  canonicalSignature,
 } from "@aastar/core";
 import {
   AbiDecodingZeroDataError,
@@ -609,10 +610,14 @@ export class BLSSignatureService {
         // Classification lives in @aastar/core so this transport and the evidence gates cannot drift
         // apart about what "the same signer twice" means; what they do about it stays different on
         // purpose — a release gate aborts, a live transport skips.
-        const normalisedSig = sig?.startsWith("0x") ? sig : `0x${sig}`;
-        const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+        // The RAW value goes to the classifier. Prefixing it here first is what created FU-37: a
+        // case-sensitive `startsWith("0x")` rewrote `0X…` to `0x0X…`, and the dedup then compared a
+        // string this code had corrupted rather than the signature the node sent. Normalisation
+        // belongs in one place, next to the parse that can actually validate the result.
+        const fault = classifyDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
         if (fault) throw new Error(`${fault.message} — dropping this co-signature`);
-        recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: normalisedSig }, seenSigners);
+        recordDvtSigner({ endpoint: node.apiEndpoint, nodeId, signature: sig }, seenSigners);
+        const normalisedSig = canonicalSignature(sig)!;
 
         signerNodeSignatures.push(normalisedSig);
         signerNodeIds.push(nodeId as string);
