@@ -25,7 +25,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
 import { onboardDvtNode } from '@aastar/operator';
-import { CANONICAL_ADDRESSES, dvtOperatorActions } from '@aastar/core';
+import { CANONICAL_ADDRESSES, dvtOperatorActions, eip2335PasswordCandidates } from '@aastar/core';
 
 /** Fail with the missing variable's name rather than a cryptic downstream TypeError. */
 function requireEnv(name: string): string {
@@ -55,8 +55,16 @@ function decryptEip2335(ks: any, password: string): Hex {
     const decipher = createDecipheriv('aes-128-ctr', dk.subarray(0, 16), Buffer.from(c.cipher.params.iv, 'hex'));
     return `0x${Buffer.concat([decipher.update(cipherMsg), decipher.final()]).toString('hex')}` as Hex;
   };
-  // EIP-2335 says NFKD-normalize + strip control chars; try normalized then raw (encrypt lib may differ).
-  return tryWith(password.normalize('NFKD')) ?? tryWith(password) ?? (() => { throw new Error('keystore checksum mismatch — wrong DVT3_SECRET'); })();
+  // EIP-2335 names TWO steps — NFKD, then strip C0/C1/Delete. This used to do only the first while
+  // the comment claimed both, so a keystore whose password carried a stray control character failed
+  // its checksum and reported "wrong DVT3_SECRET" about a secret that was correct. The candidate list
+  // is spec-first, then the looser forms encryptors actually produce; the checksum decides, so a
+  // wider list can only turn a spurious failure into a success, never select a wrong key.
+  for (const pw of eip2335PasswordCandidates(password)) {
+    const hit = tryWith(pw);
+    if (hit) return hit;
+  }
+  throw new Error('keystore checksum mismatch — wrong DVT3_SECRET');
 }
 
 // EIP-2537 G1 (128B) encoding — matches register-node.mjs / the contract.

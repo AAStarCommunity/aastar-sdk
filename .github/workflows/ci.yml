@@ -75,6 +75,15 @@ jobs:
           SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
         run: pnpm -r test
 
+      # `pnpm -r` iterates the workspace PACKAGES and skips the workspace root, so nothing above
+      # runs a test file that lives in `scripts/`. Measured: `security-scan.test.ts` (merged in
+      # #339) and `upstream/abi-signature.test.ts` had never executed in CI — they were verified by
+      # running vitest by hand, which is exactly how a test can look green and still not be a gate.
+      # `scripts/repcredit/**` is excluded because `repcredit:test` already covers it in two other
+      # jobs; this step is precisely the remainder.
+      - name: Run root-level tests (scripts/, excluding repcredit)
+        run: pnpm run test:scripts
+
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
       # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
