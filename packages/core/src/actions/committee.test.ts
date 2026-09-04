@@ -9,9 +9,14 @@ import {
     isAccountEnrolled,
 } from './committee.js';
 import { COMMITTEE_QUORUM_UNAVAILABLE } from '../crypto/dvtWire.js';
+import { CANONICAL_ADDRESSES } from '../addresses.js';
 
-const VALIDATOR = '0x1A8Db639b5d8Bd5742edB083656EDD56f416cd64' as Address;
-const ROUTER = '0xA15127e8601e77De7C655bf04ca75cccD8C968f0' as Address;
+// Read the canonical pins rather than literals. These are only stub targets — the assertions here
+// never touch a chain — but a hardcoded address silently goes stale on a canonical bump and then
+// the file reads as if it were exercising the current stack when it is not (CC-45 shipped exactly
+// that). T5.2.1 moved both of these from the v0.31.0 stack to v0.33.0.
+const VALIDATOR = CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm as Address;
+const ROUTER = CANONICAL_ADDRESSES[11155111].aaStarValidator as Address;
 const ACCOUNT = '0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0' as Address;
 const nid = (n: number): Hex => `0x${n.toString(16).padStart(64, '0')}`;
 
