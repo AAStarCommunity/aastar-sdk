@@ -6,6 +6,7 @@
 
 export * from './branding.js';
 export * from './crypto/dvtSignerIdentity.js'; // DVT co-signature identity classifier (pure)
+export * from './actions/committeeTree.js'; // frozen-root committee proofs rebuilt from events
 export * from './utils/eip2335-password.js'; // EIP-2335 keystore password pre-processing (pure; no node:crypto)
 export * from './contract-addresses.js'; // Single source of truth for all contract addresses
 export * from './addresses.js'; // Canonical per-chainId address book + getCanonicalAddresses() resolver
