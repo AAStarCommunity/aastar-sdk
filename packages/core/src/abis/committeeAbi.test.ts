@@ -164,7 +164,13 @@ describe('guardian-slash surface (SuperPaymaster Registry 5.7.0 / BLSAggregator 
         ]) {
             expect(fns(RegistryABI), `missing ${f}`).toContain(f);
         }
-        expect(sigs(RegistryABI)).toContain('setCreditPolicy(uint256,uint256,uint256,bool)');
+        // CC-115 B4: Registry 5.8.0 NARROWED this from (perProposalCap, totalCap, baseline,
+        // applyBaseline) to caps only. The dropped `applyBaseline` is why the measurement harness
+        // in scripts/repcredit-e2e.ts can no longer restore totalCreditExposure and now fails
+        // loudly instead — asserted here so a future widening is a deliberate review, not a
+        // surprise.
+        expect(sigs(RegistryABI)).toContain('setCreditPolicy(uint256,uint256)');
+        expect(sigs(RegistryABI)).not.toContain('setCreditPolicy(uint256,uint256,uint256,bool)');
         // 5.7.0 folded the single-value setter into setCreditPolicy.
         expect(fns(RegistryABI)).not.toContain('setMaxAggregateCreditUpliftPerProposal');
     });

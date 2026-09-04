@@ -23,6 +23,71 @@ import { keccak256 } from 'viem';
 const SDK_ROOT = process.cwd();
 const ABIS_DIR = path.join(SDK_ROOT, 'packages/core/src/abis');
 
+// CC-115 B4. Contracts whose authoritative upstream is the DEPLOYED artifact, not the compiler's
+// `out/`. BLSAggregator is the case that forced this: SuperPaymaster's `contracts/src` is 4.12.0,
+// the deployed Sepolia contract is 4.11.0, and the contract is not upgradeable, so 4.12.0 is on no
+// chain. 4.11.0 is a strict SUBSET of 4.12.0, which is what makes the mismatch dangerous rather
+// than merely wrong: 71 of 72 functions behave identically, and the 72nd — guardianSlashCases —
+// keeps its selector while changing its return arity, so it decodes wrongly instead of reverting.
+// The redirect target is itself hash-pinned (deployedStack.sepolia.aggregator.abi) and verified
+// against the upstream git blob by scripts/repcredit/deployed-stack.ts, so the chain of custody
+// runs: upstream commit -> blob sha256 -> vendored artifact -> this diff -> abiSha256 pin.
+const DEPLOYED_ABI_REDIRECT = new Set<string>(['BLSAggregator']);
+
+/** Redirect-target custody failures. Non-empty => the run fails, exactly like a drift. */
+const redirectFailures: string[] = [];
+
+/**
+ * The redirect is driven by the PIN, not by this file's constant list.
+ *
+ * That matters for more than tidiness: the synthetic-upstream harness in
+ * `abi-drift-provenance.test.ts` builds a pin with no `deployedStack`, and a redirect that engaged
+ * regardless turned BLSAggregator into a permanently-missing must-verify artifact there — 31 tests
+ * red, none of them about anything real. A pin that does not declare a deployed artifact does not
+ * get one. A pin that DOES declare one and cannot produce it is a hard failure, handled at the call
+ * site, so the dangerous direction (silently falling back to the 4.12.0 out/ artifact) stays shut.
+ */
+function redirectTargetFor(name: string): string | null {
+  if (!DEPLOYED_ABI_REDIRECT.has(name)) return null;
+  const vendoredAt = (PIN as { deployedStack?: Record<string, { aggregator?: { abi?: { vendoredAt?: string } } }> })
+    .deployedStack?.sepolia?.aggregator?.abi?.vendoredAt;
+  return typeof vendoredAt === 'string' && vendoredAt.length > 0 ? vendoredAt : null;
+}
+
+/**
+ * The custody chain for a redirected artifact: it must be byte-identical to the blob at the pinned
+ * upstream revision named in `deployedStack`.
+ *
+ * Read from the git OBJECT (`git show <rev>:<path>`), never the sibling worktree — an unrelated
+ * uncommitted file upstream would otherwise decide whether this passes, which is the same
+ * attribution hole the solc-metadata path already closes for compiled artifacts.
+ */
+function verifyRedirectedBlob(name: string, vendoredPath: string): { ok: boolean; detail: string } {
+  const stack = (PIN as { deployedStack?: Record<string, { aggregator?: { abi?: Record<string, string> } }> })
+    .deployedStack?.sepolia?.aggregator?.abi;
+  if (!stack?.repo || !stack.revision || !stack.path || !stack.sha256) {
+    return { ok: false, detail: 'deployedStack.sepolia.aggregator.abi is missing repo/revision/path/sha256' };
+  }
+  const root = OUT_DIRS.map((d) => path.resolve(d, '../')).find((r) => path.basename(r) === stack.repo);
+  if (!root) return { ok: false, detail: `no checkout of ${stack.repo} among the scanned upstreams` };
+  const local = createHash('sha256').update(fs.readFileSync(vendoredPath)).digest('hex');
+  if (local !== stack.sha256) {
+    return { ok: false, detail: `${path.relative(SDK_ROOT, vendoredPath)} hashes ${local.slice(0, 16)} but the pin says ${stack.sha256.slice(0, 16)}` };
+  }
+  try {
+    const blob = execFileSync('git', ['-C', root, 'show', `${stack.revision}:${stack.path}`], {
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const blobHash = createHash('sha256').update(blob).digest('hex');
+    if (blobHash !== stack.sha256) {
+      return { ok: false, detail: `${stack.repo}@${stack.revision.slice(0, 12)}:${stack.path} hashes ${blobHash.slice(0, 16)}, pin says ${stack.sha256.slice(0, 16)}` };
+    }
+    return { ok: true, detail: `byte-identical to ${stack.repo}@${stack.revision.slice(0, 12)}:${stack.path} (${stack.sha256.slice(0, 16)}…)` };
+  } catch (error) {
+    return { ok: false, detail: `cannot read ${stack.repo}@${stack.revision.slice(0, 12)}:${stack.path} — ${String(error).slice(0, 120)}` };
+  }
+}
+
 // Upstream foundry `out/` dirs (sibling checkouts). First match for a contract name wins.
 const OUT_DIRS = [
   '../SuperPaymaster/out',
@@ -1003,7 +1068,17 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     skippedEntries.push({ name, reason: `documented intentional drift: ${KNOWN_DRIFT.get(name)}`, expected: false });
     continue;
   }
-  const up = findUpstreamArtifact(name);
+  // CC-115 B4: a contract whose SDK ABI must track the DEPLOYED artifact rather than upstream
+  // `out/`. This is a REDIRECT, not a skip — the contract stays in `checked`, is still diffed, and
+  // still needs a matching abiSha256 pin. Skipping it instead (via KNOWN_DRIFT) would have removed
+  // the SDK's single most consequential ABI from the gate entirely, which is the failure mode this
+  // repo already documented: an exemption that reads like coverage.
+  const redirected = redirectTargetFor(name);
+  const up = redirected ? path.join(SDK_ROOT, redirected) : findUpstreamArtifact(name);
+  if (redirected && !fs.existsSync(up)) {
+    skippedEntries.push({ name, reason: `deployed-ABI redirect target missing: ${redirected}`, expected: true });
+    continue;
+  }
   if (!up) {
     const repo = SOURCE_INDEX.get(name);
     skippedEntries.push({
@@ -1021,7 +1096,18 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
   checkedNames.push(name);
   const sdk = loadAbi(path.join(ABIS_DIR, file));
   const ups = loadAbi(up);
-  const repo = repoProvenanceFor(up);
+  // A redirected artifact lives in THIS repo and carries no solc metadata, so the compile-time
+  // custody chain (artifact -> metadata.sources -> pinned upstream blobs) does not apply to it. It
+  // has a different, equally checkable chain: the file must be byte-identical to a blob at a pinned
+  // upstream revision. Running the solc-metadata verifier over it would report five "gaps" that are
+  // properties of the artifact KIND, not evidence of drift — and a permanent ⚠️ teaches readers to
+  // ignore the column. So attribute it the right way instead of excusing it.
+  const repo = redirected ? null : repoProvenanceFor(up);
+  if (redirected) {
+    const blobOk = verifyRedirectedBlob(name, up);
+    if (!blobOk.ok) redirectFailures.push(`${name}: ${blobOk.detail}`);
+    console.log(`ℹ️  ${name}: ABI redirected to the DEPLOYED artifact — ${blobOk.detail}`);
+  }
   const provenance = {
     name,
     artifact: up,
@@ -1312,6 +1398,14 @@ let vendoredPinHolds = true;
 // ---------------------------------------------------------------------------------------------
 function provenanceGaps(entry: (typeof checkedProvenance)[number]): string[] {
   const gaps: string[] = [];
+  // A redirected artifact is attributed by BLOB IDENTITY at a pinned upstream revision, not by
+  // solc metadata — it has none to carry. Its chain is checked in verifyRedirectedBlob() and any
+  // break lands in `redirectFailures`, which fails the run on its own. Reporting the five
+  // metadata-shaped "gaps" here as well would make a permanently-⚠️ column that readers learn to
+  // skip, which is how a real gap gets missed later.
+  if (redirectTargetFor(entry.name)) {
+    return redirectFailures.filter((f) => f.startsWith(`${entry.name}:`));
+  }
   const repo = entry.repo;
   if (!repo) {
     gaps.push(
@@ -1447,6 +1541,14 @@ if (STRICT && expectedMissing.length) {
 if (mustVerifyMissing.length) {
   console.error(`\nMUST-VERIFY NOT VERIFIED: ${mustVerifyMissing.length} contract(s) that must always be compared were not:`);
   for (const [name, why] of mustVerifyMissing) console.error(`  - ${name} (${why})`);
+  failed = true;
+}
+// Like the must-verify block above, deliberately not gated on --strict: a redirected ABI whose
+// custody chain is broken is an ABI nobody has attributed to anything.
+if (redirectFailures.length) {
+  console.error(`\nDEPLOYED-ABI REDIRECT BROKEN: ${redirectFailures.length} contract(s):`);
+  for (const line of redirectFailures) console.error(`  - ${line}`);
+  console.error('  The vendored copy must be byte-identical to the blob at the pinned upstream revision.');
   failed = true;
 }
 if (failed) process.exit(1);

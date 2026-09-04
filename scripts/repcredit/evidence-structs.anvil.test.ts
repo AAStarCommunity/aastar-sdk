@@ -1,5 +1,6 @@
 /**
- * REAL viem + REAL anvil regression for the 5 -> 7 `guardianSlashCases` hazard (CC-50 round-10 HIGH).
+ * REAL viem + REAL anvil regression for the `guardianSlashCases` arity hazard (CC-50 round-10 HIGH;
+ * re-polarised to 7 -> 8 by CC-115 B4, when the reviewed constant moved to the deployed 4.11.0 shape).
  *
  * WHY THIS FILE EXISTS
  * --------------------
@@ -57,7 +58,12 @@ const SHIPPED_BLS_ABI = JSON.parse(
   readFileSync(join(SDK_REPO, 'packages/core/src/abis/BLSAggregator.json'), 'utf8'),
 ).abi as Abi;
 
-/** The upstream 4.8.0 outputs (repo:sp, CC-48): fraudProofHash inserted @1, verifier appended. */
+/**
+ * The 4.12.0 SOURCE outputs (#400 inserted `uint16 slashBps` before `verifier`).
+ *
+ * CC-115 B4 moved the reviewed constant to the deployed 4.11.0 shape (7 outputs), so the live
+ * hazard is no longer 5-vs-7 but 7-vs-8 — and 8 is what upstream `contracts/src` already emits.
+ */
 const RESHAPED_OUTPUTS = [
   { name: 'guardiansHash', type: 'bytes32' },
   { name: 'fraudProofHash', type: 'bytes32' },
@@ -65,6 +71,7 @@ const RESHAPED_OUTPUTS = [
   { name: 'status', type: 'uint8' },
   { name: 'guardianCount', type: 'uint16' },
   { name: 'resolvedCount', type: 'uint16' },
+  { name: 'slashBps', type: 'uint16' },
   { name: 'verifier', type: 'address' },
 ] as const;
 const RESHAPED_ABI = [
@@ -87,13 +94,17 @@ const GUARDIAN_COUNT = 3;
 const RESOLVED_COUNT = 3;
 const VERIFIER = `0x${'cc'.repeat(20)}` as Address;
 
+const SLASH_BPS = 500;
+
+/** What the REVIEWED (= deployed 4.11.0) contract returns. */
 const SEVEN_WORDS = encodeAbiParameters(
-  RESHAPED_OUTPUTS.map(o => ({ type: o.type })),
+  GUARDIAN_SLASH_CASE.outputs.map(o => ({ type: o.type })),
   [GUARDIANS_HASH, FRAUD_PROOF_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT, VERIFIER],
 );
-const FIVE_WORDS = encodeAbiParameters(
-  GUARDIAN_SLASH_CASE.outputs.map(o => ({ type: o.type })),
-  [GUARDIANS_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT],
+/** What a 4.12.0 contract would return: the live hazard, same selector. */
+const EIGHT_WORDS = encodeAbiParameters(
+  RESHAPED_OUTPUTS.map(o => ({ type: o.type })),
+  [GUARDIANS_HASH, FRAUD_PROOF_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT, SLASH_BPS, VERIFIER],
 );
 
 /**
@@ -115,8 +126,10 @@ function returnerRuntime(data: Hex): Hex {
 
 /** Distinct address per case so a mixed-up address can never look like a pass. */
 const ADDR = {
-  sevenWord: '0x00000000000000000000000000000000000000b1' as Address,
-  fiveWord: '0x00000000000000000000000000000000000000b2' as Address,
+  /** returns the REVIEWED 7 words (= deployed 4.11.0) */
+  reviewedSeven: '0x00000000000000000000000000000000000000b1' as Address,
+  /** returns the 4.12.0 SOURCE shape's 8 words, at the same selector */
+  sourceEight: '0x00000000000000000000000000000000000000b2' as Address,
   noCode: '0x00000000000000000000000000000000000000b3' as Address,
 };
 
@@ -144,7 +157,7 @@ async function waitFor(check: () => Promise<boolean>, tries: number, delayMs: nu
   return false;
 }
 
-describe('guardianSlashCases 5 -> 7 against a real chain', () => {
+describe('guardianSlashCases 7 -> 8 against a real chain', () => {
   let anvil: ChildProcess | undefined;
   let booted = false;
   let unavailable = '';
@@ -163,8 +176,8 @@ describe('guardianSlashCases 5 -> 7 against a real chain', () => {
       unavailable ||= `anvil did not answer on ${RPC} within 15s`;
       return;
     }
-    await rpc('anvil_setCode', [ADDR.sevenWord, returnerRuntime(SEVEN_WORDS)]);
-    await rpc('anvil_setCode', [ADDR.fiveWord, returnerRuntime(FIVE_WORDS)]);
+    await rpc('anvil_setCode', [ADDR.reviewedSeven, returnerRuntime(SEVEN_WORDS)]);
+    await rpc('anvil_setCode', [ADDR.sourceEight, returnerRuntime(EIGHT_WORDS)]);
     publicClient = createPublicClient({ chain: foundry, transport: http(RPC) }) as PublicClient;
     booted = true;
   }, 40_000);
@@ -180,23 +193,21 @@ describe('guardianSlashCases 5 -> 7 against a real chain', () => {
     return false;
   }
 
-  it('THE BYPASS: real viem readContract with the 5-output ABI silently mislabels the 7-word answer', async () => {
+  it('THE BYPASS: real viem readContract with the 7-output ABI silently accepts the 8-word answer', async () => {
     if (!guard()) return;
-    // This is the round-9 failure, measured. viem does not revert, does not warn, and hands back
-    // five members: guardiansHash, then fraudProofHash under the name deadline, and so on.
+    // Measured, not asserted in prose: viem does not revert and does not warn. It decodes the
+    // first seven words and drops the eighth, so `verifier` comes back holding slashBps and the
+    // real verifier address is gone. Nothing downstream can tell.
     const raw = (await publicClient.readContract({
-      address: ADDR.sevenWord,
+      address: ADDR.sourceEight,
       abi: SHIPPED_BLS_ABI,
       functionName: 'guardianSlashCases',
       args: [1n],
     })) as readonly unknown[];
-    expect(raw).toHaveLength(5);
+    expect(raw).toHaveLength(7);
     expect(raw[0]).toBe(GUARDIANS_HASH);
-    // Slot 1 is `deadline` per the vendored ABI, but the bytes are fraudProofHash's.
-    expect(raw[1]).toBe(BigInt(FRAUD_PROOF_HASH));
-    expect(raw[1]).not.toBe(DEADLINE);
-    // Slot 2 is `status`, carrying the real deadline. uint8 truncation makes it unrecognisable.
-    expect(raw[2]).not.toBe(STATUS);
+    // Slot 6 is `verifier` per the vendored ABI, but the bytes at that offset are slashBps's.
+    expect(raw[6]).not.toBe(getAddress(VERIFIER));
   });
 
   it('THE FIX: readNamedStruct refuses the same call on the same chain, before decoding', async () => {
@@ -204,22 +215,22 @@ describe('guardianSlashCases 5 -> 7 against a real chain', () => {
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.sevenWord,
+        address: ADDR.sourceEight,
         abi: SHIPPED_BLS_ABI,
         spec: GUARDIAN_SLASH_CASE,
         args: [1n],
       }),
-    ).rejects.toThrow(/returned 7 word\(s\) but the vendored ABI declares 5 statically-sized output\(s\)/);
+    ).rejects.toThrow(/returned 8 word\(s\) but the vendored ABI declares 7 statically-sized output\(s\)/);
   });
 
-  it('a MATCHED 7-output ABI + reviewed constant reads the right values off that same contract', async () => {
+  it('a MATCHED 8-output ABI + matching constant reads the right values off that same contract', async () => {
     if (!guard()) return;
     // Proves the refusal above is about the mismatch, not about the reader being unable to read a
     // 7-field struct: this is the positive case the B2 re-vendor will land.
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.sevenWord,
+        address: ADDR.sourceEight,
         abi: RESHAPED_ABI,
         spec: RESHAPED_SPEC,
         args: [1n],
@@ -231,26 +242,29 @@ describe('guardianSlashCases 5 -> 7 against a real chain', () => {
       status: STATUS,
       guardianCount: GUARDIAN_COUNT,
       resolvedCount: RESOLVED_COUNT,
+      slashBps: SLASH_BPS,
       verifier: getAddress(VERIFIER),
     });
   });
 
-  it('NO false positive: the shipped ABI reads a real 5-word contract correctly', async () => {
+  it('NO false positive: the shipped ABI reads the real 7-word contract correctly', async () => {
     if (!guard()) return;
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.fiveWord,
+        address: ADDR.reviewedSeven,
         abi: SHIPPED_BLS_ABI,
         spec: GUARDIAN_SLASH_CASE,
         args: [1n],
       }),
     ).resolves.toEqual({
       guardiansHash: GUARDIANS_HASH,
+      fraudProofHash: FRAUD_PROOF_HASH,
       deadline: DEADLINE,
       status: STATUS,
       guardianCount: GUARDIAN_COUNT,
       resolvedCount: RESOLVED_COUNT,
+      verifier: getAddress(VERIFIER),
     });
   });
 

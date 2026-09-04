@@ -74,12 +74,26 @@ export type ReviewedStruct = {
 export const GUARDIAN_SLASH_CASE: ReviewedStruct = {
   functionName: 'guardianSlashCases',
   label: 'BLSAggregator.guardianSlashCases',
+  // CC-115 B4, 2026-09-04: re-reviewed against the DEPLOYED 4.11.0 artifact
+  // (SuperPaymaster@d651646a:abis/BLSAggregator-4.11.0.deployed.json, sha256 df667b4d…06ce) and
+  // confirmed against the chain: `cast call 0xEaeC2F51… guardianSlashCases(uint256) 0` returns 224
+  // bytes = 7 words, the 7-type list below decodes it, and the 8-type 4.12.0 list raises.
+  //
+  // Two moves happened between the old 5-output review and this one, and the second is the reason
+  // this constant is a literal rather than something derived from the ABI:
+  //   5 -> 7  upstream inserted `fraudProofHash` at index 1 and appended `verifier` (SP 4.8.0)
+  //   7 -> 8  #400 inserted `uint16 slashBps` before `verifier` — that is 4.12.0, which is on NO
+  //           chain, and MUST NOT be adopted here while the deployed contract is 4.11.0.
+  // Every member is statically sized, so a wrong list does not revert; it decodes into the wrong
+  // fields. The word-count assertion in this module is what turns that into a failure.
   outputs: [
     { name: 'guardiansHash', type: 'bytes32' },
+    { name: 'fraudProofHash', type: 'bytes32' },
     { name: 'deadline', type: 'uint64' },
     { name: 'status', type: 'uint8' },
     { name: 'guardianCount', type: 'uint16' },
     { name: 'resolvedCount', type: 'uint16' },
+    { name: 'verifier', type: 'address' },
   ],
 };
 

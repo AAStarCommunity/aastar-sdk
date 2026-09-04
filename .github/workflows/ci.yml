@@ -168,7 +168,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: AAStarCommunity/YetAnotherAA-Validator
-          ref: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
+          ref: 941f0d06dec76a469adbbb9306e1e84d4e6bf5fa
           path: YetAnotherAA-Validator
           token: ${{ secrets.YAAA_CHECKOUT_TOKEN }}
 
@@ -207,7 +207,7 @@ jobs:
           REPCREDIT_YAAA_HTTP_TEST: '1'
           REPCREDIT_ANVIL_TEST: '1'
           REPCREDIT_YAAA_DIR: ${{ github.workspace }}/YetAnotherAA-Validator
-          REPCREDIT_YAAA_REV: e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9
+          REPCREDIT_YAAA_REV: 941f0d06dec76a469adbbb9306e1e84d4e6bf5fa
           # Same reason as the unit-test job: no sibling contract checkouts on this runner.
           REPCREDIT_UPSTREAM_ARTIFACTS: 'absent'
         run: pnpm run repcredit:test
@@ -253,7 +253,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: AAStarCommunity/SuperPaymaster
-          ref: 03713febef863a7e3bafe13b0f955fa1f0d85683
+          ref: d651646aee98e8b22c8abe5af079bd4bb0a35728
           path: SuperPaymaster
           # Only the foundry dependency submodules: `submodules: recursive` would also drag in
           # standards/ercs and friends, which the build does not need.
@@ -269,7 +269,7 @@ jobs:
       - name: Assert the upstream checkout is clean and at the pinned revision
         working-directory: SuperPaymaster
         run: |
-          test "$(git rev-parse HEAD)" = "03713febef863a7e3bafe13b0f955fa1f0d85683"
+          test "$(git rev-parse HEAD)" = "d651646aee98e8b22c8abe5af079bd4bb0a35728"
           test -z "$(git status --porcelain)"
 
       - uses: pnpm/action-setup@v5

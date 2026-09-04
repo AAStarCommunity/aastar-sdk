@@ -1414,9 +1414,20 @@ async function runMeasurements(
   const batchSizes = measurementSmoke ? [1] : [1, 10, 50, 100];
   const repetitions = measurementSmoke ? 2 : 10;
   // Registry 5.7.0 folded the per-proposal cap, the total-exposure cap and the exposure baseline
-  // into one setter (`setCreditPolicy`), so the harness must save and restore ALL THREE — restoring
+  // into one setter (`setCreditPolicy`), so the harness saved and restored ALL THREE — restoring
   // only the per-proposal cap would silently leave the measurement's relaxed total cap in place for
   // every later arm, including the ones that assert the cap fires.
+  //
+  // CC-115 B4: Registry 5.8.0 NARROWED that setter to `setCreditPolicy(perProposalCap, totalCap)`.
+  // The `applyBaseline` flag is gone, and with it the harness's ability to put `totalCreditExposure`
+  // back. 5.8.0 offers no substitute an owner can call to set an arbitrary baseline — the only
+  // writers are the accrual path, a resync that zeroes it, and `seedCreditPopulation`, none of
+  // which restores a saved value.
+  //
+  // So this no longer pretends to restore it. The caps are restored (they still can be), and the
+  // exposure counter is MEASURED before and after; if the measurement arms moved it, the run fails
+  // loudly instead of handing later cap-control arms a polluted accounting state and calling the
+  // result evidence.
   const readRegistryUint = (functionName: string) =>
     publicClient.readContract({ address: deployment.registry, abi: RegistryABI, functionName }) as Promise<bigint>;
   const productionCap = await readRegistryUint("maxAggregateCreditUpliftPerProposal");
@@ -1427,8 +1438,8 @@ async function runMeasurements(
     deployment.registry,
     RegistryABI as Abi,
     "setCreditPolicy",
-    // applyBaseline=false: the harness relaxes the CAPS, it must not rewrite accrued exposure.
-    [(1n << 256n) - 1n, (1n << 256n) - 1n, 0n, false],
+    // 5.8.0: caps only. The harness relaxes the CAPS; accrued exposure is untouched by design.
+    [(1n << 256n) - 1n, (1n << 256n) - 1n],
   );
   await sendContract(deployerWallet, deployment.registry, RegistryABI as Abi, "setReputationSource", [DEPLOYER, true]);
   const validator0 = validatorWallet(validators[0]);
@@ -1521,9 +1532,8 @@ async function runMeasurements(
     deployment.registry,
     RegistryABI as Abi,
     "setCreditPolicy",
-    // applyBaseline=true restores the exposure counter the measurement arms moved, so the later
-    // cap controls run against the same accounting state the run started with.
-    [productionCap, productionTotalCap, productionExposure, true],
+    // 5.8.0: caps only — see the note above. The exposure counter is checked, not rewritten.
+    [productionCap, productionTotalCap],
   );
   const restoredCap = await readRegistryUint("maxAggregateCreditUpliftPerProposal");
   const restoredTotalCap = await readRegistryUint("maxTotalCreditExposure");
@@ -1532,7 +1542,12 @@ async function runMeasurements(
     throw new Error(
       "measurement harness did not restore the Registry credit policy: " +
         `perProposal ${restoredCap} (want ${productionCap}), total ${restoredTotalCap} ` +
-        `(want ${productionTotalCap}), exposure ${restoredExposure} (want ${productionExposure})`,
+        `(want ${productionTotalCap}), exposure ${restoredExposure} (want ${productionExposure}). ` +
+        "NOTE (CC-115 B4): under Registry 5.8.0 the caps ARE restorable but totalCreditExposure is " +
+        "NOT — setCreditPolicy no longer takes a baseline, and no owner-callable substitute sets an " +
+        "arbitrary value. So an exposure mismatch here is not a restore bug to retry; it means the " +
+        "measurement arms accrued exposure that cannot be put back, and the later cap-control arms " +
+        "would be measuring a different accounting state than the run started in.",
     );
   }
   const summary = {
