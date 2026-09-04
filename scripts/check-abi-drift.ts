@@ -38,6 +38,12 @@ const DEPLOYED_ABI_REDIRECT = new Set<string>(['BLSAggregator']);
 const redirectFailures: string[] = [];
 
 /**
+ * SDK-extra entries suppressed by KNOWN_DRIFT. Printed, never silent: an exemption that leaves no
+ * trace in the output is indistinguishable from a gate that did not look.
+ */
+const knownDriftSuppressed: string[] = [];
+
+/**
  * The redirect is driven by the PIN, not by this file's constant list.
  *
  * That matters for more than tidiness: the synthetic-upstream harness in
@@ -110,6 +116,19 @@ const STANDARD_EXTERNAL = new Set([
 ]);
 
 // Contracts whose SDK ABI intentionally differs from the bare upstream artifact (documented reason).
+/**
+ * Contracts whose SDK ABI legitimately carries entries upstream's artifact does not.
+ *
+ * FU-7. This used to `continue` — the contract was never compared at all. But the documented reason
+ * is one-directional: the SDK MERGES an extra surface in. Skipping the comparison also hid the other
+ * direction, and that direction is a real staleness bug: measured on CC-103, upstream had added
+ * `enrollInCommitteeValidator` and `proposeGuardianAddition` while the SDK's copy lacked both, and
+ * the gate was green throughout.
+ *
+ * So the exemption is now exactly as wide as its justification: `goneUpstream` (SDK-extra) is
+ * suppressed for these contracts, `missingInSdk` (upstream added it, we are stale) still fails.
+ * Same shape as the redirect above — narrow the comparison, never switch it off.
+ */
 const KNOWN_DRIFT = new Map<string, string>([
   [
     'AAStarAirAccountV7',
@@ -1090,11 +1109,8 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     skippedEntries.push({ name, reason: 'name collision with an unrelated upstream contract (CC-27)', expected: false });
     continue;
   }
-  if (KNOWN_DRIFT.has(name)) {
-    console.log(`ℹ️  ${name}: known intentional drift — ${KNOWN_DRIFT.get(name)}`);
-    skippedEntries.push({ name, reason: `documented intentional drift: ${KNOWN_DRIFT.get(name)}`, expected: false });
-    continue;
-  }
+  // NOTE: KNOWN_DRIFT no longer skips. See its definition — it now suppresses only the SDK-extra
+  // direction, at the comparison below, so upstream additions still surface.
   // CC-115 B4: a contract whose SDK ABI must track the DEPLOYED artifact rather than upstream
   // `out/`. This is a REDIRECT, not a skip — the contract stays in `checked`, is still diffed, and
   // still needs a matching abiSha256 pin. Skipping it instead (via KNOWN_DRIFT) would have removed
@@ -1179,8 +1195,17 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     const b = sigSet(ups, kind);
     const missingInSdk = [...b].filter((s) => !a.has(s)); // upstream has it, SDK's copy doesn't (stale)
     const goneUpstream = [...a].filter((s) => !b.has(s)); // SDK has it, upstream removed/renamed it
+    // `missingInSdk` is NEVER suppressed — not even for KNOWN_DRIFT. That is the whole point of
+    // FU-7: the documented exemption covers extra entries, so applying it to missing ones granted
+    // a licence nobody wrote down.
     if (missingInSdk.length) problems.push(`${kind} added upstream, missing in SDK: ${missingInSdk.join(', ')}`);
-    if (goneUpstream.length) problems.push(`${kind} in SDK but gone upstream: ${goneUpstream.join(', ')}`);
+    if (goneUpstream.length) {
+      if (KNOWN_DRIFT.has(name)) {
+        knownDriftSuppressed.push(`${name}: ${kind} SDK-extra (expected): ${goneUpstream.join(', ')}`);
+      } else {
+        problems.push(`${kind} in SDK but gone upstream: ${goneUpstream.join(', ')}`);
+      }
+    }
   }
   if (problems.length) {
     // A diff against an artifact built from UNCOMMITTED upstream sources is not evidence that the
