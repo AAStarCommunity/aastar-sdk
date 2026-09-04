@@ -102,6 +102,42 @@ describe('checkDvtConnectivity', () => {
     },
   );
 
+
+  it('an environment that DOES declare relay is NOT ok when /relay/health fails', async () => {
+    // The mirror of the case above, and the one that makes the exemption safe rather than merely
+    // convenient. Everything the exemption buys rests on the word "only" in "only when the
+    // environment does not declare relay" — and until this case existed, nothing held that word:
+    // review measured that making relay failures never count left all 17 tests green, so a later
+    // edit widening the exemption to every environment (to quiet relay flakiness, say) would pass.
+    //
+    // Same shape as the gap this PR fixes, one level up: I wrote the assertion for the acceptable
+    // half and not for the unacceptable one.
+    const env = { ...DVT_CONFIG.environments.sepolia!, dvtNodes: [node] };
+    const [r] = await checkDvtConnectivity(env, okFetch({ 'relay/health': { status: 'down' } }) as any);
+
+    expect(env.capabilities.relay, 'this environment must declare relay for the case to mean anything').toBe(true);
+    expect(r.relayOk).toBe(false);
+    expect(r.errors.join(' ')).toContain('/relay/health status=down');
+    expect(r.ok).toBe(false);
+  });
+
+  it('a declared relay that is UNREACHABLE is also not ok', async () => {
+    // The throwing path is a separate branch from the status-not-ok path, and the review mutation
+    // had to disable both — so both are pinned.
+    const env = { ...DVT_CONFIG.environments.sepolia!, dvtNodes: [node] };
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.endsWith('/relay/health')) throw new Error('ECONNREFUSED');
+      const body = url.endsWith('/health')
+        ? { status: 'ok', capabilities: [{ name: 'dvtSigning', enabled: true }, { name: 'relay', enabled: true }, { name: 'keeper', enabled: true }] }
+        : url.endsWith('/node/info') ? { nodeId: node.nodeId } : {};
+      return { json: async () => body } as any;
+    });
+    const [r] = await checkDvtConnectivity(env, fetchImpl as any);
+
+    expect(r.errors.join(' ')).toContain('/relay/health: ECONNREFUSED');
+    expect(r.ok).toBe(false);
+  });
+
   it('an environment that does NOT declare relay is ok without /relay/health', async () => {
     // The mirror of the case above. `r.ok` used to require relayOk unconditionally, so an
     // environment legitimately running without relay could never be reported ok — the check demanded
