@@ -80,11 +80,28 @@ export function extractClaims(file: string, text: string): Claim[] {
 }
 
 /** Compare claims to states. `states` maps PR number → what GitHub says. */
-export function reconcile(claims: readonly Claim[], states: ReadonlyMap<number, Reconciliation['actual']>): Reconciliation[] {
+export function reconcile(
+  claims: readonly Claim[],
+  states: ReadonlyMap<number, Reconciliation['actual']>,
+  /**
+   * The PR this run is itself part of, if any.
+   *
+   * An entry closed by the PR under review necessarily claims DONE against a PR that is still OPEN —
+   * the entry is written before the PR exists. Without this the gate reddens every single ledger PR
+   * including the one that introduced it, which is how a check gets switched off in its first week.
+   *
+   * The exemption is narrow on purpose: it covers exactly the PR whose head is this branch. Any
+   * OTHER open PR claimed as done is still a problem, and that is the case worth catching — an entry
+   * closed by a PR that never landed.
+   */
+  selfPr?: number,
+): Reconciliation[] {
   return claims.map((claim) => {
     const actual = states.get(claim.pr) ?? 'MISSING';
     let problem: string | null = null;
-    if (actual === 'MISSING') {
+    if (claim.pr === selfPr && actual === 'OPEN') {
+      // Nothing to reconcile yet: this PR is the thing being claimed.
+    } else if (actual === 'MISSING') {
       problem = `PR #${claim.pr} does not exist — a wrong number reads as evidence`;
     } else if (claim.claimsDone && actual !== 'MERGED') {
       problem = `claims DONE but PR #${claim.pr} is ${actual}`;
@@ -95,15 +112,46 @@ export function reconcile(claims: readonly Claim[], states: ReadonlyMap<number, 
   });
 }
 
+/** The PR whose head is the current branch, if one is open. */
+function currentBranchPr(): number | undefined {
+  try {
+    const out = execFileSync('gh', ['pr', 'view', '--json', 'number', '-q', '.number'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return out ? Number(out) : undefined;
+  } catch {
+    return undefined; // no PR for this branch yet — every claim reconciles normally
+  }
+}
+
+/**
+ * Ask GitHub for one PR's state.
+ *
+ * A failed call is NOT a missing PR, and the first version made exactly that mistake: it caught
+ * every error and returned `MISSING`. Observed while testing — a burst of `gh` calls started failing
+ * transiently and the tool reported `PR #339 does not exist` about a PR that had merged an hour
+ * earlier. A confident wrong diagnosis, produced by the instrument, about the thing it was measuring.
+ *
+ * So only GitHub's own "no such pull request" counts as missing. Anything else — rate limit, no
+ * auth, no network — is an instrument failure and throws, because a reconciliation that cannot reach
+ * its authority has not reconciled anything and must not say it did.
+ */
 function ghState(pr: number): Reconciliation['actual'] {
   try {
     const out = execFileSync('gh', ['pr', 'view', String(pr), '--json', 'state', '-q', '.state'], {
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     }).trim();
-    return out === 'MERGED' || out === 'OPEN' || out === 'CLOSED' ? out : 'MISSING';
-  } catch {
-    return 'MISSING';
+    if (out === 'MERGED' || out === 'OPEN' || out === 'CLOSED') return out;
+    throw new Error(`unexpected state ${JSON.stringify(out)}`);
+  } catch (error) {
+    const stderr = String((error as { stderr?: Buffer | string }).stderr ?? '') + String((error as Error).message ?? '');
+    if (/Could not resolve to a PullRequest|no pull requests found/i.test(stderr)) return 'MISSING';
+    throw new Error(
+      `check-task-ledger: could not read the state of PR #${pr} — ${stderr.trim().slice(0, 200)}\n` +
+        'This is a failure of the check, not a finding about the PR. Refusing to report it as missing.',
+    );
   }
 }
 
@@ -126,10 +174,21 @@ if (process.argv[1]?.endsWith('check-task-ledger.ts')) {
   }
 
   const states = new Map(prs.map((pr) => [pr, ghState(pr)] as const));
-  const problems = reconcile(claims, states).filter((r) => r.problem);
-  for (const r of problems) console.error(`  ❌ ${r.claim.where}: ${r.problem}`);
-  if (problems.length) {
-    console.error(`\ncheck-task-ledger: ${problems.length} claim(s) disagree with GitHub.`);
+  const selfPr = currentBranchPr();
+  if (selfPr) console.log(`check-task-ledger: this branch is PR #${selfPr}; entries closed by it are not yet reconcilable.`);
+
+  const problems = reconcile(claims, states, selfPr).filter((r) => r.problem);
+  // Deduplicated: one line may name the same PR twice (`done=PR#354` plus a mention in the prose),
+  // and printing the identical problem twice makes a single fault look like two.
+  const seen = new Set<string>();
+  for (const r of problems) {
+    const key = `${r.claim.where}|${r.problem}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    console.error(`  ❌ ${r.claim.where}: ${r.problem}`);
+  }
+  if (seen.size) {
+    console.error(`\ncheck-task-ledger: ${seen.size} claim(s) disagree with GitHub.`);
     process.exit(1);
   }
   console.log('check-task-ledger: ✅ every PR claim agrees with GitHub.');

@@ -85,3 +85,25 @@ describe('the real ledgers parse', () => {
     expect(new Set(claims.map((c) => c.pr)).size).toBeGreaterThan(10);
   });
 });
+
+describe('the self-PR exemption is narrow', () => {
+  const claim = (pr: number): Claim => ({ where: 'f.md:1', pr, claimsDone: true });
+
+  it('an entry closed by THIS PR is not yet reconcilable', () => {
+    // Without this the gate reddens every ledger PR including the one that introduced it — an entry
+    // is written before its PR exists, so it necessarily claims DONE against something still OPEN.
+    expect(reconcile([claim(354)], states({ 354: 'OPEN' }), 354)[0].problem).toBeNull();
+  });
+
+  it('…but ANOTHER open PR claimed as done is still a problem', () => {
+    // The case worth catching: an entry closed by a PR that never landed. If the exemption widened
+    // to every OPEN pr, this goes green and the check stops meaning anything.
+    expect(reconcile([claim(353)], states({ 353: 'OPEN' }), 354)[0].problem).toMatch(/claims DONE but PR #353 is OPEN/);
+  });
+
+  it('the self PR still has to EXIST', () => {
+    // A typo that happens to equal the current PR number is not a thing, but a self PR that is
+    // CLOSED rather than open is: the exemption covers "not merged yet", not "abandoned".
+    expect(reconcile([claim(354)], states({ 354: 'CLOSED' }), 354)[0].problem).toMatch(/is CLOSED/);
+  });
+});
