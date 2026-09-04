@@ -1,0 +1,84 @@
+/**
+ * The audit's instrument checks, exercised by replaying the two bugs it has actually had.
+ *
+ * `EXPECTED_SDK_PATHS = 37` used to stand in for all of this. It worked — and it worked by asking a
+ * human to remember a number that lived in the same file, so one edit turned any red run green and
+ * nothing recorded whether that edit was a deliberate endpoint change or a shrug. FU-27 asked for
+ * the version that does not depend on anyone remembering.
+ *
+ * Three extractors, three mechanisms, three different ways to be wrong:
+ *
+ *   A  literal scan         every string shaped like a path      (over-matches prose)
+ *   B  call-site scan       first argument of an HTTP call       (misses variable-passed paths)
+ *   C  expression position  preceded by ( , = : [ or return      (misses nothing real; rejects prose)
+ *
+ * B ⊆ A closes the direction that actually broke; A ⊆ C closes the one B cannot see. Neither is a
+ * number. What they cannot do is catch an endpoint all three miss — three views of the same source
+ * text are not three independent observers, and correlated blindness stays blind.
+ */
+import { describe, expect, it } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const AUDIT = 'scripts/kms-endpoint-audit.ts';
+
+/** Run the audit with the source temporarily mutated; always restores. */
+function withMutation(apply: (src: string) => string, run: () => string): string {
+  const original = readFileSync(AUDIT, 'utf8');
+  const mutated = apply(original);
+  expect(mutated, 'the mutation must actually change the file — a no-op edit proves nothing').not.toBe(original);
+  writeFileSync(AUDIT, mutated);
+  try {
+    return run();
+  } finally {
+    writeFileSync(AUDIT, original);
+  }
+}
+
+function audit(): string {
+  try {
+    return execFileSync('npx', ['tsx', AUDIT], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    return `${e.stdout ?? ''}${e.stderr ?? ''}`;
+  }
+}
+
+describe('instrument checks (FU-27)', () => {
+  it('the audit runs and reports all three extractor counts', () => {
+    // The baseline that makes the mutations below mean something: if the audit could not run, every
+    // "the mutation was caught" reading would be the same output as "nothing ran".
+    const out = audit();
+    expect(out).toMatch(/literal scan \d+ · call-site scan \d+ \+ \d+ indirect call\(s\)/);
+    expect(out).not.toMatch(/instrument check:/);
+  }, 60_000);
+
+  it('replaying the .json filter bug: the call-site scan catches it and names the endpoints', () => {
+    // The bug that really happened. Filtering `.json` did not merely lose two rows — it moved two
+    // called endpoints into "the spec documents it, the SDK never calls it", asserting the opposite
+    // of the truth.
+    const out = withMutation(
+      (s) => s.replace("/\\.(ts|js|md)$/.test(p)", "/\\.(ts|js|md|json)$/.test(p)"),
+      audit,
+    );
+    expect(out).toMatch(/passed to an HTTP call but the\n\s+literal scan does not report them/);
+    expect(out).toContain('attestation-measurements.json');
+  }, 60_000);
+
+  it('replaying the /60 bug: the expression-position check catches it', () => {
+    // The other direction, and the one the call-site scan is blind to — measured: with comment
+    // stripping removed the counts went 37 → 38 and no check fired, because the extra path hides
+    // among the sixteen the literal scan legitimately finds that no call site uses.
+    const out = withMutation(
+      (s) => s.replace(/\.replace\(\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g, ''\)\n\s*\.replace\(\/\(\^\|\[\^:\]\)\\\/\\\/\.\*\$\/gm, '\$1'\);/, ';'),
+      audit,
+    );
+    expect(out).toMatch(/never appear in an expression/);
+  }, 60_000);
+
+  it('the audit no longer contains a remembered path count', () => {
+    // The point of FU-27. A number in this file is independence outsourced to memory: making a red
+    // run green takes one edit, and nothing records why.
+    expect(readFileSync(AUDIT, 'utf8')).not.toMatch(/EXPECTED_SDK_PATHS\s*=/);
+  });
+});
