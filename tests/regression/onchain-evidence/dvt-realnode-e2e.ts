@@ -69,6 +69,9 @@ import {
     entryPointActions,
     blsAlgorithmActions,
     getDvtConfig,
+    classifyDvtSigner,
+    recordDvtSigner,
+    newDvtIdentitySeen,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -289,10 +292,22 @@ async function main() {
     };
     console.log(`\n[4] Requesting co-signatures from ${TUNNELS.length} DVT tunnels …`);
     const signed: { url: string; nodeId: Hex; signature: Hex; publicKey: Hex }[] = [];
+    const seen = newDvtIdentitySeen();
+    const identityFaults: string[] = [];
+    const pinned = new Map(getDvtConfig().dvtNodes.map((n) => [n.url, n.nodeId]));
     for (const url of TUNNELS) {
         try {
             const r = await requestNodeSign(url, userOpRpc, ownerAuth);
             if ((r.signature.length - 2) / 2 !== 256) throw new Error(`sig is not 256-byte EIP-2537 (${(r.signature.length - 2) / 2} bytes)`);
+            // FU-15. Identity via @aastar/core's classifier — the same code the SDK transport uses,
+            // so this gate and production cannot disagree about what "the same signer twice" means.
+            // The signature-byte comparison is the one that earns its place: two nodes sharing a BLS
+            // key return byte-identical partials, and nothing about their nodeIds looks wrong.
+            // Faults are collected and thrown after the loop: a release gate must not quietly route
+            // around an impostor and pass while exercising a different signer set.
+            const candidate = { endpoint: url, nodeId: r.nodeId, signature: r.signature, expectedNodeId: pinned.get(url) };
+            const identityFault = classifyDvtSigner(candidate, seen);
+            if (identityFault) { identityFaults.push(identityFault.message); continue; }
             // Gate on isRegistered (authoritative): validate() aggregates registeredKeys(nodeId) for
             // the claimed nodeIds and pairs them against the aggregate sig — so validate()==0 IS the
             // cryptographic proof that each node signed with the key registered for its nodeId. The
@@ -307,6 +322,7 @@ async function main() {
                 console.warn(`    ! ${url}: nodeId ${r.nodeId} is NOT registered on ${VERIFIER} — excluding from the proof`);
                 continue;
             }
+            recordDvtSigner(candidate, seen);
             signed.push({ url, ...r });
         } catch (e) {
             console.warn(`    ! ${url} failed: ${(e as Error).message.split('\n')[0].slice(0, 120)}`);

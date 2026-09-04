@@ -235,6 +235,39 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     ).rejects.toThrow(/Failed to get signatures from any BLS signer nodes/);
   });
 
+
+  it("two nodes returning byte-identical partials: the second is dropped (one key, two ids)", async () => {
+    // FU-15. Distinct, well-formed nodeIds — so the id checks see nothing wrong, and neither does
+    // the encoder, nor the on-chain strictly-ascending rule. What gives it away is the partial:
+    // BLS is deterministic over (key, message), so one key signing one userOpHash produces the same
+    // bytes wherever it runs. #343's method doc claimed this case was out of reach here; it was not.
+    mockPost.mockReset();
+    const SAME = `0x${"cd".repeat(128)}`;
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SAME } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SAME } }); // different id, same key
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+
+    expect(out.nodeIds).toEqual([N1]);
+    expect(out.signature).toBe(SAME); // one surviving co-signer ⇒ its partial IS the aggregate
+    expect(mockPost).toHaveBeenCalledTimes(2); // no /signature/aggregate call
+  });
+
+  it("genuinely different partials from different nodes are both kept", async () => {
+    // The other side of the same check: a byte comparison that rejected honest signers would be
+    // worse than no check. Distinct keys cannot collide (asserted in dvtSignerIdentity.test.ts).
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: `0x${"11".repeat(128)}` } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: `0x${"22".repeat(128)}` } })
+      .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
+
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([N1, N2]);
+    expect(out.signature).toBe("0xAGG");
+  });
+
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {
     const svc = makeService();
     await expect((svc as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), undefined)).rejects.toThrow(

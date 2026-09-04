@@ -33,6 +33,9 @@ import {
     getDvtConfig,
     airAccountFactoryActions,
     buildInitConfig,
+    classifyDvtSigner,
+    recordDvtSigner,
+    newDvtIdentitySeen,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -138,18 +141,38 @@ async function main() {
     // Collect co-sigs, GATING on isRegistered (the verifier aggregates registeredKeys(nodeId)); a
     // zero/unregistered nodeId would corrupt the aggregate. Retry across rounds for flaky tunnels.
     const collected = new Map<Hex, Hex>(); // nodeId -> sig
+    const seen = newDvtIdentitySeen();
+    const faults: string[] = [];
+    const pinned = new Map(getDvtConfig().dvtNodes.map((n) => [n.url, n.nodeId]));
     for (let round = 0; round < 4 && collected.size < 2; round++) {
         for (const url of TUNNELS) {
             try {
                 const r = await requestNodeSign(url, userOpRpc, ownerAuth);
-                if (BigInt(r.nodeId) === 0n) { console.warn(`  ! ${url.slice(8, 40)}: zero nodeId — skip`); continue; }
+            // FU-15. Identity via @aastar/core's classifier — the same code the SDK transport uses,
+            // so this gate and production cannot disagree about what "the same signer twice" means.
+            // The signature-byte comparison is the one that earns its place: two nodes sharing a BLS
+            // key return byte-identical partials, and nothing about their nodeIds looks wrong.
+            // Faults are collected and thrown after the loop: a release gate must not quietly route
+            // around an impostor and pass while exercising a different signer set.
+                //
+                // Retries make one thing here different from the other gates: the SAME endpoint may
+                // legitimately answer twice across rounds, and its second answer is a duplicate by
+                // every measure. So a node already collected is skipped BEFORE classification —
+                // otherwise the retry loop would manufacture its own identity faults.
+                if (collected.has(r.nodeId)) continue;
+                const candidate = { endpoint: url, nodeId: r.nodeId, signature: r.signature, expectedNodeId: pinned.get(url) };
+                const fault = classifyDvtSigner(candidate, seen);
+                if (fault) { faults.push(fault.message); continue; }
                 const reg = await rpc((c) => c.readContract({ address: VERIFIER, abi: AAStarBLSAlgorithmABI, functionName: 'isRegistered', args: [r.nodeId] })) as boolean;
                 if (!reg) { console.warn(`  ! ${url.slice(8, 40)}: nodeId ${r.nodeId.slice(0, 12)}… NOT registered — skip`); continue; }
-                if (!collected.has(r.nodeId)) { collected.set(r.nodeId, r.signature); console.log(`  ${url.replace('https://', '').slice(0, 34)} nodeId=${r.nodeId.slice(0, 14)}… registered ✓`); }
+                recordDvtSigner(candidate, seen);
+                collected.set(r.nodeId, r.signature);
+                console.log(`  ${url.replace('https://', '').slice(0, 34)} nodeId=${r.nodeId.slice(0, 14)}… registered ✓`);
             } catch (e) { console.warn(`  ! ${url.slice(8, 40)}: ${(e as Error).message.slice(0, 70)}`); }
         }
         if (collected.size < 2 && round < 3) { console.log(`  round ${round + 1}: ${collected.size} registered co-sigs, retrying…`); await new Promise((r) => setTimeout(r, 4000)); }
     }
+    if (faults.length) throw new Error(`DVT signer identity fault(s), refusing to aggregate:\n  - ${faults.join('\n  - ')}`);
     const signed = [...collected.entries()].map(([nodeId, signature]) => ({ nodeId, signature }));
     if (signed.length < 2) throw new Error(`BLOCKER: need >=2 REGISTERED DVT co-sigs, got ${signed.length} (tunnels down/flaky this run)`);
     const agg = signed.slice(1).reduce((a, s) => a.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
