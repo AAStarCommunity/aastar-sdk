@@ -2,9 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.0-rc.2] - 2026-09-05 — first INSTALLABLE release candidate
+
+**SDK Code Integrity Hash**: `b8953258d0572badc75680733df33af7fb4092d34d1de46288d25ce1ff9a3b6d`
+*(Excludes metadata/markdown to ensure stability / 排除文档文件以确保哈希稳定)*
+
+Published to npm under the **`rc` dist-tag only**. `latest` stays on 0.45.0.
+
+### Why an rc.2 exists at all
+
+`v0.46.0-rc.1` is a **git tag and nothing else**. Its tree still carries
+`packages/sdk/package.json` at `0.45.0`, so it was never publishable and npm never received it —
+`@aastar/sdk` stopped at 0.45.0. A tag is a coordinate for a *checkout*; a consumer that can only
+`npm install` cannot reach it.
+
+That distinction had a downstream cost. `YetAnotherAA-Validator` installs the npm package, and the
+published 0.45.0 address book is the **pre-`v0.33.0` batch**. Measured against the 0.45.0 tarball
+(`dist/core.js`) versus this tree:
+
+| key | published 0.45.0 | this release |
+|---|---|---|
+| `blsAggregator` (Sepolia) | `0xF51c0298…` (BLSAggregator-4.1.0) | `0xEaeC2F51…` (4.11.0) |
+| `aaStarValidator` (router) | `0xA15127e8…` | `0xA97A7527…` (v0.33.0) |
+| `airAccountFactoryV7` | `0x25C1E9F9…` | `0x2A5cf40c…` (v0.33.0) |
+
+So installing 0.45.0 to exercise the CC-115 B3 stack fails every stack assertion — and fails in the
+way that is hardest to read, because the SDK answers confidently with addresses that were correct
+two deployments ago.
+
+**No code changed in this release.** It is the 0.46.0 tree at a version number npm can serve. The
+three "old" addresses still appear in `packages/core/src/addresses.ts` — all three inside
+`SUPERSEDED:` / `was 0x…` comments recording the move, none as a live value; that was checked rather
+than assumed, because a grep hit is not a fact about which value the code returns.
+
+### What this is NOT
+
+- **Not 0.46.0.** The `[Unreleased]` note below still governs what is and is not settled for the
+  final release, including the BLSAggregator 4.11.0-deployed vs 4.12.0-source struct gap.
+- **Not a `latest` promotion.** `npm i @aastar/sdk` keeps resolving 0.45.0 until 0.46.0 ships.
+- **Not evidence that the release gate passed.** RELEASE-CHECKLIST §4 (full on-chain
+  business-scenario set) is still running at the time of this tag. An rc exists precisely so
+  downstream can start integrating *before* that finishes; it is not a claim that it finished.
+
 ## [Unreleased] — targeting SDK 0.46.0 (minor)
 
-> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.**
+> ⛔️ **0.46.0 IS NOT RELEASED.** `latest` on npm is 0.45.0.
+>
+> Amended 2026-09-05: this line used to read "NOT RELEASED, NOT PUBLISHED, NOT TAGGED".
+> Two of those three are now false — `v0.46.0-rc.1` is tagged and `0.46.0-rc.2` is published
+> under the `rc` dist-tag. The one that matters is the one kept above.
 >
 > **This note was rewritten 2026-09-05 because every concrete fact in it had gone stale.** What it
 > used to say, and what is measurable now:
