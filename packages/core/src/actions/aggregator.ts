@@ -1,11 +1,64 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, encodeFunctionData } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, encodeFunctionData, decodeFunctionResult } from 'viem';
 import { BLSAggregatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 import { BLSHelpers } from '../crypto/blsSigner.js';
 
 /** A registered validator's on-chain BLS G1 public key point. */
 export type BLSG1Point = { x_a: Hex, x_b: Hex, y_a: Hex, y_b: Hex };
+
+/** Lifecycle of a queued guardian-slash case (`guardianSlashCases(uint256).status`). */
+export enum GuardianSlashStatus {
+    /** No case at this id. */
+    NONE = 0,
+    /** Queued and inside its window — guardians may still resolve it. */
+    PENDING = 1,
+    /** Executed. */
+    EXECUTED = 2,
+    /** Window elapsed without execution (see `expireGuardianSlashCase`). */
+    EXPIRED = 3,
+}
+
+/**
+ * One queued guardian-slash case, decoded from `guardianSlashCases(uint256)`.
+ *
+ * Field order is the DEPLOYED BLSAggregator-4.11.0 struct. It is not stable across versions —
+ * see {@link AggregatorActions.guardianSlashCase} for why that matters and what guards it.
+ */
+export type GuardianSlashCase = {
+    /** Commitment to the guardian set the case was queued against. */
+    guardiansHash: Hex;
+    /** Commitment to the fraud proof backing the case. */
+    fraudProofHash: Hex;
+    /** Unix seconds after which the case can no longer be executed. */
+    deadline: bigint;
+    status: GuardianSlashStatus;
+    /** Guardians in the set the case was queued against. */
+    guardianCount: number;
+    /** Guardians that have already resolved (slashed or cleared). */
+    resolvedCount: number;
+    /** Fraud-proof verifier bound to this case at queue time. */
+    verifier: Address;
+};
+
+/**
+ * Words `guardianSlashCases` returns on the DEPLOYED aggregator (4.11.0): 7 static fields → 224 bytes.
+ *
+ * SuperPaymaster's `contracts/src` is at 4.12.0, which adds a field to this struct **without changing
+ * the selector**. 4.11.0 is otherwise a strict subset — 71 of 72 functions behave identically — so this
+ * one return is the whole difference, and it is the kind that does not announce itself: a 7-parameter
+ * ABI decoding a 256-byte return does not revert. If the added field lands anywhere but the end, every
+ * field after it silently shifts. Hence the byte-length assertion in
+ * {@link AggregatorActions.guardianSlashCase} rather than a plain `readContract`.
+ */
+const GUARDIAN_SLASH_CASE_WORDS = 7;
+const GUARDIAN_SLASH_CASE_BYTES = GUARDIAN_SLASH_CASE_WORDS * 32;
+/**
+ * 0-based index of the `verifier` word — the only field whose valid values are constrained enough to
+ * detect a SAME-WIDTH struct change, which the byte-length check above cannot see. An address must
+ * have 12 zero high bytes; any displaced `uint256`/`bytes32` almost certainly does not.
+ */
+const GUARDIAN_SLASH_CASE_VERIFIER_WORD = 6;
 
 /**
  * BLSAggregator slash severity levels (SP #329 unified slash consensus). The
@@ -95,6 +148,61 @@ export type AggregatorActions = {
     getSlashThreshold: (args: { slashLevel: SlashLevel | number }) => Promise<number>;
     /** Convenience: read the whole slash threshold table (WARNING/MINOR/MAJOR) in one shot. */
     getSlashThresholds: () => Promise<{ warning: number, minor: number, major: number }>;
+    /**
+     * The floor `setSlashThreshold` will not go below (`SLASH_THRESHOLD_FLOOR()` view). Read it rather
+     * than assuming: a threshold table that passes {@link getSlashThresholds} but sits at the floor
+     * means governance has no headroom left to lower it.
+     */
+    slashThresholdFloor: () => Promise<number>;
+    /**
+     * The two BLS domain path tags that separate a QUEUE co-signature from an EXECUTE one
+     * (`TAG_QUEUE_SLASH()` / `TAG_EXECUTE_SLASH()`). A caller reconstructing either preimage must use
+     * the on-chain tags — reusing one for the other is a valid signature over the wrong intent.
+     */
+    slashPathTags: () => Promise<{ queue: Hex, execute: Hex }>;
+
+    // Guardian slash + exit cooldown (CC-13 批A) — read side
+    /** Seconds a guardian must wait between requesting and consuming an exit (`GUARDIAN_EXIT_COOLDOWN()`). */
+    guardianExitCooldown: () => Promise<bigint>;
+    /** Seconds a queued guardian-slash case stays executable (`GUARDIAN_SLASH_CASE_WINDOW()`). */
+    guardianSlashCaseWindow: () => Promise<bigint>;
+    /**
+     * Unix seconds until which this guardian is barred from exiting (`guardianExitCooldownUntil`).
+     * `0` = not under cooldown. Compare against a BLOCK timestamp, not local wall-clock.
+     */
+    guardianExitCooldownUntil: (args: { guardian: Address }) => Promise<bigint>;
+    /** A guardian's pending exit request window (`guardianExitRequests`); both `0` = no request. */
+    guardianExitRequest: (args: { guardian: Address }) => Promise<{ readyAt: bigint, expiresAt: bigint }>;
+    /** How many queued slash cases still name this guardian unresolved (`pendingGuardianSlashCount`). */
+    pendingGuardianSlashCount: (args: { guardian: Address }) => Promise<bigint>;
+    /** Whether a specific guardian was already slashed within a specific case (`guardianSlashed`). */
+    guardianSlashed: (args: { caseId: bigint, guardian: Address }) => Promise<boolean>;
+    /** Whether a queue-hash has been consumed, i.e. that co-signature cannot be replayed. */
+    isSlashQueueHashUsed: (args: { queueHash: Hex }) => Promise<boolean>;
+    /**
+     * One queued guardian-slash case, decoded from `guardianSlashCases(uint256)`.
+     *
+     * Deliberately NOT a plain `readContract`: it raw-`call`s and asserts the return is exactly
+     * {@link GUARDIAN_SLASH_CASE_BYTES} (7 words) before decoding. The deployed 4.11.0 struct has 7
+     * fields while SuperPaymaster `src` 4.12.0 has 8 **under the same selector**, and viem decoding 7
+     * static parameters out of a longer return does not revert — a field added anywhere but the end
+     * shifts every later field with no error. Throws a named `AAStarError` on any other length, so a
+     * contract upgrade shows up as a loud failure here rather than as plausible wrong values
+     * downstream.
+     *
+     * ## What is actually holding, in three layers — do not read this as "verified"
+     * 1. **Width (224 bytes)** — chain-anchored. Measured against the live aggregator, ids 0/1/2.
+     * 2. **Field order** — anchored to `BLSAggregator-4.11.0.deployed.json`, which was matched
+     *    70/70 on non-tuple selectors against the deployed bytecode. The chain cannot corroborate
+     *    this further: a selector does not encode its outputs.
+     * 3. **These two runtime guards** — **ASLEEP TODAY.** No guardian-slash case has ever been
+     *    queued, so every read returns 224 zero bytes, and the zero address is legitimately
+     *    zero-padded. On today's data neither guard can tell a correct decode from a wrong one.
+     *    They wake up when the first real case is queued. What is doing real work right now is the
+     *    sentinel fixture in `aggregator.guardianSlash.test.ts`, and what it pins is the
+     *    decoder-against-ABI-file link — the right link, but not the on-chain one.
+     */
+    guardianSlashCase: (args: { caseId: bigint }) => Promise<GuardianSlashCase>;
 
     // Proposal & Execution
     executeProposal: (args: { proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
@@ -352,6 +460,234 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             return { warning: Number(warning), minor: Number(minor), major: Number(major) };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getSlashThresholds');
+        }
+    },
+
+    async slashThresholdFloor() {
+        try {
+            const floor = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'SLASH_THRESHOLD_FLOOR',
+                args: []
+            });
+            return Number(floor);
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'slashThresholdFloor');
+        }
+    },
+
+    async slashPathTags() {
+        try {
+            const read = (functionName: string) => (client as PublicClient).readContract({
+                address, abi: BLSAggregatorABI, functionName, args: []
+            }) as Promise<Hex>;
+            const [queue, execute] = await Promise.all([
+                read('TAG_QUEUE_SLASH'),
+                read('TAG_EXECUTE_SLASH'),
+            ]);
+            return { queue, execute };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'slashPathTags');
+        }
+    },
+
+    // Guardian slash + exit cooldown (CC-13 批A) — read side
+
+    async guardianExitCooldown() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'GUARDIAN_EXIT_COOLDOWN',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianExitCooldown');
+        }
+    },
+
+    async guardianSlashCaseWindow() {
+        try {
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'GUARDIAN_SLASH_CASE_WINDOW',
+                args: []
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianSlashCaseWindow');
+        }
+    },
+
+    async guardianExitCooldownUntil({ guardian }) {
+        try {
+            validateAddress(guardian, 'guardian');
+            const until = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'guardianExitCooldownUntil',
+                args: [guardian]
+            });
+            // uint64 — widen to bigint so callers compare against block timestamps without a cast.
+            return BigInt(until as bigint | number);
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianExitCooldownUntil');
+        }
+    },
+
+    async guardianExitRequest({ guardian }) {
+        try {
+            validateAddress(guardian, 'guardian');
+            const [readyAt, expiresAt] = await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'guardianExitRequests',
+                args: [guardian]
+            }) as readonly [bigint | number, bigint | number];
+            return { readyAt: BigInt(readyAt), expiresAt: BigInt(expiresAt) };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianExitRequest');
+        }
+    },
+
+    async pendingGuardianSlashCount({ guardian }) {
+        try {
+            validateAddress(guardian, 'guardian');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'pendingGuardianSlashCount',
+                args: [guardian]
+            }) as Promise<bigint>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'pendingGuardianSlashCount');
+        }
+    },
+
+    async guardianSlashed({ caseId, guardian }) {
+        try {
+            validateRequired(caseId, 'caseId');
+            validateAddress(guardian, 'guardian');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'guardianSlashed',
+                args: [caseId, guardian]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianSlashed');
+        }
+    },
+
+    async isSlashQueueHashUsed({ queueHash }) {
+        try {
+            validateRequired(queueHash, 'queueHash');
+            return await (client as PublicClient).readContract({
+                address,
+                abi: BLSAggregatorABI,
+                functionName: 'usedSlashQueueHashes',
+                args: [queueHash]
+            }) as Promise<boolean>;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isSlashQueueHashUsed');
+        }
+    },
+
+    async guardianSlashCase({ caseId }) {
+        validateRequired(caseId, 'caseId');
+        let raw: Hex;
+        try {
+            const { data } = await (client as PublicClient).call({
+                to: address,
+                data: encodeFunctionData({
+                    abi: BLSAggregatorABI,
+                    functionName: 'guardianSlashCases',
+                    args: [caseId],
+                }),
+            });
+            if (data === undefined) {
+                throw new Error('guardianSlashCases returned no data');
+            }
+            raw = data;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianSlashCase');
+        }
+
+        // The shape gate. See GUARDIAN_SLASH_CASE_WORDS: this is the ONE place the deployed 4.11.0
+        // and the 4.12.0 source diverge, and it diverges without changing the selector — so length is
+        // the only signal available before the values are already wrong. Checked BEFORE decoding, so a
+        // longer return can never reach the decoder and produce plausible-looking shifted fields.
+        const byteLength = (raw.length - 2) / 2;
+        // An EMPTY return is a different diagnosis and deserves a different one. `eth_call` answers
+        // `0x` when there is no code at the address, or when the contract has no such function and no
+        // fallback — neither is an ABI-shape problem, and telling someone to re-sync the ABI sends
+        // them to the wrong place. Split it out before the shape message can claim it.
+        if (byteLength === 0) {
+            throw new AAStarError(
+                ErrorCode.CONTRACT_REVERT,
+                `guardianSlashCase: eth_call to ${address} returned empty data for ` +
+                `guardianSlashCases(${caseId}). That usually means there is no contract code at this ` +
+                `address, or the contract has no such function — not that the ABI drifted. Check that ` +
+                `the aggregator address is right for this chain before re-syncing anything.`,
+            );
+        }
+        if (byteLength !== GUARDIAN_SLASH_CASE_BYTES) {
+            throw new AAStarError(
+                ErrorCode.ABI_SHAPE_MISMATCH,
+                `guardianSlashCase: aggregator ${address} returned ${byteLength} bytes for ` +
+                `guardianSlashCases(${caseId}), expected ${GUARDIAN_SLASH_CASE_BYTES} ` +
+                `(${GUARDIAN_SLASH_CASE_WORDS} words = the deployed BLSAggregator-4.11.0 struct). ` +
+                `The selector is unchanged across 4.11.0/4.12.0 while the struct is not, so this is a ` +
+                `contract upgrade, not a bad caseId. Refusing to decode: a 7-parameter decode of a ` +
+                `longer return does not revert, it silently shifts every field after the added one. ` +
+                `Re-sync the BLSAggregator ABI (pnpm run abi:sync) and update GUARDIAN_SLASH_CASE_WORDS.`,
+            );
+        }
+
+        // Length is NECESSARY BUT NOT SUFFICIENT: a same-width change (a field REPLACED rather than
+        // added) is still 7 words and sails through the check above. The cheap complement is the one
+        // word whose valid values are constrained — `verifier` is an address, so its high 12 bytes
+        // MUST be zero.
+        //
+        // BE PRECISE ABOUT WHAT THIS DOES NOT COVER. It catches displacement only when the displaced
+        // value is LARGE. Measured against the actual 4.12.0 struct
+        // (SuperPaymaster@d651646a BLSAggregator.sol:143), which inserts `uint16 slashBps` BEFORE
+        // `verifier`: a 7-parameter decode would read `slashBps` in the `verifier` slot, and a uint16
+        // is right-aligned with 30 zero high bytes — so this check passes. The width check is what
+        // stops that one, and it is the reason both exist. Do not describe this as a general
+        // field-shift detector; the very next upstream change is the case it misses.
+        const verifierWord = raw.slice(2 + GUARDIAN_SLASH_CASE_VERIFIER_WORD * 64);
+        if (!/^0{24}/.test(verifierWord)) {
+            throw new AAStarError(
+                ErrorCode.ABI_SHAPE_MISMATCH,
+                `guardianSlashCase: word ${GUARDIAN_SLASH_CASE_VERIFIER_WORD} of ` +
+                `guardianSlashCases(${caseId}) on ${address} is 0x${verifierWord.slice(0, 64)}, whose ` +
+                `high 12 bytes are not zero — it cannot be the \`verifier\` address. The return is the ` +
+                `expected ${GUARDIAN_SLASH_CASE_BYTES} bytes, so this is a same-width struct change ` +
+                `(a field replaced or reordered), which the length check cannot see. Refusing to ` +
+                `decode: every field would be plausible and wrong. Re-sync the BLSAggregator ABI.`,
+            );
+        }
+
+        try {
+            const [guardiansHash, fraudProofHash, deadline, status, guardianCount, resolvedCount, verifier] =
+                decodeFunctionResult({
+                    abi: BLSAggregatorABI,
+                    functionName: 'guardianSlashCases',
+                    data: raw,
+                }) as readonly [Hex, Hex, bigint | number, number, number, number, Address];
+            return {
+                guardiansHash,
+                fraudProofHash,
+                deadline: BigInt(deadline),
+                status: Number(status) as GuardianSlashStatus,
+                guardianCount: Number(guardianCount),
+                resolvedCount: Number(resolvedCount),
+                verifier,
+            };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'guardianSlashCase');
         }
     },
 

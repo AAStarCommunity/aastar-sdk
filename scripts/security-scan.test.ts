@@ -18,11 +18,33 @@
  */
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, rmSync, mkdtempSync } from 'node:fs';
+import { writeFileSync, rmSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SCANNER = join(process.cwd(), 'scripts/security-scan.ts');
+
+/**
+ * FU-48. Launch `tsx` directly instead of via `npx`. Measured on this machine, scanning a
+ * one-file directory:
+ *
+ *   npx tsx …                    833ms / 628ms
+ *   ./node_modules/.bin/tsx …    239ms / 251ms
+ *
+ * i.e. **`npx`'s own resolution is 60–70% of every spawn here**, and this file spawns ~30 times.
+ * That is the whole optimisation: nothing about the scanner or the assertions changes.
+ *
+ * WHY NOT THE BIGGER REWRITE. The obvious fix was to batch every probe into one directory and
+ * scan once. It would be faster still — but it means restructuring all ~30 probe bodies, and the
+ * risk of a case silently disappearing in that restructure is not worth the extra second on a
+ * suite that is already fast enough after this one line. Measured first, then took the cheap half.
+ *
+ * WHAT THIS DOES NOT CHANGE: `npx tsx` resolves to this same local binary, so the code executed is
+ * identical — only the launcher differs. The subject here is the scanner's logic, not npx. The
+ * fallback keeps the suite runnable where the local bin is absent (a checkout without install).
+ */
+const TSX_BIN = join(process.cwd(), 'node_modules', '.bin', 'tsx');
+const [LAUNCHER, LAUNCH_ARGS] = existsSync(TSX_BIN) ? [TSX_BIN, []] : ['npx', ['tsx']];
 
 /** Run the scanner over one throwaway file; true when it reports a leak. */
 function flags(content: string): boolean {
@@ -30,7 +52,7 @@ function flags(content: string): boolean {
   const file = join(dir, 'probe.md');
   writeFileSync(file, content);
   try {
-    const out = execFileSync('npx', ['tsx', SCANNER, dir], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const out = execFileSync(LAUNCHER, [...LAUNCH_ARGS, SCANNER, dir], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     return /CRITICAL/.test(out);
   } catch (error) {
     // Non-zero exit is how the scanner reports a leak; read its output rather than the code.
@@ -44,9 +66,9 @@ function flags(content: string): boolean {
 const HEX = (n: string) => `0x${n.repeat(64).slice(0, 64)}`;
 
 /**
- * FU-30's code half. Every test here `execFileSync`s `npx tsx` at least once, and vitest's default
- * timeout is 5s — so these tests can fail for a reason that has nothing to do with what they assert.
- * That matters more than usual here: **a timeout red and an assertion red are the same `× test name`
+ * FU-30's code half. Every test here spawns the scanner at least once, and vitest's default timeout
+ * is 5s — so these tests can fail for a reason that has nothing to do with what they assert. That
+ * matters more than usual here: **a timeout red and an assertion red are the same `× test name`
  * line**, so a run that fails on machine load reads exactly like the scanner having a hole. #339 lost
  * time to precisely that, and the rule was written down then while the code was left at the default.
  *
@@ -55,17 +77,20 @@ const HEX = (n: string) => `0x${n.repeat(64).slice(0, 64)}`;
  * hurt, while the generalisation went into the docs and never came back for its siblings**. That is
  * the sharper statement, and the one FU-47 records.
  *
- * The number is measured, not guessed:
+ * MEASURED, AND RE-MEASURED AFTER FU-48 (2026-09-05). Leaving the old numbers here would have
+ * reproduced exactly the staleness #364 was opened to fix, so both readings are kept:
  *
- *   slowest test (veto-distance, 12 spawns)   9.6s   ← the one that already carried its own timeout
- *   second slowest (every-term-is-a-veto)     3.2s   ← 64% of the 5s default, with nothing to spare
- *   the remaining twelve                    ~0.8s each locally
+ *                                        before (npx)   after (direct tsx)
+ *   veto-distance (12 spawns)                 9.6s            2.64s
+ *   every-term-is-a-veto (4 spawns)           3.2s            0.90s
+ *   the remaining twelve                     ~0.8s           ~0.22s each
+ *   whole file                                 24s            6.8s
  *
- * And local margins UNDERSTATE the risk. The first test pays the `npx tsx` cold start: 892ms here,
- * **6607ms on CI — 7.4x**. It is the one that actually went red on CI, and it is the reason the
- * number is not 10s. 30s gives the 3.2s case ~9x and the 9.6s case ~3x. Deliberately generous: the
- * cost of a too-high timeout is a slow failure, the cost of a too-low one is a failure that lies
- * about why.
+ * The 30s stays anyway, and the reason is not the local numbers. Local margins UNDERSTATE the risk:
+ * before FU-48 the first test measured 892ms here and **6607ms on CI — 7.4x** — and it is the one
+ * that actually went red on CI. FU-48 removes ~70% of each spawn, not the variance that produced
+ * that 7.4x. Keeping the headroom costs a slow failure in the worst case; shrinking it buys nothing
+ * and risks a failure that lies about why.
  */
 const SPAWN_TIMEOUT_MS = 30_000;
 
