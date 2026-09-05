@@ -35,12 +35,25 @@ function withMutation(apply: (src: string) => string, run: () => string): string
   }
 }
 
+/**
+ * The audit's real baseline is a spec in a sibling repository, absent on CI — so the tool exits
+ * before any instrument check runs, and five of these tests failed there while passing locally. The
+ * extractors do not need the real spec: they read the SDK, and what is under test is whether they
+ * agree with each other. A minimal stand-in keeps these runnable everywhere, and keeps them from
+ * failing whenever upstream edits its spec for reasons unrelated to the extractors.
+ */
+const FIXTURE_SPEC = 'scripts/__fixtures__/kms-openapi.min.yaml';
+
 function audit(): string {
   try {
-    return execFileSync('npx', ['tsx', AUDIT], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return execFileSync('npx', ['tsx', AUDIT, '--spec', FIXTURE_SPEC], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (error) {
     const e = error as { stdout?: string; stderr?: string };
-    return `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    const out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    // A missing baseline aborts before any instrument check — the exact CI failure this fixture
+    // exists to remove. Fail with that cause named rather than with a confusing assertion diff.
+    expect(out, 'the audit could not reach its baseline; the instrument checks never ran').not.toMatch(/no KMS spec at/);
+    return out;
   }
 }
 

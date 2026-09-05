@@ -1,0 +1,16 @@
+# Minimal KMS OpenAPI stand-in for the audit's INSTRUMENT tests.
+#
+# The audit's real baseline lives in a sibling repository, so on CI there is none and the tool exits
+# before any instrument check runs — which is how five of these tests failed on CI while passing
+# locally. The extractors do not need the real spec: they read the SDK, and what they are being
+# tested on is whether they agree with each other.
+#
+# Deliberately NOT a copy of the real spec. Copying it would make these tests fail whenever upstream
+# changed, for reasons that have nothing to do with the extractors.
+info:
+  version: fixture-0
+paths:
+  /health:
+    get: {}
+  /version:
+    get: {}
