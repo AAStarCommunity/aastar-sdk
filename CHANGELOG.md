@@ -31,9 +31,24 @@ All notable changes to this project will be documented in this file.
 > `setGuardianSlashBps(uint16)`, `GuardianSlashBpsUpdated`) — all 4.12.0-only, none present on the
 > deployed 4.11.0 (checked on chain). See FU-52.
 >
-> **NOT VERIFIED BY THIS REWRITE:** whether CC-50 blocker **B2** is still open, and whether this
-> version is publishable. Those belong to whoever owns that ledger; this edit only corrects facts
-> about the pin, the struct, and what CI does — each re-derivable from the commands in PR #364.
+> **可发布性：已裁决（2026-09-05，#383）。** 上一版把这一条记为「本次改写未核实」。现在核了，
+> 判据全部可复跑：
+>
+> | 问题 | 读数 |
+> |---|---|
+> | CI 对着 pin 的 provenance 门禁 | `abi-provenance` 在 `main` 上**连续 4 次 success**（`584ee246` / `3627ab1e` / `ca7b7f1d` / `055edd59`） |
+> | SDK ABI 与 pin 的差距 | `abi:sync` = **`0 missing · 1 drifted`**，唯一那条是 `BLSAggregator` |
+> | 那条 drift 的内容 | 5 个 4.12.0-only 新增项 + `guardianSlashCases` 的 `SAME SELECTOR, DIFFERENT RETURN` |
+> | 那条 drift 的处置 | 4.12.0 **由作者拍板暂不部署**（4.11 满足论文）；SDK 对齐的是**已部署的 4.11.0**；唯一危险面 `guardianSlashCase()` **fail-closed**（`ABI_SHAPE_MISMATCH`），不会返回一个貌似合理的错值 |
+> | 全量回归 | 15 个包全绿；链上套件 27 passed / 2 skipped（两条 skip 卡在 FU-38 的 CI archive RPC secret） |
+>
+> **结论：就 SDK 自身的交付面而言，本版可发布。** 缺的那 5 项不是遗漏，是对一个
+> **尚未部署**的上游版本的刻意不跟进（FU-52）——跟进它反而会让 SDK 领先于链。
+>
+> **这条裁决不解决 CC-50 的 B2。** B2 是「开发机上的上游工作树跑到 pin 前面」这个跨仓条件，
+> 归属在别处；而它对本仓的影响是**本地** `check:abi-drift:strict` 变红，**不是 CI**——
+> CI 自己 checkout 并 `forge build` 那个 pin。**把「我这台机器上红」读成「这个版本不能发」，
+> 正是本文件上一版留下的那种停在半路的判断。**
 
 ### 2026-09-05 round — DVT node onboarding, guardian slash reads, and four fictional call sites
 
