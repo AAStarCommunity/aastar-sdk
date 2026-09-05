@@ -82,6 +82,34 @@ const CLOSES_CLAIM = /(?:Closes|Fixes|Resolves|关闭|已修|修复)\s+FU-(\d+)/
 /** Every follow-up the body names, for reporting only. */
 const FU_MENTION = /\bFU-(\d+)\b/g;
 
+/**
+ * A RECORD that some OTHER PR closed the follow-up — the third kind of statement the contract was
+ * missing (raised in review on #360).
+ *
+ * Without it a bookkeeping-only PR has no honest phrasing: claiming closure makes the gate demand
+ * `done=PR#<this>`, which would have the ledger assert that a one-line markdown change delivered a
+ * `requireStake()` watch; saying nothing passes but is not quite true either.
+ *
+ * Both halves are mechanically checkable — the ledger must credit #M, and #M must be MERGED — so
+ * this is not an escape hatch. It is a claim, held to the same standard as the other one.
+ */
+const RECORDS_CLAIM = /FU-(\d+)\s*(?:由|由 PR)?\s*#?(\d{3})\s*(?:关闭|完成|交付)|records? that FU-(\d+) was closed by #?(\d{3})/gi;
+
+/** Parsed `{ fu, by }` pairs from RECORDS_CLAIM, tolerating either language's capture positions. */
+export function extractRecords(body: string): { fu: string; by: number }[] {
+  // Deduplicated: a body may state the same record in the title and again in the text, and printing
+  // `FU-34←#345, FU-34←#345` makes one statement look like two.
+  const seen = new Set<string>();
+  return [...body.matchAll(RECORDS_CLAIM)]
+    .map((m) => ({ fu: `FU-${m[1] ?? m[3]}`, by: Number(m[2] ?? m[4]) }))
+    .filter((r) => {
+      const k = `${r.fu}|${r.by}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+}
+
 /** An explicit refusal to close, in either language. */
 const NOT_CLOSING = (fu: string) =>
   new RegExp(`(does not close|not closed by this|不关闭|暂不关闭|不 ?close)[^\\n]{0,80}${fu}|${fu}[^\\n]{0,80}(does not close|not closed by this|不关闭|暂不关闭)`, 'i');
@@ -124,7 +152,14 @@ function isQuoted(line: string, claimIndex: number): boolean {
   return pairs.some(([open, close]) => before.includes(open) && after.includes(close));
 }
 
-export function checkClosure(body: string, ledger: string, prNumber: number | undefined): ClosureProblem[] {
+export function checkClosure(
+  body: string,
+  ledger: string,
+  prNumber: number | undefined,
+  /** States of PRs cited by a RECORDS claim, so "closed by #M" can be held to #M actually merging. */
+  citedPrStates: ReadonlyMap<number, 'MERGED' | 'OPEN' | 'CLOSED' | 'MISSING'> = new Map(),
+): ClosureProblem[] {
+  const records = extractRecords(body);
   const claimed = [...new Set(
     body
       .split('\n')
@@ -135,6 +170,29 @@ export function checkClosure(body: string, ledger: string, prNumber: number | un
       ),
   )];
   const problems: ClosureProblem[] = [];
+
+  // A RECORDS claim is checked on its own terms: the ledger must credit the PR named, and that PR
+  // must have merged. Recording a closure by a PR that never landed is the same defect as claiming
+  // one yourself without doing the work.
+  for (const { fu, by } of records) {
+    const line = ledger.split('\n').find((l) => new RegExp(`^- \\[[ x]\\] ${fu} `).test(l));
+    if (!line) {
+      problems.push({ fu, detail: `the body records ${fu} as closed by #${by}, but no such entry exists in the ledger on this branch` });
+      continue;
+    }
+    if (!line.startsWith('- [x]') || !line.includes(`done=PR#${by}`)) {
+      problems.push({
+        fu,
+        detail: `the body records ${fu} as closed by #${by}, but the ledger on this branch does not credit #${by} — ` +
+          'mark it "- [x] … done=PR#' + by + '" here, or correct the PR number',
+      });
+      continue;
+    }
+    const state = citedPrStates.get(by);
+    if (state !== undefined && state !== 'MERGED') {
+      problems.push({ fu, detail: `the body records ${fu} as closed by #${by}, but #${by} is ${state} — a PR that has not landed closed nothing` });
+    }
+  }
 
   for (const fu of claimed) {
     const line = ledger.split('\n').find((l) => new RegExp(`^- \\[[ x]\\] ${fu} `).test(l));
@@ -188,7 +246,26 @@ if (process.argv[1]?.endsWith('check-followup-closure.ts')) {
     console.log('check-followup-closure: no PR body available (not a pull_request run) — nothing checked.');
     process.exit(0);
   }
-  const problems = checkClosure(body, readFileSync(LEDGER, 'utf8'), number);
+  // States of any PR a RECORDS claim cites, so "closed by #M" is held to #M having merged.
+  const cited = new Map<number, 'MERGED' | 'OPEN' | 'CLOSED' | 'MISSING'>();
+  for (const { by } of extractRecords(body)) {
+    if (cited.has(by)) continue;
+    try {
+      const out = execFileSync('gh', ['pr', 'view', String(by), '--json', 'state', '-q', '.state'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }).trim();
+      cited.set(by, out === 'MERGED' || out === 'OPEN' || out === 'CLOSED' ? out : 'MISSING');
+    } catch (error) {
+      // Same discipline as everywhere else in this file: a failed call is not an answer. Only
+      // GitHub's own "no such PR" counts as missing; anything else means the check could not run.
+      const stderr = String((error as { stderr?: Buffer | string }).stderr ?? '') + String((error as Error).message ?? '');
+      if (/Could not resolve to a PullRequest/i.test(stderr)) cited.set(by, 'MISSING');
+      else throw new Error(`check-followup-closure: could not read the state of the cited PR #${by} — ${stderr.trim().slice(0, 160)}`);
+    }
+  }
+
+  const problems = checkClosure(body, readFileSync(LEDGER, 'utf8'), number, cited);
   const mentioned = [...new Set([...body.matchAll(FU_MENTION)].map((m) => `FU-${m[1]}`))];
   // Both lines below say CLAIMS, not mentions. They used to say "mentioned", while `problems` only
   // ever examined closing claims — a success message asserting something it had not checked, which
@@ -198,7 +275,10 @@ if (process.argv[1]?.endsWith('check-followup-closure.ts')) {
   // a PR may mention ten follow-ups and claim to close one, and only the second number is checked.
   console.log(`check-followup-closure: PR #${number} mentions ${mentioned.length} follow-up(s): ${mentioned.join(', ') || '(none)'}`);
   const claims = [...new Set([...body.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`))];
-  console.log(`check-followup-closure: of those, ${claims.length} are CLAIMED closed by this PR: ${claims.join(', ') || '(none)'} — only these are checked`);
+  const recs = extractRecords(body);
+  console.log(`check-followup-closure: of those, ${claims.length} are CLAIMED closed by this PR: ${claims.join(', ') || '(none)'}`);
+  console.log(`check-followup-closure: and ${recs.length} are RECORDED as closed by another PR: ${recs.map((r) => `${r.fu}←#${r.by}`).join(', ') || '(none)'}`);
+  console.log('check-followup-closure: only those two groups are checked.');
   for (const p of problems) console.error(`  ❌ ${p.detail}`);
   if (problems.length) {
     console.error(`\ncheck-followup-closure: ${problems.length} follow-up(s) CLAIMED closed but not accounted for.`);
