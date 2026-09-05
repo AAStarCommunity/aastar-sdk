@@ -13,15 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Full history. `check-progress-sync.test.ts` asserts the gate REDS on progress.md as it
-          # stood at 49679dd9 — the rotted version that shipped. Under the default fetch-depth 1
-          # that object does not exist and the two cases carrying the whole point never run.
+          # Full history. TWO tests assert their gate REDS on a historical tree:
+          #   check-branch-task.test.ts   → tasks.md at 9e538e07 (merged #377, no T1.2.3 row)
+          #   check-progress-sync.test.ts → progress.md at 49679dd9 (the rotted version)
+          # Under the default fetch-depth 1 neither object exists, `git show` throws, and in both
+          # cases the two examples carrying the whole point (the historical red AND its positive
+          # control) never run.
           #
-          # #380 review put it exactly: pinning the sha fixed "WHICH tree", not "is the tree here".
-          # Two different failures, and the first fix reads like it covers both.
+          # #380 review put the distinction exactly: pinning the sha fixed "WHICH tree", not
+          # "is the tree here". Two different failures, and the first fix reads like it covers both.
           #
-          # (#379 adds the identical line for its own history test. Whichever merges first, the
-          # other's copy is a trivial conflict — both orders end correct.)
+          # A test whose evidence lives in repository HISTORY is not hermetic — the runner's
+          # checkout is part of its fixture. Vendoring copies of the old files was the alternative;
+          # it would be hermetic and also copies that no longer prove anything about what shipped.
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
@@ -112,9 +116,21 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:task-ledger
 
+      # A branch that NAMES a task must have that task in the ledger. T1.2.3 was built, reviewed
+      # twice and merged with no row at all — and both gates above were green, correctly: a row
+      # that was never written is in nobody's scope.
+      #
+      # No `env:` here, and that is deliberate. The first version set `GITHUB_HEAD_REF` explicitly;
+      # `GITHUB_*` is a reserved prefix and it was also redundant, since Actions already sets that
+      # variable on pull_request events. (It was NOT the cause of the zero-run episode on #379 —
+      # that was a merge conflict, see FU-74. Two separate things, recorded separately.)
+      - name: Every task named by the branch is actually written down
+        if: github.event_name == 'pull_request'
+        run: pnpm run check:branch-task
+
       # progress.md is read as "what is true right now", and nothing checked it. It sat un-updated
-      # across ~20 merged PRs — including a claim #375 had RETRACTED — while every other ledger
-      # gate stayed green, correctly: none of them reads this file.
+      # across ~20 merged PRs while every other ledger gate stayed green, correctly: none of them
+      # reads this file.
       - name: progress.md quotes the same statuses the ledger defines
         run: pnpm run check:progress-sync
 

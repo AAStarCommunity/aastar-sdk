@@ -24,6 +24,7 @@
     "test:scripts": "vitest run scripts --exclude '**/repcredit/**'",
     "check:followups": "tsx scripts/check-followups.ts",
     "check:task-ledger": "tsx scripts/check-task-ledger.ts",
+    "check:branch-task": "tsx scripts/check-branch-task.ts",
     "check:progress-sync": "tsx scripts/check-progress-sync.ts",
     "check:followup-closure": "tsx scripts/check-followup-closure.ts",
     "test:coverage": "vitest run --coverage",
