@@ -4,22 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] — targeting SDK 0.46.0 (minor)
 
-> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.** CC-50 blocker **B2** is still open. The
-> `Registry` / `BLSAggregator` ABIs on this branch come from an **unmerged** SuperPaymaster branch:
-> `scripts/upstream-abi-pin.json` pins `03713feb` (`Registry` 5.7.0 / `BLSAggregator` 4.6.0), which
-> is reachable only from `codex/repcredit-e2e-evidence-20260823` and from **no `main` commit and no
-> deployed chain**. (Earlier revisions of this note named `daa1d1ec`, an ancestor of that pin, and
-> were not updated when the pin moved — round-10 LOW.)
+> ⛔️ **NOT RELEASED, NOT PUBLISHED, NOT TAGGED.**
 >
-> Upstream has since moved further: repo:sp's current candidate `e8a8ac5b` is `BLSAggregator`
-> **4.10.0**, which reshapes `guardianSlashCases` from 5 outputs to 7 (`fraudProofHash` inserted at
-> index 1, `verifier` appended). The BLS **domain** is unchanged — `DOMAIN_NAME` and every
-> `TAG_*` still carry the `.v1` suffix and `domainSeparator()` is still
-> `keccak256(abi.encode(DOMAIN_NAME, chainid, aggregator, registry))` — so
-> `scripts/repcredit/bls-domain.ts` needs no change. The **struct** does, and until the three-way
-> re-vendor lands the evidence runner fails closed on that pairing rather than recording it (see the
-> tenth-round entry). This version may only be published after repo:sp lands its fix and returns a
-> final commit/version/artifact hash.
+> **This note was rewritten 2026-09-05 because every concrete fact in it had gone stale.** What it
+> used to say, and what is measurable now:
+>
+> | 它说的 | 实测 |
+> |---|---|
+> | `upstream-abi-pin.json` pins `03713feb` | pin is **`d651646a`** (`scripts/upstream-abi-pin.json`) |
+> | that pin is "reachable only from `codex/repcredit-e2e-evidence-20260823`, from **no `main` commit and no deployed chain**" | `d651646a` resolves on GitHub, and CI's `abi-provenance` job checks it out and `forge build`s it **on every run** — measured 5/5 `success`, ~3m36s–4m21s each, including on `main` |
+> | upstream candidate `e8a8ac5b` is 4.10.0, reshaping `guardianSlashCases` 5 outputs → 7 | the pinned source `d651646a` self-declares **`BLSAggregator-4.12.0`** and that struct is now **8 fields** |
+>
+> **The caution itself still stands — for a different revision and a different delta.** The pinned
+> source is ahead of what is deployed: Sepolia `blsAggregator` (`0xEaeC2F51…`) reads
+> `BLSAggregator-4.11.0` and returns **224 bytes = 7 words** from `guardianSlashCases`, while the
+> pinned 4.12.0 source declares 8 fields — `uint16 slashBps` **inserted before** `verifier`
+> (`contracts/src/modules/monitoring/BLSAggregator.sol:143`), not appended. Same selector, so a
+> 7-parameter decode of a 4.12.0 return does not revert; it reads `slashBps` as `verifier` and drops
+> the real one. `guardianSlashCase()` in `@aastar/core` fails closed on that (`ABI_SHAPE_MISMATCH`).
+>
+> **That struct has now changed twice in two minor versions** (5 → 7 at 4.10.0 per the note this
+> replaces, 7 → 8 at 4.12.0 measured here). Treat its width as version-specific, never as settled.
+>
+> Also open, and NOT claimed resolved here: `abi:sync` currently reports 5 undelivered
+> `BLSAggregator` items (`GUARDIAN_SLASH_BPS_MAX/MIN()`, `guardianSlashBps()`,
+> `setGuardianSlashBps(uint16)`, `GuardianSlashBpsUpdated`) — all 4.12.0-only, none present on the
+> deployed 4.11.0 (checked on chain). See FU-52.
+>
+> **NOT VERIFIED BY THIS REWRITE:** whether CC-50 blocker **B2** is still open, and whether this
+> version is publishable. Those belong to whoever owns that ledger; this edit only corrects facts
+> about the pin, the struct, and what CI does — each re-derivable from the commands in PR #364.
 
 **RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
 
@@ -283,6 +297,26 @@ precisely:
 * the **job itself has never run** — no `forge build` of `03713feb`, no GitHub-hosted execution. Its
   first run may well need fixing (toolchain versions, submodule paths, build time). A red first run
   should be read as this job being wrong, not as the pin being unattributable.
+
+> **CORRECTION, 2026-09-05 (PR #364).** The narration above is kept as written, because it was an
+> honest account of that round — but two of its statements must not be read as current, and one was
+> never true:
+>
+> * **`03713feb` was already wrong when this was written.** The same commit that added this text
+>   (`e4439dda`, PR #329) created `scripts/upstream-abi-pin.json` with
+>   `d651646aee98e8b22c8abe5af079bd4bb0a35728`, and set the workflow `ref` to it. Every mention of
+>   `03713feb` in this section names a revision the job never checked out.
+> * **"the job itself has never run" was true then, and is not now.** Measured over the five most
+>   recent CI runs that reached it (`main`, `chore/followups-*`, `feat/T1.2.1-*`, `feat/T2.1.1-*`):
+>   **5/5 `success`, ~3m36s–4m21s each**, including on `main`.
+> * **So the instruction it ends on has inverted.** "Read a red first run as this job being wrong"
+>   followed correctly from a job with no track record. It now has one, so a red here is more likely
+>   a real finding — and that advice would send the next person to debug the runner while the gate
+>   reports an actual drift. Read a red as a finding first; suspect the job only after its own
+>   inventory line shows it compared nothing.
+>
+> None of this changed by itself, nothing failed, and the advice quietly reversed. That is the point
+> worth carrying forward: **a correct instruction does not announce itself when its premise expires.**
 
 What *is* observable about B2 from here: the strict gate is red on a developer's machine because the
 sibling working tree has moved ahead of the pin — `fc0ca825` in round 8, `fcc205ee` in round 9,
