@@ -115,8 +115,29 @@
 
 ### T2.1.2 Timelock 写编排（批B）  `BLOCKED`
 - **优先级**：mid
-- **阻塞原因**：`@aastar/core` 尚未纳入 OZ `TimelockController` ABI；且 slash 治理的 proposer/executor 角色归属需业务确认。
-- **依赖**：T2.1.1
+- **依赖**：T2.1.1（已 DONE，PR #362）
+- **⚠️ 阻塞理由已按实测重写（2026-09-05）**。原文记的是「`@aastar/core` 尚未纳入 OZ
+  `TimelockController` ABI；且 slash 治理的 proposer/executor 角色归属需业务确认」——
+  **前半是假的，后半不是主要阻塞**：
+  - `packages/core/src/abis/TimelockController.json` **早就在**（28 个函数，`schedule` /
+    `execute` / `cancel` / `hashOperation` / `isOperationReady` / `getMinDelay` 全有），
+    已导出为 `TimelockControllerABI`；
+  - `packages/core/src/actions/timelockController.ts` **也早就包好了** 9 个方法。
+  所以「缺 ABI」这条把一个不存在的障碍写成了阻塞。
+- **真正的阻塞（可复核）**：
+  ```
+  canonical.timelockController (Sepolia) = 0x0000…0000   # addresses.ts:62「not yet deployed」
+  链上 slashPolicyAdmin                  = 0xb5600060…   # cast code → 0x，无代码 = EOA
+  ```
+  **Sepolia 上没有部署 Timelock，而 slash 政策管理员仍是一个 EOA。** 在两者都不存在的链上
+  建 Timelock 编排，等于造一条没有任何东西走过的路径——与 T1.2.2 里 G21「不补 bootstrap
+  路径」同一条理由。
+- **解除条件**（两条都要，且都不在本仓）：① Timelock 部署到 Sepolia 并写进 canonical；
+  ② `slashPolicyAdmin` 从 EOA 移交给它。移交发生时 `aggregator.guardianSlash.onchain.test.ts`
+  里那条「记录它是否仍是 EOA」的断言会打印出变化，不需要靠人记得回来看。
+- **届时要做的**：把已有的 `encodeSetSlashPolicyAdmin` / `encodeSetSlashThreshold`（T2.1.1 已交付）
+  经 `timelockControllerActions.schedule` / `execute` 串起来，加一条真实的 schedule→wait→execute
+  上链证据。
 
 ---
 
