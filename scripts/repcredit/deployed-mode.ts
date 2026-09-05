@@ -427,6 +427,12 @@ const ZERO: Address = '0x0000000000000000000000000000000000000000';
  * zero address means "empty slot", not "read failed". They are dropped, and the COUNT of what
  * survives is what `checkStackInvariants` compares the run's N against.
  *
+ * **The sparse-scan guarantee is today pinned ONLY by a unit test, and that is worth saying.** The
+ * frozen stack fills slots 1/2/3 — contiguously — so `continue` and `break` produce the same
+ * reading against the real chain, and a live run cannot corroborate this. What can, and does, is
+ * the mutation: `continue → break` turns one test red. It starts carrying weight in production the
+ * first time a stack has slot 2 empty and slot 3 filled, and not before. (#387 review.)
+ *
  * Stakes come from the Registry, not the aggregator, via two getters whose argument orders are
  * **reversed with respect to each other**: `getRoleStake(bytes32 role, address who)` and
  * `getEffectiveStake(address who, bytes32 role)`. Swapping them is caught by viem's encoder rather

@@ -2199,6 +2199,11 @@ async function main(): Promise<void> {
     const committeeChecks = checkCommitteeRegistration(committeeEntries);
     const registeredOperators: Record<string, Address[]> = {
       guardianSlots: slots.map((v) => v.address),
+      // ...and THIS list drops them, on purpose: the negative check below asks "is the funder one
+      // of these operators", and `0x0` is not an operator. The zeros are not lost — they are held
+      // to account by `committeeChecks` above, which FAILS on each one. Read the two lines as a
+      // split of duty: the read refuses to hide a stale nodeId, the negative check refuses to
+      // compare against a non-address.
       committee: committeeEntries.filter((e) => e.operator !== ZERO_ADDRESS).map((e) => e.operator),
     };
     const funderChecks = checkFunderRole(deployerAccount.address, owners, registeredOperators);
