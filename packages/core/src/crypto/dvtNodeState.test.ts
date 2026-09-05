@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { keccak256 } from 'viem';
 
 import { parseDvtNodeState } from './dvtNodeState.js';
+import { bls12_381 as bls } from '@noble/curves/bls12-381';
+
 import { buildDvtPop, encodeG1Point } from './dvtPop.js';
+
+/** Lay out an EIP-2537 128-byte G1 blob from two field elements. */
+const word2 = (x: bigint, y: bigint) =>
+    ('0x' + '00'.repeat(16) + x.toString(16).padStart(96, '0') + '00'.repeat(16) + y.toString(16).padStart(96, '0')) as `0x${string}`;
 
 /**
  * A real key pair, derived rather than invented: a hand-written "public key" would not be a valid
@@ -57,6 +63,47 @@ describe('parseDvtNodeState — shape and normalisation (G1)', () => {
     it('rejects the all-zero 128-byte blob (the point at infinity)', () => {
         expect(() => parseDvtNodeState({ publicKey: `0x${'00'.repeat(128)}` }))
             .toThrow(/not a valid BLS G1 point/);
+    });
+
+    it('rejects an ON-CURVE point outside the prime-order subgroup — the BLS-critical one', () => {
+        // #367 review: the guard is stronger than the previous comment claimed, and this is the
+        // dimension that actually matters for BLS. Small-subgroup / rogue-key attacks use points
+        // that ARE on the curve, so they sail through both the padding check and any naive
+        // on-curve test. Measured: x = 4, 5, 6, 8… each have a valid y with isTorsionFree() false.
+        //
+        // The assertion is on the DISTINCT rejection reason, not merely on "it threw". Three bad
+        // points here reject for three different reasons, and an earlier guard firing first would
+        // otherwise let this case pass while proving nothing — which is exactly how the off-curve
+        // case below was vacuous in round one.
+        const Fp = bls.fields.Fp;
+        const x = 4n;
+        const y = Fp.sqrt(Fp.add(Fp.mul(Fp.mul(x, x), x), 4n));
+        expect(bls.G1.ProjectivePoint.fromAffine({ x, y }).isTorsionFree(), 'fixture must be OUTSIDE the subgroup').toBe(false);
+        expect(() => parseDvtNodeState({ publicKey: word2(x, y) }))
+            .toThrow(/not in prime-order subgroup/);
+    });
+
+    it('the three bad-point classes reject for three DIFFERENT reasons', () => {
+        // Guards against an early return swallowing the later checks. If any two of these ever
+        // produced the same message, one of the three probes would have stopped testing what its
+        // name says while still passing.
+        const Fp = bls.fields.Fp;
+        const sub = (() => { const x = 4n; return word2(x, Fp.sqrt(Fp.add(Fp.mul(Fp.mul(x, x), x), 4n))); })();
+        const reasons = [
+            `0x${'00'.repeat(128)}`,   // infinity
+            word2(1n, 1n),             // not on the curve
+            sub,                       // on curve, outside subgroup
+        ].map((pk) => {
+            // NON-greedy: the infinity message carries two em-dashes, and a greedy strip ate the
+            // half naming the cause, leaving "the contract rejects it". The instrument was deleting
+            // the very word this test looks for.
+            try { parseDvtNodeState({ publicKey: pk as `0x${string}` }); return 'ACCEPTED'; }
+            catch (e) { return (e as Error).message.replace(/^.*?— /, ''); }
+        });
+        expect(new Set(reasons).size, `expected 3 distinct reasons, got ${JSON.stringify(reasons)}`).toBe(3);
+        expect(reasons.some((r) => /infinity/.test(r))).toBe(true);
+        expect(reasons.some((r) => /equation left != right/.test(r))).toBe(true);
+        expect(reasons.some((r) => /prime-order subgroup/.test(r))).toBe(true);
     });
 
     it('rejects a well-formed but OFF-CURVE point', () => {

@@ -120,5 +120,23 @@ export function parseDvtNodeState(raw: DvtNodeStateInput | null | undefined): Dv
         }
     }
 
-    return { publicKey, nodeId, keyless: raw.privateKey === undefined };
+    // `=== undefined` treated a JSON `null` — the idiomatic way a board writes "no key here" — as
+    // "this node HAS a local key", which routes a key-less TEE node into `buildDvtPop` instead of
+    // the KMS `/pop` signer (#367 review found it by value table: null / "" / 0 all read as
+    // key-bearing). null and undefined are both absent.
+    //
+    // A value that is PRESENT but not a usable key is neither: it is a malformed state file, and
+    // guessing which way to route it would pick a side of an ambiguity the file itself did not
+    // resolve. Same stance as the nodeId mismatch above — say so, do not choose.
+    if (raw.privateKey !== undefined && raw.privateKey !== null) {
+        if (typeof raw.privateKey !== 'string' || raw.privateKey.length === 0) {
+            throw new Error(
+                'dvt node_state: privateKey is present but is not a non-empty string ' +
+                `(got ${raw.privateKey === '' ? 'an empty string' : typeof raw.privateKey}). ` +
+                'Absent means key-less (PoP comes from the KMS TEE); a real key means local signing. ' +
+                'This value is neither, and choosing one would route the node on a guess.',
+            );
+        }
+    }
+    return { publicKey, nodeId, keyless: raw.privateKey === undefined || raw.privateKey === null };
 }
