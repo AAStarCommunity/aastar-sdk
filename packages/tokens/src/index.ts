@@ -69,8 +69,17 @@ export class FinanceClient {
      * **Note the last column.** An earlier version of this note told the caller to use
      * `lockStakeWithTicket` — which exists only on Sepolia. That is the same "second dead end"
      * `removeGasToken → removeToken` had, and harder to see: the first name is invented, the second
-     * is real but not on your chain. **`topUpStake` is the only staking entry point present
-     * everywhere.**
+     * is real but not on your chain. **Of the two, `topUpStake` is the one present everywhere.**
+     *
+     * Precise scope, because the first wording of this line was a universal claim and false as
+     * written: of `GTokenStaking`'s **29** declared functions, **27 are on all three chains**
+     * (`slash`, `slashByDVT`, `unlockAndTransfer`, `getLockedStake`, …). Exactly **two** are
+     * Sepolia-only — `lockStakeWithTicket` and `MAX_TOTAL_STAKE()`. So the OP deployments are not
+     * a reduced surface in general; they are missing those two.
+     *
+     * And a counter-intuitive reading worth carrying: **the OP implementations are LARGER and have
+     * FEWER functions** (10029 B / 27 vs Sepolia's 9061 B / 29). "Bigger means newer means more
+     * complete" is inverted here, so byte size is not a version proxy.
      *
      * Throws instead of sending. It could only ever revert, and a revert costs gas and arrives as
      * "execution reverted" with nothing pointing at the cause.

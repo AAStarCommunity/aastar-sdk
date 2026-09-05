@@ -97,9 +97,11 @@ because working behaviour was withdrawn.
   rejects outright — so they threw locally and never reached a node. (#382)
 - **`@aastar/tokens`** — `FinanceClient.stakeGToken` now **throws**. `stake(uint256)` is on no
   deployed `GTokenStaking`, on **any** of the three supported chains (two positive controls green
-  on each). `topUpStake` is the only staking entry point present everywhere;
-  **`lockStakeWithTicket` exists on Sepolia only.** They are not the same operation, so the wrapper
-  does not choose for you. (#382, chain matrix added in #383 review)
+  on each). Of the two candidates the wrapper could have pointed at, **`topUpStake` is on all three
+  chains and `lockStakeWithTicket` is Sepolia-only** — they are not the same operation, so the
+  wrapper does not choose for you. (Scope, since the first wording here was a universal claim:
+  27 of `GTokenStaking`'s 29 functions are on all three chains; exactly `lockStakeWithTicket` and
+  `MAX_TOTAL_STAKE()` are not.) (#382, chain matrix added in #383 review)
 - **`@aastar/identity`** — `ReputationClient.submitProof` now **throws**. Its own comment called
   the signature "generic for now" — and it broadcast a transaction. A stub that throws and a stub
   that broadcasts are very different things. (#382)
