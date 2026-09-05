@@ -263,7 +263,30 @@ async function main() {
         preValid = sim.result as bigint;
     } catch (e) { preValid = `revert: ${(e as Error).message.split('\n')[0].slice(0, 90)}`; }
     console.log(`validateUserOp pre-check = ${preValid} (0 ⇒ BLS sig accepted)`);
-    if (preValid !== 0n) throw new Error(`BLOCKER: validateUserOp pre-check = ${preValid} while verifier.validate = ${verifierResult}. If verifier==0 but validateUserOp!=0, the BLS aggregate is fine — the fault is account-side (e.g. validator()==0 → call setValidator; owner-ECDSA mismatch; tier gate). If verifier!=0, the collected node set's aggregate is bad (flaky tunnels). Aborting before wasting a reverted handleOps tx.`);
+    if (preValid !== 0n) {
+        // State the two READINGS first, then the interpretations — and only the ones that fit.
+        //
+        // The previous version opened with "If verifier==0 but validateUserOp!=0 …", listing two
+        // cases. When both readings were 1, NEITHER case applied — and the message's hypothetical
+        // contrast got read as an observed contrast. It cost a wrong diagnosis (chased an address
+        // mismatch that did not exist). A message that describes shapes the data may not have is a
+        // measurement claim in disguise.
+        const both = preValid !== 0n && verifierResult !== 0n;
+        const hint = both
+            ? 'BOTH are non-zero, so the aggregate itself did not verify. Do NOT look account-side yet: ' +
+              'check whether this validator is in COMMITTEE mode (committeeActive()), in which case a ' +
+              'legacy 0x01-framed payload is rejected on SHAPE and this runner is superseded by ' +
+              'tier3-committee-handleops.ts. Otherwise the collected node set is bad (flaky tunnels).'
+            : verifierResult === 0n
+              ? 'The aggregate verified but the account refused it, so the fault is account-side: ' +
+                'validator()==0 (call setValidator), owner-ECDSA mismatch, or a tier gate.'
+              : 'The account accepted while the verifier did not — these two should not disagree; ' +
+                'check that both are reading the SAME validator address before anything else.';
+        throw new Error(
+            `BLOCKER: validateUserOp = ${preValid}, verifier.validate = ${verifierResult}. ${hint} ` +
+            'Aborting before wasting a reverted handleOps tx.'
+        );
+    }
 
     // (6) Ensure deposit covers prefund.
     const required = (verificationGasLimit + callGasLimit + preVerificationGas) * maxFee;
