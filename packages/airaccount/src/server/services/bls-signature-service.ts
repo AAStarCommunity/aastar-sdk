@@ -581,6 +581,14 @@ export class BLSSignatureService {
     const signerNodeSignatures: string[] = [];
     const signerNodeIds: string[] = [];
     const seenSigners = newDvtIdentitySeen();
+    // FU-32. Why each node dropped out, kept per node.
+    //
+    // The loop treats unreachable, refused, and incoherent identically — deliberately, because for
+    // liveness they ARE identical: one fewer co-signer. But when nobody answers, "Failed to get
+    // signatures from any BLS signer nodes" is the same sentence whether the network is down or one
+    // node is misreporting its id, and those need opposite responses from an operator. The reasons
+    // were being collected by the catch and then discarded.
+    const nodeFailures: string[] = [];
     for (const node of selectedNodes) {
       try {
         const response = await axios.post(`${node.apiEndpoint}/signature/sign`, body);
@@ -639,12 +647,18 @@ export class BLSSignatureService {
         signerNodeIds.push(nodeId as string);
       } catch (err) {
         if (err instanceof DvtPendingConfirmationError) throw err;
-        // Node unreachable / rejected / answered incoherently — continue with the others.
+        // Node unreachable / rejected / answered incoherently — continue with the others, but keep
+        // the reason. Swallowing it costs nothing while a quorum forms and costs everything when one
+        // does not.
+        nodeFailures.push(`${node.apiEndpoint}: ${(err as Error)?.message ?? String(err)}`.slice(0, 300));
       }
     }
 
     if (signerNodeSignatures.length === 0) {
-      throw new Error("Failed to get signatures from any BLS signer nodes");
+      throw new Error(
+        `Failed to get signatures from any BLS signer nodes (${selectedNodes.length} attempted)` +
+          (nodeFailures.length ? `:\n  - ${nodeFailures.join('\n  - ')}` : ''),
+      );
     }
 
     if (signerNodeSignatures.length === 1) {
