@@ -71,7 +71,11 @@ All notable changes to this project will be documented in this file.
 - **`@aastar/operator`** — `onboardDvtNode({ router })` (#367) and `onboardDvtNode({ account })`
   (#377) resolve the validator instead of trusting an address.
 - **`@aastar/paymaster`** — `PaymasterOperator.removeToken` / `.withdrawTo`, the real entry points.
-  (#382)
+  **`withdrawTo` is on all three supported deployments; `removeToken` needs PaymasterV4 4.5.0 and
+  today only Sepolia runs it** — chain 10 and 11155420 run 4.3.0, whose implementation declares
+  neither `removeToken` nor `isTokenSupported`. Positive controls (`tokenPrices`,
+  `setServiceFeeRate`, `withdrawTo`) are green on all three, so those ❌ are facts about the
+  functions, not a broken probe. (#382, qualified in #383 review) 
 - **`@aastar/dapp`** — `DVTClient.registerWithProof(wallet, validator, proof)`. The PoP is an
   input: a browser holds no BLS secret, and on the recommended KMS-TEE deployment the secret never
   leaves the enclave. (#381)
