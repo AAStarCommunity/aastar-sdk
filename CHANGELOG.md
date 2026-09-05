@@ -35,6 +35,78 @@ All notable changes to this project will be documented in this file.
 > version is publishable. Those belong to whoever owns that ledger; this edit only corrects facts
 > about the pin, the struct, and what CI does — each re-derivable from the commands in PR #364.
 
+### 2026-09-05 round — DVT node onboarding, guardian slash reads, and four fictional call sites
+
+> Ordering note: the `@aastar/paymaster` / `@aastar/tokens` / `@aastar/identity` entries below land
+> with **#382**; everything else is already on `main`. This section merges after it.
+
+#### Added
+
+- **`@aastar/core`**
+  - `parseDvtNodeState(raw)` — validate a node's `node_state.json` and derive `nodeId`. Takes a
+    **parsed object, not a path**: the bytes arrive from a CLI, a portal paste, or a KMS over HTTP,
+    and only one of those has a filesystem — and `core` must stay browser-safe. (#367)
+  - `getAccountDvtValidator(client, account)` — resolve the DVT validator an ACCOUNT consults, via
+    `account.validatorRouter()` → `router.getAlgorithm(0x01)`. (#377)
+  - Guardian-slash read surface: `GuardianSlashStatus`, `GuardianSlashCase`, and ten view wrappers
+    (`guardianSlashCase`, exit-cooldown family). (#362)
+  - `ErrorCode.ABI_SHAPE_MISMATCH` (`E4004`) — the chain answered, but the answer cannot be
+    trusted. Distinct from a revert **and not retryable**. (#362)
+  - `dvtOperatorActions()` gains `owner()` / `registry()` / `roleDvt()`. (#367)
+- **`@aastar/operator`** — `onboardDvtNode({ router })` (#367) and `onboardDvtNode({ account })`
+  (#377) resolve the validator instead of trusting an address.
+- **`@aastar/paymaster`** — `PaymasterOperator.removeToken` / `.withdrawTo`, the real entry points.
+  (#382)
+- **`@aastar/dapp`** — `DVTClient.registerWithProof(wallet, validator, proof)`. The PoP is an
+  input: a browser holds no BLS secret, and on the recommended KMS-TEE deployment the secret never
+  leaves the enclave. (#381)
+
+#### Changed / Removed — **breaking, and every one of these could not work before**
+
+Each removed or throwing method named a contract function that **exists on no deployed contract**,
+verified against bytecode on Sepolia. They are listed as breaking because they are API surface, not
+because working behaviour was withdrawn.
+
+- **`@aastar/dapp`** — `DVTClient.registerValidator` **removed**. It called
+  `registerValidator(bytes)`, declared by no contract in this repo. (#381)
+- **`@aastar/paymaster`** — `addGasToken` / `removeGasToken` / `withdrawPNT` now **throw**, naming
+  their replacements. All three were absent from the deployed PaymasterV4 implementation, and all
+  five methods in that group passed a raw human-readable string array as `abi:`, which viem
+  rejects outright — so they threw locally and never reached a node. (#382)
+- **`@aastar/tokens`** — `FinanceClient.stakeGToken` now **throws**. `stake(uint256)` is on no
+  deployed `GTokenStaking`; the contract declares `lockStakeWithTicket` / `topUpStake`, which are
+  **not the same operation**, so the wrapper does not choose for you. (#382)
+- **`@aastar/identity`** — `ReputationClient.submitProof` now **throws**. Its own comment called
+  the signature "generic for now" — and it broadcast a transaction. A stub that throws and a stub
+  that broadcasts are very different things. (#382)
+- **`@aastar/operator`** — `onboardDvtNode`'s three anchors (`account` / `router` / `validator`)
+  are mutually exclusive, **enforced** rather than documented. A wrong DVT validator does not
+  revert, so nothing downstream would tell you which anchor won. (#377)
+
+#### Fixed
+
+- **`encodeG1Point`** — the 128-byte path validated zero padding only, while its own comment
+  claimed a mis-shaped blob was rejected. It now runs `assertValidity()` plus an
+  infinity check, which also rejects on-curve points **outside the prime-order subgroup** — the
+  dimension small-subgroup and rogue-key attacks live in. (#367)
+- **`guardianSlashCase`** — fails closed instead of decoding a longer return. Deployed
+  `BLSAggregator-4.11.0` returns 7 words; the pinned 4.12.0 source declares 8 with `uint16
+  slashBps` **inserted before** `verifier` — **same selector**, so a 7-word decode does not revert;
+  it reads `slashBps` as `verifier`. (#362)
+- **`abi:sync`** — compared `name(inputs)` only and **never outputs**, so it reported green against
+  the drift above. Blast radius measured before shipping: 646 same-signature functions, exactly one
+  mismatch, zero false positives. (#366)
+
+#### Known limits, stated rather than implied
+
+- **`@aastar/analytics`** — `getSupplyMetrics` reads `totalLifetimeBurned()`, which the deployed
+  GToken does not have; the `catch` computes `cap - totalSupply - remainingMintable` and **that is
+  the only path this code has ever taken**. The value is right. The two branches are **not**
+  interchangeable if a future GToken adds the counter: one measures burns, the other measures what
+  the cap no longer accounts for. Behaviour unchanged. (#382)
+- **`getSupportedTokens()`** exists on the deployed PaymasterV4 and the SDK does not wrap it —
+  a missing capability, not a defect.
+
 **RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
 
 ### Added
