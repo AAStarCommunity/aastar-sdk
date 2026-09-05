@@ -154,6 +154,20 @@ export class PaymasterOperator {
      * correct and using `parseAbi`, twenty lines above `addGasToken`. So the broken method was not
      * filling a gap; it was a second, fictional spelling of a capability the class already had.
      */
+    /**
+     * 移除一个 gas token。
+     *
+     * **链上可用性不是全网一致的（#383 评审）**：
+     *
+     * ```
+     * chain 11155111 (Sepolia)     impl 0xc0f96862… 10493B  PMV4-Deposit-4.5.0  removeToken ✅
+     * chain 10       (OP mainnet)  impl 0xc4dd13f7… 10450B  4.3.0               removeToken ❌
+     * chain 11155420 (OP Sepolia)  impl 0x90612308… 10450B  4.3.0               removeToken ❌
+     * ```
+     *
+     * 正对照 `tokenPrices` / `setServiceFeeRate` / `withdrawTo` 三条链全 ✅，所以上面的 ❌
+     * 是关于那个函数的事实。`isTokenSupported` 与 `removeToken` 同进同出。
+     */
     static async removeToken(wallet: any, address: Address, token: Address) {
         return wallet.writeContract({
             address,
@@ -186,8 +200,11 @@ export class PaymasterOperator {
     /** @deprecated Wrong name. Use {@link removeToken}. */
     static async removeGasToken(_wallet: any, _address: Address, _token: Address): Promise<never> {
         throw new Error(
-            'PaymasterOperator.removeGasToken: the contract function is `removeToken(address)`. ' +
-            'Use removeToken(wallet, paymaster, token).',
+            'PaymasterOperator.removeGasToken: `removeGasToken` is on no deployed PaymasterV4. ' +
+            'The 4.5.0 implementation declares `removeToken(address)` — use removeToken(wallet, ' +
+            'paymaster, token) THERE. But check your chain first: as of 2026-09-05 only Sepolia ' +
+            'runs 4.5.0; chain 10 and 11155420 run 4.3.0, which has neither name. On those there ' +
+            'is no removal entry point at all, and no wrapper can invent one.',
         );
     }
 
