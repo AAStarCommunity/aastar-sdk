@@ -34,7 +34,7 @@ import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, DVT_CONFIG, getDvtConfig, EntryPointABI, AAStarAirAccountV7ABI,
     AAStarBLSAlgorithmABI, buildInitConfig, encodeG2Point, airAccountFactoryActions, entryPointActions,
-    getCommitteeState, isAccountEnrolled, fetchCommitteeSigners, readFrozenRootAgreement, type CommitteeSigner,
+    getCommitteeState, isAccountEnrolled, fetchCommitteeSigners, readFrozenRootAgreement, describeFrozenRootDisagreement, type CommitteeSigner,
 } from '@aastar/core';
 import { packCumulativeT3Signature, packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -191,11 +191,9 @@ async function main() {
     // direction, which is the opposite of what the guard it replaces did.
     const freshness = await rpc((c) => readFrozenRootAgreement(c, BLS_VERIFIER));
     if (!freshness.agrees) {
-        throw new Error(
-            `committee set has moved since the epoch-${freshness.epoch - 1n} snapshot: proofs read at ` +
-            `block ${atBlock} prove against runningRoot ${freshness.runningRoot}, but _verifyMerkle ` +
-            `checks epochSetRoot(${freshness.epoch - 1n}) = ${freshness.frozenRoot}`
-        );
+        // The message must distinguish the rollover gap from a real mutation — they look identical
+        // in a root comparison, and one of them is an 8%-of-the-time self-healing state.
+        throw new Error(`proofs read at block ${atBlock} would not verify — ${describeFrozenRootDisagreement(freshness)}`);
     }
     const committeeSigners: CommitteeSigner[] = signers;
     const guardianSignature = await guardianWallet.signMessage({ account: guardian, message: { raw: userOpHash } });

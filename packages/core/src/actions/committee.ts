@@ -299,6 +299,19 @@ export interface FrozenRootAgreement {
     frozenRoot: Hex;
     /** True when proofs fetched now would verify. */
     agrees: boolean;
+    /**
+     * `epochPinned(epoch)` — false during the gap between an epoch starting and the keeper calling
+     * `snapshotEpoch()` for it.
+     *
+     * Measured on Sepolia (pr-daemon, historical-block probe): the first ~5 blocks of each epoch
+     * are unpinned, so with `epochLength = 64` the validator is fail-closed roughly **8% of the
+     * time** and a runner starting at a random moment lands in that window about 1 in 13 runs.
+     *
+     * It is carried here so a caller can tell the two red states apart. They look the same in a
+     * root comparison and they are not the same thing: a rollover gap resolves itself within about
+     * a minute, while a genuine set mutation persists for the rest of the epoch.
+     */
+    currentEpochPinned: boolean;
 }
 
 /**
@@ -343,11 +356,43 @@ export async function readFrozenRootAgreement(
                 'frozen e-1 snapshot for _verifyMerkle to check proofs against.',
         );
     }
-    const frozenRoot = (await read('epochSetRoot', [epoch - 1n])) as Hex;
+    const [frozenRoot, currentEpochPinned] = (await Promise.all([
+        read('epochSetRoot', [epoch - 1n]),
+        read('epochPinned', [epoch]),
+    ])) as [Hex, boolean];
     return {
         epoch,
         runningRoot,
         frozenRoot,
         agrees: runningRoot.toLowerCase() === frozenRoot.toLowerCase(),
+        currentEpochPinned,
     };
+}
+
+/**
+ * A human-readable reason for a {@link FrozenRootAgreement} that does not agree.
+ *
+ * Both states surface as "the roots differ", and treating them alike is how a red gets trained into
+ * noise — which is the failure this repo keeps paying for. They are not alike:
+ *
+ * - **rollover gap** — the epoch just turned and the keeper has not snapshotted it yet. Fail-closed
+ *   by design, self-healing in about a minute, and it happens on ~8% of all blocks.
+ * - **set moved** — a node activated or deactivated inside the epoch. Real, persists to the end of
+ *   the epoch, and even then proofs against `[e-1]` would still verify: the gate is conservative.
+ */
+export function describeFrozenRootDisagreement(a: FrozenRootAgreement): string {
+    if (a.agrees) return 'proofs fetched now would verify against the frozen root';
+    if (!a.currentEpochPinned) {
+        return (
+            `epoch ${a.epoch} is not pinned yet — the keeper has not called snapshotEpoch() since the ` +
+            `epoch turned. This is the ROLLOVER GAP (~first 5 blocks of every epoch, ~8% of the time), ` +
+            'it is fail-closed by design and clears itself within about a minute. Retry rather than investigate.'
+        );
+    }
+    return (
+        `the committee set moved inside epoch ${a.epoch}: getMerkleProof proves against runningRoot ` +
+        `${a.runningRoot}, while _verifyMerkle checks epochSetRoot(${a.epoch - 1n}) = ${a.frozenRoot}. ` +
+        'NOTE this gate is CONSERVATIVE — runningRoot diverges on any node activation/deactivation ' +
+        'while proofs against [e-1] stay valid, so this is a safe-direction refusal, not proof of a defect.'
+    );
 }

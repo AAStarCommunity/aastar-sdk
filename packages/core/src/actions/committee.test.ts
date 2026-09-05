@@ -4,6 +4,7 @@ import {
     ALG_ID_DVT,
     assertCommitteeSubmittable,
     fetchCommitteeSigners,
+    describeFrozenRootDisagreement,
     readFrozenRootAgreement,
     getCommitteeState,
     getMountedDvtValidator,
@@ -273,10 +274,11 @@ describe('readFrozenRootAgreement — the index the live chain cannot corroborat
      * index.** The only real evidence is `validate()` reading `setRoot[e - 1]` in the contract
      * source — and the only way a TEST can carry that evidence is to be handed roots that differ.
      */
-    const reader = (roots: Record<string, Hex>, running: Hex, epoch: bigint) => ({
+    const reader = (roots: Record<string, Hex>, running: Hex, epoch: bigint, pinned = true) => ({
         readContract: async (a: { functionName: string; args?: readonly unknown[] }) => {
             if (a.functionName === 'runningRoot') return running;
             if (a.functionName === 'currentEpoch') return epoch;
+            if (a.functionName === 'epochPinned') return pinned;
             if (a.functionName === 'epochSetRoot') return roots[String(a.args![0])] ?? R('0');
             throw new Error(`unexpected ${a.functionName}`);
         },
@@ -302,9 +304,65 @@ describe('readFrozenRootAgreement — the index the live chain cannot corroborat
         expect(r.epoch).toBe(5n);
     });
 
+    it('READS epochPinned from the chain, for the CURRENT epoch', async () => {
+        /*
+         * Mutation found this gap: replacing the `epochPinned` read with a hardcoded `true` passed
+         * every test. The two-class message was covered — `describeFrozenRootDisagreement` is fed
+         * a struct directly — but nothing checked that the struct's field came from the chain at
+         * all. **The predicate was tested and the read was not**, which is the third time today.
+         *
+         * The epoch index matters too: `epochSetRoot` is read at `e-1` and `epochPinned` at `e`,
+         * because the rollover gap is about THIS epoch not being snapshotted yet.
+         */
+        const asked: unknown[][] = [];
+        const spy = {
+            readContract: async (a: { functionName: string; args?: readonly unknown[] }) => {
+                if (a.functionName === 'runningRoot') return RUNNING;
+                if (a.functionName === 'currentEpoch') return 5n;
+                if (a.functionName === 'epochSetRoot') return RUNNING;
+                if (a.functionName === 'epochPinned') {
+                    asked.push([...(a.args ?? [])]);
+                    return false;
+                }
+                throw new Error(`unexpected ${a.functionName}`);
+            },
+        };
+        const r = await readFrozenRootAgreement(spy as never, VALIDATOR);
+        expect(r.currentEpochPinned).toBe(false); // a hardcoded `true` fails here
+        expect(asked).toEqual([[5n]]); // e, not e-1
+    });
+
     it('THROWS at epoch 0 rather than reading epochSetRoot(-1)', async () => {
         await expect(
             readFrozenRootAgreement(reader({}, RUNNING, 0n) as never, VALIDATOR),
         ).rejects.toThrow(/currentEpoch\(\) == 0/);
+    });
+});
+
+describe('describeFrozenRootDisagreement — two red states that look identical', () => {
+    const R = (n: string) => `0x${n.repeat(64)}` as Hex;
+    const base = { epoch: 9n, runningRoot: R('a'), frozenRoot: R('b'), agrees: false };
+
+    it('names the ROLLOVER GAP when the current epoch is not pinned yet', () => {
+        // Measured at ~8% of blocks: the keeper has not called snapshotEpoch() since the epoch
+        // turned. Self-healing in about a minute. A runner that reports this as "the set moved"
+        // sends someone to investigate a state that fixes itself — and trains the red into noise.
+        const msg = describeFrozenRootDisagreement({ ...base, currentEpochPinned: false });
+        expect(msg).toMatch(/ROLLOVER GAP/);
+        expect(msg).toMatch(/Retry rather than investigate/);
+        expect(msg).not.toMatch(/set moved/);
+    });
+
+    it('names a real mutation when the epoch IS pinned — and still says the gate is conservative', () => {
+        const msg = describeFrozenRootDisagreement({ ...base, currentEpochPinned: true });
+        expect(msg).toMatch(/committee set moved inside epoch 9/);
+        // The honesty clause: proofs against [e-1] stay valid even here, so this is a safe-direction
+        // refusal, not evidence of a defect. Dropping this sentence makes the message overclaim.
+        expect(msg).toMatch(/CONSERVATIVE/);
+    });
+
+    it('says so plainly when the roots agree', () => {
+        expect(describeFrozenRootDisagreement({ ...base, agrees: true, currentEpochPinned: true }))
+            .toMatch(/would verify/);
     });
 });
