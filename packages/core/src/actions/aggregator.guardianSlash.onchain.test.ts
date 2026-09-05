@@ -18,6 +18,18 @@
  * bytecode) and cannot be corroborated on-chain, because a selector does not encode its outputs.
  *
  * Stated plainly so nobody reads a green run here as "the decode is verified".
+ *
+ * THESE ONES ACTUALLY RUN IN THE MERGE GATE — AND THAT IS NOT TRUE OF EVERY "on-chain" TEST HERE
+ * ---------------------------------------------------------------------------------------------
+ * `ci.yml` sets `AASTAR_ONCHAIN_TEST=1` and `SEPOLIA_RPC_URL=<public node>` for the unit-test job,
+ * so everything below executes on every PR. The log-replay assertions (committeeTree, dvt.onchain)
+ * do NOT: they need an endpoint that serves `eth_getLogs` over history consistently, which the free
+ * public node does not, and FU-38 gates them off.
+ *
+ * The dividing line is the RPC METHOD, not the word "on-chain". This file is pure `eth_call` — a
+ * point read at head, which a public node answers reliably — so it is gate-eligible. Worth knowing
+ * before adding an assertion here: reach for `eth_getLogs` and this file silently joins the batch
+ * that nothing runs.
  */
 import { describe, it, expect } from 'vitest';
 import { createPublicClient, http, type Address } from 'viem';
@@ -73,6 +85,18 @@ describe('guardian-slash read surface vs the live BLSAggregator', () => {
         // struct, the selector does not change and a plain readContract would keep "working" while
         // returning shifted values; guardianSlashCase throws GUARDIAN_SLASH_CASE_SHAPE instead.
         // Reading id 0 is enough: the struct width does not depend on whether a case exists.
+        //
+        // ⚠️ ONLY THE WIDTH GUARD IS AWAKE HERE. Measured by mutation against this live chain
+        // (review of #362, CI's own public endpoint):
+        //
+        //   GUARDIAN_SLASH_CASE_WORDS   7 → 8   → 1 failed  ← the width guard carries this test
+        //   GUARDIAN_SLASH_CASE_VERIFIER_WORD 6 → 0 → 7 passed  ← the zero-padding guard is SILENT
+        //
+        // That second result is not a defect, it is the consequence of there being no queued case:
+        // the return is 224 zero bytes, and the zero address is legitimately zero-padded, so that
+        // assertion reads the same whichever word it points at. Do NOT read this green as "field
+        // displacement is covered" — it is covered by the sentinel fixture in the offline suite,
+        // and the on-chain half of it wakes up when the first real case is queued.
         const c = await agg().guardianSlashCase({ caseId: 0n });
         expect(c.status).toBe(GuardianSlashStatus.NONE);
         expect(c.verifier).toBe('0x0000000000000000000000000000000000000000');
