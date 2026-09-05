@@ -1,5 +1,5 @@
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
-import { type Hex, isHex, keccak256, size, toBytes, toHex } from 'viem';
+import { type Hex, bytesToBigInt, isHex, keccak256, size, toBytes, toHex } from 'viem';
 import { BLS_POP_DST } from './hashToField.js';
 import { encodeG2Point } from './dvtWire.js';
 
@@ -77,6 +77,29 @@ export function encodeG1Point(pubkey: Hex | Uint8Array): Hex {
                 }
             }
         }
+        // Padding alone is not validity. The 48/96-byte paths below go through `fromHex`, which
+        // parses the point; the 128-byte path used to be a pure pass-through, so an all-zero blob
+        // (the point at infinity) or arbitrary in-range garbage sailed through a function whose own
+        // contract says a mis-shaped blob is "rejected, not silently registered". Assert the point
+        // for real, so all three widths mean the same thing. (T1.2.2: found by a parseDvtNodeState
+        // test that asserted a promise this function was not keeping.)
+        //
+        // `assertValidity()` is stronger than "is it on the curve", and the distinction matters
+        // enough to name: it also rejects a point that IS on the curve but lies OUTSIDE the
+        // prime-order subgroup (`bad point: not in prime-order subgroup`). That is the dimension
+        // BLS actually dies on — small-subgroup and rogue-key attacks use exactly such points, and
+        // they pass both the padding check and any naive on-curve test. Measured: x = 4, 5, 6, 8…
+        // all give a valid y with `isTorsionFree() === false`, and all are refused here.
+        // Describing this as an on-curve check UNDERSTATES it, which would invite someone to add a
+        // redundant subgroup check later (#367 review).
+        const point = bls.G1.ProjectivePoint.fromAffine({
+            x: bytesToBigInt(bytes.subarray(16, 64)),
+            y: bytesToBigInt(bytes.subarray(80, 128)),
+        });
+        point.assertValidity();
+        if (point.equals(bls.G1.ProjectivePoint.ZERO)) {
+            throw new Error('encodeG1Point: 128-byte input is the point at infinity — the contract rejects it');
+        }
         return toHex(bytes);
     }
 
@@ -123,7 +146,13 @@ export function buildDvtPop(blsSecretKey: Hex): DvtPop {
     }
     const sk = BigInt(blsSecretKey);
     if (sk <= 0n || sk >= BLS_CURVE_ORDER) {
-        throw new Error('buildDvtPop: BLS secret key must be a scalar in [1, r-1] (r = BLS12-381 curve order)');
+        throw new Error(
+            'buildDvtPop: BLS secret key must be a scalar in [1, r-1] (r = BLS12-381 curve order). ' +
+            'A key stored as a raw 32-byte scalar can exceed r; noble reduces it at sign time, so the ' +
+            'EFFECTIVE key is (raw mod r). Reduce it yourself and pass the canonical scalar — this is ' +
+            'deliberately NOT done here: `raw >= r` is equally consistent with a wrong byte string, and ' +
+            'silently reducing that produces a valid PoP for a key the node does not hold.',
+        );
     }
 
     // publicKey = sk · G1_generator, serialized EIP-2537 (128 bytes) — matches on-chain storage.
