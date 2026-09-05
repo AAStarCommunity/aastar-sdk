@@ -101,6 +101,16 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:task-ledger
 
+      # A branch that NAMES a task must have that task in the ledger. T1.2.3 was built, reviewed
+      # twice and merged with no row at all — and both gates above were green, correctly: a row
+      # that was never written is in nobody's scope. GITHUB_HEAD_REF because the checkout is
+      # detached on pull_request, so git cannot answer which branch this is.
+      - name: Every task named by the branch is actually written down
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+        run: pnpm run check:branch-task
+
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
       # where the bookkeeping COULD be deferred, and a deferrable step gets deferred. See FU-43.
