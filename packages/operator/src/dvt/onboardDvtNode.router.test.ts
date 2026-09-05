@@ -30,6 +30,7 @@ function harness(mountedReturns: string) {
         readContract: async (p: any) => {
             reads.push({ address: p.address, functionName: p.functionName });
             if (p.functionName === 'getAlgorithm') return mountedReturns;
+            if (p.functionName === 'validatorRouter') return ROUTER;
             // Enough of the read surface to reach the first decision point and stop.
             if (p.functionName === 'operatorNode') return `0x${'00'.repeat(32)}`;
             if (p.functionName === 'nodeOperator') return '0x0000000000000000000000000000000000000000';
@@ -84,7 +85,7 @@ describe('onboardDvtNode router resolution (G12)', () => {
         await expect(onboardDvtNode({
             publicClient: h.publicClient, operatorWallet: h.operatorWallet,
             blsSecretKey: `0x${'11'.repeat(32)}`, router: ROUTER, validator: STALE, dryRun: true,
-        })).rejects.toThrow(/pass either `validator` or `router`, not both/);
+        })).rejects.toThrow(/pass exactly one of/);
     });
 
     it('POSITIVE CONTROL: without router it uses the explicit validator and never touches a router', async () => {
@@ -97,5 +98,85 @@ describe('onboardDvtNode router resolution (G12)', () => {
         }).catch(() => {});
         expect(h.reads.some((r) => r.functionName === 'getAlgorithm')).toBe(false);
         for (const r of h.reads) expect(r.address).toBe(STALE);
+    });
+});
+
+describe('onboardDvtNode account anchor (FU-65) — the router is not a global fact', () => {
+    const AA_ACCOUNT = '0x0985785d1fc37978474C472E39391774DcB1C711' as const;
+
+    it('resolves through the ACCOUNT: validatorRouter() first, then getAlgorithm on what it named', async () => {
+        // Two reads in order, on two different addresses. Asserting only the final validator would
+        // pass against an implementation that ignored the account and used the canonical router —
+        // which is precisely the bug this option exists to remove.
+        const h = harness(MOUNTED);
+        await onboardDvtNode({
+            publicClient: h.publicClient, operatorWallet: h.operatorWallet,
+            blsSecretKey: `0x${'11'.repeat(32)}`, account: AA_ACCOUNT, dryRun: true,
+        }).catch(() => { /* stopped early on purpose; the read TRACE is the assertion */ });
+
+        const vr = h.reads.find((r) => r.functionName === 'validatorRouter');
+        expect(vr, 'never asked the account').toBeTruthy();
+        expect(vr!.address, 'asked the wrong contract for the router').toBe(AA_ACCOUNT);
+
+        const alg = h.reads.find((r) => r.functionName === 'getAlgorithm');
+        expect(alg, 'never resolved algId 0x01').toBeTruthy();
+        expect(alg!.address).toBe(ROUTER);
+        // Order matters: the router must come FROM the account, not be known beforehand.
+        expect(h.reads.indexOf(vr!)).toBeLessThan(h.reads.indexOf(alg!));
+
+        const after = h.reads.filter((r) => !['validatorRouter', 'getAlgorithm'].includes(r.functionName));
+        expect(after.length).toBeGreaterThan(0);
+        for (const r of after) expect(r.address).toBe(MOUNTED);
+    });
+
+    it('NEGATIVE CONTROL: without `account`, validatorRouter is never read', async () => {
+        // Otherwise the assertion above would also hold for an implementation that always reads the
+        // account — and a flow that reads an address it was not given is its own bug.
+        const h = harness(MOUNTED);
+        await onboardDvtNode({
+            publicClient: h.publicClient, operatorWallet: h.operatorWallet,
+            blsSecretKey: `0x${'11'.repeat(32)}`, router: ROUTER, dryRun: true,
+        }).catch(() => {});
+        expect(h.reads.find((r) => r.functionName === 'validatorRouter')).toBeUndefined();
+    });
+
+    for (const [name, extra] of [
+        ['account + router', { account: AA_ACCOUNT, router: ROUTER }],
+        ['account + validator', { account: AA_ACCOUNT, validator: STALE }],
+        ['router + validator', { router: ROUTER, validator: STALE }],
+        ['all three', { account: AA_ACCOUNT, router: ROUTER, validator: STALE }],
+    ] as const) {
+        it(`REFUSES ${name} — they can disagree, and the chain will not tell you which won`, async () => {
+            // `validator` vs `router` was ALREADY guarded pairwise before this (9b5f31c2:223). The
+            // real gap is narrower and easy to miss: **a two-way check does not become a three-way
+            // one by adding a third option next to it.** An earlier draft of this comment said the
+            // code "silently preferred router" — that was wrong, and an existing test asserting the
+            // old error message is what caught it.
+            //
+            // Why it matters more than an ordinary argument clash: a wrong DVT validator does not
+            // revert, so nothing downstream would ever surface which anchor won.
+            const h = harness(MOUNTED);
+            await expect(onboardDvtNode({
+                publicClient: h.publicClient, operatorWallet: h.operatorWallet,
+                blsSecretKey: `0x${'11'.repeat(32)}`, dryRun: true, ...extra,
+            })).rejects.toThrow(/pass exactly one/);
+            // And it must refuse BEFORE touching the chain: a rejection that already sent reads has
+            // decided something on the caller's behalf.
+            expect(h.reads).toHaveLength(0);
+        });
+    }
+
+    it('POSITIVE CONTROL: exactly one anchor is accepted, all three ways', async () => {
+        // Without this, a guard that threw on ANY anchor would satisfy every case above while
+        // making the option unusable.
+        for (const extra of [{ account: AA_ACCOUNT }, { router: ROUTER }, { validator: MOUNTED }]) {
+            const h = harness(MOUNTED);
+            const err = await onboardDvtNode({
+                publicClient: h.publicClient, operatorWallet: h.operatorWallet,
+                blsSecretKey: `0x${'11'.repeat(32)}`, dryRun: true, ...extra,
+            }).then(() => null, (e: Error) => e);
+            expect(err?.message ?? '', JSON.stringify(extra)).not.toMatch(/pass exactly one of/);
+            expect(h.reads.length, JSON.stringify(extra)).toBeGreaterThan(0);
+        }
     });
 });

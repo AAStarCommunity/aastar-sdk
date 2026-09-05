@@ -24,7 +24,12 @@ import { describe, expect, it } from 'vitest';
 import { createPublicClient, http, type Address } from 'viem';
 
 import { CANONICAL_ADDRESSES } from '../addresses.js';
-import { getMountedDvtValidator, getCommitteeState, ALG_ID_DVT } from './committee.js';
+import {
+  getAccountDvtValidator,
+  getMountedDvtValidator,
+  getCommitteeState,
+  ALG_ID_DVT,
+} from './committee.js';
 
 const SEPOLIA = 11155111;
 const a = CANONICAL_ADDRESSES[SEPOLIA];
@@ -95,5 +100,67 @@ describe('committee path against the live v0.33.0 stack', () => {
 
     const mounted = (await getMountedDvtValidator(client(), a.aaStarValidator as Address)) as string;
     expect(mounted.toLowerCase()).not.toBe(stale.toLowerCase());
+  });
+});
+
+describe('getAccountDvtValidator — the anchor that is a deployment fact (FU-65)', () => {
+  /**
+   * Two REAL deployed accounts that route to DIFFERENT validators. This pair is the whole reason
+   * the function exists, so the test is built around it rather than around the canonical book.
+   *
+   * The second account's PROVENANCE is what gives this evidentiary weight, and it is worth stating
+   * because it is not visible from the address: the DVT repo pulled it out of the indexed topics of
+   * ~45k blocks of the committee validator's logs — 482 candidates, filtered. **It did not come from
+   * an address book.** Had it, the pair would only show "two documents disagree"; coming from logs,
+   * it shows two DEPLOYMENTS disagree, which is a fact no amount of editing config files can fix.
+   */
+  const ACCOUNTS = [
+    {
+      account: '0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8',
+      router: '0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c',
+      validator: '0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC',
+    },
+    {
+      account: '0x0985785d1fc37978474C472E39391774DcB1C711',
+      router: '0xA97A752779ebfDA58612F6727Ec7C8366c39f897',
+      validator: '0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9',
+    },
+  ] as const;
+
+  for (const { account, router, validator } of ACCOUNTS) {
+    it.runIf(RUN_ONCHAIN)(`resolves ${account.slice(0, 10)}… through its own validatorRouter()`, async () => {
+      const got = await getAccountDvtValidator(client(), account as Address);
+      expect(got.router.toLowerCase()).toBe(router.toLowerCase());
+      expect(got.validator.toLowerCase()).toBe(validator.toLowerCase());
+    });
+  }
+
+  it.runIf(RUN_ONCHAIN)('THE PROPERTY: the two accounts resolve to DIFFERENT validators', async () => {
+    // Asserting each account's value one at a time would still pass if both rows were stale copies
+    // of the same answer. What this function exists for is that the answers DIFFER — so that is
+    // asserted directly, and from freshly-read values rather than from the table above.
+    const [a1, a2] = await Promise.all(ACCOUNTS.map((x) => getAccountDvtValidator(client(), x.account as Address)));
+    expect(a1.router.toLowerCase()).not.toBe(a2.router.toLowerCase());
+    expect(a1.validator.toLowerCase()).not.toBe(a2.validator.toLowerCase());
+  });
+
+  it.runIf(RUN_ONCHAIN)('NEGATIVE CONTROL: the canonical book matches ONE of them, not both', async () => {
+    // The precise reason a canonical default cannot be correct-by-construction here. If this ever
+    // matched both, the two accounts would have converged and the whole per-account framing would
+    // need re-reading rather than trusting.
+    const canonical = a.aaStarBLSAlgorithm.toLowerCase();
+    const resolved = await Promise.all(
+      ACCOUNTS.map((x) => getAccountDvtValidator(client(), x.account as Address).then((r) => r.validator.toLowerCase())),
+    );
+    expect(resolved.filter((v) => v === canonical)).toHaveLength(1);
+  });
+
+  it.runIf(RUN_ONCHAIN)('an EOA has no validatorRouter() — it must fail, not resolve to zero', async () => {
+    // The failure mode being closed: two zeros in a row read like data. An EOA returns empty
+    // calldata, which viem surfaces as a decode failure rather than a zero — either way it must
+    // not come back looking like an answer.
+    await expect(
+      getAccountDvtValidator(client(), '0x000000000000000000000000000000000000dEaD' as Address),
+    ).rejects.toThrow();
   });
 });
