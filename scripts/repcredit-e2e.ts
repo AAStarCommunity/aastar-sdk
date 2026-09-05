@@ -17,6 +17,7 @@
 import {
   AAStarAirAccountV7ABI,
   BLSAggregatorABI,
+  CANONICAL_ADDRESSES,
   DVTValidatorABI,
   EntryPointABI,
   GTokenABI,
@@ -46,6 +47,12 @@ import {
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
 import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
 import { buildMaterialPassport, materialFileList, redactSecrets } from "./repcredit/material-passport.js";
+import { readDeployedStackPin } from "./repcredit/deployed-stack.js";
+import {
+  checkFunderRole,
+  checkStackInvariants,
+  resolveDeployedAddresses,
+} from "./repcredit/deployed-mode.js";
 import {
   assertHttpRejections,
   assertRevertedNotOutOfGas,
@@ -271,14 +278,36 @@ const superPaymasterDir = resolve(process.env.REPCREDIT_SUPERPAYMASTER_DIR ?? jo
 const yaaaDir = resolve(process.env.REPCREDIT_YAAA_DIR ?? join(worktreeRoot, "YetAnotherAA-Validator"));
 const airDir = resolve(process.env.REPCREDIT_AIRACCOUNT_DIR ?? join(worktreeRoot, "airaccount-contract"));
 const networkMode = process.env.REPCREDIT_NETWORK_MODE ?? "local";
-if (!["local", "sepolia"].includes(networkMode)) throw new Error("REPCREDIT_NETWORK_MODE must be local or sepolia");
-const isSepolia = networkMode === "sepolia";
-const chainId = isSepolia ? 11_155_111 : 31_337;
-const livePrivateKey = process.env.REPCREDIT_PRIVATE_KEY as Hex | undefined;
-if (isSepolia && (!livePrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(livePrivateKey))) {
-  throw new Error("Sepolia mode requires REPCREDIT_PRIVATE_KEY as a 32-byte hex key");
+if (!["local", "sepolia", "deployed"].includes(networkMode)) {
+  throw new Error("REPCREDIT_NETWORK_MODE must be local, sepolia or deployed");
 }
-const deployerAccount = privateKeyToAccount(isSepolia ? livePrivateKey! : LOCAL_DEPLOYER_KEY);
+/**
+ * `deployed` — run against the FROZEN stack instead of building one (CC-115 B6-prep, T6.1.1).
+ *
+ * The author decided 2026-09-05 that B6 measures the real deployment, not an isolated copy. That is
+ * a different mode rather than a flag on `sepolia`, and the reason is in the assertions: `sepolia`
+ * demands `defaultThreshold === 3n` and AirAccount `0.31.0`, both artefacts of its own deploy
+ * scripts. The frozen stack reads **2** and **v0.33.0**.
+ *
+ * > Pointed at the real stack, the existing runner refuses before its first transaction — with
+ * > "RepCredit default threshold is not three", about a stack that is correct.
+ *
+ * Relaxing those in `sepolia` mode would remove a real check from the path that still deploys.
+ */
+const isDeployed = networkMode === "deployed";
+/** Unchanged meaning: "fresh-deploy onto Sepolia". The seven deploy steps all hang off this. */
+const isSepolia = networkMode === "sepolia";
+// Both live on Sepolia; `isSepolia` continues to mean "fresh-deploy onto Sepolia" everywhere below,
+// which is what keeps the seven deploy steps out of this mode without touching any of them.
+const chainId = isSepolia || isDeployed ? 11_155_111 : 31_337;
+const livePrivateKey = process.env.REPCREDIT_PRIVATE_KEY as Hex | undefined;
+// `deployed` needs it too, and for a reason worth stating: without this guard `deployerAccount`
+// below silently falls back to LOCAL_DEPLOYER_KEY — a WELL-KNOWN anvil key — and would then be used
+// as the funder on Sepolia. Found by running the three modes rather than by reading the diff.
+if ((isSepolia || isDeployed) && (!livePrivateKey || !/^0x[0-9a-fA-F]{64}$/.test(livePrivateKey))) {
+  throw new Error(`${networkMode} mode requires REPCREDIT_PRIVATE_KEY as a 32-byte hex key`);
+}
+const deployerAccount = privateKeyToAccount(isSepolia || isDeployed ? livePrivateKey! : LOCAL_DEPLOYER_KEY);
 const DEPLOYER = deployerAccount.address;
 const outputDirRaw = process.env.REPCREDIT_OUTPUT_DIR ?? "";
 if (!outputDirRaw || !outputDirRaw.startsWith("/")) {
@@ -306,8 +335,8 @@ if (isSepolia && (!skipMeasurements || nodeCount !== 3)) {
   throw new Error("Sepolia evidence requires three nodes and REPCREDIT_SKIP_MEASUREMENTS=true");
 }
 
-const rpcUrl = isSepolia ? (process.env.REPCREDIT_RPC_URL ?? "") : `http://127.0.0.1:${port}`;
-if (!rpcUrl) throw new Error("Sepolia mode requires REPCREDIT_RPC_URL");
+const rpcUrl = isSepolia || isDeployed ? (process.env.REPCREDIT_RPC_URL ?? "") : `http://127.0.0.1:${port}`;
+if (!rpcUrl) throw new Error(`${networkMode} mode requires REPCREDIT_RPC_URL`);
 const experimentChain = defineChain({
   id: chainId,
   name: isSepolia ? "RepCredit Sepolia Evidence" : "RepCredit Anvil Prague",
@@ -2063,6 +2092,94 @@ async function main(): Promise<void> {
     anvil.once("exit", () => closeSync(anvilFd));
     children.push(anvil);
     await waitRpc();
+  }
+
+  if (isDeployed) {
+    // ---- deployed-stack mode (CC-115 B6-prep) -------------------------------------------------
+    //
+    // Nothing below deploys. Every address comes from the frozen pin plus the SDK address book,
+    // with the provenance of each recorded rather than merged — five keys are backed by BOTH
+    // records and byte-identical, four exist only in the address book, and a flat map would make
+    // all nine look equally corroborated.
+    const pin = readDeployedStackPin("sepolia", process.cwd());
+    const resolved = resolveDeployedAddresses(pin, CANONICAL_ADDRESSES[11_155_111] as never);
+
+    // ① The gate runs BEFORE the first transaction, and its failure is a refusal, not a warning.
+    //    `REPCREDIT_REQUIRE_ONCHAIN=1` is what makes "we could not reach the chain" a failure too:
+    //    unreachable and correct produce the same silence otherwise.
+    runLogged("deployed-stack-gate", "pnpm", ["exec", "tsx", "scripts/repcredit/check-deployed-stack.ts"], process.cwd(), {
+      REPCREDIT_REQUIRE_ONCHAIN: "1",
+      SEPOLIA_RPC_URL: rpcUrl,
+    });
+
+    const deployment: Deployment = Object.fromEntries(
+      Object.entries(resolved.addresses).map(([k, v]) => [k, v.address]),
+    ) as Deployment;
+
+    // ② The two readings that differ from a fresh deploy, plus N. Read through
+    //    Registry.blsAggregator() so the threshold is the one the reputation path uses.
+    const registryAggregator = (await publicClient.readContract({
+      address: deployment.registry, abi: RegistryABI, functionName: "blsAggregator",
+    })) as Address;
+    const invariants = checkStackInvariants({
+      defaultThreshold: (await publicClient.readContract({
+        address: registryAggregator, abi: BLSAggregatorABI, functionName: "defaultThreshold",
+      })) as bigint,
+      // `version()`, lowercase. The deployed aggregator has no `VERSION()`; asking for the
+      // upper-case one returns a revert that reads as a fact about the contract.
+      aggregatorVersion: (await publicClient.readContract({
+        address: registryAggregator, abi: BLSAggregatorABI, functionName: "version",
+      })) as string,
+      nodeCount,
+    });
+
+    // ③ The funder may fund and may not govern (DSR ruling 2). An empty operator list is itself a
+    //    failure — "not in this empty list" is trivially true and reads exactly like a real pass.
+    const owners = await Promise.all(([
+      ["registry.owner", deployment.registry],
+      ["staking.owner", deployment.staking],
+      ["aggregator.owner", registryAggregator],
+    ] as const).map(async ([label, address]) => ({
+      label,
+      // RegistryABI carries `owner()`; reusing it avoids a second hand-written ABI, which is the
+      // exact thing #381/#382 were about. All three targets are Ownable-shaped for this getter.
+      address: (await publicClient.readContract({ address, abi: RegistryABI, functionName: "owner" })) as Address,
+    })));
+    // The operator roster is read from the registry's ROLE_DVT membership. Left to the same DVT
+    // interface question as the signing half below: `checkFunderRole` REQUIRES a non-empty list and
+    // fails on an empty one, so passing `[]` here would be a silent pass waiting to happen — it
+    // fails loudly instead, which is the correct state until the roster read is specified.
+    const registeredOperators: Address[] = [];
+    const funderChecks = checkFunderRole(deployerAccount.address, owners, registeredOperators);
+
+    const failed = [...resolved.agreement, ...invariants, ...funderChecks].filter(c => !c.ok);
+    writeJsonExclusive(join(rawDir, "deployed-stack-checks.json"), {
+      addresses: resolved.addresses,
+      checks: [...resolved.agreement, ...invariants, ...funderChecks],
+      // The funder's ROLE is evidence; its address is not. Passport records the role only.
+      funder: { role: "funder", address: "[REDACTED]" },
+    });
+    if (failed.length) {
+      throw new Error(
+        `deployed-stack mode refuses to run: ${failed.length} check(s) failed —\n` +
+        failed.map(c => `  ${c.name}: ${c.detail}`).join("\n"),
+      );
+    }
+
+    // ④ BOUNDARY, deliberately fail-closed rather than guessed.
+    //
+    // Everything above consumes the stack. Driving it needs validator signatures, and this runner
+    // currently obtains them by generating ephemeral BLS keys and starting local nodes — exactly
+    // what ⑤ forbids ("never load operator keys"). Replacing that means calling the REAL nodes,
+    // and their signing interface is DVT's to specify, not mine to infer.
+    //
+    // DSR's instruction was explicit: raise it on CC-115 rather than guess. So this throws with the
+    // question rather than shipping a plausible client that would produce receipts nobody can trust.
+    throw new Error(
+      "deployed-stack mode: stack verified, but the node-driving half is not implemented yet. " +
+      "It needs the DVT-side signing interface (public endpoint 1.13.1 or DVT-run signer) — asked " +
+      "on CC-115. Raising here rather than generating ephemeral keys, which spec ⑤ forbids.",
+    );
   }
 
   const superPaymasterConfig = isSepolia
