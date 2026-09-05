@@ -213,6 +213,27 @@ describe('FU-56 — two model gaps, both hit on the same real entry', () => {
             expect(c[0].pr).toBe(2);
         });
 
+        it('KNOWN FAIL-OPEN: a backticked `done=` is swallowed — pinned, not endorsed', () => {
+            // #372 review found this direction had no test. Masking cannot tell a quotation from a
+            // use, so a `done=PR#N` written inside backticks stops being a claim — and the gate says
+            // nothing, it just checks one fewer thing and prints green. **Silent under-counting is
+            // the failure mode a gate cannot report on itself.**
+            //
+            // Pinned as-is rather than "fixed", and the reason is a trade-off not an omission:
+            // un-masking `done=` would re-open the bug this masking exists to close (documenting the
+            // rule inside the ledger tripped the rule). Today the shape occurs ZERO times in the real
+            // ledgers. This test is here so the next person meets the behaviour deliberately instead
+            // of discovering it as a missing red.
+            expect(claims('- [x] FU-x · `done=PR#347` shown as an example of the syntax')).toEqual([]);
+        });
+
+        it('POSITIVE CONTROL: the same `done=` outside backticks is still counted', () => {
+            // Separates "backticked claims are dropped" from "done= stopped working".
+            const c = claims('- [x] FU-x · done=PR#347');
+            expect(c).toHaveLength(1);
+            expect(c[0]).toMatchObject({ pr: 347, claimsDone: true });
+        });
+
         it('an unclosed backtick does not swallow the rest of the line', () => {
             // A greedy or unterminated mask would blind everything after a stray backtick — the kind
             // of quiet coverage loss that shows up as "the gate stopped finding anything".
