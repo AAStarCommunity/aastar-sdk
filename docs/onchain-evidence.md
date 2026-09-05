@@ -329,3 +329,59 @@ codehash 与 CC-115 B4 冻结的 `deployedStack` pin 逐字一致（`scripts/ups
 ⚠️ **gate 的报错文案在这个失效模式下会误导**：它说 `the upstream needs 'forge build'`，而 `forge build` 已经跑过两次（含 clean 重建）。真正缺的不是构建，是**构建产出的文件名**。已记入跟进账本。
 
 **排查时我自己踩的坑**（记下来因为它比结论有用）：中途我 diff 两份 `contracts/foundry.toml` 得到「完全相同」，据此排除了配置差异——**但那两个文件都不存在**（配置在仓库根），`diff` 比的是两个空集。全空、全相同、全红，都是量具坏了的信号，第一反应该是怀疑判据而不是采信结论。
+
+---
+
+## T1.1.2 — dvt3 独立节点的链上注册
+
+**Claim proven:** the INDEPENDENT dvt3 node (board B, key held in an EIP-2335 keystore on the board)
+completed `registerWithProof` on the **live** Sepolia DVT validator — the staked, self-service path,
+not a bootstrap/owner call.
+
+- **Script:** `tests/regression/onchain-evidence/dvt3-register.ts` (T1.1.1, PR #316)
+- **Run:** `DRY_ONLY=1 pnpm exec tsx tests/regression/onchain-evidence/dvt3-register.ts` (dry first — it broadcasts)
+
+### The transaction
+
+| | |
+|---|---|
+| tx | [`0x7aa5231a07357b7cea5b5609912311ee895386b8ed5ec664a557b943850cc246`](https://sepolia.etherscan.io/tx/0x7aa5231a07357b7cea5b5609912311ee895386b8ed5ec664a557b943850cc246) |
+| block | `11604058` |
+| to | `0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9` — `AAStarBLSAlgorithm`, the validator the router mounts at algId `0x01` |
+| from (operator) | `0xA5924206B809Db98c760e5459bCe225Bd4207b66` |
+| function | `registerWithProof(bytes,bytes,bytes)` — selector `0xdd7bcfc6` |
+| status | `1` (success), gasUsed `893345` |
+| dvt3 nodeId | `0x96d64ba8240694153c757707732a11ff175380065ddacb6406094c9d5fa5cfce` |
+
+### Why five separate reads instead of one
+
+A tx hash on its own proves only that *something* happened. Each of these was read independently and
+they agree — which is what makes the record checkable rather than merely recorded:
+
+| read | result |
+|---|---|
+| `isRegistered(nodeId)` on the live validator | `true` |
+| `nodeOperator(nodeId)` | `0xA5924206…` |
+| receipt `from` | `0xA5924206…` — **the same address the validator reports**, arrived at independently |
+| receipt `to` | the live validator, not a superseded one |
+| calldata selector | `0xdd7bcfc6` = `registerWithProof`, i.e. the STAKED path, not `registerPublicKey` |
+
+The hash was located by replaying `PublicKeyRegistered(bytes32,bytes)`
+(topic0 `0xb53698ad0068408d16d323c1bb45fdca9ff6bb47219ff6d0832591dbb505aac3`) filtered on the nodeId, so
+it is derived from the chain rather than copied out of a run log that might describe a different run.
+
+### ⚠️ A stale record this supersedes, and why it did not look stale
+
+`docs/dvt-wire-format.md:105` lists dvt3's nodeId as
+`0xd4f954361cdb2b2d89a631c939b6f930de5b2c5753911d2be7fb1ecc9f17a60e`, registered on the **v0.20.0**
+validator `0xAF525A…`. Measured on the live validator today:
+
+```
+isRegistered(0x96d64ba8…) = true    ← the id DVT_CONFIG serves
+isRegistered(0xd4f95436…) = false   ← the id that doc names
+```
+
+Both were true once, on different validators. Nothing about that entry reads as wrong — it names a
+real id that really was registered — which is exactly why this kind of staleness survives: **it is
+falsified only against a contract nobody re-reads.** The rule this record follows instead: every value
+here was read from the chain at the address the ROUTER currently mounts, never from a prior document.
