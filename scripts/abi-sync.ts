@@ -66,6 +66,34 @@ const renderType = (i: any): string =>
     : (i?.type ?? '?');
 const sigSet = (abi: any[], kind: string) => new Set(abi.filter((e) => e.type === kind && e.name).map((e) => `${e.name}(${(e.inputs || []).map(renderType).join(',')})`));
 
+/**
+ * The SAME lesson as the tuple expansion above, on the other side of the function — and it was
+ * never carried across. `sigSet` keys on `name(inputs)`, so **outputs never participate in the
+ * comparison at all**. A function that keeps its name and parameters while changing what it
+ * RETURNS is, to the check above, not a change.
+ *
+ * That is not a theoretical hole. Measured 2026-09-05 against the checked-out upstream:
+ *
+ *   BLSAggregator.guardianSlashCases(uint256)
+ *     SDK      out = [bytes32,bytes32,uint64,uint8,uint16,uint16,address]           (7 words)
+ *     upstream out = [bytes32,bytes32,uint64,uint8,uint16,uint16,uint16,address]    (8 words)
+ *
+ * `uint16 slashBps` inserted BEFORE `verifier`. `abi:sync` mentioned this contract zero times
+ * while reporting five other drifts on it. And this is the most dangerous shape there is: the
+ * SELECTOR is unchanged, so the call does not revert — a 7-parameter decode of an 8-word return
+ * reads `slashBps` as `verifier` and drops the real one. Every field looks plausible.
+ *
+ * Blast radius, measured before adding this rather than after: across 30 contracts that resolve to
+ * an upstream artifact, 646 same-signature functions compared, **exactly 1** output mismatch — the
+ * real one. No false-positive flood, so this does not become the gate that gets deleted before it
+ * catches anything (verification.md §5).
+ */
+const outSig = (e: any): string => (e.outputs || []).map(renderType).join(',');
+const fnByKey = (abi: any[]) => new Map(
+  abi.filter((e) => e.type === 'function' && e.name)
+    .map((e) => [`${e.name}(${(e.inputs || []).map(renderType).join(',')})`, outSig(e)] as const),
+);
+
 function concreteContracts(dir: string): string[] {
   const out: string[] = [];
   const walk = (d: string) => {
@@ -82,7 +110,7 @@ const findArtifact = (outDir: string, name: string) => { const p = path.join(out
 
 const sdkAbis = new Set(fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')));
 
-type FnChange = { contract: string; kind: 'function' | 'event' | 'error'; sig: string; change: 'added' | 'removed' };
+type FnChange = { contract: string; kind: 'function' | 'event' | 'error'; sig: string; change: 'added' | 'removed' | 'return-shape'; detail?: string };
 const report = { missing: [] as { level: string; contract: string; copiedFrom?: string }[], drifted: [] as string[], changes: [] as FnChange[], newContracts: [] as string[] };
 const log = (m: string) => { if (!JSON_OUT) console.log(m); };
 
@@ -123,10 +151,27 @@ for (const name of sdkAbis) {
     for (const s of [...b].filter((x) => !a.has(x))) { report.changes.push({ contract: name, kind, sig: s, change: 'added' }); drifted = true; }
     for (const s of [...a].filter((x) => !b.has(x))) { report.changes.push({ contract: name, kind, sig: s, change: 'removed' }); drifted = true; }
   }
+  // Same-signature, different RETURN. Only reachable for functions present on BOTH sides, so it
+  // never double-reports something already flagged as added/removed above.
+  {
+    const sdkOut = fnByKey(sdk), upsOut = fnByKey(ups);
+    for (const [sig, want] of upsOut) {
+      const have = sdkOut.get(sig);
+      if (have === undefined || have === want) continue;
+      report.changes.push({
+        contract: name, kind: 'function', sig, change: 'return-shape',
+        detail: `SDK returns (${have || 'void'}), upstream returns (${want || 'void'})`,
+      });
+      drifted = true;
+    }
+  }
   if (drifted) {
     report.drifted.push(name);
     if (FIX) { fs.writeFileSync(path.join(ABIS_DIR, `${name}.json`), JSON.stringify({ abi: ups }, null, 2)); log(`   🔄 refreshed drifted ABI ${name}`); }
-    else log(`   ❌ DRIFT ${name}: ${report.changes.filter((c) => c.contract === name).map((c) => `${c.change} ${c.kind} ${c.sig}`).join('; ')}`);
+    else log(`   ❌ DRIFT ${name}: ${report.changes.filter((c) => c.contract === name).map((c) => c.change === 'return-shape'
+      // Spelled out because the selector is UNCHANGED: this one does not revert, it mis-decodes.
+      ? `SAME SELECTOR, DIFFERENT RETURN ${c.sig} — ${c.detail}`
+      : `${c.change} ${c.kind} ${c.sig}`).join('; ')}`);
   }
 }
 
