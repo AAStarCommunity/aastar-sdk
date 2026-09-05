@@ -16,7 +16,48 @@ import { KNOWN_UNJUSTIFIED, findUnjustified } from './check-hardcoded-abi.js';
 const DAPP = 'packages/dapp/src/ui/index.ts';
 const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8');
 
-describe('what counts as justified', () => {
+/**
+ * FU-30's action half, applied here rather than only where it once hurt (FU-47).
+ *
+ * These tests spawn a subprocess (`git`, or the scanner). vitest's default timeout is 5s, and
+ * **a timeout red and an assertion red are the same `× test name` line** — so a run that dies on
+ * machine load reads exactly like the thing under test having a hole.
+ *
+ * Measured 2026-09-05, slowest single case in this file: 160ms locally. The only CI/local ratio
+ * this repo has actually measured is **7.4x** (FU-48: 892ms local → 6607ms on CI, on a different
+ * workload). Applying it here is an EXTRAPOLATION, not a measurement — stated so nobody reads the
+ * number below as observed. Under it, `kms-endpoint-audit`'s slowest case sits at ~93% of the 5s
+ * default, which is the case that motivated doing this now.
+ *
+ * ## What this does NOT do — the name says "timeout", so say the limit out loud (#384 review)
+ *
+ * It bounds the VERDICT, not the EXECUTION. These tests spawn with `execFileSync`, which blocks the
+ * event loop that vitest's timer runs on. Measured on vitest 4.0.17 with three controls:
+ *
+ * ```
+ * execFileSync('sleep','3') under { timeout: 1 }   → "Test timed out in 1ms", took 3177ms
+ * await sleep(3000)        under { timeout: 1 }   → "Test timed out in 1ms", took 1ms
+ * instant body             under { timeout: 1 }   → green
+ * ```
+ *
+ * So a genuinely HUNG subprocess is not cut short by this. What it does fix is the case this was
+ * raised for: a spawn that is slow but finishes no longer gets reported as an assertion failure.
+ * Hence `VERDICT` in the name — the earlier `SPAWN_TIMEOUT_MS` promised the other thing.
+ *
+ * ## And it does not cover hooks
+ *
+ * A `describe`-level `{ timeout }` applies to CASES ONLY; hooks keep the separate `hookTimeout`
+ * (default 10s). Measured with a positive control: a 12s `beforeAll` under
+ * `describe(..., { timeout: 30_000 })` still fails `Hook timed out in 10000ms`, while the same hook
+ * with an explicit per-hook argument passes. None of the four files here has a hook, so this note
+ * is a boundary for whoever copies the pattern — not a defect in it.
+ *
+ * The headroom costs a slow failure in the worst case. Shrinking it buys nothing and risks a
+ * failure that lies about why.
+ */
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('what counts as justified', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('an import with no justification is reported', () => {
     expect(findUnjustified('f.ts', "import { parseAbi } from 'viem';")).toHaveLength(1);
   });
@@ -53,7 +94,7 @@ describe('what counts as justified', () => {
   });
 });
 
-describe('THE CASE — dapp, before and after', () => {
+describe('THE CASE — dapp, before and after', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   /** `packages/dapp/src/ui/index.ts` as it stood on the commit this branch forked from. */
   const FORKED_AT = '055edd59';
   const before = () =>
@@ -86,7 +127,7 @@ describe('THE CASE — dapp, before and after', () => {
   });
 });
 
-describe('the baseline', () => {
+describe('the baseline', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('every entry still fires — an entry that does not is stale', () => {
     // A baseline is a debt register. An entry that no longer fires means someone fixed the file
     // and did not remove it, and from then on that file is exempt for free.
