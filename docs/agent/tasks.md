@@ -30,7 +30,7 @@
 
 ## F1.2 — 节点 onboarding API
 
-### T1.2.1 盘点 CLI/mjs 脚本 → API 的缺口  `PR_OPEN`
+### T1.2.1 盘点 CLI/mjs 脚本 → API 的缺口 (PR #361)  `DONE`
 - **优先级**：high
 - **目标**：明确 `register-node.mjs` / `dvt3-register.ts` 里哪些步骤还没有对应的 SDK API，产出缺口清单（社区节点接入的真正交付物是 API + portal，不是脚本）。
 - **开发范围**：只做盘点与设计，不写实现。
@@ -68,11 +68,33 @@
 
 ## F2.1 — Slash 治理 read getters（CC-13 批A）
 
-### T2.1.1 slash 只读查询 API  `READY`
+### T2.1.1 slash 只读查询 API  `PR_OPEN`
 - **优先级**：mid
 - **目标**：暴露 slash 状态/冷却/阈值等只读能力（`isSlashPending` 等已随 0.39.4 进 ABI）。
 - **依赖**：无（地址依赖已由 CC-18 / 0.39.4 解除）
 - **验收命令**：新增单测 `pnpm --filter @aastar/core test` 全绿 + 一条 Sepolia 实读证据
+  - 实测：`621 passed | 34 skipped`（60 文件）✅ —— **这个数随每次加测试而变，读它先看锚点**：
+    617=并 main 前 · 619=并 main 后（评审 #362 量到并更正我写的 617）· 621=补了两条 4.12.0 真实布局用例之后。
+    判据是命令本身而不是这个数：`pnpm --filter @aastar/core test` 全绿。
+  - 链上：`AASTAR_ONCHAIN_TEST=1 pnpm exec vitest run packages/core/src/actions/aggregator.guardianSlash.onchain.test.ts` → 7/7 ✅
+- **盘点结论**：SuperPaymaster 侧的 slash 只读面（`isSlashPending`/`getLatestSlash`/`getSlashCount`/
+  `getSlashHistory`/`slashHistory`）与 aggregator 的 `slashPolicyAdmin`/`slashThresholds`
+  **本来就已经有了**。真正缺的是 **guardian slash + 退出冷却**那一族，共 10 个 view，全部补齐。
+- **本 task 的硬骨头**：`guardianSlashCases(uint256)` 的形状陷阱。链上 4.11.0 是 7 字、SP src 4.12.0
+  是 8 字，**selector 不变**（`0xee02231c`），viem 拿 7 参 ABI 解更长的返回**不 revert**。所以这个
+  getter 不走 `readContract`，改裸 `call` + 两道守卫：
+  - **长度 === 224** —— 管「加字段」。链上实测锚定。
+  - **`verifier` 字高 12 字节为 0** —— 管**同宽且被挤进来的值够大**的那一类错位；长度看不见这一类。
+    **实测更正（别把它说宽）**：4.12.0 真实的改法是在 `verifier` 前插入 `uint16 slashBps`
+    （`SuperPaymaster@d651646a` `BLSAggregator.sol:143`），而 uint16 右对齐、高 12 字节本就是 0，
+    所以**这道守卫对那个真实变更不响**，响的是宽度那道。两道不是冗余，缺一不可。
+  - 新错误码 `ErrorCode.ABI_SHAPE_MISMATCH (E4004)`：链答了、但答案不可信，是唯一一类
+    「继续走下去会产出貌似合理的错值」的失败，调用方必须能与 revert 区分且不得重试。
+- **⚠️ 证据分三层，别读成「已验证」**：① 宽度 224 = 链上实测；② 字段序 = 锚在
+  `BLSAggregator-4.11.0.deployed.json`（该文件已 70/70 selector 对上部署字节码），链上无法再佐证，
+  因为 **selector 不编码 outputs**；③ **这两道运行时守卫今天是睡着的**——链上一个 case 都没排过队，
+  全 0 返回下零地址本来就是合法零填充，两道守卫都区分不出对错。现在真正在干活的是单测里那组
+  手铺哨兵 fixture，它钉的是「解码器 ↔ ABI 文件」这一环。第一个真 case 排队时守卫才醒。
 
 ### T2.1.2 Timelock 写编排（批B）  `BLOCKED`
 - **优先级**：mid
