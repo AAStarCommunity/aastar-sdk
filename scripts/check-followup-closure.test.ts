@@ -107,3 +107,27 @@ describe('the real ledger', () => {
     expect(closed.some((l) => /done=PR#\d+/.test(l)), 'and at least one must carry done=PR#N').toBe(true);
   });
 });
+
+describe('who is claiming (found by running the gate on its own PR)', () => {
+  it('quoting ANOTHER PR\'s closing claim is not a claim by this one', () => {
+    // The gate reported two problems against its own PR: that body says «#356 正文「Closes FU-32」»
+    // — reporting what another PR claimed, while explaining how the ledger drifted — and the rule
+    // read it as this PR claiming to close FU-32.
+    //
+    // It had already narrowed from "any mention" to "a closing claim" and STILL missed a coordinate:
+    // who is claiming. Two narrowings, both found the same way — by running it on real text.
+    const ledger = [doneBy(32, 356)].join('\n');
+    expect(checkClosure('#356 正文写「Closes FU-32」而账本未标记。', ledger, 357)).toEqual([]);
+    expect(checkClosure('PR #356 said "Closes FU-32" and the ledger did not agree.', ledger, 357)).toEqual([]);
+  });
+
+  it('…but citing THIS PR alongside the claim is still a claim', () => {
+    // Otherwise "Closes FU-9 (see #357)" would be a way through, and the escape hatch would be an
+    // accident of phrasing rather than a decision.
+    expect(checkClosure('Closes FU-9 — see #357 for the reasoning.', [open(9)].join('\n'), 357)).toHaveLength(1);
+  });
+
+  it('a plain claim with no PR cited is unaffected', () => {
+    expect(checkClosure('Closes FU-9.', [open(9)].join('\n'), 357)).toHaveLength(1);
+  });
+});

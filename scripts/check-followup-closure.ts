@@ -73,8 +73,34 @@ const NOT_CLOSING = (fu: string) =>
  * `prNumber` is what makes the "closed by THIS pr" half meaningful; without it the check can only
  * ask whether the entry is closed at all, which a stale `done=PR#<something else>` would satisfy.
  */
+/**
+ * Lines that QUOTE someone else's closing claim rather than making one.
+ *
+ * Found by running this gate against its own PR: the body of #357 says «#356 正文「Closes FU-32」»
+ * — reporting what another PR claimed, while explaining how the ledger drifted — and the gate read
+ * it as #357 claiming to close FU-32.
+ *
+ * The rule had narrowed from "any mention" to "a closing claim" and still missed a coordinate: WHO
+ * is claiming. A line that names another PR number alongside the claim is describing that PR, not
+ * this one. Narrow, and deliberately so — it does not try to parse attribution in general, only to
+ * recognise the one form that actually occurs here, which is a line that cites a PR by number.
+ */
+const QUOTES_ANOTHER_PR = /(?:PR\s*)?#\d+/;
+
 export function checkClosure(body: string, ledger: string, prNumber: number | undefined): ClosureProblem[] {
-  const claimed = [...new Set([...body.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`))];
+  const claimed = [...new Set(
+    body
+      .split('\n')
+      .flatMap((line) => {
+        const hits = [...line.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`);
+        if (hits.length === 0) return [];
+        // A line citing another PR number is quoting that PR's claim, not making one — unless the
+        // number cited IS this PR.
+        const cited = line.match(new RegExp(QUOTES_ANOTHER_PR, 'g')) ?? [];
+        const citesOther = cited.some((c) => Number(c.replace(/\D/g, '')) !== prNumber);
+        return citesOther ? [] : hits;
+      }),
+  )];
   const problems: ClosureProblem[] = [];
 
   for (const fu of claimed) {
