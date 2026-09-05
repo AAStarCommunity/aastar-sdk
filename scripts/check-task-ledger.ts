@@ -138,10 +138,39 @@ export function findUnverifiableStatuses(file: string, text: string): Unverifiab
     const trailing = /`([A-Z_]+)`\s*$/.exec(rest)?.[1];
     const status = IN_FLIGHT_STATUSES.find((s) => s === trailing);
     if (!status) return;
-    // The header must name the PR it is claiming. Body text does not count: a number buried three
-    // paragraphs down is not what a reader scanning statuses will see, and `T2.1.1` proved it —
-    // its body said `#362` while its header said PR_OPEN, and the two disagreed for hours.
-    if (!/PR ?#\d+/.test(rest)) out.push({ where: `${file}:${i + 1}`, task, status });
+    // The header must name the PR it is claiming. Two things this does NOT accept:
+    //
+    // 1. **Body text.** A number buried three paragraphs down is not what a reader scanning
+    //    statuses sees, and `T2.1.1` proved it: its body said `#362` while its header said
+    //    PR_OPEN, and the two disagreed for hours.
+    // 2. **A PR number inside a code span.** #376 review, and this half is why the fix there was
+    //    only half a fix. Measured on that version:
+    //
+    //        ### T2.2 说明 `PR #123` 这种写法  `PR_OPEN`         → silent, should report
+    //        ### T2.3 见 docs/foo.md 里的 PR #123 例子  `APPROVED` → silent, should report
+    //
+    //    The row names no PR of its own; it merely mentions one, and the gate went quiet.
+    //    **Fail-OPEN**, which is the direction that costs something — the row then sits
+    //    unchecked exactly like the two this function was written to catch.
+    //
+    // Masking alone fixes only case 1 — case 2's number sits in plain prose, where no delimiter
+    // marks it as notation. So the test is not "does a PR number appear anywhere" but "does this
+    // header NAME its PR", and the ledger already has a spelling for that: every row that carries
+    // one writes `(PR #N)` immediately before the status.
+    //
+    //     ### T1.2.1 盘点 CLI/mjs 脚本 → API 的缺口 (PR #361)  `DONE`
+    //     ### T4.1.1 建立 .pilot.yml + docs/agent 规划层 (PR #315)  `DONE`
+    //
+    // Requiring the parenthesised form is stricter than "a number is present", and strictness is
+    // the right direction here for a reason specific to this check: the cost of a false negative
+    // is a row that silently goes unchecked — the exact defect this function exists to catch —
+    // while the cost of a false positive is one edit to a header, on a line whose convention the
+    // rest of the file already follows.
+    //
+    // Masking is still applied, so a header DOCUMENTING the convention (`` `(PR #N)` ``) does not
+    // satisfy it by quoting it. Two independent reasons a row can fail to name its PR, and both
+    // have to be closed or the check is only as strong as whichever a writer happens to trip.
+    if (!/\(PR ?#\d+\)/.test(maskCodeSpans(rest))) out.push({ where: `${file}:${i + 1}`, task, status });
   });
   return out;
 }
