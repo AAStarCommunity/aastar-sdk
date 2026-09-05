@@ -13,15 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          # Full history. `check-branch-task.test.ts` asserts the gate REDS on `tasks.md` as it
-          # stood at 9e538e07 — the commit that merged #377 without recording T1.2.3. Under the
-          # default fetch-depth 1 that object does not exist, `git show` throws, and the two cases
-          # that carry the whole point (the historical red AND its positive control) never run.
+          # Full history. TWO tests assert their gate REDS on a historical tree:
+          #   check-branch-task.test.ts   → tasks.md at 9e538e07 (merged #377, no T1.2.3 row)
+          #   check-progress-sync.test.ts → progress.md at 49679dd9 (the rotted version)
+          # Under the default fetch-depth 1 neither object exists, `git show` throws, and in both
+          # cases the two examples carrying the whole point (the historical red AND its positive
+          # control) never run.
           #
-          # They did not fail quietly: the job went red. But the shape is worth naming — a test
-          # whose evidence lives in repository HISTORY is not hermetic, and the runner's checkout
-          # is part of its fixture. Vendoring a copy of the old file was the alternative; it would
-          # be hermetic and also a copy that no longer proves anything about what shipped.
+          # #380 review put the distinction exactly: pinning the sha fixed "WHICH tree", not
+          # "is the tree here". Two different failures, and the first fix reads like it covers both.
+          #
+          # A test whose evidence lives in repository HISTORY is not hermetic — the runner's
+          # checkout is part of its fixture. Vendoring copies of the old files was the alternative;
+          # it would be hermetic and also copies that no longer prove anything about what shipped.
           fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
@@ -114,16 +118,21 @@ jobs:
 
       # A branch that NAMES a task must have that task in the ledger. T1.2.3 was built, reviewed
       # twice and merged with no row at all — and both gates above were green, correctly: a row
-      # that was never written is in nobody's scope. GITHUB_HEAD_REF because the checkout is
-      # detached on pull_request, so git cannot answer which branch this is.
-      # No `env:` here, and that is the fix rather than an omission. The first version set
-      # `GITHUB_HEAD_REF` explicitly — **`GITHUB_*` is a reserved prefix**, so the whole workflow
-      # became invalid and GitHub created ZERO runs for every sha after it. `gh pr checks` then
-      # says "no checks reported on the branch", which reads like a queue delay, not a broken file.
-      # It was also redundant: Actions already sets GITHUB_HEAD_REF on pull_request events.
+      # that was never written is in nobody's scope.
+      #
+      # No `env:` here, and that is deliberate. The first version set `GITHUB_HEAD_REF` explicitly;
+      # `GITHUB_*` is a reserved prefix and it was also redundant, since Actions already sets that
+      # variable on pull_request events. (It was NOT the cause of the zero-run episode on #379 —
+      # that was a merge conflict, see FU-74. Two separate things, recorded separately.)
       - name: Every task named by the branch is actually written down
         if: github.event_name == 'pull_request'
         run: pnpm run check:branch-task
+
+      # progress.md is read as "what is true right now", and nothing checked it. It sat un-updated
+      # across ~20 merged PRs while every other ledger gate stayed green, correctly: none of them
+      # reads this file.
+      - name: progress.md quotes the same statuses the ledger defines
+        run: pnpm run check:progress-sync
 
       # A hand-written ABI in shipped source must say why. `packages/dapp` shipped a publicly
       # exported method calling `registerValidator(bytes)` — a function on no contract in this repo
@@ -132,6 +141,7 @@ jobs:
       # function existed. Baseline of 8 pre-existing files; it may only shrink.
       - name: Hand-written ABIs in shipped source carry a justification
         run: pnpm run check:hardcoded-abi
+
 
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
