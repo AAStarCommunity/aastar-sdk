@@ -50,14 +50,22 @@ const HEX = (n: string) => `0x${n.repeat(64).slice(0, 64)}`;
  * line**, so a run that fails on machine load reads exactly like the scanner having a hole. #339 lost
  * time to precisely that, and the rule was written down then while the code was left at the default.
  *
- * The number is measured, not guessed. On this machine, unloaded:
+ * Note what was already here: ONE test carried `{timeout: 30_000}` — the one that had already hurt.
+ * So the state this replaces was not "nobody did it", it was **local painkiller on the case that
+ * hurt, while the generalisation went into the docs and never came back for its siblings**. That is
+ * the sharper statement, and the one FU-47 records.
  *
- *   slowest test (veto-distance, 12 spawns)   9.6s   ← already carried its own {timeout: 30_000}
+ * The number is measured, not guessed:
+ *
+ *   slowest test (veto-distance, 12 spawns)   9.6s   ← the one that already carried its own timeout
  *   second slowest (every-term-is-a-veto)     3.2s   ← 64% of the 5s default, with nothing to spare
- *   the remaining twelve                    ~0.8s each
+ *   the remaining twelve                    ~0.8s each locally
  *
- * 30s gives the 3.2s case ~9x headroom and the 9.6s case ~3x. Deliberately generous: the cost of a
- * too-high timeout is a slow failure, the cost of a too-low one is a failure that lies about why.
+ * And local margins UNDERSTATE the risk. The first test pays the `npx tsx` cold start: 892ms here,
+ * **6607ms on CI — 7.4x**. It is the one that actually went red on CI, and it is the reason the
+ * number is not 10s. 30s gives the 3.2s case ~9x and the 9.6s case ~3x. Deliberately generous: the
+ * cost of a too-high timeout is a slow failure, the cost of a too-low one is a failure that lies
+ * about why.
  */
 const SPAWN_TIMEOUT_MS = 30_000;
 
