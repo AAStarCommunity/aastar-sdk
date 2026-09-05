@@ -293,10 +293,36 @@ jobs:
   # scripts/repcredit/abi-drift-provenance.test.ts builds REAL git repos and runs THIS script
   # against them, including a clean-and-pinned baseline that passes strict. The `ref` literal
   # below is bound to scripts/upstream-abi-pin.json by unit tests, so the two cannot drift apart
-  # unnoticed. What has NOT been executed is this job: no `forge build` of 03713feb and no
-  # GitHub-hosted run has been performed in this round, so its first run may still need fixing
-  # (toolchain versions, submodule paths, build time). Treat a red first run as this job being
-  # wrong, not as the pin being unattributable — and do not read this comment as a measurement.
+  # unnoticed.
+  #
+  # This paragraph used to end with a status note that is no longer true. Replacing it took three
+  # separate diagnoses, because THREE DIFFERENT THINGS WERE WRONG IN THREE DIFFERENT WAYS, and
+  # each needs a different fix. Blaming both sentences to e4439dda (#329, 2026-09-04) — the very
+  # commit that introduced this job:
+  #
+  #   1. "no `forge build` of 03713feb"  →  WRONG WHEN WRITTEN, not stale. The SAME commit set
+  #      the pin to `d651646aee98e8b22c8abe5af079bd4bb0a35728` (upstream-abi-pin.json, and the
+  #      `ref` below). The sentence named the revision the commit was moving OFF. Fix = correct
+  #      the fact.
+  #
+  #   2. "no GitHub-hosted run has been performed in this round"  →  TRUE WHEN WRITTEN, then went
+  #      stale. The job was being introduced right there, so it genuinely had never run. Measured
+  #      2026-09-05, the five most recent CI runs that reached it (`main`, `chore/followups-*`,
+  #      `feat/T1.2.1-*`, `feat/T2.1.1-*`): 5/5 `success`, ~3m36s–4m21s each, including on `main`.
+  #      Fix = re-measure, and date the measurement.
+  #
+  #   3. "Treat a red first run as this job being wrong, not as the pin being unattributable"  →
+  #      SOUND ADVICE WHOSE PREMISE EXPIRED. It followed correctly from (2) while (2) held. Now
+  #      the job has a green track record, so a red here is more likely a real finding, and this
+  #      sentence would send the next person to debug the runner while the gate is busy reporting
+  #      an actual drift. Fix = re-derive the conclusion, not just the fact.
+  #
+  # (3) is the one worth remembering: a correct instruction does not announce itself when its
+  # premise expires. Nothing here changed, nothing failed, and the advice quietly inverted.
+  #
+  # CURRENT READING: treat a red as a finding first. Suspect the job only after the gate's own
+  # inventory line shows it compared nothing. And when you touch this, re-measure or delete the
+  # numbers — an undated measurement is exactly what went stale above.
   #
   # WHEN B2 CLOSES this literal and the pin file move together, in the same commit as the
   # re-vendored ABIs — see docs/RELEASE-CHECKLIST.md and the CHANGELOG's B2 sequence.
