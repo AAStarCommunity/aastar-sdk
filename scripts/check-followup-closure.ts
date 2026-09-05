@@ -74,32 +74,46 @@ const NOT_CLOSING = (fu: string) =>
  * ask whether the entry is closed at all, which a stale `done=PR#<something else>` would satisfy.
  */
 /**
- * Lines that QUOTE someone else's closing claim rather than making one.
+ * Is this claim being QUOTED rather than made?
  *
- * Found by running this gate against its own PR: the body of #357 says «#356 正文「Closes FU-32」»
- * — reporting what another PR claimed, while explaining how the ledger drifted — and the gate read
- * it as #357 claiming to close FU-32.
+ * The first attempt at this used "does the line cite another PR number" as the signal, and it was
+ * wrong in both directions — review measured all four:
  *
- * The rule had narrowed from "any mention" to "a closing claim" and still missed a coordinate: WHO
- * is claiming. A line that names another PR number alongside the claim is describing that PR, not
- * this one. Narrow, and deliberately so — it does not try to parse attribution in general, only to
- * recognise the one form that actually occurs here, which is a line that cites a PR by number.
+ *   "Closes FU-99 (found in review of #350)"   dropped, and it IS a claim
+ *   "Closes FU-40 · src=PR#341"                dropped — and `src=PR#N` is this ledger's own
+ *                                              standard notation, so the gate would go silent on an
+ *                                              entirely ordinary line
+ *   «评审说「Closes FU-99」,我不同意»            reported, and it is NOT a claim
+ *   "> Closes FU-99"                           reported — and a leading `>` is how markdown quotes,
+ *                                              which every review message in this repo uses
+ *
+ * The general shape of the mistake: having found the right COORDINATE (who is claiming), I measured
+ * it with a correlated but different quantity (does the line name another PR). A correlated quantity
+ * gives the right answer on most samples, which is exactly why it survives inspection.
+ *
+ * So attribution is judged by the syntax of quotation: a blockquote line, or the claim enclosed in
+ * 「」/""/backticks. Everything else is a claim, including one that mentions where it came from.
  */
-const QUOTES_ANOTHER_PR = /(?:PR\s*)?#\d+/;
+function isQuoted(line: string, claimIndex: number): boolean {
+  if (/^\s*>/.test(line)) return true;
+  // Enclosure: look for an opening quote mark before the claim and a closing one after it, on the
+  // same line. Deliberately literal — this is not trying to parse markdown, only to recognise the
+  // handful of forms that actually appear.
+  const before = line.slice(0, claimIndex);
+  const after = line.slice(claimIndex);
+  const pairs: [string, string][] = [['「', '」'], ['"', '"'], ['`', '`'], ['“', '”'], ["'", "'"]];
+  return pairs.some(([open, close]) => before.includes(open) && after.includes(close));
+}
 
 export function checkClosure(body: string, ledger: string, prNumber: number | undefined): ClosureProblem[] {
   const claimed = [...new Set(
     body
       .split('\n')
-      .flatMap((line) => {
-        const hits = [...line.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`);
-        if (hits.length === 0) return [];
-        // A line citing another PR number is quoting that PR's claim, not making one — unless the
-        // number cited IS this PR.
-        const cited = line.match(new RegExp(QUOTES_ANOTHER_PR, 'g')) ?? [];
-        const citesOther = cited.some((c) => Number(c.replace(/\D/g, '')) !== prNumber);
-        return citesOther ? [] : hits;
-      }),
+      .flatMap((line) =>
+        [...line.matchAll(CLOSES_CLAIM)]
+          .filter((m) => !isQuoted(line, m.index ?? 0))
+          .map((m) => `FU-${m[1]}`),
+      ),
   )];
   const problems: ClosureProblem[] = [];
 

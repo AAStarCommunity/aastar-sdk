@@ -108,26 +108,41 @@ describe('the real ledger', () => {
   });
 });
 
-describe('who is claiming (found by running the gate on its own PR)', () => {
-  it('quoting ANOTHER PR\'s closing claim is not a claim by this one', () => {
-    // The gate reported two problems against its own PR: that body says «#356 正文「Closes FU-32」»
-    // — reporting what another PR claimed, while explaining how the ledger drifted — and the rule
-    // read it as this PR claiming to close FU-32.
-    //
-    // It had already narrowed from "any mention" to "a closing claim" and STILL missed a coordinate:
-    // who is claiming. Two narrowings, both found the same way — by running it on real text.
-    const ledger = [doneBy(32, 356)].join('\n');
-    expect(checkClosure('#356 正文写「Closes FU-32」而账本未标记。', ledger, 357)).toEqual([]);
-    expect(checkClosure('PR #356 said "Closes FU-32" and the ledger did not agree.', ledger, 357)).toEqual([]);
+describe('who is claiming — judged by quotation syntax, not by PR numbers', () => {
+  // Two rounds of narrowing, both found by running on real text. The second narrowing used "does the
+  // line cite another PR number" as the signal for "someone else is claiming" — a correlated but
+  // DIFFERENT quantity, wrong in both directions. All four cases below were measured in review.
+  //
+  // The lesson generalises past this file: having found the right coordinate, ask whether the thing
+  // measuring it IS that coordinate. A correlated quantity is right on most samples, which is
+  // exactly why it survives inspection.
+  const ledger = [open(99)].join('\n');
+
+  it('CONTROL: a plain claim is reported', () => {
+    // Without this the four cases below cannot be told from a check that reports nothing at all.
+    expect(checkClosure('Closes FU-99', ledger, 357)).toHaveLength(1);
   });
 
-  it('…but citing THIS PR alongside the claim is still a claim', () => {
-    // Otherwise "Closes FU-9 (see #357)" would be a way through, and the escape hatch would be an
-    // accident of phrasing rather than a decision.
-    expect(checkClosure('Closes FU-9 — see #357 for the reasoning.', [open(9)].join('\n'), 357)).toHaveLength(1);
+  it.each([
+    ['citing where it came from', 'Closes FU-99 (found in review of #350)'],
+    ['the ledger\'s own src= notation', 'Closes FU-99 · src=PR#341'],
+  ])('%s is still a claim', (_label, body) => {
+    // The miss direction. `src=PR#N` is this ledger's standard notation, so the old rule went silent
+    // on an entirely ordinary line — a gate that fails quietly on house style is worse than none.
+    expect(checkClosure(body, ledger, 357)).toHaveLength(1);
   });
 
-  it('a plain claim with no PR cited is unaffected', () => {
-    expect(checkClosure('Closes FU-9.', [open(9)].join('\n'), 357)).toHaveLength(1);
+  it.each([
+    ['enclosed in 「」', '评审说「Closes FU-99」，我不同意'],
+    ['a markdown blockquote', '> Closes FU-99'],
+    ['enclosed in backticks', 'the body said `Closes FU-99` and the ledger disagreed'],
+  ])('%s is a quotation, not a claim', (_label, body) => {
+    // The false-positive direction. A leading `>` is how markdown quotes, and every review message
+    // in this repo uses it — this gate would have fired on the next PR that quoted a review.
+    expect(checkClosure(body, ledger, 357)).toEqual([]);
+  });
+
+  it('a claim that cites THIS PR is still a claim', () => {
+    expect(checkClosure('Closes FU-99 — see #357 for the reasoning.', ledger, 357)).toHaveLength(1);
   });
 });
