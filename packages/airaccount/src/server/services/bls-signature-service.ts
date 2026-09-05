@@ -650,7 +650,18 @@ export class BLSSignatureService {
         // Node unreachable / rejected / answered incoherently — continue with the others, but keep
         // the reason. Swallowing it costs nothing while a quorum forms and costs everything when one
         // does not.
-        nodeFailures.push(`${node.apiEndpoint}: ${(err as Error)?.message ?? String(err)}`.slice(0, 300));
+        // Host, not the full URL. #350 established this for the cross-check client's source labels
+        // and the reasoning transfers unchanged: these strings end up in error messages and CI logs,
+        // and the PATH of a service URL is a routine hiding place for credentials. Today's DVT
+        // endpoints carry none — checked — but the rule was never predicated on today's endpoints.
+        const host = (() => {
+          try {
+            return new URL(node.apiEndpoint).host;
+          } catch {
+            return node.apiEndpoint;
+          }
+        })();
+        nodeFailures.push(`${host}: ${(err as Error)?.message ?? String(err)}`.slice(0, 300));
       }
     }
 

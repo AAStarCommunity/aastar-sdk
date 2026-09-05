@@ -101,6 +101,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:task-ledger
 
+      # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
+      # Two entries drifted in one night without either being a lapse of care — both had a moment
+      # where the bookkeeping COULD be deferred, and a deferrable step gets deferred. See FU-43.
+      - name: Follow-ups a PR claims to close must be closed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: pnpm run check:followup-closure
+
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
       # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the

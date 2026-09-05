@@ -373,8 +373,8 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     expect(err.message).toContain("2 attempted");
     expect(err.message, "the unreachable node's reason").toContain("ECONNREFUSED");
     expect(err.message, "the incoherent node's reason").toMatch(/not a 32-byte hex value/);
-    expect(err.message, "and which endpoint each came from").toContain(NODES[0].apiEndpoint);
-    expect(err.message).toContain(NODES[1].apiEndpoint);
+    expect(err.message, "and which endpoint each came from").toContain(new URL(NODES[0].apiEndpoint).host);
+    expect(err.message).toContain(new URL(NODES[1].apiEndpoint).host);
   });
 
   it("a round that SUCCEEDS carries no failure noise", async () => {
@@ -386,6 +386,27 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
       .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
     const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
     expect(out.nodeIds).toEqual([N1, N2]);
+  });
+
+
+  it("the failure list logs the HOST, never the path (#350's rule)", async () => {
+    // A separate case with a PATH-BEARING endpoint, because the ordinary fixtures cannot tell the two
+    // implementations apart: `https://dvt1.example` has no path, so "host" and "full URL" are the
+    // same string and a mutation back to the full URL stays green — measured.
+    //
+    // The rule comes from #350 and the reasoning transfers unchanged: this text goes into error
+    // messages and CI logs, and the PATH of a service URL is a routine hiding place for credentials.
+    // Today's DVT endpoints carry none; the rule was never predicated on today's endpoints.
+    const withSecret = [{ apiEndpoint: "https://dvt-gw.example/v2/SUPER_SECRET_KEY" }];
+    mockPost.mockReset();
+    mockPost.mockRejectedValueOnce(new Error("connect ECONNREFUSED"));
+
+    const err = await (makeService() as any)
+      ._coordinateBlsAggregate(withSecret, "0x" + "cd".repeat(32), DVT_REQ)
+      .then(() => null, (e: Error) => e);
+
+    expect(err.message).toContain("dvt-gw.example");
+    expect(err.message, "the credential-bearing path must not reach the log").not.toContain("SUPER_SECRET_KEY");
   });
 
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {
