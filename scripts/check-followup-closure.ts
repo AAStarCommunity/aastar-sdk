@@ -157,15 +157,34 @@ function isQuoted(line: string, claimIndex: number): boolean {
   return pairs.some(([open, close]) => before.includes(open) && after.includes(close));
 }
 
-export function checkClosure(
-  body: string,
-  ledger: string,
-  prNumber: number | undefined,
-  /** States of PRs cited by a RECORDS claim, so "closed by #M" can be held to #M actually merging. */
-  citedPrStates: ReadonlyMap<number, 'MERGED' | 'OPEN' | 'CLOSED' | 'MISSING'> = new Map(),
-): ClosureProblem[] {
-  const records = extractRecords(body);
-  const claimed = [...new Set(
+/**
+ * The follow-ups this PR body CLAIMS to close, with quoted occurrences removed.
+ *
+ * ## Why this is a function and not two copies of four lines
+ *
+ * It WAS two copies, and they disagreed. `checkClosure` filtered through {@link isQuoted}; the
+ * summary line printed by the runner re-derived the same list straight from `body.matchAll` and did
+ * not. Measured on PR #375, whose body quotes `` `Closes FU-65` `` while describing having deleted
+ * that very line:
+ *
+ * ```
+ * check-followup-closure: of those, 1 are CLAIMED closed by this PR: FU-65      ← unfiltered
+ * check-followup-closure: ✅ every follow-up this PR CLAIMS to close is closed  ← filtered: 0
+ * ```
+ *
+ * **Both lines are printed, one above the other, and a reader takes the second as a verdict on the
+ * first.** It is not: the ✅ is a statement about the empty set, while the number above it came from
+ * a different computation. FU-63 recorded the plain version of this (zero claims, green verdict);
+ * this is the disguised version, and it is worse — there the reader could see nothing was checked,
+ * here the summary actively supplies a subject the verdict never had.
+ *
+ * The general rule, which is the reason to fix it structurally rather than to patch the caller: **a
+ * quantity a gate REPORTS and a quantity a gate CHECKS must be the same computation, not two
+ * computations that agree today.** Two definitions in one file drift silently, because nothing
+ * compares them — exactly the argument this repo's task ledger makes about two hand-written ledgers.
+ */
+export function extractClosingClaims(body: string): string[] {
+  return [...new Set(
     body
       .split('\n')
       .flatMap((line) =>
@@ -174,6 +193,17 @@ export function checkClosure(
           .map((m) => `FU-${m[1]}`),
       ),
   )];
+}
+
+export function checkClosure(
+  body: string,
+  ledger: string,
+  prNumber: number | undefined,
+  /** States of PRs cited by a RECORDS claim, so "closed by #M" can be held to #M actually merging. */
+  citedPrStates: ReadonlyMap<number, 'MERGED' | 'OPEN' | 'CLOSED' | 'MISSING'> = new Map(),
+): ClosureProblem[] {
+  const records = extractRecords(body);
+  const claimed = extractClosingClaims(body);
   const problems: ClosureProblem[] = [];
 
   // A RECORDS claim is checked on its own terms: the ledger must credit the PR named, and that PR
@@ -279,7 +309,9 @@ if (process.argv[1]?.endsWith('check-followup-closure.ts')) {
   // The mention list is still printed, because it is the input a reader needs to judge the verdict:
   // a PR may mention ten follow-ups and claim to close one, and only the second number is checked.
   console.log(`check-followup-closure: PR #${number} mentions ${mentioned.length} follow-up(s): ${mentioned.join(', ') || '(none)'}`);
-  const claims = [...new Set([...body.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`))];
+  // The SAME call `checkClosure` makes. Re-deriving it here is how the printed number and the
+  // verified number came apart — see extractClosingClaims.
+  const claims = extractClosingClaims(body);
   const recs = extractRecords(body);
   console.log(`check-followup-closure: of those, ${claims.length} are CLAIMED closed by this PR: ${claims.join(', ') || '(none)'}`);
   console.log(`check-followup-closure: and ${recs.length} are RECORDED as closed by another PR: ${recs.map((r) => `${r.fu}←#${r.by}`).join(', ') || '(none)'}`);

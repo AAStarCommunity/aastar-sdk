@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { checkClosure, extractRecords } from './check-followup-closure.js';
+import { checkClosure, extractClosingClaims, extractRecords } from './check-followup-closure.js';
 
 const open = (n: number) => `- [ ] FU-${n} · B · src=x · 2026-09-05 · text`;
 const doneBy = (n: number, pr: number) => `- [x] FU-${n} · B · src=x · 2026-09-05 · text · done=PR#${pr}`;
@@ -204,5 +204,58 @@ describe('the third kind of statement: recording someone else\'s closure', () =>
     // closest, constructed because the real corpus could not distinguish a working pattern from one
     // that matches nothing.
     expect(extractRecords(text)).toEqual([]);
+  });
+});
+
+describe('FU-67 — the number printed and the number checked must be one computation', () => {
+  // #375 review found the symptom; the cause turned out to be sharper than "a missing filter".
+  // This file computed "the follow-ups this PR claims to close" TWICE — once inside `checkClosure`
+  // (through `isQuoted`) and once in the runner's summary line (straight from `matchAll`). They
+  // disagreed on #375, whose body quotes `Closes FU-65` while describing having deleted that line:
+  //
+  //     of those, 1 are CLAIMED closed by this PR: FU-65     ← unfiltered
+  //     ✅ every follow-up this PR CLAIMS to close is closed  ← filtered: zero
+  //
+  // Printed one above the other, a reader takes the ✅ as a verdict on the 1. It is a verdict on
+  // the empty set. FU-63 is the plain version (zero claims, green); this is the disguised version,
+  // where the summary supplies a subject the verdict never had.
+
+  it('a claim inside backticks is not a claim', () => {
+    expect(extractClosingClaims('有一句 `Closes FU-65 的记录`，已删')).toEqual([]);
+  });
+
+  it('POSITIVE CONTROL: an unquoted claim on the same shape IS one', () => {
+    // Without this, a function that returned [] for everything would satisfy the case above — and
+    // "the gate reports nothing" is the failure being fixed, not the fix.
+    expect(extractClosingClaims('Closes FU-65')).toEqual(['FU-65']);
+  });
+
+  it('one line carrying both keeps only the real one', () => {
+    // The discriminating case: a per-line filter that gave up on lines containing any backtick
+    // would drop FU-12 too, and would still pass both cases above.
+    expect(extractClosingClaims('Closes FU-12 而 `Closes FU-65` 是引用')).toEqual(['FU-12']);
+  });
+
+  it('a blockquote is not a claim either — every review message in this repo is one', () => {
+    expect(extractClosingClaims('> Closes FU-65')).toEqual([]);
+  });
+
+  it('THE STRUCTURAL PROPERTY: checkClosure examines exactly what the summary reports', () => {
+    // The regression that matters is not any single body — it is the two computations drifting
+    // apart again. So this asserts they AGREE, on a body built to make them disagree if they are
+    // ever re-derived separately: one real claim, one quoted, one in a blockquote.
+    const body = [
+      'Closes FU-12',
+      'and `Closes FU-65` was deleted',
+      '> Closes FU-99 (quoting the reviewer)',
+    ].join('\n');
+    const reported = extractClosingClaims(body);
+    expect(reported).toEqual(['FU-12']);
+
+    // `checkClosure` must complain about FU-12 and about NOTHING else: any problem naming FU-65 or
+    // FU-99 would mean it is looking at a different set than the one reported above.
+    const ledger = '- [ ] FU-12 · A · src=x · 2026-09-05 · open\n';
+    const problems = checkClosure(body, ledger, 999);
+    expect(problems.map((p) => p.fu)).toEqual(['FU-12']);
   });
 });

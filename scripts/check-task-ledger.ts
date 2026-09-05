@@ -91,6 +91,61 @@ const DONE_MARKERS = /`DONE`|\bDONE\b|已合并|已合|^- \[x\]/;
 function maskCodeSpans(line: string): string {
     return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
 }
+/**
+ * Task statuses that ASSERT a pull request exists and is in flight.
+ *
+ * `DONE` is deliberately absent. A task can be done without a PR (a decision, a measurement, work
+ * folded into someone else's branch), so demanding a number there would fire on legitimate entries —
+ * and a gate that fires on legitimate entries gets switched off. These three cannot: each names a
+ * point in a PR's life, so a task wearing one is claiming a PR exists.
+ */
+const IN_FLIGHT_STATUSES = ['PR_OPEN', 'APPROVED', 'CHANGES_REQUESTED'] as const;
+
+export interface UnverifiableStatus {
+  where: string;
+  task: string;
+  status: string;
+}
+
+/**
+ * Find task headers that claim an in-flight PR without naming one.
+ *
+ * ## Why this is a SEPARATE pass rather than another rule inside `extractClaims`
+ *
+ * `extractClaims` can only reason about claims it can see, and a claim with no PR number produces no
+ * claim at all. So the two tasks that actually went stale — `T1.1.2` and `T2.1.1`, both reading
+ * `PR_OPEN` for hours after their PRs merged — were not "checked and passed". **They were never
+ * looked at**, and the run printed `✅ every PR claim agrees with GitHub` while they sat there.
+ *
+ * That is the same shape #374 recorded as FU-63 one day earlier, in a different file: a gate whose
+ * scope is defined by what it can parse will always report success on the rows it cannot parse, and
+ * the sentence it prints ("every claim agrees") stays literally true. **The rows that go stale are
+ * disproportionately the unparseable ones, because nothing was pulling them back into line.**
+ *
+ * So this does not check a status against GitHub — `reconcile` does that, and does it well once a
+ * number is present. It checks that the question is ASKABLE.
+ */
+export function findUnverifiableStatuses(file: string, text: string): UnverifiableStatus[] {
+  const out: UnverifiableStatus[] = [];
+  text.split('\n').forEach((line, i) => {
+    const header = /^#{2,4}\s+(T[0-9.]+)\b(.*)$/.exec(line);
+    if (!header) return;
+    const [, task, rest] = header;
+    // The status is the LAST code span on the line, not any occurrence of a status word. A header
+    // that MENTIONS a status while carrying another — `### T9 讲 `PR_OPEN` 的用法  `DONE`` — would
+    // otherwise be read as PR_OPEN and reported, which is the same mention-vs-use confusion FU-56
+    // recorded for the claim regex. Found in self-review, before it had a chance to fire.
+    const trailing = /`([A-Z_]+)`\s*$/.exec(rest)?.[1];
+    const status = IN_FLIGHT_STATUSES.find((s) => s === trailing);
+    if (!status) return;
+    // The header must name the PR it is claiming. Body text does not count: a number buried three
+    // paragraphs down is not what a reader scanning statuses will see, and `T2.1.1` proved it —
+    // its body said `#362` while its header said PR_OPEN, and the two disagreed for hours.
+    if (!/PR ?#\d+/.test(rest)) out.push({ where: `${file}:${i + 1}`, task, status });
+  });
+  return out;
+}
+
 export function extractClaims(file: string, text: string): Claim[] {
   const claims: Claim[] = [];
   text.split('\n').forEach((line, i) => {
@@ -272,6 +327,23 @@ if (process.argv[1]?.endsWith('check-task-ledger.ts')) {
   // Printed before any verdict: a run that found no claims and a run that found no problems produce
   // the same "OK" otherwise, and this repo has been bitten by that shape repeatedly.
   console.log(`check-task-ledger: ${claims.length} claims over ${prs.length} PRs in ${files.length} file(s)`);
+
+  // Runs BEFORE the GitHub pass, and reddens on its own: an unverifiable status is not a
+  // disagreement with GitHub, it is a row GitHub was never asked about. Reporting it under the same
+  // verdict line would let "every claim agrees" keep covering for it.
+  const unverifiable = files.flatMap((f) => findUnverifiableStatuses(f, readFileSync(f, 'utf8')));
+  console.log(`check-task-ledger: ${unverifiable.length} status(es) claim an in-flight PR without naming one`);
+  if (unverifiable.length) {
+    for (const u of unverifiable) {
+      console.error(`  ❌ ${u.where}: ${u.task} is \`${u.status}\` but names no PR — nothing can check it`);
+    }
+    console.error(
+      '\ncheck-task-ledger: a status naming no PR is not checked and not reported; it just sits there.\n' +
+        'Put `(PR #N)` in the header, or move the task to a status that does not assert a live PR.',
+    );
+    process.exit(1);
+  }
+
   if (claims.length === 0) {
     console.error('check-task-ledger: parsed 0 claims. The reference format changed, or the docs are gone.');
     process.exit(1);
