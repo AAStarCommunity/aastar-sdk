@@ -43,7 +43,33 @@ function flags(content: string): boolean {
 
 const HEX = (n: string) => `0x${n.repeat(64).slice(0, 64)}`;
 
-describe('secrets are still caught (the exemption is narrow)', () => {
+/**
+ * FU-30's code half. Every test here `execFileSync`s `npx tsx` at least once, and vitest's default
+ * timeout is 5s — so these tests can fail for a reason that has nothing to do with what they assert.
+ * That matters more than usual here: **a timeout red and an assertion red are the same `× test name`
+ * line**, so a run that fails on machine load reads exactly like the scanner having a hole. #339 lost
+ * time to precisely that, and the rule was written down then while the code was left at the default.
+ *
+ * Note what was already here: ONE test carried `{timeout: 30_000}` — the one that had already hurt.
+ * So the state this replaces was not "nobody did it", it was **local painkiller on the case that
+ * hurt, while the generalisation went into the docs and never came back for its siblings**. That is
+ * the sharper statement, and the one FU-47 records.
+ *
+ * The number is measured, not guessed:
+ *
+ *   slowest test (veto-distance, 12 spawns)   9.6s   ← the one that already carried its own timeout
+ *   second slowest (every-term-is-a-veto)     3.2s   ← 64% of the 5s default, with nothing to spare
+ *   the remaining twelve                    ~0.8s each locally
+ *
+ * And local margins UNDERSTATE the risk. The first test pays the `npx tsx` cold start: 892ms here,
+ * **6607ms on CI — 7.4x**. It is the one that actually went red on CI, and it is the reason the
+ * number is not 10s. 30s gives the 3.2s case ~9x and the 9.6s case ~3x. Deliberately generous: the
+ * cost of a too-high timeout is a slow failure, the cost of a too-low one is a failure that lies
+ * about why.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('secrets are still caught (the exemption is narrow)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   // Each of these carries a public-data marker AND a secret word. The veto must win — otherwise
   // the FU-4 narrowing is a hole rather than a filter.
   it('privateKeyX — a coordinate-looking name on an actual private key', () => {
@@ -122,7 +148,7 @@ describe('secrets are still caught (the exemption is narrow)', () => {
   });
 });
 
-describe('public-by-definition data no longer blocks (the six real false positives)', () => {
+describe('public-by-definition data no longer blocks (the six real false positives)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   // Transcribed from the lines that were actually flagging, so this file fails if the exemption
   // regresses rather than merely if some invented example stops matching.
   it('keyX / keyY coordinates', () => {
