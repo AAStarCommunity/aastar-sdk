@@ -29,6 +29,18 @@
  * form a machine can read — and, importantly, it says so out loud when it runs, because "0 pairs
  * checked" and "all pairs agree" are the same green otherwise.
  *
+ * ## The limit, stated because it is easy to overclaim here — and I did
+ *
+ * **This gate would NOT have caught the retracted sentence.** #380 review measured it: the prose at
+ * progress.md L25-26 that #375 had withdrawn parses to ZERO claims, because it is a paragraph about
+ * an address, not a task id next to a status. It is out of scope, and no reasonable widening brings
+ * it in — "did a prose assertion get retracted elsewhere" is not a mechanical question.
+ *
+ * What the rewrite of progress.md fixed and what this gate prevents are **two different things**,
+ * and the first framing of this file blurred them. The gate catches STATUS drift, which is the part
+ * that recurs. The retracted sentence was caught by a human reading the file, and next time it will
+ * have to be caught the same way.
+ *
  * Usage:  pnpm exec tsx scripts/check-progress-sync.ts [--progress <f>] [--tasks <f>]
  * Exit 0 when every quoted status matches; 1 otherwise.
  */
@@ -44,16 +56,24 @@ export interface StatusPair {
     line: number;
 }
 
-/**
- * Blank out backtick-quoted spans, length-preserving.
+/*
+ * NOTE — there is deliberately NO `maskCodeSpans` here, and that is worth a paragraph because the
+ * first version had one.
  *
- * Not applied to the status itself — the status IS a code span, that is how it is written. This is
- * for the file's own prose about the rule: the header of `progress.md` documents the very pattern
- * this scans for, and without masking that documentation would parse as a claim. Third time this
- * exact confusion has cost something here (FU-56 #2, FU-68), so it is installed up front rather
- * than after it fires.
+ * It was defined with a comment explaining why it was needed... and never called. #380 review found
+ * it, and also measured what wiring it up would have done: **the gate would go from 3 claims to 0**.
+ * Of course it would — the status IS a code span, that is how it is written. Masking code spans in
+ * this file blanks out the very thing being checked.
+ *
+ * So this is not "dead code that happened to be harmless". It is dead code whose comment described
+ * a change that would have silently disabled the check. **The second such case in this one file**:
+ * the placeholder-masking line was the first, removed in the same PR after mutation showed it could
+ * not fail. Both were written by reasoning about what the file "should" need rather than about what
+ * its inputs actually look like.
+ *
+ * What protects the file's own documentation from parsing as a claim is the id pattern instead:
+ * `T<x.y.z>` contains no digits. That mechanism is pinned by a test.
  */
-const maskCodeSpans = (line: string) => line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
 
 /**
  * Claims of the form `T1.2.1 \`DONE\`` — a task id, then a backticked all-caps status, close by.

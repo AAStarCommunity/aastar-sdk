@@ -12,6 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history. `check-progress-sync.test.ts` asserts the gate REDS on progress.md as it
+          # stood at 49679dd9 — the rotted version that shipped. Under the default fetch-depth 1
+          # that object does not exist and the two cases carrying the whole point never run.
+          #
+          # #380 review put it exactly: pinning the sha fixed "WHICH tree", not "is the tree here".
+          # Two different failures, and the first fix reads like it covers both.
+          #
+          # (#379 adds the identical line for its own history test. Whichever merges first, the
+          # other's copy is a trivial conflict — both orders end correct.)
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
         with:
