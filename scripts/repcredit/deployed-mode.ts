@@ -135,27 +135,61 @@ export interface StackReadings {
     nodeCount: number;
 }
 
-/** DSR's ④, as a pure predicate over readings. */
-export function checkStackInvariants(r: StackReadings): Check[] {
+/**
+ * DSR's ④, as a pure predicate over readings.
+ *
+ * ## Where each expectation comes from, and why that had to change
+ *
+ * The first version of this function hard-coded `2n` and `'BLSAggregator-4.11.0'`. #387 review
+ * pointed out what that means, and it is worse than untidy: **this whole mode exists because the
+ * `sepolia` mode hard-codes its expectations** (3n, factory 0.31.0) and therefore silently describes
+ * a stack that no longer exists. Writing the same two constants into the new mode reproduces the
+ * defect one version later — the next re-deploy would need a fifth mode.
+ *
+ * Both values are already in the pin (`aggregator.defaultThreshold`, `aggregator.version`), and the
+ * rest of this file's on-chain checks read their expectations from there. So does this now.
+ *
+ * **`nodeCount` is deliberately NOT taken from the pin, because it is not in it and should not be.**
+ * N is a property of THIS RUN — how many nodes the runner drove — and the pin describes contracts.
+ *
+ * That leaves the question of what to compare it against, and the obvious answer is wrong. Passing
+ * the runner's own `nodeCount` as the expectation makes this `x === x`: green on every input,
+ * including the ones it exists to reject. (I wrote exactly that for a moment while making the two
+ * fixes above — removing one hard-coded constant is not the same as replacing it with a *check*.)
+ *
+ * So the expectation is the **active validator count read from chain**, and this check earns its
+ * keep by relating two independent numbers: how many nodes the run drives, and how many slots the
+ * aggregator actually has filled. `3 === 3` from two sources is a fact; from one it is a tautology.
+ */
+export function checkStackInvariants(
+    r: StackReadings,
+    /** From the pin — `aggregator.defaultThreshold` and `aggregator.version`. */
+    expected: { defaultThreshold: number; version: string },
+    /**
+     * The active validator count READ FROM CHAIN — not the runner's own node count, which would
+     * make the third check compare a number to itself. See the note above.
+     */
+    onChainActiveCount: number,
+): Check[] {
     return [
         {
             name: 'deployed:defaultThreshold',
-            ok: r.defaultThreshold === 2n,
+            ok: r.defaultThreshold === BigInt(expected.defaultThreshold),
             // Read from Registry.blsAggregator().defaultThreshold(), the same route the reputation
             // path takes — so the paper's m is this number, not the deploy script's 3.
-            detail: `defaultThreshold ${r.defaultThreshold}; frozen stack expects 2 (fresh-deploy sets 3)`,
+            detail: `defaultThreshold ${r.defaultThreshold}; pin expects ${expected.defaultThreshold} (fresh-deploy sets 3)`,
         },
         {
             name: 'deployed:aggregatorVersion',
-            ok: r.aggregatorVersion === 'BLSAggregator-4.11.0',
+            ok: r.aggregatorVersion === expected.version,
             // `version()`, lowercase. `VERSION()` is on no deployed BLSAggregator — asking for it
             // returns a revert that reads as a fact about the contract instead of about the question.
-            detail: `version() "${r.aggregatorVersion}"; expects "BLSAggregator-4.11.0"`,
+            detail: `version() "${r.aggregatorVersion}"; pin expects "${expected.version}"`,
         },
         {
             name: 'deployed:nodeCount',
-            ok: r.nodeCount === 3,
-            detail: `N=${r.nodeCount}; the frozen stack is N=3 only (local mode may vary)`,
+            ok: r.nodeCount === onChainActiveCount,
+            detail: `run drives N=${r.nodeCount}; chain has ${onChainActiveCount} active validator slot(s)`,
         },
     ];
 }
@@ -355,4 +389,181 @@ export function checkFunderRole(
         });
     }
     return out;
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * The reads. Everything above is a pure predicate; these three are the I/O that
+ * feeds them, and they live here rather than in the runner for one reason: the
+ * runner passed EMPTY LISTS to `checkFunderRole` and the checks above were
+ * therefore never exercised against a real registry.
+ *
+ * #387 review measured what that cost. With `{ guardianSlots: [], committee: [] }`
+ * the two `operator-list-nonempty` checks fail, ③ throws on `failed.length`, and
+ * the ④ boundary error underneath it — the one that states the open question —
+ * **is unreachable on every run**. Two exported, unit-tested functions
+ * (`checkValidatorRoster`, `checkAccountRouting`) were likewise never called by
+ * the runner at all.
+ *
+ * > A pure function with a passing unit test and no caller is not a delivered
+ * > check. It is a check-shaped object, and it reads identically in a diff.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Minimal shape of the viem public client these reads need. */
+type Reader = {
+    readContract: (args: {
+        address: Address;
+        abi: readonly unknown[];
+        functionName: string;
+        args?: readonly unknown[];
+    }) => Promise<unknown>;
+};
+
+const ZERO: Address = '0x0000000000000000000000000000000000000000';
+
+/**
+ * Registry A: the aggregator's guardian slot table, `validatorAtSlot(1..maxSlot)`.
+ *
+ * Slots are 1-indexed and sparse — the table has room for 13 and the frozen stack fills 3 — so a
+ * zero address means "empty slot", not "read failed". They are dropped, and the COUNT of what
+ * survives is what `checkStackInvariants` compares the run's N against.
+ *
+ * Stakes come from the Registry, not the aggregator, via two getters whose argument orders are
+ * **reversed with respect to each other**: `getRoleStake(bytes32 role, address who)` and
+ * `getEffectiveStake(address who, bytes32 role)`. Swapping them is caught by viem's encoder rather
+ * than by a wrong number, since `address` and `bytes32` are not interchangeable there — but it is
+ * the kind of pair worth naming at the call site instead of trusting to memory.
+ */
+export async function readValidatorSlots(
+    client: Reader,
+    args: {
+        aggregator: Address;
+        aggregatorAbi: readonly unknown[];
+        registry: Address;
+        registryAbi: readonly unknown[];
+        roleDvt: string;
+        maxSlot?: number;
+    },
+): Promise<ValidatorSlot[]> {
+    const maxSlot = args.maxSlot ?? 13;
+    const out: ValidatorSlot[] = [];
+    for (let slot = 1; slot <= maxSlot; slot++) {
+        const address = (await client.readContract({
+            address: args.aggregator,
+            abi: args.aggregatorAbi,
+            functionName: 'validatorAtSlot',
+            args: [slot],
+        })) as Address;
+        if (address === ZERO) continue;
+        const [roleStake, effectiveStake] = (await Promise.all([
+            client.readContract({
+                address: args.registry, abi: args.registryAbi,
+                functionName: 'getRoleStake', args: [args.roleDvt, address],
+            }),
+            client.readContract({
+                address: args.registry, abi: args.registryAbi,
+                functionName: 'getEffectiveStake', args: [address, args.roleDvt],
+            }),
+        ])) as [bigint, bigint];
+        out.push({ slot, address, roleStake, effectiveStake });
+    }
+    return out;
+}
+
+/** One nodeId's answer from registry B, zero address included rather than dropped. */
+export interface CommitteeEntry {
+    nodeId: string;
+    /** `0x0` means this nodeId is not registered on this validator. */
+    operator: Address;
+}
+
+/**
+ * Registry B: the AirAccount committee validator, `nodeOperator(bytes32 nodeId)`.
+ *
+ * Zeros are RETURNED, not filtered, and that is the whole design of this function. The nodeIds come
+ * from `DVT_CONFIG`, where they are labelled **fallbacks** — the live co-sign path reads them from
+ * each node at run time. A fallback that has gone stale answers `0x0`, and a version of this that
+ * quietly dropped zeros would hand back a shorter list that still looks like a healthy read.
+ *
+ * That matters here specifically: the list feeds `checkFunderRole`, whose `not-an-operator` check is
+ * a NEGATIVE — "the funder is not in this list". Shrinking the list makes that check easier to pass.
+ * **A silent partial read weakens a negative check without failing anything**, which is the failure
+ * mode `operator-list-nonempty` was written for and does not cover, because a partial list is not
+ * empty. {@link checkCommitteeRegistration} covers it.
+ */
+export async function readCommitteeOperators(
+    client: Reader,
+    args: { validator: Address; validatorAbi: readonly unknown[]; nodeIds: readonly string[] },
+): Promise<CommitteeEntry[]> {
+    return (await Promise.all(
+        args.nodeIds.map(async (nodeId) => ({
+            nodeId,
+            operator: (await client.readContract({
+                address: args.validator, abi: args.validatorAbi,
+                functionName: 'nodeOperator', args: [nodeId],
+            })) as Address,
+        })),
+    )) satisfies CommitteeEntry[];
+}
+
+/** Every queried nodeId must resolve to a real operator on registry B. See above for why. */
+export function checkCommitteeRegistration(entries: readonly CommitteeEntry[]): Check[] {
+    return entries.map((e) => ({
+        name: `committee:registered:${e.nodeId.slice(0, 10)}`,
+        ok: e.operator !== ZERO,
+        detail:
+            e.operator === ZERO
+                ? `nodeId ${e.nodeId} has NO operator on the committee validator — the pinned fallback ` +
+                  `nodeId is stale, or this node is not registered on this stack`
+                : `nodeId ${e.nodeId} → ${e.operator}`,
+    }));
+}
+
+/**
+ * The B3 manifest's validator set — read from the DSR repo, **after** verifying its sha256 against
+ * the pin.
+ *
+ * ## Why the hash check is not ceremony
+ *
+ * This file lives in another repository on the same machine, and the roster comparison is only
+ * evidence if the thing being compared against is the artefact DSR published. Without the digest
+ * this reads whatever is at that path today — including a working copy someone is mid-edit on —
+ * and would report agreement with it. `checkDeployedAbiPin` computes its hash from the git object
+ * for exactly this reason; the same argument applies here, and the same argument is why a MISSING
+ * manifest throws instead of degrading to "roster not checked".
+ *
+ * The digest that must match is `pin.manifest.sha256`, over the raw file bytes.
+ */
+export function readValidatorSetFromManifest(
+    pin: DeployedStackPin,
+    read: (path: string) => Uint8Array,
+    sha256: (b: Uint8Array) => string,
+    dsrRoot: string,
+): { slotOrder: readonly string[]; activeCount: number; orderedAddressSetHash: string } {
+    const path = `${dsrRoot}/${pin.manifest.path}`;
+    let bytes: Uint8Array;
+    try {
+        bytes = read(path);
+    } catch {
+        throw new Error(
+            `deployed mode needs the B3 manifest and could not read it at ${path}. ` +
+                `Set REPCREDIT_DSR_ROOT to the DSR checkout root (the manifest is at ${pin.manifest.path}, ` +
+                `produced by ${pin.manifest.producedBy} at commit ${pin.manifest.commit}).`,
+        );
+    }
+    const got = sha256(bytes);
+    if (got !== pin.manifest.sha256) {
+        throw new Error(
+            `B3 manifest at ${path} has sha256 ${got}, pin expects ${pin.manifest.sha256}. ` +
+                `Refusing to compare the roster against an artefact that is not the pinned one.`,
+        );
+    }
+    const set = (JSON.parse(new TextDecoder().decode(bytes)) as { validatorSet?: Record<string, unknown> }).validatorSet;
+    if (!set) throw new Error(`B3 manifest at ${path} has no validatorSet block.`);
+    const { slotOrder, activeCount, orderedAddressSetHash } = set as {
+        slotOrder: string[]; activeCount: number; orderedAddressSetHash: string;
+    };
+    if (!Array.isArray(slotOrder) || typeof activeCount !== 'number' || typeof orderedAddressSetHash !== 'string') {
+        throw new Error(`B3 manifest validatorSet is missing slotOrder/activeCount/orderedAddressSetHash.`);
+    }
+    return { slotOrder, activeCount, orderedAddressSetHash };
 }

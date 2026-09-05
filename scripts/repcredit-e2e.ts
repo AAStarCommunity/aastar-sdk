@@ -16,9 +16,11 @@
 
 import {
   AAStarAirAccountV7ABI,
+  AAStarCommitteeValidatorABI,
   BLSAggregatorABI,
   CANONICAL_ADDRESSES,
   DVTValidatorABI,
+  getDvtConfig,
   EntryPointABI,
   GTokenABI,
   GTokenStakingABI,
@@ -49,8 +51,13 @@ import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.j
 import { buildMaterialPassport, materialFileList, redactSecrets } from "./repcredit/material-passport.js";
 import { readDeployedStackPin } from "./repcredit/deployed-stack.js";
 import {
+  checkCommitteeRegistration,
   checkFunderRole,
   checkStackInvariants,
+  checkValidatorRoster,
+  readCommitteeOperators,
+  readValidatorSetFromManifest,
+  readValidatorSlots,
   resolveDeployedAddresses,
 } from "./repcredit/deployed-mode.js";
 import {
@@ -82,7 +89,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   closeSync,
   copyFileSync,
@@ -2102,6 +2109,13 @@ async function main(): Promise<void> {
     // records and byte-identical, four exist only in the address book, and a flat map would make
     // all nine look equally corroborated.
     const pin = readDeployedStackPin("sepolia", process.cwd());
+    // Verified against pin.manifest.sha256 before it is read — see readValidatorSetFromManifest.
+    const manifestRoster = readValidatorSetFromManifest(
+      pin,
+      (f) => new Uint8Array(readFileSync(f)),
+      (b) => createHash("sha256").update(b).digest("hex"),
+      process.env.REPCREDIT_DSR_ROOT ?? `${process.cwd()}/../DSR-Research-Flow`,
+    );
     const resolved = resolveDeployedAddresses(pin, CANONICAL_ADDRESSES[11_155_111] as never);
 
     // ① The gate runs BEFORE the first transaction, and its failure is a refusal, not a warning.
@@ -2121,17 +2135,32 @@ async function main(): Promise<void> {
     const registryAggregator = (await publicClient.readContract({
       address: deployment.registry, abi: RegistryABI, functionName: "blsAggregator",
     })) as Address;
-    const invariants = checkStackInvariants({
-      defaultThreshold: (await publicClient.readContract({
-        address: registryAggregator, abi: BLSAggregatorABI, functionName: "defaultThreshold",
-      })) as bigint,
-      // `version()`, lowercase. The deployed aggregator has no `VERSION()`; asking for the
-      // upper-case one returns a revert that reads as a fact about the contract.
-      aggregatorVersion: (await publicClient.readContract({
-        address: registryAggregator, abi: BLSAggregatorABI, functionName: "version",
-      })) as string,
-      nodeCount,
+    // Registry A — the aggregator's guardian slot table. Read BEFORE the invariants, because the
+    // count of filled slots is what N is compared against; comparing `nodeCount` to itself would be
+    // green on every input.
+    const slots = await readValidatorSlots(publicClient as never, {
+      aggregator: registryAggregator, aggregatorAbi: BLSAggregatorABI,
+      registry: deployment.registry, registryAbi: RegistryABI,
+      roleDvt: ROLE_DVT,
     });
+
+    const invariants = checkStackInvariants(
+      {
+        defaultThreshold: (await publicClient.readContract({
+          address: registryAggregator, abi: BLSAggregatorABI, functionName: "defaultThreshold",
+        })) as bigint,
+        // `version()`, lowercase. The deployed aggregator has no `VERSION()`; asking for the
+        // upper-case one returns a revert that reads as a fact about the contract.
+        aggregatorVersion: (await publicClient.readContract({
+          address: registryAggregator, abi: BLSAggregatorABI, functionName: "version",
+        })) as string,
+        nodeCount,
+      },
+      // Both expectations from the pin. They were literals in the source until #387 review pointed
+      // out that this mode exists BECAUSE `sepolia` mode hard-codes its expectations.
+      { defaultThreshold: pin.aggregator.defaultThreshold, version: pin.aggregator.version },
+      slots.length,
+    );
 
     // ③ The funder may fund and may not govern (DSR ruling 2). An empty operator list is itself a
     //    failure — "not in this empty list" is trivially true and reads exactly like a real pass.
@@ -2154,15 +2183,43 @@ async function main(): Promise<void> {
     // 0xb5600060, which is Registry.owner() itself — so "is this address an operator?" has no
     // answer until you name the registry, and one of the answers is the governance key.
     //
-    // Both reads are still to be wired. checkFunderRole fails on an empty list PER REGISTRY, so
-    // passing empty maps here is loud rather than a silent pass waiting to happen.
-    const registeredOperators: Record<string, Address[]> = { guardianSlots: [], committee: [] };
+    // Both reads are now WIRED. They used to be empty literals with a comment saying an empty list
+    // fails loudly — which was true, and was the problem: the two `operator-list-nonempty` checks
+    // failed on every run, ③ threw, and the ④ boundary error below it was unreachable. The failure
+    // a reader saw was "operator list is empty", never the open question ④ exists to state.
+    //
+    // The committee read keeps zero answers rather than filtering them: the nodeIds below are the
+    // FALLBACKS recorded in DVT_CONFIG, and a stale one answers 0x0. Dropping it would shorten a
+    // list that a NEGATIVE check ("funder is not in it") consults — easier to pass, nothing red.
+    const committeeEntries = await readCommitteeOperators(publicClient as never, {
+      validator: pin.airAccount.algorithm1,
+      validatorAbi: AAStarCommitteeValidatorABI,
+      nodeIds: getDvtConfig("sepolia").dvtNodes.map((n) => n.nodeId),
+    });
+    const committeeChecks = checkCommitteeRegistration(committeeEntries);
+    const registeredOperators: Record<string, Address[]> = {
+      guardianSlots: slots.map((v) => v.address),
+      committee: committeeEntries.filter((e) => e.operator !== ZERO_ADDRESS).map((e) => e.operator),
+    };
     const funderChecks = checkFunderRole(deployerAccount.address, owners, registeredOperators);
 
-    const failed = [...resolved.agreement, ...invariants, ...funderChecks].filter(c => !c.ok);
+    // The roster, against the B3 manifest — two independent comparisons (plain-text slot order, and
+    // the hash convention the manifest itself records). `checkValidatorRoster` was exported and
+    // unit-tested but called by nothing until now, which is the same class of gap as the empty maps
+    // above: a check with a passing test and no caller reads exactly like a delivered check.
+    const rosterChecks = checkValidatorRoster(
+      slots,
+      manifestRoster,
+      keccak256(encodeAbiParameters([{ type: "address[]" }], [slots.map((v) => v.address)])),
+    );
+
+    const allChecks = [
+      ...resolved.agreement, ...invariants, ...rosterChecks, ...committeeChecks, ...funderChecks,
+    ];
+    const failed = allChecks.filter(c => !c.ok);
     writeJsonExclusive(join(rawDir, "deployed-stack-checks.json"), {
       addresses: resolved.addresses,
-      checks: [...resolved.agreement, ...invariants, ...funderChecks],
+      checks: allChecks,
       // The funder's ROLE is evidence; its address is not. Passport records the role only.
       funder: { role: "funder", address: "[REDACTED]" },
     });
@@ -2174,6 +2231,13 @@ async function main(): Promise<void> {
     }
 
     // ④ BOUNDARY, deliberately fail-closed rather than guessed.
+    //
+    // `checkAccountRouting` is the one exported predicate still without a caller, and that is a
+    // property of WHERE this boundary sits rather than an oversight: it checks the accounts a run
+    // created, and this mode creates none — it stops here. Its own contract says an empty account
+    // set FAILS, so calling it with `[]` would turn "we have not got there yet" into a red check
+    // about routing, which is a worse lie than not calling it. It gets wired in the same change
+    // that removes this throw.
     //
     // Everything above consumes the stack. Driving it needs validator signatures, and this runner
     // currently obtains them by generating ephemeral BLS keys and starting local nodes — exactly
