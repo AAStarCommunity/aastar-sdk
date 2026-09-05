@@ -52,10 +52,19 @@ derived/measurement-summary.json         (unless --skip-measurements)
 > wrong" is *tampered with*, not *hashed the wrong version*. **A tamper alarm that fires on every
 > honest run trains the reader to ignore it.**
 
-`buildMaterialPassport` enforces the structural half: it **refuses any file outside the bundle root**.
-Redaction only walks that root, so an entry from outside it would be attested without ever having been
-redacted — and would look exactly like every other entry. Refusing it makes "was this redacted?"
-answerable from the passport alone.
+`buildMaterialPassport` enforces the structural half: it **refuses any file whose bytes live outside
+the bundle root**. Redaction only walks that root, so such an entry would be attested without ever
+having been redacted — and would look exactly like every other entry.
+
+The containment test is on the **resolved real path**, not on how the path is spelled. #369 review
+found why that distinction is the whole point: a *symlink inside the root* pointing at a file outside
+it passed a literal `resolve`+`relative` check and got hashed, while `redactSecrets` skipped it — a
+symlink's `Dirent` reports `isFile() === false`, so the directory walk never opens it. Same end state
+("attested, never redacted") reached by *path inside, content outside* rather than by *path outside*.
+
+With `realpathSync` on both sides, "was this redacted?" is answerable from the passport alone. Without
+it, the passport answered a question about the path while the reader believed it answered one about
+the bytes.
 
 ## 4. What redaction covers — and what it does NOT
 

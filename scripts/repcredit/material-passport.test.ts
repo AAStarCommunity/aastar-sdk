@@ -6,7 +6,7 @@
  * A property that can only be checked by running the thing it protects is not really checked.
  */
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -116,6 +116,57 @@ describe('buildMaterialPassport', () => {
             expect(() => buildMaterialPassport(b.root, [join(outside.root, 'raw/x.json')]))
                 .toThrow(/outside the bundle root/);
         } finally { b.cleanup(); outside.cleanup(); }
+    });
+
+    it('REFUSES a symlink whose TARGET is outside the root — path inside, content outside', () => {
+        // #369 review. The check used to be path-literal (`resolve` + `relative`), so this case was
+        // ACCEPTED and hashed — while `redactSecrets` skipped it entirely, because a symlink's Dirent
+        // reports isFile() === false and the walk never opens it. That is exactly the state the error
+        // message claims to prevent, reached by a different route than the one it was written for.
+        const b = bundle({ 'raw/a.json': '{}' });
+        const outside = bundle({ 'raw/x.json': `{"k":"${SECRET}"}` });
+        const link = join(b.root, 'raw/link.json');
+        try {
+            symlinkSync(join(outside.root, 'raw/x.json'), link);
+            expect(() => buildMaterialPassport(b.root, [link])).toThrow(/outside the bundle root/);
+        } finally { b.cleanup(); outside.cleanup(); }
+    });
+
+    it('POSITIVE CONTROL for the symlink fix: a link to a file INSIDE the root is still accepted', () => {
+        // Required by the review's own recipe: watching the case above flip to "reject" proves
+        // nothing alone, because a check that rejects EVERYTHING flips it too.
+        //
+        // Measured, and worth stating precisely because the reading is not the obvious one: reverting
+        // realpath→resolve reds BOTH symlink cases (this one fails on the resolved PATH, not on being
+        // rejected), while `records path RELATIVE to the bundle root` — a plain file, no link — stays
+        // GREEN. **That plain-file case is the actual "did not reject everything" control**; this one
+        // additionally pins that a link inside the root resolves to its target rather than being
+        // recorded under the link's own name.
+        const b = bundle({ 'raw/a.json': '{"n":1}' });
+        const link = join(b.root, 'raw/inner-link.json');
+        try {
+            symlinkSync(join(b.root, 'raw/a.json'), link);
+            const [entry] = buildMaterialPassport(b.root, [link]);
+            expect(entry.path).toBe('raw/a.json'); // realpath resolves it to its target, still inside
+            expect(entry.bytes).toBe(7);
+        } finally { b.cleanup(); }
+    });
+
+    it('END TO END: redact then build, over a real directory walk (the half review could not run)', () => {
+        // The reviewer disclosed they inferred the redaction half from Dirent readings and code
+        // branches rather than executing it, because they passed the wrong signature. This closes
+        // that: one call each, in runner order, over a nested tree.
+        const b = bundle({ 'raw/a.json': `{"k":"${SECRET}"}` });
+        mkdirSync(join(b.root, 'derived'), { recursive: true });
+        writeFileSync(join(b.root, 'derived/s.json'), `{"deep":"${SECRET}"}`);
+        try {
+            redactSecrets(b.root, [SECRET]);
+            const files = [join(b.root, 'raw/a.json'), join(b.root, 'derived/s.json')];
+            const passport = buildMaterialPassport(b.root, files);
+            expect(passport.map((e) => e.path).sort()).toEqual(['derived/s.json', 'raw/a.json']);
+            for (const f of files) expect(readFileSync(f, 'utf8')).not.toContain(SECRET);
+            for (const e of passport) expect(e.sha256).toBe(sha256File(join(b.root, e.path)));
+        } finally { b.cleanup(); }
     });
 
     it('hashes the REDACTED bytes when called in the runner order — redact, then build', () => {

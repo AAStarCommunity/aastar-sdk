@@ -43,7 +43,7 @@
  * relying on this pass to find it).
  */
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 /** One line of the passport. See the module doc for why these three fields and no others. */
@@ -101,9 +101,15 @@ export function redactSecrets(root: string, secrets: readonly string[]): void {
  * passport alone.
  */
 export function buildMaterialPassport(root: string, files: readonly string[]): MaterialPassportEntry[] {
-    const base = resolve(root);
+    // realpath, not resolve: the containment check must be about WHERE THE BYTES ARE, not about how
+    // the path is spelled. #369 review found the gap — a symlink INSIDE the root whose target sits
+    // outside it passed the literal check and was hashed, while `redactSecrets` skipped it entirely
+    // (a symlink's Dirent reports `isFile() === false`, so the walk never opens it). The result was
+    // precisely what the error below says it prevents: attested, never redacted — reached by "path
+    // inside, content outside" rather than by "path outside".
+    const base = realpathSync(resolve(root));
     return files.map((file) => {
-        const abs = resolve(file);
+        const abs = realpathSync(resolve(file));
         const rel = relative(base, abs);
         if (rel === '' || rel.startsWith('..') || rel.startsWith(`..${sep}`)) {
             throw new Error(
