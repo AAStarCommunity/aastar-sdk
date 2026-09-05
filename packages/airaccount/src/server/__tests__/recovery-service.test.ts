@@ -288,7 +288,29 @@ describe("proposeGuardianAddition — the two-step the contract requires (CC-102
     // (The first version of this comment named 0x8b0a0a6e. That value was never measured; it was
     // written from memory and is wrong. A hex constant in a comment reads exactly like a reading.)
     const selector = svc.encodeProposeGuardianAddition(G).slice(0, 10);
-    expect(selector).toBe(toFunctionSelector("proposeGuardianAddition(address)"));
+    /*
+     * The expectation is a MEASURED CONSTANT, not `toFunctionSelector("proposeGuardianAddition(address)")`.
+     *
+     * That version shared its premise with the thing under test: both sides derived the selector from
+     * the same signature string, so it could only catch "two places in this repo disagree" — never
+     * "this repo disagrees with the chain". #393 review demonstrated it: change the ABI's parameter
+     * type to `bytes20` AND change the expected signature the same way, and all 25 tests stay green
+     * while the encoded selector becomes 0x74b41140 — which the deployed implementation does not
+     * expose (0 hits, versus 1 for 0xa228c4e0).
+     *
+     * The test's own name says "the selector the DEPLOYED account exposes", and in that state it was
+     * producing precisely the one it does not. Hard-coding is the weaker tool, but it BREAKS THE
+     * SHARED DERIVATION: nothing about it moves when the signature string moves.
+     */
+    // MEASURED: present in the v0.33.0 account implementation runtime bytecode at
+    // 0x63a6D78A7B7e443D4d15EDCf950aE567e0F80a3b (Sepolia, 24209 bytes) — 1 hit. Control in the same
+    // read: addGuardian(address) = 0xa526d83b also present; both ABSENT from the extension
+    // 0x4ad5C1EFa95deaadEF3d3Ab02CB96504DEa0fCC2, so the probe reads one contract consistently.
+    const ON_CHAIN_SELECTOR = "0xa228c4e0";
+    expect(selector).toBe(ON_CHAIN_SELECTOR);
+    // Kept as a SECOND, independent path: keccak of the signature must agree with the measured
+    // constant. If these two ever diverge, one of them is wrong and the failure says which.
+    expect(toFunctionSelector("proposeGuardianAddition(address)")).toBe(ON_CHAIN_SELECTOR);
     // Control: a different guardian must not change the selector, only the argument word.
     const other = svc.encodeProposeGuardianAddition("0xaE33e4f6A3f9EB8B9121756A034F78fdC94E3757");
     expect(other.slice(0, 10)).toBe(selector);
