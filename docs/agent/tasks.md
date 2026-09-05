@@ -90,6 +90,55 @@
   补了一条「填充合法、字段在域内、但不在曲线上」（x=1,y=1）的用例后，同一变异**恰好 1 红**。
   这一格是变异帮我发现的：**测试原本在断言一个它并没有在测的东西。**
 
+### T1.2.3 从账户解析 validator —— 因为不存在一个全局答案 (PR #377)  `DONE`
+- **优先级**：high
+- **依赖**：T1.2.2
+- **⚠️ 这条是补记的，而 #377 已经合了。** 它从来没被写进本文件；分支叫
+  `feat/T1.2.3-account-anchor`，PR 开了、审了、合了，台账里一行都没有。
+  **两道账本门禁都看不见它**——它们核的是已写下的行，而一行从没写下就不在作用域里。
+  与 FU-63 / FU-66 同一形状的第三次，只是这次漏掉的不是一个字段，是整条任务。
+  已加门禁（`check-branch-task.ts`）：**分支名里点名了 `T<x.y.z>` 的，这个任务必须在本文件里**。
+  实测它对 `feat/T1.2.3-account-anchor` + 补记录前的 tasks.md 会红。
+- **起因**：T1.2.2 交付的 `router?:` 被 dvt 仓库证明**不闭合**——它只是把不能信的 pin
+  从 validator 搬到了 router 上。Sepolia block `11639067` 实测，两个真实部署账户
+  （各 45 字节代理）路由到**不同的** validator：
+  ```
+  0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8 → 0xe68d6A7B… → 0x539B9681…
+  0x0985785d1fc37978474C472E39391774DcB1C711 → 0xA97A7527… → 0x7ac7E9d4…
+  ```
+  第二个账户**不是从地址簿读的**（dvt 从 committee validator 近 45k 区块日志的
+  indexed topic 里筛的 482 个候选）——若来自地址簿，这一对只能证明「两份文档不一致」。
+- **结论**：**「Sepolia 上现役的 DVT validator 是谁」不是一个有答案的问题；
+  「这个账户咨询谁」是。** 所以 `account?:` 的价值不是找到那个对的 validator
+  （不存在那个东西），而是**把一个无解的问题换成一个链上唯一确定的问题**。
+- **交付**：`getAccountDvtValidator`（core）+ `onboardDvtNode({ account })`；
+  三个锚（`account`/`router`/`validator`）互斥**从两路推广到三路**，且拒绝发生在
+  任何链上读之前（有 `reads.length === 0` 的断言钉住）。
+- **验收命令**：`AASTAR_ONCHAIN_TEST=1 pnpm exec vitest run packages/core/src/actions/committee.onchain.test.ts`
+  - 实测 9/9（含正/负对照：两账户解析结果必须**互不相同**；canonical 只能命中**其中一个**）
+  - `pnpm --filter @aastar/core test` 646 passed；`--filter @aastar/operator` 60 passed
+- **变异暴露的一格**：「去掉 router 零地址守卫」在链上套件里**红 0**——EOA 探针
+  返回空 calldata，viem 在 decode 阶段就抛，控制流走不到守卫。补桩客户端测试
+  （`committee.accountAnchor.test.ts`）才叫醒它，三条变异随即红 3/2/1。
+  **「链答了」和「守卫响了」是两件事**，只看前者的套件会把睡着的守卫报成已覆盖。
+
+### F1.2 收口：8 条「需新增」的去向
+
+`node-onboarding-api-gap.md` 判定 21 条里 8 条需新增。**8 条现在全部有归属**，
+表格本身不动（那一列是验收判据的输入）：
+
+| 缺口 | 去向 |
+|---|---|
+| G1 / G4 | ✅ 交付 `parseDvtNodeState`（#367） |
+| G12 | ✅ 交付 `router?:`（#367），**并由 #377 的 `account?:` 补完**——#367 那版不闭合 |
+| G14 | ✅ 交付 `owner()`/`registry()`/`roleDvt()`（#367） |
+| G5 / G11 | ⛔ jason 拍板不做：portal 不收 keystore 文件，只支持 cast/env |
+| G6 | ⛔ 我重判不做（决定级联自 G5）：改为把报错写清，**不在函数内静默 reduce** |
+| G21 | ⛔ 不做，改早失败：现役 validator `requireStake()==true`，我们运行的每个环境都不可达 |
+
+**所以 F1.2 的 API 面已收口。** 剩下的是 CC-38 的另一半——portal 页面交互，
+不在本 Feature 内。
+
 ---
 
 ## F2.1 — Slash 治理 read getters（CC-13 批A）
