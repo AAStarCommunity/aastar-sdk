@@ -90,9 +90,46 @@ const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEPOLIA].entryPoint); // Entr
 // live on-chain, so the pin was not "broken" — it was aimed at a superseded target, which is exactly
 // the case this guard is meant to force a human to look at rather than let a config edit slide by.
 // The three DVT nodes are registered on 0x539B (isRegistered verified on-chain).
+//
+// ── 2026-09-06: the guard FIRED, and it fired correctly. What it is asking is a product question. ──
+//
+// Canonical's algId-0x01 verifier moved again, v0.27.0 `0x539B…` → v0.33.0 `0x7ac7E9d4…`, and the
+// new one runs in COMMITTEE mode (`committeeActive() == true`, `epochLength() == 64`).
+//
+// This is NOT a stale pin to bump, and bumping it would break the runner for a second reason rather
+// than fix it. Measured today, with a real 3-node aggregate (`v0.23.0-row10-handleops`):
+//
+//     verifier.validate([nodeIds][blsSig]) on 0x7ac7E9d4…  =  1     ← the canonical verifier
+//                                                                     REJECTS the legacy proof shape
+//     the three nodeIds are `isRegistered == true` on BOTH validators (so registration is not it)
+//
+// Under committee mode the verifier expects committee framing (per-signer Merkle proofs against the
+// frozen `epochSetRoot(e-1)`); a legacy `[nodeIds][blsSig]` proof is a SHAPE mismatch. The same
+// supersession that `v0.23.0-row10-handleops` now asserts at the account level applies here at the
+// verifier level. `cc103-committee-e2e` independently asserts the rejection and passes.
+//
+// So the open question is not an address. It is: **is the legacy DVT verifier-proof path still a
+// scenario this release claims to support?**
+//   (a) YES → keep this pin at `0x539B…` and rewrite the comment above: the pin then means
+//       "the LEGACY validator, deliberately", not "canonical", and the runner is evidence about a
+//       contract the canonical router no longer mounts.
+//   (b) NO  → give it the Row 10 treatment: assert the supersession and point at
+//       `tier3-composite-e2e` / `tier3-committee-handleops` for the committee equivalent.
+//
+// That is a product decision about what the release claims, not a config edit, so it is NOT made
+// here. The guard stays and keeps failing — which is exactly what it was written to do.
 const EXPECTED_VERIFIER = getAddress('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
 if (VERIFIER !== EXPECTED_VERIFIER) {
-    throw new Error(`VERIFIER drift: CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm=${VERIFIER} != ${EXPECTED_VERIFIER}`);
+    throw new Error(
+        `VERIFIER drift (the guard is working, not broken): CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm ` +
+        `= ${VERIFIER}, this runner is pinned to ${EXPECTED_VERIFIER}.\n` +
+        '  Canonical moved to the v0.33.0 COMMITTEE-mode validator. Bumping this pin does NOT fix the ' +
+        'runner: measured, that validator returns 1 for a legacy [nodeIds][blsSig] proof, because ' +
+        'committee mode expects per-signer Merkle proofs. Node registration is NOT the issue — all ' +
+        'three nodeIds are isRegistered on both validators.\n' +
+        '  The decision this needs is whether the legacy DVT verifier-proof path is still a supported ' +
+        'scenario. See the comment above this guard for the two options. Do not silently repoint.'
+    );
 }
 
 // Node endpoints come from DVT_CONFIG, the ONE list AASTAR_DVT_ENV can switch. getDefaultDvtNodes
