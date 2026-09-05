@@ -62,7 +62,11 @@ describe('resolveDeployedAddresses — provenance is recorded, never merged away
   });
 
   it('throws when a key exists in neither record — this mode cannot create one', () => {
-    const { gToken, ...withoutGToken } = book;
+    // `_gToken` because the repcredit eslint config bans unused names that do not start with `_`.
+    // CI caught this, and the catch is worth noting: `lint:repcredit` is the ONE eslint invocation
+    // in this repo that actually runs (the root `pnpm -r lint` is a no-op — no package defines the
+    // script), so it is also the only place a rule can fire at all.
+    const { gToken: _gToken, ...withoutGToken } = book;
     expect(() => resolveDeployedAddresses(pin, withoutGToken)).toThrow(/no address for gToken/);
   });
 });
