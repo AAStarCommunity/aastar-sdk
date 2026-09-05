@@ -1,6 +1,13 @@
 /**
  * BLS consensus preimages — byte-identical to BLSAggregator 4.6.0
- * (SuperPaymaster `03713feb`, pinned in scripts/upstream-abi-pin.json).
+ * (SuperPaymaster `03713feb` — where this format LANDED; the pin has since moved to `d651646a`).
+ *
+ * Verified against the DEPLOYED aggregator, not inferred from the pin (2026-09-05, FU-49). Sepolia
+ * `0xEaeC2F51…` reads `BLSAggregator-4.11.0`, and every constant below matches it byte for byte:
+ * `DOMAIN_NAME`, `TAG_QUEUE_SLASH`, `TAG_EXECUTE_SLASH`, `TAG_REPUTATION` — 4/4 — and
+ * `domainSeparator()` recomputed locally as `keccak(abi.encode(DOMAIN_NAME, chainId, aggregator,
+ * registry))` equals the on-chain value. So the byte-identity claim survives the pin move; only the
+ * sentence about WHICH revision is pinned was stale, and it is corrected above.
  *
  * WHAT CHANGED AND WHY IT MATTERS (CC-49 HIGH-A, landed in SP 03713feb)
  * ---------------------------------------------------------------------
