@@ -18,7 +18,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const AUDIT = 'scripts/kms-endpoint-audit.ts';
 
@@ -44,9 +45,18 @@ function withMutation(apply: (src: string) => string, run: () => string): string
  */
 const FIXTURE_SPEC = 'scripts/__fixtures__/kms-openapi.min.yaml';
 
+/**
+ * FU-48, same one-line win as security-scan.test.ts: launch `tsx` directly rather than through
+ * `npx`, whose own resolution measured 60-70% of every spawn (833/628ms via npx vs 239/251ms
+ * direct). `npx tsx` resolves to this same local binary, so the code executed is identical — only
+ * the launcher differs. The fallback keeps this runnable in a checkout without an install.
+ */
+const TSX_BIN = join(process.cwd(), 'node_modules', '.bin', 'tsx');
+const [LAUNCHER, LAUNCH_ARGS] = existsSync(TSX_BIN) ? [TSX_BIN, []] : ['npx', ['tsx']];
+
 function audit(): string {
   try {
-    return execFileSync('npx', ['tsx', AUDIT, '--spec', FIXTURE_SPEC], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return execFileSync(LAUNCHER, [...LAUNCH_ARGS, AUDIT, '--spec', FIXTURE_SPEC], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch (error) {
     const e = error as { stdout?: string; stderr?: string };
     const out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
