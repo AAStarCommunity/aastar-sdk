@@ -6,7 +6,7 @@
  * chain and spending real ETH.
  */
 import { describe, expect, it } from 'vitest';
-import type { Address } from 'viem';
+import { keccak256, encodeAbiParameters, encodePacked, type Address } from 'viem';
 
 // Relative, not '@aastar/core': the root package does not depend on the workspace packages, so
 // vitest cannot resolve the bare specifier here even though tsx can at runtime.
@@ -15,6 +15,7 @@ import { readDeployedStackPin } from './deployed-stack.js';
 import {
   DEPLOYMENT_KEYS,
   checkAccountRouting,
+  checkValidatorRoster,
   checkFunderRole,
   checkStackInvariants,
   resolveDeployedAddresses,
@@ -127,7 +128,11 @@ describe('checkFunderRole — the funder may fund, and may not govern', () => {
     { label: 'staking.owner', address: A('0x0000000000000000000000000000000000000002') },
     { label: 'aggregator.owner', address: A('0x0000000000000000000000000000000000000003') },
   ];
-  const operators = [A('0x0000000000000000000000000000000000000009')];
+  // Two registries, because B6 spans both and the same node has DIFFERENT operators on each.
+  const operators = {
+    guardianSlots: [A('0x5D870E132CC010E882E90f4aFaACDC4F19C7Eca3')],
+    committee: [A('0xEcAACb915f7D92e9916f449F7ad42BD0408733c9')],
+  };
 
   it('passes for an ordinary funder', () => {
     expect(checkFunderRole(FUNDER, gov, operators).filter((c) => !c.ok)).toEqual([]);
@@ -138,15 +143,77 @@ describe('checkFunderRole — the funder may fund, and may not govern', () => {
     expect(bad.map((c) => c.name)).toEqual(['deployed:funder:not:staking.owner']);
   });
 
-  it('REJECTS a funder that is a registered operator, case-insensitively', () => {
-    const bad = checkFunderRole(A(operators[0].toUpperCase()), gov, operators).filter((c) => !c.ok);
-    expect(bad.map((c) => c.name)).toEqual(['deployed:funder:not-an-operator']);
+  it('REJECTS an operator of registry A, and NAMES which registry', () => {
+    const bad = checkFunderRole(A(operators.guardianSlots[0].toUpperCase()), gov, operators).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['deployed:funder:not-an-operator:guardianSlots']);
   });
 
-  it('an EMPTY operator list fails — it would make the check above vacuous', () => {
-    // "the funder is not in this list" is trivially true of an empty list, and reads identically
-    // to a real pass.
-    const bad = checkFunderRole(FUNDER, gov, []).filter((c) => !c.ok);
-    expect(bad.map((c) => c.name)).toEqual(['deployed:funder:operator-list-nonempty']);
+  it('REJECTS an operator of registry B — the case a single-list check would clear', () => {
+    // This is the whole reason the parameter is a map. A run that consulted only the guardian slots
+    // would pass a funder that is a committee operator, and the output would look identical.
+    const bad = checkFunderRole(operators.committee[0], gov, operators).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['deployed:funder:not-an-operator:committee']);
+  });
+
+  it('an EMPTY list fails PER REGISTRY — naming the one that was not read', () => {
+    const bad = checkFunderRole(FUNDER, gov, { ...operators, committee: [] }).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['deployed:funder:operator-list-nonempty:committee']);
+  });
+});
+
+describe('checkValidatorRoster — two independent paths to the same set', () => {
+  const SLOTS = [
+    '0x5D870E132CC010E882E90f4aFaACDC4F19C7Eca3',
+    '0x40F0b12128f256B62Fa22b36D37012Ee004bbd1f',
+    '0xD904A706E355D6b48bAeDBec472CE94BC6981601',
+  ] as const;
+  const HASH = '0x12e163e7065f48e34225677be9596d9e800def6389fe783bf472b8d72905acfb';
+  const manifest = { slotOrder: [...SLOTS], activeCount: 3, orderedAddressSetHash: HASH };
+  const live = SLOTS.map((address, i) => ({
+    slot: i + 1, address: address as Address, roleStake: 30n * 10n ** 18n, effectiveStake: 30n * 10n ** 18n,
+  }));
+
+  it('the documented convention reproduces the manifest digest', () => {
+    // `hashConventions.validatorSetHash` says keccak256(abi.encode(address[])). My first attempt
+    // used encodePacked and got 0xa281865c… — the fix was to READ the recorded convention, not to
+    // try encodings until one matched.
+    expect(keccak256(encodeAbiParameters([{ type: 'address[]' }], [[...SLOTS] as Address[]]))).toBe(HASH);
+  });
+
+  it('NEGATIVE CONTROL: encodePacked does NOT reproduce it', () => {
+    // Without this, the assertion above would pass for any convention that happened to work, and
+    // the "two independent paths" claim would rest on a coincidence.
+    expect(keccak256(encodePacked(['address[]'], [[...SLOTS] as Address[]]))).not.toBe(HASH);
+  });
+
+  it('accepts the live set', () => {
+    expect(checkValidatorRoster(live, manifest, HASH).filter((c) => !c.ok)).toEqual([]);
+  });
+
+  it('REJECTS a reordered set — slotOrder is order-sensitive', () => {
+    // Reordering keeps the same MEMBERS. A set comparison would pass; the slot table is a sequence.
+    const swapped = [live[1], live[0], live[2]].map((s, i) => ({ ...s, slot: i + 1 }));
+    const bad = checkValidatorRoster(swapped, manifest, HASH).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['roster:slotOrder']);
+  });
+
+  it('REJECTS a zero stake, naming the slot', () => {
+    const bad = checkValidatorRoster(
+      live.map((s, i) => (i === 1 ? { ...s, effectiveStake: 0n } : s)), manifest, HASH,
+    ).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['roster:stake:slot2']);
+  });
+
+  it('REJECTS N != 3 on either side', () => {
+    expect(checkValidatorRoster(live.slice(0, 2), manifest, HASH).filter((c) => !c.ok).map((c) => c.name))
+      .toContain('roster:count');
+    expect(checkValidatorRoster(live, { ...manifest, activeCount: 4 }, HASH).filter((c) => !c.ok).map((c) => c.name))
+      .toContain('roster:count');
+  });
+
+  it('REJECTS a digest that does not match, independently of slotOrder', () => {
+    // The two paths must be able to disagree — otherwise the second one is decoration.
+    const bad = checkValidatorRoster(live, manifest, '0x' + '11'.repeat(32)).filter((c) => !c.ok);
+    expect(bad.map((c) => c.name)).toEqual(['roster:setHash']);
   });
 });

@@ -2145,11 +2145,18 @@ async function main(): Promise<void> {
       // exact thing #381/#382 were about. All three targets are Ownable-shaped for this getter.
       address: (await publicClient.readContract({ address, abi: RegistryABI, functionName: "owner" })) as Address,
     })));
-    // The operator roster is read from the registry's ROLE_DVT membership. Left to the same DVT
-    // interface question as the signing half below: `checkFunderRole` REQUIRES a non-empty list and
-    // fails on an empty one, so passing `[]` here would be a silent pass waiting to happen — it
-    // fails loudly instead, which is the correct state until the roster read is specified.
-    const registeredOperators: Address[] = [];
+    // TWO registries, and conflating them is the trap (DVT, CC-115 d11681ee; verified on chain):
+    //
+    //   A  SP BLSAggregator guardian slots   validatorAtSlot(1..13)      drives the reputation path
+    //   B  AirAccount committee validator    nodeOperator(bytes32 id)    drives UserOp co-signing
+    //
+    // The SAME node has DIFFERENT operators on each. On the legacy validator node1's operator is
+    // 0xb5600060, which is Registry.owner() itself — so "is this address an operator?" has no
+    // answer until you name the registry, and one of the answers is the governance key.
+    //
+    // Both reads are still to be wired. checkFunderRole fails on an empty list PER REGISTRY, so
+    // passing empty maps here is loud rather than a silent pass waiting to happen.
+    const registeredOperators: Record<string, Address[]> = { guardianSlots: [], committee: [] };
     const funderChecks = checkFunderRole(deployerAccount.address, owners, registeredOperators);
 
     const failed = [...resolved.agreement, ...invariants, ...funderChecks].filter(c => !c.ok);

@@ -215,6 +215,107 @@ export function checkAccountRouting(
     ]);
 }
 
+/** One validator slot as the aggregator reports it. */
+export interface ValidatorSlot {
+    slot: number;
+    address: Address;
+    roleStake: bigint;
+    effectiveStake: bigint;
+}
+
+/**
+ * The active validator set, checked two independent ways (DSR 2026-09-05).
+ *
+ * ## Why the roster is the aggregator's slot table and not the registry's role count
+ *
+ * DSR's first version of this criterion asserted `Registry.getRoleUserCount(ROLE_DVT) === N`.
+ * Measured on chain: **19 vs 3**. Those are different populations — holding ROLE_DVT is not the
+ * same as occupying a slot in the aggregator's active set — and DSR withdrew the equality rather
+ * than relax it. `getRoleUserCount` is kept as an OBSERVATION in the passport, never in an equation:
+ * loosening a false assertion to `>=` would only have made it vacuously true.
+ *
+ * ## Two checks, deliberately independent
+ *
+ * 1. **`slotOrder`, element by element.** The B3 manifest carries the three addresses in plain text
+ *    and in order. This comparison assumes no encoding at all.
+ * 2. **`orderedAddressSetHash`**, using the convention the manifest itself records under
+ *    `hashConventions.validatorSetHash`: `keccak256(abi.encode(address[] slots1To3))`.
+ *
+ * The second is a real second path only because the convention was WRITTEN DOWN. My first attempt
+ * used `encodePacked` and got a different digest; the correct response to that was not to try
+ * encodings until one matched — **a hash you reverse-engineer until it agrees proves only that you
+ * found a formula that produces those bytes.** (It also cost me a wrong report: I said the manifest
+ * did not document the preimage, having read one block of it. FU-81.)
+ */
+export function checkValidatorRoster(
+    slots: readonly ValidatorSlot[],
+    manifest: { slotOrder: readonly string[]; activeCount: number; orderedAddressSetHash: string },
+    computedSetHash: string,
+): Check[] {
+    const out: Check[] = [];
+    const addrs = slots.map((s) => s.address);
+
+    out.push({
+        name: 'roster:count',
+        ok: slots.length === 3 && manifest.activeCount === 3,
+        detail: `${slots.length} non-zero slot(s) on chain; manifest activeCount ${manifest.activeCount}; both must be 3`,
+    });
+
+    // (1) plain-text, order-sensitive. No encoding assumptions anywhere in this comparison.
+    const orderOk =
+        addrs.length === manifest.slotOrder.length &&
+        addrs.every((a, i) => a.toLowerCase() === manifest.slotOrder[i].toLowerCase());
+    out.push({
+        name: 'roster:slotOrder',
+        ok: orderOk,
+        detail: `chain [${addrs.join(', ')}] vs manifest slotOrder [${manifest.slotOrder.join(', ')}]`,
+    });
+
+    // (2) the recorded convention, as a second and independent path.
+    out.push({
+        name: 'roster:setHash',
+        ok: computedSetHash.toLowerCase() === manifest.orderedAddressSetHash.toLowerCase(),
+        detail: `keccak256(abi.encode(address[])) ${computedSetHash} vs manifest ${manifest.orderedAddressSetHash}`,
+    });
+
+    for (const s of slots) {
+        out.push({
+            name: `roster:stake:slot${s.slot}`,
+            ok: s.roleStake > 0n && s.effectiveStake > 0n,
+            detail: `${s.address} roleStake ${s.roleStake}, effective ${s.effectiveStake}; both must exceed 0`,
+        });
+    }
+    return out;
+}
+
+/**
+ * ## B6 spans TWO unrelated registries, and conflating them is the trap
+ *
+ * DVT's answer (CC-115 `d11681ee`), verified on chain here:
+ *
+ * | | registry A | registry B |
+ * |---|---|---|
+ * | what | SP `BLSAggregator` guardian slots | AirAccount validator, nodeId-indexed |
+ * | read by | `validatorAtSlot(1..13)` | `nodeOperator(bytes32 nodeId)` |
+ * | drives | the reputation path (`defaultThreshold = 2`) | UserOp co-signing |
+ * | keys | held by the DVT session, **no HTTP interface** | reachable via `POST /signature/sign` |
+ *
+ * They are different sets of addresses for the same three nodes. Measured:
+ *
+ * ```
+ * nodeId 0x1f5e41c6…  committee 0x7ac7E9d4… → 0xEcAACb91…   legacy 0x539B9681… → 0xb5600060…
+ * nodeId 0xe3a4a3af…  committee            → 0x85744FD1…   legacy              → 0xEcAACb91…
+ * nodeId 0x96d64ba8…  committee            → 0xA5924206…   legacy              → 0xF7Bf79Ac…
+ * ```
+ *
+ * **Every operator differs between the two validators, and on the legacy one node1's operator is
+ * `0xb5600060…` — which is `Registry.owner()` itself.** So "is this address an operator?" has no
+ * answer until you say WHICH registry, and one of the answers is the governance key.
+ *
+ * That is why {@link checkFunderRole} takes a labelled exclusion set rather than one list: a run
+ * that checked only registry A would clear a funder that is a committee operator, and vice versa.
+ */
+
 /**
  * The funder is allowed to exist; it is not allowed to be governance or an operator (DSR ruling 2).
  *
@@ -229,7 +330,8 @@ export function checkAccountRouting(
 export function checkFunderRole(
     funder: Address,
     governance: readonly { label: string; address: Address }[],
-    registeredOperators: readonly Address[],
+    /** Per-registry, because the answer differs by registry — see the note above. */
+    registeredOperators: Readonly<Record<string, readonly Address[]>>,
 ): Check[] {
     const f = funder.toLowerCase();
     const out: Check[] = governance.map((g) => ({
@@ -237,16 +339,20 @@ export function checkFunderRole(
         ok: g.address.toLowerCase() !== f,
         detail: `funder must not be ${g.label} (${g.address})`,
     }));
-    out.push({
-        name: 'deployed:funder:not-an-operator',
-        ok: !registeredOperators.some((o) => o.toLowerCase() === f),
-        detail: `funder must not be one of the ${registeredOperators.length} registered operator(s)`,
-    });
-    // The list being empty is not evidence that the funder is absent from it.
-    out.push({
-        name: 'deployed:funder:operator-list-nonempty',
-        ok: registeredOperators.length > 0,
-        detail: `${registeredOperators.length} operator(s) read; an empty list makes the check above vacuous`,
-    });
+    // Labelled per registry: "is this an operator" is not answerable without saying which one,
+    // and a run that consulted only one of them would clear a funder that sits in the other.
+    for (const [label, list] of Object.entries(registeredOperators)) {
+        out.push({
+            name: `deployed:funder:not-an-operator:${label}`,
+            ok: !list.some((o) => o.toLowerCase() === f),
+            detail: `funder must not be one of the ${list.length} operator(s) in registry ${label}`,
+        });
+        // An empty list makes the check above trivially true, and it reads exactly like a real pass.
+        out.push({
+            name: `deployed:funder:operator-list-nonempty:${label}`,
+            ok: list.length > 0,
+            detail: `${list.length} operator(s) read from registry ${label}`,
+        });
+    }
     return out;
 }
