@@ -39,6 +39,7 @@ All notable changes to this project will be documented in this file.
 > | CI 对着 pin 的 provenance 门禁 | `abi-provenance` 在 `main` 上**连续 4 次 success**（`584ee246` / `3627ab1e` / `ca7b7f1d` / `055edd59`） |
 > | SDK ABI 与 pin 的差距 | `abi:sync` = **`0 missing · 1 drifted`**，唯一那条是 `BLSAggregator` |
 > | 那条 drift 的内容 | 5 个 4.12.0-only 新增项 + `guardianSlashCases` 的 `SAME SELECTOR, DIFFERENT RETURN` |
+> | 「已部署的是 4.11.0」靠什么成立 | **链上直读**：`0xEaeC2F51…`.`version()` 返回 `BLSAggregator-4.11.0`。注意是**小写 `version()`** —— 该合约没有 `VERSION()`（selector `0xffa1ad74` 不在它的 23667 字节里，`0x54fd4d50` 在）。`cc103-committee-probe` 原来问的是大写那个，于是打印 `X … reverted`，**把「我问错了」写成了「合约有问题」**，同时丢掉了本裁决唯一真正需要的那个读数。已修。 |
 > | 那条 drift 的处置 | 4.12.0 **由作者拍板暂不部署**（4.11 满足论文）；SDK 对齐的是**已部署的 4.11.0**；唯一危险面 `guardianSlashCase()` **fail-closed**（`ABI_SHAPE_MISMATCH`），不会返回一个貌似合理的错值 |
 > | 那道 fail-closed 今天被什么钉住 | **只有单测。** 部署的 `0xEaeC2F51…`(4.11.0) 对 `guardianSlashCase(0)` **revert，data `0x`** —— 链上一个 case 都没排过队，所以 7 字误解码此刻**不可达**（#383 评审实测）。这让结论更强（现在不可能出错）**也更窄**（守卫从没在链上响过）。**第一个真 case 落链时，要拿真实返回跑一次，确认它走的是正常解码而不是守卫。** |
 > | 全量回归 | 15 个包全绿；链上套件 27 passed / 2 skipped（两条 skip 卡在 FU-38 的 CI archive RPC secret） |
