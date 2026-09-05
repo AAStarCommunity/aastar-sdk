@@ -354,6 +354,40 @@ describe("_coordinateBlsAggregate — DVT transport / aggregation (#257 format, 
     expect(first).toBe(SIG_1);
   });
 
+
+  it("when nobody answers, the error says WHY each node dropped out (FU-32)", async () => {
+    // The three causes are handled identically on purpose — for liveness they are identical, one
+    // fewer co-signer. But when nobody answers they need opposite responses from an operator, and
+    // the sentence used to be the same for all of them: the loop collected the reasons and threw
+    // them away. Each cause is given a distinct shape here so a single generic message cannot pass.
+    mockPost.mockReset();
+    mockPost
+      .mockRejectedValueOnce(new Error("connect ECONNREFUSED 10.0.0.1:443"))
+      .mockResolvedValueOnce({ data: { nodeId: "0xnot-bytes32", signature: SIG_1 } });
+
+    const err = await (makeService() as any)
+      ._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ)
+      .then(() => null, (e: Error) => e);
+
+    expect(err, "the round must still fail — this is about diagnosis, not tolerance").toBeInstanceOf(Error);
+    expect(err.message).toContain("2 attempted");
+    expect(err.message, "the unreachable node's reason").toContain("ECONNREFUSED");
+    expect(err.message, "the incoherent node's reason").toMatch(/not a 32-byte hex value/);
+    expect(err.message, "and which endpoint each came from").toContain(NODES[0].apiEndpoint);
+    expect(err.message).toContain(NODES[1].apiEndpoint);
+  });
+
+  it("a round that SUCCEEDS carries no failure noise", async () => {
+    // The other half: a diagnosis appended to every message would train people to stop reading it.
+    mockPost.mockReset();
+    mockPost
+      .mockResolvedValueOnce({ data: { nodeId: N1, signature: SIG_1 } })
+      .mockResolvedValueOnce({ data: { nodeId: N2, signature: SIG_2 } })
+      .mockResolvedValueOnce({ data: { signature: "0xAGG" } });
+    const out = await (makeService() as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), DVT_REQ);
+    expect(out.nodeIds).toEqual([N1, N2]);
+  });
+
   it("throws when a dvtRequest is missing (DVT v1.7 requires owner authorization)", async () => {
     const svc = makeService();
     await expect((svc as any)._coordinateBlsAggregate(NODES, "0x" + "cd".repeat(32), undefined)).rejects.toThrow(
