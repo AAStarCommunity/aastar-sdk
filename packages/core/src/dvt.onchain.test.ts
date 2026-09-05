@@ -250,10 +250,14 @@ describe('the pinned nodeIds are the set the chain actually has (FU-17)', () => 
   // node registered by someone else, may not match. That moves the risk from a date ("it will break
   // eventually") to a structure ("whether they match depends on who registered").
   //
-  // A structural risk cannot be fixed by picking a better literal. It can be turned into a red test.
+  // A structural risk cannot be fixed by picking a better literal. It can be turned into a test that
+  // goes red — WHERE IT RUNS. On CI it does not: both cases below need an archive endpoint and are
+  // skipped without one (FU-38). Said here rather than only in the ledger, because the failure mode
+  // is somebody reading "FU-17 · done" in six months and concluding that stale pins are covered.
+  // They are covered by a check that exists; they are not covered by a check CI runs.
   it.runIf(RUN_LOGS)('every pinned nodeId is in the live active set', async () => {
     const at = await (archiveClient() as unknown as { getBlockNumber(): Promise<bigint> }).getBlockNumber();
-    const leaves = await committeeLeavesAt(archiveClient(), addrs.aaStarBLSAlgorithm as Address, at);
+    const leaves = await committeeLeavesAt(archiveClient(), sepoliaEnv.validator as Address, at);
     const active = new Set([...leaves.values()].map((v) => v.toLowerCase()));
 
     for (const node of sepoliaEnv.dvtNodes) {
@@ -271,7 +275,7 @@ describe('the pinned nodeIds are the set the chain actually has (FU-17)', () => 
     // itself a fault, but it means this config no longer describes the signer set, and a caller
     // choosing signers from it is choosing from a stale list.
     const at = await (archiveClient() as unknown as { getBlockNumber(): Promise<bigint> }).getBlockNumber();
-    const leaves = await committeeLeavesAt(archiveClient(), addrs.aaStarBLSAlgorithm as Address, at);
+    const leaves = await committeeLeavesAt(archiveClient(), sepoliaEnv.validator as Address, at);
     const pinned = new Set(sepoliaEnv.dvtNodes.map((n) => n.nodeId.toLowerCase()));
     const unknown = [...leaves.values()].map((v) => v.toLowerCase()).filter((id) => !pinned.has(id));
 
