@@ -30,19 +30,39 @@
 
 ## F1.2 — 节点 onboarding API
 
-### T1.2.1 盘点 CLI/mjs 脚本 → API 的缺口  `READY`
+### T1.2.1 盘点 CLI/mjs 脚本 → API 的缺口 (PR #361)  `DONE`
 - **优先级**：high
 - **目标**：明确 `register-node.mjs` / `dvt3-register.ts` 里哪些步骤还没有对应的 SDK API，产出缺口清单（社区节点接入的真正交付物是 API + portal，不是脚本）。
 - **开发范围**：只做盘点与设计，不写实现。
 - **明确不做**：不动 portal UI。
 - **依赖**：T1.1.1（先有一条跑通的真实路径再抽象）
-- **交付物**：`docs/agent/` 下一份缺口清单或直接展开成 T1.2.2+
-- **验收命令**：清单文件存在且逐条标注「已有 API / 需新增」
+- **交付物**：[`docs/agent/node-onboarding-api-gap.md`](node-onboarding-api-gap.md)
+- **验收命令**：
+  ```bash
+  awk '/^\| G[0-9]+ \|/{n++; if (/\| (已有 API|需新增) \|$/) ok++} \
+       END{printf "rows=%d labelled=%d\n",n,ok; exit (n>0 && n==ok)?0:1}' \
+    docs/agent/node-onboarding-api-gap.md
+  ```
+  实测 `rows=21 labelled=21` rc=0；把任一条判定改成表外词（如 `待定`）→ `labelled=20` rc=1，
+  所以它是能红的，不是恒真。
+- **结论**：21 个能力步骤，**已有 API 13 / 需新增 8**。`register-node.mjs` 在两个仓库里各有一份且
+  内容不同（DVT 侧 285 行、AirAccount 侧 107 行），三份全盘了。
+- **顺带核实（跨仓，不在本 task 修；读 `AirAccount` @ `4de82e4`）**：两个文件做的事不同——
+  `setup-server.py:155-157` 是真正的硬 pin，三个常量里 gToken/staking 逐字等于 canonical、
+  **只有 validator 那条是已被取代的 `0x539B9681…`**；`register-node.mjs` 完整地址命中 **0 个**，
+  它是 fail-closed（缺 `VALIDATOR_ADDRESS` 就 die），错的是它 die 信息里那句假事实
+  「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——canonical 实为活的 `0x7ac7E9d4…`。
+  两个 validator 都有代码、都对我们的节点答 `isRegistered=true`，所以填错了在链上看不出来。
 
 ### T1.2.2 节点 onboarding API 实现  `BACKLOG`
 - **优先级**：high
 - **依赖**：T1.2.1
-- **验收命令**：待 T1.2.1 定义
+- **验收命令**：缺口清单里 8 条「需新增」（G1/G4/G5/G6/G11/G12/G14/G21）逐条有实现，或有记录
+  在案的「决定不做」。
+- **⏳ 进入实现前需 jason 拍板三条**（见清单 §需新增的 8 条）：
+  - **G5** keystore 解密放哪个包——core 明确是 browser-safe（`no node:crypto`），解密进不来
+  - **G11** portal 要不要支持上传加密 keystore（SDK 是 viem-only，不能照抄 ethers 那条实现）
+  - **G21** bootstrap 注册路径（`requireStake==false` → `registerPublicKey`）是补齐还是明确不支持
 
 ---
 
@@ -212,7 +232,7 @@
 - **交付物**：本条台账记录 + T5.4.2 / T5.4.3 的拆分
 - **验收命令**：`test -d ~/Dev/aastar/AirAccount && ls packages/airaccount/src/server/services/kms-*.ts | wc -l`
 
-### T5.4.2 KMS 端点面对账（37 条 vs 服务端当前路由） (PR #337)  `PR_OPEN`
+### T5.4.2 KMS 端点面对账（37 条 vs 服务端当前路由） (PR #337)  `DONE`
 - **优先级**：mid
 - **目标**：把 SDK 打的 37 个端点逐条对上服务端 v0.30.0-beta.1 的实际路由，产出「仍存在 / 已改名 / 已移除 / 服务端新增但 SDK 未用」四类清单。
 - **明确不做**：不改客户端实现；只出对账结果与证据。每类差异各自成为独立 task。
@@ -220,7 +240,7 @@
 - **验收命令**：对账脚本退出码 + 四类清单齐全
 - **风险**：服务端是 Rust/TEE 栈，路由可能不在 TS 里。抓不到权威路由表就标 BLOCKED 说明缺什么，**不猜**。
 
-### T5.4.3 CC-19 安全加固在 SDK 侧的对应面 (PR #338)  `PR_OPEN`
+### T5.4.3 CC-19 安全加固在 SDK 侧的对应面 (PR #338)  `DONE`
 - **优先级**：mid
 - **目标**：CC-19 是 fail-closed API key + XSS 修复。确认 SDK 客户端在 API key 缺失/无效时 fail-closed（不是静默降级），并给出配对红。
 - **依赖**：T5.4.1

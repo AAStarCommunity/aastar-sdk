@@ -4,19 +4,31 @@
 
 ## 当前聚焦：M5 上游全面同步
 
-**更新于 2026-09-04 · main = `e4439dda`**
+**更新于 2026-09-05 · main = `1ecc587b`**
 
 | Feature | 状态 | 说明 |
 |---|---|---|
 | F5.1 SP 栈地址 | **全部 DONE** (#331 · #329 · #333 → `ea0e8a9b`) | 地址已切、三腿断言在 CI 常跑、证据已回写 |
 | F5.2 AirAccount v0.33.0 | T5.2.1 `DONE` (#332 → `a71106c2`) · T5.2.2 `READY` | 6 键已切并链上核验 |
 | F5.3 DVT 对齐核验 | **DONE** (#335 → `a9b85a5a`) | 已从「核一次」变成「门禁常核」 |
-| F5.4 KMS 面扫描 | T5.4.1 `PR_OPEN` (#336) · T5.4.2/T5.4.3 `READY` | 阻塞已解除：仓库=`~/Dev/aastar/AirAccount` @ v0.30.0-beta.1；37 端点/2165 行，已拆成两个可做完的 task |
+| F5.4 KMS 面扫描 | **全部 DONE** (#336 · #337 · #338) | 37 端点已对账；`apiKey` fail-open 现状已被表征测试固化，是否改必填 = FU-24 待拍板 |
+| F1.2 节点 onboarding API | T1.2.1 `PR_OPEN` | 缺口盘点交付：21 步 / 已有 API 13 / 需新增 8 |
 
-**刚完成**：CC-115 B4 = PR #329，4 轮 pr-daemon 评审，approved `ecd4343d` → 合并 `e4439dda`。
-B4 建立的双轴 pin + 可证伪门禁方法，是 M5 逐个上游套用的模板。
+**账本漂移已修正（2026-09-05）**：T5.4.2/T5.4.3 在 tasks.md 里一直标 `PR_OPEN`，而 #337/#338
+分别在 09-04 17:59 / 17:47 就已 MERGED。这是 FU-43 记的那一类——**已交付却没标**，
+结构上 `check:task-ledger` 看不见（它核「已声明的主张是否属实」，不核「已完成的工作是否被声明」）。
 
-**等他仓**（不阻塞 M5）：
+**方法论基线（仍适用）**：CC-115 B4 = PR #329，4 轮 pr-daemon 评审，approved `ecd4343d` →
+合并 `e4439dda`。它建立的双轴 pin + 可证伪门禁方法，是逐个上游套用的模板。
+
+**刚完成**：T1.2.1 缺口盘点。顺带核出一条跨仓事实（`AirAccount` @ `4de82e4`）：
+`setup-server.py:155-157` 硬 pin 三个 Sepolia 地址，gToken/staking 逐字等于 canonical、
+**只有 validator 那条是已被取代的 `0x539B9681…`**；`register-node.mjs` 则一个完整地址都没有，
+它是 fail-closed，错的是 die 信息里那句「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——
+canonical 实为活的 `0x7ac7E9d4…`。两个 validator 都答 `isRegistered=true`，**填错了在链上看不出来**。
+不在本仓修，已记入清单的「跨仓观察」。（初稿把两个文件并成「都硬 pin」，评审 #361 指出后逐文件重核。）
+
+**等他仓**（不阻塞）：
 - CC-115 双轴 pin 裁决 —— 已两次问 @repo:dsr（`bd2be1ec` / `dc08ec2b`），未回
 - DVT `fix/cc49-round5-…` 是否合入 master
 
@@ -24,8 +36,13 @@ B4 建立的双轴 pin + 可证伪门禁方法，是 M5 逐个上游套用的模
 
 | 分支 | 用途 | 状态 |
 |---|---|---|
-| `docs/pilot-plan-upstream-sync` | 本次规划文档 | 待 PR |
-| `codex/repcredit-e2e-evidence-20260823` | B4 evidence | 已合并（`e4439dda`） |
+| `feat/T1.2.1-node-onboarding-api-gap` | T1.2.1 缺口清单 | PR_OPEN |
+| `chore/followups-20260905-v` | FU-34 账本更正 | PR #360，评审打在旧 sha，等再评审 |
+| `docs/pilot-plan-upstream-sync` | 规划文档 | 待 PR |
+| `codex/repcredit-e2e-evidence-20260823` | B4 evidence | 已合并（`e4439dda`），worktree 仍在 |
+
+**挂起、需 jason 拍板**：PR #15（`[WIP] feat(m14)`，已 APPROVE 但标题仍 WIP、`checks=none`、
+开了 161 天）与 PR #14（Spore draft，CI FAILURE）。即 FU-2，**不擅自合**。
 
 
 ---
