@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   extractClaims,
@@ -308,7 +309,14 @@ describe('FU-66 — a status that names no PR was never checked, and the run sai
     // use `#N` for cross-repo ISSUES too (CC tasks, DVT #314/#320), so a header mentioning an issue
     // would have satisfied a check that exists to locate a PULL REQUEST.
     expect(findUnverifiableStatuses(file, '### T9.9.9 关于 #362 的重构  `PR_OPEN`')).toHaveLength(1);
-    expect(findUnverifiableStatuses(file, '### T9.9.9 关于 PR #362 的重构  `PR_OPEN`')).toEqual([]);
+    // The second half of this case USED TO assert `[]` for `关于 PR #362 的重构` — i.e. it pinned
+    // the fail-open FU-68 records as though it were the intended behaviour. "关于 PR #362 的重构"
+    // MENTIONS a PR; it does not name the row's own. **A test can hold a bug in place, and this one
+    // did**: #376 review found the defect by reading the code, not by running the suite, because
+    // the suite agreed with the code.
+    expect(findUnverifiableStatuses(file, '### T9.9.9 关于 PR #362 的重构  `PR_OPEN`')).toHaveLength(1);
+    // What actually names it — the spelling every row in the ledger already uses.
+    expect(findUnverifiableStatuses(file, '### T9.9.9 重构 (PR #362)  `PR_OPEN`')).toEqual([]);
   });
 
   it('THE REGRESSION: the real ledger is clean now, and was not before', () => {
@@ -323,5 +331,53 @@ describe('FU-66 — a status that names no PR was never checked, and the run sai
     const stale = readFileSync(file, 'utf8')
       .replace('### T2.1.1 slash 只读查询 API (PR #362)  `DONE`', '### T2.1.1 slash 只读查询 API  `PR_OPEN`');
     expect(findUnverifiableStatuses(file, stale)).toHaveLength(1);
+  });
+});
+
+describe('FU-68 — the OTHER half of the same function was still fail-open', () => {
+  // #376 fixed mention-vs-use on the STATUS half (only the trailing code span counts) and left the
+  // "does this header name a PR" half matching the whole line. Review found it. Both of the cases
+  // below were silent on that version, and silence here means the row goes unchecked — the exact
+  // defect `findUnverifiableStatuses` was written to catch, reached from the other side.
+  const file = 'docs/agent/tasks.md';
+  const reports = (line: string) => findUnverifiableStatuses(file, line).length > 0;
+
+  it('a PR number inside a code span does not name the row PR', () => {
+    expect(reports('### T2.2 说明 `PR #123` 这种写法  `PR_OPEN`')).toBe(true);
+  });
+
+  it('a PR number in plain prose does not either — masking alone would NOT have caught this', () => {
+    // Worth keeping separate from the case above: they fail for different reasons and a fix that
+    // only added `maskCodeSpans` would pass the first and still miss this one. That fix was the
+    // obvious one, and it is half a fix.
+    expect(reports('### T2.3 见 docs/foo.md 里的 PR #123 例子  `APPROVED`')).toBe(true);
+  });
+
+  it('a header DOCUMENTING the (PR #N) convention does not satisfy it by quoting it', () => {
+    // The rule cannot be cited inside the medium it polices — FU-56 #2, third occurrence.
+    //
+    // The fixture uses a REAL number on purpose. The first draft wrote a literal `(PR #N)`, which
+    // passed with masking removed — `N` is not a digit, so the regex never matched it either way.
+    // The case was asserting something it was not testing, and only mutation said so: dropping
+    // `maskCodeSpans` reded ZERO. Same defect as the curve-check fixture in #367.
+    expect(reports('### T2.5 例如写成 `(PR #362)` 这样  `PR_OPEN`')).toBe(true);
+    // ...and the un-quoted form of the very same text is accepted, so this pins the QUOTING and
+    // not merely the words around it.
+    expect(reports('### T2.5 例如写成 (PR #362) 这样  `PR_OPEN`')).toBe(false);
+  });
+
+  it('POSITIVE CONTROL: the conventional form is accepted', () => {
+    // Without this, requiring the parenthesised spelling could have rejected EVERY row and still
+    // passed the three cases above — and "the gate reports everything" is how a gate gets deleted.
+    expect(reports('### T2.1 x (PR #362)  `PR_OPEN`')).toBe(false);
+  });
+
+  it('POSITIVE CONTROL: the real ledger still passes, and its DONE rows use this spelling', () => {
+    // The convention is not invented here — it is what the file already does. If that were untrue,
+    // the rule above would be a new demand dressed up as an existing one.
+    const text = readFileSync(join(process.cwd(), file), 'utf8');
+    expect(findUnverifiableStatuses(file, text)).toEqual([]);
+    const named = text.split('\n').filter((l) => /^#{2,4}\s+T[0-9.]+/.test(l) && /\(PR ?#\d+\)/.test(l));
+    expect(named.length, 'no row uses (PR #N), so this rule has no basis in the file').toBeGreaterThan(5);
   });
 });
