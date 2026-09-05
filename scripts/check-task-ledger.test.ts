@@ -8,7 +8,13 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { extractClaims, reconcile, resolveSelfPrFromEnv, type Claim } from './check-task-ledger.js';
+import {
+  extractClaims,
+  findUnverifiableStatuses,
+  reconcile,
+  resolveSelfPrFromEnv,
+  type Claim,
+} from './check-task-ledger.js';
 
 const states = (m: Record<number, 'MERGED' | 'OPEN' | 'CLOSED'>) =>
   new Map(Object.entries(m).map(([k, v]) => [Number(k), v] as const));
@@ -242,4 +248,80 @@ describe('FU-56 — two model gaps, both hit on the same real entry', () => {
             expect(c[0].pr).toBe(7);
         });
     });
+});
+
+describe('FU-66 — a status that names no PR was never checked, and the run said ✅', () => {
+  // The two rows that prompted this were `T1.1.2` and `T2.1.1`, both reading `PR_OPEN` while their
+  // PRs (#368, #362) had merged. `extractClaims` found nothing on either line — a claim with no
+  // number produces no claim — so the reconciliation printed "every PR claim agrees with GitHub"
+  // and was, narrowly, telling the truth. Same shape as FU-63 in the other ledger, one day apart.
+  const file = 'docs/agent/tasks.md';
+
+  it('flags a status that asserts a live PR without naming one', () => {
+    const out = findUnverifiableStatuses(file, '### T9.9.9 something  `PR_OPEN`');
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ task: 'T9.9.9', status: 'PR_OPEN', where: `${file}:1` });
+  });
+
+  it('POSITIVE CONTROL: the same header WITH a PR number is accepted', () => {
+    // Without this, a function that flagged every in-flight header would pass the case above while
+    // making the gate unusable — and the honest fix would look like "turn it off".
+    expect(findUnverifiableStatuses(file, '### T9.9.9 something (PR #362)  `PR_OPEN`')).toEqual([]);
+  });
+
+  it('does NOT demand a PR number from DONE — a task can finish without one', () => {
+    // The deliberate hole. T1.1.1, T3.1.1, T5.1.1 are all DONE with no PR: measurements and
+    // decisions, not branches. Requiring a number there would fire on correct entries, and a gate
+    // that fires on correct entries is a gate someone deletes.
+    expect(findUnverifiableStatuses(file, '### T1.1.1 evidence script  `DONE`')).toEqual([]);
+    expect(findUnverifiableStatuses(file, '### T2.1.2 timelock  `BLOCKED`')).toEqual([]);
+    expect(findUnverifiableStatuses(file, '### T0.0.1 backlog item  `READY`')).toEqual([]);
+  });
+
+  it('covers every in-flight status, not just PR_OPEN', () => {
+    for (const s of ['PR_OPEN', 'APPROVED', 'CHANGES_REQUESTED']) {
+      expect(findUnverifiableStatuses(file, `### T9.9.9 x  \`${s}\``), s).toHaveLength(1);
+    }
+  });
+
+  it('a PR number in the BODY does not satisfy the header — T2.1.1 was exactly this', () => {
+    // Its body carried `#362` three paragraphs down while its header said PR_OPEN. A number a
+    // reader has to hunt for is not what they see when scanning statuses, and the two disagreed
+    // for hours. Note the body form is also a bare `#362`, which the claim regex would not match
+    // even if body text did count — two independent reasons the row was invisible.
+    const doc = ['### T2.1.1 slash getters  `PR_OPEN`', '- 评审 #362 量到并更正我写的 617'].join('\n');
+    expect(findUnverifiableStatuses(file, doc)).toHaveLength(1);
+  });
+
+  it('the status is the LAST code span, not any status word on the line', () => {
+    // Self-review, before it fired: a header that MENTIONS a status while carrying another would
+    // have been read as the mentioned one. Same mention-vs-use confusion FU-56 recorded for the
+    // claim regex — a rule cannot be cited inside the medium it polices.
+    expect(findUnverifiableStatuses(file, '### T9.9.9 讲 `PR_OPEN` 的用法  `DONE`')).toEqual([]);
+    // ...and the genuinely-in-flight one on a line that also mentions another status still reds.
+    expect(findUnverifiableStatuses(file, '### T9.9.9 不再是 `DONE` 了  `PR_OPEN`')).toHaveLength(1);
+  });
+
+  it('a BARE #362 in the header does not count — `#` alone is ambiguous here', () => {
+    // Found by mutation, not by design: loosening the header pattern from `PR #\d+` to `#\d+`
+    // produced ZERO reds, so nothing was pinning the distinction. It matters because these ledgers
+    // use `#N` for cross-repo ISSUES too (CC tasks, DVT #314/#320), so a header mentioning an issue
+    // would have satisfied a check that exists to locate a PULL REQUEST.
+    expect(findUnverifiableStatuses(file, '### T9.9.9 关于 #362 的重构  `PR_OPEN`')).toHaveLength(1);
+    expect(findUnverifiableStatuses(file, '### T9.9.9 关于 PR #362 的重构  `PR_OPEN`')).toEqual([]);
+  });
+
+  it('THE REGRESSION: the real ledger is clean now, and was not before', () => {
+    // Anchored to the file rather than a fixture, because the fault was in the file. If either row
+    // regresses to a bare `PR_OPEN`, this reds without anyone remembering why it exists.
+    expect(findUnverifiableStatuses(file, readFileSync(file, 'utf8'))).toEqual([]);
+  });
+
+  it('POSITIVE CONTROL for the line above: the pre-fix text still reds', () => {
+    // Otherwise `[]` from a clean file and `[]` from a function that stopped working look the same
+    // — the exact confusion FU-61 records (a negative control blind in the same way as the case).
+    const stale = readFileSync(file, 'utf8')
+      .replace('### T2.1.1 slash 只读查询 API (PR #362)  `DONE`', '### T2.1.1 slash 只读查询 API  `PR_OPEN`');
+    expect(findUnverifiableStatuses(file, stale)).toHaveLength(1);
+  });
 });

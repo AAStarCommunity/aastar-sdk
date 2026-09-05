@@ -112,7 +112,7 @@ dryRun 得到的 nodeId vs state）。理由写在 dvt3:130 的 abort 信息里�
 > | 锚点 | router | `getAlgorithm(0x01)` |
 > |---|---|---|
 > | 本仓 canonical `aaStarValidator`（v0.33.0 ValidatorRouter） | `0xA97A752779ebfDA58612F6727Ec7C8366c39f897` | `0x7ac7E9d4…` |
-> | 参考账户 `0x92EA8b02…`.`validatorRouter()` | `0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c` | `0x539B9681…` |
+> | 参考账户 `0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8`.`validatorRouter()` | `0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c` | `0x539B9681…` |
 >
 > 也就是说，按**「部署中的账户实际会咨询谁」**这个判据，`setup-server.py` pin 的那个是对的。
 > 我用的是**「地址簿说哪个是当前 router」**这个判据。两个判据都不是任意的，答案不同。
@@ -123,7 +123,7 @@ dryRun 得到的 nodeId vs state）。理由写在 dvt3:130 的 abort 信息里�
 >
 > | account（各 45 字节代理） | `validatorRouter()` | `getAlgorithm(0x01)` |
 > |---|---|---|
-> | `0x92EA8b02…`（owner `0xb5600060…`） | `0xe68d6A7B…` | `0x539B9681…` |
+> | `0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8`（owner `0xb5600060…`） | `0xe68d6A7B…` | `0x539B9681…` |
 > | `0x0985785d1fc37978474C472E39391774DcB1C711`（owner `0xEcAACb91…`） | `0xA97A7527…` | `0x7ac7E9d4…` |
 >
 > 第二个账户的出处对这条的证明力是关键：**它不是从任何地址簿里读出来的**——dvt 从 committee
