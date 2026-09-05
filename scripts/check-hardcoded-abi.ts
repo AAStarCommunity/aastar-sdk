@@ -7,10 +7,17 @@
  * against every ABI under `packages/core/src/abis/`:
  *
  * ```
- * registerValidator(bytes)               → exists on no contract in this repo
- * signProposal(uint256,bytes)            → exists on no contract in this repo
- * createProposal(address,uint8,string)   → real one takes (address,uint8,string,bytes32)
+ * registerValidator(bytes)               → exists on no contract in this repo (0/52 ABIs)
+ * signProposal(uint256,bytes)            → exists on no contract in this repo (0/52 ABIs)
+ * createProposal(address,uint8,string)   → EXISTS (DVTValidator declares both the 3-param
+ *                                          0x8e24bc9a and the 4-param 0x2dcc352b overloads)
  * ```
+ *
+ * **Correction, #381 review.** This said all three were wrong. My audit script kept one signature
+ * per name, so it compared against the four-parameter overload and called the three-parameter one
+ * a mismatch — **an extractor that collapses overloads is blind to the one case where a single
+ * name carries two selectors**, which is precisely the hazard #362 was about. Two of the three
+ * were invented; the third was real and never called.
  *
  * `DVTClient.registerValidator` was publicly exported and could only ever revert.
  *
@@ -25,9 +32,11 @@
  * ## Why THIS rule, rather than "no hardcoded ABIs"
  *
  * Because hand-written ABIs are sometimes correct and necessary, and a gate that forbids them
- * outright would fire on four files in `packages/airaccount` that need one (a factory ABI that
- * genuinely is not in `@aastar/core`). Those files already do the right thing: an
- * `eslint-disable-next-line no-restricted-imports` with a reason.
+ * outright would fire on the files in `packages/airaccount` that need one (a factory ABI that
+ * genuinely is not in `@aastar/core`). Those already do the right thing: an
+ * `eslint-disable-next-line no-restricted-imports` with a reason — **19 shipped files there
+ * mention `parseAbi` and every one of them carries a justification.** (An earlier version of this
+ * comment said "four", a number I did not measure and could not reproduce afterwards.)
  *
  * So the rule is the one the repo already follows: **if you hand-write an ABI, say why on the line
  * above.** That is mechanical, it fires on exactly the file that had no answer, and complying with

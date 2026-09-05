@@ -8,13 +8,23 @@
  * repository.** Measured against every ABI under `packages/core/src/abis/`:
  *
  * ```
- * registerValidator(bytes)                  → exists nowhere
- * signProposal(uint256,bytes)               → exists nowhere
- * createProposal(address,uint8,string)      → real one is (address,uint8,string,bytes32)
- *                                             four params, so a DIFFERENT selector
+ * registerValidator(bytes)                  → exists nowhere (0 hits across 52 ABIs)
+ * signProposal(uint256,bytes)               → exists nowhere (0 hits across 52 ABIs)
+ * createProposal(address,uint8,string)      → EXISTS. DVTValidator declares two overloads,
+ *                                             0x8e24bc9a (3 params) and 0x2dcc352b (4 params)
  * ```
  *
- * All three hand-written signatures were wrong; the real registration entry points are
+ * **Correction, #381 review.** An earlier version of this comment said all three were wrong. The
+ * third one is real — and the way I got it wrong is the same hazard this whole file is about: my
+ * audit script kept ONE signature per function name, so it saw the four-parameter overload and
+ * reported a mismatch. **An extractor that collapses overloads is blind to exactly the case where
+ * one name has two selectors**, which is the shape that cost a day elsewhere in this repo
+ * (`guardianSlashCases`, #362).
+ *
+ * It was still dead weight here: `createProposal` was declared in the literal and never called by
+ * any method on the class. Two invented names and one unused real one.
+ *
+ * The real registration entry points are
  * `registerWithProof(bytes,bytes,bytes)` (staked path) and `registerPublicKey(bytes32,bytes)`
  * (bootstrap, unreachable on every environment we run — `requireStake()` is true).
  *
