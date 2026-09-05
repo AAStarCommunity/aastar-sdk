@@ -107,15 +107,19 @@ export class ReputationClient {
             throw new Error("Wallet client required to submit proofs");
         }
 
-        // Using a generic 'submitProof' signature for now
-        // In reality this would target the ReputationOracle or similar
-        return this.walletClient.writeContract({
-            address: this.reputationAddress,
-            abi: parseAbi(['function submitProof(string,bytes32)']),
-            functionName: 'submitProof',
-            args: [params.proofData, params.signature],
-            chain: this.walletClient.chain,
-            account: this.walletClient.account
-        });
+        // The comment that used to sit here said it all: "Using a generic 'submitProof' signature
+        // for now / In reality this would target the ReputationOracle or similar". It was a
+        // placeholder that SENT A TRANSACTION — `submitProof` appears in none of this repo's 52
+        // ABIs, so every call could only revert, after paying gas, with "execution reverted" and
+        // nothing naming the cause.
+        //
+        // A stub that throws and a stub that broadcasts are very different things. This one now
+        // throws, which is what its own comment always implied it should do.
+        throw new Error(
+            'ReputationClient.submitProof is not implemented. The original code sent a transaction ' +
+            'to `submitProof(string,bytes32)`, a function declared by no contract in this SDK — its ' +
+            'own comment called the signature "generic for now". Wire it to the real reputation ' +
+            'entry point before using it.',
+        );
     }
 }
