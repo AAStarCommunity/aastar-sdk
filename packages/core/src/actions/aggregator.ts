@@ -645,11 +645,18 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             );
         }
 
-        // Length is NECESSARY BUT NOT SUFFICIENT: a same-width change (4.12.0 REPLACING a field rather
-        // than adding one) is still 7 words and sails through the check above. The cheap complement is
-        // the one word whose valid values are constrained — `verifier` is an address, so its high 12
-        // bytes MUST be zero. Any field shift moves a uint256/bytes32 into that slot and lights up
-        // immediately. Length catches additions; this catches displacement.
+        // Length is NECESSARY BUT NOT SUFFICIENT: a same-width change (a field REPLACED rather than
+        // added) is still 7 words and sails through the check above. The cheap complement is the one
+        // word whose valid values are constrained — `verifier` is an address, so its high 12 bytes
+        // MUST be zero.
+        //
+        // BE PRECISE ABOUT WHAT THIS DOES NOT COVER. It catches displacement only when the displaced
+        // value is LARGE. Measured against the actual 4.12.0 struct
+        // (SuperPaymaster@d651646a BLSAggregator.sol:143), which inserts `uint16 slashBps` BEFORE
+        // `verifier`: a 7-parameter decode would read `slashBps` in the `verifier` slot, and a uint16
+        // is right-aligned with 30 zero high bytes — so this check passes. The width check is what
+        // stops that one, and it is the reason both exist. Do not describe this as a general
+        // field-shift detector; the very next upstream change is the case it misses.
         const verifierWord = raw.slice(2 + GUARDIAN_SLASH_CASE_VERIFIER_WORD * 64);
         if (!/^0{24}/.test(verifierWord)) {
             throw new AAStarError(

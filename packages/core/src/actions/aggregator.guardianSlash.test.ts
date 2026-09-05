@@ -211,6 +211,49 @@ describe('guardianSlashCase shape gate (BLSAggregator 4.11.0 = 7 words)', () => 
         ).rejects.toThrow(/returned 256 bytes.*expected 224/s);
     });
 
+    it('REFUSES the REAL 4.12.0 layout — read from upstream source, not invented', async () => {
+        // The case above uses a made-up extra word. This one is the actual struct, transcribed from
+        // SuperPaymaster@d651646a `contracts/src/modules/monitoring/BLSAggregator.sol:143`, which
+        // self-declares `BLSAggregator-4.12.0` while the deployed contract is 4.11.0:
+        //
+        //   bytes32 guardiansHash / bytes32 fraudProofHash / uint64 deadline / uint8 status
+        //   uint16 guardianCount / uint16 resolvedCount / uint16 slashBps / address verifier
+        //
+        // `slashBps` is INSERTED BEFORE `verifier`, not appended — so a 7-parameter decode reads
+        // words 0-5 correctly, reads `slashBps` AS `verifier`, and drops the real verifier entirely.
+        // An invented trailing word could never have shown that.
+        const REAL_412 = [
+            CASE_WORDS[0], CASE_WORDS[1], CASE_WORDS[2], CASE_WORDS[3], CASE_WORDS[4], CASE_WORDS[5],
+            word('64'),                                       // slashBps = 100 bps, the new word 6
+            word('a1346F1668cBf8D031Cc5D72eDA45F5788CA1cd3'), // verifier, displaced to word 7
+        ];
+        const { client } = mockCallClient(('0x' + REAL_412.join('')) as `0x${string}`);
+        await expect(
+            aggregatorActions(ADDR)(client).guardianSlashCase({ caseId: 1n }),
+        ).rejects.toThrow(/returned 256 bytes.*expected 224/s);
+    });
+
+    it('and on that real layout ONLY the width guard fires — the zero-padding one is blind to it', async () => {
+        // Worth pinning because it corrects an overclaim. `slashBps` is a uint16: right-aligned,
+        // 30 zero high bytes. So when it lands in the `verifier` slot the high-12-bytes check passes
+        // happily. The zero-padding guard catches displacement only when the displaced value is
+        // LARGE — it is not a general field-shift detector, and the real upcoming change is exactly
+        // the case it misses.
+        //
+        // Truncating the real 4.12.0 return to 7 words simulates "width somehow agreed": every
+        // remaining guard is then satisfied, and `verifier` decodes to 0x…0064 — a plausible-looking
+        // address that is really a basis-point count. That is what the width check is preventing,
+        // alone.
+        const truncated = [
+            CASE_WORDS[0], CASE_WORDS[1], CASE_WORDS[2], CASE_WORDS[3], CASE_WORDS[4], CASE_WORDS[5],
+            word('64'), // slashBps sitting where verifier is expected
+        ];
+        const { client } = mockCallClient(('0x' + truncated.join('')) as `0x${string}`);
+        const res = await aggregatorActions(ADDR)(client).guardianSlashCase({ caseId: 1n });
+        expect(res.verifier).toBe('0x0000000000000000000000000000000000000064');
+        // Documented, not celebrated: this is the shape the guards do NOT catch between them.
+    });
+
     it('REFUSES a 6-word return too — the gate is exact, not a lower bound', async () => {
         const sixWords = ('0x' + CASE_WORDS.slice(0, 6).join('')) as `0x${string}`;
         const { client } = mockCallClient(sixWords);
