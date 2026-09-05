@@ -1,4 +1,5 @@
 import { type Address, parseAbi } from 'viem';
+import { PaymasterABI } from '@aastar/core';
 import { type GaslessReadinessReport, type PaymasterV4MiddlewareConfig } from './PaymasterUtils';
 
 /**
@@ -114,56 +115,112 @@ export class PaymasterOperator {
         } as any);
     }
 
-    static async addGasToken(wallet: any, address: Address, token: Address) {
+    /**
+     * ## The five methods that used to live here, and what was wrong with them
+     *
+     * Each passed a **raw human-readable string array** as `abi:` — `['function addGasToken(...)']`
+     * — which viem does not accept. Measured: `encodeFunctionData` throws
+     * `Cannot use 'in' operator to search for 'name' in function addGasToken(address token)`,
+     * so these threw locally and never reached a node.
+     *
+     * Three of the five also named functions that **do not exist on the deployed contract**.
+     * Probed against the implementation behind the aPNTs PaymasterV4 proxy
+     * (EIP-1167 → `0xc0f968625e3ac0a2ad7f107cd5857425f672d268`, 10493 bytes), Sepolia block 11639724:
+     *
+     * ```
+     * addGasToken(address)                  ❌      setServiceFeeRate(uint256)     ✅
+     * removeGasToken(address)               ❌      setMaxGasCostCap(uint256)      ✅
+     * withdrawPNT(address,address,uint256)  ❌      setTokenPrice(address,uint256) ✅
+     *                                              removeToken(address)           ✅
+     *                                              withdrawTo(address,uint256)    ✅
+     * ```
+     *
+     * (The ✅ column is the positive control: the same probe on the same bytecode finds real
+     * selectors, so the ❌ column is a fact about those names and not a broken instrument. An
+     * earlier run of this probe against the PROXY address returned ❌ for everything — a 45-byte
+     * EIP-1167 stub contains no selectors at all. That reading looked exactly like a discovery.)
+     *
+     * The two that exist are restored below against `PaymasterABI` from `@aastar/core`. The three
+     * that do not are kept as **throwing shims** rather than deleted: a caller upgrading past this
+     * change gets a message naming the replacement, instead of viem's `'in' operator` error —
+     * which is what they were already getting, just without an explanation.
+     *
+     * `addGasToken` and `withdrawPNT` cannot be forwarded automatically, and that is the part worth
+     * noticing: **their parameter lists were wrong too.** Registering a gas token needs a price,
+     * and `withdrawTo(to, amount)` takes no token at all. The signatures were invented alongside
+     * the names.
+     *
+     * `setTokenPrice` — the real way to register a gas token — **was already here all along**,
+     * correct and using `parseAbi`, twenty lines above `addGasToken`. So the broken method was not
+     * filling a gap; it was a second, fictional spelling of a capability the class already had.
+     */
+    static async removeToken(wallet: any, address: Address, token: Address) {
         return wallet.writeContract({
             address,
-            abi: ['function addGasToken(address token)'],
-            functionName: 'addGasToken',
+            abi: PaymasterABI,
+            functionName: 'removeToken',
             args: [token],
-            chain: wallet.chain
+            chain: wallet.chain,
         } as any);
     }
 
-    static async removeGasToken(wallet: any, address: Address, token: Address) {
+    static async withdrawTo(wallet: any, address: Address, to: Address, amount: bigint) {
         return wallet.writeContract({
             address,
-            abi: ['function removeGasToken(address token)'],
-            functionName: 'removeGasToken',
-            args: [token],
-            chain: wallet.chain
+            abi: PaymasterABI,
+            functionName: 'withdrawTo',
+            args: [to, amount],
+            chain: wallet.chain,
         } as any);
+    }
+
+    /** @deprecated Not a function on PaymasterV4. Use {@link setTokenPrice}. */
+    static async addGasToken(_wallet: any, _address: Address, _token: Address): Promise<never> {
+        throw new Error(
+            'PaymasterOperator.addGasToken: `addGasToken(address)` is on no deployed PaymasterV4 ' +
+            '(verified against implementation 0xc0f968625e3ac0a2ad7f107cd5857425f672d268). ' +
+            'Registering a gas token also needs a price — use setTokenPrice(wallet, paymaster, token, price).',
+        );
+    }
+
+    /** @deprecated Wrong name. Use {@link removeToken}. */
+    static async removeGasToken(_wallet: any, _address: Address, _token: Address): Promise<never> {
+        throw new Error(
+            'PaymasterOperator.removeGasToken: the contract function is `removeToken(address)`. ' +
+            'Use removeToken(wallet, paymaster, token).',
+        );
     }
 
     static async setServiceFeeRate(wallet: any, address: Address, rate: bigint) {
         return wallet.writeContract({
             address,
-            abi: ['function setServiceFeeRate(uint256 rate)'],
+            abi: PaymasterABI,
             functionName: 'setServiceFeeRate',
             args: [rate],
-            chain: wallet.chain
+            chain: wallet.chain,
         } as any);
     }
 
     static async setMaxGasCostCap(wallet: any, address: Address, cap: bigint) {
         return wallet.writeContract({
             address,
-            abi: ['function setMaxGasCostCap(uint256 cap)'],
+            abi: PaymasterABI,
             functionName: 'setMaxGasCostCap',
             args: [cap],
-            chain: wallet.chain
+            chain: wallet.chain,
         } as any);
     }
 
-    static async withdrawPNT(wallet: any, address: Address, to: Address, token: Address, amount: bigint) {
-        return wallet.writeContract({
-            address,
-            abi: ['function withdrawPNT(address to, address token, uint256 amount)'],
-            functionName: 'withdrawPNT',
-            args: [to, token, amount],
-            chain: wallet.chain
-        } as any);
+    /** @deprecated Wrong name AND wrong parameters. Use {@link withdrawTo}. */
+    static async withdrawPNT(
+        _wallet: any, _address: Address, _to: Address, _token: Address, _amount: bigint,
+    ): Promise<never> {
+        throw new Error(
+            'PaymasterOperator.withdrawPNT: `withdrawPNT` is on no deployed PaymasterV4, and the ' +
+            'real entry point takes no token argument. Use withdrawTo(wallet, paymaster, to, amount).',
+        );
     }
-    
+
     // --- Diagnostics & Automation ---
 
     static async checkGaslessReadiness(
@@ -264,12 +321,13 @@ export class PaymasterOperator {
 
         // 4. Token Support & Price
         if (report.details.tokenPrice === 0n) {
-            try {
-                const hash = await this.addGasToken(operatorWallet, paymasterAddress, token);
-                await publicClient.waitForTransactionReceipt({ hash });
-                results.push({ step: 'AddGasToken', hash, status: 'Confirmed' });
-            } catch (e) {}
-
+            // An `addGasToken(...)` call used to sit here inside `try { } catch (e) {}`. It threw
+            // every single time — viem rejects the raw string array it passed as `abi:` — and the
+            // empty catch swallowed it, so `results` simply never gained an 'AddGasToken' entry.
+            //
+            // **An always-throwing call inside an empty catch is indistinguishable from a call that
+            // succeeded but produced nothing**, and the working code was already on the next line:
+            // `setTokenPrice` is how a gas token is registered, it was correct, and it ran.
             if (options.tokenPriceUSD) {
                 const hash = await this.setTokenPrice(operatorWallet, paymasterAddress, token, options.tokenPriceUSD);
                 await publicClient.waitForTransactionReceipt({ hash });

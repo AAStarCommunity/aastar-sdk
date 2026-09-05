@@ -56,15 +56,21 @@ export class FinanceClient {
         } as any);
     }
 
-    /** @deprecated Use instance methods instead */
-    static async stakeGToken(wallet: WalletClient, stakingAddr: Address, amount: bigint) {
-         return wallet.writeContract({
-            address: stakingAddr,
-            abi: STAKING_ABI,
-            functionName: 'stake',
-            args: [amount],
-            chain: wallet.chain
-        } as any);
+    /**
+     * @deprecated `stake(uint256)` is on no deployed GTokenStaking. Measured on Sepolia at block
+     * 11639724: selector 0xa694fc3a is absent from 0x472297B5…'s 9061 bytes. The real ABI declares
+     * `lockStakeWithTicket` / `topUpStake` / `getStakeInfo` — there is no bare `stake`.
+     *
+     * Throws instead of sending. It could only ever revert, and a revert costs gas and arrives as
+     * "execution reverted" with nothing pointing at the cause.
+     */
+    static async stakeGToken(_wallet: WalletClient, _stakingAddr: Address, _amount: bigint): Promise<never> {
+        throw new Error(
+            'FinanceClient.stakeGToken: `stake(uint256)` is on no deployed GTokenStaking ' +
+            '(verified against 0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e). The contract declares ' +
+            'lockStakeWithTicket / topUpStake; pick the one that matches your intent — they are not ' +
+            'the same operation and this wrapper cannot choose for you.',
+        );
     }
 
     /** @deprecated Use instance methods instead */

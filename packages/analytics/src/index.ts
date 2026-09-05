@@ -67,6 +67,19 @@ export class AnalyticsClient {
             }) as Promise<bigint>
         ]);
 
+        // `totalLifetimeBurned()` is NOT on the deployed GToken. Measured on Sepolia at block
+        // 11639724: the selector 0x5c5de6a9 is absent from 0x4c09aE57…'s 6113 bytes, while
+        // `totalSupply()` (0x18160ddd) IS present — same probe, same bytecode, so this is a fact
+        // about that function and not a broken reading.
+        //
+        // So the `catch` below is not a fallback: **it is the only path this code has ever taken.**
+        // The derivation it computes is the real answer, and it is correct — burned is what the cap
+        // no longer accounts for. The shape is left as-is deliberately, because a future GToken may
+        // add the counter and the read would then be preferred.
+        //
+        // What is worth knowing is that the two branches are NOT interchangeable if that day comes:
+        // an on-chain counter measures burns, the derivation measures "cap minus what exists and
+        // what may still be minted". They agree today only because nothing else consumes the cap.
         let totalLifetimeBurned = 0n;
         try {
             totalLifetimeBurned = await this.publicClient.readContract({
