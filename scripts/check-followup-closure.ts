@@ -57,6 +57,25 @@ export interface ClosureProblem {
  *
  * So the trigger is a closing claim. That is mechanical and unambiguous, and it is what the drift
  * actually looked like: the body said the work was done, and the ledger did not.
+ *
+ * A GAP THIS SURFACED — and the worst kind, because the gate does not merely miss it, it PUSHES
+ * toward the wrong answer:
+ *
+ * `done=PR#N` names the PR that DID THE WORK, not the PR that wrote the marker. So a bookkeeping-only
+ * PR has no honest way to speak here. Say "closes FU-34" and the gate demands `done=PR#<this>` — which
+ * would make the ledger claim that a one-line markdown change delivered a `requireStake()` watch.
+ * Say nothing and it passes, but that is not quite true either: the entry IS being closed, here.
+ *
+ * #360 hit exactly this. Its title said "关闭 FU-34" (`关闭` is a CLOSES_CLAIM word) while the entry
+ * credits #345. The gate was right to object, and its first prescription — point `done=` at this PR —
+ * would have written a falsehood into the ledger. Taking the second (drop the claim) is the correct
+ * workaround today.
+ *
+ * The contract is missing a third kind of statement: "this PR RECORDS that FU-N was closed by #M".
+ * Both halves are mechanically checkable — the ledger says `done=PR#M`, and #M is MERGED. Until it
+ * exists, a bookkeeping PR must phrase itself as not-closing, which is a workaround and is recorded
+ * as such in FU-43. **A gate that pushes people toward a false statement is worse than one that
+ * misses the true one.**
  */
 const CLOSES_CLAIM = /(?:Closes|Fixes|Resolves|关闭|已修|修复)\s+FU-(\d+)/gi;
 
@@ -171,11 +190,22 @@ if (process.argv[1]?.endsWith('check-followup-closure.ts')) {
   }
   const problems = checkClosure(body, readFileSync(LEDGER, 'utf8'), number);
   const mentioned = [...new Set([...body.matchAll(FU_MENTION)].map((m) => `FU-${m[1]}`))];
+  // Both lines below say CLAIMS, not mentions. They used to say "mentioned", while `problems` only
+  // ever examined closing claims — a success message asserting something it had not checked, which
+  // is the exact failure this repo spent a night hunting, sitting in the tool built to hunt it.
+  //
+  // The mention list is still printed, because it is the input a reader needs to judge the verdict:
+  // a PR may mention ten follow-ups and claim to close one, and only the second number is checked.
   console.log(`check-followup-closure: PR #${number} mentions ${mentioned.length} follow-up(s): ${mentioned.join(', ') || '(none)'}`);
+  const claims = [...new Set([...body.matchAll(CLOSES_CLAIM)].map((m) => `FU-${m[1]}`))];
+  console.log(`check-followup-closure: of those, ${claims.length} are CLAIMED closed by this PR: ${claims.join(', ') || '(none)'} — only these are checked`);
   for (const p of problems) console.error(`  ❌ ${p.detail}`);
   if (problems.length) {
-    console.error(`\ncheck-followup-closure: ${problems.length} follow-up(s) mentioned but not accounted for.`);
+    console.error(`\ncheck-followup-closure: ${problems.length} follow-up(s) CLAIMED closed but not accounted for.`);
     process.exit(1);
   }
-  console.log('check-followup-closure: ✅ every mentioned follow-up is closed here or explicitly deferred.');
+  console.log(
+    'check-followup-closure: ✅ every follow-up this PR CLAIMS to close is closed here or explicitly deferred.\n' +
+      '   Follow-ups merely MENTIONED are not checked — see the list above and judge them yourself.',
+  );
 }
