@@ -43,7 +43,7 @@ const fn = (name: string, inputs: string[], outputs: string[]) => ({
  * Build a disposable SDK root plus the ONE sibling layout `abi-sync.ts` resolves
  * (`../SuperPaymaster/{contracts/src,out}`), and run the real script against it.
  */
-function runSync(sdkOutputs: string[], upstreamOutputs: string[]) {
+function runSync(sdkOutputs: string[], upstreamOutputs: string[], opts: { upstreamExtra?: boolean } = {}) {
     const root = mkdtempSync(join(tmpdir(), 'abisync-'));
     const sdk = join(root, 'sdk');
     const up = join(root, 'SuperPaymaster');
@@ -58,9 +58,14 @@ function runSync(sdkOutputs: string[], upstreamOutputs: string[]) {
         join(sdk, 'packages/core/src/abis/Probe.json'),
         JSON.stringify({ abi: [fn('probe', ['uint256'], sdkOutputs)] }, null, 2),
     );
+    // `upstreamExtra` puts a function upstream that the SDK does not have, so a run can contain BOTH
+    // an added-function drift and a return-shape drift at once. Without it the seam between the two
+    // passes is never exercised — which is exactly how the third case below used to be vacuous.
+    const upstreamAbi = [fn('probe', ['uint256'], upstreamOutputs)];
+    if (opts.upstreamExtra) upstreamAbi.push(fn('extra', [], ['uint256']));
     writeFileSync(
         join(up, 'out/Probe.sol/Probe.json'),
-        JSON.stringify({ abi: [fn('probe', ['uint256'], upstreamOutputs)] }, null, 2),
+        JSON.stringify({ abi: upstreamAbi }, null, 2),
     );
 
     try {
@@ -102,10 +107,28 @@ describe('abi:sync return-shape drift', { timeout: 60_000 }, () => {
         expect(code).toBe(0);
     });
 
-    it('a genuinely added function is still reported as added, not as a return change', () => {
-        // Guards the seam: the return-shape pass only looks at functions present on BOTH sides, so
-        // it must not double-report something the added/removed pass already owns.
-        const root = runSync(['bytes32'], ['bytes32']);
-        expect(root.code).toBe(0); // baseline for the reader: the fixture itself is not drifted
+    it('an added function is reported ONCE, as added — never also as a return change', () => {
+        // Guards the seam between the two passes: the return-shape pass looks only at functions
+        // present on BOTH sides, so it must not re-report what the added/removed pass already owns.
+        //
+        // THIS CASE USED TO BE VACUOUS and #366 review proved it: its fixture had no added function
+        // at all, so the assertion was the positive control wearing a different name. Removing the
+        // `have === undefined` half of the guard changed real behaviour (SAME SELECTOR occurrences
+        // 1 → 5 against the live upstream) and all three cases stayed green. A test that cannot see
+        // the guard it is named after is worse than no test: it occupies the slot.
+        const { code, out } = runSync(
+            ['bytes32', 'uint16', 'address'],
+            ['bytes32', 'uint16', 'uint16', 'address'],
+            { upstreamExtra: true },
+        );
+        expect(code).not.toBe(0);
+        // The added function must be reported by the added/removed pass...
+        expect(out).toMatch(/added function extra\(\)/);
+        // ...and must NOT also surface as a return-shape change. Anchored on the NAME, because the
+        // run legitimately contains one SAME SELECTOR line (for `probe`) — asserting "no SAME
+        // SELECTOR at all" would fail for the right reason and hide the wrong one.
+        expect(out).not.toMatch(/SAME SELECTOR[^;]*extra\(\)/);
+        // And the real drift is still reported, so this fixture is not just quietly inert.
+        expect(out).toMatch(/SAME SELECTOR[^;]*probe\(uint256\)/);
     });
 });

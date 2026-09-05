@@ -83,10 +83,17 @@ const sigSet = (abi: any[], kind: string) => new Set(abi.filter((e) => e.type ==
  * SELECTOR is unchanged, so the call does not revert — a 7-parameter decode of an 8-word return
  * reads `slashBps` as `verifier` and drops the real one. Every field looks plausible.
  *
- * Blast radius, measured before adding this rather than after: across 30 contracts that resolve to
- * an upstream artifact, 646 same-signature functions compared, **exactly 1** output mismatch — the
- * real one. No false-positive flood, so this does not become the gate that gets deleted before it
- * catches anything (verification.md §5).
+ * Blast radius, measured before adding this rather than after: over every contract that resolves to
+ * an upstream artifact on the machine running it, **exactly one** output mismatch — the real one.
+ * No false-positive flood, so this does not become the gate that gets deleted before it catches
+ * anything (verification.md §5).
+ *
+ * The load-bearing half of that sentence is "exactly one", and it reproduces. The DENOMINATOR does
+ * not and is deliberately not quoted: it depends on how many upstream `out/` trees the machine has
+ * built. Two independent runs on 2026-09-05 measured 30 contracts / 646 functions and 23 / 546 —
+ * both finding the same single mismatch. Quoting a denominator here would make the next reader
+ * either doubt a correct result or "fix" it to match, which is the same trap as the frozen test
+ * count #364 was opened over.
  */
 const outSig = (e: any): string => (e.outputs || []).map(renderType).join(',');
 const fnByKey = (abi: any[]) => new Map(
