@@ -195,9 +195,23 @@ export async function isAccountEnrolled(
  * - `requiredQuorum()`, whose NatSpec says it mirrors `validate()`'s readiness *exactly* and returns
  *   `type(uint256).max` when nothing can satisfy it.
  *
- * That pair also covers two things no root or block comparison can see: a `configVersion` bump
- * (five admin setters raise it, invalidating every pinned snapshot at once) and the wall-clock
- * `epochSetValidUntil` expiry. Both are inside `_epochUsable`, hence inside `requiredQuorum()`.
+ * **Which of that pair is the real guard is worth stating, because the obvious reading is wrong.**
+ *
+ * The root comparison looks like the load-bearing check and is not. `runningRoot` is written only by
+ * `_smtSet`, reached from `_onNodeActivated` / `_onNodeDeactivated` — so ANY node going up or down
+ * inside an epoch makes it diverge from `epochSetRoot[e-1]` and keeps it diverged until the epoch
+ * ends, **while proofs against `[e-1]` stay perfectly valid**, because `validate()` reads only
+ * `[e-1]`. With 64-block epochs (~12.8 min) and an active `syncNode` keeper it can refuse a large
+ * slice of the window. It is a conservative gate whose rejections are not necessarily real problems.
+ *
+ * `requiredQuorum()` is the guard that catches the things that actually invalidate a snapshot: a
+ * `configVersion` bump (five admin setters raise it, invalidating every pinned snapshot at once) and
+ * the wall-clock `epochSetValidUntil` expiry. Both live inside `_epochUsable`, hence inside it — and
+ * **no root or block comparison can see either**, a time bound least of all.
+ *
+ * So the whole re-configuration and expiry story rests on one thing: `assertCommitteeQuorum`
+ * refusing the `type(uint256).max` sentinel. That is implicit enough to be worth naming here.
+ * (Diagnosed with yetanotheraa-validator, who traced the `_smtSet` call sites.)
  *
  * > The tempting fix was to swap in `runningRoot` vs `epochSetRoot(currentEpoch)` — same shape, one
  * > index off, and it would pass today because all three roots are currently equal. Picking a
