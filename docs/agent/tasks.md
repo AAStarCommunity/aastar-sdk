@@ -20,11 +20,20 @@
 - **风险/回滚**：真实上链且 JASON 代付 ETH+GToken —— **默认必须先 `DRY_ONLY=1` 跑一遍**，nodeId 与板子 `node_state.json` 不一致时脚本自身 abort。
 - **证据**：PR #316 合并进 main = `32b8f273`（2026-08-02）。评审 APPROVE；Codex PK 的 EIP-2335 控制字符剥离 Low → FU-5
 
-### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引  `BACKLOG`
+### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引  `PR_OPEN`
 - **优先级**：mid
 - **目标**：让 `docs/onchain-evidence.md` 有 dvt3 这条的 tx hash + 区块，符合「验收 = 上链 tx hash，不是单测」的纪律。
 - **依赖**：T1.1.1
 - **验收命令**：`grep -n "dvt3" docs/onchain-evidence.md`
+- **证据**：tx `0x7aa5231a…` @ block `11604058`，`to` = 现役 validator `0x7ac7E9d4…`，
+  `from` = `0xA5924206…`（与 validator 自报的 `nodeOperator` 一致），status=1，
+  selector `0xdd7bcfc6` = `registerWithProof`（**staked 路径**，不是 `registerPublicKey`）。
+  hash 由 `PublicKeyRegistered` 事件按 nodeId 回放定位，**从链上导出而非抄自运行日志**。
+- **⚠️ 差点记错的一格**：仓库里唯一一个「看起来像 dvt3 的 32 字节值」是
+  `docs/dvt-wire-format.md:105` 的 `0xd4f9543…` —— 那是 **nodeId 不是 tx hash**，
+  而且是 **v0.20.0 那个已被取代的 validator** 上的旧身份。链上实测：现役 validator 对它
+  `isRegistered=false`，对 config 里的 `0x96d64ba8…` 才是 `true`。
+  **两者当年都为真，只是在不同的 validator 上** —— 这种陈旧只会被「没人再去读的那个合约」证伪。
 
 ---
 
