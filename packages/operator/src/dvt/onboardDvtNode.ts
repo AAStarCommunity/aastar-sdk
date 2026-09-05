@@ -82,13 +82,40 @@ export interface OnboardDvtNodeParams {
      *
      * Before it, a caller had two choices: trust the canonical book, or hand-pin an address. Both
      * downstream onboarding scripts hand-pinned — and one of them pinned
-     * `0x539B9681…`, a SUPERSEDED validator. That mistake is invisible on chain: the old contract
-     * still has code, and still answers `isRegistered = true` for our nodes, so the two most obvious
-     * sanity checks ("is there code there?", "does it know my node?") both pass against the wrong
-     * contract. Only the router distinguishes them, because the router mounts exactly one.
+     * `0x539B9681…`, a DIFFERENT validator. Whichever of the two is wrong for a given deployment,
+     * the mistake is invisible on chain: both contracts have code, and both answer
+     * `isRegistered = true` for our nodes, so the two most obvious sanity checks ("is there code
+     * there?", "does it know my node?") pass against either. A router distinguishes them, because
+     * a router mounts exactly one.
      *
      * Pass the router and this reads `getAlgorithm(0x01)` at call time. Nothing to keep in sync,
      * and no address to copy out of a comment.
+     *
+     * ## What this parameter does NOT solve — read before treating it as the safe option
+     *
+     * **The router is still an input you must get right from somewhere else.** The DVT repo swept
+     * every router named across both repos and reports at least 11 on Sepolia, with
+     * `getAlgorithm(0x01)` returning 7 DIFFERENT validators — every one answering normally, none
+     * reverting. (That sweep is theirs, not reproduced here.) What IS reproduced here, at block
+     * 11639067, is that **two real deployed accounts route to different validators**:
+     *
+     * ```
+     * 0x92EA8b02… (45B proxy)  .validatorRouter() = 0xe68d6A7B…  → 0x539B9681…
+     * 0x0985785d… (45B proxy)  .validatorRouter() = 0xA97A7527…  → 0x7ac7E9d4…
+     * ```
+     *
+     * **So there is no such thing as "the current validator on Sepolia" — only "the current
+     * validator FOR A GIVEN ACCOUNT".** Passing `router` moves the uncertainty from the validator
+     * to the router; it does not remove it, and no global answer exists to move it to.
+     *
+     * The anchor that settles itself is one layer up: the account's own `validatorRouter()`,
+     * decided by what was deployed rather than by what someone wrote in a config. An
+     * `account?: Address` option resolving through it is FU-65 — and its real value is not that it
+     * finds the right validator, but that it **replaces an unanswerable question with an answerable
+     * one**: not "who is live on Sepolia" but "who does THIS account consult".
+     *
+     * Stated here rather than left implicit because an API that relocates an unknown while LOOKING
+     * like it eliminated one is worse than not offering it.
      */
     router?: Address;
     /** SuperPaymaster role Registry. Default: canonical `registry`. */

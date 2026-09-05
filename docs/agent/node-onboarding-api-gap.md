@@ -97,16 +97,53 @@ dryRun 得到的 nodeId vs state）。理由写在 dvt3:130 的 abort 信息里�
 `AirAccount/kms/node-setup/` 这两个文件**做的事不同，别混为一谈**（初稿把它们并成「都硬 pin」，
 是错的；下面是逐文件核实后的版本）：
 
-### `setup-server.py:155-157` —— 真正的硬 pin，三条里错一条
+### `setup-server.py:155-157` —— 真正的硬 pin，但「哪条是错的」这个问法本身是错的
 
 | 键 | 它 pin 的值 | 对本仓 canonical（chain 11155111） |
 |---|---|---|
-| `validator` | `0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC` | ❌ **已被取代**；canonical 是 `0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9` |
+| `validator` | `0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC` | ⚠️ **与 canonical 不同，但不是「已被取代」——见下** |
 | `gToken` | `0x4c09aE57503Aa1E2A43b05621A38DbdD43b0Aa08` | ✅ 逐字等于 canonical |
 | `staking` | `0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e` | ✅ 逐字等于 canonical |
 
-三条里只有 validator 那条错——**而它恰恰是最难看出错了的那条**。两个 gToken/staking 若 pin 错，
-交易当场 revert；validator pin 错则一路成功。
+> **更正（2026-09-05，dvt 仓库反驳后上链复核）。** 本节初版断言 `0x539B9681…`「已被取代」，
+> 并把 canonical 的 `0x7ac7E9d4…` 当成唯一正确答案。**这条断言没有成立。** dvt 用另一个锚点
+> 得到了相反结论，我在 block `11639030` 独立复读，两边都真实：
+>
+> | 锚点 | router | `getAlgorithm(0x01)` |
+> |---|---|---|
+> | 本仓 canonical `aaStarValidator`（v0.33.0 ValidatorRouter） | `0xA97A752779ebfDA58612F6727Ec7C8366c39f897` | `0x7ac7E9d4…` |
+> | 参考账户 `0x92EA8b02…`.`validatorRouter()` | `0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c` | `0x539B9681…` |
+>
+> 也就是说，按**「部署中的账户实际会咨询谁」**这个判据，`setup-server.py` pin 的那个是对的。
+> 我用的是**「地址簿说哪个是当前 router」**这个判据。两个判据都不是任意的，答案不同。
+>
+> **这里还有一层，初稿标为「未验」，现已实测成立**（dvt 先测，本仓在 block `11639067` 独立复读）：
+> `0x92EA8b02…` 是 `INTERFACES.md` 里的 e2e 参考账户，**一个**部署事实，不等于「社区节点服务的
+> 那批账户」。而确实**存在指向不同 router 的两批账户**：
+>
+> | account（各 45 字节代理） | `validatorRouter()` | `getAlgorithm(0x01)` |
+> |---|---|---|
+> | `0x92EA8b02…`（owner `0xb5600060…`） | `0xe68d6A7B…` | `0x539B9681…` |
+> | `0x0985785d1fc37978474C472E39391774DcB1C711`（owner `0xEcAACb91…`） | `0xA97A7527…` | `0x7ac7E9d4…` |
+>
+> 第二个账户的出处对这条的证明力是关键：**它不是从任何地址簿里读出来的**——dvt 从 committee
+> validator `0x7ac7E9d4…` 近 45k 区块日志的 indexed topic 里捞出 482 个候选地址筛出来的。
+>
+> **所以正确的说法不是「哪个 validator 是现役的」，而是：锚点是 per-account 的
+> —— Sepolia 上不存在单一的「现役 validator」，只存在「某账户的现役 validator」。**
+> （这句是 dvt 收窄他们自己那句「账户的 `validatorRouter()` 是唯一非任意锚点」之后给的：
+> 机制确实非任意，但**他们挑的那个账户来自 `INTERFACES.md`**——一边诊断「拿写下来的常量当权威」，
+> 一边在自己的修法里做了同一件事。）
+>
+> dvt 进一步查出 Sepolia 上**至少 11 个 router，`getAlgorithm(0x01)` 给出 7 个不同的 validator**，
+> 每一个都正常应答、都不报错。**这一遍扫描是他们做的，本仓未复现**；本仓复现的只有上表那两行。
+>
+> **所以真正的发现不是「谁 pin 错了」，是没有人能说出哪个是权威的。**「地址簿 vs 部署事实」
+> 这两个锚谁说了算，两个仓库都没有回答过；论文证据栈钉的是哪一批账户，也还没人核过（已报 DSR）。
+
+**校正后仍然成立的那半**：validator 这一格与另外两格**失效方式不同**。gToken/staking 若 pin 错，
+交易当场 revert；**validator pin 错则一路成功**——这一点与上面哪个锚正确无关，
+也正是为什么这一格值得单独有一道门禁，而不是靠比对文件。
 
 ### `register-node.mjs` —— 不 pin，是 fail-closed；错的是它给的**理由**
 
@@ -129,13 +166,32 @@ dryRun 得到的 nodeId vs state）。理由写在 dvt3:130 的 abort 信息里�
 
 ### 为什么这条属于 G12
 
-`0x539B9681…` 是**已被取代的** validator。本仓 `packages/core/src/dvt.onchain.test.ts` 的实测记录：
-`router.getAlgorithm(0x01) = 0x7ac7E9d4…`，而 `0x539B9681…` 仍有 13610 字节代码、
+本仓 `packages/core/src/dvt.onchain.test.ts` 的实测记录：canonical router 的
+`getAlgorithm(0x01) = 0x7ac7E9d4…`，而 `0x539B9681…` 仍有 13610 字节代码、
 `isRegistered(node 1-3)` 同样返回 `true × 3`。**两个都答，且答得一样**——
-「有代码」和「认得我们的节点」都区分不出哪个是活的。
+「有代码」和「认得我们的节点」都区分不出哪个是活的。（dvt 独立复现了后半条：
+`isRegistered` 对三个 nodeId 在两个 validator 上全为 true。）
 
-这正是 G12 的价值：不是「多一个可选参数」，而是**唯一能自证的答案来源**。下游手填/手 pin，
-是因为 SDK 没给它一条从 router 解析的入口；填错了，而错法在链上看不出来。
+**但上面的更正把 G12 的性质也改了，而且是往更重要的方向改。**
+
+原来的说法是「SDK 没给下游一条从 router 解析的入口，所以它手填、填错了」。这个说法把
+`onboardDvtNode({ router })` 当成闭合的修法。**它不闭合**：它只是把不能信的 pin 从 validator
+上移到了 router 上，而 router 有 11 个候选、每一个都能正常应答。
+
+真正能自证的锚只有一层——**账户自己的 `validatorRouter()`**，因为那是由链上部署事实决定、
+不由谁写文档决定的东西。dvt 的建议是 `onboardDvtNode` 增加 `account?: Address`，从
+`account.validatorRouter().getAlgorithm(0x01)` 解析。**这个建议是对的，已记入 FU-65。**
+
+**但它解的不是「找到那个对的 validator」——因为不存在那个东西。** 上面的实测说明锚点是
+per-account 的。`account?:` 的价值在于**它把问题换成了一个有唯一答案的问题**：
+不是「Sepolia 现役 validator 是谁」（无解），而是「**这个**账户会咨询谁」（链上唯一确定）。
+
+推论，且这一条要写进 API 文档而不只是这里：**onboarding 一个节点时，「为哪个账户 onboard」
+是一个必须先回答的问题，不是一个可以省略的细节。** 省掉它，就只能回到猜某个全局答案。
+
+在那之前，`router` 参数必须在文档里明说：**它仍是一个需要外部真值的输入**，
+不是「填了它就不用担心地址」。一个把不确定性搬了个家、却看起来像消除了不确定性的 API，
+比没有这个参数更坏。
 
 > 归属：AirAccount 仓库的两个文件 + 本仓库缺的 G12 入口。前者不是 SDK 的交付物，此处只记录不追。
 
