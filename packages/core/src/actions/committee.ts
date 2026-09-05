@@ -54,6 +54,68 @@ export async function getMountedDvtValidator(
     })) as Address;
 }
 
+/**
+ * Resolve the DVT validator an ACCOUNT actually consults: `account.validatorRouter()` then
+ * `router.getAlgorithm(0x01)`.
+ *
+ * ## Why this exists when {@link getMountedDvtValidator} already resolves a router
+ *
+ * Because the router is not a global fact, and taking one as input silently assumes it is.
+ * Measured on Sepolia at block 11639067 — two real deployed accounts, 45-byte proxies both:
+ *
+ * ```
+ * 0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8 → router 0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c
+ *                                            → validator 0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC
+ * 0x0985785d1fc37978474C472E39391774DcB1C711 → router 0xA97A752779ebfDA58612F6727Ec7C8366c39f897
+ *                                            → validator 0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9
+ * ```
+ *
+ * The DVT repo's sweep of every router named across both repos found at least 11 on Sepolia,
+ * resolving to 7 different validators — all answering, none reverting. (Their measurement.)
+ *
+ * **So "the current DVT validator on Sepolia" is not a question with an answer.** "Which validator
+ * does THIS account consult" is, and the chain decides it: `validatorRouter()` is set by what was
+ * deployed, not by what anyone wrote in a config or an address book.
+ *
+ * That is the whole value of this function, and it is worth stating plainly because it is easy to
+ * read it as a convenience wrapper: it does not find a better answer to the old question, it
+ * **replaces an unanswerable question with an answerable one**.
+ *
+ * The trap it closes is silent. A wrong validator does not revert: the superseded contract still
+ * has code, and still answers `isRegistered = true` for nodes registered on it, so both obvious
+ * sanity checks ("is there code there?", "does it know my node?") pass against either one.
+ */
+export async function getAccountDvtValidator(
+    publicClient: PublicClient,
+    account: Address,
+): Promise<{ router: Address; validator: Address }> {
+    const router = (await publicClient.readContract({
+        address: account,
+        abi: AAStarAirAccountV7ABI,
+        functionName: 'validatorRouter',
+    })) as Address;
+
+    // A zero router is not "no router configured, fall back to something" — it is an account that
+    // cannot validate at all, and continuing would resolve `getAlgorithm` against address(0) and
+    // return address(0) as if it were an answer. Two zeros in a row read like data.
+    if (/^0x0{40}$/i.test(router)) {
+        throw new Error(
+            `account ${account} reports validatorRouter() = the zero address. ` +
+                'It is not an AAStar account, or it has never been configured. Resolving further ' +
+                'would return the zero address as if it were a validator.',
+        );
+    }
+
+    const validator = await getMountedDvtValidator(publicClient, router);
+    if (/^0x0{40}$/i.test(validator)) {
+        throw new Error(
+            `router ${router} (from account ${account}) mounts nothing at algId 0x01. ` +
+                'The account routes somewhere, but that somewhere has no DVT validator.',
+        );
+    }
+    return { router, validator };
+}
+
 /** Read the full committee state from a mounted `AAStarCommitteeValidator`. */
 export async function getCommitteeState(
     publicClient: PublicClient,

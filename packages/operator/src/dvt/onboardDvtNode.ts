@@ -13,6 +13,7 @@ import {
     ROLE_DVT,
     buildDvtPop,
     dvtOperatorActions,
+    getAccountDvtValidator,
     getMountedDvtValidator,
     registryActions,
     tokenActions,
@@ -118,6 +119,39 @@ export interface OnboardDvtNodeParams {
      * like it eliminated one is worse than not offering it.
      */
     router?: Address;
+    /**
+     * Resolve the validator from the ACCOUNT that will use it (FU-65). Mutually exclusive with
+     * {@link validator} and {@link router} — enforced, not merely documented.
+     *
+     * ## This is the anchor to prefer, and the reason is not convenience
+     *
+     * {@link router} moved the uncertainty one layer up; it did not remove it, because **there is no
+     * global answer to move it to**. Measured on Sepolia at block 11639067 — two real deployed
+     * accounts, 45-byte proxies both:
+     *
+     * ```
+     * 0x92EA8b02D34A4D5d10f0Db9Ea894e8bC72e292e8 → 0xe68d6A7Bb60DA4caE62ceC2439722fc5eEF87a5c
+     *                                            → 0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC
+     * 0x0985785d1fc37978474C472E39391774DcB1C711 → 0xA97A752779ebfDA58612F6727Ec7C8366c39f897
+     *                                            → 0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9
+     * ```
+     *
+     * So "the current DVT validator on Sepolia" is not a question with an answer. **"Which
+     * validator does THIS account consult" is** — and `validatorRouter()` is decided by what was
+     * deployed, not by what anyone wrote in a config or an address book.
+     *
+     * ## What passing this MEANS, and why it is not a detail you can skip
+     *
+     * Onboarding a node is always onboarding it into some account's validator. When no anchor is
+     * given, this falls back to the canonical book — which is a guess at a global answer that does
+     * not exist. **So "which account is this for?" is a question the caller has to answer, not a
+     * parameter they can leave out and still be correct by default.**
+     *
+     * The default is kept because most callers today are on the one deployment the book describes,
+     * and removing it would break them for a reason they cannot act on. It is a compatibility
+     * affordance, not a recommendation.
+     */
+    account?: Address;
     /** SuperPaymaster role Registry. Default: canonical `registry`. */
     registry?: Address;
     /** GToken (stake asset). Default: canonical `gToken`. */
@@ -218,17 +252,27 @@ export async function onboardDvtNode(params: OnboardDvtNodeParams): Promise<Onbo
     const canonical = CANONICAL_ADDRESSES[chainId as keyof typeof CANONICAL_ADDRESSES];
     if (!canonical) throw new Error(`onboardDvtNode: no canonical address book for chain ${chainId}`);
 
-    if (params.validator && params.router) {
+    // The anchors are mutually exclusive. `validator` vs `router` was already guarded pairwise;
+    // this generalises it to three so that adding `account` did not quietly open a new pair —
+    // a two-way check does not become a three-way one by adding a third option next to it.
+    const anchors = (['account', 'router', 'validator'] as const).filter((k) => params[k] !== undefined);
+    if (anchors.length > 1) {
         throw new Error(
-            'onboardDvtNode: pass either `validator` or `router`, not both — they answer the same ' +
-            'question and a disagreement between them has no safe resolution here.',
+            `onboardDvtNode: pass exactly one of \`account\` / \`router\` / \`validator\` — got ` +
+                `${anchors.join(' + ')}. They answer the same question and a disagreement between ` +
+                'them has no safe resolution here. It matters more than an ordinary argument clash ' +
+                'because a wrong DVT validator does not revert: the superseded one still has code ' +
+                'and still answers isRegistered=true, so nothing downstream would ever tell you ' +
+                'which anchor won.',
         );
     }
-    // G12: resolving beats trusting. See the `router` doc for what a wrong pin looks like on chain
-    // (spoiler: exactly like a right one).
-    const validator = params.router
-        ? await getMountedDvtValidator(publicClient, params.router)
-        : params.validator ?? (canonical.aaStarBLSAlgorithm as Address);
+    // G12 / FU-65: resolving beats trusting, and resolving FROM THE ACCOUNT beats resolving from a
+    // router. See the `account` doc for why the router is not a global fact.
+    const validator = params.account
+        ? (await getAccountDvtValidator(publicClient, params.account)).validator
+        : params.router
+          ? await getMountedDvtValidator(publicClient, params.router)
+          : params.validator ?? (canonical.aaStarBLSAlgorithm as Address);
     const registry = params.registry ?? (canonical.registry as Address);
     const gToken = params.gToken ?? (canonical.gToken as Address);
     const staking = params.staking ?? (canonical.staking as Address);
