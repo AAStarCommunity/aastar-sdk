@@ -34,9 +34,17 @@
  * Because hand-written ABIs are sometimes correct and necessary, and a gate that forbids them
  * outright would fire on the files in `packages/airaccount` that need one (a factory ABI that
  * genuinely is not in `@aastar/core`). Those already do the right thing: an
- * `eslint-disable-next-line no-restricted-imports` with a reason — **19 shipped files there
- * mention `parseAbi` and every one of them carries a justification.** (An earlier version of this
- * comment said "four", a number I did not measure and could not reproduce afterwards.)
+ * `eslint-disable-next-line no-restricted-imports` with a reason: **16 shipped files there IMPORT
+ * `parseAbi`, and every one of those 16 carries a justification.** Three more merely mention the
+ * word — two in prose, one using `parseAbiParameters` — and they need no justification because
+ * they hand-write nothing.
+ *
+ * That distinction is the correction itself, twice over. The first version said "four", a number I
+ * never measured. The second said "19 … and every one of them carries a justification" — **19 is
+ * the MENTION count and the property only holds of the 16 that import**, so I had fixed a wrong
+ * number by measuring and then attached the result to the wrong denominator. #381 review caught
+ * both. The narrow reading is also the stronger one: `import parseAbi` is exactly what the lint
+ * rule bans, so it is the population the rule is about.
  *
  * So the rule is the one the repo already follows: **if you hand-write an ABI, say why on the line
  * above.** That is mechanical, it fires on exactly the file that had no answer, and complying with
