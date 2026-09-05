@@ -59,7 +59,7 @@ const INVENTORY: { file: string; min: number; maxGated: number; why: string }[] 
   { file: 'packages/core/src/actions/committeeTree.test.ts', maxGated: 4, min: 16, why: 'frozen-root proofs; 4 of these are skipped on CI (FU-38)' },
   { file: 'packages/core/src/dvt.onchain.test.ts', maxGated: 6, min: 12, why: 'DVT_CONFIG vs the router, the requireStake watch (FU-34), and the entryPoint anchor (FU-35)' },
   { file: 'packages/core/src/addresses.threeLegs.test.ts', maxGated: 4, min: 6, why: 'the three-legs split — the check that made it visible' },
-  { file: 'packages/core/src/actions/committee.onchain.test.ts', maxGated: 5, min: 5, why: 'committee framing against the mounted validator' },
+  { file: 'packages/core/src/actions/committee.onchain.test.ts', maxGated: 9, min: 9, why: 'committee framing against the mounted validator (5) + FU-65 account→router→validator resolution (4) — the second group is NEW gated coverage, not previously-unconditional cases moved behind the flag' },
   { file: 'packages/core/src/addresses.airaccount.test.ts', maxGated: 4, min: 5, why: 'AirAccount stack edges, not just addresses' },
   { file: 'packages/core/src/addresses.gToken.test.ts', maxGated: 2, min: 3, why: 'Registry → staking → GTOKEN (FU-1)' },
   { file: 'packages/core/src/addresses.dvt.test.ts', maxGated: 2, min: 3, why: 'live-aggregator rooting (FU-22)' },

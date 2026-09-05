@@ -147,9 +147,14 @@ describe('onboardDvtNode account anchor (FU-65) — the router is not a global f
         ['all three', { account: AA_ACCOUNT, router: ROUTER, validator: STALE }],
     ] as const) {
         it(`REFUSES ${name} — they can disagree, and the chain will not tell you which won`, async () => {
-            // Before this, the docstring said "mutually exclusive" while the code silently preferred
-            // `router`. A caller passing two got one honoured and no indication which — and since a
-            // wrong validator does not revert, nothing downstream would ever surface the choice.
+            // `validator` vs `router` was ALREADY guarded pairwise before this (9b5f31c2:223). The
+            // real gap is narrower and easy to miss: **a two-way check does not become a three-way
+            // one by adding a third option next to it.** An earlier draft of this comment said the
+            // code "silently preferred router" — that was wrong, and an existing test asserting the
+            // old error message is what caught it.
+            //
+            // Why it matters more than an ordinary argument clash: a wrong DVT validator does not
+            // revert, so nothing downstream would ever surface which anchor won.
             const h = harness(MOUNTED);
             await expect(onboardDvtNode({
                 publicClient: h.publicClient, operatorWallet: h.operatorWallet,
