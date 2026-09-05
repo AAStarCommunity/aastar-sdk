@@ -56,23 +56,52 @@ const DONE_MARKERS = /`DONE`|\bDONE\b|已合并|已合|^- \[x\]/;
  *
  * So the syntax decides, not the presence of a number:
  *
- *   `src=PR#N`   the follow-up came from that PR's review        → not a claim, ignored
- *   `done=PR#N`  the follow-up was closed by that PR             → claims MERGED
- *   `PR #N` on a line marked DONE / 已合并                        → claims MERGED
- *   `PR #N` anywhere else                                        → claims only that #N EXISTS
+ *   `src=PR#N`     the follow-up came from that PR's review      → not a claim, ignored
+ *   `decided=PR#N` adjudicated: deliberately NOT acted on         → not a claim, ignored
+ *   `done=PR#N`    the follow-up was closed by that PR            → claims MERGED
+ *   `PR #N` on a line marked DONE / 已合并                          → claims MERGED
+ *   `PR #N` anywhere else                                          → claims only that #N EXISTS
  *
  * The narrowing is not a weakening: the remaining rules are the ones whose violation is unambiguous.
  * A gate that reports two dozen non-problems on its first honest run gets deleted before it ever
  * catches the real one.
+ *
+ * ## Two gaps FU-56 records, both hit on the same entry, both fixed here
+ *
+ * **1. "Closed because we decided not to act" had no category.** FU-2 was closed by a decision to
+ * KEEP its PR open — the follow-up is resolved, the PR is deliberately not. Under the old rules a
+ * `[x]` line naming that PR read as "claims it merged", and the gate correctly complained. The only
+ * available workaround was to reword the prose, which works but does not generalise: the error text
+ * points at PR STATE, so nobody would think to look at their own sentence. `decided=PR#N` says the
+ * thing the model could not express.
+ *
+ * **2. A regex cannot tell MENTIONING a form from USING it.** Explaining rule 3 inside the ledger
+ * — quoting the very shape it forbids as a counter-example — tripped rule 3. You cannot cite a rule
+ * inside the medium that rule polices. Spans in backticks are now skipped before matching, so an
+ * entry can quote `PR #123` while documenting the rule without asserting anything about #123.
  */
+
+/**
+ * Blank out backtick-quoted spans, preserving length so reported columns stay honest.
+ *
+ * Deliberately only backticks: quotation marks are ordinary punctuation in these ledgers and would
+ * swallow real claims. A code span is the one delimiter whose presence already means "this is
+ * notation being shown, not used".
+ */
+function maskCodeSpans(line: string): string {
+    return line.replace(/`[^`]*`/g, (m) => ' '.repeat(m.length));
+}
 export function extractClaims(file: string, text: string): Claim[] {
   const claims: Claim[] = [];
   text.split('\n').forEach((line, i) => {
     const where = `${file}:${i + 1}`;
     const marked = DONE_MARKERS.test(line);
-    for (const m of line.matchAll(/(src=|done=)?PR ?#(\d+)/g)) {
+    // Mask BEFORE matching: a quoted `PR #123` is notation, not an assertion (FU-56 #2).
+    const scanned = maskCodeSpans(line);
+    for (const m of scanned.matchAll(/(src=|decided=|done=)?PR ?#(\d+)/g)) {
       const kind = m[1];
-      if (kind === 'src=') continue; // a citation of origin, not a status claim
+      if (kind === 'src=') continue;      // a citation of origin, not a status claim
+      if (kind === 'decided=') continue;  // adjudicated, deliberately not acted on (FU-56 #1)
       claims.push({ where, pr: Number(m[2]), claimsDone: kind === 'done=' || marked });
     }
   });

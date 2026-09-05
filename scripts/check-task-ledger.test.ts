@@ -157,3 +157,68 @@ describe('which PR this run belongs to — decided from the environment', () => 
     expect(resolveSelfPrFromEnv({})).toBe('ask-git');
   });
 });
+
+describe('FU-56 — two model gaps, both hit on the same real entry', () => {
+    const claims = (line: string) => extractClaims('l.md', line);
+
+    describe('gap 1: "closed because we decided NOT to act" had no category', () => {
+        it('`decided=PR#N` on a DONE line is not a claim that #N merged', () => {
+            // FU-2's shape: the follow-up is resolved BY A DECISION to keep its PR open. Under the
+            // old rules the `[x]` made every PR number on the line read as "claims merged", and the
+            // gate was right to complain — the ledger had no way to say what actually happened.
+            expect(claims('- [x] FU-2 · decided=PR#15 · keep it, deliberately not merged')).toEqual([]);
+        });
+
+        it('POSITIVE CONTROL: `done=PR#N` on the same line SHAPE still claims merged', () => {
+            // Without this, the assertion above would also pass if `decided=` had accidentally
+            // disabled claim extraction for the whole line — silently blinding the gate is a far
+            // worse outcome than the gap it was added to close.
+            const c = claims('- [x] FU-9 · done=PR#347 · shipped');
+            expect(c).toHaveLength(1);
+            expect(c[0]).toMatchObject({ pr: 347, claimsDone: true });
+        });
+
+        it('a bare PR number on a DONE line STILL claims merged — the old rule is intact', () => {
+            const c = claims('- [x] FU-x · closed by PR #123');
+            expect(c).toHaveLength(1);
+            expect(c[0]).toMatchObject({ pr: 123, claimsDone: true });
+        });
+    });
+
+    describe('gap 2: a regex cannot tell MENTIONING a form from USING it', () => {
+        it('a backtick-quoted PR reference asserts nothing', () => {
+            // Explaining rule 3 inside the ledger — quoting the shape it forbids as a
+            // counter-example — used to trip rule 3. You cannot cite a rule inside the medium that
+            // rule polices.
+            expect(claims('- [x] FU-56 · the rule is: a bare `PR #123` on a DONE line claims merged')).toEqual([]);
+        });
+
+        it('POSITIVE CONTROL: the SAME reference outside backticks is still a claim', () => {
+            // The pair matters more than either half: it separates "quoting is ignored" from
+            // "this line is ignored".
+            const c = claims('- [x] FU-56 · the rule is: a bare PR #123 on a DONE line claims merged');
+            expect(c).toHaveLength(1);
+            expect(c[0]).toMatchObject({ pr: 123, claimsDone: true });
+        });
+
+        it('a quoted reference and a real one on the SAME line: only the real one counts', () => {
+            // NOT a length-preservation test, though an earlier version of this claimed to be one.
+            // Mutating the mask to '' (shortening the line) left it green: `where` is line-based, so
+            // column drift is currently unobservable and nothing here can guard it. The padding in
+            // maskCodeSpans is kept because it costs nothing and stays correct if positions are ever
+            // reported — but a test must not claim to protect what it cannot see.
+            const line = '- [x] a `PR #1` b PR #2';
+            const c = claims(line);
+            expect(c).toHaveLength(1);
+            expect(c[0].pr).toBe(2);
+        });
+
+        it('an unclosed backtick does not swallow the rest of the line', () => {
+            // A greedy or unterminated mask would blind everything after a stray backtick — the kind
+            // of quiet coverage loss that shows up as "the gate stopped finding anything".
+            const c = claims('- [x] FU-x · stray ` then PR #7');
+            expect(c).toHaveLength(1);
+            expect(c[0].pr).toBe(7);
+        });
+    });
+});
