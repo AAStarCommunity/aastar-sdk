@@ -58,6 +58,69 @@ function fail(msg: string): never {
 }
 
 /** Paths the SDK's KMS services actually call, as string literals. */
+/**
+ * SECOND, INDEPENDENT extractor — by how a path is USED, not by what it looks like (FU-27).
+ *
+ * `sdkPaths()` below finds every string literal shaped like a path. This one finds the first
+ * argument of an HTTP call. The mechanisms share nothing: this needs no comment stripping (a path in
+ * a comment is not passed to `.get()`) and no extension filter (the `.json` endpoints are arguments
+ * like any other), so the two do not fail the same way. Their DISAGREEMENT is the signal, which is
+ * what the old remembered path count was standing in for — a number a human had to remember, and which anyone
+ * could make a red run green by editing.
+ *
+ * It also reports how many calls pass a VARIABLE rather than a literal. That number is what makes
+ * the comparison interpretable: this repo's KMS client has a generic wrapper whose callers hand it a
+ * path, so the literal scan legitimately finds more than this one does.
+ */
+function calledPaths(): { paths: Set<string>; indirectCalls: number } {
+  const files = execFileSync('bash', ['-c', `ls ${SERVICES_DIR}/kms-*.ts`], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  const paths = new Set<string>();
+  let indirectCalls = 0;
+  for (const file of files) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/\.(get|post|put|patch|delete)\s*(?:<[^>]*>)?\s*\(\s*([^,)]+)/g)) {
+      const literal = /^["'`](\/[^"'`]*)["'`]$/.exec(m[2].trim());
+      if (literal) paths.add(literal[1]);
+      else indirectCalls += 1;
+    }
+  }
+  return { paths, indirectCalls };
+}
+
+/**
+ * THIRD extractor — path literals that sit in an EXPRESSION position (FU-27).
+ *
+ * The call-site scan closes one direction only. Measured, replaying both historical bugs against it:
+ *
+ *   re-add the `.json` filter (the real one)   → caught, and it names both endpoints
+ *   remove comment stripping (the "/60" one)   → NOT caught: 37 → 38, and the extra hides among
+ *                                                the sixteen paths the literal scan legitimately
+ *                                                finds that no call site uses
+ *
+ * `EXPECTED_SDK_PATHS` would have caught the second (38 ≠ 37), so dropping it without replacing that
+ * half would have shipped a regression dressed as an improvement. This is the replacement: a path
+ * that is really an endpoint is passed, assigned, or returned — it appears after `(`, `,`, `=`, `:`,
+ * `[`, or `return`. A path scraped out of prose (`m/44'/60'/0'/0/0`) is preceded by an ordinary
+ * character and fails that, with no number for anyone to remember.
+ */
+function expressionPositionPaths(): Set<string> {
+  const files = execFileSync('bash', ['-c', `ls ${SERVICES_DIR}/kms-*.ts`], { encoding: 'utf8' })
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  const paths = new Set<string>();
+  for (const file of files) {
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/(\(|,|=|:|\[|\breturn)\s*["'`](\/[a-zA-Z0-9/_.-]*)["'`]/g)) {
+      paths.add(m[2]);
+    }
+  }
+  return paths;
+}
+
 function sdkPaths(): Map<string, string[]> {
   if (!existsSync(SERVICES_DIR)) fail(`no services dir at ${SERVICES_DIR}`);
   const files = execFileSync('bash', ['-c', `ls ${SERVICES_DIR}/kms-*.ts`], { encoding: 'utf8' })
@@ -164,27 +227,90 @@ function main() {
       `${specOnly.length} spec-only · ${KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path)).length} known-missing`,
   );
 
-  // ── two checks on the INSTRUMENT, with very different power ────────────────────────────────
+  // ── checks on the INSTRUMENT ───────────────────────────────────────────────────────────────
   //
-  // (1) The externally-derived count. This is the one that can actually catch a broken extractor.
+  // (1) Two extractors, built on different mechanisms, cross-checked (FU-27).
   //
-  // 37 did not come from this file. It was counted by hand and, independently, by a reviewer's own
-  // script, before this tool existed — and the only reason the `.json` bug was ever found is that
-  // this tool said 35 while that 37 sat in a different document. Pinning it here moves that
-  // cross-document disagreement into the one place where disagreeing is loud.
+  // This replaces the old remembered path count, which was independence outsourced to a human memory:
+  // the number lived in this file, so making a red run green took one edit, and nothing recorded
+  // whether that edit was a deliberate endpoint change or a shrug.
   //
-  // Changing this number is allowed and will happen — but it must be a deliberate edit in the same
-  // commit that adds or removes an endpoint, with the endpoint named. Bumping it to make a red run
-  // green is the exact move this guard exists to make visible.
-  const EXPECTED_SDK_PATHS = 37;
-  if (sdk.size !== EXPECTED_SDK_PATHS) {
+  // The invariant: every path that appears AT A CALL SITE must also be found by the literal scan.
+  // A violation means `sdkPaths()` is filtering out real endpoints — which is exactly the bug that
+  // happened: the `.json` filter dropped two `.well-known` endpoints and, worse, moved them into
+  // "the spec documents it, the SDK never calls it", asserting the opposite of the truth.
+  const called = calledPaths();
+  const missedByLiteralScan = [...called.paths].filter((p) => !sdk.has(p)).sort();
+  const literalOnly = [...sdk.keys()].filter((p) => !called.paths.has(p)).sort();
+
+  console.log(
+    `   (instrument: literal scan ${sdk.size} · call-site scan ${called.paths.size} + ` +
+      `${called.indirectCalls} indirect call(s) · literal-only ${literalOnly.length})`,
+  );
+
+  if (missedByLiteralScan.length) {
     console.error(
-      `\n❌ instrument check: sdkPaths() found ${sdk.size} paths, but ${EXPECTED_SDK_PATHS} are expected.\n` +
-        '   This number is derived OUTSIDE this file (hand count + an independent reviewer script).\n' +
-        '   Either an endpoint was added/removed in the SDK — in which case update EXPECTED_SDK_PATHS\n' +
-        '   in the same commit and name the endpoint — or the extractor in sdkPaths() is wrong again.\n' +
-        '   It has been wrong twice: too loose (invented "/60" from a BIP-44 path in a comment) and\n' +
-        '   too tight (hid two real .well-known endpoints). Neither raised an error on its own.',
+      `\n❌ instrument check: ${missedByLiteralScan.length} path(s) are passed to an HTTP call but the\n` +
+        `   literal scan does not report them: ${missedByLiteralScan.join(', ')}\n` +
+        '   sdkPaths() is dropping real endpoints. Every row about them in the report above is wrong\n' +
+        '   in the most misleading direction: they appear as "documented but never called".',
+    );
+    process.exit(1);
+  }
+
+  // (2) The literal scan may legitimately find MORE, but only because some calls take a variable.
+  // With no indirect calls there is no such excuse, and an extra path means the literal scan invented
+  // one — the other direction of the same bug, which once produced "/60" out of a BIP-44 path in a
+  // comment. This is weaker than (1) and says so: while indirect calls exist, an invented path hides
+  // among the legitimate extras.
+  // (2) Every reported path must occupy an expression position. This is the other direction: the
+  // literal scan inventing an endpoint out of prose. It replaces what `EXPECTED_SDK_PATHS` covered,
+  // without asking anyone to remember a number.
+  const inExpression = expressionPositionPaths();
+  const notUsed = [...sdk.keys()].filter((p) => !inExpression.has(p)).sort();
+  if (notUsed.length) {
+    console.error(
+      `\n❌ instrument check: ${notUsed.length} reported path(s) never appear in an expression —\n` +
+        `   ${notUsed.join(', ')}\n` +
+        '   They are not passed, assigned, or returned anywhere, so they are not endpoints the SDK\n' +
+        '   calls. The literal scan is reading them out of prose; comment stripping is the usual cause.',
+    );
+    process.exit(1);
+  }
+
+  // (3) A declarative FLOOR on how many endpoints the SDK is known to call.
+  //
+  // The two relations above are relations, and a relation survives its data shrinking. Demonstrated
+  // in review by deleting one real, documented call (`/kms/create-agent-key`): every number slid one
+  // — 36 documented → 35, literal scan 37 → 36 — B ⊆ A held, A ⊆ C held, the bipartition held, and
+  // the exit code did not move. The endpoint simply moved into "spec documents it, SDK never calls
+  // it", a bucket that is deliberately not a failure.
+  //
+  // The old `EXPECTED_SDK_PATHS = 37` DID catch that, and removing it without replacing this half
+  // would have shipped a regression wearing the word "independent". But it caught it by being an
+  // EQUALITY, which fires on every addition too — so it had to be edited constantly, and a number
+  // edited constantly is a number edited without thinking.
+  //
+  // A floor keeps the half that matters and drops the half that annoys: adding endpoints is free,
+  // removing one requires editing this line — and that edit is exactly where "why is there one
+  // fewer?" gets asked.
+  const MIN_SDK_PATHS = 37;
+  if (sdk.size < MIN_SDK_PATHS) {
+    console.error(
+      `\n❌ instrument check: the SDK now calls ${sdk.size} paths, floor is ${MIN_SDK_PATHS}.\n` +
+        '   An endpoint the SDK used to call is gone. If that removal is intended, lower this floor in\n' +
+        '   the same commit and name the endpoint — the relations above cannot see a removal, because\n' +
+        '   they compare the extractors to each other and all of them shrink together.',
+    );
+    process.exit(1);
+  }
+
+  // (4) With no indirect calls there is no excuse for the literal scan finding more at all.
+  if (called.indirectCalls === 0 && literalOnly.length > 0) {
+    console.error(
+      `\n❌ instrument check: no call passes a variable, yet the literal scan reports ${literalOnly.length}\n` +
+        `   path(s) no call site uses: ${literalOnly.join(', ')}\n` +
+        '   With no indirect calls there is nothing to explain them — the literal scan is inventing paths.',
     );
     process.exit(1);
   }
@@ -208,7 +334,7 @@ function main() {
     );
     process.exit(1);
   }
-  console.log(`   (instrument: ${sdk.size} SDK paths == expected ${EXPECTED_SDK_PATHS} ✅ · bipartition ${documented.length}+${notInSpec.length} ✅)`);
+  console.log(`   (instrument: bipartition ${documented.length}+${notInSpec.length} == ${sdk.size} ✅)`);
 
   // Exit non-zero only for the thing a human must act on: a documented addition the SDK never calls.
   const missing = KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path));
