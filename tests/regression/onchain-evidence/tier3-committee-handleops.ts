@@ -34,7 +34,7 @@ import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, DVT_CONFIG, getDvtConfig, EntryPointABI, AAStarAirAccountV7ABI,
     AAStarBLSAlgorithmABI, buildInitConfig, encodeG2Point, airAccountFactoryActions, entryPointActions,
-    getCommitteeState, isAccountEnrolled, fetchCommitteeSigners, type CommitteeSigner,
+    getCommitteeState, isAccountEnrolled, fetchCommitteeSigners, readFrozenRootAgreement, type CommitteeSigner,
 } from '@aastar/core';
 import { packCumulativeT3Signature, packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -164,8 +164,39 @@ async function main() {
     const nodeIds = signed.map((s) => s.nodeId);
 
     // ── (4) committee slot + Merkle proofs, then pack 0x05 COMMITTEE framing ─────────────────────
-    const { signers, lastSetMutationBlock, atBlock } = await rpc((c) => fetchCommitteeSigners(c, BLS_VERIFIER, nodeIds));
-    if (lastSetMutationBlock > atBlock) throw new Error(`committee set mutated at ${lastSetMutationBlock} after proofs read at ${atBlock}`);
+    const { signers, atBlock } = await rpc((c) => fetchCommitteeSigners(c, BLS_VERIFIER, nodeIds));
+    // The freshness guard, and why it is no longer a block comparison.
+    //
+    // This line used to be `if (lastSetMutationBlock > atBlock) throw`, and it has been a no-op
+    // through TWO different causes. First, while the function still existed: the value was read
+    // PINNED to `atBlock`, and a storage read at block N cannot report a mutation later than N, so
+    // the condition was structurally false. Then, when #244 removed the function upstream and the
+    // read was deleted, the destructured value became `undefined` — and `undefined > atBlock` is
+    // ALSO false. **The second no-op looked exactly like the first, and this runner passed with it.**
+    //
+    // Why a ROOT comparison and not simply deleting the guard: the two candidate replacements answer
+    // different questions, and only one of them is this guard's job.
+    //
+    //   requiredQuorum() sentinel   "can committee validation succeed AT ALL right now"
+    //                               (configVersion bump, epochSetValidUntil expiry)
+    //   runningRoot vs [e-1]        "would THESE proofs verify"
+    //
+    // The first is already covered above — `signed.length < st.requiredQuorum` throws on the
+    // type(uint256).max sentinel, because nothing is less than it. The second is what was lost, and
+    // it is the same check the production signing path makes (bls-signature-service, FU-9).
+    //
+    // It is CONSERVATIVE: `runningRoot` is written by `_smtSet` on any node activation/deactivation,
+    // so it diverges from `epochSetRoot[e-1]` for the rest of an epoch while proofs against `[e-1]`
+    // stay valid. A rejection here is not necessarily a real problem — but it fails in the safe
+    // direction, which is the opposite of what the guard it replaces did.
+    const freshness = await rpc((c) => readFrozenRootAgreement(c, BLS_VERIFIER));
+    if (!freshness.agrees) {
+        throw new Error(
+            `committee set has moved since the epoch-${freshness.epoch - 1n} snapshot: proofs read at ` +
+            `block ${atBlock} prove against runningRoot ${freshness.runningRoot}, but _verifyMerkle ` +
+            `checks epochSetRoot(${freshness.epoch - 1n}) = ${freshness.frozenRoot}`
+        );
+    }
     const committeeSigners: CommitteeSigner[] = signers;
     const guardianSignature = await guardianWallet.signMessage({ account: guardian, message: { raw: userOpHash } });
     const signature = packCumulativeT3Signature({

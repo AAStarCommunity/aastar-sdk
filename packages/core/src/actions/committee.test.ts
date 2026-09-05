@@ -4,6 +4,7 @@ import {
     ALG_ID_DVT,
     assertCommitteeSubmittable,
     fetchCommitteeSigners,
+    readFrozenRootAgreement,
     getCommitteeState,
     getMountedDvtValidator,
     isAccountEnrolled,
@@ -254,5 +255,56 @@ describe('assertCommitteeSubmittable', () => {
         await expect(assertCommitteeSubmittable(client, VALIDATOR, ACCOUNT, 3)).rejects.toThrow(
             /committeeActive\(\) is false/
         );
+    });
+});
+
+describe('readFrozenRootAgreement — the index the live chain cannot corroborate', () => {
+    const R = (n: string) => `0x${n.repeat(64)}` as Hex;
+    const RUNNING = R('a');
+    const FROZEN_PREV = R('b');
+    const FROZEN_CUR = R('c');
+
+    /**
+     * A reader where `epochSetRoot[e]` and `epochSetRoot[e-1]` are DIFFERENT.
+     *
+     * This is the whole point. #390 review measured the live chain: `runningRoot()` and
+     * `epochSetRoot` for five consecutive epochs are all the same value, so `[e]`, `[e-1]` and
+     * `[e-4]` are indistinguishable there. **A passing on-chain run is zero evidence for the
+     * index.** The only real evidence is `validate()` reading `setRoot[e - 1]` in the contract
+     * source — and the only way a TEST can carry that evidence is to be handed roots that differ.
+     */
+    const reader = (roots: Record<string, Hex>, running: Hex, epoch: bigint) => ({
+        readContract: async (a: { functionName: string; args?: readonly unknown[] }) => {
+            if (a.functionName === 'runningRoot') return running;
+            if (a.functionName === 'currentEpoch') return epoch;
+            if (a.functionName === 'epochSetRoot') return roots[String(a.args![0])] ?? R('0');
+            throw new Error(`unexpected ${a.functionName}`);
+        },
+    });
+
+    it('compares against epoch - 1, not epoch', async () => {
+        // running == epochSetRoot[e], and DIFFERENT from [e-1]. Reading `[e]` would call this
+        // agreement; reading `[e-1]` — what validate() does — must call it disagreement.
+        const r = await readFrozenRootAgreement(
+            reader({ '5': FROZEN_CUR, '4': FROZEN_PREV }, FROZEN_CUR, 5n) as never,
+            VALIDATOR,
+        );
+        expect(r.frozenRoot).toBe(FROZEN_PREV);
+        expect(r.agrees).toBe(false);
+    });
+
+    it('agrees when the running root matches the frozen e-1 root', async () => {
+        const r = await readFrozenRootAgreement(
+            reader({ '5': FROZEN_CUR, '4': RUNNING }, RUNNING, 5n) as never,
+            VALIDATOR,
+        );
+        expect(r.agrees).toBe(true);
+        expect(r.epoch).toBe(5n);
+    });
+
+    it('THROWS at epoch 0 rather than reading epochSetRoot(-1)', async () => {
+        await expect(
+            readFrozenRootAgreement(reader({}, RUNNING, 0n) as never, VALIDATOR),
+        ).rejects.toThrow(/currentEpoch\(\) == 0/);
     });
 });

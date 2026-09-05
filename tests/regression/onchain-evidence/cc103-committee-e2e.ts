@@ -33,6 +33,7 @@ import {
     getCommitteeState,
     getMountedDvtValidator,
     isAccountEnrolled,
+    readFrozenRootAgreement,
     encodeCommitteeBLSBlock,
     encodeDVTAccountSignature,
     type CommitteeSigner,
@@ -297,16 +298,12 @@ async function main() {
     // The staleness signal is no longer `lastSetMutationBlock` — that function was removed upstream
     // at #244 and is absent from the deployed bytecode, so reading it took the whole fetch down.
     // What the contract actually compares is the roots, so that is what is checked here.
-    const [liveRoot, epochNow] = (await Promise.all([
-        pc.readContract({ address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI, functionName: 'runningRoot' }),
-        pc.readContract({ address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI, functionName: 'currentEpoch' }),
-    ])) as [Hex, bigint];
-    const frozenRoot = (await pc.readContract({
-        address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI,
-        functionName: 'epochSetRoot', args: [epochNow - 1n],
-    })) as Hex;
+    // Uses the shared reader rather than a fourth hand-rolled copy — three copies of this comparison
+    // are how the removed field survived in two runners after the SDK dropped it.
+    const fresh = await readFrozenRootAgreement(pc, stack.committeeValidator);
+    const [liveRoot, epochNow, frozenRoot] = [fresh.runningRoot, fresh.epoch, fresh.frozenRoot];
     check(
-        typeof fetched.atBlock === 'bigint' && liveRoot.toLowerCase() === frozenRoot.toLowerCase(),
+        typeof fetched.atBlock === 'bigint' && fresh.agrees,
         'proofs fetched now would verify against the FROZEN epochSetRoot(e-1)',
         // e-1, not e. `validate()` reads setRoot[e-1]; comparing against epochSetRoot(e) is the
         // off-by-one that passes today only because all three roots currently coincide.

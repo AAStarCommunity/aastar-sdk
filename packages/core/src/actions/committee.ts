@@ -288,3 +288,66 @@ export function encodeEnrollInCommitteeValidator(): Hex {
         functionName: 'enrollInCommitteeValidator',
     });
 }
+
+/** What the contract compares when it verifies a committee Merkle proof. */
+export interface FrozenRootAgreement {
+    /** `currentEpoch()`. */
+    epoch: bigint;
+    /** `runningRoot()` — the CURRENT set, which `getMerkleProof` proves against. */
+    runningRoot: Hex;
+    /** `epochSetRoot(epoch - 1)` — the FROZEN root `validate()` actually checks. */
+    frozenRoot: Hex;
+    /** True when proofs fetched now would verify. */
+    agrees: boolean;
+}
+
+/**
+ * Read whether proofs fetched right now would verify against the root the contract checks.
+ *
+ * This replaces the `lastSetMutationBlock() > atBlock` freshness guard that three evidence runners
+ * used. That guard is worth describing, because it failed in two different ways in sequence:
+ *
+ * 1. It could never fire even when the function existed — `fetchCommitteeSigners` read the value
+ *    PINNED to `atBlock`, and a storage read at block N cannot report a mutation later than N.
+ * 2. When the function was removed upstream (#244) and the read deleted, the destructured value
+ *    became `undefined`, so `undefined > atBlock` is `false` — **silently the same no-op**, now
+ *    with nothing left to notice.
+ *
+ * It exists as one exported function precisely so the next removal has one call site to update
+ * rather than three hand-rolled copies, which is how (2) happened at all.
+ *
+ * ## The index is `epoch - 1`, and the chain cannot corroborate that
+ *
+ * `validate()` reads `setRoot[e - 1]`, so that is what proofs must match. Measured on Sepolia,
+ * `epochSetRoot` for five consecutive epochs and `runningRoot()` are ALL the same value — so
+ * `[e]`, `[e-1]` and `[e-4]` are indistinguishable on the live chain today. **A green run is
+ * therefore zero evidence for the index**; the only evidence is the contract source. Anything
+ * asserting `-1` has to be fed a synthetic reader where the two roots differ.
+ */
+export async function readFrozenRootAgreement(
+    publicClient: Pick<PublicClient, 'readContract'>,
+    committeeValidator: Address,
+): Promise<FrozenRootAgreement> {
+    const read = (functionName: string, args: readonly unknown[] = []) =>
+        publicClient.readContract({
+            address: committeeValidator,
+            abi: AAStarCommitteeValidatorABI,
+            functionName,
+            args,
+        } as never);
+
+    const [runningRoot, epoch] = (await Promise.all([read('runningRoot'), read('currentEpoch')])) as [Hex, bigint];
+    if (epoch === 0n) {
+        throw new Error(
+            `readFrozenRootAgreement: ${committeeValidator} reports currentEpoch() == 0, so there is no ` +
+                'frozen e-1 snapshot for _verifyMerkle to check proofs against.',
+        );
+    }
+    const frozenRoot = (await read('epochSetRoot', [epoch - 1n])) as Hex;
+    return {
+        epoch,
+        runningRoot,
+        frozenRoot,
+        agrees: runningRoot.toLowerCase() === frozenRoot.toLowerCase(),
+    };
+}
