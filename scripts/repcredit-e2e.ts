@@ -45,6 +45,7 @@ import {
 } from "./repcredit/evidence-structs.js";
 import { verifyFixtures } from "./repcredit/sync-fixture-abis.js";
 import { ExperimentSecrets, postSignedJson } from "./repcredit/experiment-auth.js";
+import { buildMaterialPassport, materialFileList, redactSecrets } from "./repcredit/material-passport.js";
 import {
   assertHttpRejections,
   assertRevertedNotOutOfGas,
@@ -74,7 +75,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import {
   closeSync,
   copyFileSync,
@@ -82,10 +83,8 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
-  readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -449,9 +448,6 @@ function appendJsonLine(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, bigintReplacer)}\n`, { flag: "a" });
 }
 
-function sha256(path: string): string {
-  return createHash("sha256").update(new Uint8Array(readFileSync(path))).digest("hex");
-}
 
 function receiptRecord(receipt: TransactionReceipt) {
   return {
@@ -1985,27 +1981,10 @@ function redactEvidence(): void {
   redactEvidenceSecrets(outputDir, evidenceSecrets());
 }
 
-function redactEvidenceSecrets(root: string, secrets: string[]): void {
-  const activeSecrets = secrets.filter(secret => secret.length > 0);
-  const visit = (path: string): void => {
-    for (const entry of readdirSync(path, { withFileTypes: true })) {
-      const child = join(path, entry.name);
-      if (entry.isDirectory()) {
-        visit(child);
-        continue;
-      }
-      let content = readFileSync(child, "utf8");
-      let redacted = content;
-      for (const secret of activeSecrets) redacted = redacted.split(secret).join("[REDACTED]");
-      if (redacted !== content) writeFileSync(child, redacted);
-      content = readFileSync(child, "utf8");
-      for (const secret of activeSecrets) {
-        if (content.includes(secret)) throw new Error(`secret remained in evidence file ${child}`);
-      }
-    }
-  };
-  visit(root);
-}
+// Moved to ./repcredit/material-passport.ts (CC-115 B4b) so it can be tested without standing up a
+// chain: this file has zero exports and runs at import time, so nothing here was reachable from a
+// test. Behaviour is unchanged; the module carries the contract and its boundaries.
+const redactEvidenceSecrets = redactSecrets;
 
 async function main(): Promise<void> {
   // Fail before touching a chain if the experiment ABI fixtures no longer match their recorded
@@ -2164,27 +2143,17 @@ async function main(): Promise<void> {
 
   redactEvidence();
 
-  const materialFiles = [
-    join(rawDir, "superpaymaster-deployment.json"),
-    ...(isSepolia ? [join(rawDir, "superpaymaster-broadcast.json")] : []),
-    join(rawDir, "airaccount-deployment.json"),
-    join(rawDir, "network-preflight.json"),
-    join(rawDir, "validator-setup.json"),
-    join(rawDir, "e2e.json"),
-    join(rawDir, "overissue-verifier-broadcast.json"),
-    join(rawDir, "security-controls.json"),
-    ...(isSepolia ? [join(rawDir, "validator-refunds.json")] : []),
-    ...(skipMeasurements ? [] : [join(rawDir, "measurements.jsonl"), join(derivedDir, "measurement-summary.json")]),
-  ];
+  // One definition, in ./repcredit/material-passport.ts — the prose copy in
+  // docs/repcredit-material-passport.md is checked against it by that module's test.
+  const materialFiles = materialFileList({ isSepolia, skipMeasurements }).map(rel => join(outputDir, rel));
   const completed = {
     ...manifest,
     completedAt: new Date().toISOString(),
     status: "passed",
-    materialPassport: materialFiles.map(path => ({
-      path: path.slice(outputDir.length + 1),
-      bytes: statSync(path).size,
-      sha256: sha256(path),
-    })),
+    // Built AFTER redactEvidence() above — the hashes must describe the bytes that ship. The helper
+    // also refuses any file outside outputDir, which is what makes "was this redacted?" answerable
+    // from the passport alone (redaction only walks outputDir).
+    materialPassport: buildMaterialPassport(outputDir, materialFiles),
   };
   writeJsonExclusive(join(outputDir, "manifest.json"), completed);
   process.stdout.write(`${JSON.stringify({ status: "passed", outputDir, files: completed.materialPassport }, null, 2)}\n`);
