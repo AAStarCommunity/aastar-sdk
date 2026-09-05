@@ -92,27 +92,52 @@ dryRun 得到的 nodeId vs state）。理由写在 dvt3:130 的 abort 信息里�
 
 ## 跨仓观察（不在本 task 修，仅记录）
 
-`AirAccount/kms/node-setup/register-node.mjs` 第 20/95–97 行与 `setup-server.py:155`
-把 Sepolia validator **硬 pin 成 `0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC`**，并写着
-「SDK canonical `aaStarBLSAlgorithm=0x0`（漂移）」——在 Sepolia 上**不传 `VALIDATOR_ADDRESS` 就直接 die**。
+> 读的是 `AirAccount` @ `4de82e4`（2026-08-18）。评审独立读的是同一 revision。
 
-这三句话按本仓库现状核实：
+`AirAccount/kms/node-setup/` 这两个文件**做的事不同，别混为一谈**（初稿把它们并成「都硬 pin」，
+是错的；下面是逐文件核实后的版本）：
 
-| 它说的 | 实际（本仓库 `packages/core/src/addresses.ts`，chain 11155111） |
+### `setup-server.py:155-157` —— 真正的硬 pin，三条里错一条
+
+| 键 | 它 pin 的值 | 对本仓 canonical（chain 11155111） |
+|---|---|---|
+| `validator` | `0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC` | ❌ **已被取代**；canonical 是 `0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9` |
+| `gToken` | `0x4c09aE57503Aa1E2A43b05621A38DbdD43b0Aa08` | ✅ 逐字等于 canonical |
+| `staking` | `0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e` | ✅ 逐字等于 canonical |
+
+三条里只有 validator 那条错——**而它恰恰是最难看出错了的那条**。两个 gToken/staking 若 pin 错，
+交易当场 revert；validator pin 错则一路成功。
+
+### `register-node.mjs` —— 不 pin，是 fail-closed；错的是它给的**理由**
+
+全文**完整地址命中 0 个**（`grep -coE '0x[0-9a-fA-F]{40}'` = 0）。它做的是：Sepolia 上缺
+`VALIDATOR_ADDRESS` 就直接 die（95–97 行）。第 20 行的 `0x539B96…` 是 usage 注释里的**截断建议**。
+
+问题不在 pin，在它写下的三句判断——按本仓 `packages/core/src/addresses.ts` 逐条核实全部不成立：
+
+| 它说的（注释 20-22 行 + 96 行 die 信息） | 实际 |
 |---|---|
-| canonical `aaStarBLSAlgorithm = 0x0`，漂移 | `0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9`（v0.33.0 COMMITTEE validator），非 0 |
-| canonical `gToken = 0x8d6Fe002`，别用 | `0x4c09aE57503Aa1E2A43b05621A38DbdD43b0Aa08`——正是它让你手填的那个（`0x8d6Fe002` 是 **op-mainnet** 的 gToken，见 FU-1） |
-| canonical `staking` 不可用 | `0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e`——同样正是它让你手填的那个 |
+| canonical `aaStarBLSAlgorithm = 0x0`，漂移 | `0x7ac7E9d4…`（v0.33.0 COMMITTEE validator），非 0 |
+| canonical `gToken = 0x8d6Fe002`，别用 | canonical 是 `0x4c09aE57…`，**正是它让你手填的那个**。`0x8d6Fe002dDacCcFBD377F684EC1825f2E1ab7ef6` 是 **op-mainnet(10)** 的 gToken（本次直接在 `addresses.ts` 的 chain 10 段核实，非仅引用 FU-1） |
+| canonical `staking` 不可用 | canonical 是 `0x472297B5…`，同样正是它让你手填的那个 |
 
-而它 pin 的 `0x539B9681…` 是**已被取代的** validator：`packages/core/src/dvt.onchain.test.ts` 的实测记录
-`router.getAlgorithm(0x01) = 0x7ac7E9d4…`，`0x539B9681…` 仍有 13610 字节代码、
-`isRegistered(node 1-3)` 同样返回 `true × 3`。**两个 validator 都答，且答得一样**——
-所以「有代码」和「认得我们的节点」都区分不出哪个是活的。
+第 96 行那句 die 信息本身就是一条**假事实**（「SDK canonical aaStarBLSAlgorithm=0x0 会失配」）——
+它把一个正确的地址簿描述成坏的，然后要求人手填一个错的。
 
-这正是 G12 的价值：不是「多一个可选参数」，而是**唯一能自证的答案来源**。下游之所以手 pin，
-是因为 SDK 没给它一条从 router 解析的入口；手 pin 之后 pin 错了，而错法在链上看不出来。
+**所以两者修法不同**：`setup-server.py` 要改的是常量；`register-node.mjs` 要改的是注释建议 +
+那条 die 信息的措辞（以及要不要保留 fail-closed 本身）。
 
-> 归属：AirAccount 仓库的脚本 + 本仓库缺的 G12 入口。前者不是 SDK 的交付物，此处只记录不追。
+### 为什么这条属于 G12
+
+`0x539B9681…` 是**已被取代的** validator。本仓 `packages/core/src/dvt.onchain.test.ts` 的实测记录：
+`router.getAlgorithm(0x01) = 0x7ac7E9d4…`，而 `0x539B9681…` 仍有 13610 字节代码、
+`isRegistered(node 1-3)` 同样返回 `true × 3`。**两个都答，且答得一样**——
+「有代码」和「认得我们的节点」都区分不出哪个是活的。
+
+这正是 G12 的价值：不是「多一个可选参数」，而是**唯一能自证的答案来源**。下游手填/手 pin，
+是因为 SDK 没给它一条从 router 解析的入口；填错了，而错法在链上看不出来。
+
+> 归属：AirAccount 仓库的两个文件 + 本仓库缺的 G12 入口。前者不是 SDK 的交付物，此处只记录不追。
 
 ## 不进 API 的部分（说明为什么）
 

@@ -21,10 +21,12 @@
 **方法论基线（仍适用）**：CC-115 B4 = PR #329，4 轮 pr-daemon 评审，approved `ecd4343d` →
 合并 `e4439dda`。它建立的双轴 pin + 可证伪门禁方法，是逐个上游套用的模板。
 
-**刚完成**：T1.2.1 缺口盘点。顺带核出一条跨仓事实：`AirAccount/kms/node-setup/` 把 Sepolia
-validator 硬 pin 成已被取代的 `0x539B9681…`，理由写「SDK canonical 漂移成 0x0」，而 canonical
-实为活的 `0x7ac7E9d4…`。两个 validator 都答 `isRegistered=true`，**pin 错了在链上看不出来**。
-不在本仓修，已记入清单的「跨仓观察」。
+**刚完成**：T1.2.1 缺口盘点。顺带核出一条跨仓事实（`AirAccount` @ `4de82e4`）：
+`setup-server.py:155-157` 硬 pin 三个 Sepolia 地址，gToken/staking 逐字等于 canonical、
+**只有 validator 那条是已被取代的 `0x539B9681…`**；`register-node.mjs` 则一个完整地址都没有，
+它是 fail-closed，错的是 die 信息里那句「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——
+canonical 实为活的 `0x7ac7E9d4…`。两个 validator 都答 `isRegistered=true`，**填错了在链上看不出来**。
+不在本仓修，已记入清单的「跨仓观察」。（初稿把两个文件并成「都硬 pin」，评审 #361 指出后逐文件重核。）
 
 **等他仓**（不阻塞）：
 - CC-115 双轴 pin 裁决 —— 已两次问 @repo:dsr（`bd2be1ec` / `dc08ec2b`），未回

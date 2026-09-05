@@ -47,10 +47,12 @@
   所以它是能红的，不是恒真。
 - **结论**：21 个能力步骤，**已有 API 13 / 需新增 8**。`register-node.mjs` 在两个仓库里各有一份且
   内容不同（DVT 侧 285 行、AirAccount 侧 107 行），三份全盘了。
-- **顺带核实（跨仓，不在本 task 修）**：`AirAccount/kms/node-setup/` 把 Sepolia validator 硬 pin 成
-  已被取代的 `0x539B9681…`，理由写的是「SDK canonical 漂移成 0x0」——本仓库 canonical 实为
-  `0x7ac7E9d4…`（活的那个），它同时点名要绕开的 gToken/staking 也恰好就是 canonical 的值。
-  两个 validator 都有代码、都对我们的节点答 `isRegistered=true`，所以 pin 错了在链上看不出来。
+- **顺带核实（跨仓，不在本 task 修；读 `AirAccount` @ `4de82e4`）**：两个文件做的事不同——
+  `setup-server.py:155-157` 是真正的硬 pin，三个常量里 gToken/staking 逐字等于 canonical、
+  **只有 validator 那条是已被取代的 `0x539B9681…`**；`register-node.mjs` 完整地址命中 **0 个**，
+  它是 fail-closed（缺 `VALIDATOR_ADDRESS` 就 die），错的是它 die 信息里那句假事实
+  「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——canonical 实为活的 `0x7ac7E9d4…`。
+  两个 validator 都有代码、都对我们的节点答 `isRegistered=true`，所以填错了在链上看不出来。
 
 ### T1.2.2 节点 onboarding API 实现  `BACKLOG`
 - **优先级**：high
