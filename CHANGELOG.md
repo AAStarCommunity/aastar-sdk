@@ -31,9 +31,108 @@ All notable changes to this project will be documented in this file.
 > `setGuardianSlashBps(uint16)`, `GuardianSlashBpsUpdated`) — all 4.12.0-only, none present on the
 > deployed 4.11.0 (checked on chain). See FU-52.
 >
-> **NOT VERIFIED BY THIS REWRITE:** whether CC-50 blocker **B2** is still open, and whether this
-> version is publishable. Those belong to whoever owns that ledger; this edit only corrects facts
-> about the pin, the struct, and what CI does — each re-derivable from the commands in PR #364.
+> **可发布性：已裁决（2026-09-05，#383）。** 上一版把这一条记为「本次改写未核实」。现在核了，
+> 判据全部可复跑：
+>
+> | 问题 | 读数 |
+> |---|---|
+> | CI 对着 pin 的 provenance 门禁 | `abi-provenance` 在 `main` 上**连续 4 次 success**（`584ee246` / `3627ab1e` / `ca7b7f1d` / `055edd59`） |
+> | SDK ABI 与 pin 的差距 | `abi:sync` = **`0 missing · 1 drifted`**，唯一那条是 `BLSAggregator` |
+> | 那条 drift 的内容 | 5 个 4.12.0-only 新增项 + `guardianSlashCases` 的 `SAME SELECTOR, DIFFERENT RETURN` |
+> | 「已部署的是 4.11.0」靠什么成立 | **链上直读**：`0xEaeC2F51…`.`version()` 返回 `BLSAggregator-4.11.0`。注意是**小写 `version()`** —— 该合约没有 `VERSION()`（selector `0xffa1ad74` 不在它的 23667 字节里，`0x54fd4d50` 在）。`cc103-committee-probe` 原来问的是大写那个，于是打印 `X … reverted`，**把「我问错了」写成了「合约有问题」**，同时丢掉了本裁决唯一真正需要的那个读数。已修。 |
+> | 那条 drift 的处置 | 4.12.0 **由作者拍板暂不部署**（4.11 满足论文）；SDK 对齐的是**已部署的 4.11.0**；唯一危险面 `guardianSlashCase()` **fail-closed**（`ABI_SHAPE_MISMATCH`），不会返回一个貌似合理的错值 |
+> | 那道 fail-closed 今天被什么钉住 | **只有单测。** 部署的 `0xEaeC2F51…`(4.11.0) 对 `guardianSlashCase(0)` **revert，data `0x`** —— 链上一个 case 都没排过队，所以 7 字误解码此刻**不可达**（#383 评审实测）。这让结论更强（现在不可能出错）**也更窄**（守卫从没在链上响过）。**第一个真 case 落链时，要拿真实返回跑一次，确认它走的是正常解码而不是守卫。** |
+> | 全量回归 | 15 个包全绿；链上套件 27 passed / 2 skipped（两条 skip 卡在 FU-38 的 CI archive RPC secret） |
+>
+> **结论：就 SDK 自身的交付面而言，本版可发布。** 缺的那 5 项不是遗漏，是对一个
+> **尚未部署**的上游版本的刻意不跟进（FU-52）——跟进它反而会让 SDK 领先于链。
+>
+> **这条裁决不解决 CC-50 的 B2。** B2 是「开发机上的上游工作树跑到 pin 前面」这个跨仓条件，
+> 归属在别处；而它对本仓的影响是**本地** `check:abi-drift:strict` 变红，**不是 CI**——
+> CI 自己 checkout 并 `forge build` 那个 pin。**把「我这台机器上红」读成「这个版本不能发」，
+> 正是本文件上一版留下的那种停在半路的判断。**
+
+### 2026-09-05 round — DVT node onboarding, guardian slash reads, and four fictional call sites
+
+> Ordering note: the `@aastar/paymaster` / `@aastar/tokens` / `@aastar/identity` entries below land
+> with **#382**; everything else is already on `main`. This section merges after it.
+
+#### Added
+
+- **`@aastar/core`**
+  - `parseDvtNodeState(raw)` — validate a node's `node_state.json` and derive `nodeId`. Takes a
+    **parsed object, not a path**: the bytes arrive from a CLI, a portal paste, or a KMS over HTTP,
+    and only one of those has a filesystem — and `core` must stay browser-safe. (#367)
+  - `getAccountDvtValidator(client, account)` — resolve the DVT validator an ACCOUNT consults, via
+    `account.validatorRouter()` → `router.getAlgorithm(0x01)`. (#377)
+  - Guardian-slash read surface: `GuardianSlashStatus`, `GuardianSlashCase`, and ten view wrappers
+    (`guardianSlashCase`, exit-cooldown family). (#362)
+  - `ErrorCode.ABI_SHAPE_MISMATCH` (`E4004`) — the chain answered, but the answer cannot be
+    trusted. Distinct from a revert **and not retryable**. (#362)
+  - `dvtOperatorActions()` gains `owner()` / `registry()` / `roleDvt()`. (#367)
+- **`@aastar/operator`** — `onboardDvtNode({ router })` (#367) and `onboardDvtNode({ account })`
+  (#377) resolve the validator instead of trusting an address.
+- **`@aastar/paymaster`** — `PaymasterOperator.removeToken` / `.withdrawTo`, the real entry points.
+  **`withdrawTo` is on all three supported deployments; `removeToken` needs PaymasterV4 4.5.0 and
+  today only Sepolia runs it** — chain 10 and 11155420 run 4.3.0, whose implementation declares
+  neither `removeToken` nor `isTokenSupported`. Positive controls (`tokenPrices`,
+  `setServiceFeeRate`, `withdrawTo`) are green on all three, so those ❌ are facts about the
+  functions, not a broken probe. (#382, qualified in #383 review) 
+- **`@aastar/dapp`** — `DVTClient.registerWithProof(wallet, validator, proof)`. The PoP is an
+  input: a browser holds no BLS secret, and on the recommended KMS-TEE deployment the secret never
+  leaves the enclave. (#381)
+
+#### Changed / Removed — **breaking, and every one of these could not work before**
+
+Each removed or throwing method named a contract function that **exists on no deployed contract**,
+verified against bytecode on Sepolia. They are listed as breaking because they are API surface, not
+because working behaviour was withdrawn.
+
+- **`@aastar/dapp`** — `DVTClient.registerValidator` **removed**. It called
+  `registerValidator(bytes)`, declared by no contract in this repo — and the DVT validator it
+  targeted is a **zero address** in the canonical book for chain 10 and 11155420, so the method had
+  no reachable target on two of the three supported chains at all. (#381)
+- **`@aastar/paymaster`** — `addGasToken` / `removeGasToken` / `withdrawPNT` now **throw**, naming
+  their replacements. All three were absent from the deployed PaymasterV4 implementation, and all
+  five methods in that group passed a raw human-readable string array as `abi:`, which viem
+  rejects outright — so they threw locally and never reached a node. (#382)
+- **`@aastar/tokens`** — `FinanceClient.stakeGToken` now **throws**. `stake(uint256)` is on no
+  deployed `GTokenStaking`, on **any** of the three supported chains (two positive controls green
+  on each). Of the two candidates the wrapper could have pointed at, **`topUpStake` is on all three
+  chains and `lockStakeWithTicket` is Sepolia-only** — they are not the same operation, so the
+  wrapper does not choose for you. (Scope, since the first wording here was a universal claim:
+  27 of `GTokenStaking`'s 29 functions are on all three chains; exactly `lockStakeWithTicket` and
+  `MAX_TOTAL_STAKE()` are not.) (#382, chain matrix added in #383 review)
+- **`@aastar/identity`** — `ReputationClient.submitProof` now **throws**. Its own comment called
+  the signature "generic for now" — and it broadcast a transaction. A stub that throws and a stub
+  that broadcasts are very different things. (#382)
+- **`@aastar/operator`** — `onboardDvtNode`'s three anchors (`account` / `router` / `validator`)
+  are mutually exclusive, **enforced** rather than documented. A wrong DVT validator does not
+  revert, so nothing downstream would tell you which anchor won. (#377)
+
+#### Fixed
+
+- **`encodeG1Point`** — the 128-byte path validated zero padding only, while its own comment
+  claimed a mis-shaped blob was rejected. It now runs `assertValidity()` plus an
+  infinity check, which also rejects on-curve points **outside the prime-order subgroup** — the
+  dimension small-subgroup and rogue-key attacks live in. (#367)
+- **`guardianSlashCase`** — fails closed instead of decoding a longer return. Deployed
+  `BLSAggregator-4.11.0` returns 7 words; the pinned 4.12.0 source declares 8 with `uint16
+  slashBps` **inserted before** `verifier` — **same selector**, so a 7-word decode does not revert;
+  it reads `slashBps` as `verifier`. (#362)
+- **`abi:sync`** — compared `name(inputs)` only and **never outputs**, so it reported green against
+  the drift above. Blast radius measured before shipping: 646 same-signature functions, exactly one
+  mismatch, zero false positives. (#366)
+
+#### Known limits, stated rather than implied
+
+- **`@aastar/analytics`** — `getSupplyMetrics` reads `totalLifetimeBurned()`, which the deployed
+  GToken does not have; the `catch` computes `cap - totalSupply - remainingMintable` and **that is
+  the only path this code has ever taken**. The value is right. The two branches are **not**
+  interchangeable if a future GToken adds the counter: one measures burns, the other measures what
+  the cap no longer accounts for. Behaviour unchanged. (#382)
+- **`getSupportedTokens()`** exists on the deployed PaymasterV4 and the SDK does not wrap it —
+  a missing capability, not a defect.
 
 **RepCredit evidence orchestrator, and the retirement of the three Paper7 scripts.**
 

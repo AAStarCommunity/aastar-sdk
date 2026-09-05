@@ -136,6 +136,23 @@ ReputationOracle or similar」。
 
 ---
 
+## ⚠️ 这张表的判据是什么，以及它分不开什么
+
+**表里每一行判的是「这个名字在 ABI 里存不存在」，不是「叫这个名字的代码是坏的」。**
+
+反例就在本仓：`packages/operator/src/PaymasterOperatorClient.ts:408` 也有一个 `addGasToken`，
+而它**是健康的** —— 它带 `price` 参数，并转发给真实入口 `setTokenPrice`。
+
+**按函数名判定的审计分不开这两者**：同一个名字，一处是虚构调用，一处是正确封装。
+要区分只能看它实际发出的 selector，或看它是否转发给一个真实入口。
+
+> **拿这张表去删「叫这个名字的代码」是错的用法。**
+
+（#382 评审发现，已记 FU-77。同一条 FU 还记了作用域外的一个同族实例：
+`scripts/21_test_paymasterv4_complete.ts` 调用 `adminClient.addGasToken` / `.withdrawPNT`，
+两者实测都是 `undefined` —— **会以 TypeError 失败，连合约调用都到不了**，比本表修的那一类还早一步死。
+正对照：同一个 client 上 `setTokenPrice` / `tokenPrices` / `withdrawTo` 均为 `function`。）
+
 ## 遗留
 
 - **第 1 条未改行为**，只补了说明。若将来 GToken 加上计数器，

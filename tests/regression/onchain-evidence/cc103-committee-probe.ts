@@ -117,7 +117,12 @@ async function main() {
   const agg = (await rd('SP.BLS_AGGREGATOR()', SP, 'BLS_AGGREGATOR', [], addr)) as Address | null;
   if (agg) {
     await rd('agg.fraudProofVerifier()', agg, 'fraudProofVerifier', [], addr);
-    await rd('agg.VERSION()', agg, 'VERSION', [], str);
+    // `version()`, lowercase. The deployed BLSAggregator has no `VERSION()` — measured: selector
+    // 0xffa1ad74 is absent from its 23667 bytes while 0x54fd4d50 (`version()`) is present. The
+    // probe used to ask for the upper-case one and print `X ... reverted`, which reads as a fact
+    // about the CONTRACT when it was a fact about the question. It also cost us the one datum the
+    // release verdict leans on: `version()` returns "BLSAggregator-4.11.0", straight from chain.
+    await rd('agg.version()', agg, 'version', [], str);
   }
 }
 
