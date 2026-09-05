@@ -298,9 +298,11 @@ precisely:
   first run may well need fixing (toolchain versions, submodule paths, build time). A red first run
   should be read as this job being wrong, not as the pin being unattributable.
 
-> **CORRECTION, 2026-09-05 (PR #364).** The narration above is kept as written, because it was an
-> honest account of that round — but two of its statements must not be read as current, and one was
-> never true:
+> **CORRECTION, 2026-09-05 (PR #364).** Scope: **every mention of `03713feb` anywhere in this
+> `[Unreleased]` section**, not just the paragraph above — the narration is kept as written because
+> it was an honest account of that round, but two of its statements must not be read as current, and
+> one was never true. (The first draft of this block said "the narration above", which left the two
+> later mentions at lines ~332 and ~415 outside its reach; #364 review caught that.)
 >
 > * **`03713feb` was already wrong when this was written.** The same commit that added this text
 >   (`e4439dda`, PR #329) created `scripts/upstream-abi-pin.json` with
