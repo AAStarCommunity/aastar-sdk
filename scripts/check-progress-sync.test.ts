@@ -62,12 +62,18 @@ describe('what the ledger defines', () => {
 });
 
 describe('THE ROT — it must red on the version that actually shipped', () => {
-  /** progress.md as it stood on origin/main before this PR. */
+  /**
+   * progress.md as it stood at `49679dd9` — the commit this PR branched from, i.e. the rotted
+   * version that actually shipped.
+   *
+   * **Pinned to a SHA, not to `origin/main`.** The first draft read `origin/main`, which MOVES: the
+   * moment this PR merges, that ref stops carrying the rotted file and the case would be asserting
+   * something about whatever landed most recently. A test whose fixture is a moving reference is
+   * not testing history, it is testing "recently".
+   */
+  const ROTTED_AT = '49679dd9';
   const rotted = () =>
-    execFileSync('git', ['show', `${execFileSync('git', ['rev-parse', 'origin/main'], { encoding: 'utf8' }).trim()}:docs/agent/progress.md`], {
-      encoding: 'utf8',
-      maxBuffer: 8 << 20,
-    });
+    execFileSync('git', ['show', `${ROTTED_AT}:docs/agent/progress.md`], { encoding: 'utf8', maxBuffer: 8 << 20 });
 
   it('reports T1.2.1 as PR_OPEN-vs-DONE on the shipped version', () => {
     const bad = mismatches(rotted(), read(T));
