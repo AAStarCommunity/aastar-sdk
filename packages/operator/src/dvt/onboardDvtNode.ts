@@ -96,16 +96,23 @@ export interface OnboardDvtNodeParams {
      * **The router is still an input you must get right from somewhere else.** The DVT repo swept
      * every router named across both repos and reports at least 11 on Sepolia, with
      * `getAlgorithm(0x01)` returning 7 DIFFERENT validators — every one answering normally, none
-     * reverting. (That sweep is theirs, not reproduced here; what IS reproduced here is the pair
-     * below.) Two defensible anchors disagree today — measured at block 11639030: this SDK's
-     * address book says the current router is
-     * `0xA97A7527…` → `0x7ac7E9d4…`, while the reference deployed account `0x92EA8b02…` reports
-     * `validatorRouter() = 0xe68d6A7B…` → `0x539B9681…`.
+     * reverting. (That sweep is theirs, not reproduced here.) What IS reproduced here, at block
+     * 11639067, is that **two real deployed accounts route to different validators**:
      *
-     * So passing `router` moves the uncertainty from the validator to the router; it does not
-     * remove it. The only anchor that settles itself is one layer up — the account's own
-     * `validatorRouter()`, because that is decided by what was deployed rather than by what someone
-     * wrote in a config. An `account?: Address` option resolving through it is FU-65.
+     * ```
+     * 0x92EA8b02… (45B proxy)  .validatorRouter() = 0xe68d6A7B…  → 0x539B9681…
+     * 0x0985785d… (45B proxy)  .validatorRouter() = 0xA97A7527…  → 0x7ac7E9d4…
+     * ```
+     *
+     * **So there is no such thing as "the current validator on Sepolia" — only "the current
+     * validator FOR A GIVEN ACCOUNT".** Passing `router` moves the uncertainty from the validator
+     * to the router; it does not remove it, and no global answer exists to move it to.
+     *
+     * The anchor that settles itself is one layer up: the account's own `validatorRouter()`,
+     * decided by what was deployed rather than by what someone wrote in a config. An
+     * `account?: Address` option resolving through it is FU-65 — and its real value is not that it
+     * finds the right validator, but that it **replaces an unanswerable question with an answerable
+     * one**: not "who is live on Sepolia" but "who does THIS account consult".
      *
      * Stated here rather than left implicit because an API that relocates an unknown while LOOKING
      * like it eliminated one is worse than not offering it.
