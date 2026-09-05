@@ -13,6 +13,7 @@ import {
     ROLE_DVT,
     buildDvtPop,
     dvtOperatorActions,
+    getMountedDvtValidator,
     registryActions,
     tokenActions,
     type DvtPop,
@@ -73,6 +74,23 @@ export interface OnboardDvtNodeParams {
     // ---- addresses (default to CANONICAL_ADDRESSES[chainId]) ----
     /** DVT validator (`AAStarBLSAlgorithm`). Default: canonical `aaStarBLSAlgorithm`. */
     validator?: Address;
+    /**
+     * Resolve the validator from a ValidatorRouter instead of trusting an address (T1.2.2 · gap G12).
+     * Mutually exclusive with {@link validator}.
+     *
+     * ## Why this exists, and why it is the option to reach for
+     *
+     * Before it, a caller had two choices: trust the canonical book, or hand-pin an address. Both
+     * downstream onboarding scripts hand-pinned — and one of them pinned
+     * `0x539B9681…`, a SUPERSEDED validator. That mistake is invisible on chain: the old contract
+     * still has code, and still answers `isRegistered = true` for our nodes, so the two most obvious
+     * sanity checks ("is there code there?", "does it know my node?") both pass against the wrong
+     * contract. Only the router distinguishes them, because the router mounts exactly one.
+     *
+     * Pass the router and this reads `getAlgorithm(0x01)` at call time. Nothing to keep in sync,
+     * and no address to copy out of a comment.
+     */
+    router?: Address;
     /** SuperPaymaster role Registry. Default: canonical `registry`. */
     registry?: Address;
     /** GToken (stake asset). Default: canonical `gToken`. */
@@ -173,7 +191,17 @@ export async function onboardDvtNode(params: OnboardDvtNodeParams): Promise<Onbo
     const canonical = CANONICAL_ADDRESSES[chainId as keyof typeof CANONICAL_ADDRESSES];
     if (!canonical) throw new Error(`onboardDvtNode: no canonical address book for chain ${chainId}`);
 
-    const validator = params.validator ?? (canonical.aaStarBLSAlgorithm as Address);
+    if (params.validator && params.router) {
+        throw new Error(
+            'onboardDvtNode: pass either `validator` or `router`, not both — they answer the same ' +
+            'question and a disagreement between them has no safe resolution here.',
+        );
+    }
+    // G12: resolving beats trusting. See the `router` doc for what a wrong pin looks like on chain
+    // (spoiler: exactly like a right one).
+    const validator = params.router
+        ? await getMountedDvtValidator(publicClient, params.router)
+        : params.validator ?? (canonical.aaStarBLSAlgorithm as Address);
     const registry = params.registry ?? (canonical.registry as Address);
     const gToken = params.gToken ?? (canonical.gToken as Address);
     const staking = params.staking ?? (canonical.staking as Address);

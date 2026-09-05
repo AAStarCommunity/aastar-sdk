@@ -17,7 +17,11 @@ export interface DvtRegisteredNode {
 /**
  * Operator-facing actions for the DVT node registry on
  * {@link https://github.com/AAStarCommunity/YetAnotherAA-Validator | AAStarBLSAlgorithm}
- * (source `AAStarValidator.sol`, the DVT validator, Sepolia `0x539B9681…`) — the
+ * (source `AAStarValidator.sol`, the DVT validator) — the
+ * NOTE: this used to name Sepolia `0x539B9681…`. That contract is SUPERSEDED and still answers:
+ * it has code and returns `isRegistered = true` for our nodes, so neither test tells it apart from
+ * the live one. `router.getAlgorithm(0x01)` mounts `0x7ac7E9d4…`. Resolve the address, do not
+ * copy one from a comment — see `resolveDvtValidator` / `onboardDvtNode({ router })`.
  * staked, self-service registration path (YetAnotherAA-Validator #165).
  *
  * The write path is `registerWithProof(publicKey, popPoint, popSig)`, gated on-chain by:
@@ -68,6 +72,17 @@ export type DvtOperatorActions = {
     requireStake: () => Promise<boolean>;
     /** `minStake() -> uint256` — the ROLE_DVT stake floor enforced at registration. */
     minStake: () => Promise<bigint>;
+
+    // ---- validator identity (T1.2.2 · gap G14) ----
+    // All three were already in the ABI and wrapped by none of it, so every caller that needed them
+    // hand-rolled an inline ABI (`dvt3-register.ts:91`) or read them through ethers in a sibling
+    // repo. Wrapping is mechanical; NOT wrapping is what makes people paste addresses.
+    /** `owner() -> address` — the only account that may use the bootstrap registration path. */
+    owner: () => Promise<Address>;
+    /** `registry() -> address` — the SuperPaymaster role Registry this validator checks stake against. */
+    registry: () => Promise<Address>;
+    /** `ROLE_DVT() -> bytes32` — read it rather than re-deriving the constant off-chain. */
+    roleDvt: () => Promise<Hex>;
 };
 
 const ABI = AAStarBLSAlgorithmABI;
@@ -227,6 +242,36 @@ export const dvtOperatorActions =
                 }) as boolean;
             } catch (error) {
                 throw AAStarError.fromViemError(error as Error, 'requireStake');
+            }
+        },
+
+        async owner() {
+            try {
+                return await (client as PublicClient).readContract({
+                    address, abi: ABI, functionName: 'owner', args: [],
+                }) as Address;
+            } catch (error) {
+                throw AAStarError.fromViemError(error as Error, 'owner');
+            }
+        },
+
+        async registry() {
+            try {
+                return await (client as PublicClient).readContract({
+                    address, abi: ABI, functionName: 'registry', args: [],
+                }) as Address;
+            } catch (error) {
+                throw AAStarError.fromViemError(error as Error, 'registry');
+            }
+        },
+
+        async roleDvt() {
+            try {
+                return await (client as PublicClient).readContract({
+                    address, abi: ABI, functionName: 'ROLE_DVT', args: [],
+                }) as Hex;
+            } catch (error) {
+                throw AAStarError.fromViemError(error as Error, 'roleDvt');
             }
         },
 
