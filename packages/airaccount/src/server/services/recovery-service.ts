@@ -151,9 +151,56 @@ export class RecoveryService {
   // ── Calldata encoders (submit TO the account address) ─────────────
 
   /**
+   * Seconds an `addGuardian` proposal must age before the add is allowed.
+   *
+   * `GUARDIAN_ADD_TIMELOCK = 2 days` (`AAStarAirAccountBase.sol:147`). Stated as a constant because
+   * two days is not something a caller can discover by retrying, and a UI that does not surface it
+   * looks broken for 48 hours.
+   */
+  static readonly GUARDIAN_ADD_TIMELOCK_SECONDS = 2 * 24 * 60 * 60;
+
+  /**
+   * Encode `proposeGuardianAddition(guardian)` calldata. **Owner only.**
+   *
+   * ## When this is required, and why it is not optional
+   *
+   * The guardian that brings the count to `RECOVERY_THRESHOLD` (2) cannot be added directly. It must
+   * be proposed first, then added at least {@link GUARDIAN_ADD_TIMELOCK_SECONDS} later:
+   *
+   * ```
+   * addGuardian(g2) without a proposal   →  GuardianAdditionNotProposed()      0xe73be0e7
+   * addGuardian(g2) right after propose  →  GuardianAdditionTimelockNotExpired 0x534910fe
+   * ```
+   *
+   * (Both measured on Sepolia. Control: re-adding an existing guardian gives `GuardianAlreadySet()`
+   * `0x53682430` — three distinct selectors, so the probe distinguishes.)
+   *
+   * This is a deliberate control (CC-102 F-W5/F-W7), not a limitation to route around: that specific
+   * addition both completes a recovery quorum and lets an owner-only subset reach Tier-3, so a stolen
+   * owner key could otherwise self-add two puppet guardians and take the account over irreversibly
+   * (`executeRecovery` is permissionless, `cancelRecovery` is guardian-only). The timelock is the
+   * legitimate owner's reaction window.
+   *
+   * **The FIRST guardian is exempt** (count 0 → 1; a lone guardian is below every quorum), and so are
+   * **guardians supplied at account creation via `InitConfig`** — that path never reaches this gate.
+   * For setting up an account with two or more guardians, creation-time is the route that works
+   * without a two-day wait.
+   */
+  encodeProposeGuardianAddition(guardian: string): string {
+    return encodeFunctionData({
+      abi: AIRACCOUNT_ABI_PARSED,
+      functionName: "proposeGuardianAddition",
+      args: [guardian as Address],
+    });
+  }
+
+  /**
    * Encode `addGuardian(guardian)` calldata. **Owner only.**
    * Registers a recovery guardian; reverts once 3 guardians are set, or if the
    * guardian is `address(0)`, the owner, or already registered.
+   *
+   * ⚠️ For the guardian that reaches `RECOVERY_THRESHOLD` (the SECOND one), this alone reverts with
+   * `GuardianAdditionNotProposed()`. See {@link encodeProposeGuardianAddition}.
    */
   encodeAddGuardian(guardian: string): string {
     return encodeFunctionData({

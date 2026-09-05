@@ -3,7 +3,8 @@
  *
  * Proves the AirAccount beta.4 social-recovery flow end-to-end on live Sepolia:
  *   1. Deploy a beta.4 account owned by JASON via factory.createAccount.
- *   2. OWNER addGuardian(g1), addGuardian(g2)  — 2 txs (onlyOwner gate).
+ *   2. Guardians g1+g2 come from InitConfig at creation — 0 txs. (Adding the SECOND one
+ *      post-deploy needs propose + a 2-day GUARDIAN_ADD_TIMELOCK; CC-102 F-W5/F-W7.)
  *   3. Guardian g1 proposeRecovery(newOwner)   — 1 tx (starts 2-day timelock + 1st approval).
  *   4. Guardian g2 approveRecovery()           — 1 tx (reaches 2-of-3 threshold).
  *   5. Read activeRecovery() on-chain          — confirms proposal w/ 2 approvals.
@@ -145,7 +146,28 @@ async function main() {
 
     // ── 1. Deploy beta.4 account owned by JASON ─────────────────────────────
     const config = {
-        guardians: ['0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000', '0x0000000000000000000000000000000000000000'] as readonly [Address, Address, Address],
+        // Both guardians are installed AT CREATION, not added afterwards.
+        //
+        // Adding them post-deploy stopped working, and not by accident: the guardian that reaches
+        // RECOVERY_THRESHOLD (2) must now be proposed and then added at least GUARDIAN_ADD_TIMELOCK
+        // (**2 days**) later. Measured on Sepolia, three distinct selectors:
+        //
+        //   addGuardian(g2) with no proposal    GuardianAdditionNotProposed()       0xe73be0e7
+        //   addGuardian(g2) right after propose GuardianAdditionTimelockNotExpired  0x534910fe
+        //   addGuardian(g1) again (control)     GuardianAlreadySet()                0x53682430
+        //
+        // That is CC-102 F-W5/F-W7 and it is a control, not an obstacle: a stolen owner key could
+        // otherwise self-add two puppet guardians and take the account over irreversibly
+        // (executeRecovery is permissionless, cancelRecovery is guardian-only).
+        //
+        // `AAStarAirAccountBase.sol:1838` says it outright — "Guardians supplied at account creation
+        // (InitConfig) never touch this path" — so this is the supported route, not a workaround.
+        //
+        // What this changes about the evidence, stated rather than glossed: guardian INSTALLATION is
+        // this runner's precondition, not its claim (the claim is propose → approve → the timelock
+        // revert on execute). A two-day wait cannot live inside a runner, and the alternative —
+        // reporting red forever — would say "recovery is broken" about a working stack.
+        guardians: [g1.address, g2.address, '0x0000000000000000000000000000000000000000'] as readonly [Address, Address, Address],
         guardianP256X: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
         guardianP256Y: [ZERO32, ZERO32, ZERO32] as readonly [Hex, Hex, Hex],
         dailyLimit: parseEther('1'),                 // dailyLimit > 0 (GUARD-enabled)
@@ -180,12 +202,16 @@ async function main() {
     const onchainOwner = await airAccountActions(account)(publicClient).owner();
     console.log(`   Account owner on-chain (via SDK): ${onchainOwner}`);
 
-    // ── 2. OWNER addGuardian(g1), addGuardian(g2) — calldata via SDK RecoveryService ──
-    const addG1 = await sendVerified(ownerWallet, account, recoverySvc.encodeAddGuardian(g1.address) as Hex, 'addGuardian(g1)');
-    const addG2 = await sendVerified(ownerWallet, account, recoverySvc.encodeAddGuardian(g2.address) as Hex, 'addGuardian(g2)');
-    steps.push({ step: 'OWNER addGuardian(g1)', actor: `JASON ${owner.address}`, tx: addG1 });
-    steps.push({ step: 'OWNER addGuardian(g2)', actor: `JASON ${owner.address}`, tx: addG2 });
-    console.log(`   guardianCount on-chain (via SDK): ${await recoverySvc.getGuardianCount(account)}`);
+    // ── 2. Guardians came from InitConfig, so there is nothing to add here ────────────────────────
+    // (see the note on `guardians:` above — post-deploy the second one needs a 2-day timelock).
+    // The count is READ rather than assumed: a config that silently failed to install them would
+    // otherwise surface three steps later as an unexplained recovery failure.
+    const guardianCount = await recoverySvc.getGuardianCount(account);
+    console.log(`   guardianCount on-chain (via SDK): ${guardianCount} (installed at creation, not added)`);
+    if (Number(guardianCount) !== 2) {
+        throw new Error(`expected 2 guardians from InitConfig, on-chain count is ${guardianCount}`);
+    }
+    steps.push({ step: 'Guardians g1+g2 installed via InitConfig at creation (no addGuardian tx)', actor: `JASON ${owner.address}`, tx: deployTx });
 
     // ── 3. Guardian g1 proposeRecovery(newOwner) — via SDK RecoveryService ──
     const proposeTx = await sendVerified(g1Wallet, account, recoverySvc.encodeProposeRecovery(newOwner) as Hex, 'g1 proposeRecovery(newOwner)');
