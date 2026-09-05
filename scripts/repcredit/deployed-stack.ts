@@ -42,6 +42,24 @@ export type DeployedStackPin = {
   chainId: number;
   manifest: { producedBy: string; commit: string; path: string; sha256: string; stackKind: string };
   addresses: Record<'blsAggregator' | 'registry' | 'superPaymaster' | 'dvtValidator' | 'fraudProofVerifier', Address>;
+  /**
+   * The AirAccount v0.33.0 leg (CC-115 B6-prep).
+   *
+   * Not hand-copied: generated from `packages/core/src/addresses.ts`, and {@link checkAirAccountLeg}
+   * asserts the two stay equal. The authoritative upstream source is a secret file
+   * (`airaccount-contract .env.sepolia` V0330) that nobody reads or pastes, so the SDK address book
+   * is the single source here — which is exactly why the on-chain assertions below exist. A pin
+   * whose only backing is another file we also wrote is not evidence.
+   */
+  airAccount: {
+    factory: Address;
+    implementation: Address;
+    extension: Address;
+    validatorRouter: Address;
+    algorithm1: Address;
+    entryPoint: Address;
+    factoryVersion: string;
+  };
   legs: Record<string, string>;
   aggregator: {
     version: string;
@@ -464,6 +482,91 @@ export async function checkDeployedStackOnChain(pin: DeployedStackPin, client: P
         ? `the pin names ${rejected.address}, which is explicitly rejected: ${rejected.why}`
         : `${rejected.address} is not what we pinned`,
     });
+  }
+
+  return out;
+}
+
+/** Read a `string` getter. Separate from {@link readAddress} because the return decoding differs. */
+async function readString(client: PublicClient, to: Address, fn: string): Promise<string> {
+  const res = (await client.call({ to, data: toFunctionSelector(`function ${fn}() view returns (string)`) })) as { data?: Hex };
+  if (!res?.data || res.data === '0x') throw new Error(`${fn}() returned no data`);
+  const hex = res.data.slice(2);
+  const len = parseInt(hex.slice(64, 128), 16);
+  return Buffer.from(hex.slice(128, 128 + len * 2), 'hex').toString('utf8');
+}
+
+/**
+ * The AirAccount v0.33.0 leg, on chain, plus the pin↔address-book equality (CC-115 B6-prep).
+ *
+ * ## Why the equality check is the load-bearing one
+ *
+ * Every address in `pin.airAccount` was generated FROM `packages/core/src/addresses.ts`. Comparing
+ * them proves only that the generator ran — which is worth checking (they drift the moment someone
+ * edits one by hand) but proves nothing about the chain. The four on-chain reads are what make the
+ * pin accountable:
+ *
+ *   factory.FACTORY_VERSION() == "0.33.0"    the stack is the one the paper describes
+ *   factory.implementation()  == impl        the factory mints THAT account, not another
+ *   router.getAlgorithm(1)    == algorithm1  the validator this SDK will drive
+ *   SuperPaymaster.entryPoint() == entryPoint  the 4337 entry point the run will use
+ *
+ * `book` is passed in rather than imported so this module keeps no dependency on `@aastar/core`;
+ * the caller owns that edge.
+ */
+export async function checkAirAccountLeg(
+  pin: DeployedStackPin,
+  client: PublicClient,
+  book: Record<string, string>,
+): Promise<Check[]> {
+  const out: Check[] = [];
+  const a = pin.airAccount;
+
+  // pin <-> address book. Named per field so a failure says WHICH one moved.
+  const BOOK_KEY: Record<keyof Omit<typeof a, 'factoryVersion'>, string> = {
+    factory: 'airAccountFactoryV7',
+    implementation: 'airAccountV7Impl',
+    extension: 'airAccountExtension',
+    validatorRouter: 'aaStarValidator',
+    algorithm1: 'aaStarBLSAlgorithm',
+    entryPoint: 'entryPoint',
+  };
+  for (const [field, key] of Object.entries(BOOK_KEY) as [keyof typeof BOOK_KEY, string][]) {
+    const pinned = a[field];
+    const booked = book[key];
+    out.push({
+      name: `airAccount:book:${field}`,
+      ok: Boolean(booked) && eq(pinned, booked),
+      detail: `pin ${pinned} vs addresses.ts ${key} ${booked ?? '(absent)'}`,
+    });
+  }
+
+  const probe = async (name: string, fn: () => Promise<string>, want: string) => {
+    try {
+      const got = await fn();
+      out.push({ name, ok: eq(got, want), detail: `on chain ${got}; pin ${want}` });
+    } catch (error) {
+      // A read that THREW is not a read that disagreed, and the two need different fixes.
+      out.push({ name, ok: false, detail: `read failed: ${(error as Error).message}` });
+    }
+  };
+
+  await probe('airAccount:factoryVersion', () => readString(client, a.factory, 'FACTORY_VERSION'), a.factoryVersion);
+  await probe('airAccount:implementation', () => readAddress(client, a.factory, 'implementation'), a.implementation);
+  await probe('airAccount:entryPoint', () => readAddress(client, pin.addresses.superPaymaster, 'entryPoint'), a.entryPoint);
+  try {
+    const got = (await client.call({
+      to: a.validatorRouter,
+      data: `${toFunctionSelector('function getAlgorithm(uint8) view returns (address)')}${'01'.padStart(64, '0')}` as Hex,
+    })) as { data?: Hex };
+    const mounted = got?.data && got.data !== '0x' ? `0x${got.data.slice(-40)}` : null;
+    out.push({
+      name: 'airAccount:router:algId1',
+      ok: Boolean(mounted) && eq(mounted!, a.algorithm1),
+      detail: `router ${a.validatorRouter} mounts ${mounted ?? '(no data)'} at algId 0x01; pin ${a.algorithm1}`,
+    });
+  } catch (error) {
+    out.push({ name: 'airAccount:router:algId1', ok: false, detail: `read failed: ${(error as Error).message}` });
   }
 
   return out;

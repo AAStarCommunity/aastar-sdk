@@ -141,6 +141,41 @@
 
 ---
 
+## F6.1 — RepCredit deployed-stack 模式（CC-115 B6 前置）
+
+### T6.1.1 runner 的 deployed-stack 模式 + AirAccount v0.33 腿  `IN_PROGRESS`
+- **优先级**：high
+- **来源**：@repo:dsr CC-115 评论 `42e377cf` §4（作者 2026-09-05 拍板 B6 直接打真实部署栈，
+  不做隔离副本）+ 两条 DSR 裁决（v0.33 地址来源、出资密钥边界）。
+- **⚠️ 盘点先于实现，而盘点里最该报的两条不是「要跳哪几步」**：
+  `repcredit-e2e.ts:2114` 断言 `defaultThreshold === 3n`、`:2126` 断言
+  `air.version === "0.31.0"` —— **这两条断言本身编码了 fresh-deploy 假设**。
+  也就是说：**现在的 runner 直接指向真实栈，会在第一笔交易之前就以「阈值不是 3」拒跑**，
+  而那恰恰是它应该接受的栈。DSR 已确认与其记录一致。
+  （同时领一份账：B4 我报「runner 坐标 = `main ≥ d769a122`」时，这两条断言就在那里，我没读到。）
+- **要跳的 7 处**（Sepolia 分支）：删旧配置 · `forge script DeployRepCreditSepolia` ·
+  读 broadcast 收据 · `forge build`(airDir) · `pnpm repcredit:deploy:sepolia` ·
+  `gen-repcredit-nodes.mjs` 生成临时节点密钥 · `setupValidators`/`startNodes`。
+  跳掉后 `REPCREDIT_ETH_USD_FEED` 与 `repcredit:deploy:sepolia` 依赖**随之消失**
+  （DSR ③ 要求的判据：若它们仍被调用，就是没跳干净）。
+- **本次交付（第一半）**：`deployedStack.sepolia.airAccount` 块 + `checkAirAccountLeg`
+  + 接进 `check-deployed-stack`。
+  - **地址不手抄**：该块由 `packages/core/src/addresses.ts` 程序化生成；
+    权威上游是 `airaccount-contract .env.sepolia` V0330，**秘密文件，不读不贴**（DSR 裁决 1）。
+  - 因此**链上断言才是让这个 pin 可问责的东西**：`FACTORY_VERSION()=="0.33.0"` ·
+    `factory.implementation()` · `router.getAlgorithm(1)` · `SuperPaymaster.entryPoint()`。
+    **一个只由我们自己另一份文件背书的 pin 不是证据。**
+- **验收命令**：`REPCREDIT_REQUIRE_ONCHAIN=1 pnpm exec tsx scripts/repcredit/check-deployed-stack.ts`
+  - 实测 **39 check(s), 0 failed; on-chain RAN**（原 29 + 新 10）
+  - 六条变异逐一红：factory 假地址 3 · implementation 2 · algorithm1 2 · entryPoint 2 ·
+    factoryVersion 改 0.31.0 → 1 · **router 换成 v0.31 的真 router → 2**
+  - 最后一条是要的那格：**换成一个真实存在、链上照样应答的旧 router**，
+    靠 `getAlgorithm(1)` 才抓得住。
+- **DSR 独立读回一致**（block 11640727）：implementation `0x63a6D78A…`、
+  `getAlgorithm(1)` `0x7ac7E9d4…`、`SP.entryPoint()` `0x00000000717…` —— 我从文件取值，未抄其消息。
+
+---
+
 ## F2.1 — Slash 治理 read getters（CC-13 批A）
 
 ### T2.1.1 slash 只读查询 API (PR #362)  `DONE`

@@ -9,7 +9,15 @@
 import { createPublicClient, http } from 'viem';
 
 import { crossCheckedClientFromUrls } from '@aastar/core';
-import { checkDeployedAbiPin, checkDeployedStackOnChain, readDeployedStackPin, summarise, type Check } from './deployed-stack.js';
+import { CANONICAL_ADDRESSES } from '@aastar/core';
+import {
+  checkAirAccountLeg,
+  checkDeployedAbiPin,
+  checkDeployedStackOnChain,
+  readDeployedStackPin,
+  summarise,
+  type Check,
+} from './deployed-stack.js';
 
 const argv = process.argv.slice(2);
 const network = argv.includes('--network') ? argv[argv.indexOf('--network') + 1] : 'sepolia';
@@ -62,6 +70,9 @@ async function main() {
       );
     }
     const live = await checkDeployedStackOnChain(pin, client as never);
+    // The AirAccount v0.33.0 leg (CC-115 B6-prep). Kept in the same on-chain block so a run that
+    // could not reach a node reports ALL of it as unreached, rather than half-passing offline.
+    live.push(...(await checkAirAccountLeg(pin, client as never, CANONICAL_ADDRESSES[pin.chainId] as never)));
     checks.push(...live);
     onChainRan = true;
     console.log(summarise(live).text);
