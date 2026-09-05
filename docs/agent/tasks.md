@@ -54,7 +54,7 @@
   「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——canonical 实为活的 `0x7ac7E9d4…`。
   两个 validator 都有代码、都对我们的节点答 `isRegistered=true`，所以填错了在链上看不出来。
 
-### T1.2.2 节点 onboarding API 实现  `PR_OPEN`
+### T1.2.2 节点 onboarding API 实现 (PR #367)  `DONE`
 - **优先级**：high
 - **依赖**：T1.2.1
 - **验收命令**：`pnpm --filter @aastar/core test` + `pnpm --filter @aastar/operator test` 全绿
