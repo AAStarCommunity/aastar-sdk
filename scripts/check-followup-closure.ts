@@ -93,7 +93,12 @@ const FU_MENTION = /\bFU-(\d+)\b/g;
  * Both halves are mechanically checkable — the ledger must credit #M, and #M must be MERGED — so
  * this is not an escape hatch. It is a claim, held to the same standard as the other one.
  */
-const RECORDS_CLAIM = /FU-(\d+)\s*(?:由|由 PR)?\s*#?(\d{3})\s*(?:关闭|完成|交付)|records? that FU-(\d+) was closed by #?(\d{3})/gi;
+// `(\d{1,5})(?!\d)` — not `(\d{3})`. Review measured what the fixed width did: `#99` and `#1345`
+// parsed to nothing and were silently unchecked, while `#12345` parsed as `123` and sent the gate
+// to verify a PR the author never mentioned. A width that happens to fit today's PR numbers is a
+// coincidence, and the failure it produces is the worst kind — not "no answer" but "a confident
+// answer about the wrong thing".
+const RECORDS_CLAIM = /FU-(\d+)\s*(?:由|由 PR)?\s*#?(\d{1,5})(?!\d)\s*(?:关闭|完成|交付)|records? that FU-(\d+) was closed by #?(\d{1,5})(?!\d)/gi;
 
 /** Parsed `{ fu, by }` pairs from RECORDS_CLAIM, tolerating either language's capture positions. */
 export function extractRecords(body: string): { fu: string; by: number }[] {

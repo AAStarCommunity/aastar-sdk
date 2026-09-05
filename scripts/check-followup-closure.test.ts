@@ -162,6 +162,26 @@ describe('the third kind of statement: recording someone else\'s closure', () =>
     expect(checkClosure('This PR records that FU-34 was closed by #345.', done(34, 345), 360, merged)).toEqual([]);
   });
 
+
+  it.each([
+    ['two digits', '本 PR 记录 FU-34 由 #99 关闭。', 99],
+    ['three digits', '本 PR 记录 FU-34 由 #345 关闭。', 345],
+    ['four digits', '本 PR 记录 FU-34 由 #1345 关闭。', 1345],
+    ['five digits', 'records that FU-34 was closed by #12345', 12345],
+  ])('a %s PR number is parsed whole', (_label, body, expected) => {
+    // The fixed `\d{3}` this replaces was measured doing two different wrong things at once: `#99`
+    // and `#1345` parsed to nothing and went silently unchecked, and `#12345` parsed as `123` —
+    // sending the gate to verify a PR the author never named. The second is the worse half: not
+    // "no answer" but "a confident answer about the wrong thing".
+    expect(extractRecords(body)).toEqual([{ fu: 'FU-34', by: expected }]);
+  });
+
+  it('a long number never yields its first three digits', () => {
+    // Stated separately from the case above because it is the property, not an example: no prefix of
+    // a PR number may become a PR number.
+    expect(extractRecords('records that FU-34 was closed by #12345').map((r) => r.by)).not.toContain(123);
+  });
+
   it('the ledger must actually credit the PR named', () => {
     // Otherwise the record is just another way to say "trust me".
     expect(checkClosure('本 PR 记录 FU-34 由 #345 关闭。', done(34, 341), 360, merged)[0].detail).toMatch(/does not credit #345/);
