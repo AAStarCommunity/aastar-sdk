@@ -51,6 +51,16 @@ import { createPublicClient, http, type Address } from 'viem';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { DVT_CONFIG } from './dvt.js';
 import { DEFAULT_DVT_NODES, getDefaultDvtNodes } from './crypto/dvtNodes.js';
+import { committeeLeavesAt } from './actions/committeeTree.js';
+
+/**
+ * Log-replay needs an endpoint that serves `eth_getLogs` over history CONSISTENTLY; the free public
+ * one does not (FU-38). Same gate as `committeeTree.test.ts`, same reason: a flaky instrument that
+ * fails the way the bug fails cannot be told apart from the bug.
+ */
+const ARCHIVE_RPC = process.env.AASTAR_ARCHIVE_RPC_URL;
+const RUN_LOGS = process.env.AASTAR_ONCHAIN_TEST === '1' && !!ARCHIVE_RPC;
+const archiveClient = () => createPublicClient({ transport: http(ARCHIVE_RPC!) }) as never;
 
 const SEPOLIA = 11155111;
 const addrs = CANONICAL_ADDRESSES[SEPOLIA];
@@ -224,4 +234,52 @@ describe('entryPoint is anchored, not just written twice (FU-35)', () => {
       expect(env.entryPoint.toLowerCase(), `${name} targets a different EntryPoint`).toBe(sepoliaEnv.entryPoint.toLowerCase());
     }
   });
+});
+
+describe('the pinned nodeIds are the set the chain actually has (FU-17)', () => {
+  // WHY THE PINS NEED A CHECK AT ALL
+  // --------------------------------
+  // FU-17 was filed as a time bomb — "the day operators re-register, the fallback ids all go stale"
+  // — and that turned out to be false: `registerWithProof` derives `nodeId = keccak256(pubkey)`, so
+  // re-registration with the same key reproduces the same id. Measured: 3/3 match, and note the
+  // hash is over the whole 128-byte EIP-2537 blob (stripping the 16-byte padding to 96 does not).
+  //
+  // The follow-up survived the correction with a harder reason. `registerPublicKey(bytes32, bytes)`
+  // takes the nodeId as an ARGUMENT — so "the id equals keccak of the key" is a CONVENTION the
+  // original registrant followed, not something the protocol guarantees. A new node, or the same
+  // node registered by someone else, may not match. That moves the risk from a date ("it will break
+  // eventually") to a structure ("whether they match depends on who registered").
+  //
+  // A structural risk cannot be fixed by picking a better literal. It can be turned into a red test.
+  it.runIf(RUN_LOGS)('every pinned nodeId is in the live active set', async () => {
+    const at = await (archiveClient() as unknown as { getBlockNumber(): Promise<bigint> }).getBlockNumber();
+    const leaves = await committeeLeavesAt(archiveClient(), addrs.aaStarBLSAlgorithm as Address, at);
+    const active = new Set([...leaves.values()].map((v) => v.toLowerCase()));
+
+    for (const node of sepoliaEnv.dvtNodes) {
+      expect(
+        active.has(node.nodeId.toLowerCase()),
+        `${node.url} is pinned to ${node.nodeId}, which is not in the validator's active set ` +
+          `(${[...active].join(', ')}). Either the pin is stale or that node is no longer registered — ` +
+          'read the ids from the nodes rather than guessing a new literal.',
+      ).toBe(true);
+    }
+  }, 180_000);
+
+  it.runIf(RUN_LOGS)('and the active set contains nothing the config does not know about', async () => {
+    // The other direction, and the one a subset check cannot see: a fourth node joining is not
+    // itself a fault, but it means this config no longer describes the signer set, and a caller
+    // choosing signers from it is choosing from a stale list.
+    const at = await (archiveClient() as unknown as { getBlockNumber(): Promise<bigint> }).getBlockNumber();
+    const leaves = await committeeLeavesAt(archiveClient(), addrs.aaStarBLSAlgorithm as Address, at);
+    const pinned = new Set(sepoliaEnv.dvtNodes.map((n) => n.nodeId.toLowerCase()));
+    const unknown = [...leaves.values()].map((v) => v.toLowerCase()).filter((id) => !pinned.has(id));
+
+    expect(
+      unknown,
+      `the validator has ${unknown.length} registered node(s) DVT_CONFIG does not list. That is not a ` +
+        'defect on its own, but this config is what callers pick signers from, so it is now an ' +
+        'incomplete view of the set.',
+    ).toEqual([]);
+  }, 180_000);
 });
