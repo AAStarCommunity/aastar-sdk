@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 
-import { checkClosure } from './check-followup-closure.js';
+import { checkClosure, extractRecords } from './check-followup-closure.js';
 
 const open = (n: number) => `- [ ] FU-${n} · B · src=x · 2026-09-05 · text`;
 const doneBy = (n: number, pr: number) => `- [x] FU-${n} · B · src=x · 2026-09-05 · text · done=PR#${pr}`;
@@ -144,5 +144,65 @@ describe('who is claiming — judged by quotation syntax, not by PR numbers', ()
 
   it('a claim that cites THIS PR is still a claim', () => {
     expect(checkClosure('Closes FU-99 — see #357 for the reasoning.', ledger, 357)).toHaveLength(1);
+  });
+});
+
+describe('the third kind of statement: recording someone else\'s closure', () => {
+  // Raised in review on #360, and it is the gap that mattered most: a bookkeeping-only PR had NO
+  // honest phrasing. Claiming closure made the gate demand `done=PR#<this>` — which would have the
+  // ledger assert that a one-line markdown change delivered a `requireStake()` watch. Saying nothing
+  // passed, but was not quite true either.
+  //
+  // It is a CLAIM, not an escape hatch: both halves are checked.
+  const done = (n: number, by: number) => `- [x] FU-${n} · B · src=x · 2026-09-05 · text · done=PR#${by}`;
+  const merged = new Map<number, 'MERGED' | 'OPEN' | 'CLOSED' | 'MISSING'>([[345, 'MERGED'], [999, 'OPEN']]);
+
+  it('a correct record passes', () => {
+    expect(checkClosure('本 PR 记录 FU-34 由 #345 关闭。', done(34, 345), 360, merged)).toEqual([]);
+    expect(checkClosure('This PR records that FU-34 was closed by #345.', done(34, 345), 360, merged)).toEqual([]);
+  });
+
+
+  it.each([
+    ['two digits', '本 PR 记录 FU-34 由 #99 关闭。', 99],
+    ['three digits', '本 PR 记录 FU-34 由 #345 关闭。', 345],
+    ['four digits', '本 PR 记录 FU-34 由 #1345 关闭。', 1345],
+    ['five digits', 'records that FU-34 was closed by #12345', 12345],
+  ])('a %s PR number is parsed whole', (_label, body, expected) => {
+    // The fixed `\d{3}` this replaces was measured doing two different wrong things at once: `#99`
+    // and `#1345` parsed to nothing and went silently unchecked, and `#12345` parsed as `123` —
+    // sending the gate to verify a PR the author never named. The second is the worse half: not
+    // "no answer" but "a confident answer about the wrong thing".
+    expect(extractRecords(body)).toEqual([{ fu: 'FU-34', by: expected }]);
+  });
+
+  it('a long number never yields its first three digits', () => {
+    // Stated separately from the case above because it is the property, not an example: no prefix of
+    // a PR number may become a PR number.
+    expect(extractRecords('records that FU-34 was closed by #12345').map((r) => r.by)).not.toContain(123);
+  });
+
+  it('the ledger must actually credit the PR named', () => {
+    // Otherwise the record is just another way to say "trust me".
+    expect(checkClosure('本 PR 记录 FU-34 由 #345 关闭。', done(34, 341), 360, merged)[0].detail).toMatch(/does not credit #345/);
+  });
+
+  it('and that PR must have merged — a PR that never landed closed nothing', () => {
+    expect(checkClosure('本 PR 记录 FU-34 由 #999 关闭。', done(34, 999), 360, merged)[0].detail).toMatch(/#999 is OPEN/);
+  });
+
+  it('a record for a follow-up with no ledger entry is reported', () => {
+    expect(checkClosure('本 PR 记录 FU-77 由 #345 关闭。', done(34, 345), 360, merged)[0].detail).toMatch(/no such entry exists/);
+  });
+
+  it.each([
+    ['narrative about where a follow-up came from', '这条跟进项来自 PR#343 的评审，与 FU-16 同族。'],
+    ['quoting another PR\'s closing claim', '#356 正文写「Closes FU-32」而账本未标记。'],
+    ['a ledger line pasted into the body', '- [x] FU-34 · B · src=PR#343 · done=PR#345'],
+  ])('%s is not a record', (_label, text) => {
+    // Measured against the last 19 real PR bodies: zero hits. These three are the shapes that come
+    // closest, constructed because the real corpus could not distinguish a working pattern from one
+    // that matches nothing.
+    expect(extractRecords(text)).toEqual([]);
   });
 });
