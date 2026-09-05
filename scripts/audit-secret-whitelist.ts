@@ -20,9 +20,32 @@
  * on Sepolia" is normal for a testnet fixture and alarming for a key nobody meant to fund. Which of
  * those it is depends on intent, and intent is not on chain.
  *
- * It is a REPORT, deliberately not a gate. Turning it into one would mean encoding a rule about
- * which balances are acceptable, and that rule does not exist yet — inventing it here would be the
- * gate deciding a question it was built to inform.
+ * ONE HALF IS A REPORT, THE OTHER HALF IS A GATE
+ * ----------------------------------------------
+ * A first version of this file called the whole thing a report, on the grounds that judging a
+ * balance needs a policy nobody has written. That reasoning is sound — and it covers only half of
+ * what this file does. The other half, "can a third party check this note", is ALREADY a decision,
+ * already written down as {@link SELF_JUSTIFYING}: `Anvil #3` is verifiable by anyone, `Test Key` is
+ * not, and telling those apart needs no balance policy at all. Letting the undecidability of the
+ * first half cover the second was a category error, caught in review.
+ *
+ * So the balance readings stay a report, and the count of unverifiable entries is a ceiling: it may
+ * not grow. Same shape as `maxGated` in `test-inventory.test.ts` — lock the status quo, make raising
+ * it a deliberate edit, and let that edit be where someone asks "why can nobody verify this new
+ * key?". It does not adjudicate the existing eleven, and it does not adjudicate any balance.
+ *
+ * WHY A CEILING RATHER THAN LEAVING IT IN THE REPORT
+ * -------------------------------------------------
+ * This script arrived with an npm script and no CI wiring — the exact state `security-scan.ts`
+ * turned out to be in: present, with tests that run, never once executed against the repository.
+ * A report with no consumer decays into a file.
+ *
+ * WHY THERE IS NO `--file` FLAG (a security property, not a missing feature)
+ * -------------------------------------------------------------------------
+ * The scanned path is fixed. With a flag this becomes "hand me any file containing private keys and
+ * I will derive the addresses and query a chain about them" — and even printing no key, it would
+ * still tell an external RPC WHICH ADDRESSES someone is interested in. Anyone tempted to add the
+ * flag as an obvious convenience should read this paragraph first.
  *
  * Usage:  pnpm exec tsx scripts/audit-secret-whitelist.ts [--rpc <url>]
  */
@@ -67,6 +90,12 @@ async function main() {
 
   const client = createPublicClient({ transport: http(rpc) });
   const opaque = entries.filter((e) => !e.selfJustifying);
+
+  /**
+   * How many entries currently cannot be verified by a third party. A CEILING, not a target: the
+   * eleven that exist are not adjudicated here, but a twelfth has to be argued for.
+   */
+  const MAX_OPAQUE_ENTRIES = 11;
   console.log(`   ${entries.length - opaque.length} self-justifying (a third party can verify the note)`);
   console.log(`   ${opaque.length} opaque — the note asserts what it is without letting anyone check\n`);
 
@@ -89,8 +118,20 @@ async function main() {
     );
   }
 
+  if (opaque.length > MAX_OPAQUE_ENTRIES) {
+    console.error(
+      `\n❌ ${opaque.length} whitelist entries cannot be verified by a third party; the ceiling is ` +
+        `${MAX_OPAQUE_ENTRIES}.\n` +
+        '   A new key was whitelisted with a note that only asserts what it is. Either give it a note\n' +
+        '   someone else can check (where it came from, or a public source), or raise the ceiling in\n' +
+        '   this file in the same commit and say why.\n' +
+        '   This does not judge the existing entries, and it does not judge any balance.',
+    );
+    process.exit(1);
+  }
+
   console.log(
-    '\nNo verdict is offered. A balance is ordinary for a testnet fixture and alarming for a key\n' +
+    '\nNo verdict is offered on the BALANCES. A balance is ordinary for a testnet fixture and alarming for a key\n' +
       'nobody meant to fund; telling those apart needs intent, which is not on chain. What the\n' +
       'audit can say is which notes let someone else check, and which ask to be believed.',
   );

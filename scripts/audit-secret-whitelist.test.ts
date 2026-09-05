@@ -54,3 +54,51 @@ describe('the real whitelist', () => {
     expect(source).toMatch(/privateKeyToAccount\(entry\.key\)/);
   });
 });
+
+describe('the half that IS decidable is a gate', () => {
+  it('the ceiling exists and is a comparison, not an equality', () => {
+    // Review caught the category error this fixes: judging a BALANCE needs a policy nobody has
+    // written, but "can a third party check this note" was already decided in code. Letting the
+    // undecidability of the first cover the second made the whole file a report when half of it
+    // could be a gate.
+    //
+    // A ceiling, not an equality — same reasoning as MIN_SDK_PATHS in the KMS audit: an equality
+    // fires on every addition, gets edited constantly, and a number edited constantly is edited
+    // without thinking.
+    const source = readFileSync('scripts/audit-secret-whitelist.ts', 'utf8');
+    expect(source).toMatch(/opaque\.length > MAX_OPAQUE_ENTRIES/);
+    expect(source, 'an equality would fire on verifiable additions too').not.toMatch(/opaque\.length !== MAX_OPAQUE/);
+  });
+
+  it('adding a VERIFIABLE key does not trip the ceiling', () => {
+    // The half that must stay free. If this fired too, the ceiling would be a tax on every new
+    // fixture and would be removed.
+    const before = parseWhitelist(readFileSync('scripts/security-scan.ts', 'utf8')).filter((e) => !e.selfJustifying).length;
+    const withAnvil = parseWhitelist(
+      readFileSync('scripts/security-scan.ts', 'utf8') + `\n    '${'0x' + '3'.repeat(64)}', // Anvil #10\n`,
+    ).filter((e) => !e.selfJustifying).length;
+    expect(withAnvil).toBe(before);
+  });
+
+  it('adding an OPAQUE key does', () => {
+    const before = parseWhitelist(readFileSync('scripts/security-scan.ts', 'utf8')).filter((e) => !e.selfJustifying).length;
+    const withOpaque = parseWhitelist(
+      readFileSync('scripts/security-scan.ts', 'utf8') + `\n    '${'0x' + '4'.repeat(64)}', // Test Key\n`,
+    ).filter((e) => !e.selfJustifying).length;
+    expect(withOpaque).toBe(before + 1);
+  });
+
+  it('there is no --file flag, and that is a security property', () => {
+    // Not a missing feature. With one, this becomes "hand me any file of private keys and I will
+    // derive the addresses and query a chain about them" — printing no key, it would still tell an
+    // external RPC which addresses someone is interested in.
+    //
+    // Note how this is asserted. A first draft banned the string `--file` anywhere in the file and
+    // went red on the very PARAGRAPH above explaining why there is no such flag — the same trap as
+    // #354's `toContain`: a text assertion counts characters, and characters live in prose too. So
+    // the ban is on the flag being READ, not on the word appearing.
+    const source = readFileSync('scripts/audit-secret-whitelist.ts', 'utf8');
+    expect(source, 'the flag must never be parsed from argv').not.toMatch(/argv[^\n]*['"`]--file/);
+    expect(source, 'the scanned path must stay fixed').toMatch(/const SCANNER = 'scripts\/security-scan\.ts'/);
+  });
+});
