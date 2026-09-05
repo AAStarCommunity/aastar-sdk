@@ -10,6 +10,7 @@ import {
 } from './committee.js';
 import { COMMITTEE_QUORUM_UNAVAILABLE } from '../crypto/dvtWire.js';
 import { CANONICAL_ADDRESSES } from '../addresses.js';
+import { AAStarCommitteeValidatorABI } from '../abis/index.js';
 
 // Read the canonical pins rather than literals. These are only stub targets — the assertions here
 // never touch a chain — but a hardcoded address silently goes stale on a canonical bump and then
@@ -123,9 +124,8 @@ describe('fetchCommitteeSigners', () => {
                 const s = slots[a[0] as string];
                 return [s, proofOf(s)];
             },
-            lastSetMutationBlock: 90n,
         });
-        const { signers, lastSetMutationBlock, atBlock } = await fetchCommitteeSigners(client, VALIDATOR, [
+        const { signers, atBlock } = await fetchCommitteeSigners(client, VALIDATOR, [
             nid(1),
             nid(2),
             nid(3),
@@ -138,13 +138,12 @@ describe('fetchCommitteeSigners', () => {
             expect(s.merkleProof).toEqual(proofOf(slots[s.nodeId]));
             expect(s.merkleProof).toHaveLength(14);
         }
-        expect(lastSetMutationBlock).toBe(90n);
         expect(atBlock).toBe(100n);
     });
 
     it('reads every proof at the SAME block, so the set cannot mutate mid-fetch', async () => {
         const { client, calls } = stubClient(
-            { getMerkleProof: () => [0n, proofOf(0n)], lastSetMutationBlock: 1n },
+            { getMerkleProof: () => [0n, proofOf(0n)] },
             777n
         );
         await fetchCommitteeSigners(client, VALIDATOR, [nid(1), nid(2)]);
@@ -153,13 +152,47 @@ describe('fetchCommitteeSigners', () => {
         }
     });
 
-    it('surfaces lastSetMutationBlock so a caller can tell the proofs went stale', async () => {
-        // getMerkleProof proves against the CURRENT root; production needs the FROZEN setRoot[e-1].
-        // The mutation block is the caller's only signal that a current-state proof is unsafe.
-        const { client } = stubClient({ getMerkleProof: () => [0n, proofOf(0n)], lastSetMutationBlock: 99n }, 100n);
-        const r = await fetchCommitteeSigners(client, VALIDATOR, [nid(1)]);
-        expect(r.lastSetMutationBlock).toBe(99n);
-        expect(r.atBlock).toBe(100n);
+    it('calls ONLY functions the vendored ABI declares', async () => {
+        /*
+         * The test this replaces asserted `lastSetMutationBlock` came back as 99n — and it passed for
+         * as long as the function had not existed on chain, because a stub answers whatever it is
+         * asked. Measured on Sepolia: that selector is absent from the deployed committee validator's
+         * runtime bytecode, so the real call reverted and took the whole fetch down with it, AFTER
+         * every proof had been fetched successfully.
+         *
+         * A mock cannot tell you a function exists. What it CAN check is cheaper and still worth
+         * having: that the names this module calls are at least declared by the ABI it ships with.
+         * That is one of the two ways this bug could have been caught early — the other is
+         * ABI-vs-deployed-bytecode, which no unit test can do and which belongs in the drift gate.
+         */
+        const { client, calls } = stubClient({ getMerkleProof: () => [0n, proofOf(0n)] }, 100n);
+        await fetchCommitteeSigners(client, VALIDATOR, [nid(1)]);
+        const declared = new Set(
+            (AAStarCommitteeValidatorABI as readonly { type: string; name?: string }[])
+                .filter((e) => e.type === 'function')
+                .map((e) => e.name),
+        );
+        const called = calls.filter((c) => c.functionName !== 'getBlockNumber').map((c) => c.functionName);
+        // Control: the meter must be able to say no. An empty `called` would pass vacuously, and an
+        // ABI that declared everything would too.
+        expect(called.length).toBeGreaterThan(0);
+        expect(declared.has('lastSetMutationBlock')).toBe(false); // removed upstream at #244
+        for (const fn of called) expect(declared.has(fn)).toBe(true);
+    });
+
+    it('no longer declares the four functions the deployed validator does not have', () => {
+        // Guard against re-vendoring a pre-#244 copy. Three were removed when the block-start
+        // snapshot model became the epoch-pinned one; the fourth was never missing — the old ABI
+        // had `snapshotEpoch()` where the contract has `snapshotEpoch(bytes32[])`, which is why a
+        // selector probe reported it absent. Name and signature are different questions.
+        const fns = (AAStarCommitteeValidatorABI as readonly { type: string; name?: string; inputs?: unknown[] }[])
+            .filter((e) => e.type === 'function');
+        const names = new Set(fns.map((e) => e.name));
+        for (const gone of ['lastSetMutationBlock', 'rootAtBlockStart', 'countAtBlockStart']) {
+            expect(names.has(gone)).toBe(false);
+        }
+        const snapshot = fns.find((e) => e.name === 'snapshotEpoch');
+        expect(snapshot?.inputs).toHaveLength(1); // bytes32[] activeNodeIds — not the zero-arg getter
     });
 });
 

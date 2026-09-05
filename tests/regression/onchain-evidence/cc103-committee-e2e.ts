@@ -21,7 +21,7 @@
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { concat, createPublicClient, http, keccak256, numberToHex, size, toHex, type Address, type Hex } from 'viem';
+import { concat, createPublicClient, http, keccak256, numberToHex, parseAbiItem, size, toHex, type Address, type Hex } from 'viem';
 import { sepolia } from 'viem/chains';
 import {
     AAStarCommitteeValidatorABI,
@@ -52,8 +52,44 @@ const stack = {
     router: canonical.aaStarValidator as Address,
     committeeValidator: canonical.aaStarBLSAlgorithm as Address,
     accountImpl: canonical.airAccountV7Impl as Address,
-    referenceEnrolledAccount: '0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0' as Address,
 };
+
+/**
+ * A positive control for `isAccountEnrolled`, DERIVED FROM CHAIN rather than pinned.
+ *
+ * This used to be the literal `0xf249d5708cC3e1Dff42F5B36935FF270BeC403A0`, and the check failed.
+ * Measured: that address is a 45-byte EIP-1167 proxy whose `validatorRouter()` is
+ * `0xA15127e8…` — the **v0.31.0** router. It belongs to the previous stack generation, so it is
+ * correctly not enrolled on the v0.33.0 committee validator. The fixture was stale, not the SDK.
+ *
+ * A pinned "known enrolled account" goes stale on exactly the event this suite exists to track: a
+ * stack redeploy. Reading `AccountEnrolled` and keeping one that is STILL enrolled makes the
+ * control describe the deployment under test instead of the one it was written against.
+ *
+ * It throws rather than skipping when it finds none: "no enrolled account in the recent window"
+ * and "the positive control passed" must not look alike.
+ */
+async function findEnrolledAccount(pc: ReturnType<typeof createPublicClient>): Promise<Address> {
+    const latest = await pc.getBlockNumber();
+    const from = latest > 45_000n ? latest - 45_000n : 0n;
+    const logs = await pc.getLogs({
+        address: stack.committeeValidator,
+        event: parseAbiItem('event AccountEnrolled(address indexed account)'),
+        fromBlock: from,
+        toBlock: latest,
+    });
+    // Newest first: an account enrolled and later unenrolled must not be picked just because it
+    // appears in the log. `enrolledAccount()` is the authority; the event only nominates candidates.
+    for (const log of [...logs].reverse()) {
+        const account = (log as { args: { account?: Address } }).args.account;
+        if (account && (await isAccountEnrolled(pc, stack.committeeValidator, account))) return account;
+    }
+    throw new Error(
+        `no still-enrolled account found in AccountEnrolled logs on ${stack.committeeValidator} ` +
+            `over blocks ${from}..${latest}. The positive control for isAccountEnrolled cannot be ` +
+            'built, so this run would only be testing the negative case.',
+    );
+}
 
 let failures = 0;
 const ok = (label: string, detail = '') => console.log(`  PASS  ${label}${detail ? ' — ' + detail : ''}`);
@@ -201,7 +237,7 @@ async function main() {
 
     // ── 5. accountId must not appear (B2) ─────────────────────────────────────────────────────
     console.log('\n[5] accountId absence (CC-103 B2)');
-    const acct = stack.referenceEnrolledAccount.slice(2).toLowerCase();
+    const acct = (await findEnrolledAccount(pc)).slice(2).toLowerCase();
     check(!blockHex.toLowerCase().includes(acct), 'reference account address absent from the payload');
     check(BigInt(`0x${blockHex.slice(2, 66)}`) === BigInt(signers.length), 'first word is the signer count, not an accountId');
 
@@ -242,8 +278,9 @@ async function main() {
         `${state.quorumUsable}`
     );
 
-    const enrolled = await isAccountEnrolled(pc, stack.committeeValidator, stack.referenceEnrolledAccount);
-    check(enrolled, 'isAccountEnrolled sees the upstream reference account as enrolled');
+    const referenceEnrolledAccount = await findEnrolledAccount(pc);
+    const enrolled = await isAccountEnrolled(pc, stack.committeeValidator, referenceEnrolledAccount);
+    check(enrolled, `isAccountEnrolled sees a chain-derived enrolled account (${referenceEnrolledAccount})`);
     const notEnrolled = await isAccountEnrolled(pc, stack.committeeValidator, stack.router);
     check(!notEnrolled, 'isAccountEnrolled returns false for a never-enrolled address (negative)');
 
@@ -257,10 +294,23 @@ async function main() {
         if (foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof) !== runningRoot) fetchedOk = false;
     }
     check(fetchedOk, 'every fetched signer folds to the live runningRoot (slot/proof not mixed up)');
+    // The staleness signal is no longer `lastSetMutationBlock` — that function was removed upstream
+    // at #244 and is absent from the deployed bytecode, so reading it took the whole fetch down.
+    // What the contract actually compares is the roots, so that is what is checked here.
+    const [liveRoot, epochNow] = (await Promise.all([
+        pc.readContract({ address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI, functionName: 'runningRoot' }),
+        pc.readContract({ address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI, functionName: 'currentEpoch' }),
+    ])) as [Hex, bigint];
+    const frozenRoot = (await pc.readContract({
+        address: stack.committeeValidator, abi: AAStarCommitteeValidatorABI,
+        functionName: 'epochSetRoot', args: [epochNow - 1n],
+    })) as Hex;
     check(
-        typeof fetched.lastSetMutationBlock === 'bigint' && fetched.atBlock >= fetched.lastSetMutationBlock,
-        'fetchCommitteeSigners reports the staleness signal',
-        `atBlock=${fetched.atBlock} lastMutation=${fetched.lastSetMutationBlock}`
+        typeof fetched.atBlock === 'bigint' && liveRoot.toLowerCase() === frozenRoot.toLowerCase(),
+        'proofs fetched now would verify against the FROZEN epochSetRoot(e-1)',
+        // e-1, not e. `validate()` reads setRoot[e-1]; comparing against epochSetRoot(e) is the
+        // off-by-one that passes today only because all three roots currently coincide.
+        `atBlock=${fetched.atBlock} epoch=${epochNow} running=${liveRoot.slice(0, 12)}… frozen(e-1)=${frozenRoot.slice(0, 12)}…`
     );
 
     // Encoding what the reader produced must give the same bytes as the hand-built path above.
@@ -271,7 +321,7 @@ async function main() {
     // that the guard fires, not a stubbed one.
     let refused = '';
     try {
-        await assertCommitteeSubmittable(pc, stack.committeeValidator, stack.referenceEnrolledAccount, 3);
+        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, 3);
     } catch (e: any) {
         refused = e?.message ?? '';
     }

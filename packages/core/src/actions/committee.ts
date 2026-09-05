@@ -168,19 +168,50 @@ export async function isAccountEnrolled(
 /**
  * Fetch `slot` + Merkle proof for each contributing node and shape them into {@link CommitteeSigner}s.
  *
- * ⚠️ Uses the validator's `getMerkleProof`, which proves against the CURRENT active-set root. The
- * contract's own NatSpec is explicit that PRODUCTION proofs must target the FROZEN `setRoot[e-1]`,
- * and that a current-state proof is valid only while the set has not changed since that snapshot.
- * This helper therefore returns `setMutatedSince`, read from `lastSetMutationBlock()`, so a caller
- * can tell whether the proofs it just fetched are still safe to submit — rather than discovering it
- * as an on-chain revert. Rebuilding the frozen tree from `SlotAssigned`/`SlotCleared` events is the
- * durable path and is NOT implemented here.
+ * ⚠️ Uses the validator's `getMerkleProof`, which proves against the CURRENT active-set root, while
+ * `_verifyMerkle` checks the FROZEN `epochSetRoot(e-1)`. **Deciding whether that gap matters is the
+ * caller's job, and this function no longer pretends to help with it.**
+ *
+ * ## Why the staleness read is gone
+ *
+ * It used to also read `lastSetMutationBlock()` and return it. Measured on Sepolia against the live
+ * committee validator `0x7ac7E9d4…`: **that function is not in the deployed bytecode.** Probing all
+ * 59 functions of the ABI vendored at the time, four were absent —
+ * `lastSetMutationBlock` · `rootAtBlockStart` · `countAtBlockStart` · `snapshotEpoch` — and the read
+ * therefore reverted, taking this whole function down with it. Two evidence runners died here
+ * AFTER successfully fetching every proof.
+ *
+ * Three of those were removed upstream at #244 (CC-115 D2, 2026-08-30), which replaced the
+ * block-start snapshot model with the epoch-pinned one. The vendored ABI predated it. (The fourth,
+ * `snapshotEpoch`, was never missing — the ABI had the wrong signature; see the note in
+ * `AAStarCommitteeValidator.json`.)
+ *
+ * ## What replaced it, and where
+ *
+ * Nothing here — because the value was **already unused**. The one production caller destructures
+ * `{ signers }` and does the real checks itself, against functions that exist:
+ *
+ * - `runningRoot()` vs `epochSetRoot(currentEpoch - 1)` — the roots the contract actually compares;
+ * - `requiredQuorum()`, whose NatSpec says it mirrors `validate()`'s readiness *exactly* and returns
+ *   `type(uint256).max` when nothing can satisfy it.
+ *
+ * That pair also covers two things no root or block comparison can see: a `configVersion` bump
+ * (five admin setters raise it, invalidating every pinned snapshot at once) and the wall-clock
+ * `epochSetValidUntil` expiry. Both are inside `_epochUsable`, hence inside `requiredQuorum()`.
+ *
+ * > The tempting fix was to swap in `runningRoot` vs `epochSetRoot(currentEpoch)` — same shape, one
+ * > index off, and it would pass today because all three roots are currently equal. Picking a
+ * > replacement by reading function names is how you get a check that agrees with reality by
+ * > coincidence.
+ *
+ * Rebuilding the frozen tree from `SlotAssigned`/`SlotCleared` events is the durable path and lives
+ * in {@link fetchCommitteeSignersFrozen}.
  */
 export async function fetchCommitteeSigners(
     publicClient: PublicClient,
     committeeValidator: Address,
     nodeIds: readonly Hex[]
-): Promise<{ signers: CommitteeSigner[]; lastSetMutationBlock: bigint; atBlock: bigint }> {
+): Promise<{ signers: CommitteeSigner[]; atBlock: bigint }> {
     const atBlock = await publicClient.getBlockNumber();
     const signers = await Promise.all(
         nodeIds.map(async (nodeId) => {
@@ -194,14 +225,7 @@ export async function fetchCommitteeSigners(
             return { nodeId, slot, merkleProof: [...proof] } satisfies CommitteeSigner;
         })
     );
-    const lastSetMutationBlock = (await publicClient.readContract({
-        address: committeeValidator,
-        abi: AAStarCommitteeValidatorABI,
-        functionName: 'lastSetMutationBlock',
-        blockNumber: atBlock,
-    })) as bigint;
-
-    return { signers, lastSetMutationBlock, atBlock };
+    return { signers, atBlock };
 }
 
 /**
