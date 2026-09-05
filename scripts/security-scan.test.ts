@@ -43,7 +43,25 @@ function flags(content: string): boolean {
 
 const HEX = (n: string) => `0x${n.repeat(64).slice(0, 64)}`;
 
-describe('secrets are still caught (the exemption is narrow)', () => {
+/**
+ * FU-30's code half. Every test here `execFileSync`s `npx tsx` at least once, and vitest's default
+ * timeout is 5s — so these tests can fail for a reason that has nothing to do with what they assert.
+ * That matters more than usual here: **a timeout red and an assertion red are the same `× test name`
+ * line**, so a run that fails on machine load reads exactly like the scanner having a hole. #339 lost
+ * time to precisely that, and the rule was written down then while the code was left at the default.
+ *
+ * The number is measured, not guessed. On this machine, unloaded:
+ *
+ *   slowest test (veto-distance, 12 spawns)   9.6s   ← already carried its own {timeout: 30_000}
+ *   second slowest (every-term-is-a-veto)     3.2s   ← 64% of the 5s default, with nothing to spare
+ *   the remaining twelve                    ~0.8s each
+ *
+ * 30s gives the 3.2s case ~9x headroom and the 9.6s case ~3x. Deliberately generous: the cost of a
+ * too-high timeout is a slow failure, the cost of a too-low one is a failure that lies about why.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('secrets are still caught (the exemption is narrow)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   // Each of these carries a public-data marker AND a secret word. The veto must win — otherwise
   // the FU-4 narrowing is a hole rather than a filter.
   it('privateKeyX — a coordinate-looking name on an actual private key', () => {
@@ -122,7 +140,7 @@ describe('secrets are still caught (the exemption is narrow)', () => {
   });
 });
 
-describe('public-by-definition data no longer blocks (the six real false positives)', () => {
+describe('public-by-definition data no longer blocks (the six real false positives)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   // Transcribed from the lines that were actually flagging, so this file fails if the exemption
   // regresses rather than merely if some invented example stops matching.
   it('keyX / keyY coordinates', () => {
