@@ -43,9 +43,17 @@ const LEDGER = 'docs/agent/tasks.md';
  * Task ids a branch name claims. `T` followed by at least two dot-separated numbers, so an ordinary
  * word starting with T cannot match and neither can a bare `T5`.
  *
- * Anchored on a non-alphanumeric boundary rather than `\b`: `\b` matches inside `feat/T1.2.3`, which
- * is what we want, but it would also match the `T1.2` inside a longer token like `XT1.2.3`. Requiring
- * a separator makes the claim explicit.
+ * Anchored on a non-alphanumeric boundary rather than `\b`. **An earlier version of this comment
+ * justified that with "`\b` would also match inside `XT1.2.3`" — measured, and false**: `\b` does not
+ * match there either, because `X` and `T` are both word characters so there is no boundary between
+ * them. #379 review caught it by mutating the separator and getting ZERO reds; nothing was pinning
+ * the choice, and the reason written down for it did not hold.
+ *
+ * The two forms differ on exactly one character: `_`. JavaScript's `\w` includes underscore, so `\b`
+ * treats `_T1.2.3` as one word and finds no claim; this form treats `_` as a separator and does.
+ * A branch like `chore/fix_T1.2.3_thing` HAS named the task, so the stricter-looking form is the
+ * more correct one — but it is a one-character difference, not the sweeping distinction the old
+ * comment implied. Pinned by a case in the tests, since a rationale nobody can falsify is decoration.
  */
 export function tasksNamedBy(branch: string): string[] {
     return [...new Set([...branch.matchAll(/(?:^|[^A-Za-z0-9])(T\d+(?:\.\d+)+)/g)].map((m) => m[1]))];

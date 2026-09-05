@@ -12,6 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history. `check-branch-task.test.ts` asserts the gate REDS on `tasks.md` as it
+          # stood at 9e538e07 — the commit that merged #377 without recording T1.2.3. Under the
+          # default fetch-depth 1 that object does not exist, `git show` throws, and the two cases
+          # that carry the whole point (the historical red AND its positive control) never run.
+          #
+          # They did not fail quietly: the job went red. But the shape is worth naming — a test
+          # whose evidence lives in repository HISTORY is not hermetic, and the runner's checkout
+          # is part of its fixture. Vendoring a copy of the old file was the alternative; it would
+          # be hermetic and also a copy that no longer proves anything about what shipped.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
         with:

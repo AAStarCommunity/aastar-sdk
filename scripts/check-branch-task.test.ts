@@ -30,9 +30,21 @@ describe('what a branch name CLAIMS', () => {
     });
 
     it('requires a separator before the T — `XT1.2.3` is not a claim', () => {
-        // `\b` would match inside a longer token. A claim has to be legible as one.
         expect(tasksNamedBy('XT1.2.3-not-a-claim')).toEqual([]);
         expect(tasksNamedBy('T1.2.3-at-the-start')).toEqual(['T1.2.3']);
+    });
+
+    it('an UNDERSCORE separates — the one character where this differs from \\b', () => {
+        // #379 review: mutating the separator to `\b` produced ZERO reds, so nothing pinned the
+        // choice — and the reason the code gave for it ("`\b` would match inside XT1.2.3") is false,
+        // measured: `X` and `T` are both word characters, so `\b` finds no boundary there either.
+        //
+        // The forms differ on exactly one character. `\w` includes `_`, so `\b` reads `_T1.2.3` as
+        // one word and sees no claim. A branch like `chore/fix_T1.2.3_thing` HAS named the task,
+        // which is why this form is the right one — a one-character difference, deliberately kept,
+        // now falsifiable.
+        expect(tasksNamedBy('chore/fix_T1.2.3_thing')).toEqual(['T1.2.3']);
+        expect(tasksNamedBy('_T1.2.3')).toEqual(['T1.2.3']);
     });
 
     it('requires at least two dotted parts — a bare `T5` is not a task id here', () => {
