@@ -278,7 +278,34 @@ function main() {
     process.exit(1);
   }
 
-  // (3) With no indirect calls there is no excuse for the literal scan finding more at all.
+  // (3) A declarative FLOOR on how many endpoints the SDK is known to call.
+  //
+  // The two relations above are relations, and a relation survives its data shrinking. Demonstrated
+  // in review by deleting one real, documented call (`/kms/create-agent-key`): every number slid one
+  // — 36 documented → 35, literal scan 37 → 36 — B ⊆ A held, A ⊆ C held, the bipartition held, and
+  // the exit code did not move. The endpoint simply moved into "spec documents it, SDK never calls
+  // it", a bucket that is deliberately not a failure.
+  //
+  // The old `EXPECTED_SDK_PATHS = 37` DID catch that, and removing it without replacing this half
+  // would have shipped a regression wearing the word "independent". But it caught it by being an
+  // EQUALITY, which fires on every addition too — so it had to be edited constantly, and a number
+  // edited constantly is a number edited without thinking.
+  //
+  // A floor keeps the half that matters and drops the half that annoys: adding endpoints is free,
+  // removing one requires editing this line — and that edit is exactly where "why is there one
+  // fewer?" gets asked.
+  const MIN_SDK_PATHS = 37;
+  if (sdk.size < MIN_SDK_PATHS) {
+    console.error(
+      `\n❌ instrument check: the SDK now calls ${sdk.size} paths, floor is ${MIN_SDK_PATHS}.\n` +
+        '   An endpoint the SDK used to call is gone. If that removal is intended, lower this floor in\n' +
+        '   the same commit and name the endpoint — the relations above cannot see a removal, because\n' +
+        '   they compare the extractors to each other and all of them shrink together.',
+    );
+    process.exit(1);
+  }
+
+  // (4) With no indirect calls there is no excuse for the literal scan finding more at all.
   if (called.indirectCalls === 0 && literalOnly.length > 0) {
     console.error(
       `\n❌ instrument check: no call passes a variable, yet the literal scan reports ${literalOnly.length}\n` +

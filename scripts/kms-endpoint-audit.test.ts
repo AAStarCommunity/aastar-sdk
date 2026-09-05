@@ -76,9 +76,59 @@ describe('instrument checks (FU-27)', () => {
     expect(out).toMatch(/never appear in an expression/);
   }, 60_000);
 
-  it('the audit no longer contains a remembered path count', () => {
-    // The point of FU-27. A number in this file is independence outsourced to memory: making a red
-    // run green takes one edit, and nothing records why.
-    expect(readFileSync(AUDIT, 'utf8')).not.toMatch(/EXPECTED_SDK_PATHS\s*=/);
+  it('the remaining number is a FLOOR, not an equality', () => {
+    // An earlier version of this case asserted that no number remained at all, and that was the
+    // wrong property — review showed a bare number is still needed, because relations between
+    // extractors cannot see the data shrinking underneath all of them.
+    //
+    // What was wrong with `= 37` was not that it was a number, it was that it was an EQUALITY:
+    // adding an endpoint fired it too, so it had to be edited constantly, and a number edited
+    // constantly is edited without thinking. So the property to hold is the COMPARISON, and the two
+    // behavioural cases below are what actually pin it — this one only keeps the shape honest.
+    const source = readFileSync(AUDIT, 'utf8');
+    expect(source, 'the old equality must be gone').not.toMatch(/sdk\.size !== \w+PATHS/);
+    expect(source, 'and replaced by a floor').toMatch(/sdk\.size < MIN_SDK_PATHS/);
   });
+});
+
+describe('the floor: relations cannot see a removal', () => {
+  const SERVICE = 'packages/airaccount/src/server/services/kms-agent-service.ts';
+
+  /** Mutate a service file instead of the audit, restoring afterwards. */
+  function withServiceMutation(apply: (src: string) => string, run: () => string): string {
+    const original = readFileSync(SERVICE, 'utf8');
+    const mutated = apply(original);
+    expect(mutated, 'the mutation must actually change the file').not.toBe(original);
+    writeFileSync(SERVICE, mutated);
+    try {
+      return run();
+    } finally {
+      writeFileSync(SERVICE, original);
+    }
+  }
+
+  it('deleting a real endpoint call is caught', () => {
+    // Demonstrated in review: with only B ⊆ A and A ⊆ C, deleting `/kms/create-agent-key` slid every
+    // number one place — 36 documented → 35, literal scan 37 → 36 — and every relation still held.
+    // The endpoint just moved into "spec documents it, SDK never calls it", which is deliberately
+    // not a failure. Relations compare the extractors to each other, and all of them shrink together.
+    const out = withServiceMutation(
+      (src) => src.split('\n').filter((l) => !l.includes('"/kms/create-agent-key"')).join('\n'),
+      audit,
+    );
+    expect(out).toMatch(/the SDK now calls 36 paths, floor is 37/);
+  }, 60_000);
+
+  it('ADDING an endpoint stays green', () => {
+    // The half the old equality got wrong. `= 37` fired on additions too, so it had to be edited
+    // constantly — and a number edited constantly is a number edited without thinking. A floor is
+    // free to add against and requires a deliberate edit to lower, which is where "why is there one
+    // fewer?" gets asked.
+    const out = withServiceMutation(
+      (src) => src.replace('  async createAgentKey(', '  async __probe(): Promise<void> { await this.http.get("/kms/brand-new"); }\n\n  async createAgentKey('),
+      audit,
+    );
+    expect(out).not.toMatch(/floor is/);
+    expect(out).toMatch(/literal scan 38/);
+  }, 60_000);
 });
