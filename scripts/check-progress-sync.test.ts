@@ -15,7 +15,25 @@ const P = 'docs/agent/progress.md';
 const T = 'docs/agent/tasks.md';
 const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8');
 
-describe('what counts as a quoted status', () => {
+/**
+ * FU-30's action half, applied here rather than only where it once hurt (FU-47).
+ *
+ * These tests spawn a subprocess (`git`, or the scanner). vitest's default timeout is 5s, and
+ * **a timeout red and an assertion red are the same `× test name` line** — so a run that dies on
+ * machine load reads exactly like the thing under test having a hole.
+ *
+ * Measured 2026-09-05, slowest single case in this file: 171ms locally. The only CI/local ratio
+ * this repo has actually measured is **7.4x** (FU-48: 892ms local → 6607ms on CI, on a different
+ * workload). Applying it here is an EXTRAPOLATION, not a measurement — stated so nobody reads the
+ * number below as observed. Under it, `kms-endpoint-audit`'s slowest case sits at ~93% of the 5s
+ * default, which is the case that motivated doing this now.
+ *
+ * The headroom costs a slow failure in the worst case. Shrinking it buys nothing and risks a
+ * failure that lies about why.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('what counts as a quoted status', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('pairs a task id with a nearby backticked status', () => {
     expect(statusPairs('| F1.2 | T1.2.1 `PR_OPEN` | x |')).toEqual([
       { task: 'T1.2.1', claimed: 'PR_OPEN', line: 1 },
@@ -47,7 +65,7 @@ describe('what counts as a quoted status', () => {
   });
 });
 
-describe('what the ledger defines', () => {
+describe('what the ledger defines', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('takes the trailing code span as the status, not any status word on the line', () => {
     expect([...ledgerStatuses('### T9.9.9 讲 `PR_OPEN` 的用法  `DONE`')]).toEqual([['T9.9.9', 'DONE']]);
   });
@@ -61,7 +79,7 @@ describe('what the ledger defines', () => {
   });
 });
 
-describe('THE ROT — it must red on the version that actually shipped', () => {
+describe('THE ROT — it must red on the version that actually shipped', { timeout: SPAWN_TIMEOUT_MS }, () => {
   /**
    * progress.md as it stood at `49679dd9` — the commit this PR branched from, i.e. the rotted
    * version that actually shipped.

@@ -67,7 +67,25 @@ function audit(): string {
   }
 }
 
-describe('instrument checks (FU-27)', () => {
+/**
+ * FU-30's action half, applied here rather than only where it once hurt (FU-47).
+ *
+ * These tests spawn a subprocess (`git`, or the scanner). vitest's default timeout is 5s, and
+ * **a timeout red and an assertion red are the same `× test name` line** — so a run that dies on
+ * machine load reads exactly like the thing under test having a hole.
+ *
+ * Measured 2026-09-05, slowest single case in this file: 631ms locally. The only CI/local ratio
+ * this repo has actually measured is **7.4x** (FU-48: 892ms local → 6607ms on CI, on a different
+ * workload). Applying it here is an EXTRAPOLATION, not a measurement — stated so nobody reads the
+ * number below as observed. Under it, `kms-endpoint-audit`'s slowest case sits at ~93% of the 5s
+ * default, which is the case that motivated doing this now.
+ *
+ * The headroom costs a slow failure in the worst case. Shrinking it buys nothing and risks a
+ * failure that lies about why.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('instrument checks (FU-27)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('the audit runs and reports all three extractor counts', () => {
     // The baseline that makes the mutations below mean something: if the audit could not run, every
     // "the mutation was caught" reading would be the same output as "nothing ran".
@@ -114,7 +132,7 @@ describe('instrument checks (FU-27)', () => {
   });
 });
 
-describe('the floor: relations cannot see a removal', () => {
+describe('the floor: relations cannot see a removal', { timeout: SPAWN_TIMEOUT_MS }, () => {
   const SERVICE = 'packages/airaccount/src/server/services/kms-agent-service.ts';
 
   /** Mutate a service file instead of the audit, restoring afterwards. */

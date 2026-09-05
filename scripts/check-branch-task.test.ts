@@ -15,7 +15,25 @@ import { missingTasks, tasksInLedger, tasksNamedBy } from './check-branch-task.j
 const LEDGER = 'docs/agent/tasks.md';
 const BRANCH = 'feat/T1.2.3-account-anchor';
 
-describe('what a branch name CLAIMS', () => {
+/**
+ * FU-30's action half, applied here rather than only where it once hurt (FU-47).
+ *
+ * These tests spawn a subprocess (`git`, or the scanner). vitest's default timeout is 5s, and
+ * **a timeout red and an assertion red are the same `× test name` line** — so a run that dies on
+ * machine load reads exactly like the thing under test having a hole.
+ *
+ * Measured 2026-09-05, slowest single case in this file: 289ms locally. The only CI/local ratio
+ * this repo has actually measured is **7.4x** (FU-48: 892ms local → 6607ms on CI, on a different
+ * workload). Applying it here is an EXTRAPOLATION, not a measurement — stated so nobody reads the
+ * number below as observed. Under it, `kms-endpoint-audit`'s slowest case sits at ~93% of the 5s
+ * default, which is the case that motivated doing this now.
+ *
+ * The headroom costs a slow failure in the worst case. Shrinking it buys nothing and risks a
+ * failure that lies about why.
+ */
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('what a branch name CLAIMS', { timeout: SPAWN_TIMEOUT_MS }, () => {
     it('extracts a dotted task id', () => {
         expect(tasksNamedBy(BRANCH)).toEqual(['T1.2.3']);
         expect(tasksNamedBy('feat/T5.4.2-kms-endpoint-audit')).toEqual(['T5.4.2']);
@@ -57,7 +75,7 @@ describe('what a branch name CLAIMS', () => {
     });
 });
 
-describe('what the ledger DEFINES', () => {
+describe('what the ledger DEFINES', { timeout: SPAWN_TIMEOUT_MS }, () => {
     it('reads task ids from headers only, not from prose that mentions them', () => {
         // T2.1.2's body names T2.1.1 as a dependency. If mentions counted, a task could be
         // "defined" by another task talking about it — which is exactly how T1.2.3 could have
@@ -76,7 +94,7 @@ describe('what the ledger DEFINES', () => {
     });
 });
 
-describe('THE HISTORICAL CASE — it must red on the state that actually shipped', () => {
+describe('THE HISTORICAL CASE — it must red on the state that actually shipped', { timeout: SPAWN_TIMEOUT_MS }, () => {
     /** `tasks.md` as it stood on the commit that merged #377, i.e. with T1.2.3 still unwritten. */
     const ledgerAtMerge = () =>
         execFileSync('git', ['show', '9e538e07:docs/agent/tasks.md'], { encoding: 'utf8', maxBuffer: 8 << 20 });
