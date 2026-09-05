@@ -57,6 +57,18 @@ const read = (f: string) => readFileSync(join(process.cwd(), f), 'utf8');
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
 
 describe('what counts as a quoted status', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    // The deterministic form of "the timeout is wired". #384 review measured that provoking it is
+    // NOT reproducible: with `{ timeout: 1 }`, `execFileSync` blocks the loop the timer lives on, so
+    // whether vitest ever fires it is a race — three of their runs gave 1 red / 1 red / zero red, and
+    // four of mine gave zero red every time. **The "1 red" I reported in #384 as proof was a fluke
+    // reading.** Reading the value instead is exact and cannot flake.
+    //
+    // The positive control is the load-bearing half: delete the `{ timeout }` option above and this
+    // reads 5000 (vitest's default) and goes red. Without that, an assertion that the timeout equals
+    // a constant would also pass if the option were dropped and the constant edited to match.
+    it('the spawn timeout is actually wired to this describe', (ctx) => {
+        expect(ctx.task.timeout).toBe(SPAWN_VERDICT_TIMEOUT_MS);
+    });
   it('pairs a task id with a nearby backticked status', () => {
     expect(statusPairs('| F1.2 | T1.2.1 `PR_OPEN` | x |')).toEqual([
       { task: 'T1.2.1', claimed: 'PR_OPEN', line: 1 },

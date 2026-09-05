@@ -109,6 +109,18 @@ function audit(): string {
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
 
 describe('instrument checks (FU-27)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    // The deterministic form of "the timeout is wired". #384 review measured that provoking it is
+    // NOT reproducible: with `{ timeout: 1 }`, `execFileSync` blocks the loop the timer lives on, so
+    // whether vitest ever fires it is a race — three of their runs gave 1 red / 1 red / zero red, and
+    // four of mine gave zero red every time. **The "1 red" I reported in #384 as proof was a fluke
+    // reading.** Reading the value instead is exact and cannot flake.
+    //
+    // The positive control is the load-bearing half: delete the `{ timeout }` option above and this
+    // reads 5000 (vitest's default) and goes red. Without that, an assertion that the timeout equals
+    // a constant would also pass if the option were dropped and the constant edited to match.
+    it('the spawn timeout is actually wired to this describe', (ctx) => {
+        expect(ctx.task.timeout).toBe(SPAWN_VERDICT_TIMEOUT_MS);
+    });
   it('the audit runs and reports all three extractor counts', () => {
     // The baseline that makes the mutations below mean something: if the audit could not run, every
     // "the mutation was caught" reading would be the same output as "nothing ran".
