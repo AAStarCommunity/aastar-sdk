@@ -28,7 +28,15 @@ export enum ErrorCode {
   NOT_IMPLEMENTED = 'E4001',
   INTERNAL_ERROR = 'E4002',
   INVALID_CONFIGURATION = 'E4003',
-  
+  /**
+   * A deployed contract returned data whose SHAPE contradicts the ABI the SDK holds — the read
+   * itself succeeded. Distinct from CONTRACT_REVERT (the chain said no) and from
+   * INVALID_CONFIGURATION (a local setting is wrong): here the chain answered and the answer cannot
+   * be trusted, which is the only class of failure where continuing produces plausible wrong values
+   * instead of an error. Callers should treat it as "re-sync the ABI", never as retryable.
+   */
+  ABI_SHAPE_MISMATCH = 'E4004',
+
   // Bundler & AA Errors (5xxx)
   BUNDLER_ERROR = 'E5001',
   BUNDLER_USER_OP_REVERTED = 'E5002',
