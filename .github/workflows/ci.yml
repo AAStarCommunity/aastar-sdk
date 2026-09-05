@@ -116,10 +116,13 @@ jobs:
       # twice and merged with no row at all — and both gates above were green, correctly: a row
       # that was never written is in nobody's scope. GITHUB_HEAD_REF because the checkout is
       # detached on pull_request, so git cannot answer which branch this is.
+      # No `env:` here, and that is the fix rather than an omission. The first version set
+      # `GITHUB_HEAD_REF` explicitly — **`GITHUB_*` is a reserved prefix**, so the whole workflow
+      # became invalid and GitHub created ZERO runs for every sha after it. `gh pr checks` then
+      # says "no checks reported on the branch", which reads like a queue delay, not a broken file.
+      # It was also redundant: Actions already sets GITHUB_HEAD_REF on pull_request events.
       - name: Every task named by the branch is actually written down
         if: github.event_name == 'pull_request'
-        env:
-          GITHUB_HEAD_REF: ${{ github.head_ref }}
         run: pnpm run check:branch-task
 
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
