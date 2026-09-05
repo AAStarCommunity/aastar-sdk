@@ -54,26 +54,32 @@
   「SDK canonical `aaStarBLSAlgorithm=0x0` 会失配」——canonical 实为活的 `0x7ac7E9d4…`。
   两个 validator 都有代码、都对我们的节点答 `isRegistered=true`，所以填错了在链上看不出来。
 
-### T1.2.2 节点 onboarding API 实现  `BACKLOG`
+### T1.2.2 节点 onboarding API 实现 (PR #367)  `DONE`
 - **优先级**：high
 - **依赖**：T1.2.1
-- **验收命令**：缺口清单里 8 条「需新增」（G1/G4/G5/G6/G11/G12/G14/G21）逐条有实现，或有记录
-  在案的「决定不做」。
-- **✅ 三条已由 jason 拍板（2026-09-05），全部收敛为「不做」**：
-  - **G11 · 不做** —— portal **不收 keystore 文件**，只支持 cast / env 两种私钥来源。
-  - **G5 · 不做（由 G11 决定）** —— EIP-2335 解密的唯一消费者是 `dvt3-register.ts`
-    这个一次性上链证据脚本，它读的是**节点运营者自己板子上的 BLS keystore**
-    （`/opt/dvt-build/node_state.json`），在本机内存里解、不落盘、不经过我们。
-    G11 定了不收上传，推荐路径又是 KMS-TEE（密钥不出 TEE，走 `kmsPopSigner`），
-    于是没有任何产品面需要这个解密器。**保留脚本里的内联实现，不提升进 SDK**，
-    包边界问题随之消失。`eip2335PasswordCandidates`（纯密码规范化、无 node:crypto）
-    已在 core，不受影响。
-  - **G21 · 不做，改为早失败** —— 实测：现役 validator `0x7ac7E9d4…` `requireStake()==true`，
-    而 `testnet-local` 环境**用的是同一个 validator**，所以我们运行的每一个环境里
-    bootstrap 路径都不可达。且它是 owner-only，属部署期管理动作而非用户流程。
-    补一条链上会 revert、没人走的路径 = 增加一个 stub 形状的公共面。
-    **改为在 `requireStake==false` 时明确早失败并说明「SDK 只支持 staked 模式」。**
-- **剩余 5 条「需新增」（G1/G4/G6/G12/G14）无产品阻塞**，可直接进 T1.2.2 实现。
+- **验收命令**：`pnpm --filter @aastar/core test` + `pnpm --filter @aastar/operator test` 全绿
+  - 实测：core `639 passed | 34 skipped`、operator `53 passed`；`check:browser` / `check:stubs` PASS
+- **jason 2026-09-05 拍板，三条收敛为「不做」**：**G11** portal 不收 keystore 文件（只支持 cast/env）；
+  **G5** 随之不做——EIP-2335 解密的唯一消费者是 `dvt3-register.ts`，读的是节点运营者**自己板子上**的
+  keystore，本机内存解、不落盘、不经过我们；推荐路径又是 KMS-TEE（密钥不出 TEE），于是没有产品面需要它。
+  **G21** bootstrap 路径不做，改早失败——实测现役 validator `requireStake()==true`，而 `testnet-local`
+  **用的是同一个 validator**，所以我们运行的每个环境里它都不可达，且它 owner-only 属部署期动作。
+- **G6 由我重判为不做（决定会级联）**：它的驱动者是 keystore 路径，G5 不做后没有消费者。
+  改为把 `buildDvtPop` 的报错写清修法，并说明**为什么不在函数内静默 reduce**：`raw >= r` 同样
+  可能是「传错了字节」，静默归一会产出一个**能注册成功、但公钥对不上运行中节点**的 PoP。
+- **本次交付 G1 / G4 / G12 / G14**：
+  - **G1+G4** `parseDvtNodeState`（core，纯函数）。**刻意接「已解析的对象」而非文件路径** ——
+    字节来自三个地方（CLI 读板子、portal 收粘贴、KMS 走 HTTP），只有一个有文件系统；且 core 必须
+    过 `check:browser`，收路径就得静态引入 `node:fs`。值得集中的不是读，是**校验**。
+  - **G12** `onboardDvtNode({ router })` 从 `getAlgorithm(0x01)` 解析 validator，与 `validator` 互斥。
+  - **G14** `dvtOperatorActions` 补 `owner()` / `registry()` / `roleDvt()`。
+- **顺带修在根上的一处**：`encodeG1Point` 的 128 字节路径**只校验零填充、不校验点在不在曲线上**，
+  而它自己的注释写着「so a mis-shaped 128-byte blob is rejected」。48/96 字节路径经 `fromHex` 是校验的，
+  三种宽度语义不一致。已补 `assertValidity()` + 无穷远点检查，**全 core 套件零破坏**。
+- **可证伪（三道守卫逐一变异）**：停用 nodeId 交叉核对 → G4 那条红；`router` 接受但忽略 → 两条 router 红；
+  停用曲线校验 → **第一轮没红**，因为我的用例用全零、被无穷远那条先捕获，从没走到 `assertValidity`。
+  补了一条「填充合法、字段在域内、但不在曲线上」（x=1,y=1）的用例后，同一变异**恰好 1 红**。
+  这一格是变异帮我发现的：**测试原本在断言一个它并没有在测的东西。**
 
 ---
 
