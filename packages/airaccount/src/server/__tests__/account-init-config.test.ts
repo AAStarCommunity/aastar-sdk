@@ -8,6 +8,7 @@ import {
   type FullConfigGuardianParams,
 } from "../services/account-init-config";
 import type { AccountRecord } from "../interfaces/storage-adapter";
+import { AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 const ZERO32 = `0x${"00".repeat(32)}`;
@@ -97,10 +98,15 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
   });
 
   describe("initConfigToTuple", () => {
-    it("emits the 8 fields in consensus-critical order", () => {
+    // Was "emits the 8 fields in consensus-critical order", asserting `toHaveLength(8)`.
+    //
+    // That assertion did not miss the bug — **it pinned it**. The contract grew two fields at #161
+    // and `AIRACCOUNT_FACTORY_ABI` was updated; this test then held the flattener at the old shape,
+    // green, while every real `getAddress` call failed. The arity assertion lives in the describe
+    // block below now, where it is READ OUT OF THE ABI instead of retyped.
+    it("emits the fields in consensus-critical order", () => {
       const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
       const t = initConfigToTuple(cfg);
-      expect(t).toHaveLength(8);
       expect(t[0]).toEqual(cfg.guardians); // guardians
       expect(t[1]).toEqual(cfg.guardianP256X); // guardianP256X
       expect(t[2]).toEqual(cfg.guardianP256Y); // guardianP256Y
@@ -109,6 +115,8 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       expect(t[5]).toBe(cfg.minDailyLimit); // minDailyLimit
       expect(t[6]).toEqual(cfg.initialTokens); // initialTokens
       expect(t[7]).toEqual([]); // initialTokenConfigs (default empty)
+      expect(t[8]).toBe(cfg.tier1Limit); // #161 ETH tier-1 ceiling
+      expect(t[9]).toBe(cfg.tier2Limit); // #161 ETH tier-2 ceiling
     });
   });
 
@@ -207,5 +215,76 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       expect(cfg.initialTokens).toEqual([]);
       expect(cfg.initialTokenConfigs).toEqual([]);
     });
+  });
+});
+
+describe("initConfigToTuple agrees with the ABI it feeds", () => {
+  /**
+   * The arity, derived from `AIRACCOUNT_FACTORY_ABI` rather than retyped.
+   *
+   * This is the whole point of the test. A `toHaveLength(10)` here would be a second copy of the
+   * same number, and the bug it is meant to catch is precisely two copies drifting: the ABI gained
+   * `tier1Limit` / `tier2Limit` at #161 and the flattener did not, so viem got eight values for a
+   * ten-field tuple and reported `Cannot convert undefined to a BigInt` from inside `getAddress`.
+   * Reading the count out of the ABI means the next field the contract grows fails HERE, on a
+   * message that names the struct, instead of on a chain call that names neither.
+   */
+  const configTupleArity = (fn: "getAddress" | "createAccount"): number => {
+    const sig = AIRACCOUNT_FACTORY_ABI.find(
+      (e): e is string => typeof e === "string" && e.includes(`function ${fn}(`)
+    );
+    if (!sig) throw new Error(`no ${fn} in AIRACCOUNT_FACTORY_ABI`);
+    // The `config` tuple is the parenthesised group that ends `) config`.
+    const inner = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s+config/.exec(sig)?.[1];
+    if (!inner) throw new Error(`could not find the config tuple in: ${sig.slice(0, 80)}…`);
+    // Split on commas that are NOT inside the nested initialTokenConfigs tuple.
+    let depth = 0;
+    let fields = 1;
+    for (const ch of inner) {
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (ch === "," && depth === 0) fields++;
+    }
+    return fields;
+  };
+
+  it("reads a plausible arity out of the ABI — the meter itself must work", () => {
+    // Control: if the parser silently returned 8 for everything, every assertion below would pass
+    // while measuring nothing. Both entry points declare the SAME struct, so they must agree, and
+    // the value must exceed the eight fields that existed before #161.
+    expect(configTupleArity("getAddress")).toBe(configTupleArity("createAccount"));
+    expect(configTupleArity("getAddress")).toBeGreaterThan(8);
+  });
+
+  it("emits exactly as many positional values as the ABI declares fields", () => {
+    const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
+    expect(initConfigToTuple(cfg)).toHaveLength(configTupleArity("getAddress"));
+  });
+
+  it("defaults both ETH tier ceilings to 0n on this path", () => {
+    const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
+    expect(initConfigToTuple(cfg).slice(8)).toEqual([0n, 0n]);
+  });
+
+  it("puts tier1 in slot 9 and tier2 in slot 10 — with values that can tell them apart", () => {
+    /*
+     * The first version of this test asserted `tuple[8] === cfg.tier1Limit` on a config built by
+     * `buildFullInitConfig`, whose tier fields are BOTH `0n` — so it read `0n === 0n` twice and
+     * was green with the two slots swapped. Mutation caught it: swapping them changed nothing.
+     *
+     * It had a comment saying position matters more than presence. The comment was right and the
+     * test did not implement it. Distinct non-zero values are what make the assertion about ORDER
+     * rather than about arity, and swapping them now fails.
+     *
+     * (`buildFullInitConfig` cannot produce these: `FullConfigGuardianParams` has no tier fields.
+     * That is a real gap, tracked separately — but a test for the flattener should feed the
+     * flattener directly rather than wait for the builder to grow a parameter.)
+     */
+    const cfg = {
+      ...buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY }),
+      tier1Limit: 111n,
+      tier2Limit: 222n,
+    };
+    expect(initConfigToTuple(cfg).slice(8)).toEqual([111n, 222n]);
   });
 });
