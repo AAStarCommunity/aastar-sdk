@@ -3,11 +3,10 @@ import { createAAStarPublicClient, registryActions } from '../packages/core/src/
 import { createAdminClient } from '../packages/sdk/src/index.js';
 import { ReputationClient } from '../packages/identity/src/index.js';
 import { FinanceClient } from '../packages/tokens/src/index.js';
-import { DVTClient } from '../packages/dapp/src/index.js';
 
 import { foundry } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
-import { http, type Hex, parseEther } from 'viem';
+import { http, type Hex, parseEther, toFunctionSelector } from 'viem';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
@@ -75,15 +74,29 @@ async function runFullCapabilityTest() {
     }
 
     // 4. DVT
+    //
+    // The previous version of this block called `DVTClient.registerValidator` with a dummy key,
+    // caught the revert, and printed "DVT Call Reached (Reverted as expected for dummy key)".
+    //
+    // It printed that whether or not the function existed — and it did not: `registerValidator`
+    // is on no contract in this repo. A missing selector and a rejected key both arrive as a
+    // revert, so the script reported the first as evidence of the second. **Success and failure
+    // produced identical output**, which is why a fictional ABI survived here for so long.
+    //
+    // So this no longer sends anything. It asks the question the old block believed it was asking:
+    // does the deployed contract actually carry the selector we are about to use? That is
+    // answerable from the bytecode, with no gas and no ambiguity.
     if (DVT_ADDR) {
-        console.log("   🛡️ Testing DVT (Validator Reg)...");
-        // Mock BLS Key
-        const blsKey = "0x12345678" as Hex; // Dummy
-        try {
-            // This might revert if logic checks BLS formatting, but validates route exists
-            await DVTClient.registerValidator(walletClient, DVT_ADDR, blsKey);
-        } catch (e: any) {
-            console.log(`      DVT Call Reached (Reverted as expected for dummy key): ${e.shortMessage || e.message}`);
+        console.log("   🛡️ Testing DVT (registerWithProof selector present on the deployed code)...");
+        const selector = toFunctionSelector('registerWithProof(bytes,bytes,bytes)');
+        const code = await publicClient.getCode({ address: DVT_ADDR });
+        if (!code || code === '0x') {
+            console.error(`      ❌ no contract code at ${DVT_ADDR}`);
+        } else if (code.includes(selector.slice(2))) {
+            console.log(`      ✅ selector ${selector} present in ${(code.length - 2) / 2} bytes of code`);
+        } else {
+            // The failure the old block could not distinguish, now stated as itself.
+            console.error(`      ❌ selector ${selector} NOT in the deployed bytecode — the ABI and the chain disagree`);
         }
     } else {
         console.warn("      ⚠️ DVT_ADDR (Validation) missing, skipping.");
