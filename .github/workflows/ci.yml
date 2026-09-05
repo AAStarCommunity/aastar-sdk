@@ -101,6 +101,12 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:task-ledger
 
+      # progress.md is read as "what is true right now", and nothing checked it. It sat un-updated
+      # across ~20 merged PRs — including a claim #375 had RETRACTED — while every other ledger
+      # gate stayed green, correctly: none of them reads this file.
+      - name: progress.md quotes the same statuses the ledger defines
+        run: pnpm run check:progress-sync
+
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
       # where the bookkeeping COULD be deferred, and a deferrable step gets deferred. See FU-43.
