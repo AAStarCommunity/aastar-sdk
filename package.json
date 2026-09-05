@@ -40,6 +40,7 @@
     "upstream:check": "tsx scripts/upstream/upstream-radar.ts",
     "upstream:rehearse": "tsx scripts/upstream/upstream-radar.ts --rehearse",
     "security:check": "bash scripts/security_audit.sh",
+    "audit:secret-whitelist": "tsx scripts/audit-secret-whitelist.ts",
     "security:full": "pnpm audit && bash scripts/security_audit.sh",
     "precommit": "pnpm security:check",
     "prepare": "pnpm install --frozen-lockfile",

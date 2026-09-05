@@ -110,6 +110,15 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: pnpm run check:followup-closure
 
+      # The count of whitelist entries nobody can verify may not grow. This does not judge the
+      # existing eleven and does not judge any balance — only that a NEW opaque entry has to be
+      # argued for. Wired here because a report with no consumer decays into a file, which is
+      # precisely what happened to security-scan.ts (FU-44).
+      - name: Whitelisted keys must stay verifiable
+        env:
+          SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
+        run: pnpm run audit:secret-whitelist
+
       # anvil: the RepCredit negative-control suite drives REAL viem against a REAL chain to prove
       # `extractRevertData` reads revert bytes and not the contract address / decoded args / calldata
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
