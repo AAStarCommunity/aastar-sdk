@@ -244,13 +244,40 @@ describe("initConfigToTuple agrees with the ABI it feeds", () => {
     return fields;
   };
 
-  const configTupleArity = (fn: "getAddress" | "createAccount"): number => {
-    const sig = AIRACCOUNT_FACTORY_ABI.find(
+  /**
+   * Pick the ONE signature for `fn` out of an ABI array — parameterised on the array so the
+   * "exactly one" rule can actually be exercised.
+   *
+   * `.find()` was silently fine today because each name appears once in `AIRACCOUNT_FACTORY_ABI`.
+   * The day it grows a `getAddress` overload, `.find()` would quietly measure whichever came first
+   * and every assertion here would still pass. (#389 review, Info.)
+   *
+   * Taking the array as a parameter is the difference between a guard and a claim about a guard:
+   * deleting the check changes nothing against the real ABI — there is only one match either way —
+   * so the only way to show it fires is to hand it an array where it should.
+   */
+  const pickSignature = (abi: readonly unknown[], fn: string): string => {
+    const matches = abi.filter(
       (e): e is string => typeof e === "string" && e.includes(`function ${fn}(`)
     );
-    if (!sig) throw new Error(`no ${fn} in AIRACCOUNT_FACTORY_ABI`);
-    return arityOf(sig);
+    if (matches.length !== 1) {
+      throw new Error(`expected exactly 1 \`${fn}\`, found ${matches.length}`);
+    }
+    return matches[0];
   };
+
+  const configTupleArity = (fn: "getAddress" | "createAccount"): number =>
+    arityOf(pickSignature(AIRACCOUNT_FACTORY_ABI, fn));
+
+  it("refuses an ambiguous or missing lookup instead of measuring the first match", () => {
+    const one = "function getAddress(address o, (uint256 a) config) external view returns (address)";
+    const overload = "function getAddress(address o, (uint256 a, uint256 b) config, bytes s) external view returns (address)";
+    expect(arityOf(pickSignature([one], "getAddress"))).toBe(1);
+    // Two matches: the state this guard exists for. Without it, `.find()` would answer 1 —
+    // a real number, measured off the wrong signature, indistinguishable from a correct reading.
+    expect(() => pickSignature([one, overload], "getAddress")).toThrow(/found 2/);
+    expect(() => pickSignature([], "getAddress")).toThrow(/found 0/);
+  });
 
   it("counts a KNOWN synthetic signature correctly — the meter, on ground truth", () => {
     /*
