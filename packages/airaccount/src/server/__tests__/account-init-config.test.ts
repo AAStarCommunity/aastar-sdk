@@ -229,12 +229,8 @@ describe("initConfigToTuple agrees with the ABI it feeds", () => {
    * Reading the count out of the ABI means the next field the contract grows fails HERE, on a
    * message that names the struct, instead of on a chain call that names neither.
    */
-  const configTupleArity = (fn: "getAddress" | "createAccount"): number => {
-    const sig = AIRACCOUNT_FACTORY_ABI.find(
-      (e): e is string => typeof e === "string" && e.includes(`function ${fn}(`)
-    );
-    if (!sig) throw new Error(`no ${fn} in AIRACCOUNT_FACTORY_ABI`);
-    // The `config` tuple is the parenthesised group that ends `) config`.
+  /** Count the top-level fields of the `config` tuple in a human-readable function signature. */
+  const arityOf = (sig: string): number => {
     const inner = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s+config/.exec(sig)?.[1];
     if (!inner) throw new Error(`could not find the config tuple in: ${sig.slice(0, 80)}…`);
     // Split on commas that are NOT inside the nested initialTokenConfigs tuple.
@@ -248,12 +244,44 @@ describe("initConfigToTuple agrees with the ABI it feeds", () => {
     return fields;
   };
 
-  it("reads a plausible arity out of the ABI — the meter itself must work", () => {
-    // Control: if the parser silently returned 8 for everything, every assertion below would pass
-    // while measuring nothing. Both entry points declare the SAME struct, so they must agree, and
-    // the value must exceed the eight fields that existed before #161.
+  const configTupleArity = (fn: "getAddress" | "createAccount"): number => {
+    const sig = AIRACCOUNT_FACTORY_ABI.find(
+      (e): e is string => typeof e === "string" && e.includes(`function ${fn}(`)
+    );
+    if (!sig) throw new Error(`no ${fn} in AIRACCOUNT_FACTORY_ABI`);
+    return arityOf(sig);
+  };
+
+  it("counts a KNOWN synthetic signature correctly — the meter, on ground truth", () => {
+    /*
+     * The control that matters, and the one this file did not have.
+     *
+     * It used to assert two things: that both entry points agree, and that the answer exceeds 8.
+     * #389 review broke both with one mutation — `return fields + 2`, wrong but wrong IDENTICALLY
+     * for both signatures:
+     *
+     *   × emits exactly as many positional values as the ABI declares fields
+     *     ...and BOTH controls still passed.
+     *
+     * Of course they did. Agreement between two evaluations of the same parser over the same
+     * struct can only catch an asymmetry that the ABI makes impossible, and `> 8` only rules out
+     * the one historical value. **Neither control was independent of the thing in doubt.**
+     *
+     * A synthetic signature is: the field count is known WITHOUT running the parser, and the
+     * nesting is there because the nested `initialTokenConfigs` tuple is the only thing making
+     * this harder than counting commas. A parser off by any constant fails here — and it fails
+     * naming the meter, instead of blaming the flattener for a miscount that was never its fault.
+     */
+    const synthetic =
+      "function f(address owner, uint256 salt, (address a, uint256 b, (uint128 x, uint128 y)[] c, bytes32 d) config) external";
+    expect(arityOf(synthetic)).toBe(4); // a, b, c, d — the nested (x, y) is ONE field, not two
+    const one = "function g(address o, (uint256 only) config) external";
+    expect(arityOf(one)).toBe(1); // the degenerate case: no top-level comma at all
+  });
+
+  it("both factory entry points declare the same struct", () => {
+    // Kept, but demoted: it is a consistency check on the ABI, NOT a control on the parser.
     expect(configTupleArity("getAddress")).toBe(configTupleArity("createAccount"));
-    expect(configTupleArity("getAddress")).toBeGreaterThan(8);
   });
 
   it("emits exactly as many positional values as the ABI declares fields", () => {
