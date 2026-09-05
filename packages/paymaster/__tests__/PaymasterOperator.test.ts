@@ -2,6 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseEther } from 'viem';
 import { PaymasterOperator } from '../src/V4/PaymasterOperator';
 
+/**
+ * Every write must hand viem a PARSED abi that actually declares the function being called.
+ *
+ * Asserting a function NAME against a mock is free — the mock repeats back whatever it was told,
+ * which is exactly how `addGasToken` (on no deployed PaymasterV4, and passed a raw string array
+ * viem cannot parse) kept a green test for as long as it did. This is the assertion that costs
+ * something.
+ */
+function expectEveryWriteCarriesARealAbi(mockWallet: any) {
+    const calls = mockWallet.writeContract.mock.calls as any[];
+    expect(calls.length, 'no writes recorded — this check would be vacuous').toBeGreaterThan(0);
+    for (const [arg] of calls) {
+        expect(Array.isArray(arg.abi), `${arg.functionName}: abi must be an array`).toBe(true);
+        const declared = (arg.abi as any[]).filter((e) => typeof e === 'object' && e?.type === 'function');
+        expect(declared.length, `${arg.functionName}: abi is not a parsed ABI (raw strings?)`).toBeGreaterThan(0);
+        expect(
+            declared.map((e) => e.name),
+            `${arg.functionName}: not declared by the abi passed with it`,
+        ).toContain(arg.functionName);
+    }
+}
+
 describe('PaymasterOperator', () => {
     let mockWallet: any;
     let mockPublicClient: any;
@@ -45,11 +67,8 @@ describe('PaymasterOperator', () => {
     });
 
     it('should include all write methods', async () => {
-        await PaymasterOperator.addGasToken(mockWallet, PAYMASTER, TOKEN);
-        expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'addGasToken' }));
-
-        await PaymasterOperator.removeGasToken(mockWallet, PAYMASTER, TOKEN);
-        expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'removeGasToken' }));
+        await PaymasterOperator.removeToken(mockWallet, PAYMASTER, TOKEN);
+        expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'removeToken' }));
 
         await PaymasterOperator.setServiceFeeRate(mockWallet, PAYMASTER, 100n);
         expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'setServiceFeeRate' }));
@@ -57,11 +76,13 @@ describe('PaymasterOperator', () => {
         await PaymasterOperator.setMaxGasCostCap(mockWallet, PAYMASTER, 500000n);
         expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'setMaxGasCostCap' }));
         
-        await PaymasterOperator.withdrawPNT(mockWallet, PAYMASTER, USER, TOKEN, 100n);
-        expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'withdrawPNT' }));
+        await PaymasterOperator.withdrawTo(mockWallet, PAYMASTER, USER, 100n);
+        expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'withdrawTo' }));
 
         await PaymasterOperator.addStake(mockWallet, PAYMASTER, parseEther('1'), 86400);
         expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'addStake', value: parseEther('1') }));
+
+        expectEveryWriteCarriesARealAbi(mockWallet);
 
         await PaymasterOperator.addDeposit(mockWallet, PAYMASTER, parseEther('1'));
         expect(mockWallet.writeContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'addDeposit', value: parseEther('1') }));
@@ -108,15 +129,20 @@ describe('PaymasterOperator', () => {
             // Some calls might be conditional/skipped based on mocks.
             // With current mocks:
             // deposit info [0, false...] -> needs stake & deposit
-            // Should have called stake, deposit, updatePrice, addGasToken, setTokenPrice
             const calls = mockWallet.writeContract.mock.calls.map((c: any) => c[0].functionName);
-            console.log('Prepare Calls:', calls);
             expect(calls).toContain('addStake');
             expect(calls).toContain('addDeposit');
             // ensurePriceInitialized might be skipped if mock state is tricky, but we covered updatePrice in specific test above.
-            // expect(calls).toContain('updatePrice');
-            expect(calls).toContain('addGasToken');
             expect(calls).toContain('setTokenPrice');
+
+            // `addGasToken` used to be asserted here, and it PASSED — because a mock records the
+            // name it is handed without ever reaching viem. On a real chain that call threw every
+            // time (raw string array as `abi:`) and its exception was eaten by an empty catch, so
+            // the step it claimed to perform never happened. The assertion held while the
+            // behaviour did not.
+            expect(calls, 'a name that is on no deployed PaymasterV4').not.toContain('addGasToken');
+
+            expectEveryWriteCarriesARealAbi(mockWallet);
 
         });
     });
