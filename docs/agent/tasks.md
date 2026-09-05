@@ -20,7 +20,7 @@
 - **风险/回滚**：真实上链且 JASON 代付 ETH+GToken —— **默认必须先 `DRY_ONLY=1` 跑一遍**，nodeId 与板子 `node_state.json` 不一致时脚本自身 abort。
 - **证据**：PR #316 合并进 main = `32b8f273`（2026-08-02）。评审 APPROVE；Codex PK 的 EIP-2335 控制字符剥离 Low → FU-5
 
-### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引  `PR_OPEN`
+### T1.1.2 记录 dvt3 注册的 tx hash 到 onchain-evidence 索引 (PR #368)  `DONE`
 - **优先级**：mid
 - **目标**：让 `docs/onchain-evidence.md` 有 dvt3 这条的 tx hash + 区块，符合「验收 = 上链 tx hash，不是单测」的纪律。
 - **依赖**：T1.1.1
@@ -94,7 +94,7 @@
 
 ## F2.1 — Slash 治理 read getters（CC-13 批A）
 
-### T2.1.1 slash 只读查询 API  `PR_OPEN`
+### T2.1.1 slash 只读查询 API (PR #362)  `DONE`
 - **优先级**：mid
 - **目标**：暴露 slash 状态/冷却/阈值等只读能力（`isSlashPending` 等已随 0.39.4 进 ABI）。
 - **依赖**：无（地址依赖已由 CC-18 / 0.39.4 解除）
