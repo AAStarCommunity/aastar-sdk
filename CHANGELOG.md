@@ -40,6 +40,7 @@ All notable changes to this project will be documented in this file.
 > | SDK ABI 与 pin 的差距 | `abi:sync` = **`0 missing · 1 drifted`**，唯一那条是 `BLSAggregator` |
 > | 那条 drift 的内容 | 5 个 4.12.0-only 新增项 + `guardianSlashCases` 的 `SAME SELECTOR, DIFFERENT RETURN` |
 > | 那条 drift 的处置 | 4.12.0 **由作者拍板暂不部署**（4.11 满足论文）；SDK 对齐的是**已部署的 4.11.0**；唯一危险面 `guardianSlashCase()` **fail-closed**（`ABI_SHAPE_MISMATCH`），不会返回一个貌似合理的错值 |
+> | 那道 fail-closed 今天被什么钉住 | **只有单测。** 部署的 `0xEaeC2F51…`(4.11.0) 对 `guardianSlashCase(0)` **revert，data `0x`** —— 链上一个 case 都没排过队，所以 7 字误解码此刻**不可达**（#383 评审实测）。这让结论更强（现在不可能出错）**也更窄**（守卫从没在链上响过）。**第一个真 case 落链时，要拿真实返回跑一次，确认它走的是正常解码而不是守卫。** |
 > | 全量回归 | 15 个包全绿；链上套件 27 passed / 2 skipped（两条 skip 卡在 FU-38 的 CI archive RPC secret） |
 >
 > **结论：就 SDK 自身的交付面而言，本版可发布。** 缺的那 5 项不是遗漏，是对一个
@@ -87,14 +88,18 @@ verified against bytecode on Sepolia. They are listed as breaking because they a
 because working behaviour was withdrawn.
 
 - **`@aastar/dapp`** — `DVTClient.registerValidator` **removed**. It called
-  `registerValidator(bytes)`, declared by no contract in this repo. (#381)
+  `registerValidator(bytes)`, declared by no contract in this repo — and the DVT validator it
+  targeted is a **zero address** in the canonical book for chain 10 and 11155420, so the method had
+  no reachable target on two of the three supported chains at all. (#381)
 - **`@aastar/paymaster`** — `addGasToken` / `removeGasToken` / `withdrawPNT` now **throw**, naming
   their replacements. All three were absent from the deployed PaymasterV4 implementation, and all
   five methods in that group passed a raw human-readable string array as `abi:`, which viem
   rejects outright — so they threw locally and never reached a node. (#382)
 - **`@aastar/tokens`** — `FinanceClient.stakeGToken` now **throws**. `stake(uint256)` is on no
-  deployed `GTokenStaking`; the contract declares `lockStakeWithTicket` / `topUpStake`, which are
-  **not the same operation**, so the wrapper does not choose for you. (#382)
+  deployed `GTokenStaking`, on **any** of the three supported chains (two positive controls green
+  on each). `topUpStake` is the only staking entry point present everywhere;
+  **`lockStakeWithTicket` exists on Sepolia only.** They are not the same operation, so the wrapper
+  does not choose for you. (#382, chain matrix added in #383 review)
 - **`@aastar/identity`** — `ReputationClient.submitProof` now **throws**. Its own comment called
   the signature "generic for now" — and it broadcast a transaction. A stub that throws and a stub
   that broadcasts are very different things. (#382)

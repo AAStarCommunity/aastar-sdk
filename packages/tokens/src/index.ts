@@ -57,19 +57,31 @@ export class FinanceClient {
     }
 
     /**
-     * @deprecated `stake(uint256)` is on no deployed GTokenStaking. Measured on Sepolia at block
-     * 11639724: selector 0xa694fc3a is absent from 0x472297B5…'s 9061 bytes. The real ABI declares
-     * `lockStakeWithTicket` / `topUpStake` / `getStakeInfo` — there is no bare `stake`.
+     * @deprecated `stake(uint256)` (`0xa694fc3a`) is on **no** deployed GTokenStaking — measured on
+     * all three supported chains, each with two positive controls:
+     *
+     * ```
+     * chain 11155111  0x472297B5…  9061B   stake ❌  topUpStake ✅  getStakeInfo ✅  lockStakeWithTicket ✅
+     * chain 10        0x7A1216C2… 10029B   stake ❌  topUpStake ✅  getStakeInfo ✅  lockStakeWithTicket ❌
+     * chain 11155420  0x5f57B931… 10029B   stake ❌  topUpStake ✅  getStakeInfo ✅  lockStakeWithTicket ❌
+     * ```
+     *
+     * **Note the last column.** An earlier version of this note told the caller to use
+     * `lockStakeWithTicket` — which exists only on Sepolia. That is the same "second dead end"
+     * `removeGasToken → removeToken` had, and harder to see: the first name is invented, the second
+     * is real but not on your chain. **`topUpStake` is the only staking entry point present
+     * everywhere.**
      *
      * Throws instead of sending. It could only ever revert, and a revert costs gas and arrives as
      * "execution reverted" with nothing pointing at the cause.
      */
     static async stakeGToken(_wallet: WalletClient, _stakingAddr: Address, _amount: bigint): Promise<never> {
         throw new Error(
-            'FinanceClient.stakeGToken: `stake(uint256)` is on no deployed GTokenStaking ' +
-            '(verified against 0x472297B557c1d0F030f281a5Bb8A535f6c5AB65e). The contract declares ' +
-            'lockStakeWithTicket / topUpStake; pick the one that matches your intent — they are not ' +
-            'the same operation and this wrapper cannot choose for you.',
+            'FinanceClient.stakeGToken: `stake(uint256)` is on no deployed GTokenStaking — checked ' +
+            'on all three supported chains. `topUpStake` is the only staking entry point present on ' +
+            'every one of them; `lockStakeWithTicket` exists on Sepolia ONLY, so do not reach for it ' +
+            'without checking your chain. They are not the same operation and this wrapper cannot ' +
+            'choose for you.',
         );
     }
 
