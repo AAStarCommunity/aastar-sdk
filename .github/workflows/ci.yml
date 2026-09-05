@@ -125,6 +125,14 @@ jobs:
         if: github.event_name == 'pull_request'
         run: pnpm run check:branch-task
 
+      # A hand-written ABI in shipped source must say why. `packages/dapp` shipped a publicly
+      # exported method calling `registerValidator(bytes)` — a function on no contract in this repo
+      # — because the repo's own `parseAbi` ban never runs (no package defines a `lint` script, so
+      # `pnpm -r lint` is a no-op) and its only caller printed the same line whether or not the
+      # function existed. Baseline of 8 pre-existing files; it may only shrink.
+      - name: Hand-written ABIs in shipped source carry a justification
+        run: pnpm run check:hardcoded-abi
+
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
       # where the bookkeeping COULD be deferred, and a deferrable step gets deferred. See FU-43.
