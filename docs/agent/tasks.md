@@ -59,10 +59,21 @@
 - **依赖**：T1.2.1
 - **验收命令**：缺口清单里 8 条「需新增」（G1/G4/G5/G6/G11/G12/G14/G21）逐条有实现，或有记录
   在案的「决定不做」。
-- **⏳ 进入实现前需 jason 拍板三条**（见清单 §需新增的 8 条）：
-  - **G5** keystore 解密放哪个包——core 明确是 browser-safe（`no node:crypto`），解密进不来
-  - **G11** portal 要不要支持上传加密 keystore（SDK 是 viem-only，不能照抄 ethers 那条实现）
-  - **G21** bootstrap 注册路径（`requireStake==false` → `registerPublicKey`）是补齐还是明确不支持
+- **✅ 三条已由 jason 拍板（2026-09-05），全部收敛为「不做」**：
+  - **G11 · 不做** —— portal **不收 keystore 文件**，只支持 cast / env 两种私钥来源。
+  - **G5 · 不做（由 G11 决定）** —— EIP-2335 解密的唯一消费者是 `dvt3-register.ts`
+    这个一次性上链证据脚本，它读的是**节点运营者自己板子上的 BLS keystore**
+    （`/opt/dvt-build/node_state.json`），在本机内存里解、不落盘、不经过我们。
+    G11 定了不收上传，推荐路径又是 KMS-TEE（密钥不出 TEE，走 `kmsPopSigner`），
+    于是没有任何产品面需要这个解密器。**保留脚本里的内联实现，不提升进 SDK**，
+    包边界问题随之消失。`eip2335PasswordCandidates`（纯密码规范化、无 node:crypto）
+    已在 core，不受影响。
+  - **G21 · 不做，改为早失败** —— 实测：现役 validator `0x7ac7E9d4…` `requireStake()==true`，
+    而 `testnet-local` 环境**用的是同一个 validator**，所以我们运行的每一个环境里
+    bootstrap 路径都不可达。且它是 owner-only，属部署期管理动作而非用户流程。
+    补一条链上会 revert、没人走的路径 = 增加一个 stub 形状的公共面。
+    **改为在 `requireStake==false` 时明确早失败并说明「SDK 只支持 staked 模式」。**
+- **剩余 5 条「需新增」（G1/G4/G6/G12/G14）无产品阻塞**，可直接进 T1.2.2 实现。
 
 ---
 
