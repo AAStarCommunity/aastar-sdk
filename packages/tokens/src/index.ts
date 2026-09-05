@@ -72,14 +72,16 @@ export class FinanceClient {
      * is real but not on your chain. **Of the two, `topUpStake` is the one present everywhere.**
      *
      * Precise scope, because the first wording of this line was a universal claim and false as
-     * written: of `GTokenStaking`'s **29** declared functions, **27 are on all three chains**
-     * (`slash`, `slashByDVT`, `unlockAndTransfer`, `getLockedStake`, …). Exactly **two** are
-     * Sepolia-only — `lockStakeWithTicket` and `MAX_TOTAL_STAKE()`. So the OP deployments are not
-     * a reduced surface in general; they are missing those two.
+     * written: of the **29 functions THIS SDK declares** for `GTokenStaking`, **27 dispatch on all
+     * three chains** (`slash`, `slashByDVT`, `unlockAndTransfer`, `getLockedStake`, …), and exactly
+     * two do not — `lockStakeWithTicket` and `MAX_TOTAL_STAKE()`, both Sepolia-only.
      *
-     * And a counter-intuitive reading worth carrying: **the OP implementations are LARGER and have
-     * FEWER functions** (10029 B / 27 vs Sepolia's 9061 B / 29). "Bigger means newer means more
-     * complete" is inverted here, so byte size is not a version proxy.
+     * **Read that as a statement about this SDK's ABI, not about the contracts.** A second draft of
+     * this note said "the OP implementations are LARGER and have FEWER functions (27 vs 29)" and
+     * concluded byte size is not a version proxy. **The contrast does not exist**: 27 was our ABI's
+     * hit count, not OP's function count. Measured the other way, OP carries `setRegistry(address)`,
+     * which this SDK does not declare at all — so the OP deployment is not a reduced surface, it is
+     * a DIFFERENT one. (#383 review.)
      *
      * Throws instead of sending. It could only ever revert, and a revert costs gas and arrives as
      * "execution reverted" with nothing pointing at the cause.
@@ -87,10 +89,9 @@ export class FinanceClient {
     static async stakeGToken(_wallet: WalletClient, _stakingAddr: Address, _amount: bigint): Promise<never> {
         throw new Error(
             'FinanceClient.stakeGToken: `stake(uint256)` is on no deployed GTokenStaking — checked ' +
-            'on all three supported chains. `topUpStake` is the only staking entry point present on ' +
-            'every one of them; `lockStakeWithTicket` exists on Sepolia ONLY, so do not reach for it ' +
-            'without checking your chain. They are not the same operation and this wrapper cannot ' +
-            'choose for you.',
+            'on all three supported chains. Of the two candidates: `topUpStake` is on all three, ' +
+            '`lockStakeWithTicket` is on Sepolia ONLY. They are not the same operation, so check ' +
+            'your chain and pick deliberately — this wrapper cannot choose for you.',
         );
     }
 
