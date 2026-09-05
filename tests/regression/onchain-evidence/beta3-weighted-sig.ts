@@ -8,7 +8,7 @@
  *   2. OWNER setWeightConfig(cfg1)  — first-time valid config (onlyOwner; non-weakening vs
  *      the all-zero initial config, so setWeightConfig is the correct entry). Then read
  *      weightConfig() on-chain.
- *   3. OWNER proposeWeightChange(cfg2) — a *weakening* config (lowers tier3 6→5), which the
+ *   3. OWNER proposeWeightChange(cfg2) — a *weakening* config (lowers tier2 5→4), which the
  *      contract REQUIRES to go through the guardian-governed proposal flow (onlyOwner;
  *      _isWeakening must be true). Then read pendingWeightChange() on-chain.
  *   4. Guardian g1 approveWeightChange() → guardian g2 approveWeightChange() — 2 txs
@@ -236,9 +236,33 @@ async function main() {
     console.log('   ✅ weightConfig() matches cfg1.');
 
     // ── 3. OWNER proposeWeightChange(cfg2) — a WEAKENING config ─────────────
-    // cfg2 lowers tier3 from 6 → 5 (_isWeakening true). Still valid: tier3(5)>=tier2(5)>=tier1(4).
-    const cfg2: WC = [3, 2, 2, 1, 1, 1, 0, 4, 5, 5];
-    console.log(`\n   cfg2 (proposeWeightChange, weakens tier3 6→5): ${fmtWC(cfg2)}`);
+    /*
+     * cfg2 lowers **tier2** 5 → 4, not tier3 6 → 5.
+     *
+     * The old cfg2 (`tier3 = 5`) is now rejected outright with `InsecureWeightConfig()` (0xa59a4151),
+     * and the rule it crosses is one the contract added deliberately:
+     *
+     *     passkeyWeight + ecdsaWeight >= tier3Threshold   ⇒   InsecureWeightConfig
+     *     (AirAccountExtension.sol:708)
+     *
+     * Here that is 3 + 2 = 5 against tier3 = 5. {passkey, ecdsa} is the OWNER-ALONE subset in the TEE
+     * model — the owner holds both — so it may satisfy the lower tiers but MUST NOT reach Tier-3,
+     * which is meant to require an external factor (DVT BLS or a guardian). The runner's chosen
+     * weakening happened to land exactly on that line.
+     *
+     * Measured by simulation before editing, and the probe distinguishes three outcomes:
+     *
+     *     tier3 6→5   (3,2,2,1,1,1,0,4,5,5)   InsecureWeightConfig        ← the old cfg2
+     *     tier2 5→4   (3,2,2,1,1,1,0,4,4,6)   OK, no revert               ← this one
+     *     g2 weight 1→0                        WeakeningRequiresProposal
+     *     tier3 6→7 (control, not a weakening) WeakeningRequiresProposal
+     *
+     * The third line is worth keeping: lowering a WEIGHT is not a weakening, lowering a THRESHOLD is.
+     * Without it "this config is a weakening" would be an assumption rather than a reading — the
+     * chosen cfg2 must be one the guardian gate actually applies to, or step 4 tests nothing.
+     */
+    const cfg2: WC = [3, 2, 2, 1, 1, 1, 0, 4, 4, 6];
+    console.log(`\n   cfg2 (proposeWeightChange, weakens tier2 5→4): ${fmtWC(cfg2)}`);
     const propData = weightedSvc.encodeProposeWeightChange(wcToConfig(cfg2)) as Hex;
     const propTx = await sendVerified(ownerWallet, account, propData, 'OWNER proposeWeightChange(cfg2)');
     steps.push({ step: 'OWNER proposeWeightChange(cfg2) — weakening (tier3 6→5)', actor: `BOB ${owner.address}`, tx: propTx });
