@@ -317,7 +317,10 @@ async function main() {
         );
     }
     console.log(`   🔒 negative control: passkey+ecdsa reaching tier3 → InsecureWeightConfig (${negData}) ✅`);
-    steps.push({ step: `NEGATIVE CONTROL: {passkey,ecdsa} reaching tier3 rejected — InsecureWeightConfig ${negData}`, actor: `BOB ${owner.address}`, tx: '(simulated, no tx)' });
+    // `tx: ''` rather than a prose placeholder: the markdown builder wraps whatever is here in an
+    // etherscan link, so "(simulated, no tx)" rendered as a link to a transaction that cannot exist.
+    // An evidence file that links to a non-existent tx is worse than one that admits there is none.
+    steps.push({ step: `NEGATIVE CONTROL (simulated, no tx): {passkey,ecdsa} reaching tier3 rejected — InsecureWeightConfig ${negData}`, actor: `BOB ${owner.address}`, tx: '', note: '_(eth_call simulation — no transaction)_' });
 
     const propData = weightedSvc.encodeProposeWeightChange(wcToConfig(cfg2)) as Hex;
     const propTx = await sendVerified(ownerWallet, account, propData, 'OWNER proposeWeightChange(cfg2)');
@@ -413,7 +416,10 @@ async function main() {
     md.push(`- **Guardian g1 (slot 0):** \`${g1.address}\``);
     md.push(`- **Guardian g2 (slot 1):** \`${g2.address}\``);
     md.push(`- **cfg1 (first \`setWeightConfig\`):** \`${fmtWC(cfg1)}\``);
-    md.push(`- **cfg2 (\`proposeWeightChange\`, weakens tier3 6→5):** \`${fmtWC(cfg2)}\``);
+    // Derived, like the step label — this was the THIRD copy of "tier3 6→5" and the one that
+    // actually reached the evidence file. Found by reading the generated `.last.md`, not the source:
+    // two of the three copies were fixed while looking at code, and this one was not in view.
+    md.push(`- **cfg2 (\`proposeWeightChange\`, weakens ${changed}):** \`${fmtWC(cfg2)}\``);
     md.push('', '| Step | Action | Actor | Tx hash / result |', '|------|--------|-------|------------------|');
     steps.forEach((s, i) => {
         const cell = s.tx ? `[\`${s.tx}\`](${ETHERSCAN(s.tx)})` : (s.note ?? '');
