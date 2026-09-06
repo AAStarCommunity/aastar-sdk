@@ -1,4 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const LOCKFILE = join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'pnpm-lock.yaml');
 import { analyzeLockfile, verdict, MIN_SNAPSHOTS, SNAPSHOT_KEY } from './dep-dedupe.js';
 
 /**
@@ -100,34 +105,76 @@ describe('MIN_SNAPSHOTS is above the blind-state count and at or below the healt
     it('is at most 69 — the number of peer-qualified keys a healthy lockfile has', () => {
         expect(MIN_SNAPSHOTS).toBeLessThanOrEqual(69);
     });
+
+    // ④ An ABSOLUTE floor against a GROWING population stops working, and stops silently.
+    //
+    // The blind regex saw 35 of 69 — about 51%. A floor of 40 detects that today. Let the lockfile
+    // grow to ~120 peer-qualified keys and the same half-blind instrument reports ~61, which sails
+    // over 40: the floor is still green, still "above 35", and no longer detects anything.
+    //
+    // So the floor is checked against the REAL lockfile's current population rather than against a
+    // literal alone. This test fails the day the repo outgrows the constant — which is the point:
+    // it converts a silent loss of coverage into a red that says what to reconsider. It is NOT a
+    // derivation of the floor (that would reintroduce the circularity #405 r3 was about); the
+    // literals above still pin the magnitude. This one pins the RATIO.
+    it('stays above what a half-blind instrument would report on the CURRENT lockfile', () => {
+        const real = analyzeLockfile(readFileSync(LOCKFILE, 'utf8'));
+        const halfBlind = Math.floor(real.total * 0.51); // the measured blind/total ratio, 35/69
+        expect(MIN_SNAPSHOTS).toBeGreaterThan(halfBlind);
+    });
 });
 
 describe('verdict', () => {
-    const healthy = { total: MIN_SNAPSHOTS, distinct: MIN_SNAPSHOTS, duplicates: [] };
+    // A sentinel the DEFAULT could never contain. The previous `source` test asserted
+    // `toContain('pnpm-lock.yaml')`, which every candidate satisfies: the default was that literal
+    // and the real value is an absolute path ENDING in it. So the assertion could not tell the two
+    // apart, and — since `source` was defaulted — it was in fact pinning the default: dropping the
+    // argument at the call site left the suite at 12 passed. `source` is required now, and this
+    // string appears in no default anywhere.
+    const SRC = '/tmp/ZZZ-sentinel/other-lock.yaml';
+
+    // total !== distinct ON PURPOSE. When both are `MIN_SNAPSHOTS`, swapping `${r.total}` and
+    // `${r.distinct}` in the success line leaves every test green — the probe cannot separate two
+    // implementations because the input gives the two variables the same value. That is the very
+    // defect `dep-dedupe.ts` documents in its own history ("tested `total` against the floor while
+    // printing `distinct`"), reappearing inside the test that guards it.
+    const healthy = { total: 42, distinct: 42, duplicates: [] };
 
     it('refuses to pass a run that matched too few keys, and says it went blind', () => {
-        const v = verdict({ ...healthy, total: MIN_SNAPSHOTS - 1, distinct: MIN_SNAPSHOTS - 1 });
+        const v = verdict({ total: MIN_SNAPSHOTS - 1, distinct: MIN_SNAPSHOTS - 1, duplicates: [] }, SRC);
         expect(v.ok).toBe(false);
         expect(v.lines.join('\n')).toContain('went blind');
-        // ③ the message must name the file it read, or the reader cannot tell WHICH lockfile went blind.
-        expect(v.lines.join('\n')).toContain('pnpm-lock.yaml');
+        expect(v.lines.join('\n')).toContain(SRC);
     });
 
-    it('fails on duplicates and prints the peer suffixes that distinguish them', () => {
-        const v = verdict({
-            total: MIN_SNAPSHOTS + 1,
-            distinct: MIN_SNAPSHOTS,
-            duplicates: [{ id: 'viem@2.43.3', copies: 2, variants: ['(typescript@5.6.3)', '(typescript@5.7.2)'] }],
-        });
+    it('fails on duplicates, names the file, and prints the distinguishing peer suffixes', () => {
+        const v = verdict(
+            {
+                total: MIN_SNAPSHOTS + 1,
+                distinct: MIN_SNAPSHOTS,
+                duplicates: [{ id: 'viem@2.43.3', copies: 2, variants: ['(typescript@5.6.3)', '(typescript@5.7.2)'] }],
+            },
+            SRC,
+        );
         expect(v.ok).toBe(false);
         expect(v.lines.join('\n')).toContain('(typescript@5.6.3)');
         expect(v.lines.join('\n')).toContain('(typescript@5.7.2)');
+        // The duplicates branch used to name no file at all.
+        expect(v.lines.join('\n')).toContain(SRC);
     });
 
-    it('passes only when total and distinct are equal, and prints BOTH', () => {
-        const v = verdict(healthy);
+    // Title says what `verdict` DOES. The previous one said "passes only when total and distinct are
+    // equal" — a comparison `verdict` never performs: `{total:42, distinct:40, duplicates:[]}` returns
+    // ok=true and prints "42 … / 40 distinct … — equal". Unreachable through `analyzeLockfile`
+    // (total > distinct is equivalent to duplicates being non-empty), so not a live bug — but a title
+    // claiming a check that does not exist is the exact thing this repo keeps paying for.
+    it('passes when there are no duplicates, printing total and distinct in that order', () => {
+        const v = verdict(healthy, SRC);
         expect(v.ok).toBe(true);
-        expect(v.lines.join('\n')).toContain(`${MIN_SNAPSHOTS} peer-qualified snapshot key(s) / ${MIN_SNAPSHOTS} distinct`);
+        expect(v.lines.join('\n')).toContain(SRC);
+        // Distinct values would catch a swap; equal ones cannot. See the fixture comment above.
+        const swapProof = verdict({ total: 43, distinct: 42, duplicates: [] }, SRC);
+        expect(swapProof.lines.join('\n')).toContain('43 peer-qualified snapshot key(s) / 42 distinct');
     });
 
     it('the regex is the one that accepts quoted scoped keys', () => {

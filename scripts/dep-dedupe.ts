@@ -133,7 +133,15 @@ export function analyzeLockfile(text: string): DedupeReport {
  * The verdict, as data. Exported so the floor and both failure modes are reachable from a test —
  * `MIN_SNAPSHOTS` previously lived only inside `main()` and nothing could get at it.
  */
-export function verdict(r: DedupeReport, source = 'pnpm-lock.yaml'): { ok: boolean; lines: string[] } {
+/**
+ * `source` is REQUIRED, not defaulted. A default made the caller's argument optional, and the test
+ * that was supposed to pin it then pinned the DEFAULT instead: dropping the argument at the call
+ * site left the suite at 12 passed. It is also used on ALL THREE paths now — the previous version
+ * threaded it only into the blind branch, so the duplicates branch named no file at all and the
+ * success branch printed a hardcoded 'pnpm-lock.yaml'. The success branch is the line CI prints on
+ * a normal run, i.e. the one path where the file name was a constant was the path everybody reads.
+ */
+export function verdict(r: DedupeReport, source: string): { ok: boolean; lines: string[] } {
     if (r.total < MIN_SNAPSHOTS) {
         return {
             ok: false,
@@ -154,7 +162,8 @@ export function verdict(r: DedupeReport, source = 'pnpm-lock.yaml'): { ok: boole
             for (const v of d.variants) lines.push(`       ${v}`);
         }
         lines.push(
-            `\ncheck-dep-dedupe: ${r.duplicates.length} package version(s) resolve to more than one copy.\n` +
+            `\ncheck-dep-dedupe: ${r.duplicates.length} package version(s) in ${source} resolve to more than ` +
+                'one copy.\n' +
                 'Two copies of one version are two NOMINALLY DISTINCT types: a value from one does not\n' +
                 'satisfy a parameter typed by the other, and the diagnostic reads as an ordinary\n' +
                 'mismatch ("…68 more…" vs "…67 more…"), not as a duplication.\n' +
@@ -167,9 +176,9 @@ export function verdict(r: DedupeReport, source = 'pnpm-lock.yaml'): { ok: boole
         ok: true,
         lines: [
             `check-dep-dedupe: ✅ ${r.total} peer-qualified snapshot key(s) / ${r.distinct} distinct ` +
-                'package version(s) in pnpm-lock.yaml — equal, so each version resolves to exactly one ' +
-                'copy. (Reads the LOCKFILE, not node_modules/.pnpm — that directory keeps stale entries ' +
-                'across reinstalls and would report an already-fixed defect as live.)',
+                `package version(s) in ${source} — equal, so each version resolves to exactly one ` +
+                'copy. (Reads the LOCKFILE, not node_modules/.pnpm — that directory keeps stale ' +
+                'entries across reinstalls and would report an already-fixed defect as live.)',
         ],
     };
 }
