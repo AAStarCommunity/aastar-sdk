@@ -66,6 +66,31 @@ describe('verification.md carries the prescriptions it was written for', () => {
     }
   });
 
+  // §9.1, applied to this registry itself: it had no floor on its own size.
+  //
+  // Measured: deleting one entry gives `Tests 15 passed` — zero red. The total moves in vitest's
+  // summary line, and that is the line nobody reads, so **a prescription can be removed together
+  // with the guard that was watching it, silently**. The document-length floor below is alive
+  // (truncating to 3000 chars gives 14 failed) but its headroom is 22654 vs 4000 — 5.7x — so it
+  // only catches the file being gutted, not an entry going missing.
+  //
+  // The literal is WRITTEN OUT, not derived from `PRESCRIPTIONS.length`. That is the thing #405
+  // r3/r4 paid for twice: a threshold expressed relative to the quantity it guards pins the
+  // direction of the comparison and nothing about its magnitude.
+  //
+  // 14, and getting that number wrong was instructive: the first draft said 15, taken from
+  // `grep -c 'phrase:'` — which also counts the destructuring in the loop below and the word inside
+  // a message template. **A proxy for a count is not the count**, and the assertion caught it
+  // immediately (`expected 14 to be greater than or equal to 15`).
+  it('the registry itself only grows — deleting a prescription must not be silent', () => {
+    expect(
+      PRESCRIPTIONS.length,
+      'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
+        'also deletes the only thing checking that its rule is still in the document. Raise this ' +
+        'floor when adding, never lower it to make a red go away.',
+    ).toBeGreaterThanOrEqual(14);
+  });
+
   it('the document still exists and is substantial', () => {
     // Instrument check: `toContain` on an empty string fails, but on a truncated file the individual
     // phrase assertions would fail one by one with no hint that the file itself was the problem.
