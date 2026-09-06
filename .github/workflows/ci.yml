@@ -142,6 +142,14 @@ jobs:
       - name: Hand-written ABIs in shipped source carry a justification
         run: pnpm run check:hardcoded-abi
 
+      # An address written into a PASS line is a claim nothing checks. `dvt-onboard-e2e` reported
+      # "proven on live Sepolia 0x539B" for two upstream bumps while actually registering on the
+      # canonical committee validator — and a wrong DVT validator does not revert (the superseded
+      # one still has code and still answers isRegistered=true), so the printed line was the only
+      # thing a reader had, and it lied on the green path.
+      - name: Evidence runners must not hardcode a hex address in a printed line
+        run: pnpm run check:evidence-literals
+
 
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment

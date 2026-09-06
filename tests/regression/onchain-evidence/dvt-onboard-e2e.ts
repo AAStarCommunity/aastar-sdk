@@ -1,7 +1,12 @@
 /**
  * DVT one-click onboarding E2E (CC-36) — the on-chain acceptance gate for the `@aastar/operator`
  * {@link onboardDvtNode} L2 workflow. Nothing is mocked; both paths run against the LIVE Sepolia DVT
- * validator (`AAStarBLSAlgorithm` = CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0x539B9681…):
+ * validator (`AAStarBLSAlgorithm` = CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm). The address is
+ * deliberately NOT written here: it moved (v0.31.0 `0x1A8Db639…` -> v0.33.0 `0x7ac7E9d4…`) while this
+ * header still said `0x539B9681…`, and the PASS line below still printed `0x539B` — on runs that had
+ * in fact registered on the canonical committee validator. A wrong DVT validator does not revert
+ * (the superseded one still has code and still answers `isRegistered=true`), so a stale literal in a
+ * header or a success message is not a cosmetic error: it is the only thing a reader has, and it lied.
  *
  *   PATH A — idempotency: onboardDvtNode(operator = JACK, JACK's deterministic BLS key). JACK is already
  *     onboarded, so the workflow must short-circuit with alreadyRegistered=true and send NO transaction.
@@ -53,7 +58,8 @@ async function main() {
   const funderWallet = createWalletClient({ account: funder, chain: sepolia, transport });
   const jackWallet = createWalletClient({ account: jack, chain: sepolia, transport });
 
-  log(`validator = ${c.aaStarBLSAlgorithm}`);
+  const validator = c.aaStarBLSAlgorithm as Address;
+  log(`validator = ${validator}`);
   log(`funder(JASON) = ${funder.address}   operator(JACK) = ${jack.address}\n`);
 
   // ---------- PATH A: idempotency ----------
@@ -115,7 +121,9 @@ async function main() {
   if (!isReg || owner.toLowerCase() !== freshOp.address.toLowerCase()) throw new Error('PATH B FAIL: on-chain post-condition');
 
   log(`\n✅ PATH B PASS — onboardDvtNode staked + registered a fresh node via JASON 代付. register tx ${b.hashes.register}`);
-  log('\n✅✅ CC-36 E2E PASS — onboardDvtNode proven on live Sepolia 0x539B (idempotent + full 代付 flow).');
+  // The validator is interpolated, never spelled out: the previous literal `0x539B` outlived two
+  // canonical bumps and was still being printed on runs that used a different contract entirely.
+  log(`\n✅✅ CC-36 E2E PASS — onboardDvtNode proven on live Sepolia ${validator} (idempotent + full 代付 flow).`);
 }
 
 main().catch((e) => { console.error('E2E FAIL:', e?.shortMessage || e?.message || e); process.exit(1); });

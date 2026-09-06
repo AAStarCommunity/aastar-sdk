@@ -34,7 +34,10 @@ async function rd(label: string, address: Address, name: string, inputs: any[], 
   }
 }
 
-// SDK canonical today (v0.28.0 stack)
+// v0.28.0-era stack. The comment used to read "SDK canonical today" — written when it was, and
+// left alone through two canonical bumps. Canonical `aaStarValidator` is now 0xA97A7527…
+// (addresses.ts:157), so "today" pointed at a router that stopped being canonical twice ago.
+// The ADDRESS is an intentional historical pin and stays; the claim attached to it does not.
 const OLD_ROUTER = '0xA6bdfD17C178b43B464736408e0Fe03D5a7684eB' as Address;
 const OLD_FACTORY = '0x778ab75636F1350c31930078208eFB02E9765ed3' as Address;
 // CC-103 / airaccount-contract v0.31.0 stack
@@ -57,10 +60,15 @@ async function main() {
   console.log(`block=${await pc.getBlockNumber()}  rpc=${RPC!.slice(0, 40)}…\n`);
 
   console.log('== router.getAlgorithm(0x01) ==');
-  await rd('OLD router 0xA6bd (SDK canonical)', OLD_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
-  await rd('NEW router 0xA151 (CC-103)', NEW_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
+  // Labels interpolate the constant they describe, so the printed address cannot diverge from the
+  // one queried. The old labels also carried claims that had expired: "(SDK canonical)" on a router
+  // superseded twice over, and "NEW" on one that addresses.ts:157 now records as `(was 0xA15127e8…)`.
+  // The check:evidence-literals gate does NOT see these — they reach stdout through the `rd` helper,
+  // not through a log() call on this line. That gap is stated in the gate's own verdict.
+  await rd(`v0.28.0-era router ${OLD_ROUTER.slice(0, 6)}`, OLD_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
+  await rd(`CC-103/v0.31.0 router ${NEW_ROUTER.slice(0, 6)}`, NEW_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
 
-  console.log('\n== committee validator 0x1A8Db639 ==');
+  console.log(`\n== committee validator ${CMT_VAL} ==`);
   const active = await rd('committeeActive()', CMT_VAL, 'committeeActive', [], bool);
   const q = (await rd('requiredQuorum()', CMT_VAL, 'requiredQuorum', [], u256)) as bigint | null;
   if (q !== null) {
