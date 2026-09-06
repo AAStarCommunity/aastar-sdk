@@ -39,6 +39,11 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   // so the guard was silent about a swap, not merely about an addition. A list that can
   // only see deletions of things it already knows about cannot see a substitution at all.
   { phrase: '一次落空的采样', from: '#390 — 空集分不开「窗口没覆盖」和「量具看不见」' },
+  // #396 — registered in the SAME PR that introduces it, per §9.1. (No FU number: this is a
+  // delivered prescription, not a follow-up. An earlier draft of this line cited "FU-84", which
+  // does not exist — inventing a ledger reference inside the PR that adds a rule against
+  // unestablished claims.)
+  { phrase: '不是上一版的 finding 列表', from: '#396 — 复审只核上一轮清单会放过这一版新造的每一句话' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
