@@ -60,12 +60,16 @@ import {
     recordDvtSigner,
     newDvtIdentitySeen,
     getDvtConfig,
+    getCommitteeState,
+    isAccountEnrolled,
+    fetchCommitteeSigners,
 } from '@aastar/core';
 // SDK packers UNDER TEST (WebAuthn cumulative, algId 0x0a; #261 tagged owner-auth 0x02).
 import {
     packWebAuthnBlob,
     packCumulativeT3WA,
     packBlsPayload,
+    packCommitteeBlsPayload,
     packOwnerAuthWebAuthn,
 } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op';
@@ -178,7 +182,61 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Pr
     if (faults.length) throw new Error(`DVT signer identity fault(s), refusing to aggregate:\n  - ${faults.join('\n  - ')}`);
     if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
-    return packBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex));
+    return buildBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex), account);
+}
+
+/**
+ * Choose the BLS payload framing by READING the validator, not by assuming it (FU-81).
+ *
+ * This runner used to call `packBlsPayload` unconditionally — the LEGACY `[k][nodeIds…][sig]`
+ * shape. Measured: the canonical algId-0x01 validator reports `committeeActive() == true`
+ * (requiredQuorum 4, TREE_DEPTH 14), and committee mode expects a per-signer Merkle proof against
+ * the FROZEN `epochSetRoot(e-1)`. Legacy bytes there are a SHAPE MISMATCH, not a bad signature —
+ * which is why `validateUserOp(0x0a)` returned 1 with every co-signature valid.
+ *
+ * The SDK was never missing the capability: `packCommitteeBlsPayload` already existed, and
+ * `packCumulativeT2WA`/`packCumulativeT3WA` are framing-agnostic (they take a prebuilt payload).
+ * What was missing was reading `committeeActive()` before deciding which one to build.
+ */
+async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Address): Promise<Hex> {
+    const st = await withRpcFallback((c) => getCommitteeState(c as any, BLS_VERIFIER));
+    if (!st.active) {
+        console.log(`    framing: LEGACY (committeeActive=false)`);
+        return packBlsPayload(nodeIds, blsSignature);
+    }
+    console.log(`    framing: COMMITTEE (committeeActive=true, requiredQuorum=${st.requiredQuorum}, TREE_DEPTH=${st.treeDepth})`);
+    // ALL unmet preconditions at once, never one at a time.
+    //
+    // Reporting the first failure and stopping is how "a red hiding another red" happens: today's
+    // measurement found the `lastSetMutationBlock` revert hiding a stale-quorum literal, and the
+    // §4 verdict "12 green 1 red" was really 12 green 2 red. A reader who fixes one precondition
+    // and reruns should not be shown a brand-new blocker they could have seen the first time.
+    const unmet: string[] = [];
+    if (!(await withRpcFallback((c) => isAccountEnrolled(c as any, BLS_VERIFIER, account)))) {
+        unmet.push(
+            `account ${account} is NOT enrolled on committee validator ${BLS_VERIFIER} — committee ` +
+                "framing needs the account's one-time, owner-only enrollInCommitteeValidator()"
+        );
+    }
+    if (BigInt(nodeIds.length) < st.requiredQuorum) {
+        // Attributed, not generic. This is the FU-85 state: the reachable public DVT set is smaller
+        // than the quorum the validator now demands, because every `dvt-onboard-e2e` PATH B run adds
+        // a permanent committee member. Nothing here is broken — the aggregate would be rejected
+        // on-chain, and refusing to build it is the correct behaviour.
+        unmet.push(
+            `UNDER QUORUM: ${nodeIds.length} co-signature(s) reachable, validator requires ` +
+                `${st.requiredQuorum} (activeCount ${st.activeCount}). This is the FU-85 environment ` +
+                'state, not an SDK fault — the reachable DVT set is smaller than the committee'
+        );
+    }
+    if (unmet.length) {
+        throw new Error(
+            `committee framing has ${unmet.length} unmet precondition(s) — all of them, so that fixing ` +
+                `one does not reveal the next:\n  - ${unmet.join('\n  - ')}`
+        );
+    }
+    const { signers } = await withRpcFallback((c) => fetchCommitteeSigners(c as any, BLS_VERIFIER, nodeIds));
+    return packCommitteeBlsPayload(signers, blsSignature, st.treeDepth);
 }
 
 async function main() {
@@ -275,7 +333,7 @@ async function main() {
     if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     const blsSignature = encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex);
-    const blsPayload = packBlsPayload(signed.map((s) => s.nodeId), blsSignature);
+    const blsPayload = await buildBlsPayload(signed.map((s) => s.nodeId), blsSignature, account);
     console.log(`[3] aggregated ${signed.length} BLS co-signatures`);
 
     // ── Guardian ECDSA over userOpHash ──────────────────────────────────────────────────────────
