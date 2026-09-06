@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeLockfile } from './check-dep-dedupe.js';
+import { analyzeLockfile, verdict, MIN_SNAPSHOTS, SNAPSHOT_KEY } from './dep-dedupe.js';
 
 /**
  * The fixture below is the test this check should have had on day one.
@@ -65,5 +65,52 @@ describe('analyzeLockfile', () => {
 
     it('does not report a package that appears once', () => {
         expect(r.duplicates.map((d) => d.id)).not.toContain('ox@0.11.1');
+    });
+
+    // Review [Medium]: the assertion above pinned `variants` only for the UNSCOPED `viem`, so the
+    // quote-offset arithmetic (`t.startsWith("'") ? 1 : 0`) could be deleted and all five tests
+    // still passed — the scoped case was only checked by `toContain(id)`, which survives an off-by
+    // -one in the SUFFIX. This assertion is the one that fails when that offset goes.
+    it('strips the leading quote when slicing a SCOPED key\'s peer suffix', () => {
+        const parser = r.duplicates.find((d) => d.id === '@typescript-eslint/parser@8.50.1')!;
+        expect(parser.variants).toEqual([
+            '(eslint@9.39.2)(typescript@5.6.3)',
+            '(eslint@9.39.2)(typescript@5.7.2)',
+        ]);
+    });
+});
+
+// `MIN_SNAPSHOTS` and the pass/fail decision used to live inside the CLI's `main()`, where nothing
+// could reach them. They are part of the gate's behaviour, so they are tested like it.
+describe('verdict', () => {
+    const healthy = { total: MIN_SNAPSHOTS, distinct: MIN_SNAPSHOTS, duplicates: [] };
+
+    it('refuses to pass a run that matched too few keys, and says it went blind', () => {
+        const v = verdict({ ...healthy, total: MIN_SNAPSHOTS - 1, distinct: MIN_SNAPSHOTS - 1 });
+        expect(v.ok).toBe(false);
+        expect(v.lines.join('\n')).toContain('went blind');
+    });
+
+    it('fails on duplicates and prints the peer suffixes that distinguish them', () => {
+        const v = verdict({
+            total: MIN_SNAPSHOTS + 1,
+            distinct: MIN_SNAPSHOTS,
+            duplicates: [{ id: 'viem@2.43.3', copies: 2, variants: ['(typescript@5.6.3)', '(typescript@5.7.2)'] }],
+        });
+        expect(v.ok).toBe(false);
+        expect(v.lines.join('\n')).toContain('(typescript@5.6.3)');
+        expect(v.lines.join('\n')).toContain('(typescript@5.7.2)');
+    });
+
+    it('passes only when total and distinct are equal, and prints BOTH', () => {
+        const v = verdict(healthy);
+        expect(v.ok).toBe(true);
+        expect(v.lines.join('\n')).toContain(`${MIN_SNAPSHOTS} peer-qualified snapshot key(s) / ${MIN_SNAPSHOTS} distinct`);
+    });
+
+    it('the regex is the one that accepts quoted scoped keys', () => {
+        expect(SNAPSHOT_KEY.test("  '@scope/pkg@1.0.0(peer@2.0.0)':")).toBe(true);
+        expect(SNAPSHOT_KEY.test('  pkg@1.0.0(peer@2.0.0):')).toBe(true);
+        expect(SNAPSHOT_KEY.test('  pkg@1.0.0:')).toBe(false);
     });
 });
