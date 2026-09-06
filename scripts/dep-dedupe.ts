@@ -87,8 +87,10 @@ export const MIN_SNAPSHOTS = 40;
 
 /**
  * `total` counts every peer-qualified key; `distinct` counts identities. They differ EXACTLY by the
- * number of surplus copies — measured on this repo: healthy `72/69` before #404 (3 duplicated
- * groups, one surplus copy each) and `69/69` after.
+ * number of surplus copies. Measured on this repo: **before #404 `total=72 / distinct=69`**
+ * (3 duplicated groups, one surplus copy each); **after #404 `69/69`**. The earlier version of this
+ * sentence labelled `72/69` as "healthy", which is backwards — 72/69 is the DEFECTIVE state and
+ * 69/69 is the healthy one.
  *
  * An earlier note here said "69/66 before #404". That is arithmetically self-consistent and wrong
  * about the mechanism: it held `total` fixed and moved `distinct`, when duplication ADDS keys and
@@ -131,13 +133,14 @@ export function analyzeLockfile(text: string): DedupeReport {
  * The verdict, as data. Exported so the floor and both failure modes are reachable from a test —
  * `MIN_SNAPSHOTS` previously lived only inside `main()` and nothing could get at it.
  */
-export function verdict(r: DedupeReport): { ok: boolean; lines: string[] } {
+export function verdict(r: DedupeReport, source = 'pnpm-lock.yaml'): { ok: boolean; lines: string[] } {
     if (r.total < MIN_SNAPSHOTS) {
         return {
             ok: false,
             lines: [
-                `check-dep-dedupe: matched only ${r.total} peer-qualified snapshot(s), expected at ` +
-                    `least ${MIN_SNAPSHOTS}. The lockfile format changed and this check went blind.`,
+                `check-dep-dedupe: matched only ${r.total} peer-qualified snapshot(s) in ${source}, ` +
+                    `expected at least ${MIN_SNAPSHOTS}. The lockfile format changed and this check ` +
+                    'went blind.',
             ],
         };
     }

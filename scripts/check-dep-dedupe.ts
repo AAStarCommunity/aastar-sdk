@@ -17,6 +17,6 @@ import { analyzeLockfile, verdict } from './dep-dedupe.js';
 
 const LOCKFILE = join(resolve(dirname(fileURLToPath(import.meta.url)), '..'), 'pnpm-lock.yaml');
 
-const { ok, lines } = verdict(analyzeLockfile(readFileSync(LOCKFILE, 'utf8')));
+const { ok, lines } = verdict(analyzeLockfile(readFileSync(LOCKFILE, 'utf8')), LOCKFILE);
 for (const l of lines) (ok ? console.log : console.error)(l);
 if (!ok) process.exit(1);

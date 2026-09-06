@@ -82,6 +82,26 @@ describe('analyzeLockfile', () => {
 
 // `MIN_SNAPSHOTS` and the pass/fail decision used to live inside the CLI's `main()`, where nothing
 // could reach them. They are part of the gate's behaviour, so they are tested like it.
+// The floor's MAGNITUDE, pinned with hard literals.
+//
+// Review [Low]: every other test here states its expectation RELATIVE to `MIN_SNAPSHOTS`, so
+// setting it to 1 left all ten green — and a floor of 1, combined with the `'?` regex bug, makes
+// the gate print `✅ 35 … each version resolves to exactly one copy`: **the original blind state,
+// passing silently**. That is the same shape one level up — the floor was calibrated against the
+// instrument, and then the tests were calibrated against the floor.
+//
+// So these two numbers are written out, not derived. Deriving them is what reintroduces the defect.
+//   > 35  — the count the BLIND regex saw; a floor at or below it cannot detect that blindness
+//   ≤ 69  — the count a healthy lockfile has; a floor above it fires on a healthy repo
+describe('MIN_SNAPSHOTS is above the blind-state count and at or below the healthy count', () => {
+    it('is greater than 35 — the number of keys the pre-fix regex could see', () => {
+        expect(MIN_SNAPSHOTS).toBeGreaterThan(35);
+    });
+    it('is at most 69 — the number of peer-qualified keys a healthy lockfile has', () => {
+        expect(MIN_SNAPSHOTS).toBeLessThanOrEqual(69);
+    });
+});
+
 describe('verdict', () => {
     const healthy = { total: MIN_SNAPSHOTS, distinct: MIN_SNAPSHOTS, duplicates: [] };
 
@@ -89,6 +109,8 @@ describe('verdict', () => {
         const v = verdict({ ...healthy, total: MIN_SNAPSHOTS - 1, distinct: MIN_SNAPSHOTS - 1 });
         expect(v.ok).toBe(false);
         expect(v.lines.join('\n')).toContain('went blind');
+        // ③ the message must name the file it read, or the reader cannot tell WHICH lockfile went blind.
+        expect(v.lines.join('\n')).toContain('pnpm-lock.yaml');
     });
 
     it('fails on duplicates and prints the peer suffixes that distinguish them', () => {
