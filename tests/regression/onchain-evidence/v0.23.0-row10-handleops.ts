@@ -29,6 +29,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, AAStarAirAccountV7ABI, AAStarBLSAlgorithmABI,
+    AAStarCommitteeValidatorABI,
     encodeDVTVerifierProof, encodeBLSAccountSignature, encodeG2Point, entryPointActions,
     getDvtConfig,
     airAccountFactoryActions,
@@ -188,6 +189,61 @@ async function main() {
     } catch (e) { verifierResult = `revert: ${(e as Error).message.split('\n')[0].slice(0, 90)}`; }
     console.log(`verifier.validate(proof) = ${verifierResult} (0 ⇒ BLS aggregate over ${signed.length} nodes is valid)`);
 
+    /*
+     * ── The premise this whole runner was written on no longer holds ─────────────────────────────
+     *
+     * Row 10 is LEGACY BLS framing: `[0x01][nodeIdsLength][nodeIds][blsSig][ownerECDSA]`, with no
+     * per-signer Merkle proofs. It was written against a validator in pre-committee mode.
+     *
+     * The deployed validator now runs COMMITTEE mode, which rejects legacy framing BY DESIGN — the
+     * account decodes the framing `committeeActive()` tells it to, so a legacy-framed payload is a
+     * shape mismatch, not a bad signature. `cc103-committee-e2e` asserts exactly this rejection and
+     * PASSES, which is independent confirmation that the red below is the deployment behaving
+     * correctly rather than a regression here.
+     *
+     * So this runner reports the truth instead of failing on a superseded expectation — and it
+     * does NOT quietly exit 0. It asserts the rejection, which is a real checkable property of this
+     * deployment, and names where the positive path now lives. A skip and a pass must not look
+     * alike; neither must a pass and "the thing I was testing is gone".
+     */
+    const committeeOn = (await rpc((c) => c.readContract({
+        address: VERIFIER, abi: AAStarCommitteeValidatorABI, functionName: 'committeeActive',
+    }))) as boolean;
+    if (committeeOn) {
+        // A REVERT is not the same answer as "returned non-zero", and collapsing them here would be
+        // fail-open: `.catch(() => -1n)` makes any RPC hiccup or ABI mismatch read as "correctly
+        // rejected". The contract's documented behaviour is to RETURN 1, so that is what is required.
+        let preCheck: bigint;
+        try {
+            preCheck = (await rpc((c) => c.simulateContract({
+                address: ACC10, abi: AAStarAirAccountV7ABI, functionName: 'validateUserOp',
+                args: [{ ...userOp, signature: encodeBLSAccountSignature({ nodeIds: signed.map((s) => s.nodeId), blsSig: aggSig, ownerSig: ownerSig65 as Hex }) }, userOpHash, 0n],
+                account: ENTRY_POINT,
+            }))).result as bigint;
+        } catch (e) {
+            throw new Error(
+                'validateUserOp REVERTED on the legacy-framed payload. The expected rejection is a RETURNED ' +
+                `1, not a revert — a revert is a different fact and may not be about framing at all: ${(e as Error).message.split('\n')[0].slice(0, 140)}`
+            );
+        }
+        console.log(`\ncommitteeActive() = true — legacy 0x01 framing is not decodable by this validator.`);
+        console.log(`  legacy-framed validateUserOp = ${preCheck} (MUST be non-zero: committee mode rejects legacy framing)`);
+        if (preCheck === 0n) {
+            throw new Error(
+                'committeeActive() is true, yet a LEGACY-framed 0x01 payload was ACCEPTED. That contradicts ' +
+                'cc103-committee-e2e, which asserts committee mode rejects legacy framing. One of the two is wrong.'
+            );
+        }
+        console.log(
+            `\n✅ ROW 10 SUPERSEDED, and verified as such: legacy 0x01 framing is REJECTED (${preCheck}) while\n` +
+            `   committeeActive() is true — the documented behaviour, cross-checked by cc103-committee-e2e.\n` +
+            `   The live equivalent of this scenario is tier3-committee-handleops.ts (COMMITTEE-framed 0x05\n` +
+            `   executed on-chain via EntryPoint.handleOps). This runner does NOT prove legacy BLS works today,\n` +
+            `   because it does not.`
+        );
+        return;
+    }
+
     // (4) Account-level ALG_BLS (0x01) signature for EntryPoint.handleOps:
     //     [0x01][nodeIdsLength(32)][nodeIds][blsSig(256)][ownerECDSA(65)].
     //     The trailing 65 bytes are the owner's EIP-191 sig over userOpHash (ownerAuth, computed above)
@@ -207,7 +263,30 @@ async function main() {
         preValid = sim.result as bigint;
     } catch (e) { preValid = `revert: ${(e as Error).message.split('\n')[0].slice(0, 90)}`; }
     console.log(`validateUserOp pre-check = ${preValid} (0 ⇒ BLS sig accepted)`);
-    if (preValid !== 0n) throw new Error(`BLOCKER: validateUserOp pre-check = ${preValid} while verifier.validate = ${verifierResult}. If verifier==0 but validateUserOp!=0, the BLS aggregate is fine — the fault is account-side (e.g. validator()==0 → call setValidator; owner-ECDSA mismatch; tier gate). If verifier!=0, the collected node set's aggregate is bad (flaky tunnels). Aborting before wasting a reverted handleOps tx.`);
+    if (preValid !== 0n) {
+        // State the two READINGS first, then the interpretations — and only the ones that fit.
+        //
+        // The previous version opened with "If verifier==0 but validateUserOp!=0 …", listing two
+        // cases. When both readings were 1, NEITHER case applied — and the message's hypothetical
+        // contrast got read as an observed contrast. It cost a wrong diagnosis (chased an address
+        // mismatch that did not exist). A message that describes shapes the data may not have is a
+        // measurement claim in disguise.
+        const both = preValid !== 0n && verifierResult !== 0n;
+        const hint = both
+            ? 'BOTH are non-zero, so the aggregate itself did not verify. Do NOT look account-side yet: ' +
+              'check whether this validator is in COMMITTEE mode (committeeActive()), in which case a ' +
+              'legacy 0x01-framed payload is rejected on SHAPE and this runner is superseded by ' +
+              'tier3-committee-handleops.ts. Otherwise the collected node set is bad (flaky tunnels).'
+            : verifierResult === 0n
+              ? 'The aggregate verified but the account refused it, so the fault is account-side: ' +
+                'validator()==0 (call setValidator), owner-ECDSA mismatch, or a tier gate.'
+              : 'The account accepted while the verifier did not — these two should not disagree; ' +
+                'check that both are reading the SAME validator address before anything else.';
+        throw new Error(
+            `BLOCKER: validateUserOp = ${preValid}, verifier.validate = ${verifierResult}. ${hint} ` +
+            'Aborting before wasting a reverted handleOps tx.'
+        );
+    }
 
     // (6) Ensure deposit covers prefund.
     const required = (verificationGasLimit + callGasLimit + preVerificationGas) * maxFee;
