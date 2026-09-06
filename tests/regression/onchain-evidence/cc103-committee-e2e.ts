@@ -316,14 +316,38 @@ async function main() {
 
     // assertCommitteeSubmittable must REFUSE while committee mode is off — this is the live proof
     // that the guard fires, not a stubbed one.
+    //
+    // The signer count is READ FROM THE CHAIN, not written here. The previous revision passed a
+    // literal `3` — the value `requiredQuorum()` held when this runner was written. The validator
+    // has since gone to 4 (activeCount 5), so the call started refusing with
+    // "only 3 committee signer(s) collected, validator requires 4" and this check went red for a
+    // reason that had nothing to do with what its label claims to test.
+    //
+    // Note what the label said: "assertCommitteeSubmittable passes while committee is ON". What it
+    // actually tested was "…passes WITH THREE SIGNERS", and three was a stale reading of a chain
+    // value. A hardcoded quorum inside a test of a quorum guard is the guard's own defect class.
+    const liveQuorum = Number(state.requiredQuorum);
     let refused = '';
     try {
-        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, 3);
+        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum);
     } catch (e: any) {
         refused = e?.message ?? '';
     }
     if (active) {
-        check(refused === '', 'assertCommitteeSubmittable passes while committee is ON');
+        check(refused === '', `assertCommitteeSubmittable passes at the live quorum (${liveQuorum} signers)`, refused.slice(0, 90));
+        // Paired negative, in the same run: one signer short must REFUSE and must name the quorum.
+        // Without this, the positive above is satisfied by a guard that never refuses anything.
+        let short = '';
+        try {
+            await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum - 1);
+        } catch (e: any) {
+            short = e?.message ?? '';
+        }
+        check(
+            short.includes(`requires ${liveQuorum}`),
+            `…and REFUSES one signer short (${liveQuorum - 1}), naming the live quorum`,
+            short.slice(0, 90) || 'did NOT refuse',
+        );
     } else {
         check(
             /committeeActive\(\) is false/.test(refused),
