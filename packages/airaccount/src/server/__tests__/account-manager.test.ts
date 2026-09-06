@@ -506,7 +506,12 @@ describe("AccountManager", () => {
       const [owner, salt, configTuple] = factory.read.getAddress.mock.calls[0][0];
       expect(owner).toBe(SIGNER_ADDRESS);
       expect(salt).toBe(7n); // uint256 -> bigint
-      expect(configTuple).toHaveLength(8);
+      // 10, not 8: #161 folded the ETH tier ceilings into InitConfig as slots 9 and 10. This
+      // assertion said 8 and stayed green while every real `getAddress` failed with
+      // `Cannot convert undefined to a BigInt` — a mock records the values it is handed, so a
+      // count agreed between the flattener and this line proves only that they agree.
+      expect(configTuple).toHaveLength(10);
+      expect(configTuple.slice(8)).toEqual([0n, 0n]); // tier1Limit / tier2Limit, unconfigured
       expect(configTuple[0]).toEqual([ZERO_ADDR, ZERO_ADDR, ZERO_ADDR]); // guardians (ECDSA) all zero
       expect(configTuple[1][0]).toBe(X1); // guardianP256X[0]
       expect(configTuple[2][0]).toBe(Y1); // guardianP256Y[0]

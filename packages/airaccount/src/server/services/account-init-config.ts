@@ -56,8 +56,16 @@ export interface FullConfigGuardianParams {
   minDailyLimit?: bigint;
   /**
    * ERC-20 tokens to pre-register with the guard at birth (index-aligned with `initialTokenConfigs`).
-   * NOTE: these are per-TOKEN spend limits — they do NOT set the account's NATIVE-ETH tier1/tier2
-   * (those live in account storage slots 10/11, set via `setTierLimits`, not in InitConfig). #266.
+   * NOTE: these are per-TOKEN spend limits and are NOT the account's NATIVE-ETH tier1/tier2.
+   *
+   * This note used to end "set via `setTierLimits`, **not in InitConfig**. #266" — which stopped
+   * being true at #161, when the contract folded the ETH tiers INTO InitConfig as slots 9 and 10.
+   * `AIRACCOUNT_FACTORY_ABI` was updated for that; this comment and `initConfigToTuple` were not.
+   *
+   * This path still leaves both at the builder's `0n` default, because there is no parameter here
+   * to set them — and adding one needs the record to persist them too, or deploy-time
+   * re-derivation stops matching the address predicted at create time. Tracked as a follow-up,
+   * deliberately NOT done in the change that fixed the encoding.
    */
   initialTokens?: readonly Address[];
   /** Per-token `{ tier1Limit, tier2Limit, dailyLimit }` (wei), 1:1 with `initialTokens`. */
@@ -80,9 +88,12 @@ export function toGuardianSpecs(p: FullConfigGuardianParams): GuardianSpec[] {
 }
 
 /**
- * Build the full 8-field `InitConfig` for the create path. Delegates to the core
- * `buildInitConfig` (the 0.22.0 builder) so the P-256 slots, sentinel handling, and
- * approvedAlgId defaulting are produced by ONE audited implementation — never hand-rolled.
+ * Build the full `InitConfig` for the create path. Delegates to the core `buildInitConfig`
+ * (the 0.22.0 builder) so the P-256 slots, sentinel handling, and approvedAlgId defaulting
+ * are produced by ONE audited implementation — never hand-rolled.
+ *
+ * (It said "8-field". The struct has been TEN fields since #161; the count was removed rather
+ * than corrected, because a number written in prose is what went stale here in the first place.)
  */
 export function buildFullInitConfig(p: FullConfigGuardianParams): InitConfig {
   return buildInitConfig({
@@ -100,6 +111,24 @@ export function buildFullInitConfig(p: FullConfigGuardianParams): InitConfig {
  * factory ABI (`AIRACCOUNT_FACTORY_ABI`, fed through viem `parseAbi`) expects as the
  * `config` argument of `getAddress` / `createAccount`. Field order is consensus-critical
  * and matches `AAStarAirAccountBase.InitConfig` exactly.
+ *
+ * ## The two that were missing, and why the symptom named neither of them
+ *
+ * `tier1Limit` / `tier2Limit` (#161, InitConfig slots 9 and 10) were absent here while
+ * `AIRACCOUNT_FACTORY_ABI` had already been updated to declare them. Half an update: viem was
+ * handed eight values for a ten-field tuple, read `undefined` for the last two, and reported
+ *
+ * ```
+ * Cannot convert undefined to a BigInt
+ * ```
+ *
+ * from inside `getAddress`. That message names neither the field nor the struct — it reads as an
+ * encoding bug, and it is the first thing a reader sees on a path that never reaches the chain.
+ * Four evidence runners and the whole server-side create path failed exactly this way.
+ *
+ * **A positional flattener and the ABI it feeds are two halves of one fact, and nothing made them
+ * move together.** {@link initConfigTupleArity} is that link: the test derives the expected arity
+ * from the ABI rather than from a number retyped here.
  */
 export function initConfigToTuple(c: InitConfig): readonly unknown[] {
   return [
@@ -111,6 +140,11 @@ export function initConfigToTuple(c: InitConfig): readonly unknown[] {
     c.minDailyLimit,
     c.initialTokens,
     c.initialTokenConfigs.map((t) => [t.tier1Limit, t.tier2Limit, t.dailyLimit]),
+    // #161 — the NATIVE-ETH tier ceilings, folded into InitConfig by the contract. They are not
+    // an afterthought appended here: they are slots 9 and 10 of the struct, and their absence is
+    // what produced the message above.
+    c.tier1Limit,
+    c.tier2Limit,
   ];
 }
 

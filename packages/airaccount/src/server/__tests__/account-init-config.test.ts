@@ -8,6 +8,7 @@ import {
   type FullConfigGuardianParams,
 } from "../services/account-init-config";
 import type { AccountRecord } from "../interfaces/storage-adapter";
+import { AIRACCOUNT_FACTORY_ABI } from "../constants/entrypoint";
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 const ZERO32 = `0x${"00".repeat(32)}`;
@@ -97,10 +98,15 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
   });
 
   describe("initConfigToTuple", () => {
-    it("emits the 8 fields in consensus-critical order", () => {
+    // Was "emits the 8 fields in consensus-critical order", asserting `toHaveLength(8)`.
+    //
+    // That assertion did not miss the bug — **it pinned it**. The contract grew two fields at #161
+    // and `AIRACCOUNT_FACTORY_ABI` was updated; this test then held the flattener at the old shape,
+    // green, while every real `getAddress` call failed. The arity assertion lives in the describe
+    // block below now, where it is READ OUT OF THE ABI instead of retyped.
+    it("emits the fields in consensus-critical order", () => {
       const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
       const t = initConfigToTuple(cfg);
-      expect(t).toHaveLength(8);
       expect(t[0]).toEqual(cfg.guardians); // guardians
       expect(t[1]).toEqual(cfg.guardianP256X); // guardianP256X
       expect(t[2]).toEqual(cfg.guardianP256Y); // guardianP256Y
@@ -109,6 +115,8 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       expect(t[5]).toBe(cfg.minDailyLimit); // minDailyLimit
       expect(t[6]).toEqual(cfg.initialTokens); // initialTokens
       expect(t[7]).toEqual([]); // initialTokenConfigs (default empty)
+      expect(t[8]).toBe(cfg.tier1Limit); // #161 ETH tier-1 ceiling
+      expect(t[9]).toBe(cfg.tier2Limit); // #161 ETH tier-2 ceiling
     });
   });
 
@@ -207,5 +215,131 @@ describe("account-init-config helpers (#118 P-256 full-config path)", () => {
       expect(cfg.initialTokens).toEqual([]);
       expect(cfg.initialTokenConfigs).toEqual([]);
     });
+  });
+});
+
+describe("initConfigToTuple agrees with the ABI it feeds", () => {
+  /**
+   * The arity, derived from `AIRACCOUNT_FACTORY_ABI` rather than retyped.
+   *
+   * This is the whole point of the test. A `toHaveLength(10)` here would be a second copy of the
+   * same number, and the bug it is meant to catch is precisely two copies drifting: the ABI gained
+   * `tier1Limit` / `tier2Limit` at #161 and the flattener did not, so viem got eight values for a
+   * ten-field tuple and reported `Cannot convert undefined to a BigInt` from inside `getAddress`.
+   * Reading the count out of the ABI means the next field the contract grows fails HERE, on a
+   * message that names the struct, instead of on a chain call that names neither.
+   */
+  /** Count the top-level fields of the `config` tuple in a human-readable function signature. */
+  const arityOf = (sig: string): number => {
+    const inner = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s+config/.exec(sig)?.[1];
+    if (!inner) throw new Error(`could not find the config tuple in: ${sig.slice(0, 80)}…`);
+    // Split on commas that are NOT inside the nested initialTokenConfigs tuple.
+    let depth = 0;
+    let fields = 1;
+    for (const ch of inner) {
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      else if (ch === "," && depth === 0) fields++;
+    }
+    return fields;
+  };
+
+  /**
+   * Pick the ONE signature for `fn` out of an ABI array — parameterised on the array so the
+   * "exactly one" rule can actually be exercised.
+   *
+   * `.find()` was silently fine today because each name appears once in `AIRACCOUNT_FACTORY_ABI`.
+   * The day it grows a `getAddress` overload, `.find()` would quietly measure whichever came first
+   * and every assertion here would still pass. (#389 review, Info.)
+   *
+   * Taking the array as a parameter is the difference between a guard and a claim about a guard:
+   * deleting the check changes nothing against the real ABI — there is only one match either way —
+   * so the only way to show it fires is to hand it an array where it should.
+   */
+  const pickSignature = (abi: readonly unknown[], fn: string): string => {
+    const matches = abi.filter(
+      (e): e is string => typeof e === "string" && e.includes(`function ${fn}(`)
+    );
+    if (matches.length !== 1) {
+      throw new Error(`expected exactly 1 \`${fn}\`, found ${matches.length}`);
+    }
+    return matches[0];
+  };
+
+  const configTupleArity = (fn: "getAddress" | "createAccount"): number =>
+    arityOf(pickSignature(AIRACCOUNT_FACTORY_ABI, fn));
+
+  it("refuses an ambiguous or missing lookup instead of measuring the first match", () => {
+    const one = "function getAddress(address o, (uint256 a) config) external view returns (address)";
+    const overload = "function getAddress(address o, (uint256 a, uint256 b) config, bytes s) external view returns (address)";
+    expect(arityOf(pickSignature([one], "getAddress"))).toBe(1);
+    // Two matches: the state this guard exists for. Without it, `.find()` would answer 1 —
+    // a real number, measured off the wrong signature, indistinguishable from a correct reading.
+    expect(() => pickSignature([one, overload], "getAddress")).toThrow(/found 2/);
+    expect(() => pickSignature([], "getAddress")).toThrow(/found 0/);
+  });
+
+  it("counts a KNOWN synthetic signature correctly — the meter, on ground truth", () => {
+    /*
+     * The control that matters, and the one this file did not have.
+     *
+     * It used to assert two things: that both entry points agree, and that the answer exceeds 8.
+     * #389 review broke both with one mutation — `return fields + 2`, wrong but wrong IDENTICALLY
+     * for both signatures:
+     *
+     *   × emits exactly as many positional values as the ABI declares fields
+     *     ...and BOTH controls still passed.
+     *
+     * Of course they did. Agreement between two evaluations of the same parser over the same
+     * struct can only catch an asymmetry that the ABI makes impossible, and `> 8` only rules out
+     * the one historical value. **Neither control was independent of the thing in doubt.**
+     *
+     * A synthetic signature is: the field count is known WITHOUT running the parser, and the
+     * nesting is there because the nested `initialTokenConfigs` tuple is the only thing making
+     * this harder than counting commas. A parser off by any constant fails here — and it fails
+     * naming the meter, instead of blaming the flattener for a miscount that was never its fault.
+     */
+    const synthetic =
+      "function f(address owner, uint256 salt, (address a, uint256 b, (uint128 x, uint128 y)[] c, bytes32 d) config) external";
+    expect(arityOf(synthetic)).toBe(4); // a, b, c, d — the nested (x, y) is ONE field, not two
+    const one = "function g(address o, (uint256 only) config) external";
+    expect(arityOf(one)).toBe(1); // the degenerate case: no top-level comma at all
+  });
+
+  it("both factory entry points declare the same struct", () => {
+    // Kept, but demoted: it is a consistency check on the ABI, NOT a control on the parser.
+    expect(configTupleArity("getAddress")).toBe(configTupleArity("createAccount"));
+  });
+
+  it("emits exactly as many positional values as the ABI declares fields", () => {
+    const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
+    expect(initConfigToTuple(cfg)).toHaveLength(configTupleArity("getAddress"));
+  });
+
+  it("defaults both ETH tier ceilings to 0n on this path", () => {
+    const cfg = buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY });
+    expect(initConfigToTuple(cfg).slice(8)).toEqual([0n, 0n]);
+  });
+
+  it("puts tier1 in slot 9 and tier2 in slot 10 — with values that can tell them apart", () => {
+    /*
+     * The first version of this test asserted `tuple[8] === cfg.tier1Limit` on a config built by
+     * `buildFullInitConfig`, whose tier fields are BOTH `0n` — so it read `0n === 0n` twice and
+     * was green with the two slots swapped. Mutation caught it: swapping them changed nothing.
+     *
+     * It had a comment saying position matters more than presence. The comment was right and the
+     * test did not implement it. Distinct non-zero values are what make the assertion about ORDER
+     * rather than about arity, and swapping them now fails.
+     *
+     * (`buildFullInitConfig` cannot produce these: `FullConfigGuardianParams` has no tier fields.
+     * That is a real gap, tracked separately — but a test for the flattener should feed the
+     * flattener directly rather than wait for the builder to grow a parameter.)
+     */
+    const cfg = {
+      ...buildFullInitConfig({ p256Guardians: [{ x: X1, y: Y1 }], dailyLimit: DAILY }),
+      tier1Limit: 111n,
+      tier2Limit: 222n,
+    };
+    expect(initConfigToTuple(cfg).slice(8)).toEqual([111n, 222n]);
   });
 });

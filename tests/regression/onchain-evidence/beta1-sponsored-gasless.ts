@@ -37,8 +37,13 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 // ── beta.4 / PaymasterV4 Sepolia addresses (verified on-chain by the task owner) ────
 const FACTORY: Address = CANONICAL_ADDRESSES[11155111].airAccountFactoryV7 as Address; // v0.19 factory (SDK source of truth)
 const ENTRY_POINT: Address = '0x0000000071727De22E5E9d8BAf0edAc6f37da032'; // EntryPoint v0.7
-const PAYMASTER_V4: Address = '0xD0c82dc12B7d65b03dF7972f67d13F1D33469a98';
-const GAS_TOKEN: Address = '0xDf669834F04988BcEE0E3B6013B6b867Bd38778d';
+// Canonical, not hand-pinned. The two literals that used to sit here pointed at a PREVIOUS
+// deployment generation: measured on Sepolia, that paymaster does not even carry
+// `isTokenSupported(address)`, while the canonical aPNTs pair answers `true` and reports the same
+// `tokenPrices` (2000000). A runner pinned to a superseded deployment does not fail loudly — it
+// fails somewhere downstream, in a message about something else entirely.
+const PAYMASTER_V4: Address = CANONICAL_ADDRESSES[11155111].aPNTsPaymasterV4 as Address;
+const GAS_TOKEN: Address = CANONICAL_ADDRESSES[11155111].aPNTs as Address;
 const ALG_ECDSA = 2;
 // v0.20.0 (#120): InitConfig guardianP256X/Y (bytes32[3]) — zero for ECDSA-only accounts.
 const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
@@ -127,6 +132,12 @@ async function main() {
         minDailyLimit: 0n,
         initialTokens: [] as readonly Address[],
         initialTokenConfigs: [] as readonly { tier1Limit: bigint; tier2Limit: bigint; dailyLimit: bigint }[],
+        // The ETH tier limits. Absent here until now, and the symptom was NOT "missing field":
+        // viem reported `Cannot convert undefined to a BigInt` from inside `getAddress`, which
+        // reads as an encoding bug rather than as an InitConfig that grew two members.
+        // The factory tuple is ten fields (#161); these are slots 9 and 10.
+        tier1Limit: parseEther('0.01'),
+        tier2Limit: parseEther('0.1'),
     };
     const salt = BigInt(Date.now()); // unique per run
     const sender = await factorySvc.getAddress({ owner: owner.address, salt, config });

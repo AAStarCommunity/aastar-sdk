@@ -153,6 +153,12 @@ async function main() {
         minDailyLimit: 0n,
         initialTokens: [] as readonly Address[],
         initialTokenConfigs: [] as readonly { tier1Limit: bigint; tier2Limit: bigint; dailyLimit: bigint }[],
+        // ETH tier limits — InitConfig slots 9 and 10 (#161). Absent until now, and the symptom
+        // named neither the field nor the struct: viem raised `Cannot convert undefined to a
+        // BigInt` from inside `getAddress`, which reads as an encoding bug rather than as a tuple
+        // that grew two members. Six evidence runners failed this way with one cause.
+        tier1Limit: parseEther('0.01'),
+        tier2Limit: parseEther('0.1'),
     };
     const salt = BigInt(Math.floor(Date.now() / 1000)); // unique per run
     console.log(`\n   Using salt: ${salt}`);
