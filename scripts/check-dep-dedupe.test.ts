@@ -100,27 +100,55 @@ describe('analyzeLockfile', () => {
 //   ≤ 69  — the count a healthy lockfile has; a floor above it fires on a healthy repo
 describe('MIN_SNAPSHOTS is above the blind-state count and at or below the healthy count', () => {
     it('is greater than 35 — the number of keys the pre-fix regex could see', () => {
-        expect(MIN_SNAPSHOTS).toBeGreaterThan(35);
+        // The bare form printed `expected 20 to be greater than 35`: two integers, naming neither
+        // the lockfile, nor the blindness, nor what to do. A red that does not say what it is about
+        // is a red someone edits away.
+        expect(
+            MIN_SNAPSHOTS,
+            'MIN_SNAPSHOTS must exceed 35 — the count the QUOTE-BLIND regex saw (35 of 69). A floor ' +
+                'at or below it cannot detect that blindness at all.',
+        ).toBeGreaterThan(35);
     });
     it('is at most 69 — the number of peer-qualified keys a healthy lockfile has', () => {
-        expect(MIN_SNAPSHOTS).toBeLessThanOrEqual(69);
+        expect(
+            MIN_SNAPSHOTS,
+            'MIN_SNAPSHOTS must not exceed 69 — the count a healthy lockfile has today. Above it, ' +
+                'the gate fires on a repo with nothing wrong.',
+        ).toBeLessThanOrEqual(69);
     });
 
-    // ④ An ABSOLUTE floor against a GROWING population stops working, and stops silently.
+    // An absolute floor against a GROWING population stops working. 40 detects a half-blind
+    // instrument on today's 69 keys; at ~120 keys the same instrument reports ~61 and sails over it.
     //
-    // The blind regex saw 35 of 69 — about 51%. A floor of 40 detects that today. Let the lockfile
-    // grow to ~120 peer-qualified keys and the same half-blind instrument reports ~61, which sails
-    // over 40: the floor is still green, still "above 35", and no longer detects anything.
+    // WHAT THIS TEST DOES NOT DO — stated first, because the previous version of this comment got it
+    // backwards. It said the test "converts a silent loss of coverage into a red". It cannot:
+    // it measures the population with `analyzeLockfile`, the very function whose blindness is the
+    // hazard. Install the original `'?` bug and `real.total` drops 69 -> 35, so `halfBlind` drops
+    // 35 -> 17 and `MIN(40) > 17` is MORE comfortably true. **Measured: this assertion is the one
+    // cell that stays green under blindness** (the suite still fails, 4 red — from the fixture tests
+    // above, which are what actually pin the regex).
     //
-    // So the floor is checked against the REAL lockfile's current population rather than against a
-    // literal alone. This test fails the day the repo outgrows the constant — which is the point:
-    // it converts a silent loss of coverage into a red that says what to reconsider. It is NOT a
-    // derivation of the floor (that would reintroduce the circularity #405 r3 was about); the
-    // literals above still pin the magnitude. This one pins the RATIO.
-    it('stays above what a half-blind instrument would report on the CURRENT lockfile', () => {
+    // So it pins GROWTH, not coverage: the day the repo outgrows the constant, this goes red and
+    // says to reconsider the floor. That is worth having and is all it is.
+    //
+    // The 0.51 is NOT load-bearing — review measured the green band at ratio <= 0.579, seven points
+    // wide, and the guard is inverted outside it: a LIGHTER blindness (ratio 0.8 -> floor(69*0.8)
+    // = 55, 40 > 55 false) turns this red on a healthy repo while a heavier one keeps it green. It
+    // is a stand-in for "roughly half", not a tuned threshold.
+    //
+    // No independent counter is used deliberately. Review's first attempt at one reproduced the
+    // ORIGINAL bug exactly — an awk pattern requiring the line to end `):`, which quoted keys do not
+    // (they end `)':`) — giving 35 again. Measured here: 35 unquoted + 34 quoted = 69. Any
+    // independent counter has to be validated against that same 35/69 split before it is trusted.
+    it('floor stays above a half-blind report on the CURRENT population (growth check, NOT a blindness check)', () => {
         const real = analyzeLockfile(readFileSync(LOCKFILE, 'utf8'));
-        const halfBlind = Math.floor(real.total * 0.51); // the measured blind/total ratio, 35/69
-        expect(MIN_SNAPSHOTS).toBeGreaterThan(halfBlind);
+        const halfBlind = Math.floor(real.total * 0.51);
+        expect(
+            MIN_SNAPSHOTS,
+            `MIN_SNAPSHOTS=${MIN_SNAPSHOTS} must exceed ${halfBlind} — what a ~half-blind reader ` +
+                `would report on the current lockfile (${real.total} peer-qualified keys). The repo ` +
+                'has grown past this constant; raise MIN_SNAPSHOTS deliberately.',
+        ).toBeGreaterThan(halfBlind);
     });
 });
 
@@ -133,12 +161,16 @@ describe('verdict', () => {
     // string appears in no default anywhere.
     const SRC = '/tmp/ZZZ-sentinel/other-lock.yaml';
 
-    // total !== distinct ON PURPOSE. When both are `MIN_SNAPSHOTS`, swapping `${r.total}` and
-    // `${r.distinct}` in the success line leaves every test green — the probe cannot separate two
-    // implementations because the input gives the two variables the same value. That is the very
-    // defect `dep-dedupe.ts` documents in its own history ("tested `total` against the floor while
-    // printing `distinct`"), reappearing inside the test that guards it.
-    const healthy = { total: 42, distinct: 42, duplicates: [] };
+    // `healthy` is EQUAL on both counts because that is what a healthy lockfile looks like; the
+    // thing that separates a swapped implementation is `swapProof` below, not this constant. (The
+    // previous comment here said "total !== distinct ON PURPOSE" directly above `{42, 42}` — the
+    // note described the fix while the value beside it did not implement it.)
+    //
+    // It is expressed relative to MIN_SNAPSHOTS so that raising the floor cannot drag it under:
+    // with the literal 42 and MIN at 70, this test failed with `expected false to be true` — the
+    // fixture had fallen below the floor and taken the blind branch, i.e. following ④'s own
+    // prescription broke the test that ④ added.
+    const healthy = { total: MIN_SNAPSHOTS + 1, distinct: MIN_SNAPSHOTS + 1, duplicates: [] };
 
     it('refuses to pass a run that matched too few keys, and says it went blind', () => {
         const v = verdict({ total: MIN_SNAPSHOTS - 1, distinct: MIN_SNAPSHOTS - 1, duplicates: [] }, SRC);
@@ -173,8 +205,10 @@ describe('verdict', () => {
         expect(v.ok).toBe(true);
         expect(v.lines.join('\n')).toContain(SRC);
         // Distinct values would catch a swap; equal ones cannot. See the fixture comment above.
-        const swapProof = verdict({ total: 43, distinct: 42, duplicates: [] }, SRC);
-        expect(swapProof.lines.join('\n')).toContain('43 peer-qualified snapshot key(s) / 42 distinct');
+        const swapProof = verdict({ total: MIN_SNAPSHOTS + 2, distinct: MIN_SNAPSHOTS + 1, duplicates: [] }, SRC);
+        expect(swapProof.lines.join('\n')).toContain(
+            `${MIN_SNAPSHOTS + 2} peer-qualified snapshot key(s) / ${MIN_SNAPSHOTS + 1} distinct`,
+        );
     });
 
     it('the regex is the one that accepts quoted scoped keys', () => {
