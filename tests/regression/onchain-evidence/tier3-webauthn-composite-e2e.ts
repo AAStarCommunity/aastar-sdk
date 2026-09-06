@@ -233,6 +233,8 @@ async function main() {
     const bornX = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'p256KeyX' }))) as Hex;
     const bornValidator = (await withRpcFallback((c) => c.readContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'validator' }))) as Address;
     console.log(`[0c] p256KeyX @birth = ${bornX.slice(0, 14)}…  (== supplied: ${bornX.toLowerCase() === p256X.toLowerCase()})`);
+    // evidence-literal-ok: the zero address is a SENTINEL, not a deployment — it names "unset", and
+    // there is no canonical value it could drift away from.
     console.log(`     validator @birth = ${bornValidator} (non-zero: ${bornValidator !== '0x0000000000000000000000000000000000000000'})`);
     if (bornX.toLowerCase() !== p256X.toLowerCase()) throw new Error('passkey not injected at birth (p256KeyX != supplied ownerP256X)');
     if (bornValidator === '0x0000000000000000000000000000000000000000') throw new Error('validator not wired at birth');
