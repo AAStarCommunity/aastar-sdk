@@ -198,23 +198,20 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex, acc
  * `packCumulativeT2WA`/`packCumulativeT3WA` are framing-agnostic (they take a prebuilt payload).
  * What was missing was reading `committeeActive()` before deciding which one to build.
  */
-// The three `c as any` below are load-bearing, and that was MEASURED rather than assumed after
-// review reported them as free to delete (their run: "0 precedent, deleting all three produces no
-// new error"). On this checkout it does not reproduce — same file, `pnpm exec tsc --noEmit -p
-// tsconfig.json`, counting only this file's diagnostics:
+// There were three `c as any` here, and the argument about them ended in a repo defect rather than
+// in either side being right about the code.
 //
-//   origin/main baseline .................. 5
-//   this branch, `as any` KEPT ............ 5   ← this change adds none
-//   this branch, `as any` REMOVED ......... 8   ← +3, exactly at the three call sites
+// Review said they were free to delete; measurement on this checkout said deleting them cost +3
+// diagnostics. Both were true, of different trees. The cause was #404: the root pinned
+// `typescript@5.6.3` while the packages pinned `5.7.2`, so pnpm installed viem/ox/abitype TWICE,
+// and `PublicClient` from `tests/` was a NOMINALLY DISTINCT type from `PublicClient` inside
+// `@aastar/core`. The casts were load-bearing — they were bearing the weight of a misconfigured
+// dependency graph, not of a real type difference.
 //
-// So they are not "a check turned off early"; without them `withRpcFallback`'s client parameter
-// does not satisfy what `@aastar/core` asks for here. The disagreement is left visible rather than
-// resolved by picking a side: one of us is measuring a different tree (this file also has 5
-// pre-existing errors on main, which review reported as 0 — the two numbers disagree in the same
-// direction, so the likeliest cause is a different tsconfig or a dist-vs-src resolution of
-// `@aastar/core`, not a different opinion about the code).
+// With #404 merged there is one copy of each, and the casts are gone. Measured, not assumed:
+// this file's diagnostics are 0 with them and 0 without.
 async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Address): Promise<Hex> {
-    const st = await withRpcFallback((c) => getCommitteeState(c as any, BLS_VERIFIER));
+    const st = await withRpcFallback((c) => getCommitteeState(c, BLS_VERIFIER));
     if (!st.active) {
         console.log(`    framing: LEGACY (committeeActive=false)`);
         return packBlsPayload(nodeIds, blsSignature);
@@ -234,7 +231,7 @@ async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Addre
     // §4 verdict "12 green 1 red" was really 12 green 2 red. A reader who fixes one precondition
     // and reruns should not be shown a brand-new blocker they could have seen the first time.
     const unmet: string[] = [];
-    if (!(await withRpcFallback((c) => isAccountEnrolled(c as any, BLS_VERIFIER, account)))) {
+    if (!(await withRpcFallback((c) => isAccountEnrolled(c, BLS_VERIFIER, account)))) {
         unmet.push(
             `account ${account} is NOT enrolled on committee validator ${BLS_VERIFIER} — committee ` +
                 "framing needs the account's one-time, owner-only enrollInCommitteeValidator()"
@@ -257,7 +254,7 @@ async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Addre
                 `one does not reveal the next:\n  - ${unmet.join('\n  - ')}`
         );
     }
-    const { signers } = await withRpcFallback((c) => fetchCommitteeSigners(c as any, BLS_VERIFIER, nodeIds));
+    const { signers } = await withRpcFallback((c) => fetchCommitteeSigners(c, BLS_VERIFIER, nodeIds));
     return packCommitteeBlsPayload(signers, blsSignature, st.treeDepth);
 }
 
