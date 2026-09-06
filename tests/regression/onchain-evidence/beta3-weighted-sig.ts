@@ -8,7 +8,7 @@
  *   2. OWNER setWeightConfig(cfg1)  — first-time valid config (onlyOwner; non-weakening vs
  *      the all-zero initial config, so setWeightConfig is the correct entry). Then read
  *      weightConfig() on-chain.
- *   3. OWNER proposeWeightChange(cfg2) — a *weakening* config (lowers tier3 6→5), which the
+ *   3. OWNER proposeWeightChange(cfg2) — a *weakening* config (lowers tier2 5→4), which the
  *      contract REQUIRES to go through the guardian-governed proposal flow (onlyOwner;
  *      _isWeakening must be true). Then read pendingWeightChange() on-chain.
  *   4. Guardian g1 approveWeightChange() → guardian g2 approveWeightChange() — 2 txs
@@ -236,12 +236,104 @@ async function main() {
     console.log('   ✅ weightConfig() matches cfg1.');
 
     // ── 3. OWNER proposeWeightChange(cfg2) — a WEAKENING config ─────────────
-    // cfg2 lowers tier3 from 6 → 5 (_isWeakening true). Still valid: tier3(5)>=tier2(5)>=tier1(4).
-    const cfg2: WC = [3, 2, 2, 1, 1, 1, 0, 4, 5, 5];
-    console.log(`\n   cfg2 (proposeWeightChange, weakens tier3 6→5): ${fmtWC(cfg2)}`);
+    /*
+     * cfg2 lowers **tier2** 5 → 4, not tier3 6 → 5.
+     *
+     * The old cfg2 (`tier3 = 5`) is now rejected outright with `InsecureWeightConfig()` (0xa59a4151),
+     * and the rule it crosses is one the contract added deliberately:
+     *
+     *     passkeyWeight + ecdsaWeight >= tier3Threshold   ⇒   InsecureWeightConfig
+     *     (AirAccountExtension.sol:708)
+     *
+     * Here that is 3 + 2 = 5 against tier3 = 5. {passkey, ecdsa} is the OWNER-ALONE subset in the TEE
+     * model — the owner holds both — so it may satisfy the lower tiers but MUST NOT reach Tier-3,
+     * which is meant to require an external factor (DVT BLS or a guardian). The runner's chosen
+     * weakening happened to land exactly on that line.
+     *
+     * Measured by simulation before editing, and the probe distinguishes three outcomes:
+     *
+     *     entry point           change                                  result
+     *     proposeWeightChange   tier3 6→5  (3,2,2,1,1,1,0,4,5,5)        InsecureWeightConfig      ← old cfg2
+     *     proposeWeightChange   tier2 5→4  (3,2,2,1,1,1,0,4,4,6)        OK, no revert             ← this one
+     *     proposeWeightChange   g2 weight 1→0                           WeakeningRequiresProposal
+     *     proposeWeightChange   tier3 6→7 (control, not a weakening)     WeakeningRequiresProposal
+     *
+     * The entry point is named on every row because `WeakeningRequiresProposal` MEANS THE OPPOSITE
+     * on the two of them: on `setWeightConfig` it says "this IS a weakening (so propose it)", on
+     * `proposeWeightChange` it says "this is NOT a weakening (so just set it)". All four rows above
+     * are the propose path. Without the column a reader has to re-derive that. (#394 review.)
+     *
+     * The third line is worth keeping: lowering a WEIGHT is not a weakening, lowering a THRESHOLD is.
+     * Without it "this config is a weakening" would be an assumption rather than a reading — the
+     * chosen cfg2 must be one the guardian gate actually applies to, or step 4 tests nothing.
+     */
+    const cfg2: WC = [3, 2, 2, 1, 1, 1, 0, 4, 4, 6];
+    console.log(`\n   cfg2 (proposeWeightChange, weakens tier2 5→4): ${fmtWC(cfg2)}`);
+    /*
+     * NEGATIVE CONTROL — the security invariant this runner just stopped exercising.
+     *
+     * Routing cfg2 around `InsecureWeightConfig` is right for this runner, but it leaves the rule
+     * unwatched: after this change nothing in the repo exercises "the owner-alone subset
+     * {passkey, ecdsa} must not reach Tier-3" (#394 review). So it is asserted here, on the same
+     * live account, one block before the positive path — by SIMULATION, so it costs no gas and
+     * sends no transaction.
+     *
+     * The expected selector is a MEASURED constant, and it is checked to be the RIGHT rejection:
+     * `WeakeningRequiresProposal` (0x2e0ec5bc) is also a revert on this call and would satisfy a
+     * bare "it reverted" assertion while meaning something entirely different.
+     */
+    const INSECURE_WEIGHT_CONFIG = '0xa59a4151'; // keccak("InsecureWeightConfig()")[0:4]; measured in
+                                                // the extension bytecode (present there, absent from impl)
+    const ownerAloneReachesTier3: WC = [3, 2, 2, 1, 1, 1, 0, 4, 5, 5]; // passkey+ecdsa = 5 >= tier3 = 5
+    let negData = '';
+    try {
+        await publicClient.call({
+            account: owner.address,
+            to: account,
+            data: weightedSvc.encodeProposeWeightChange(wcToConfig(ownerAloneReachesTier3)) as Hex,
+        });
+    } catch (e) {
+        // viem wraps the revert several layers deep (CallExecutionError → … → RawContractError), and
+        // the depth is not stable across call shapes. Walk the whole cause chain for the first 4-byte
+        // selector rather than reaching for a fixed path — the first version read `e.cause.data`,
+        // found nothing, and fell back to `String(e)`, producing the literal "CallExecut".
+        //
+        // That failure mode was worth having: the assertion below names BOTH possibilities ("the
+        // invariant was removed upstream, OR this probe stopped reading revert data"), so the wrong
+        // one did not read as a finding about the contract.
+        const findSelector = (err: unknown, depth = 0): string => {
+            if (!err || depth > 8) return '';
+            const o = err as { data?: unknown; cause?: unknown };
+            if (typeof o.data === 'string' && /^0x[0-9a-fA-F]{8}/.test(o.data)) return o.data.slice(0, 10);
+            return findSelector(o.cause, depth + 1);
+        };
+        negData = findSelector(e) || String(e).slice(0, 40);
+    }
+    if (negData !== INSECURE_WEIGHT_CONFIG) {
+        throw new Error(
+            `negative control FAILED: a config where passkey+ecdsa (${cfg2[0]}+${cfg2[1]}) reaches ` +
+            `tier3 must revert with InsecureWeightConfig ${INSECURE_WEIGHT_CONFIG}, got "${negData}". ` +
+            'Either the invariant was removed upstream, or this probe is no longer reading the revert data.'
+        );
+    }
+    console.log(`   🔒 negative control: passkey+ecdsa reaching tier3 → InsecureWeightConfig (${negData}) ✅`);
+    // `tx: ''` rather than a prose placeholder: the markdown builder wraps whatever is here in an
+    // etherscan link, so "(simulated, no tx)" rendered as a link to a transaction that cannot exist.
+    // An evidence file that links to a non-existent tx is worse than one that admits there is none.
+    steps.push({ step: `NEGATIVE CONTROL (simulated, no tx): {passkey,ecdsa} reaching tier3 rejected — InsecureWeightConfig ${negData}`, actor: `BOB ${owner.address}`, tx: '', note: '_(eth_call simulation — no transaction)_' });
+
     const propData = weightedSvc.encodeProposeWeightChange(wcToConfig(cfg2)) as Hex;
     const propTx = await sendVerified(ownerWallet, account, propData, 'OWNER proposeWeightChange(cfg2)');
-    steps.push({ step: 'OWNER proposeWeightChange(cfg2) — weakening (tier3 6→5)', actor: `BOB ${owner.address}`, tx: propTx });
+    // The label is DERIVED from cfg1/cfg2, not retyped. It said "tier3 6→5" while cfg2 lowered
+    // tier2 5→4 — four lines below the value it described, and it is written into the tracked
+    // `.beta3-weighted-sig.last.md`, so the evidence record would have claimed this run performed a
+    // weakening the contract rejects outright. A hand-written label next to a value it describes is
+    // a second copy, and second copies drift.
+    const changed = WC_FIELDS
+        .map((f, i) => (cfg1[i] !== cfg2[i] ? `${f} ${cfg1[i]}→${cfg2[i]}` : null))
+        .filter(Boolean)
+        .join(', ');
+    steps.push({ step: `OWNER proposeWeightChange(cfg2) — weakening (${changed})`, actor: `BOB ${owner.address}`, tx: propTx });
 
     const readPending = async () => {
         const p = await weightedSvc.getPendingWeightChange();
@@ -324,7 +416,10 @@ async function main() {
     md.push(`- **Guardian g1 (slot 0):** \`${g1.address}\``);
     md.push(`- **Guardian g2 (slot 1):** \`${g2.address}\``);
     md.push(`- **cfg1 (first \`setWeightConfig\`):** \`${fmtWC(cfg1)}\``);
-    md.push(`- **cfg2 (\`proposeWeightChange\`, weakens tier3 6→5):** \`${fmtWC(cfg2)}\``);
+    // Derived, like the step label — this was the THIRD copy of "tier3 6→5" and the one that
+    // actually reached the evidence file. Found by reading the generated `.last.md`, not the source:
+    // two of the three copies were fixed while looking at code, and this one was not in view.
+    md.push(`- **cfg2 (\`proposeWeightChange\`, weakens ${changed}):** \`${fmtWC(cfg2)}\``);
     md.push('', '| Step | Action | Actor | Tx hash / result |', '|------|--------|-------|------------------|');
     steps.forEach((s, i) => {
         const cell = s.tx ? `[\`${s.tx}\`](${ETHERSCAN(s.tx)})` : (s.note ?? '');
