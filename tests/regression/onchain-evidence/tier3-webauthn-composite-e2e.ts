@@ -156,7 +156,7 @@ function eip2537ToG2(sig256: Hex) {
 //
 // The endpoint list also came from three hardcoded literals here; it now comes from DVT_CONFIG,
 // which is what AASTAR_DVT_ENV switches — so this gate could not be pointed at the local mirror.
-async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Promise<Hex> {
+async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex, account: Address): Promise<Hex> {
     const signed: { nodeId: Hex; signature: Hex }[] = [];
     const seen = newDvtIdentitySeen();
     const faults: string[] = [];
@@ -198,6 +198,21 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Pr
  * `packCumulativeT2WA`/`packCumulativeT3WA` are framing-agnostic (they take a prebuilt payload).
  * What was missing was reading `committeeActive()` before deciding which one to build.
  */
+// The three `c as any` below are load-bearing, and that was MEASURED rather than assumed after
+// review reported them as free to delete (their run: "0 precedent, deleting all three produces no
+// new error"). On this checkout it does not reproduce — same file, `pnpm exec tsc --noEmit -p
+// tsconfig.json`, counting only this file's diagnostics:
+//
+//   origin/main baseline .................. 5
+//   this branch, `as any` KEPT ............ 5   ← this change adds none
+//   this branch, `as any` REMOVED ......... 8   ← +3, exactly at the three call sites
+//
+// So they are not "a check turned off early"; without them `withRpcFallback`'s client parameter
+// does not satisfy what `@aastar/core` asks for here. The disagreement is left visible rather than
+// resolved by picking a side: one of us is measuring a different tree (this file also has 5
+// pre-existing errors on main, which review reported as 0 — the two numbers disagree in the same
+// direction, so the likeliest cause is a different tsconfig or a dist-vs-src resolution of
+// `@aastar/core`, not a different opinion about the code).
 async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Address): Promise<Hex> {
     const st = await withRpcFallback((c) => getCommitteeState(c as any, BLS_VERIFIER));
     if (!st.active) {
@@ -205,7 +220,14 @@ async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Addre
         return packBlsPayload(nodeIds, blsSignature);
     }
     console.log(`    framing: COMMITTEE (committeeActive=true, requiredQuorum=${st.requiredQuorum}, TREE_DEPTH=${st.treeDepth})`);
-    // ALL unmet preconditions at once, never one at a time.
+    // ALL unmet preconditions OF THIS BRANCH at once, never one at a time.
+    //
+    // Scope, stated because the first draft read like a whole-file rule while it governs one
+    // branch: it covers the two preconditions a reader must GO FIX AND RERUN (not enrolled /
+    // under quorum). Node reachability and identity faults above stay one-at-a-time on purpose —
+    // those are one-shot environment states, not a checklist someone works through.
+    // (A sentence reading wider than what it establishes, inside a comment about reporting
+    // everything at once. #403 review.)
     //
     // Reporting the first failure and stopping is how "a red hiding another red" happens: today's
     // measurement found the `lastSetMutationBlock` revert hiding a stale-quorum literal, and the
@@ -407,7 +429,7 @@ async function main() {
     const txWaBlob = packWebAuthnBlob(txAssertion, txHash);
     const txOwnerAuth = packOwnerAuthWebAuthn(txAssertion, txHash);
     const txOpRpc = { sender: txOp.sender, nonce: numberToHex(txOp.nonce), initCode: txOp.initCode, callData: txOp.callData, accountGasLimits: txOp.accountGasLimits, preVerificationGas: numberToHex(txOp.preVerificationGas), gasFees: txOp.gasFees, paymasterAndData: txOp.paymasterAndData, signature: txOp.signature };
-    const txBlsPayload = await coSignDvt(txOpRpc, txOwnerAuth);
+    const txBlsPayload = await coSignDvt(txOpRpc, txOwnerAuth, account);
     const txGuardianSig = await guardianWallet.signMessage({ account: guardian, message: { raw: txHash } });
     txOp.signature = packCumulativeT3WA(txWaBlob, txBlsPayload, txGuardianSig);
     console.log(`[9] Tier-3 composite signed (${(txOp.signature.length - 2) / 2} bytes, algId 0x0a)`);
