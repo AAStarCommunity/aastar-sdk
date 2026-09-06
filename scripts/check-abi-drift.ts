@@ -201,19 +201,111 @@ function findUpstreamArtifact(name: string): string | null {
       .readdirSync(dir)
       .filter((f) => f.startsWith(`${name}.`) && f.endsWith('.json'))
       .sort();
-    // Exactly one candidate is unambiguous. Several means the profiles disagree about what this
-    // contract IS, and picking one silently would make the gate's answer depend on readdir order —
-    // so say so and let the caller treat it as missing.
+    // Exactly one candidate is unambiguous.
     if (profiled.length === 1) return path.join(dir, profiled[0]);
+
+    // Several candidates. The previous revision stopped here and reported the contract as missing,
+    // with the advice "rebuild with the default profile". On SuperPaymaster that advice can never
+    // be followed: its `foundry.toml` declares `[[profile.default.additional_compiler_profiles]]`
+    // named `registry-size` (to hold `Registry.sol` under EIP-170), so foundry writes
+    // `<C>.default.json` AND `<C>.registry-size.json` for every contract in Registry's import
+    // closure and NO plain `<C>.json` — by design, for as long as that restriction exists.
+    // Measured on that checkout: 98 contracts carry both shapes. The gate was therefore
+    // permanently red on an upstream that was building correctly.
+    //
+    // But the refusal was right about one thing: DON'T let readdir order decide. So decide by
+    // MEASUREMENT instead of by convention.
+    //
+    // The first version justified this with "the profiles differ in optimizer settings, and
+    // optimizer settings cannot change an ABI". Review pointed out that this code has never read
+    // any profile's settings — it matches FILE NAMES — so that sentence asserted something no code
+    // path here established. It is also not safe as a general assumption:
+    // `additional_compiler_profiles` can set a different `solc` VERSION, which is the one per-path
+    // knob that genuinely can move an ABI, and which is not an optimizer setting.
+    //
+    // So the justification is the comparison itself, not a belief about what differs. Compare the
+    // candidates on every axis the CHOICE affects:
+    //   · identical  -> any of them answers the question this gate asks; take the first and record
+    //                   that they agreed, so the report says WHY it was safe rather than hiding it.
+    //   · different  -> the profiles really do disagree about what this contract IS. That is the
+    //                   hazard the original refusal was written for; keep refusing, and say that
+    //                   they differ rather than that one is missing.
+    // Measured on the current SuperPaymaster checkout: 98 multi-profile contracts, 98 identical
+    // ABIs, 0 differing. Picking `default` by name would have produced the same answer here — and
+    // would have kept producing it silently on the day a profile started changing the ABI.
     if (profiled.length > 1) {
+      // Read every candidate the SAME WAY the rest of this script reads an artifact. The first
+      // revision used `JSON.parse(...).abi ?? []`, which diverges from `loadAbi` in a way that
+      // matters: `loadAbi` also accepts a BARE TOP-LEVEL ARRAY. Two candidates that were bare
+      // arrays would both yield `[]` here and be pronounced IDENTICAL — measured by review with
+      // two bare arrays of 32 and 31 entries, which this reported as `== … IDENTICAL`. Unreachable
+      // while foundry writes objects, but "the comparator and the loader disagree about what an
+      // artifact IS" is not a bug worth keeping just because today's producer hides it.
+      // The criterion must cover everything the CHOICE affects, not only the thing this gate is
+      // named after. The picked artifact feeds `repoProvenanceFor` through `metadata.sources`, so
+      // two candidates with identical ABIs and different source sets would be resolved silently
+      // and then attributed to whichever one readdir happened to sort first — the exact hazard the
+      // original refusal existed to prevent, reintroduced one layer down. Measured on this
+      // checkout: 98 multi-profile contracts, source sets identical in 98, differing in 0.
+      const keys = profiled.map((f) => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+          const abi = Array.isArray(raw) ? raw : raw.abi || [];
+          const sources = Object.keys(raw?.metadata?.sources ?? {}).sort();
+          return { abi: canonicalAbiKey(abi), sources: JSON.stringify(sources) };
+        } catch {
+          return null;
+        }
+      });
+      const unreadable = profiled.filter((_, i) => keys[i] === null);
+      if (unreadable.length > 0) {
+        // NOT the same state as "the profiles disagree" — nothing was compared. Saying they
+        // disagree would send the reader to fix a profile that may be perfectly fine, and it is
+        // the same defect this repo keeps finding: a message asserting something no code path
+        // established. Review produced it on purpose by making one candidate unparseable.
+        profiledUnreadable.set(name, unreadable);
+        continue;
+      }
+      const ok = keys as { abi: string; sources: string }[];
+      // Name the axis. The first version of this fix reported EVERY disagreement as
+      // "their ABIs are NOT identical" — which is false whenever it was the source sets that
+      // differed, and it is the fourth time in one day that a message asserted more than the
+      // comparison behind it established. A verdict that names the wrong axis sends the reader to
+      // rebuild the wrong thing.
+      const abiDiffers = new Set(ok.map((k) => k.abi)).size > 1;
+      const sourcesDiffer = new Set(ok.map((k) => k.sources)).size > 1;
+      if (!abiDiffers && !sourcesDiffer) {
+        profiledAgreement.set(name, profiled);
+        return path.join(dir, profiled[0]);
+      }
       profiledAmbiguity.set(name, profiled);
+      profiledDisagreementAxis.set(
+        name,
+        abiDiffers && sourcesDiffer ? 'ABIs and metadata.sources' : abiDiffers ? 'ABIs' : 'metadata.sources',
+      );
     }
   }
   return null;
 }
 
-/** Contracts whose out/ dir holds several `<C>.<profile>.json` and no unambiguous `<C>.json`. */
+/**
+ * Stable stringification of an ABI, so two artifacts can be compared for ABI equality.
+ * Entries are sorted by (type, name, input types) because solc's emission order is not a
+ * guaranteed property of the ABI — comparing raw JSON would report a difference that isn't one.
+ */
+function canonicalAbiKey(abi: any[]): string {
+  const key = (e: any) => `${e.type}:${e.name ?? ''}:${(e.inputs ?? []).map(renderType).join(',')}`;
+  return JSON.stringify([...abi].sort((a, b) => key(a).localeCompare(key(b))));
+}
+
+/** Contracts whose out/ dir holds several `<C>.<profile>.json` whose ABIs DISAGREE. */
 const profiledAmbiguity = new Map<string, string[]>();
+/** Contracts resolved from several `<C>.<profile>.json` because every candidate's ABI was identical. */
+const profiledAgreement = new Map<string, string[]>();
+/** Contracts with several `<C>.<profile>.json` where at least one could not be read at all. */
+const profiledUnreadable = new Map<string, string[]>();
+/** Which axis actually disagreed, so the message never names one that did not. */
+const profiledDisagreementAxis = new Map<string, string>();
 
 // Upstream SOURCE trees (sibling checkouts), used to decide whether an SDK ABI is EXPECTED to have
 // an upstream artifact. Sources are the right oracle here because `forge clean` removes `out/` but
@@ -1127,10 +1219,18 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
     skippedEntries.push({
       name,
       reason: repo
-        ? profiledAmbiguity.has(name)
-          ? `NO UNAMBIGUOUS ARTIFACT: ${repo}/out has ${profiledAmbiguity.get(name)!.join(', ')} but no ` +
-            `${name}.json. Several build profiles wrote this contract and they may not agree; ` +
-            'rebuild with the default profile, or pick one deliberately — do NOT let readdir order decide.'
+        ? (profiledAmbiguity.has(name) || profiledUnreadable.has(name))
+          ? profiledUnreadable.has(name)
+            ? `PROFILE ARTIFACT UNREADABLE: ${repo}/out has ${profiledUnreadable.get(name)!.join(', ')} that ` +
+              'could not be parsed as an artifact, so NO comparison was performed. This is not a ' +
+              'statement about whether the profiles agree — it is a statement that the question was ' +
+              'never asked. Fix or remove the unreadable file, then re-run.'
+            : `PROFILES DISAGREE on ${profiledDisagreementAxis.get(name)}: ${repo}/out has ` +
+            `${profiledAmbiguity.get(name)!.join(', ')} whose ${profiledDisagreementAxis.get(name)} ` +
+            'are NOT identical, so there is no single answer to "which artifact IS this contract". ' +
+            'This is not a missing build — pick one deliberately, or fix the profile that diverged. ' +
+            '(metadata.sources counts because the chosen artifact also feeds provenance attribution, ' +
+            'so picking one silently would decide that too.)'
           : `NO ARTIFACT, but ${repo}/src declares this contract — the upstream needs \`forge build\` ` +
             '(if out/ DOES contain <C>.<profile>.json, the build ran under a named profile; that shape is ' +
             'now recognised, so this message means the artifact is genuinely absent)'
@@ -1278,6 +1378,28 @@ for (const entry of [...checkedProvenance].sort((a, b) => a.name.localeCompare(b
     console.log(`       ? … and ${src.unattributed.length - SOURCE_LIST_CAP} further unattributed source(s)`);
   }
   if (src.mainSourceProblem) console.log(`       ⚠️  ${src.mainSourceGapLabel}: ${src.mainSourceProblem}`);
+}
+// An auto-resolution the report does not mention is indistinguishable from no resolution at all.
+// Say which contracts were resolved this way, how many candidates agreed, and on what grounds —
+// so a reader can object to the reasoning rather than only to the verdict.
+if (profiledAgreement.size > 0) {
+  console.log(
+    `\n--- resolved from several build profiles (${profiledAgreement.size}) — every candidate's ABI ` +
+      'AND metadata.sources were IDENTICAL ---',
+  );
+  const sample = [...profiledAgreement.entries()].sort(([a], [b]) => a.localeCompare(b));
+  for (const [name, files] of sample.slice(0, SOURCE_LIST_CAP)) {
+    console.log(`  ${name}: ${files.join(' == ')}`);
+  }
+  if (sample.length > SOURCE_LIST_CAP) {
+    console.log(`  … and ${sample.length - SOURCE_LIST_CAP} more, all with identical ABIs across their profiles`);
+  }
+  console.log(
+    '  (Grounds: the candidates were COMPARED and matched on both axes. This code never reads any\n' +
+      '   profile\'s settings — it matches file names — so it does not know, and does not claim, WHY\n' +
+      '   they agree. A candidate that DISAGREED on either axis is NOT resolved (PROFILES DISAGREE);\n' +
+      '   one that could not be PARSED is reported separately, because nothing was compared.)',
+  );
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
 for (const entry of skippedEntries.sort((a, b) => a.name.localeCompare(b.name))) {
