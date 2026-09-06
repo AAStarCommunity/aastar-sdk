@@ -28,6 +28,15 @@ export type AirAccountFactoryActions = {
     }) => Promise<Hash>;
     // createNonces(owner) -> the factory's anti-replay nonce for KMS-relay createAccount.
     createNonces: (args: { owner: Address }) => Promise<bigint>;
+    // getConfigHash(config) -> the factory's OWN _getConfigHash. Authoritative; prefer it over the
+    // local replica `configHashFromInitConfig` whenever a client is available (airaccount-contract#155).
+    getConfigHash: (args: { config: InitConfig }) => Promise<Hex>;
+    // hashCreateAccount(...) -> the factory's OWN relay-mode CREATE_ACCOUNT digest, INNER (pre-EIP-191).
+    // Authoritative counterpart to the local `buildCreateAccountHash`; the owner still personal_signs it.
+    hashCreateAccount: (args: {
+        owner: Address, salt: bigint, config: InitConfig,
+        ownerP256X?: Hex, ownerP256Y?: Hex, nonce: bigint, deadline: bigint,
+    }) => Promise<Hex>;
     // createAccountWithDefaults(owner, salt, guardian1, guardian1Sig, guardian2, guardian2Sig, dailyLimit)
     // -> deploys an AirAccount using the factory's default guard/validator with up to two ECDSA
     // guardians (each authorizing via signature). Args forwarded in exact ABI order.
@@ -85,10 +94,20 @@ const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex;
 /**
  * Byte-exact replica of the factory's `internal pure _getConfigHash(InitConfig)`:
  * `keccak256(abi.encode(guardians, guardianP256X, guardianP256Y, dailyLimit, approvedAlgIds,
- *  minDailyLimit, initialTokens, initialTokenConfigs))`. Field order is consensus-critical — it feeds
- * both the CREATE2 clone salt and the relay-mode ownerSig digest. The factory has NO public view for
- * this (airaccount-contract#155), so the SDK mirrors it here; the on-chain relay-deploy e2e is the
- * cross-check that the replica matches (a wrong byte => the deploy reverts InvalidOwnerSignature).
+ *  minDailyLimit, initialTokens, initialTokenConfigs, tier1Limit, tier2Limit))` — **ten** fields.
+ * Field order is consensus-critical: it feeds both the CREATE2 clone salt and the relay-mode
+ * ownerSig digest.
+ *
+ * The last two were added by airaccount-contract **#161** (v0.29.0), which took `InitConfig` from
+ * 8 to 10 fields. The struct passed to `createAccount` was updated then; THIS replica was not, and
+ * the gap was invisible for four releases because the only thing that could see it — the relay
+ * deploy — reverts `InvalidOwnerSignature()`, which reads like a key problem, not an encoding one.
+ *
+ * The replica now has a cheaper cross-check than a deploy: the factory exposes
+ * **`getConfigHash(config)`** as a public pure view (airaccount-contract#155). Prefer
+ * {@link airAccountFactoryActions}`(f)(client).getConfigHash({ config })` whenever a client is at
+ * hand; this local form exists for offline/pure use, and is pinned against a measured on-chain
+ * value in `airAccountFactory.createAccountHash.test.ts`.
  */
 export function configHashFromInitConfig(config: InitConfig): Hex {
     return keccak256(encodeAbiParameters(
@@ -101,6 +120,8 @@ export function configHashFromInitConfig(config: InitConfig): Hex {
             { type: 'uint256' },      // minDailyLimit
             { type: 'address[]' },    // initialTokens
             { type: 'tuple[]', components: [{ type: 'uint128' }, { type: 'uint128' }, { type: 'uint256' }] }, // initialTokenConfigs
+            { type: 'uint256' },      // tier1Limit  (#161)
+            { type: 'uint256' },      // tier2Limit  (#161)
         ],
         [
             config.guardians as readonly Address[],
@@ -111,6 +132,8 @@ export function configHashFromInitConfig(config: InitConfig): Hex {
             config.minDailyLimit,
             config.initialTokens as readonly Address[],
             config.initialTokenConfigs.map((t) => [t.tier1Limit, t.tier2Limit, t.dailyLimit]),
+            config.tier1Limit,
+            config.tier2Limit,
         ] as never
     ));
 }
@@ -193,6 +216,28 @@ export const airAccountFactoryActions = (address: Address) => (client: PublicCli
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'createAccount');
+        }
+    },
+    async getConfigHash({ config }) {
+        try {
+            validateRequired(config, 'config');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'getConfigHash', args: [config]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getConfigHash');
+        }
+    },
+    async hashCreateAccount({ owner, salt, config, ownerP256X, ownerP256Y, nonce, deadline }) {
+        try {
+            validateAddress(owner, 'owner');
+            validateRequired(config, 'config');
+            return await (client as PublicClient).readContract({
+                address, abi: ABI, functionName: 'hashCreateAccount',
+                args: [owner, salt, config, ownerP256X ?? ZERO_BYTES32, ownerP256Y ?? ZERO_BYTES32, nonce, deadline]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'hashCreateAccount');
         }
     },
     async createNonces({ owner }) {
