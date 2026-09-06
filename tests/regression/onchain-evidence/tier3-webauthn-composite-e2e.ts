@@ -209,7 +209,9 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex, acc
 // dependency graph, not of a real type difference.
 //
 // With #404 merged there is one copy of each, and the casts are gone. Measured, not assumed:
-// this file's diagnostics are 0 with them and 0 without.
+// this file's diagnostics are 0 with them and 0 without — at head `ce430d25afd274aeb082a48a6a065e2bdba3036d`, tsc 5.7.2, 0 duplicate
+// groups, unbuilt tree, whole-repo total 701 either way. The coordinates are here because a bare
+// "0 with them and 0 without" cannot later be told apart from a reading taken on a different tree.
 async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Address): Promise<Hex> {
     const st = await withRpcFallback((c) => getCommitteeState(c, BLS_VERIFIER));
     if (!st.active) {
