@@ -316,14 +316,56 @@ async function main() {
 
     // assertCommitteeSubmittable must REFUSE while committee mode is off — this is the live proof
     // that the guard fires, not a stubbed one.
+    //
+    // THE SIGNER COUNT IS READ FROM THE CHAIN. The previous revision passed a literal `3` — the
+    // value `requiredQuorum()` held when this runner was written. The validator has since gone to 4
+    // (activeCount 5), so the call started refusing with "only 3 committee signer(s) collected,
+    // validator requires 4" and this check went red for a reason unrelated to its own label. Note
+    // what that label said: "passes while committee is ON". What it tested was "…passes WITH THREE
+    // SIGNERS", and three was a stale reading of a chain value. A hardcoded quorum inside a test of
+    // a quorum guard is the guard's own defect class.
+    //
+    // The probe count must also survive the FAIL-CLOSED WINDOW at the head of an epoch, where
+    // `committeeActive()` is still true while `requiredQuorum()` returns the 2^256-1 sentinel
+    // (FU-81: blocks 11645632/33, epoch 181963's first two). `Number(sentinel)` rounds UP past the
+    // sentinel — `BigInt(Number(2n**256n-1n)) >= 2n**256n-1n` is TRUE — so a probe built from it
+    // SATISFIES the guard instead of tripping it. Measured with the old `if (active)` shape:
+    //
+    //   PASS  …passes at the live quorum (1.157920892373162e+77 signers)      ← FALSE GREEN
+    //   FAIL  …and REFUSES one signer short (same number) — did NOT refuse
+    //
+    // A false green, not two reds. So the quorum pair is gated on `state.quorumUsable` (asserted a
+    // few lines above), not on `active`: a guard over a QUANTITY must be gated on whether that
+    // quantity is usable, not on whether the subsystem is switched on.
+    const liveQuorum = state.quorumUsable ? Number(state.requiredQuorum) : 1;
     let refused = '';
     try {
-        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, 3);
+        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum);
     } catch (e: any) {
         refused = e?.message ?? '';
     }
-    if (active) {
-        check(refused === '', 'assertCommitteeSubmittable passes while committee is ON');
+    if (active && state.quorumUsable) {
+        check(refused === '', `assertCommitteeSubmittable passes at the live quorum (${liveQuorum} signers)`, refused.slice(0, 90));
+        // Paired negative, same run: one signer short must REFUSE and must name the live quorum.
+        // Without it, the positive above is satisfied by a guard that never refuses anything.
+        let short = '';
+        try {
+            await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum - 1);
+        } catch (e: any) {
+            short = e?.message ?? '';
+        }
+        check(
+            short.includes(`requires ${liveQuorum}`),
+            `…and REFUSES one signer short (${liveQuorum - 1}), naming the live quorum`,
+            short.slice(0, 90) || 'did NOT refuse'
+        );
+    } else if (active) {
+        // Reported, never silently skipped and never counted as a pass: a window that suppresses
+        // two checks has to say so, or this run's verdict is quietly narrower than the last one's.
+        console.log(
+            '  SKIP  assertCommitteeSubmittable quorum pair — requiredQuorum() is the fail-closed ' +
+                'sentinel right now (epoch head; see FU-81). Re-run a few blocks later.'
+        );
     } else {
         check(
             /committeeActive\(\) is false/.test(refused),
