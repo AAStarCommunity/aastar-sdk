@@ -19,53 +19,40 @@
  *
  * Env: SEPOLIA_RPC_URL (or RPC_URL) from .env.sepolia.
  */
-import * as dotenv from "dotenv";
-import * as path from "path";
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import { concat, createPublicClient, http, keccak256, numberToHex, parseAbiItem, size, toHex, type Address, type Hex } from 'viem';
+import { sepolia } from 'viem/chains';
 import {
-  concat,
-  createPublicClient,
-  http,
-  keccak256,
-  numberToHex,
-  parseAbiItem,
-  size,
-  toHex,
-  type Address,
-  type Hex,
-} from "viem";
-import { sepolia } from "viem/chains";
-import {
-  AAStarCommitteeValidatorABI,
-  CANONICAL_ADDRESSES,
-  COMMITTEE_QUORUM_UNAVAILABLE,
-  DVT_TIER_T2,
-  assertCommitteeSubmittable,
-  fetchCommitteeSigners,
-  getCommitteeState,
-  getMountedDvtValidator,
-  isAccountEnrolled,
-  readFrozenRootAgreement,
-  encodeCommitteeBLSBlock,
-  encodeDVTAccountSignature,
-  type CommitteeSigner,
-} from "@aastar/core";
+    AAStarCommitteeValidatorABI,
+    CANONICAL_ADDRESSES,
+    COMMITTEE_QUORUM_UNAVAILABLE,
+    DVT_TIER_T2,
+    assertCommitteeSubmittable,
+    fetchCommitteeSigners,
+    getCommitteeState,
+    getMountedDvtValidator,
+    isAccountEnrolled,
+    readFrozenRootAgreement,
+    encodeCommitteeBLSBlock,
+    encodeDVTAccountSignature,
+    type CommitteeSigner,
+} from '@aastar/core';
 
-dotenv.config({
-  path: path.resolve(import.meta.dirname, "../../../.env.sepolia"),
-});
+dotenv.config({ path: path.resolve(import.meta.dirname, '../../../.env.sepolia') });
 
 const RPC = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL;
-if (!RPC) throw new Error("missing SEPOLIA_RPC_URL / RPC_URL in .env.sepolia");
+if (!RPC) throw new Error('missing SEPOLIA_RPC_URL / RPC_URL in .env.sepolia');
 
 const pc = createPublicClient({ chain: sepolia, transport: http(RPC) });
 // The v0.31.0 stack IS canonical now (airaccount-contract published all 12 addresses on CC-48;
 // the transitional COMMITTEE_STACK_ADDRESSES group existed only while they were incomplete).
 const canonical = CANONICAL_ADDRESSES[sepolia.id];
 const stack = {
-  factory: canonical.airAccountFactoryV7 as Address,
-  router: canonical.aaStarValidator as Address,
-  committeeValidator: canonical.aaStarBLSAlgorithm as Address,
-  accountImpl: canonical.airAccountV7Impl as Address,
+    factory: canonical.airAccountFactoryV7 as Address,
+    router: canonical.aaStarValidator as Address,
+    committeeValidator: canonical.aaStarBLSAlgorithm as Address,
+    accountImpl: canonical.airAccountV7Impl as Address,
 };
 
 /**
@@ -83,510 +70,329 @@ const stack = {
  * It throws rather than skipping when it finds none: "no enrolled account in the recent window"
  * and "the positive control passed" must not look alike.
  */
-async function findEnrolledAccount(
-  pc: ReturnType<typeof createPublicClient>,
-): Promise<Address> {
-  const latest = await pc.getBlockNumber();
-  const from = latest > 45_000n ? latest - 45_000n : 0n;
-  const logs = await pc.getLogs({
-    address: stack.committeeValidator,
-    event: parseAbiItem("event AccountEnrolled(address indexed account)"),
-    fromBlock: from,
-    toBlock: latest,
-  });
-  // Newest first: an account enrolled and later unenrolled must not be picked just because it
-  // appears in the log. `enrolledAccount()` is the authority; the event only nominates candidates.
-  for (const log of [...logs].reverse()) {
-    const account = (log as { args: { account?: Address } }).args.account;
-    if (
-      account &&
-      (await isAccountEnrolled(pc, stack.committeeValidator, account))
-    )
-      return account;
-  }
-  throw new Error(
-    `no still-enrolled account found in AccountEnrolled logs on ${stack.committeeValidator} ` +
-      `over blocks ${from}..${latest}. The positive control for isAccountEnrolled cannot be ` +
-      "built, so this run would only be testing the negative case.",
-  );
+async function findEnrolledAccount(pc: ReturnType<typeof createPublicClient>): Promise<Address> {
+    const latest = await pc.getBlockNumber();
+    const from = latest > 45_000n ? latest - 45_000n : 0n;
+    const logs = await pc.getLogs({
+        address: stack.committeeValidator,
+        event: parseAbiItem('event AccountEnrolled(address indexed account)'),
+        fromBlock: from,
+        toBlock: latest,
+    });
+    // Newest first: an account enrolled and later unenrolled must not be picked just because it
+    // appears in the log. `enrolledAccount()` is the authority; the event only nominates candidates.
+    for (const log of [...logs].reverse()) {
+        const account = (log as { args: { account?: Address } }).args.account;
+        if (account && (await isAccountEnrolled(pc, stack.committeeValidator, account))) return account;
+    }
+    throw new Error(
+        `no still-enrolled account found in AccountEnrolled logs on ${stack.committeeValidator} ` +
+            `over blocks ${from}..${latest}. The positive control for isAccountEnrolled cannot be ` +
+            'built, so this run would only be testing the negative case.',
+    );
 }
 
 let failures = 0;
-const ok = (label: string, detail = "") =>
-  console.log(`  PASS  ${label}${detail ? " — " + detail : ""}`);
+const ok = (label: string, detail = '') => console.log(`  PASS  ${label}${detail ? ' — ' + detail : ''}`);
 const bad = (label: string, detail: string) => {
-  failures++;
-  console.log(`  FAIL  ${label} — ${detail}`);
+    failures++;
+    console.log(`  FAIL  ${label} — ${detail}`);
 };
-const check = (cond: boolean, label: string, detail = "") =>
-  cond ? ok(label, detail) : bad(label, detail || "assertion failed");
+const check = (cond: boolean, label: string, detail = '') => (cond ? ok(label, detail) : bad(label, detail || 'assertion failed'));
 
 const readValidator = (functionName: string, args: readonly unknown[] = []) =>
-  pc.readContract({
-    address: stack.committeeValidator,
-    abi: AAStarCommitteeValidatorABI,
-    functionName,
-    args: args as never,
-  });
+    pc.readContract({
+        address: stack.committeeValidator,
+        abi: AAStarCommitteeValidatorABI,
+        functionName,
+        args: args as never,
+    });
 
 /** Byte-for-byte mirror of AAStarCommitteeValidator._verifyMerkle's folding. */
 function foldMerkle(slot: bigint, leaf: Hex, proof: readonly Hex[]): Hex {
-  let cur = leaf;
-  let idx = slot;
-  for (const sib of proof) {
-    // Contract: keccak256(abi.encode(cur, sib)) — abi.encode of two bytes32 is plain concatenation.
-    cur =
-      (idx & 1n) === 0n
-        ? keccak256(concat([cur, sib]))
-        : keccak256(concat([sib, cur]));
-    idx >>= 1n;
-  }
-  return cur;
+    let cur = leaf;
+    let idx = slot;
+    for (const sib of proof) {
+        // Contract: keccak256(abi.encode(cur, sib)) — abi.encode of two bytes32 is plain concatenation.
+        cur = (idx & 1n) === 0n ? keccak256(concat([cur, sib])) : keccak256(concat([sib, cur]));
+        idx >>= 1n;
+    }
+    return cur;
 }
 
 /** Mirror of the contract's committee-payload parser (AAStarCommitteeValidator.sol ~line 495). */
 function parseCommitteeBlock(payload: Hex, treeDepth: number) {
-  const bytes = payload.slice(2);
-  const word = (byteOff: number) =>
-    `0x${bytes.slice(byteOff * 2, byteOff * 2 + 64)}` as Hex;
-  const k = Number(BigInt(word(0)));
-  const perSigner = 64 + treeDepth * 32;
-  const signers: { nodeId: Hex; slot: bigint; proof: Hex[] }[] = [];
-  let off = 32;
-  let prev = 0n;
-  for (let i = 0; i < k; i++) {
-    const nodeId = word(off);
-    const slot = BigInt(word(off + 32));
-    if (slot >= 1n << BigInt(treeDepth))
-      throw new Error(`signer ${i}: non-canonical slot ${slot}`);
-    if (i !== 0 && BigInt(nodeId) <= prev)
-      throw new Error(`signer ${i}: nodeIds not strictly ascending`);
-    prev = BigInt(nodeId);
-    const proof: Hex[] = [];
-    for (let l = 0; l < treeDepth; l++) proof.push(word(off + 64 + l * 32));
-    signers.push({ nodeId, slot, proof });
-    off += perSigner;
-  }
-  const blsSig = `0x${bytes.slice(off * 2)}` as Hex;
-  return { k, signers, blsSig, consumed: off };
+    const bytes = payload.slice(2);
+    const word = (byteOff: number) => `0x${bytes.slice(byteOff * 2, byteOff * 2 + 64)}` as Hex;
+    const k = Number(BigInt(word(0)));
+    const perSigner = 64 + treeDepth * 32;
+    const signers: { nodeId: Hex; slot: bigint; proof: Hex[] }[] = [];
+    let off = 32;
+    let prev = 0n;
+    for (let i = 0; i < k; i++) {
+        const nodeId = word(off);
+        const slot = BigInt(word(off + 32));
+        if (slot >= 1n << BigInt(treeDepth)) throw new Error(`signer ${i}: non-canonical slot ${slot}`);
+        if (i !== 0 && BigInt(nodeId) <= prev) throw new Error(`signer ${i}: nodeIds not strictly ascending`);
+        prev = BigInt(nodeId);
+        const proof: Hex[] = [];
+        for (let l = 0; l < treeDepth; l++) proof.push(word(off + 64 + l * 32));
+        signers.push({ nodeId, slot, proof });
+        off += perSigner;
+    }
+    const blsSig = `0x${bytes.slice(off * 2)}` as Hex;
+    return { k, signers, blsSig, consumed: off };
 }
 
 async function main() {
-  const block = await pc.getBlockNumber();
-  console.log(`CC-103 committee wire E2E — Sepolia block ${block}`);
-  console.log(
-    `validator ${stack.committeeValidator}  router ${stack.router}\n`,
-  );
+    const block = await pc.getBlockNumber();
+    console.log(`CC-103 committee wire E2E — Sepolia block ${block}`);
+    console.log(`validator ${stack.committeeValidator}  router ${stack.router}\n`);
 
-  // ── 1. live committee state ───────────────────────────────────────────────────────────────
-  console.log("[1] live committee state");
-  const [active, quorum, depthRaw, activeCount, runningRoot] =
-    (await Promise.all([
-      readValidator("committeeActive"),
-      readValidator("requiredQuorum"),
-      readValidator("TREE_DEPTH"),
-      readValidator("activeCount"),
-      readValidator("runningRoot"),
+    // ── 1. live committee state ───────────────────────────────────────────────────────────────
+    console.log('[1] live committee state');
+    const [active, quorum, depthRaw, activeCount, runningRoot] = (await Promise.all([
+        readValidator('committeeActive'),
+        readValidator('requiredQuorum'),
+        readValidator('TREE_DEPTH'),
+        readValidator('activeCount'),
+        readValidator('runningRoot'),
     ])) as [boolean, bigint, bigint, bigint, Hex];
-  const treeDepth = Number(depthRaw);
-  const perSigner = 64 + treeDepth * 32;
-  console.log(
-    `      committeeActive=${active}  activeCount=${activeCount}  TREE_DEPTH=${treeDepth}  perSigner=${perSigner}`,
-  );
-  console.log(
-    `      requiredQuorum=${quorum === COMMITTEE_QUORUM_UNAVAILABLE ? "type(uint256).max (fail-closed sentinel)" : quorum}`,
-  );
-  check(
-    treeDepth === 14,
-    "TREE_DEPTH read from chain, not assumed",
-    `${treeDepth}`,
-  );
-  check(
-    perSigner === 512,
-    "perSigner derived from on-chain depth",
-    `${perSigner} bytes`,
-  );
+    const treeDepth = Number(depthRaw);
+    const perSigner = 64 + treeDepth * 32;
+    console.log(`      committeeActive=${active}  activeCount=${activeCount}  TREE_DEPTH=${treeDepth}  perSigner=${perSigner}`);
+    console.log(`      requiredQuorum=${quorum === COMMITTEE_QUORUM_UNAVAILABLE ? 'type(uint256).max (fail-closed sentinel)' : quorum}`);
+    check(treeDepth === 14, 'TREE_DEPTH read from chain, not assumed', `${treeDepth}`);
+    check(perSigner === 512, 'perSigner derived from on-chain depth', `${perSigner} bytes`);
 
-  // ── 2. real active-set members + their real proofs ────────────────────────────────────────
-  console.log("\n[2] real active-set members + on-chain Merkle proofs");
-  const logs = await pc.getLogs({
-    address: stack.committeeValidator,
-    event: {
-      type: "event",
-      name: "SlotAssigned",
-      inputs: [
-        { name: "nodeId", type: "bytes32", indexed: true },
-        { name: "slot", type: "uint256", indexed: false },
-      ],
-    },
-    fromBlock: "earliest",
-    toBlock: "latest",
-  });
-  const nodeIds = [...new Set(logs.map((l) => (l as any).args.nodeId as Hex))];
-  check(
-    nodeIds.length === Number(activeCount),
-    "SlotAssigned set matches activeCount()",
-    `${nodeIds.length} nodes`,
-  );
+    // ── 2. real active-set members + their real proofs ────────────────────────────────────────
+    console.log('\n[2] real active-set members + on-chain Merkle proofs');
+    const logs = await pc.getLogs({
+        address: stack.committeeValidator,
+        event: {
+            type: 'event',
+            name: 'SlotAssigned',
+            inputs: [
+                { name: 'nodeId', type: 'bytes32', indexed: true },
+                { name: 'slot', type: 'uint256', indexed: false },
+            ],
+        },
+        fromBlock: 'earliest',
+        toBlock: 'latest',
+    });
+    const nodeIds = [...new Set(logs.map((l) => (l as any).args.nodeId as Hex))];
+    check(nodeIds.length === Number(activeCount), 'SlotAssigned set matches activeCount()', `${nodeIds.length} nodes`);
 
-  const signers: CommitteeSigner[] = [];
-  for (const nodeId of nodeIds) {
-    const [slot, proof] = (await readValidator("getMerkleProof", [nodeId])) as [
-      bigint,
-      readonly Hex[],
-    ];
-    check(
-      proof.length === treeDepth,
-      `proof length for ${nodeId.slice(0, 10)}…`,
-      `${proof.length} siblings`,
-    );
-    signers.push({ nodeId, slot, merkleProof: [...proof] });
-  }
-
-  // ── 3. fold every real proof; must reproduce the on-chain root ────────────────────────────
-  console.log(
-    "\n[3] fold real proofs with the contract algorithm -> compare to runningRoot()",
-  );
-  console.log(`      runningRoot = ${runningRoot}`);
-  for (const s of signers) {
-    // leaf = nodeId itself (AAStarCommitteeValidator.sol:106 "leaf = nodeId, or 0 if empty";
-    // validate() passes `nid` straight into _verifyMerkle).
-    const folded = foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof);
-    check(
-      folded === runningRoot,
-      `slot ${s.slot} proof folds to runningRoot`,
-      folded === runningRoot ? "" : `got ${folded}`,
-    );
-  }
-
-  // ── 4. encode -> re-parse with the contract's parser ──────────────────────────────────────
-  console.log("\n[4] encode with the SDK, re-parse with the contract parser");
-  const blsSig = toHex(new Uint8Array(256));
-  const blockHex = encodeCommitteeBLSBlock(signers, blsSig, treeDepth);
-  const expectedLen = 32 + signers.length * perSigner + 256;
-  check(
-    size(blockHex) === expectedLen,
-    "encoded block length",
-    `${size(blockHex)} == 32 + ${signers.length}*${perSigner} + 256`,
-  );
-
-  const parsed = parseCommitteeBlock(blockHex, treeDepth);
-  check(
-    parsed.k === signers.length,
-    "nodeIdsLength decodes as the SIGNER COUNT",
-    `k=${parsed.k}`,
-  );
-  check(
-    parsed.consumed + 256 === size(blockHex),
-    "parser consumes exactly up to the 256-byte blsSig",
-  );
-  check(parsed.blsSig === blsSig, "blsSig survives the round trip");
-
-  const sortedIn = [...signers].sort((a, b) =>
-    BigInt(a.nodeId) < BigInt(b.nodeId) ? -1 : 1,
-  );
-  let fieldsOk = true;
-  parsed.signers.forEach((p, i) => {
-    const want = sortedIn[i];
-    if (
-      p.nodeId !== want.nodeId ||
-      p.slot !== BigInt(want.slot) ||
-      concat(p.proof) !== concat([...want.merkleProof])
-    ) {
-      fieldsOk = false;
+    const signers: CommitteeSigner[] = [];
+    for (const nodeId of nodeIds) {
+        const [slot, proof] = (await readValidator('getMerkleProof', [nodeId])) as [bigint, readonly Hex[]];
+        check(proof.length === treeDepth, `proof length for ${nodeId.slice(0, 10)}…`, `${proof.length} siblings`);
+        signers.push({ nodeId, slot, merkleProof: [...proof] });
     }
-  });
-  check(
-    fieldsOk,
-    "each parsed entry keeps its own nodeId+slot+proof after sorting",
-  );
 
-  // The contract rejects non-ascending ids; our encoder must therefore always emit ascending.
-  let ascending = true;
-  for (let i = 1; i < parsed.signers.length; i++) {
-    if (
-      BigInt(parsed.signers[i].nodeId) <= BigInt(parsed.signers[i - 1].nodeId)
-    )
-      ascending = false;
-  }
-  check(
-    ascending,
-    "emitted nodeIds are strictly ascending (contract rejects otherwise)",
-  );
+    // ── 3. fold every real proof; must reproduce the on-chain root ────────────────────────────
+    console.log('\n[3] fold real proofs with the contract algorithm -> compare to runningRoot()');
+    console.log(`      runningRoot = ${runningRoot}`);
+    for (const s of signers) {
+        // leaf = nodeId itself (AAStarCommitteeValidator.sol:106 "leaf = nodeId, or 0 if empty";
+        // validate() passes `nid` straight into _verifyMerkle).
+        const folded = foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof);
+        check(folded === runningRoot, `slot ${s.slot} proof folds to runningRoot`, folded === runningRoot ? '' : `got ${folded}`);
+    }
 
-  // Every parsed proof must still verify against the live root after the round trip.
-  let allVerify = true;
-  for (const p of parsed.signers) {
-    if (foldMerkle(p.slot, p.nodeId, p.proof) !== runningRoot)
-      allVerify = false;
-  }
-  check(allVerify, "re-parsed proofs still fold to the live runningRoot");
+    // ── 4. encode -> re-parse with the contract's parser ──────────────────────────────────────
+    console.log('\n[4] encode with the SDK, re-parse with the contract parser');
+    const blsSig = toHex(new Uint8Array(256));
+    const blockHex = encodeCommitteeBLSBlock(signers, blsSig, treeDepth);
+    const expectedLen = 32 + signers.length * perSigner + 256;
+    check(size(blockHex) === expectedLen, 'encoded block length', `${size(blockHex)} == 32 + ${signers.length}*${perSigner} + 256`);
 
-  // ── 5. accountId must not appear (B2) ─────────────────────────────────────────────────────
-  console.log("\n[5] accountId absence (CC-103 B2)");
-  const acct = (await findEnrolledAccount(pc)).slice(2).toLowerCase();
-  check(
-    !blockHex.toLowerCase().includes(acct),
-    "reference account address absent from the payload",
-  );
-  check(
-    BigInt(`0x${blockHex.slice(2, 66)}`) === BigInt(signers.length),
-    "first word is the signer count, not an accountId",
-  );
+    const parsed = parseCommitteeBlock(blockHex, treeDepth);
+    check(parsed.k === signers.length, 'nodeIdsLength decodes as the SIGNER COUNT', `k=${parsed.k}`);
+    check(parsed.consumed + 256 === size(blockHex), 'parser consumes exactly up to the 256-byte blsSig');
+    check(parsed.blsSig === blsSig, 'blsSig survives the round trip');
 
-  // ── 6. legacy back-compat ─────────────────────────────────────────────────────────────────
-  console.log("\n[6] legacy framing unchanged (committeeActive()==false path)");
-  const p256 = {
-    r: numberToHex(7, { size: 32 }),
-    s: numberToHex(8, { size: 32 }),
-  };
-  const legacy = encodeDVTAccountSignature({
-    tier: DVT_TIER_T2,
-    p256,
-    nodeIds: [...nodeIds],
-    blsSig,
-  });
-  const legacyExpected = concat([
-    numberToHex(DVT_TIER_T2, { size: 1 }),
-    p256.r,
-    p256.s,
-    numberToHex(nodeIds.length, { size: 32 }),
-    ...[...nodeIds].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)),
-    blsSig,
-  ]);
-  check(
-    legacy === legacyExpected,
-    "legacy T2 bytes identical to the pre-committee layout",
-  );
+    const sortedIn = [...signers].sort((a, b) => (BigInt(a.nodeId) < BigInt(b.nodeId) ? -1 : 1));
+    let fieldsOk = true;
+    parsed.signers.forEach((p, i) => {
+        const want = sortedIn[i];
+        if (p.nodeId !== want.nodeId || p.slot !== BigInt(want.slot) || concat(p.proof) !== concat([...want.merkleProof])) {
+            fieldsOk = false;
+        }
+    });
+    check(fieldsOk, 'each parsed entry keeps its own nodeId+slot+proof after sorting');
 
-  // ── 7. the SDK reader module against the LIVE validator ───────────────────────────────────
-  // actions/committee.ts is unit-tested against a stubbed client, which by construction cannot
-  // catch an ABI mismatch, a renamed getter, or a changed return shape. These calls do.
-  console.log("\n[7] actions/committee.ts against the live validator");
+    // The contract rejects non-ascending ids; our encoder must therefore always emit ascending.
+    let ascending = true;
+    for (let i = 1; i < parsed.signers.length; i++) {
+        if (BigInt(parsed.signers[i].nodeId) <= BigInt(parsed.signers[i - 1].nodeId)) ascending = false;
+    }
+    check(ascending, 'emitted nodeIds are strictly ascending (contract rejects otherwise)');
 
-  const mounted = await getMountedDvtValidator(pc, stack.router);
-  check(
-    mounted.toLowerCase() === stack.committeeValidator.toLowerCase(),
-    "getMountedDvtValidator resolves algId 0x01 to the committee validator",
-    mounted,
-  );
+    // Every parsed proof must still verify against the live root after the round trip.
+    let allVerify = true;
+    for (const p of parsed.signers) {
+        if (foldMerkle(p.slot, p.nodeId, p.proof) !== runningRoot) allVerify = false;
+    }
+    check(allVerify, 're-parsed proofs still fold to the live runningRoot');
 
-  const state = await getCommitteeState(pc, stack.committeeValidator);
-  check(
-    state.treeDepth === treeDepth,
-    "getCommitteeState.treeDepth matches the raw read",
-    `${state.treeDepth}`,
-  );
-  check(
-    state.perSignerBytes === perSigner,
-    "getCommitteeState.perSignerBytes derived from it",
-    `${state.perSignerBytes}`,
-  );
-  check(
-    state.active === active,
-    "getCommitteeState.active matches committeeActive()",
-    `${state.active}`,
-  );
-  check(
-    state.activeCount === activeCount,
-    "getCommitteeState.activeCount matches",
-    `${state.activeCount}`,
-  );
-  check(
-    state.quorumUsable === (quorum !== COMMITTEE_QUORUM_UNAVAILABLE),
-    "getCommitteeState.quorumUsable flags the fail-closed sentinel",
-    `${state.quorumUsable}`,
-  );
+    // ── 5. accountId must not appear (B2) ─────────────────────────────────────────────────────
+    console.log('\n[5] accountId absence (CC-103 B2)');
+    const acct = (await findEnrolledAccount(pc)).slice(2).toLowerCase();
+    check(!blockHex.toLowerCase().includes(acct), 'reference account address absent from the payload');
+    check(BigInt(`0x${blockHex.slice(2, 66)}`) === BigInt(signers.length), 'first word is the signer count, not an accountId');
 
-  const referenceEnrolledAccount = await findEnrolledAccount(pc);
-  const enrolled = await isAccountEnrolled(
-    pc,
-    stack.committeeValidator,
-    referenceEnrolledAccount,
-  );
-  check(
-    enrolled,
-    `isAccountEnrolled sees a chain-derived enrolled account (${referenceEnrolledAccount})`,
-  );
-  const notEnrolled = await isAccountEnrolled(
-    pc,
-    stack.committeeValidator,
-    stack.router,
-  );
-  check(
-    !notEnrolled,
-    "isAccountEnrolled returns false for a never-enrolled address (negative)",
-  );
+    // ── 6. legacy back-compat ─────────────────────────────────────────────────────────────────
+    console.log('\n[6] legacy framing unchanged (committeeActive()==false path)');
+    const p256 = { r: numberToHex(7, { size: 32 }), s: numberToHex(8, { size: 32 }) };
+    const legacy = encodeDVTAccountSignature({ tier: DVT_TIER_T2, p256, nodeIds: [...nodeIds], blsSig });
+    const legacyExpected = concat([
+        numberToHex(DVT_TIER_T2, { size: 1 }),
+        p256.r,
+        p256.s,
+        numberToHex(nodeIds.length, { size: 32 }),
+        ...[...nodeIds].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)),
+        blsSig,
+    ]);
+    check(legacy === legacyExpected, 'legacy T2 bytes identical to the pre-committee layout');
 
-  const fetched = await fetchCommitteeSigners(
-    pc,
-    stack.committeeValidator,
-    nodeIds,
-  );
-  check(
-    fetched.signers.length === nodeIds.length,
-    "fetchCommitteeSigners returns one signer per node",
-  );
-  let fetchedOk = fetched.signers.length > 0;
-  for (const s of fetched.signers) {
-    if (s.merkleProof.length !== treeDepth) fetchedOk = false;
-    // The proofs it shapes must be the SAME ones that fold to the live root — i.e. the helper
-    // did not mix up which slot/proof belongs to which nodeId.
-    if (foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof) !== runningRoot)
-      fetchedOk = false;
-  }
-  check(
-    fetchedOk,
-    "every fetched signer folds to the live runningRoot (slot/proof not mixed up)",
-  );
-  // The staleness signal is no longer `lastSetMutationBlock` — that function was removed upstream
-  // at #244 and is absent from the deployed bytecode, so reading it took the whole fetch down.
-  // What the contract actually compares is the roots, so that is what is checked here.
-  // Uses the shared reader rather than a fourth hand-rolled copy — three copies of this comparison
-  // are how the removed field survived in two runners after the SDK dropped it.
-  const fresh = await readFrozenRootAgreement(pc, stack.committeeValidator);
-  const [liveRoot, epochNow, frozenRoot] = [
-    fresh.runningRoot,
-    fresh.epoch,
-    fresh.frozenRoot,
-  ];
-  check(
-    typeof fetched.atBlock === "bigint" && fresh.agrees,
-    "proofs fetched now would verify against the FROZEN epochSetRoot(e-1)",
-    // e-1, not e. `validate()` reads setRoot[e-1]; comparing against epochSetRoot(e) is the
-    // off-by-one that passes today only because all three roots currently coincide.
-    `atBlock=${fetched.atBlock} epoch=${epochNow} running=${liveRoot.slice(0, 12)}… frozen(e-1)=${frozenRoot.slice(0, 12)}…`,
-  );
+    // ── 7. the SDK reader module against the LIVE validator ───────────────────────────────────
+    // actions/committee.ts is unit-tested against a stubbed client, which by construction cannot
+    // catch an ABI mismatch, a renamed getter, or a changed return shape. These calls do.
+    console.log('\n[7] actions/committee.ts against the live validator');
 
-  // Encoding what the reader produced must give the same bytes as the hand-built path above.
-  const fromReader = encodeCommitteeBLSBlock(
-    fetched.signers,
-    blsSig,
-    state.treeDepth,
-  );
-  check(
-    fromReader === blockHex,
-    "encodeCommitteeBLSBlock(reader output) == encode(hand-built)",
-  );
+    const mounted = await getMountedDvtValidator(pc, stack.router);
+    check(
+        mounted.toLowerCase() === stack.committeeValidator.toLowerCase(),
+        'getMountedDvtValidator resolves algId 0x01 to the committee validator',
+        mounted
+    );
 
-  // assertCommitteeSubmittable must REFUSE while committee mode is off — this is the live proof
-  // that the guard fires, not a stubbed one.
-  //
-  // The signer count is READ FROM THE CHAIN, not written here. The previous revision passed a
-  // literal `3` — the value `requiredQuorum()` held when this runner was written. The validator
-  // has since gone to 4 (activeCount 5), so the call started refusing with
-  // "only 3 committee signer(s) collected, validator requires 4" and this check went red for a
-  // reason that had nothing to do with what its label claims to test.
-  //
-  // Note what the label said: "assertCommitteeSubmittable passes while committee is ON". What it
-  // actually tested was "…passes WITH THREE SIGNERS", and three was a stale reading of a chain
-  // value. A hardcoded quorum inside a test of a quorum guard is the guard's own defect class.
-  //
-  // GUARDED BY `quorumUsable`, not just by `active`. In the fail-closed window at the head of an
-  // epoch, `committeeActive()` is STILL true while `requiredQuorum()` returns the 2^256-1
-  // sentinel — the very window measured in FU-81 (blocks 11645632/33, epoch 181963's first two).
-  // Inside it this pair degenerates, and silently:
-  //
-  //   Number(2n**256n - 1n)          === 1.157920892373162e+77
-  //   BigInt(that) >= 2n**256n - 1n  === TRUE    ← the rounding goes UP, past the sentinel
-  //   liveQuorum - 1 === liveQuorum  === TRUE    ← float64 has no neighbour there
-  //
-  // Review predicted "both checks go red". Measured, it is WORSE than that — forcing the sentinel
-  // and keeping the old `if (active)` guard gives:
-  //
-  //   PASS  …passes at the live quorum (1.157920892373162e+77 signers)     ← FALSE GREEN
-  //   FAIL  …and REFUSES one signer short (1.157920892373162e+77) — did NOT refuse
-  //
-  // The positive does not fail: `Number(sentinel)` rounds UP past the sentinel, so
-  // `signerCount >= requiredQuorum` holds and the guard is SATISFIED. A false green is a worse
-  // outcome than two reds, and it is the one this shape actually produces.
-  //
-  // A guard on a quantity must be guarded by whether that quantity is USABLE, not by whether the
-  // subsystem is on. `state.quorumUsable` is exactly that flag and is already asserted at :277.
-  if (active && state.quorumUsable) {
-    const liveQuorum = Number(state.requiredQuorum);
-    let refused = "";
+    const state = await getCommitteeState(pc, stack.committeeValidator);
+    check(state.treeDepth === treeDepth, 'getCommitteeState.treeDepth matches the raw read', `${state.treeDepth}`);
+    check(state.perSignerBytes === perSigner, 'getCommitteeState.perSignerBytes derived from it', `${state.perSignerBytes}`);
+    check(state.active === active, 'getCommitteeState.active matches committeeActive()', `${state.active}`);
+    check(state.activeCount === activeCount, 'getCommitteeState.activeCount matches', `${state.activeCount}`);
+    check(
+        state.quorumUsable === (quorum !== COMMITTEE_QUORUM_UNAVAILABLE),
+        'getCommitteeState.quorumUsable flags the fail-closed sentinel',
+        `${state.quorumUsable}`
+    );
+
+    const referenceEnrolledAccount = await findEnrolledAccount(pc);
+    const enrolled = await isAccountEnrolled(pc, stack.committeeValidator, referenceEnrolledAccount);
+    check(enrolled, `isAccountEnrolled sees a chain-derived enrolled account (${referenceEnrolledAccount})`);
+    const notEnrolled = await isAccountEnrolled(pc, stack.committeeValidator, stack.router);
+    check(!notEnrolled, 'isAccountEnrolled returns false for a never-enrolled address (negative)');
+
+    const fetched = await fetchCommitteeSigners(pc, stack.committeeValidator, nodeIds);
+    check(fetched.signers.length === nodeIds.length, 'fetchCommitteeSigners returns one signer per node');
+    let fetchedOk = fetched.signers.length > 0;
+    for (const s of fetched.signers) {
+        if (s.merkleProof.length !== treeDepth) fetchedOk = false;
+        // The proofs it shapes must be the SAME ones that fold to the live root — i.e. the helper
+        // did not mix up which slot/proof belongs to which nodeId.
+        if (foldMerkle(BigInt(s.slot), s.nodeId, s.merkleProof) !== runningRoot) fetchedOk = false;
+    }
+    check(fetchedOk, 'every fetched signer folds to the live runningRoot (slot/proof not mixed up)');
+    // The staleness signal is no longer `lastSetMutationBlock` — that function was removed upstream
+    // at #244 and is absent from the deployed bytecode, so reading it took the whole fetch down.
+    // What the contract actually compares is the roots, so that is what is checked here.
+    // Uses the shared reader rather than a fourth hand-rolled copy — three copies of this comparison
+    // are how the removed field survived in two runners after the SDK dropped it.
+    const fresh = await readFrozenRootAgreement(pc, stack.committeeValidator);
+    const [liveRoot, epochNow, frozenRoot] = [fresh.runningRoot, fresh.epoch, fresh.frozenRoot];
+    check(
+        typeof fetched.atBlock === 'bigint' && fresh.agrees,
+        'proofs fetched now would verify against the FROZEN epochSetRoot(e-1)',
+        // e-1, not e. `validate()` reads setRoot[e-1]; comparing against epochSetRoot(e) is the
+        // off-by-one that passes today only because all three roots currently coincide.
+        `atBlock=${fetched.atBlock} epoch=${epochNow} running=${liveRoot.slice(0, 12)}… frozen(e-1)=${frozenRoot.slice(0, 12)}…`
+    );
+
+    // Encoding what the reader produced must give the same bytes as the hand-built path above.
+    const fromReader = encodeCommitteeBLSBlock(fetched.signers, blsSig, state.treeDepth);
+    check(fromReader === blockHex, 'encodeCommitteeBLSBlock(reader output) == encode(hand-built)');
+
+    // assertCommitteeSubmittable must REFUSE while committee mode is off — this is the live proof
+    // that the guard fires, not a stubbed one.
+    //
+    // THE SIGNER COUNT IS READ FROM THE CHAIN. The previous revision passed a literal `3` — the
+    // value `requiredQuorum()` held when this runner was written. The validator has since gone to 4
+    // (activeCount 5), so the call started refusing with "only 3 committee signer(s) collected,
+    // validator requires 4" and this check went red for a reason unrelated to its own label. Note
+    // what that label said: "passes while committee is ON". What it tested was "…passes WITH THREE
+    // SIGNERS", and three was a stale reading of a chain value. A hardcoded quorum inside a test of
+    // a quorum guard is the guard's own defect class.
+    //
+    // The probe count must also survive the FAIL-CLOSED WINDOW at the head of an epoch, where
+    // `committeeActive()` is still true while `requiredQuorum()` returns the 2^256-1 sentinel
+    // (FU-81: blocks 11645632/33, epoch 181963's first two). `Number(sentinel)` rounds UP past the
+    // sentinel — `BigInt(Number(2n**256n-1n)) >= 2n**256n-1n` is TRUE — so a probe built from it
+    // SATISFIES the guard instead of tripping it. Measured with the old `if (active)` shape:
+    //
+    //   PASS  …passes at the live quorum (1.157920892373162e+77 signers)      ← FALSE GREEN
+    //   FAIL  …and REFUSES one signer short (same number) — did NOT refuse
+    //
+    // A false green, not two reds. So the quorum pair is gated on `state.quorumUsable` (asserted a
+    // few lines above), not on `active`: a guard over a QUANTITY must be gated on whether that
+    // quantity is usable, not on whether the subsystem is switched on.
+    const liveQuorum = state.quorumUsable ? Number(state.requiredQuorum) : 1;
+    let refused = '';
     try {
-      await assertCommitteeSubmittable(
-        pc,
-        stack.committeeValidator,
-        referenceEnrolledAccount,
-        liveQuorum,
-      );
+        await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum);
     } catch (e: any) {
-      refused = e?.message ?? "";
+        refused = e?.message ?? '';
     }
-    {
-      check(
-        refused === "",
-        `assertCommitteeSubmittable passes at the live quorum (${liveQuorum} signers)`,
-        refused.slice(0, 90),
-      );
-      // Paired negative, in the same run: one signer short must REFUSE and must name the quorum.
-      // Without this, the positive above is satisfied by a guard that never refuses anything.
-      let short = "";
-      try {
-        await assertCommitteeSubmittable(
-          pc,
-          stack.committeeValidator,
-          referenceEnrolledAccount,
-          liveQuorum - 1,
+    if (active && state.quorumUsable) {
+        check(refused === '', `assertCommitteeSubmittable passes at the live quorum (${liveQuorum} signers)`, refused.slice(0, 90));
+        // Paired negative, same run: one signer short must REFUSE and must name the live quorum.
+        // Without it, the positive above is satisfied by a guard that never refuses anything.
+        let short = '';
+        try {
+            await assertCommitteeSubmittable(pc, stack.committeeValidator, referenceEnrolledAccount, liveQuorum - 1);
+        } catch (e: any) {
+            short = e?.message ?? '';
+        }
+        check(
+            short.includes(`requires ${liveQuorum}`),
+            `…and REFUSES one signer short (${liveQuorum - 1}), naming the live quorum`,
+            short.slice(0, 90) || 'did NOT refuse'
         );
-      } catch (e: any) {
-        short = e?.message ?? "";
-      }
-      check(
-        short.includes(`requires ${liveQuorum}`),
-        `…and REFUSES one signer short (${liveQuorum - 1}), naming the live quorum`,
-        short.slice(0, 90) || "did NOT refuse",
-      );
+    } else if (active) {
+        // Reported, never silently skipped and never counted as a pass: a window that suppresses
+        // two checks has to say so, or this run's verdict is quietly narrower than the last one's.
+        console.log(
+            '  SKIP  assertCommitteeSubmittable quorum pair — requiredQuorum() is the fail-closed ' +
+                'sentinel right now (epoch head; see FU-81). Re-run a few blocks later.'
+        );
+    } else {
+        check(
+            /committeeActive\(\) is false/.test(refused),
+            'assertCommitteeSubmittable REFUSES while committee is off, naming the cause',
+            refused.slice(0, 80)
+        );
     }
-  } else if (active) {
-    // Reported, NOT silently skipped and NOT counted as a pass. A window that suppresses two
-    // checks has to say so, or the run's verdict is quietly narrower than the run before it.
-    console.log(
-      `  SKIP  assertCommitteeSubmittable quorum pair — requiredQuorum() is the fail-closed ` +
-        `sentinel right now (epoch head, see FU-81). Re-run a few blocks later.`,
-    );
-  } else {
-    check(
-      /committeeActive\(\) is false/.test(refused),
-      "assertCommitteeSubmittable REFUSES while committee is off, naming the cause",
-      refused.slice(0, 80),
-    );
-  }
 
-  // ── verdict ───────────────────────────────────────────────────────────────────────────────
-  console.log(
-    "\n─────────────────────────────────────────────────────────────",
-  );
-  if (failures > 0) {
-    console.error(`RESULT: ${failures} check(s) FAILED`);
-    process.exit(1);
-  }
-  console.log("RESULT: all read-only conformance checks PASSED");
-  console.log("");
-  console.log(
-    "NOT COVERED — committee positive validate() path is BLOCKED on-chain:",
-  );
-  console.log(`  committeeActive() = ${active} (epochLength == 0)`);
-  console.log(
-    `  requiredQuorum()  = ${quorum === COMMITTEE_QUORUM_UNAVAILABLE ? "type(uint256).max sentinel" : quorum}`,
-  );
-  console.log(
-    "  Unblocking needs BOTH, by the validator owner (CC-104, @repo:dvt):",
-  );
-  console.log("    (a) setEpochLength(N != 0)   -> committeeActive() == true");
-  console.log(
-    "    (b) snapshotEpoch()          -> pins setRoot[e-1] so requiredQuorum() stops",
-  );
-  console.log(
-    "        returning the sentinel; without it committeeActive is true but NOTHING validates.",
-  );
+    // ── verdict ───────────────────────────────────────────────────────────────────────────────
+    console.log('\n─────────────────────────────────────────────────────────────');
+    if (failures > 0) {
+        console.error(`RESULT: ${failures} check(s) FAILED`);
+        process.exit(1);
+    }
+    console.log('RESULT: all read-only conformance checks PASSED');
+    console.log('');
+    console.log('NOT COVERED — committee positive validate() path is BLOCKED on-chain:');
+    console.log(`  committeeActive() = ${active} (epochLength == 0)`);
+    console.log(`  requiredQuorum()  = ${quorum === COMMITTEE_QUORUM_UNAVAILABLE ? 'type(uint256).max sentinel' : quorum}`);
+    console.log('  Unblocking needs BOTH, by the validator owner (CC-104, @repo:dvt):');
+    console.log('    (a) setEpochLength(N != 0)   -> committeeActive() == true');
+    console.log('    (b) snapshotEpoch()          -> pins setRoot[e-1] so requiredQuorum() stops');
+    console.log('        returning the sentinel; without it committeeActive is true but NOTHING validates.');
 }
 
 main().catch((e) => {
-  console.error("CC103-E2E FAIL:", e?.shortMessage || e?.message || e);
-  if (e?.stack) console.error(e.stack.split("\n").slice(0, 5).join("\n"));
-  process.exit(1);
+    console.error('CC103-E2E FAIL:', e?.shortMessage || e?.message || e);
+    if (e?.stack) console.error(e.stack.split('\n').slice(0, 5).join('\n'));
+    process.exit(1);
 });
