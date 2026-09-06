@@ -214,8 +214,17 @@ function findUpstreamArtifact(name: string): string | null {
     // permanently red on an upstream that was building correctly.
     //
     // But the refusal was right about one thing: DON'T let readdir order decide. So decide by
-    // MEASUREMENT instead of by convention. The profiles differ in optimizer settings, and
-    // optimizer settings cannot change an ABI. Compare the candidates' ABIs:
+    // MEASUREMENT instead of by convention.
+    //
+    // The first version justified this with "the profiles differ in optimizer settings, and
+    // optimizer settings cannot change an ABI". Review pointed out that this code has never read
+    // any profile's settings — it matches FILE NAMES — so that sentence asserted something no code
+    // path here established. It is also not safe as a general assumption:
+    // `additional_compiler_profiles` can set a different `solc` VERSION, which is the one per-path
+    // knob that genuinely can move an ABI, and which is not an optimizer setting.
+    //
+    // So the justification is the comparison itself, not a belief about what differs. Compare the
+    // candidates on every axis the CHOICE affects:
     //   · identical  -> any of them answers the question this gate asks; take the first and record
     //                   that they agreed, so the report says WHY it was safe rather than hiding it.
     //   · different  -> the profiles really do disagree about what this contract IS. That is the
@@ -1386,9 +1395,10 @@ if (profiledAgreement.size > 0) {
     console.log(`  … and ${sample.length - SOURCE_LIST_CAP} more, all with identical ABIs across their profiles`);
   }
   console.log(
-    '  (Profiles here differ in optimizer settings, which cannot change an ABI. A candidate that\n' +
-      '   DISAGREED with its siblings on either axis is NOT resolved — reported as PROFILES DISAGREE;\n' +
-      '   a candidate that could not be PARSED is reported separately, because nothing was compared.)',
+    '  (Grounds: the candidates were COMPARED and matched on both axes. This code never reads any\n' +
+      '   profile\'s settings — it matches file names — so it does not know, and does not claim, WHY\n' +
+      '   they agree. A candidate that DISAGREED on either axis is NOT resolved (PROFILES DISAGREE);\n' +
+      '   one that could not be PARSED is reported separately, because nothing was compared.)',
   );
 }
 console.log(`--- skipped (${skippedEntries.length}) ---`);
