@@ -55,6 +55,16 @@
         "dvtValidator": "0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e",
         "fraudProofVerifier": "0xa1346F1668cBf8D031Cc5D72eDA45F5788CA1cd3"
       },
+      "airAccount": {
+        "$comment": "CC-115 B6-prep. The AirAccount v0.33.0 leg of the deployed stack. Values are NOT hand-copied: this block was generated from packages/core/src/addresses.ts (the \"AirAccount v0.33.0 (T5.2.1, 2026-09-04)\" section, itself read on chain at block 11634556), and check-deployed-stack asserts the two stay equal. DSR ruling 2026-09-05: the authoritative upstream source is airaccount-contract .env.sepolia V0330, a secret file nobody reads or pastes — so the SDK address book is the single source here, and the on-chain assertions below are what make it accountable.",
+        "factory": "0x2A5cf40c24B8D27B8A039DE2b628fb4C9C66dAb9",
+        "implementation": "0x63a6D78A7B7e443D4d15EDCf950aE567e0F80a3b",
+        "extension": "0x4ad5C1EFa95deaadEF3d3Ab02CB96504DEa0fCC2",
+        "validatorRouter": "0xA97A752779ebfDA58612F6727Ec7C8366c39f897",
+        "algorithm1": "0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9",
+        "entryPoint": "0x0000000071727De22E5E9d8BAf0edAc6f37da032",
+        "factoryVersion": "0.33.0"
+      },
       "legs": {
         "$comment": "The three independent pointers at the aggregator. CC-89 aligned them; between 2026-08-26 and 2026-09-01 Registry was repointed ALONE (4.11.0) while SuperPaymaster and DVTValidator still read 4.3.0, with SP.pendingBLSAgg == 0 — a SETTLED split, not a timelock window, so nothing flagged it. They were re-aligned on 2026-09-04. Pin all three separately: a manifest with a single `blsAggregator` field cannot express that state.",
         "Registry.blsAggregator": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",

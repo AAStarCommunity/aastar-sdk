@@ -9,7 +9,15 @@
 import { createPublicClient, http } from 'viem';
 
 import { crossCheckedClientFromUrls } from '@aastar/core';
-import { checkDeployedAbiPin, checkDeployedStackOnChain, readDeployedStackPin, summarise, type Check } from './deployed-stack.js';
+import { CANONICAL_ADDRESSES } from '@aastar/core';
+import {
+  checkAirAccountLeg,
+  checkDeployedAbiPin,
+  checkDeployedStackOnChain,
+  readDeployedStackPin,
+  summarise,
+  type Check,
+} from './deployed-stack.js';
 
 const argv = process.argv.slice(2);
 const network = argv.includes('--network') ? argv[argv.indexOf('--network') + 1] : 'sepolia';
@@ -26,6 +34,35 @@ const rpc = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL || 'https://ether
  * did — the thing FU-21 is really about is that "read from one endpoint" was invisible in the output.
  */
 const crossRpcs = process.env.REPCREDIT_RPC_URLS ?? '';
+
+/**
+ * The address book for a chain id, or a loud failure.
+ *
+ * ## Why this is a function and not an index expression
+ *
+ * It used to be `CANONICAL_ADDRESSES[pin.chainId] as never`, which CI rejected with TS7053: the map
+ * is keyed by literal chain ids and `pin.chainId` is a `number`. The `as never` looks like it
+ * silences that, but it is applied to the RESULT — the index access itself is still unchecked, so
+ * the cast was answering a question nobody asked.
+ *
+ * Casting the index instead would have compiled and been worse. An id with no entry yields
+ * `undefined`, `as never` lets it through, and it reaches `checkAirAccountLeg` as a book whose every
+ * lookup is `undefined` — which surfaces as a pile of address mismatches, i.e. a reading that looks
+ * like a finding about the deployment rather than about the argument.
+ *
+ * So it throws. There is no useful behaviour for "run the deployed-stack gate against a chain we
+ * have no addresses for", and the failure should name that, not describe nine wrong addresses.
+ */
+function addressBookFor(chainId: number): Record<string, string> {
+  const book = (CANONICAL_ADDRESSES as Record<number, Record<string, string> | undefined>)[chainId];
+  if (!book) {
+    throw new Error(
+      `check-deployed-stack: no canonical address book for chainId ${chainId}. ` +
+        `Known: ${Object.keys(CANONICAL_ADDRESSES).join(', ')}.`,
+    );
+  }
+  return book;
+}
 
 const sdkRoot = process.cwd();
 const upstreamRoot = process.env.REPCREDIT_SP_ROOT || `${sdkRoot}/../SuperPaymaster`;
@@ -62,6 +99,9 @@ async function main() {
       );
     }
     const live = await checkDeployedStackOnChain(pin, client as never);
+    // The AirAccount v0.33.0 leg (CC-115 B6-prep). Kept in the same on-chain block so a run that
+    // could not reach a node reports ALL of it as unreached, rather than half-passing offline.
+    live.push(...(await checkAirAccountLeg(pin, client as never, addressBookFor(pin.chainId) as never)));
     checks.push(...live);
     onChainRan = true;
     console.log(summarise(live).text);
