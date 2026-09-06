@@ -182,6 +182,10 @@ export const AIRACCOUNT_ABI = [
   // Recovery lifecycle: a guardian proposes a new owner (starts the timelock), guardians
   // approve to reach 2-of-3 threshold, then anyone executes after the timelock; guardians
   // (not the owner) can vote to cancel. See RecoveryService for the full flow.
+  // CC-102 F-W5/F-W7: the guardian that reaches RECOVERY_THRESHOLD must be proposed first and added
+  // only after GUARDIAN_ADD_TIMELOCK (2 days). Without this line RecoveryService could not encode it
+  // at all — encodeFunctionData throws on a name the parsed ABI does not declare.
+  "function proposeGuardianAddition(address _guardian) external",
   "function addGuardian(address _guardian) external",
   "function removeGuardian(uint8 index, bytes[] calldata guardianSigs) external",
   "function proposeRecovery(address _newOwner) external",

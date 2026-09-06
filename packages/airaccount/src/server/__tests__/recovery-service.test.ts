@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { zeroAddress, type PublicClient } from "viem";
+import { toFunctionSelector, zeroAddress, type PublicClient } from "viem";
 import { selectorFromId } from "../../migration/viem/hashing";
 import {
   RecoveryService,
@@ -264,5 +264,61 @@ describe("RecoveryService — buildRemoveGuardianHash (v0.20.0 spec §6.4)", () 
     expect(svc.buildRemoveGuardianHash({ ...base, account: NEW_OWNER })).not.toBe(h0);
     expect(svc.buildRemoveGuardianHash({ ...base, chainId: 1 })).not.toBe(h0);
     expect(svc.buildRemoveGuardianHash({ ...base, p256X: ("0x" + "11".repeat(32)) as `0x${string}` })).not.toBe(h0);
+  });
+});
+
+describe("proposeGuardianAddition — the two-step the contract requires (CC-102 F-W5/F-W7)", () => {
+  const svc = new RecoveryService();
+  const G = "0x61B9aDC1f0371921D70bBCECb026396Dee83C5aE";
+
+  it("encodes at all — the parsed ABI must declare it", () => {
+    // This is not a formality. `AIRACCOUNT_ABI` did NOT carry the signature, so the first version of
+    // `encodeProposeGuardianAddition` would have thrown inside `encodeFunctionData` on every call —
+    // a method that cannot run, shipped next to one that can.
+    expect(() => svc.encodeProposeGuardianAddition(G)).not.toThrow();
+  });
+
+  it("produces the selector the DEPLOYED account exposes, not just a well-formed one", () => {
+    // Checked against keccak of the signature — and that signature is the one the DEPLOYED v0.33.0
+    // account implementation has. Measured on Sepolia: selector 0xa228c4e0 is present in the
+    // implementation runtime bytecode (0x63a6D78A…, 24209 B); control `addGuardian(address)` is
+    // present in the same place, and BOTH are absent from the extension — so the probe is reading
+    // one contract consistently rather than answering yes to everything.
+    //
+    // (The first version of this comment named 0x8b0a0a6e. That value was never measured; it was
+    // written from memory and is wrong. A hex constant in a comment reads exactly like a reading.)
+    const selector = svc.encodeProposeGuardianAddition(G).slice(0, 10);
+    /*
+     * The expectation is a MEASURED CONSTANT, not `toFunctionSelector("proposeGuardianAddition(address)")`.
+     *
+     * That version shared its premise with the thing under test: both sides derived the selector from
+     * the same signature string, so it could only catch "two places in this repo disagree" — never
+     * "this repo disagrees with the chain". #393 review demonstrated it: change the ABI's parameter
+     * type to `bytes20` AND change the expected signature the same way, and all 25 tests stay green
+     * while the encoded selector becomes 0x74b41140 — which the deployed implementation does not
+     * expose (0 hits, versus 1 for 0xa228c4e0).
+     *
+     * The test's own name says "the selector the DEPLOYED account exposes", and in that state it was
+     * producing precisely the one it does not. Hard-coding is the weaker tool, but it BREAKS THE
+     * SHARED DERIVATION: nothing about it moves when the signature string moves.
+     */
+    // MEASURED: present in the v0.33.0 account implementation runtime bytecode at
+    // 0x63a6D78A7B7e443D4d15EDCf950aE567e0F80a3b (Sepolia, 24209 bytes) — 1 hit. Control in the same
+    // read: addGuardian(address) = 0xa526d83b also present; both ABSENT from the extension
+    // 0x4ad5C1EFa95deaadEF3d3Ab02CB96504DEa0fCC2, so the probe reads one contract consistently.
+    const ON_CHAIN_SELECTOR = "0xa228c4e0";
+    expect(selector).toBe(ON_CHAIN_SELECTOR);
+    // Kept as a SECOND, independent path: keccak of the signature must agree with the measured
+    // constant. If these two ever diverge, one of them is wrong and the failure says which.
+    expect(toFunctionSelector("proposeGuardianAddition(address)")).toBe(ON_CHAIN_SELECTOR);
+    // Control: a different guardian must not change the selector, only the argument word.
+    const other = svc.encodeProposeGuardianAddition("0xaE33e4f6A3f9EB8B9121756A034F78fdC94E3757");
+    expect(other.slice(0, 10)).toBe(selector);
+    expect(other).not.toBe(svc.encodeProposeGuardianAddition(G));
+  });
+
+  it("states the timelock as a number callers can read", () => {
+    // 2 days is not discoverable by retrying, and a UI that does not surface it looks broken for 48h.
+    expect(RecoveryService.GUARDIAN_ADD_TIMELOCK_SECONDS).toBe(172_800);
   });
 });
