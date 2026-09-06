@@ -5,7 +5,7 @@
 
 ## 当前聚焦：M5 上游同步 + 账本门禁补洞
 
-**更新于 2026-09-05 · main = `49679dd9`**
+**更新于 2026-09-06 · main = `ef5127a7` · npm `@aastar/sdk@0.46.0-rc.2`（dist-tag `rc`）**
 
 | Feature | 状态 | 说明 |
 |---|---|---|
@@ -28,6 +28,70 @@
 `check-task-ledger` / `check-followups` / `check-branch-task` 三道都不看这个文件。
 已补 `check:progress-sync`：本文件里每一处 `T<x.y.z> \`STATUS\`` 必须与 tasks.md 相等。
 判据不是「它现在绿」，是**它对烂掉的那一版会红**（实测报 `T1.2.1: progress 说 PR_OPEN，tasks 说 DONE`）。
+
+## 本轮（2026-09-06）：评审积压清空 + rc.2 上线 + §4 全集实跑
+
+### 评审积压：10 份 verdict 只在本地，GitHub 上一条都没有
+
+`~/Dev/tools/PR-Daemon/reviews/sessions/2026-09-05-aastar-sdk/` 里躺着 #385–#394 的十份
+APPROVE，**一条都没发到 GitHub**；`./watch.sh status` 显示 watcher 自 **2026-08-19 18:03**
+就没跑。评审内容跑过了、也答过了（commit 里那些「#387 三条阻塞」就是答它们的），
+**只有 `post_pr_review.sh` 那一步从来没跑**。
+
+> **一次做完但没有留痕的评审，在门禁眼里等于没做。** CC-115 的 G0 读的是 GitHub 上的
+> `reviewDecision`，不是谁的记忆。
+
+jason 授权后用 PAT 模式补发，**9 个已合并**（#385 #386 #387 #388 #389 #391 #392 #393 #394）。
+`#387` / `#390` 的 APPROVE 各差一个 commit（approve 之后补推的非阻塞项），按 acceptance D
+「审最新 SHA」送去增量复审 —— 这正是 #360 踩过的坑。
+
+### rc.2：一个 tag 装不上
+
+`v0.46.0-rc.1` 只是个 git tag，树里 `packages/sdk/package.json` 仍是 `0.45.0`，
+**npm 上从来没有过它**。已发布的 0.45.0 携带 v0.33.0 **之前**那批地址，
+下游装它跑 CC-115 B3 栈会全挂、且挂得最难读。#388 合并后已发布 `0.46.0-rc.2`
+（`latest` 仍留在 0.45.0），完整性哈希 `b8953258…a3b6d` 本地重算逐字相同，
+空工程 import 实测三个键均为新值。**CC-115 B5 由此解锁**，已回帖。
+
+### §4 全集：19 个 runner，14 绿
+
+红的**五**条，成因分三类 —— **而三条同源**（14 绿 + 5 红 = 19，与上一行的 runner 总数对得上；初稿写「四条」而紧跟的表枚举了五条，是 #398 评审用加法抓到的）：
+
+| 红 | 成因 |
+|---|---|
+| `cc103-committee` · `tier3-composite` · `tier3-webauthn(0x0a)` | 同一句 `lastSetMutationBlock()` 在 `0x7ac7E9d4…` 上 revert（上游 #244 已删）。#390 一合三条同消 |
+| `x402-live-roundtrip` | 他仓未启用 opt-in facilitator 模块（503）。SDK 这半已由 `x402-direct-settle` 链上证明 |
+| `dvt-realnode` | 门禁按设计红，在问一个产品问题（#392；jason 已选 (b)：legacy 路径**不算**本次发布声称支持的场景） |
+
+另 2 条需板子侧 env 跑不了（`dvt3-register` 的 keystore、`dvt-kms-onboard` 的 `KMS_POP_URL`）。
+
+### §4 期间查出并已修的三个真缺陷 —— 三条都是「声称」坏了，不是能力坏了
+
+- **`configHashFromInitConfig` 只哈希 8 个字段，合约（#161）哈希 10 个。**
+  症状 `InvalidOwnerSignature()` 读起来像密钥问题，实际是编码问题。
+  链上向工厂读它自己的 `getConfigHash` 佐证：`0x05ca2a0c…` vs SDK `0x01ed5cc0…`。
+  含此缺口的**已发布版本实测只有 `v0.45.0` 一个**。链上验收 tx `0xb5cd4426…d4405`。
+- **`dvt-onboard-e2e` 的 PASS 行把 validator 写成字面量 `0x539B`**，而它实际跑在
+  canonical `0x7ac7E9d4…` 上，跨两次 canonical bump 没人动。**错的 DVT validator 不会
+  revert**（被取代的那个仍有 code、仍答 `isRegistered=true`），所以那行打印是唯一依据，
+  而它在绿色路径上撒谎 —— 我自己就是第一个被它骗到的读者。已加门禁 `check:evidence-literals`。
+- **`check:abi-drift:strict` 给的处方在 SuperPaymaster 上永远做不到。**
+  上游 `foundry.toml` 声明 `additional_compiler_profiles = registry-size`（为把 Registry
+  压进 EIP-170），foundry 于是给 98 个合约都写 `.default.json` + `.registry-size.json`、
+  没有裸 `.json`。判据改成**测量**：比较候选者 ABI，相同则取用并写进报告，不同才拒绝。
+  实测 98 个多 profile 合约 ABI 全同、0 个不同；`checked` **+8**（本机 26→34）。
+  **写 delta 不写绝对值**：评审在自己机器上量到 23→31，差的常数 3 正是本机三个
+  `UNUSABLE CHECKOUT`。可复现的是 delta，绝对值带着这台机器上游工作区的脏状态。
+
+### 这一轮的形状
+
+三个缺陷加上评审打回我的五条，**八件事是同一件**：
+
+> **一句读起来像已验证的话，和一句真被验证过的话，长得一模一样。**
+
+而最刺的一次是：我在**修这个病的 PR 里**，又犯了五次（#395 评审五条阻塞全部成立），
+其中一条是我写的注释宣讲「re-run the command, not the memory of it」，
+而那条命令自己把实参省成了 `...`，**不可重跑**。
 
 ## 本轮（2026-09-05）交付
 
