@@ -55,12 +55,13 @@
  *
  * Run: `pnpm run check:evidence-literals`
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SCAN_DIR = join(repoRoot, 'tests/regression/onchain-evidence');
+const RUNNER_DIR = 'tests/regression/onchain-evidence';
+const SCAN_DIR = join(repoRoot, RUNNER_DIR);
 
 /**
  * Printing calls this gate can see. `console.error`/`warn`/`info` are included because they were
@@ -71,6 +72,8 @@ const SCAN_DIR = join(repoRoot, 'tests/regression/onchain-evidence');
  */
 const LOG_CALL = /(?:^|[^\w.])(?:console\.(?:log|error|warn|info)|log)\s*\(/;
 const HEX_LITERAL = /0x[0-9a-fA-F]{4,}/g;
+/** Non-global twin of {@link HEX_LITERAL} — a `/g` regex carries lastIndex and `.test` would alternate. */
+const HEX_LITERAL_TEST = /0x[0-9a-fA-F]{4,}/;
 const INTERPOLATION = /\$\{[^}]*\}/g;
 /**
  * A hex literal that is QUOTED inside an interpolation. `${...}` is exempt because interpolating a
@@ -79,8 +82,41 @@ const INTERPOLATION = /\$\{[^}]*\}/g;
  * green after it fires: one edit, defect intact. Review found it; it is now the second net.
  */
 const QUOTED_HEX_IN_INTERPOLATION = /['"`]\s*0x[0-9a-fA-F]{4,}/;
-/** A `//` comment at end of line — not part of the printed string, so not this gate's business. */
-const TRAILING_COMMENT = /\/\/.*$/;
+/**
+ * Strip a trailing `//` comment — but only a REAL one.
+ *
+ * The regex this replaces was `/\/\/.*$/`, which cuts at the FIRST `//` on the line. `https://`
+ * contains one. So any line printing a URL was silently truncated at `https:` and everything after
+ * it — including an address — became invisible to this gate, while the verdict went on claiming it
+ * had checked the line. Review's paired probe:
+ *
+ *   console.log(`explorer https://sepolia.etherscan.io/address/0x539B9681aaaa`)  -> exit 0 (and ✅)
+ *   console.log(`explorer 0x539B9681aaaa`)                                        -> exit 1
+ *
+ * 12 lines across 9 runners print `https://` today. None of them currently carry a hidden hex, so
+ * there was no live violation — but "no live violation" is not what the verdict said.
+ *
+ * A regex cannot tell a comment from a URL because it cannot tell whether it is inside a string.
+ * So this walks the line tracking quote state instead. It is not a JS parser and does not need to
+ * be: it needs to know whether a given `//` is inside quotes, and that is exactly what it tracks.
+ */
+function stripTrailingComment(line: string): string {
+    let quote: string | null = null;
+    for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (quote) {
+            if (c === '\\') i++;
+            else if (c === quote) quote = null;
+            continue;
+        }
+        if (c === "'" || c === '"' || c === '`') {
+            quote = c;
+            continue;
+        }
+        if (c === '/' && line[i + 1] === '/') return line.slice(0, i);
+    }
+    return line;
+}
 const OK_MARKER = /\/\/\s*evidence-literal-ok:/;
 const COMMENT_START = /^(?:\/\/|\*|\/\*|\*\/)/;
 
@@ -121,7 +157,19 @@ function listRunners(dir: string, prefix = ''): string[] {
     }
     const out: string[] = [];
     for (const e of entries) {
-        if (e.isDirectory()) out.push(...listRunners(join(dir, e.name), `${prefix}${e.name}/`));
+        // `isDirectory()` is FALSE for a symlink to a directory, so `withFileTypes` alone would walk
+        // straight past a symlinked subtree and still print ✅ — the recursion fix reintroducing the
+        // partial blindness it was added to remove. stat() follows the link and answers the question
+        // actually being asked: "can I descend into this".
+        let isDir = e.isDirectory();
+        if (!isDir && e.isSymbolicLink()) {
+            try {
+                isDir = statSync(join(dir, e.name)).isDirectory();
+            } catch {
+                isDir = false;
+            }
+        }
+        if (isDir) out.push(...listRunners(join(dir, e.name), `${prefix}${e.name}/`));
         else if (e.name.endsWith('.ts')) out.push(`${prefix}${e.name}`);
     }
     return out;
@@ -136,7 +184,7 @@ function main(): void {
     // today's total: it catches a collapse, not a deletion of one file.
     if (files.length < MIN_RUNNERS) {
         console.error(
-            `check-evidence-literals: found only ${files.length} runner(s) under ` +
+            `check-evidence-literals: found only ${files.length} file(s) under ` +
                 `${relative(repoRoot, SCAN_DIR)}, expected at least ${MIN_RUNNERS}. Either the layout ` +
                 'changed and this check went partly blind, or runners were removed — say which, and ' +
                 'move the floor deliberately.',
@@ -145,17 +193,25 @@ function main(): void {
     }
 
     const hits: Hit[] = [];
+    const suppressed: { file: string; line: number; text: string }[] = [];
     for (const f of files) {
         const lines = readFileSync(join(SCAN_DIR, f), 'utf8').split('\n');
         for (let i = 0; i < lines.length; i++) {
-            const raw = lines[i].replace(TRAILING_COMMENT, '');
+            const raw = stripTrailingComment(lines[i]);
             const trimmed = lines[i].trim();
             if (COMMENT_START.test(trimmed)) continue;
             if (!LOG_CALL.test(raw)) continue;
-            if (hasOkMarkerAbove(lines, i)) continue;
+            if (hasOkMarkerAbove(lines, i)) {
+                // A suppression that leaves no trace is a hole the verdict does not know about.
+                // Today's tree has exactly one, and without this the ✅ was false by that one.
+                if (HEX_LITERAL_TEST.test(stripTrailingComment(lines[i]))) {
+                    suppressed.push({ file: `${RUNNER_DIR}/${f}`, line: i + 1, text: trimmed.slice(0, 100) });
+                }
+                continue;
+            }
             const push = (literal: string) =>
                 hits.push({
-                    file: `tests/regression/onchain-evidence/${f}`,
+                    file: `${RUNNER_DIR}/${f}`,
                     line: i + 1,
                     literal,
                     text: trimmed.slice(0, 120),
@@ -187,10 +243,19 @@ function main(): void {
     // console.logs it. That summary was false about scanned code, which is the exact defect this
     // gate exists to prevent, occurring in the gate's own output. A gate's whole value is "green
     // means the reader need not check" — and when it is green, nobody opens the script.
+    // Every suppression, named. Review's point: a verdict that says "none found" while an escape
+    // hatch is quietly holding one down is false by exactly that one — and the reader cannot audit
+    // an exemption that leaves no trace. The reasons live next to the code; the COUNT lives here.
+    if (suppressed.length > 0) {
+        console.log(`check-evidence-literals: ${suppressed.length} line(s) exempted by an evidence-literal-ok marker:`);
+        for (const sup of suppressed) console.log(`  · ${sup.file}:${sup.line} — ${sup.text}`);
+    }
     console.log(
-        `check-evidence-literals: ✅ ${files.length} evidence runner(s) scanned, no 4+-digit hex ` +
+        `check-evidence-literals: ✅ ${files.length} file(s) scanned` +
+            `${suppressed.length ? `, ${suppressed.length} exempted above` : ''}, no 4+-digit hex ` +
             'written directly into a log()/console.log|error|warn|info(...) call ON THE SAME LINE ' +
-            '(quoted hex inside ${…} counts too).',
+            '(quoted hex inside ${…} counts too). "file(s)", not "runner(s)": the count includes ' +
+            'shared helpers such as _rpc.ts, which are scanned but are not scenarios.',
     );
     console.log(
         '  NOT covered, by construction: a hex passed to a print HELPER and logged inside it ' +
