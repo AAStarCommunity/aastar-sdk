@@ -74,7 +74,8 @@
     "abi:triage": "tsx scripts/abi-triage.ts",
     "address:sync": "tsx scripts/address-sync.ts",
     "check:stubs": "tsx scripts/check-stubs.ts",
-    "check:browser": "tsx scripts/check-browser-safe.ts"
+    "check:browser": "tsx scripts/check-browser-safe.ts",
+    "check:evidence-literals": "tsx scripts/check-evidence-literals.ts"
   },
   "devDependencies": {
     "@types/jest": "30.0.0",

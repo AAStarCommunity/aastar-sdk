@@ -60,7 +60,7 @@ async function main() {
   await rd('OLD router 0xA6bd (SDK canonical)', OLD_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
   await rd('NEW router 0xA151 (CC-103)', NEW_ROUTER, 'getAlgorithm', [{ type: 'uint8' }], addr, [1]);
 
-  console.log('\n== committee validator 0x1A8Db639 ==');
+  console.log(`\n== committee validator ${CMT_VAL} ==`);
   const active = await rd('committeeActive()', CMT_VAL, 'committeeActive', [], bool);
   const q = (await rd('requiredQuorum()', CMT_VAL, 'requiredQuorum', [], u256)) as bigint | null;
   if (q !== null) {

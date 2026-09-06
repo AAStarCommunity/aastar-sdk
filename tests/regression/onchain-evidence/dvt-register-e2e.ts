@@ -1,7 +1,9 @@
 /**
  * DVT node registration E2E (cross-repo, airaccount-contract v0.27.0 / YetAnotherAA-Validator #165) —
  * the @aastar/sdk `buildDvtPop` + `dvtOperatorActions.register` path proven on the LIVE Sepolia
- * DVT validator (`AAStarBLSAlgorithm` = CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0x539B9681…).
+ * DVT validator (`AAStarBLSAlgorithm` = CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm). The value is
+ * deliberately not spelled out here — it has moved twice, and both this header and the PASS line kept
+ * naming `0x539B9681…` on runs that used a different contract.
  *
  * This is the on-chain acceptance gate for aastar-sdk #279 / PR #288 (CC-17). Nothing is mocked: a
  * fresh operator EOA is onboarded to ROLE_DVT (staked), then `registerWithProof(publicKey, popPoint,
@@ -154,7 +156,7 @@ async function main() {
   log(`nodeOperator(nodeId) = ${owner}  (== operator ${operator.address} ? ${owner.toLowerCase() === operator.address.toLowerCase()})`);
   log(`registeredNodeCount = ${count}`);
   if (!isReg || owner.toLowerCase() !== operator.address.toLowerCase()) throw new Error('POST-CONDITION FAILED');
-  log(`\n✅ DVT registerWithProof E2E PASS — SDK buildDvtPop accepted by live 0x539B PoP check. tx ${hash}`);
+  log(`\n✅ DVT registerWithProof E2E PASS — SDK buildDvtPop accepted by the live PoP check on ${VALIDATOR}. tx ${hash}`);
 }
 
 main().catch((e) => { console.error('E2E FAIL:', e.shortMessage || e.message || e); process.exit(1); });
