@@ -33,6 +33,12 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   { phrase: '便利包装不是机械强制层', from: '#349/FU-41 — required_status_checks 未启用' },
   { phrase: '把人推向错误', from: '#360 — 门禁最坏的失败方式' },
   { phrase: '环境此刻造不出这个区别', from: '#347 — 变异不红的第三类成因' },
+  // #390 review, [Low] 2 — registered in the SAME PR that introduced it, per §9.1.
+  // That review also named the sharper half: this PR REPLACED a prescription (the old
+  // 「采样频率低于事件寿命…」 went out as this one came in) and NEITHER was on this list,
+  // so the guard was silent about a swap, not merely about an addition. A list that can
+  // only see deletions of things it already knows about cannot see a substitution at all.
+  { phrase: '一次落空的采样', from: '#390 — 空集分不开「窗口没覆盖」和「量具看不见」' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
