@@ -124,17 +124,28 @@ describe('MIN_SNAPSHOTS is above the blind-state count and at or below the healt
     // backwards. It said the test "converts a silent loss of coverage into a red". It cannot:
     // it measures the population with `analyzeLockfile`, the very function whose blindness is the
     // hazard. Install the original `'?` bug and `real.total` drops 69 -> 35, so `halfBlind` drops
-    // 35 -> 17 and `MIN(40) > 17` is MORE comfortably true. **Measured: this assertion is the one
-    // cell that stays green under blindness** (the suite still fails, 4 red — from the fixture tests
-    // above, which are what actually pin the regex).
+    // 35 -> 17 and `MIN(40) > 17` becomes MORE comfortably true — the threshold moves down with the
+    // instrument. Measured under that mutation: **4 failed / 9 passed**, and this assertion is among
+    // the nine. (An earlier version of this comment called it "the one cell that stays green" —
+    // false by any reading: nine stay green. The four that fail are the fixture tests above, which
+    // are what actually pin the regex.)
     //
     // So it pins GROWTH, not coverage: the day the repo outgrows the constant, this goes red and
     // says to reconsider the floor. That is worth having and is all it is.
     //
-    // The 0.51 is NOT load-bearing — review measured the green band at ratio <= 0.579, seven points
-    // wide, and the guard is inverted outside it: a LIGHTER blindness (ratio 0.8 -> floor(69*0.8)
-    // = 55, 40 > 55 false) turns this red on a healthy repo while a heavier one keeps it green. It
-    // is a stand-in for "roughly half", not a tuned threshold.
+    // The 0.51 is NOT load-bearing. This stays green while `40 > floor(69 * r)`, i.e.
+    // `r < 40/69 ≈ 0.5797` — and that condition is UNBOUNDED BELOW, so it is not a band. Seven
+    // points is the HEADROOM from the working point 0.51 up to that boundary. (Review wrote "seven
+    // points wide" and then corrected it; the number was right and the word was not — and I had
+    // already copied it here. **A borrowed number arrives with whatever was wrong about it.**)
+    //
+    // The guard is also inverted past the boundary: a LIGHTER blindness (r = 0.8 -> floor(69*0.8)
+    // = 55, `40 > 55` false) turns this red on a healthy repo, while a heavier one keeps it green.
+    // So 0.51 is a stand-in for "roughly half", not a tuned threshold.
+    //
+    // And today it buys nothing yet: `floor(69 * 0.51) = 35`, **exactly the literal in the test
+    // above**. Both cells currently fire at the same value; this one only begins to discriminate
+    // once `total` moves. That is the honest version of "it pins the RATIO".
     //
     // No independent counter is used deliberately. Review's first attempt at one reproduced the
     // ORIGINAL bug exactly — an awk pattern requiring the line to end `):`, which quoted keys do not
@@ -145,9 +156,13 @@ describe('MIN_SNAPSHOTS is above the blind-state count and at or below the healt
         const halfBlind = Math.floor(real.total * 0.51);
         expect(
             MIN_SNAPSHOTS,
+            // States the constraint and the consequence, and does NOT name a cause it never
+            // checked: the assertion is symmetric over its two operands, so lowering MIN_SNAPSHOTS
+            // trips it exactly as well as the repo growing. Review produced precisely that by
+            // setting MIN to 20 with the lockfile untouched — and the message still blamed growth.
             `MIN_SNAPSHOTS=${MIN_SNAPSHOTS} must exceed ${halfBlind} — what a ~half-blind reader ` +
-                `would report on the current lockfile (${real.total} peer-qualified keys). The repo ` +
-                'has grown past this constant; raise MIN_SNAPSHOTS deliberately.',
+                `would report on the current lockfile (${real.total} peer-qualified keys). Either ` +
+                'the repo grew or the floor was lowered; raise MIN_SNAPSHOTS deliberately.',
         ).toBeGreaterThan(halfBlind);
     });
 });
