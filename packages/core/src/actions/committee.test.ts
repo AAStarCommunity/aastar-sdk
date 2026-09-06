@@ -4,12 +4,15 @@ import {
     ALG_ID_DVT,
     assertCommitteeSubmittable,
     fetchCommitteeSigners,
+    describeFrozenRootDisagreement,
+    readFrozenRootAgreement,
     getCommitteeState,
     getMountedDvtValidator,
     isAccountEnrolled,
 } from './committee.js';
 import { COMMITTEE_QUORUM_UNAVAILABLE } from '../crypto/dvtWire.js';
 import { CANONICAL_ADDRESSES } from '../addresses.js';
+import { AAStarCommitteeValidatorABI } from '../abis/index.js';
 
 // Read the canonical pins rather than literals. These are only stub targets — the assertions here
 // never touch a chain — but a hardcoded address silently goes stale on a canonical bump and then
@@ -123,9 +126,8 @@ describe('fetchCommitteeSigners', () => {
                 const s = slots[a[0] as string];
                 return [s, proofOf(s)];
             },
-            lastSetMutationBlock: 90n,
         });
-        const { signers, lastSetMutationBlock, atBlock } = await fetchCommitteeSigners(client, VALIDATOR, [
+        const { signers, atBlock } = await fetchCommitteeSigners(client, VALIDATOR, [
             nid(1),
             nid(2),
             nid(3),
@@ -138,13 +140,12 @@ describe('fetchCommitteeSigners', () => {
             expect(s.merkleProof).toEqual(proofOf(slots[s.nodeId]));
             expect(s.merkleProof).toHaveLength(14);
         }
-        expect(lastSetMutationBlock).toBe(90n);
         expect(atBlock).toBe(100n);
     });
 
     it('reads every proof at the SAME block, so the set cannot mutate mid-fetch', async () => {
         const { client, calls } = stubClient(
-            { getMerkleProof: () => [0n, proofOf(0n)], lastSetMutationBlock: 1n },
+            { getMerkleProof: () => [0n, proofOf(0n)] },
             777n
         );
         await fetchCommitteeSigners(client, VALIDATOR, [nid(1), nid(2)]);
@@ -153,13 +154,47 @@ describe('fetchCommitteeSigners', () => {
         }
     });
 
-    it('surfaces lastSetMutationBlock so a caller can tell the proofs went stale', async () => {
-        // getMerkleProof proves against the CURRENT root; production needs the FROZEN setRoot[e-1].
-        // The mutation block is the caller's only signal that a current-state proof is unsafe.
-        const { client } = stubClient({ getMerkleProof: () => [0n, proofOf(0n)], lastSetMutationBlock: 99n }, 100n);
-        const r = await fetchCommitteeSigners(client, VALIDATOR, [nid(1)]);
-        expect(r.lastSetMutationBlock).toBe(99n);
-        expect(r.atBlock).toBe(100n);
+    it('calls ONLY functions the vendored ABI declares', async () => {
+        /*
+         * The test this replaces asserted `lastSetMutationBlock` came back as 99n — and it passed for
+         * as long as the function had not existed on chain, because a stub answers whatever it is
+         * asked. Measured on Sepolia: that selector is absent from the deployed committee validator's
+         * runtime bytecode, so the real call reverted and took the whole fetch down with it, AFTER
+         * every proof had been fetched successfully.
+         *
+         * A mock cannot tell you a function exists. What it CAN check is cheaper and still worth
+         * having: that the names this module calls are at least declared by the ABI it ships with.
+         * That is one of the two ways this bug could have been caught early — the other is
+         * ABI-vs-deployed-bytecode, which no unit test can do and which belongs in the drift gate.
+         */
+        const { client, calls } = stubClient({ getMerkleProof: () => [0n, proofOf(0n)] }, 100n);
+        await fetchCommitteeSigners(client, VALIDATOR, [nid(1)]);
+        const declared = new Set(
+            (AAStarCommitteeValidatorABI as readonly { type: string; name?: string }[])
+                .filter((e) => e.type === 'function')
+                .map((e) => e.name),
+        );
+        const called = calls.filter((c) => c.functionName !== 'getBlockNumber').map((c) => c.functionName);
+        // Control: the meter must be able to say no. An empty `called` would pass vacuously, and an
+        // ABI that declared everything would too.
+        expect(called.length).toBeGreaterThan(0);
+        expect(declared.has('lastSetMutationBlock')).toBe(false); // removed upstream at #244
+        for (const fn of called) expect(declared.has(fn)).toBe(true);
+    });
+
+    it('no longer declares the four functions the deployed validator does not have', () => {
+        // Guard against re-vendoring a pre-#244 copy. Three were removed when the block-start
+        // snapshot model became the epoch-pinned one; the fourth was never missing — the old ABI
+        // had `snapshotEpoch()` where the contract has `snapshotEpoch(bytes32[])`, which is why a
+        // selector probe reported it absent. Name and signature are different questions.
+        const fns = (AAStarCommitteeValidatorABI as readonly { type: string; name?: string; inputs?: unknown[] }[])
+            .filter((e) => e.type === 'function');
+        const names = new Set(fns.map((e) => e.name));
+        for (const gone of ['lastSetMutationBlock', 'rootAtBlockStart', 'countAtBlockStart']) {
+            expect(names.has(gone)).toBe(false);
+        }
+        const snapshot = fns.find((e) => e.name === 'snapshotEpoch');
+        expect(snapshot?.inputs).toHaveLength(1); // bytes32[] activeNodeIds — not the zero-arg getter
     });
 });
 
@@ -221,5 +256,113 @@ describe('assertCommitteeSubmittable', () => {
         await expect(assertCommitteeSubmittable(client, VALIDATOR, ACCOUNT, 3)).rejects.toThrow(
             /committeeActive\(\) is false/
         );
+    });
+});
+
+describe('readFrozenRootAgreement — the index the live chain cannot corroborate', () => {
+    const R = (n: string) => `0x${n.repeat(64)}` as Hex;
+    const RUNNING = R('a');
+    const FROZEN_PREV = R('b');
+    const FROZEN_CUR = R('c');
+
+    /**
+     * A reader where `epochSetRoot[e]` and `epochSetRoot[e-1]` are DIFFERENT.
+     *
+     * This is the whole point. #390 review measured the live chain: `runningRoot()` and
+     * `epochSetRoot` for five consecutive epochs are all the same value, so `[e]`, `[e-1]` and
+     * `[e-4]` are indistinguishable there. **A passing on-chain run is zero evidence for the
+     * index.** The only real evidence is `validate()` reading `setRoot[e - 1]` in the contract
+     * source — and the only way a TEST can carry that evidence is to be handed roots that differ.
+     */
+    const reader = (roots: Record<string, Hex>, running: Hex, epoch: bigint, pinned = true) => ({
+        readContract: async (a: { functionName: string; args?: readonly unknown[] }) => {
+            if (a.functionName === 'runningRoot') return running;
+            if (a.functionName === 'currentEpoch') return epoch;
+            if (a.functionName === 'epochPinned') return pinned;
+            if (a.functionName === 'epochSetRoot') return roots[String(a.args![0])] ?? R('0');
+            throw new Error(`unexpected ${a.functionName}`);
+        },
+    });
+
+    it('compares against epoch - 1, not epoch', async () => {
+        // running == epochSetRoot[e], and DIFFERENT from [e-1]. Reading `[e]` would call this
+        // agreement; reading `[e-1]` — what validate() does — must call it disagreement.
+        const r = await readFrozenRootAgreement(
+            reader({ '5': FROZEN_CUR, '4': FROZEN_PREV }, FROZEN_CUR, 5n) as never,
+            VALIDATOR,
+        );
+        expect(r.frozenRoot).toBe(FROZEN_PREV);
+        expect(r.agrees).toBe(false);
+    });
+
+    it('agrees when the running root matches the frozen e-1 root', async () => {
+        const r = await readFrozenRootAgreement(
+            reader({ '5': FROZEN_CUR, '4': RUNNING }, RUNNING, 5n) as never,
+            VALIDATOR,
+        );
+        expect(r.agrees).toBe(true);
+        expect(r.epoch).toBe(5n);
+    });
+
+    it('READS epochPinned from the chain, for the CURRENT epoch', async () => {
+        /*
+         * Mutation found this gap: replacing the `epochPinned` read with a hardcoded `true` passed
+         * every test. The two-class message was covered — `describeFrozenRootDisagreement` is fed
+         * a struct directly — but nothing checked that the struct's field came from the chain at
+         * all. **The predicate was tested and the read was not**, which is the third time today.
+         *
+         * The epoch index matters too: `epochSetRoot` is read at `e-1` and `epochPinned` at `e`,
+         * because the rollover gap is about THIS epoch not being snapshotted yet.
+         */
+        const asked: unknown[][] = [];
+        const spy = {
+            readContract: async (a: { functionName: string; args?: readonly unknown[] }) => {
+                if (a.functionName === 'runningRoot') return RUNNING;
+                if (a.functionName === 'currentEpoch') return 5n;
+                if (a.functionName === 'epochSetRoot') return RUNNING;
+                if (a.functionName === 'epochPinned') {
+                    asked.push([...(a.args ?? [])]);
+                    return false;
+                }
+                throw new Error(`unexpected ${a.functionName}`);
+            },
+        };
+        const r = await readFrozenRootAgreement(spy as never, VALIDATOR);
+        expect(r.currentEpochPinned).toBe(false); // a hardcoded `true` fails here
+        expect(asked).toEqual([[5n]]); // e, not e-1
+    });
+
+    it('THROWS at epoch 0 rather than reading epochSetRoot(-1)', async () => {
+        await expect(
+            readFrozenRootAgreement(reader({}, RUNNING, 0n) as never, VALIDATOR),
+        ).rejects.toThrow(/currentEpoch\(\) == 0/);
+    });
+});
+
+describe('describeFrozenRootDisagreement — two red states that look identical', () => {
+    const R = (n: string) => `0x${n.repeat(64)}` as Hex;
+    const base = { epoch: 9n, runningRoot: R('a'), frozenRoot: R('b'), agrees: false };
+
+    it('names the ROLLOVER GAP when the current epoch is not pinned yet', () => {
+        // Measured at ~8% of blocks: the keeper has not called snapshotEpoch() since the epoch
+        // turned. Self-healing in about a minute. A runner that reports this as "the set moved"
+        // sends someone to investigate a state that fixes itself — and trains the red into noise.
+        const msg = describeFrozenRootDisagreement({ ...base, currentEpochPinned: false });
+        expect(msg).toMatch(/ROLLOVER GAP/);
+        expect(msg).toMatch(/Retry rather than investigate/);
+        expect(msg).not.toMatch(/set moved/);
+    });
+
+    it('names a real mutation when the epoch IS pinned — and still says the gate is conservative', () => {
+        const msg = describeFrozenRootDisagreement({ ...base, currentEpochPinned: true });
+        expect(msg).toMatch(/committee set moved inside epoch 9/);
+        // The honesty clause: proofs against [e-1] stay valid even here, so this is a safe-direction
+        // refusal, not evidence of a defect. Dropping this sentence makes the message overclaim.
+        expect(msg).toMatch(/CONSERVATIVE/);
+    });
+
+    it('says so plainly when the roots agree', () => {
+        expect(describeFrozenRootDisagreement({ ...base, agrees: true, currentEpochPinned: true }))
+            .toMatch(/would verify/);
     });
 });

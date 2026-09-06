@@ -35,7 +35,7 @@ import { sepolia } from 'viem/chains';
 import {
     CANONICAL_ADDRESSES, DVT_CONFIG, getDvtConfig, EntryPointABI, AAStarAirAccountV7ABI,
     AAStarCommitteeValidatorABI, buildInitConfig, encodeG2Point, encodeBLSAccountSignature,
-    airAccountFactoryActions, entryPointActions, getCommitteeState, fetchCommitteeSigners,
+    airAccountFactoryActions, entryPointActions, getCommitteeState, fetchCommitteeSigners, readFrozenRootAgreement,
     isAccountEnrolled, assertCommitteeSubmittable, type CommitteeSigner,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
@@ -145,8 +145,14 @@ async function main() {
     if (BigInt(partials.length) < st.requiredQuorum) throw new Error('under quorum — aborting');
 
     // ── 3. slot + Merkle proofs ─────────────────────────────────────────────────────────────
-    const { signers, lastSetMutationBlock, atBlock } = await fetchCommitteeSigners(pc as any, COMMITTEE, partials.map((p) => p.nodeId));
-    console.log(`\n[3] proofs fetched at block ${atBlock} (last set mutation ${lastSetMutationBlock})`);
+    const { signers, atBlock } = await fetchCommitteeSigners(pc as any, COMMITTEE, partials.map((p) => p.nodeId));
+    // Was `(last set mutation ${lastSetMutationBlock})` — printing a field this function no longer
+    // returns, i.e. the literal string "undefined" in the evidence output. Reporting the roots says
+    // something checkable instead.
+    const fresh = await readFrozenRootAgreement(pc as any, COMMITTEE);
+    console.log(`\n[3] proofs fetched at block ${atBlock}; epoch ${fresh.epoch}, running root ` +
+        `${fresh.runningRoot.slice(0, 12)}… vs frozen(e-1) ${fresh.frozenRoot.slice(0, 12)}… → ` +
+        `${fresh.agrees ? 'proofs would verify' : 'STALE, proofs would NOT verify'}`);
     check(signers.every((s) => s.merkleProof.length === st.treeDepth), 'every proof has TREE_DEPTH siblings');
 
     await assertCommitteeSubmittable(pc as any, COMMITTEE, account, signers.length);

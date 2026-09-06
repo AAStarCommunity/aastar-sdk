@@ -1,4 +1,13 @@
 {
+  "$provenance": {
+    "repo": "YetAnotherAA-Validator",
+    "revision": "1991e921556cbb43ac5f1dc64de7b168c39002ef",
+    "path": "contracts/src/AAStarCommitteeValidator.sol",
+    "sourceSha256": "dad6e3710e7c707b090e1885902b09c37b5f47b12c6deb5d8b1faea6daeeb8c1",
+    "regeneratedAt": "2026-09-05",
+    "why": "The previous vendored copy predated #244 (CC-115 D2, 2026-08-30), which replaced the block-start snapshot model with the epoch-pinned one. It declared three functions that no longer exist on any deployment, and one (snapshotEpoch) with the wrong signature.",
+    "acceptance": "Every function selector in this abi is present in the deployed runtime bytecode at 0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9 (Sepolia): 65/65, measured. The copy this replaces was 55/59."
+  },
   "abi": [
     {
       "type": "constructor",
@@ -46,6 +55,19 @@
     },
     {
       "type": "function",
+      "name": "activeNodeIdsSorted",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "batchRegisterPublicKeys",
       "inputs": [
         {
@@ -64,6 +86,19 @@
     },
     {
       "type": "function",
+      "name": "blsAggregator",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "committeeActive",
       "inputs": [],
       "outputs": [
@@ -78,19 +113,6 @@
     {
       "type": "function",
       "name": "configVersion",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "countAtBlockStart",
       "inputs": [],
       "outputs": [
         {
@@ -244,6 +266,25 @@
           "name": "",
           "type": "bytes32",
           "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "epochSetValidUntil",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint64",
+          "internalType": "uint64"
         }
       ],
       "stateMutability": "view"
@@ -424,6 +465,25 @@
     },
     {
       "type": "function",
+      "name": "isEligibleForSnapshot",
+      "inputs": [
+        {
+          "name": "nodeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "isRegistered",
       "inputs": [
         {
@@ -443,7 +503,7 @@
     },
     {
       "type": "function",
-      "name": "lastSetMutationBlock",
+      "name": "minCommittee",
       "inputs": [],
       "outputs": [
         {
@@ -476,6 +536,25 @@
           "name": "",
           "type": "uint256",
           "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "nodeByPubkey",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -690,19 +769,6 @@
     },
     {
       "type": "function",
-      "name": "rootAtBlockStart",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "bytes32",
-          "internalType": "bytes32"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "runningRoot",
       "inputs": [],
       "outputs": [
@@ -716,10 +782,36 @@
     },
     {
       "type": "function",
+      "name": "setBlsAggregator",
+      "inputs": [
+        {
+          "name": "_aggregator",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setEpochLength",
       "inputs": [
         {
           "name": "_epochLength",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setMinCommittee",
+      "inputs": [
+        {
+          "name": "_minCommittee",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -806,7 +898,26 @@
     {
       "type": "function",
       "name": "snapshotEpoch",
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "activeNodeIds",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "syncExitNotice",
+      "inputs": [
+        {
+          "name": "nodeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
       "outputs": [],
       "stateMutability": "nonpayable"
     },
@@ -990,6 +1101,19 @@
     },
     {
       "type": "event",
+      "name": "BlsAggregatorSet",
+      "inputs": [
+        {
+          "name": "aggregator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "EpochLengthSet",
       "inputs": [
         {
@@ -1025,6 +1149,19 @@
         },
         {
           "name": "setCount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "MinCommitteeSet",
+      "inputs": [
+        {
+          "name": "minCommittee",
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
@@ -1079,6 +1216,31 @@
           "type": "address",
           "indexed": true,
           "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "NodeExitNoticeSynced",
+      "inputs": [
+        {
+          "name": "nodeId",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "operator",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "readyAt",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
         }
       ],
       "anonymous": false

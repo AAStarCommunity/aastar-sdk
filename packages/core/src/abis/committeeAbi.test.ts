@@ -22,7 +22,31 @@ const sigs = (abi: unknown) =>
  * that contract sits in KNOWN_DRIFT for its intentional Extension merge. That whitelist is exactly
  * what hid `enrollInCommitteeValidator` going missing. These assertions are the backstop.
  */
-describe('AAStarCommitteeValidator ABI (YetAnotherAA-Validator #237)', () => {
+/**
+ * ## A presence list cannot tell "lost by accident" from "removed on purpose"
+ *
+ * This block was written against YetAnotherAA-Validator **#237** and required
+ * `lastSetMutationBlock`. Upstream **#244** (CC-115 D2, 2026-08-30) replaced the block-start
+ * snapshot model with the epoch-pinned one and removed it, along with `rootAtBlockStart` and
+ * `countAtBlockStart`.
+ *
+ * So when the vendored ABI was finally re-generated from the current source, **this test failed** —
+ * a hand-maintained "must be present" list is a ratchet, and it ratchets against correct upstream
+ * removals exactly as hard as against accidental ones. It had no way to tell them apart, and its
+ * failure message ("missing lastSetMutationBlock") pointed at the fix rather than at the cause.
+ *
+ * The list is kept, because the case it was written for is real — `enrollInCommitteeValidator`
+ * did go missing under `KNOWN_DRIFT`. But it is now the WEAKER of two checks. The stronger one
+ * lives in `actions/committee.test.ts`: it records the function names the reader actually calls
+ * and requires the ABI to declare each of them. That one derives its list from behaviour, so an
+ * upstream removal of something nobody calls does not fail it, and a removal of something we DO
+ * call fails it without anyone editing a list.
+ *
+ * Neither can answer the question that actually mattered here — **is it in the deployed
+ * bytecode?** No unit test can; that belongs to the drift gate, and this ABI was in no sync script
+ * at all, which is why it went four functions stale unnoticed.
+ */
+describe('AAStarCommitteeValidator ABI (YetAnotherAA-Validator #244, epoch-pinned)', () => {
     it('is exported and non-empty', () => {
         expect(Array.isArray(AAStarCommitteeValidatorABI)).toBe(true);
         expect((AAStarCommitteeValidatorABI as AbiEntry[]).length).toBeGreaterThan(0);
@@ -38,7 +62,9 @@ describe('AAStarCommitteeValidator ABI (YetAnotherAA-Validator #237)', () => {
             'activeCount',
             'enrolledAccount',
             'getMerkleProof',
-            'lastSetMutationBlock',
+            // 'lastSetMutationBlock' — REMOVED upstream at #244. Absent from the deployed bytecode
+            // at 0x7ac7E9d4… (measured), so requiring it here kept a call alive that always
+            // reverted. Do not re-add: see the note above the describe.
         ]) {
             expect(fns(AAStarCommitteeValidatorABI), `missing ${f}`).toContain(f);
         }
@@ -48,7 +74,12 @@ describe('AAStarCommitteeValidator ABI (YetAnotherAA-Validator #237)', () => {
         // committeeActive() flips with setEpochLength, but requiredQuorum() also needs a pinned
         // snapshot — a runbook that only calls setEpochLength leaves nothing able to validate.
         expect(fns(AAStarCommitteeValidatorABI)).toContain('setEpochLength');
-        expect(fns(AAStarCommitteeValidatorABI)).toContain('snapshotEpoch');
+        // By SIGNATURE, not by name. The pre-#244 ABI declared `snapshotEpoch()` while the contract
+        // has `snapshotEpoch(bytes32[] activeNodeIds)` — a keeper-called state change, not a getter.
+        // A name-only assertion passed against the wrong shape, and a selector probe then reported
+        // the function "absent" when it was present all along. Name and signature are different
+        // questions, and this file has both helpers; the weaker one was chosen here by habit.
+        expect(sigs(AAStarCommitteeValidatorABI)).toContain('snapshotEpoch(bytes32[])');
         expect(fns(AAStarCommitteeValidatorABI)).toContain('epochPinned');
     });
 

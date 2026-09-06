@@ -168,19 +168,64 @@ export async function isAccountEnrolled(
 /**
  * Fetch `slot` + Merkle proof for each contributing node and shape them into {@link CommitteeSigner}s.
  *
- * ⚠️ Uses the validator's `getMerkleProof`, which proves against the CURRENT active-set root. The
- * contract's own NatSpec is explicit that PRODUCTION proofs must target the FROZEN `setRoot[e-1]`,
- * and that a current-state proof is valid only while the set has not changed since that snapshot.
- * This helper therefore returns `setMutatedSince`, read from `lastSetMutationBlock()`, so a caller
- * can tell whether the proofs it just fetched are still safe to submit — rather than discovering it
- * as an on-chain revert. Rebuilding the frozen tree from `SlotAssigned`/`SlotCleared` events is the
- * durable path and is NOT implemented here.
+ * ⚠️ Uses the validator's `getMerkleProof`, which proves against the CURRENT active-set root, while
+ * `_verifyMerkle` checks the FROZEN `epochSetRoot(e-1)`. **Deciding whether that gap matters is the
+ * caller's job, and this function no longer pretends to help with it.**
+ *
+ * ## Why the staleness read is gone
+ *
+ * It used to also read `lastSetMutationBlock()` and return it. Measured on Sepolia against the live
+ * committee validator `0x7ac7E9d4…`: **that function is not in the deployed bytecode.** Probing all
+ * 59 functions of the ABI vendored at the time, four were absent —
+ * `lastSetMutationBlock` · `rootAtBlockStart` · `countAtBlockStart` · `snapshotEpoch` — and the read
+ * therefore reverted, taking this whole function down with it. Two evidence runners died here
+ * AFTER successfully fetching every proof.
+ *
+ * Three of those were removed upstream at #244 (CC-115 D2, 2026-08-30), which replaced the
+ * block-start snapshot model with the epoch-pinned one. The vendored ABI predated it. (The fourth,
+ * `snapshotEpoch`, was never missing — the ABI had the wrong signature; see the note in
+ * `AAStarCommitteeValidator.json`.)
+ *
+ * ## What replaced it, and where
+ *
+ * Nothing here — because the value was **already unused**. The one production caller destructures
+ * `{ signers }` and does the real checks itself, against functions that exist:
+ *
+ * - `runningRoot()` vs `epochSetRoot(currentEpoch - 1)` — the roots the contract actually compares;
+ * - `requiredQuorum()`, whose NatSpec says it mirrors `validate()`'s readiness *exactly* and returns
+ *   `type(uint256).max` when nothing can satisfy it.
+ *
+ * **Which of that pair is the real guard is worth stating, because the obvious reading is wrong.**
+ *
+ * The root comparison looks like the load-bearing check and is not. `runningRoot` is written only by
+ * `_smtSet`, reached from `_onNodeActivated` / `_onNodeDeactivated` — so ANY node going up or down
+ * inside an epoch makes it diverge from `epochSetRoot[e-1]` and keeps it diverged until the epoch
+ * ends, **while proofs against `[e-1]` stay perfectly valid**, because `validate()` reads only
+ * `[e-1]`. With 64-block epochs (~12.8 min) and an active `syncNode` keeper it can refuse a large
+ * slice of the window. It is a conservative gate whose rejections are not necessarily real problems.
+ *
+ * `requiredQuorum()` is the guard that catches the things that actually invalidate a snapshot: a
+ * `configVersion` bump (five admin setters raise it, invalidating every pinned snapshot at once) and
+ * the wall-clock `epochSetValidUntil` expiry. Both live inside `_epochUsable`, hence inside it — and
+ * **no root or block comparison can see either**, a time bound least of all.
+ *
+ * So the whole re-configuration and expiry story rests on one thing: `assertCommitteeQuorum`
+ * refusing the `type(uint256).max` sentinel. That is implicit enough to be worth naming here.
+ * (Diagnosed with yetanotheraa-validator, who traced the `_smtSet` call sites.)
+ *
+ * > The tempting fix was to swap in `runningRoot` vs `epochSetRoot(currentEpoch)` — same shape, one
+ * > index off, and it would pass today because all three roots are currently equal. Picking a
+ * > replacement by reading function names is how you get a check that agrees with reality by
+ * > coincidence.
+ *
+ * Rebuilding the frozen tree from `SlotAssigned`/`SlotCleared` events is the durable path and lives
+ * in {@link fetchCommitteeSignersFrozen}.
  */
 export async function fetchCommitteeSigners(
     publicClient: PublicClient,
     committeeValidator: Address,
     nodeIds: readonly Hex[]
-): Promise<{ signers: CommitteeSigner[]; lastSetMutationBlock: bigint; atBlock: bigint }> {
+): Promise<{ signers: CommitteeSigner[]; atBlock: bigint }> {
     const atBlock = await publicClient.getBlockNumber();
     const signers = await Promise.all(
         nodeIds.map(async (nodeId) => {
@@ -194,14 +239,7 @@ export async function fetchCommitteeSigners(
             return { nodeId, slot, merkleProof: [...proof] } satisfies CommitteeSigner;
         })
     );
-    const lastSetMutationBlock = (await publicClient.readContract({
-        address: committeeValidator,
-        abi: AAStarCommitteeValidatorABI,
-        functionName: 'lastSetMutationBlock',
-        blockNumber: atBlock,
-    })) as bigint;
-
-    return { signers, lastSetMutationBlock, atBlock };
+    return { signers, atBlock };
 }
 
 /**
@@ -249,4 +287,112 @@ export function encodeEnrollInCommitteeValidator(): Hex {
         abi: AAStarAirAccountV7ABI,
         functionName: 'enrollInCommitteeValidator',
     });
+}
+
+/** What the contract compares when it verifies a committee Merkle proof. */
+export interface FrozenRootAgreement {
+    /** `currentEpoch()`. */
+    epoch: bigint;
+    /** `runningRoot()` — the CURRENT set, which `getMerkleProof` proves against. */
+    runningRoot: Hex;
+    /** `epochSetRoot(epoch - 1)` — the FROZEN root `validate()` actually checks. */
+    frozenRoot: Hex;
+    /** True when proofs fetched now would verify. */
+    agrees: boolean;
+    /**
+     * `epochPinned(epoch)` — false during the gap between an epoch starting and the keeper calling
+     * `snapshotEpoch()` for it.
+     *
+     * Measured on Sepolia (pr-daemon, historical-block probe): the first ~5 blocks of each epoch
+     * are unpinned, so with `epochLength = 64` the validator is fail-closed roughly **8% of the
+     * time** and a runner starting at a random moment lands in that window about 1 in 13 runs.
+     *
+     * It is carried here so a caller can tell the two red states apart. They look the same in a
+     * root comparison and they are not the same thing: a rollover gap resolves itself within about
+     * a minute, while a genuine set mutation persists for the rest of the epoch.
+     */
+    currentEpochPinned: boolean;
+}
+
+/**
+ * Read whether proofs fetched right now would verify against the root the contract checks.
+ *
+ * This replaces the `lastSetMutationBlock() > atBlock` freshness guard that three evidence runners
+ * used. That guard is worth describing, because it failed in two different ways in sequence:
+ *
+ * 1. It could never fire even when the function existed — `fetchCommitteeSigners` read the value
+ *    PINNED to `atBlock`, and a storage read at block N cannot report a mutation later than N.
+ * 2. When the function was removed upstream (#244) and the read deleted, the destructured value
+ *    became `undefined`, so `undefined > atBlock` is `false` — **silently the same no-op**, now
+ *    with nothing left to notice.
+ *
+ * It exists as one exported function precisely so the next removal has one call site to update
+ * rather than three hand-rolled copies, which is how (2) happened at all.
+ *
+ * ## The index is `epoch - 1`, and the chain cannot corroborate that
+ *
+ * `validate()` reads `setRoot[e - 1]`, so that is what proofs must match. Measured on Sepolia,
+ * `epochSetRoot` for five consecutive epochs and `runningRoot()` are ALL the same value — so
+ * `[e]`, `[e-1]` and `[e-4]` are indistinguishable on the live chain today. **A green run is
+ * therefore zero evidence for the index**; the only evidence is the contract source. Anything
+ * asserting `-1` has to be fed a synthetic reader where the two roots differ.
+ */
+export async function readFrozenRootAgreement(
+    publicClient: Pick<PublicClient, 'readContract'>,
+    committeeValidator: Address,
+): Promise<FrozenRootAgreement> {
+    const read = (functionName: string, args: readonly unknown[] = []) =>
+        publicClient.readContract({
+            address: committeeValidator,
+            abi: AAStarCommitteeValidatorABI,
+            functionName,
+            args,
+        } as never);
+
+    const [runningRoot, epoch] = (await Promise.all([read('runningRoot'), read('currentEpoch')])) as [Hex, bigint];
+    if (epoch === 0n) {
+        throw new Error(
+            `readFrozenRootAgreement: ${committeeValidator} reports currentEpoch() == 0, so there is no ` +
+                'frozen e-1 snapshot for _verifyMerkle to check proofs against.',
+        );
+    }
+    const [frozenRoot, currentEpochPinned] = (await Promise.all([
+        read('epochSetRoot', [epoch - 1n]),
+        read('epochPinned', [epoch]),
+    ])) as [Hex, boolean];
+    return {
+        epoch,
+        runningRoot,
+        frozenRoot,
+        agrees: runningRoot.toLowerCase() === frozenRoot.toLowerCase(),
+        currentEpochPinned,
+    };
+}
+
+/**
+ * A human-readable reason for a {@link FrozenRootAgreement} that does not agree.
+ *
+ * Both states surface as "the roots differ", and treating them alike is how a red gets trained into
+ * noise — which is the failure this repo keeps paying for. They are not alike:
+ *
+ * - **rollover gap** — the epoch just turned and the keeper has not snapshotted it yet. Fail-closed
+ *   by design, self-healing in about a minute, and it happens on ~8% of all blocks.
+ * - **set moved** — a node activated or deactivated inside the epoch. Real, persists to the end of
+ *   the epoch, and even then proofs against `[e-1]` would still verify: the gate is conservative.
+ */
+export function describeFrozenRootDisagreement(a: FrozenRootAgreement): string {
+    if (a.agrees) return 'proofs fetched now would verify against the frozen root';
+    if (!a.currentEpochPinned) {
+        return (
+            `epoch ${a.epoch} is not pinned yet — the keeper has not called snapshotEpoch() since the ` +
+            `epoch turned. This is the ROLLOVER GAP (~first 5 blocks of every epoch, ~8% of the time), ` +
+            'it is fail-closed by design and clears itself within about a minute. Retry rather than investigate.'
+        );
+    }
+    return (
+        `the committee set moved inside epoch ${a.epoch}: getMerkleProof proves against runningRoot ` +
+        `${a.runningRoot}, while _verifyMerkle checks epochSetRoot(${a.epoch - 1n}) = ${a.frozenRoot}. ` +
+        'NOTE this gate is CONSERVATIVE — runningRoot diverges on any node activation/deactivation ' +
+        'while proofs against [e-1] stay valid, so this is a safe-direction refusal, not proof of a defect.'
+    );
 }
