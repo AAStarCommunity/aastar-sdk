@@ -44,6 +44,12 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   // does not exist — inventing a ledger reference inside the PR that adds a rule against
   // unestablished claims.)
   { phrase: '不是上一版的 finding 列表', from: '#396 — 复审只核上一轮清单会放过这一版新造的每一句话' },
+  // Registered in the SAME PR that introduces them, per §9.1. One phrase per prescription, not
+  // one per section: a section can be rewritten around an intact prescription, and vice versa.
+  { phrase: '自洽正是让人停下来的那个信号', from: '#405/#406 — 五种「测了但没测到」的共同形状' },
+  { phrase: '变异必须打在两条路径的分歧处', from: '#405 — 打在公共祖先上的变异证明不了两条路径是同一条' },
+  { phrase: '标量读数不可对账', from: '#404/#406 — 补坐标解决不了，可对账的是集合差或 delta' },
+  { phrase: '先打一句「已落地」的显式回执', from: '#401 — 变异没落地的三种形态，可读性差得很远（第三种由 #406 复审贡献）' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
@@ -58,6 +64,31 @@ describe('verification.md carries the prescriptions it was written for', () => {
     for (const { phrase, from } of PRESCRIPTIONS) {
       expect(from, `${phrase} has no source`).toMatch(/#\d+|FU-\d+/);
     }
+  });
+
+  // §9.1, applied to this registry itself: it had no floor on its own size.
+  //
+  // Measured: deleting one entry gives `Tests 15 passed` — zero red. The total moves in vitest's
+  // summary line, and that is the line nobody reads, so **a prescription can be removed together
+  // with the guard that was watching it, silently**. The document-length floor below is alive
+  // (truncating to 3000 chars gives 14 failed) but its headroom is 22654 vs 4000 — 5.7x — so it
+  // only catches the file being gutted, not an entry going missing.
+  //
+  // The literal is WRITTEN OUT, not derived from `PRESCRIPTIONS.length`. That is the thing #405
+  // r3/r4 paid for twice: a threshold expressed relative to the quantity it guards pins the
+  // direction of the comparison and nothing about its magnitude.
+  //
+  // 14, and getting that number wrong was instructive: the first draft said 15, taken from
+  // `grep -c 'phrase:'` — which also counts the destructuring in the loop below and the word inside
+  // a message template. **A proxy for a count is not the count**, and the assertion caught it
+  // immediately (`expected 14 to be greater than or equal to 15`).
+  it('the registry itself only grows — deleting a prescription must not be silent', () => {
+    expect(
+      PRESCRIPTIONS.length,
+      'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
+        'also deletes the only thing checking that its rule is still in the document. Raise this ' +
+        'floor when adding, never lower it to make a red go away.',
+    ).toBeGreaterThanOrEqual(14);
   });
 
   it('the document still exists and is substantial', () => {
