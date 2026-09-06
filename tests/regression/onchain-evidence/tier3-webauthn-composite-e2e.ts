@@ -60,12 +60,16 @@ import {
     recordDvtSigner,
     newDvtIdentitySeen,
     getDvtConfig,
+    getCommitteeState,
+    isAccountEnrolled,
+    fetchCommitteeSigners,
 } from '@aastar/core';
 // SDK packers UNDER TEST (WebAuthn cumulative, algId 0x0a; #261 tagged owner-auth 0x02).
 import {
     packWebAuthnBlob,
     packCumulativeT3WA,
     packBlsPayload,
+    packCommitteeBlsPayload,
     packOwnerAuthWebAuthn,
 } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op';
@@ -152,7 +156,7 @@ function eip2537ToG2(sig256: Hex) {
 //
 // The endpoint list also came from three hardcoded literals here; it now comes from DVT_CONFIG,
 // which is what AASTAR_DVT_ENV switches — so this gate could not be pointed at the local mirror.
-async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Promise<Hex> {
+async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex, account: Address): Promise<Hex> {
     const signed: { nodeId: Hex; signature: Hex }[] = [];
     const seen = newDvtIdentitySeen();
     const faults: string[] = [];
@@ -178,7 +182,83 @@ async function coSignDvt(userOpRpc: Record<string, unknown>, ownerAuth: Hex): Pr
     if (faults.length) throw new Error(`DVT signer identity fault(s), refusing to aggregate:\n  - ${faults.join('\n  - ')}`);
     if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
-    return packBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex));
+    return buildBlsPayload(signed.map((s) => s.nodeId), encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex), account);
+}
+
+/**
+ * Choose the BLS payload framing by READING the validator, not by assuming it (FU-81).
+ *
+ * This runner used to call `packBlsPayload` unconditionally — the LEGACY `[k][nodeIds…][sig]`
+ * shape. Measured: the canonical algId-0x01 validator reports `committeeActive() == true`
+ * (requiredQuorum 4, TREE_DEPTH 14), and committee mode expects a per-signer Merkle proof against
+ * the FROZEN `epochSetRoot(e-1)`. Legacy bytes there are a SHAPE MISMATCH, not a bad signature —
+ * which is why `validateUserOp(0x0a)` returned 1 with every co-signature valid.
+ *
+ * The SDK was never missing the capability: `packCommitteeBlsPayload` already existed, and
+ * `packCumulativeT2WA`/`packCumulativeT3WA` are framing-agnostic (they take a prebuilt payload).
+ * What was missing was reading `committeeActive()` before deciding which one to build.
+ */
+// The three `c as any` below are load-bearing, and that was MEASURED rather than assumed after
+// review reported them as free to delete (their run: "0 precedent, deleting all three produces no
+// new error"). On this checkout it does not reproduce — same file, `pnpm exec tsc --noEmit -p
+// tsconfig.json`, counting only this file's diagnostics:
+//
+//   origin/main baseline .................. 5
+//   this branch, `as any` KEPT ............ 5   ← this change adds none
+//   this branch, `as any` REMOVED ......... 8   ← +3, exactly at the three call sites
+//
+// So they are not "a check turned off early"; without them `withRpcFallback`'s client parameter
+// does not satisfy what `@aastar/core` asks for here. The disagreement is left visible rather than
+// resolved by picking a side: one of us is measuring a different tree (this file also has 5
+// pre-existing errors on main, which review reported as 0 — the two numbers disagree in the same
+// direction, so the likeliest cause is a different tsconfig or a dist-vs-src resolution of
+// `@aastar/core`, not a different opinion about the code).
+async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Address): Promise<Hex> {
+    const st = await withRpcFallback((c) => getCommitteeState(c as any, BLS_VERIFIER));
+    if (!st.active) {
+        console.log(`    framing: LEGACY (committeeActive=false)`);
+        return packBlsPayload(nodeIds, blsSignature);
+    }
+    console.log(`    framing: COMMITTEE (committeeActive=true, requiredQuorum=${st.requiredQuorum}, TREE_DEPTH=${st.treeDepth})`);
+    // ALL unmet preconditions OF THIS BRANCH at once, never one at a time.
+    //
+    // Scope, stated because the first draft read like a whole-file rule while it governs one
+    // branch: it covers the two preconditions a reader must GO FIX AND RERUN (not enrolled /
+    // under quorum). Node reachability and identity faults above stay one-at-a-time on purpose —
+    // those are one-shot environment states, not a checklist someone works through.
+    // (A sentence reading wider than what it establishes, inside a comment about reporting
+    // everything at once. #403 review.)
+    //
+    // Reporting the first failure and stopping is how "a red hiding another red" happens: today's
+    // measurement found the `lastSetMutationBlock` revert hiding a stale-quorum literal, and the
+    // §4 verdict "12 green 1 red" was really 12 green 2 red. A reader who fixes one precondition
+    // and reruns should not be shown a brand-new blocker they could have seen the first time.
+    const unmet: string[] = [];
+    if (!(await withRpcFallback((c) => isAccountEnrolled(c as any, BLS_VERIFIER, account)))) {
+        unmet.push(
+            `account ${account} is NOT enrolled on committee validator ${BLS_VERIFIER} — committee ` +
+                "framing needs the account's one-time, owner-only enrollInCommitteeValidator()"
+        );
+    }
+    if (BigInt(nodeIds.length) < st.requiredQuorum) {
+        // Attributed, not generic. This is the FU-85 state: the reachable public DVT set is smaller
+        // than the quorum the validator now demands, because every `dvt-onboard-e2e` PATH B run adds
+        // a permanent committee member. Nothing here is broken — the aggregate would be rejected
+        // on-chain, and refusing to build it is the correct behaviour.
+        unmet.push(
+            `UNDER QUORUM: ${nodeIds.length} co-signature(s) reachable, validator requires ` +
+                `${st.requiredQuorum} (activeCount ${st.activeCount}). This is the FU-85 environment ` +
+                'state, not an SDK fault — the reachable DVT set is smaller than the committee'
+        );
+    }
+    if (unmet.length) {
+        throw new Error(
+            `committee framing has ${unmet.length} unmet precondition(s) — all of them, so that fixing ` +
+                `one does not reveal the next:\n  - ${unmet.join('\n  - ')}`
+        );
+    }
+    const { signers } = await withRpcFallback((c) => fetchCommitteeSigners(c as any, BLS_VERIFIER, nodeIds));
+    return packCommitteeBlsPayload(signers, blsSignature, st.treeDepth);
 }
 
 async function main() {
@@ -275,7 +355,7 @@ async function main() {
     if (signed.length < 2) throw new Error(`need >= 2 node co-signatures, got ${signed.length}`);
     const aggPoint = signed.slice(1).reduce((acc, s) => acc.add(eip2537ToG2(s.signature)), eip2537ToG2(signed[0].signature));
     const blsSignature = encodeG2Point(`0x${aggPoint.toHex(false)}` as Hex);
-    const blsPayload = packBlsPayload(signed.map((s) => s.nodeId), blsSignature);
+    const blsPayload = await buildBlsPayload(signed.map((s) => s.nodeId), blsSignature, account);
     console.log(`[3] aggregated ${signed.length} BLS co-signatures`);
 
     // ── Guardian ECDSA over userOpHash ──────────────────────────────────────────────────────────
@@ -349,7 +429,7 @@ async function main() {
     const txWaBlob = packWebAuthnBlob(txAssertion, txHash);
     const txOwnerAuth = packOwnerAuthWebAuthn(txAssertion, txHash);
     const txOpRpc = { sender: txOp.sender, nonce: numberToHex(txOp.nonce), initCode: txOp.initCode, callData: txOp.callData, accountGasLimits: txOp.accountGasLimits, preVerificationGas: numberToHex(txOp.preVerificationGas), gasFees: txOp.gasFees, paymasterAndData: txOp.paymasterAndData, signature: txOp.signature };
-    const txBlsPayload = await coSignDvt(txOpRpc, txOwnerAuth);
+    const txBlsPayload = await coSignDvt(txOpRpc, txOwnerAuth, account);
     const txGuardianSig = await guardianWallet.signMessage({ account: guardian, message: { raw: txHash } });
     txOp.signature = packCumulativeT3WA(txWaBlob, txBlsPayload, txGuardianSig);
     console.log(`[9] Tier-3 composite signed (${(txOp.signature.length - 2) / 2} bytes, algId 0x0a)`);
