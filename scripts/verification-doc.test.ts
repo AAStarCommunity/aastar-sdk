@@ -72,7 +72,19 @@ describe('verification.md carries the prescriptions it was written for', () => {
     expect(doc, `"${phrase}" is missing from ${DOC}`).toContain(phrase);
   });
 
-  it('every prescription cites a PR, and every cited PR number is plausible', () => {
+  // The name says exactly what the assertion does, and no more. It used to read
+  // "…and every cited PR number is PLAUSIBLE", which nothing checked: #414 review measured it by
+  // rewriting one `from` to `'#999 — 完全错误的归属，但形状合法'` — **29 passed, green** — while the
+  // control `'nowhere in particular'` went red. The title had compressed "what I assert" (a
+  // reference-shaped string is present) together with "what I want it to mean" (the reference is
+  // real), which is the §「防误读的文字」 failure applied to a test name.
+  //
+  // A real plausibility check was considered and rejected, with the reason recorded so nobody
+  // re-litigates it silently: bounding `#N` by the highest PR seen in `git log` would make #999 red
+  // and #414 green as required, but it puts a `git` shell-out inside a unit test and creates a
+  // second only-grows ratchet. Narrowing the title is honest and costs nothing; FU-89 holds the
+  // open question.
+  it('every prescription cites a source', () => {
     // A prescription with no origin is the thing this document warns about in its own first line.
     for (const { phrase, from } of PRESCRIPTIONS) {
       expect(from, `${phrase} has no source`).toMatch(/#\d+|FU-\d+/);
