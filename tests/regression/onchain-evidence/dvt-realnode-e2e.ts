@@ -463,23 +463,33 @@ async function main() {
     if (accepted) {
         throw new Error(
             'committeeActive() is true, yet the canonical verifier ACCEPTED a legacy [nodeIds][blsSig] ' +
-            'proof. That contradicts `cc103-committee-e2e`, which asserts committee mode rejects legacy ' +
-            'framing (and `cc103-committee-positive-e2e` / `tier3-composite-e2e:419`, which assert the ' +
-            'committee-framed accept). One of them is wrong — do not paper over it here.',
+            'proof. That contradicts `cc103-committee-positive-e2e` and `tier3-composite-e2e:419`, ' +
+            'which assert the committee-framed ACCEPT — those are the ones this result would falsify. ' +
+            '(`cc103-committee-e2e` also asserts the legacy rejection, but its own header says it ' +
+            'CANNOT make a positive validate() call, so it is not the counterpart here.) One of them is ' +
+            'wrong — do not paper over it here.',
         );
     }
     console.log(
         `\n✅ SUPERSEDED, and verified as such: committeeActive() = true and the canonical verifier\n` +
-        `   ${VERIFIER} REJECTS the legacy proof shape (validate = ${validateResult}). The three live DVT\n` +
-        '   nodes still co-signed a real userOpHash and their signatures still aggregated — that half is\n' +
-        '   unchanged and is what this runner still proves.\n' +
+        `   ${VERIFIER} REJECTS the legacy proof shape (validate = ${validateResult}).\n` +
+        '\n' +
+        '   What this run established: three live DVT nodes co-signed a real userOpHash, the SDK\n' +
+        '   aggregated their signatures, and the canonical verifier rejected the legacy SHAPE. That is\n' +
+        '   the whole of it — it is NOT an accept-path result, and the two paragraphs below say so\n' +
+        '   rather than leaving a reader to reconcile them.\n' +
         '\n' +
         '   Where the committee-framed ACCEPT path is asserted: `tier3-composite-e2e` (validateUserOp\n' +
-        '   == 0), `tier3-committee-handleops`, `cc103-committee-positive-e2e`. ⚠️ Measured 2026-09-07,\n' +
-        '   all three are currently RED — not broken, blocked: `under quorum: 3 < 4`. The reachable\n' +
-        '   public DVT set is smaller than the quorum the validator now demands (FU-85). So the accept\n' +
-        '   path is asserted somewhere, and is NOT being exercised anywhere right now. Saying only the\n' +
-        '   first half would move coverage onto runners that do not currently run.',
+        '   == 0), `tier3-committee-handleops`, `cc103-committee-positive-e2e`.\n' +
+        '\n' +
+        '   ⚠️ Measured 2026-09-07: all three RED — not broken, BLOCKED on `under quorum: 3 < 4`. The\n' +
+        '   reachable public DVT set is smaller than the quorum the validator demands (FU-85). So the\n' +
+        '   accept path is asserted somewhere and is NOT being exercised anywhere. Pointing at a runner\n' +
+        '   that does not run, and deleting the coverage, read the same to whoever comes next.\n' +
+        `   RE-MEASURE rather than trusting that date: requiredQuorum() on ${VERIFIER} vs the number of\n` +
+        '   reachable nodes in getDvtConfig().dvtNodes — if quorum <= reachable, this warning is stale\n' +
+        '   and those three should be green again. A dated claim about a moving quantity expires; the\n' +
+        '   comparison that produced it does not.',
     );
 }
 
