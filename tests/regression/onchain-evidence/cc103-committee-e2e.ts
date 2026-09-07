@@ -23,6 +23,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { concat, createPublicClient, http, keccak256, numberToHex, parseAbiItem, size, toHex, type Address, type Hex } from 'viem';
 import { sepolia } from 'viem/chains';
+import { replaySetEvents } from '../../../scripts/committee-set-replay.js';
 import {
     AAStarCommitteeValidatorABI,
     CANONICAL_ADDRESSES,
@@ -199,17 +200,19 @@ async function main() {
         fromBlock: 'earliest',
         toBlock: 'latest',
     });
-    // Order matters, not just membership: a nodeId may be assigned, cleared and re-assigned, and only
-    // the LAST event for it decides. Sorting by (block, logIndex) and replaying is the whole fix —
-    // a set difference would drop a node that came back.
-    type Ev = { nodeId: Hex; add: boolean; block: bigint; idx: number };
-    const events: Ev[] = [
-        ...logs.map((l) => ({ nodeId: (l as any).args.nodeId as Hex, add: true, block: l.blockNumber!, idx: l.logIndex! })),
-        ...cleared.map((l) => ({ nodeId: (l as any).args.nodeId as Hex, add: false, block: l.blockNumber!, idx: l.logIndex! })),
-    ].sort((a, b) => (a.block === b.block ? a.idx - b.idx : a.block < b.block ? -1 : 1));
-    const live = new Set<Hex>();
-    for (const e of events) (e.add ? live.add(e.nodeId) : live.delete(e.nodeId));
-    const nodeIds = [...live];
+    // Order matters, not just membership: a nodeId may be assigned, cleared and re-assigned (the
+    // validator recycles freed slots), and only the LAST event for it decides. The replay lives in
+    // `scripts/committee-set-replay.ts` so it can be tested against the case the CHAIN CANNOT
+    // PRODUCE: on live data, ordered replay and a set difference both return the same set, because
+    // no nodeId has ever been re-assigned after a clear (#415 review measured it). The synthetic
+    // `assign → clear → assign` in `committee-set-replay.test.ts` is what makes that reason a
+    // reading instead of an assertion — and it runs in CI, which this file does not.
+    const nodeIds = [
+        ...replaySetEvents([
+            ...logs.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: true, block: l.blockNumber, idx: l.logIndex })),
+            ...cleared.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: false, block: l.blockNumber, idx: l.logIndex })),
+        ]),
+    ] as Hex[];
     console.log(
         `      replayed ${logs.length} SlotAssigned + ${cleared.length} SlotCleared -> ${nodeIds.length} live`,
     );
