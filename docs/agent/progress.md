@@ -53,6 +53,35 @@ jason 授权后用 PAT 模式补发，**9 个已合并**（#385 #386 #387 #388 #
 （`latest` 仍留在 0.45.0），完整性哈希 `b8953258…a3b6d` 本地重算逐字相同，
 空工程 import 实测三个键均为新值。**CC-115 B5 由此解锁**，已回帖。
 
+### §4 复测（2026-09-07）：委员会那一族的红全部消掉了
+
+FU-85 收口之后逐条实跑。**只重跑了下表这 5 条，其余 14 条未重跑** —— 这一节说的是这 5 条，
+不是全集的新总数。
+
+| runner | 结果 | 读数 |
+|---|---|---|
+| `tier3-composite-e2e` | 🟢 | `validateUserOp(0x05) = 0`；旧格式与 legacy 取景两条负例都拒 |
+| `tier3-committee-handleops` | 🟢 | handleOps `0x20675b82…`，UserOpEvent `success=true` |
+| `cc103-committee-positive-e2e` | 🟢 | `validateUserOp == 0`，quorum 3 |
+| `cc103-committee-e2e` | 🟢 **（修完才绿）** | 它自己有一个缺陷：只回放 `SlotAssigned`、不减 `SlotCleared`。见 #415 |
+| `tier3-webauthn-composite-e2e` | 🟢 **（补了两件才绿）** | 见下 |
+
+**前三条转绿的原因是环境被修好**：`activeCount` 5→4 之后 keeper pin `requiredQuorum=3`，
+而公网正好三个 DVT 节点能联签。此前它们 fail-closed 于 `only 3 committee signer(s) collected,
+validator requires 4`（FU-85）。
+
+**`cc103-committee-e2e` 是被这次修复暴露出来的真缺陷**，不是环境问题：append-only 的事件重建
+在「从未发生过删除」时恰好正确，删除一发生就去为一个已失活的节点要 `getMerkleProof`。
+
+**`tier3-webauthn-composite-e2e` 需要两件，都不是代码缺陷**：
+1. 账户 `0xfabA1017…` 缺一次性的 owner-only `enrollInCommitteeValidator()` ——
+   已补，tx `0xfe68de68…`（该账户是套件自己派生并持有的 fixture，owner 就是套件发交易用的那把 key）。
+2. `.env.sepolia` 里的 Pimlico key 已过期（401），要用 `~/Dev/.env` 的活 key 覆盖 —— 见 FU-88。
+   补齐后：真实 bundler UserOp `0x5f66a054…` → 链上 tx `0x78ad6f6f…` `success=true`。
+
+**未重跑、状态沿用上一轮**：`x402-live-roundtrip`（他仓 opt-in 模块未启用）、
+`dvt-realnode`（#392 选 (b) 后已改为条件断言）、以及 2 条需板子侧 env 的。
+
 ### §4 全集：19 个 runner，14 绿
 
 红的**五**条，成因分三类 —— **而三条同源**（14 绿 + 5 红 = 19，与上一行的 runner 总数对得上；初稿写「四条」而紧跟的表枚举了五条，是 #398 评审用加法抓到的）：
