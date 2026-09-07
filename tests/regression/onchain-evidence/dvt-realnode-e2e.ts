@@ -72,6 +72,7 @@ import {
     classifyDvtSigner,
     recordDvtSigner,
     newDvtIdentitySeen,
+    AAStarCommitteeValidatorABI,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 
@@ -83,52 +84,51 @@ const VERIFIER = getAddress(CANONICAL_ADDRESSES[SEPOLIA].aaStarBLSAlgorithm); //
 const FACTORY = getAddress(CANONICAL_ADDRESSES[SEPOLIA].airAccountFactoryV7);
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEPOLIA].entryPoint); // EntryPoint v0.7
 
-// Hard-pin the verifier so a stale address book can never silently retarget this acceptance test.
-// RETARGETED v0.20.0 (0xAF525A16…) -> v0.27.0 DVT-unification (0x539B…), deliberately and with the
-// guard kept: canonical's algId-0x01 verifier moved at v0.27.0 (#274 / CC-10), and this runner's own
-// premise is that the CANONICAL verifier accepts the SDK-assembled proof. The old contract is still
-// live on-chain, so the pin was not "broken" — it was aimed at a superseded target, which is exactly
-// the case this guard is meant to force a human to look at rather than let a config edit slide by.
-// The three DVT nodes are registered on 0x539B (isRegistered verified on-chain).
+// This runner's premise USED TO BE that the canonical algId-0x01 verifier accepts an SDK-assembled
+// legacy proof. It pinned that verifier hard, so a stale address book could not silently retarget
+// the acceptance test — and the pin was retargeted once already (v0.20.0 `0xAF525A16…` → v0.27.0
+// `0x539B…`, #274 / CC-10) deliberately, with the guard kept.
 //
-// ── 2026-09-06: the guard FIRED, and it fired correctly. What it is asking is a product question. ──
+// That premise is gone. See the block below: canonical moved to a COMMITTEE-mode validator that
+// rejects the legacy proof SHAPE, and the release does not claim the legacy path (#392, option b).
+//
+// ── 2026-09-06: the guard fired, the product question it asked was answered, and the answer is NO ──
 //
 // Canonical's algId-0x01 verifier moved again, v0.27.0 `0x539B…` → v0.33.0 `0x7ac7E9d4…`, and the
 // new one runs in COMMITTEE mode (`committeeActive() == true`, `epochLength() == 64`).
 //
-// This is NOT a stale pin to bump, and bumping it would break the runner for a second reason rather
-// than fix it. Measured today, with a real 3-node aggregate (`v0.23.0-row10-handleops`):
+// Measured with a real 3-node aggregate (`v0.23.0-row10-handleops`):
 //
-//     verifier.validate([nodeIds][blsSig]) on 0x7ac7E9d4…  =  1     ← the canonical verifier
-//                                                                     REJECTS the legacy proof shape
-//     the three nodeIds are `isRegistered == true` on BOTH validators (so registration is not it)
+//     verifier.validate([nodeIds][blsSig]) on 0x7ac7E9d4…  =  1     ← canonical REJECTS the legacy
+//                                                                     proof shape
+//     the three nodeIds are `isRegistered == true` on BOTH validators — registration is not it
 //
-// Under committee mode the verifier expects committee framing (per-signer Merkle proofs against the
-// frozen `epochSetRoot(e-1)`); a legacy `[nodeIds][blsSig]` proof is a SHAPE mismatch. The same
-// supersession that `v0.23.0-row10-handleops` now asserts at the account level applies here at the
-// verifier level. `cc103-committee-e2e` independently asserts the rejection and passes.
+// Committee mode expects per-signer Merkle proofs against the frozen `epochSetRoot(e-1)`; a legacy
+// `[nodeIds][blsSig]` proof is a SHAPE mismatch, not a bad signature. Bumping the pin would have
+// broken this runner for a second reason rather than fixed it.
 //
-// So the open question is not an address. It is: **is the legacy DVT verifier-proof path still a
-// scenario this release claims to support?**
-//   (a) YES → keep this pin at `0x539B…` and rewrite the comment above: the pin then means
-//       "the LEGACY validator, deliberately", not "canonical", and the runner is evidence about a
-//       contract the canonical router no longer mounts.
-//   (b) NO  → give it the Row 10 treatment: assert the supersession and point at
-//       `tier3-composite-e2e` / `tier3-committee-handleops` for the committee equivalent.
+// The question the guard forced — **is the legacy DVT verifier-proof path still a scenario this
+// release claims to support?** — was put to the author and answered **NO**. So this runner gets the
+// Row 10 treatment (#391): it stops claiming to be evidence about the canonical path, and instead
+// ASSERTS the supersession, pointing at the runners that carry the committee equivalent.
 //
-// That is a product decision about what the release claims, not a config edit, so it is NOT made
-// here. The guard stays and keeps failing — which is exactly what it was written to do.
-const EXPECTED_VERIFIER = getAddress('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
-if (VERIFIER !== EXPECTED_VERIFIER) {
+// What that costs, stated rather than buried: this file is no longer evidence that the canonical
+// verifier accepts an SDK-assembled proof. `tier3-composite-e2e` and `tier3-committee-handleops`
+// are. What it still proves is narrower and still worth running — that the three live DVT nodes
+// co-sign a real userOpHash and that their signatures aggregate — plus, now, that the legacy shape
+// is rejected by the canonical verifier, which is the fact the supersession rests on.
+const LEGACY_VERIFIER = getAddress('0x539B9681aFd5BFbCaa655Fe4c6BdcFe1fa7864bC');
+
+// The guard is INVERTED relative to the old one, and that inversion is the whole change. It used to
+// demand that canonical still BE the legacy address. It now demands that canonical have MOVED ON —
+// so if someone ever repoints canonical back at `0x539B…`, this fails and asks why.
+if (VERIFIER === LEGACY_VERIFIER) {
     throw new Error(
-        `VERIFIER drift (the guard is working, not broken): CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm ` +
-        `= ${VERIFIER}, this runner is pinned to ${EXPECTED_VERIFIER}.\n` +
-        '  Canonical moved to the v0.33.0 COMMITTEE-mode validator. Bumping this pin does NOT fix the ' +
-        'runner: measured, that validator returns 1 for a legacy [nodeIds][blsSig] proof, because ' +
-        'committee mode expects per-signer Merkle proofs. Node registration is NOT the issue — all ' +
-        'three nodeIds are isRegistered on both validators.\n' +
-        '  The decision this needs is whether the legacy DVT verifier-proof path is still a supported ' +
-        'scenario. See the comment above this guard for the two options. Do not silently repoint.'
+        `CANONICAL_ADDRESSES[${SEPOLIA}].aaStarBLSAlgorithm is back at the LEGACY verifier ` +
+        `${LEGACY_VERIFIER}. This runner was rewritten (#392, option b) on the measured fact that ` +
+        'canonical had moved to the v0.33.0 COMMITTEE validator and rejects legacy [nodeIds][blsSig] ' +
+        'proofs. If canonical is legacy again, that premise is gone — do not "fix" this by deleting ' +
+        'the check; find out why the address book moved backwards.'
     );
 }
 
@@ -432,9 +432,43 @@ async function main() {
     console.log(`│ neg ECDSA        : ${ecdsaReverted ? 'reverted' : ecdsaValidation}  ${ecdsaRejected ? '✅ rejected' : '❌ accepted (BAD)'}`);
     console.log('└──────────────────────────────────────────────────────────────────────────');
 
-    if (!accepted) throw new Error('FAIL: on-chain validate() did not return 0 for the SDK-assembled proof');
     if (!ecdsaRejected) throw new Error('FAIL: ECDSA negative control was accepted — mandatory-BLS not enforced');
-    console.log('\n🎉 PASS — DVT combined signature ACCEPTED on-chain (validate = 0); ECDSA op rejected (mandatory-BLS).');
+
+    // What "pass" means here depends on which mode the canonical verifier is in, and the mode is
+    // READ, not assumed. #392 option (b): the legacy verifier-proof path is not a scenario this
+    // release claims, so under committee mode the REJECTION is the expected outcome and this runner
+    // asserts it rather than failing on a premise the release has dropped. Same treatment Row 10
+    // got in #391.
+    const committeeOn = (await withRpcFallback((c) =>
+        c.readContract({ address: VERIFIER, abi: AAStarCommitteeValidatorABI, functionName: 'committeeActive' }),
+    )) as boolean;
+
+    if (!committeeOn) {
+        // Legacy stack (or committee switched off upstream): the original premise holds unchanged.
+        if (!accepted) throw new Error('FAIL: on-chain validate() did not return 0 for the SDK-assembled proof');
+        console.log('\n🎉 PASS — DVT combined signature ACCEPTED on-chain (validate = 0); ECDSA op rejected (mandatory-BLS).');
+        return;
+    }
+
+    // Committee mode. A legacy `[nodeIds][blsSig]` proof is a SHAPE mismatch, so `validate()` must
+    // return non-zero. Requiring the specific documented behaviour — a RETURNED value — rather than
+    // "anything that isn't 0" matters: collapsing a revert into "correctly rejected" would make any
+    // RPC hiccup or ABI drift read as evidence (the same fail-open Row 10 was fixed for).
+    if (accepted) {
+        throw new Error(
+            'committeeActive() is true, yet the canonical verifier ACCEPTED a legacy [nodeIds][blsSig] ' +
+            'proof. That contradicts cc103-committee-e2e, which asserts committee mode rejects legacy ' +
+            'framing. One of the two is wrong — do not paper over it here.',
+        );
+    }
+    console.log(
+        `\n✅ SUPERSEDED, and verified as such: committeeActive() = true and the canonical verifier\n` +
+        `   ${VERIFIER} REJECTS the legacy proof shape (validate = ${validateResult}). The three live DVT\n` +
+        '   nodes still co-signed a real userOpHash and their signatures still aggregated — that half is\n' +
+        '   unchanged and is what this runner still proves.\n' +
+        '   The committee-framed equivalent lives in `tier3-composite-e2e` and `tier3-committee-handleops`;\n' +
+        '   this file is NOT evidence about the canonical accept path any more (#392, option b).',
+    );
 }
 
 main().catch((e) => {
