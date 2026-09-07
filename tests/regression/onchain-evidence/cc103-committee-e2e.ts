@@ -23,6 +23,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { concat, createPublicClient, http, keccak256, numberToHex, parseAbiItem, size, toHex, type Address, type Hex } from 'viem';
 import { sepolia } from 'viem/chains';
+import { replaySetEvents } from '../../../scripts/committee-set-replay.js';
 import {
     AAStarCommitteeValidatorABI,
     CANONICAL_ADDRESSES,
@@ -180,8 +181,45 @@ async function main() {
         fromBlock: 'earliest',
         toBlock: 'latest',
     });
-    const nodeIds = [...new Set(logs.map((l) => (l as any).args.nodeId as Hex))];
-    check(nodeIds.length === Number(activeCount), 'SlotAssigned set matches activeCount()', `${nodeIds.length} nodes`);
+    // SlotCleared must be replayed too. Replaying only SlotAssigned is an APPEND-ONLY reconstruction:
+    // it equals the active set exactly as long as nothing was ever removed — which was true of this
+    // validator until 2026-09-07, when a stranded node was revoked (FU-85) and this runner started
+    // asking `getMerkleProof` for a node the contract answers "node not active" for. The bug was
+    // always there; the environment was simply hiding it, and the `length === activeCount` check
+    // above could not tell "correct reconstruction" from "no deletion has happened yet".
+    const cleared = await pc.getLogs({
+        address: stack.committeeValidator,
+        event: {
+            type: 'event',
+            name: 'SlotCleared',
+            inputs: [
+                { name: 'nodeId', type: 'bytes32', indexed: true },
+                { name: 'slot', type: 'uint256', indexed: false },
+            ],
+        },
+        fromBlock: 'earliest',
+        toBlock: 'latest',
+    });
+    // Order matters, not just membership: a nodeId may be assigned, cleared and re-assigned (the
+    // validator recycles freed slots), and only the LAST event for it decides. The replay lives in
+    // `scripts/committee-set-replay.ts` so it can be tested against the case the CHAIN CANNOT
+    // PRODUCE: on live data, ordered replay and a set difference both return the same set, because
+    // no nodeId has ever been re-assigned after a clear (#415 review measured it). The synthetic
+    // `assign → clear → assign` in `committee-set-replay.test.ts` is what makes that reason a
+    // reading instead of an assertion — and it runs in CI, which this file does not.
+    const nodeIds = [
+        ...replaySetEvents([
+            ...logs.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: true, block: l.blockNumber, idx: l.logIndex })),
+            ...cleared.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: false, block: l.blockNumber, idx: l.logIndex })),
+        ]),
+    ] as Hex[];
+    console.log(
+        `      replayed ${logs.length} SlotAssigned + ${cleared.length} SlotCleared -> ${nodeIds.length} live`,
+    );
+    // This check is the one that would have caught the append-only reconstruction the moment a
+    // deletion happened — it is only vacuous while `cleared.length === 0`, which is why the counts
+    // are printed above rather than left implicit.
+    check(nodeIds.length === Number(activeCount), 'replayed SlotAssigned/SlotCleared matches activeCount()', `${nodeIds.length} nodes`);
 
     const signers: CommitteeSigner[] = [];
     for (const nodeId of nodeIds) {
