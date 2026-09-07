@@ -49,6 +49,9 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   { phrase: '自洽正是让人停下来的那个信号', from: '#405/#406 — 五种「测了但没测到」的共同形状' },
   { phrase: '变异必须打在两条路径的分歧处', from: '#405 — 打在公共祖先上的变异证明不了两条路径是同一条' },
   { phrase: '标量读数不可对账', from: '#404/#406 — 补坐标解决不了，可对账的是集合差或 delta' },
+  { phrase: '说不出不同的样子，就还没有对照', from: '#410 — 两个互斥假设预测同一读数时，对照是零证据' },
+  { phrase: '不会告诉你正确答案不在列表上', from: '#410 — 对照只在你列出的假设之间裁决' },
+  { phrase: '先列出这个阶段的全部前置条件', from: '#410 — 五条倒推假设全错，唯一答对的是正着列出来的' },
   { phrase: '先打一句「已落地」的显式回执', from: '#401 — 变异没落地的三种形态，可读性差得很远（第三种由 #406 复审贡献）' },
 ];
 
@@ -88,7 +91,7 @@ describe('verification.md carries the prescriptions it was written for', () => {
       'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
         'also deletes the only thing checking that its rule is still in the document. Raise this ' +
         'floor when adding, never lower it to make a red go away.',
-    ).toBeGreaterThanOrEqual(14);
+    ).toBeGreaterThanOrEqual(17);
   });
 
   it('the document still exists and is substantial', () => {
