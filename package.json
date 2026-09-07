@@ -75,7 +75,13 @@
     "address:sync": "tsx scripts/address-sync.ts",
     "check:stubs": "tsx scripts/check-stubs.ts",
     "check:browser": "tsx scripts/check-browser-safe.ts",
-    "check:evidence-literals": "tsx scripts/check-evidence-literals.ts"
+    "check:evidence-literals": "tsx scripts/check-evidence-literals.ts",
+    "check:dep-dedupe": "tsx scripts/check-dep-dedupe.ts"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "5.7.2"
+    }
   },
   "devDependencies": {
     "@types/jest": "30.0.0",

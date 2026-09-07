@@ -150,6 +150,15 @@ jobs:
       - name: Evidence runners must not hardcode a hex address in a printed line
         run: pnpm run check:evidence-literals
 
+      # One package version must resolve to ONE physical copy. The root pinned typescript@5.6.3
+      # while 16 workspace packages pinned 5.7.2, so pnpm installed viem/ox/abitype TWICE — and two
+      # copies of one version are two nominally distinct types. `PublicClient` from tests/ did not
+      # satisfy `PublicClient` from @aastar/core, the diagnostic said "…68 more…" vs "…67 more…",
+      # and every call across that boundary carried an `as any` that read as noise. Fixing it took
+      # the root tsc diagnostics 1246 -> 696 (#404).
+      - name: One package version, one physical copy
+        run: pnpm run check:dep-dedupe
+
 
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
