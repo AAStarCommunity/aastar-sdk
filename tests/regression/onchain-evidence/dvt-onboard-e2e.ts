@@ -210,8 +210,15 @@ async function teardownFreshNode(
   // on-chain effect. A claim about a check, introduced by the very commit that was about false
   // claims about checks, and verified by nobody.
   //
-  // `WalletClient` bare costs 5 new diagnostics (`writeContract` needs the account/chain narrowing);
-  // `WalletClient<Transport, Chain, Account>` costs zero. Measured, all three now red under mutation:
+  // `WalletClient` bare is not free (`writeContract` needs the account/chain narrowing), and the cost
+  // is THREE different numbers depending on who is counting — so each carries its unit, because the
+  // next person will run the gate, get 2, and think this note went stale:
+  //   raw tsc on this file      5   (TS2345 ×4 + TS18048 ×1)
+  //   of those, NEW             4   (`:101` TS2345 'Buffer' is on the baseline already)
+  //   as the gate counts        2   over-cap `(file, code)` keys — its key deliberately omits the
+  //                                 line number, see `evidence-types.ts:19-21`
+  // `WalletClient<Transport, Chain, Account>` costs zero on all three. Measured, all three call
+  // sites now red under mutation:
   //   publicClient.readContract    → wrong method   TS2551 🔴
   //   funderWallet.writeContract   → wrong method   TS2551 🔴
   //   operatorWallet.writeContract → wrong method   TS2551 🔴
