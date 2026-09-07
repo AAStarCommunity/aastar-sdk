@@ -53,6 +53,10 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   { phrase: '不会告诉你正确答案不在列表上', from: '#410 — 对照只在你列出的假设之间裁决' },
   { phrase: '先列出这个阶段的全部前置条件', from: '#410 — 五条倒推假设全错，唯一答对的是正着列出来的' },
   { phrase: '先打一句「已落地」的显式回执', from: '#401 — 变异没落地的三种形态，可读性差得很远（第三种由 #406 复审贡献）' },
+  // Registered in the SAME PR that introduces them, per §9.1.
+  { phrase: '下限不能松——下限的紧就是它的功能', from: '#412 — 自动评审第二次建议把同一道 floor 降到当前值以下' },
+  { phrase: '答不出②就把它写成问句', from: '#412 — 「X 在别处被覆盖」的两个成因产出同一句话' },
+  { phrase: '先问它涉及几层', from: '#412 — 倒推全错不是不够仔细，是成因和被 diff 的东西不在同一层' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
@@ -91,7 +95,7 @@ describe('verification.md carries the prescriptions it was written for', () => {
       'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
         'also deletes the only thing checking that its rule is still in the document. Raise this ' +
         'floor when adding, never lower it to make a red go away.',
-    ).toBeGreaterThanOrEqual(17);
+    ).toBeGreaterThanOrEqual(20);
   });
 
   it('the document still exists and is substantial', () => {
