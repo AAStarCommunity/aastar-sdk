@@ -80,7 +80,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {
   createPublicClient, createWalletClient, http, formatEther, keccak256, toHex, type Address, type Hex,
-  type PublicClient,
+  type PublicClient, type WalletClient, type Transport, type Chain, type Account,
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -198,15 +198,26 @@ async function main() {
  * function was written to prevent, and the next reader sees a green run over a committee that grew.
  */
 async function teardownFreshNode(
-  // `publicClient` is typed, deliberately: pr-daemon mutation-tested #408's gate against this
-  // function and found it BLIND here — `readContrctTYPO()` on an `any` client stayed green while a
-  // real bug (`before - 1` vs `before - 1n`) went red. Four `any` parameters hid the whole
-  // interaction surface of the one path with no unit-test coverage. Typing this one puts the reads
-  // and writes back under the gate; the three wallet params stay `any` because the runner's callers
-  // are themselves untyped and tightening them was not measured (FU-86).
+  // Every client parameter is typed, deliberately: pr-daemon mutation-tested #408's gate against
+  // this function and found it BLIND here — a nonexistent method on an `any` client stayed green
+  // while a real bug (`before - 1` vs `before - 1n`) went red. Four `any` parameters hid the whole
+  // interaction surface of the one path with no unit-test coverage.
+  //
+  // The first fix typed only `publicClient`, and the comment that shipped with it claimed the reads
+  // "and writes" were back under the gate. **The writes were not** — pr-daemon measured it: a
+  // nonexistent method on either `any` wallet stayed green, and those two calls
+  // (`requestGuardianExit` / `syncExitNotice`) are the only places this runner leaves a permanent
+  // on-chain effect. A claim about a check, introduced by the very commit that was about false
+  // claims about checks, and verified by nobody.
+  //
+  // `WalletClient` bare costs 5 new diagnostics (`writeContract` needs the account/chain narrowing);
+  // `WalletClient<Transport, Chain, Account>` costs zero. Measured, all three now red under mutation:
+  //   publicClient.readContract    → wrong method   TS2551 🔴
+  //   funderWallet.writeContract   → wrong method   TS2551 🔴
+  //   operatorWallet.writeContract → wrong method   TS2551 🔴
   publicClient: PublicClient,
-  operatorWallet: any,
-  funderWallet: any,
+  operatorWallet: WalletClient<Transport, Chain, Account>,
+  funderWallet: WalletClient<Transport, Chain, Account>,
   nodeId: Hex,
   validator: Address,
   c: any,
