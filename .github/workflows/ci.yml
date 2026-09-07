@@ -159,6 +159,15 @@ jobs:
       - name: One package version, one physical copy
         run: pnpm run check:dep-dedupe
 
+      # The evidence runners are executed against live contracts and were typechecked by NOTHING in
+      # CI: `ci.yml` contained the literal `tsc` zero times. Twice in two days a file there shipped
+      # uncompilable while all three checks were green — #401 (`refused` referenced outside its
+      # block) and #403 (a parameter used but not declared); both would have thrown at runtime.
+      # Baselined at the 48 diagnostics the directory already carried, so a NEW one is loud while
+      # the existing debt stays.
+      - name: Evidence runners must typecheck (no NEW diagnostics)
+        run: pnpm run check:evidence-types
+
 
       # A PR that says it closes a follow-up must actually close it, in the ledger on its own branch.
       # Two entries drifted in one night without either being a lapse of care — both had a moment
