@@ -57,6 +57,7 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   { phrase: '下限不能松——下限的紧就是它的功能', from: '#412 — 自动评审第二次建议把同一道 floor 降到当前值以下' },
   { phrase: '答不出②就把它写成问句', from: '#412 — 「X 在别处被覆盖」的两个成因产出同一句话' },
   { phrase: '先问它涉及几层', from: '#412 — 倒推全错不是不够仔细，是成因和被 diff 的东西不在同一层' },
+  { phrase: '正对照要断言读数的「形状」', from: '#412 — 量具失败时的输出几乎总是非空的，所以「非 0」会被失败本身满足（pr-daemon 在 #409 的样本）' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
@@ -95,7 +96,7 @@ describe('verification.md carries the prescriptions it was written for', () => {
       'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
         'also deletes the only thing checking that its rule is still in the document. Raise this ' +
         'floor when adding, never lower it to make a red go away.',
-    ).toBeGreaterThanOrEqual(20);
+    ).toBeGreaterThanOrEqual(21);
   });
 
   it('the document still exists and is substantial', () => {

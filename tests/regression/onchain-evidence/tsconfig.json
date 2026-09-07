@@ -1,0 +1,11 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "$comment": "A tsc project for the evidence runners, so their types are checked by a CI step rather than by hand. Two of them shipped a file that did not compile while all three CI checks were green (#401 refused, #403 refused): `ci.yml` contains the literal `tsc` zero times, and these files belong to the root project — which nothing in CI runs.",
+  "include": ["./**/*.ts"]
+}
