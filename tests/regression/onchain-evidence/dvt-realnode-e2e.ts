@@ -465,19 +465,21 @@ async function main() {
             'committeeActive() is true, yet the canonical verifier ACCEPTED a legacy [nodeIds][blsSig] ' +
             'proof. That contradicts `cc103-committee-positive-e2e` and `tier3-composite-e2e:419`, ' +
             'which assert the committee-framed ACCEPT — those are the ones this result would falsify. ' +
-            '(`cc103-committee-e2e` also asserts the legacy rejection, but its own header says it ' +
-            'CANNOT make a positive validate() call, so it is not the counterpart here.) One of them is ' +
-            'wrong — do not paper over it here.',
+            '(`cc103-committee-e2e` is NOT the counterpart: what it asserts is that the encoder\'s byte ' +
+            'layout is unchanged, offline, and its own header says it cannot make a positive ' +
+            'validate() call at all.) One of them is wrong — do not paper over it here.',
         );
     }
     console.log(
         `\n✅ SUPERSEDED, and verified as such: committeeActive() = true and the canonical verifier\n` +
         `   ${VERIFIER} REJECTS the legacy proof shape (validate = ${validateResult}).\n` +
         '\n' +
-        '   What this run established: three live DVT nodes co-signed a real userOpHash, the SDK\n' +
-        '   aggregated their signatures, and the canonical verifier rejected the legacy SHAPE. That is\n' +
-        '   the whole of it — it is NOT an accept-path result, and the two paragraphs below say so\n' +
-        '   rather than leaving a reader to reconcile them.\n' +
+        '   What this run established, at the precision the evidence actually supports: three live DVT\n' +
+        '   nodes each RETURNED a 256-byte G2 point for a real userOpHash and each is isRegistered on\n' +
+        '   the verifier; the SDK aggregated those points; the canonical verifier rejected the legacy\n' +
+        '   SHAPE. "Co-signed" would be stronger than that — nothing here pairing-checks an individual\n' +
+        '   signature, and the only on-chain oracle in this run REJECTED the aggregate, so it cannot\n' +
+        '   vouch for the parts either. That is the whole of it: NOT an accept-path result.\n' +
         '\n' +
         '   Where the committee-framed ACCEPT path is asserted: `tier3-composite-e2e` (validateUserOp\n' +
         '   == 0), `tier3-committee-handleops`, `cc103-committee-positive-e2e`.\n' +
