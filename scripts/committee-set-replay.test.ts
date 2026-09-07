@@ -87,8 +87,13 @@ describe('setDifferenceSet stays out of production', () => {
     // directory and was skipped on its extension alone.
     //
     // `ext/` and `docs/api/` are deliberately out: the first is vendored third-party code, the
-    // second is generated typedoc output (~1200 files of permalink noise). Neither can import from
-    // `scripts/`, and pulling them in would make the count large enough that nobody reads it.
+    // second is generated typedoc output (~1200 files of permalink noise), and pulling them in
+    // would make the count large enough that nobody reads it.
+    //
+    // An earlier version of this comment said "neither CAN import from `scripts/`" — a capability
+    // claim. What is measured is the weaker one: `grep -rl setDifferenceSet` over both returns 0
+    // today. #415 review flagged the gap and declined to vouch for the strong form, which is the
+    // right call: "cannot" would need something enforcing it, and nothing does.
     // `lib` is deliberately absent, and the reason is a reading rather than a guess: it holds 10 TS
     // files in a working tree but **zero tracked ones** (`lib/shared-config` is a submodule), so a
     // clean checkout has nothing there and the per-root floor below correctly reds. CI found that
