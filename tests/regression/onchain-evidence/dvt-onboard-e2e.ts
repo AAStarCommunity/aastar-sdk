@@ -17,10 +17,38 @@
  *     nodeId = keccak256(publicKey) to the fresh operator. Asserts registered && staked && the tx hashes
  *     for every step && on-chain isRegistered && nodeOperator == the fresh operator.
  *
+ *   PATH B TEARDOWN — PATH B is NOT idempotent by construction (a fresh operator + a fresh key each
+ *     run), so without a teardown **every run permanently enlarges the canonical committee**, and a
+ *     larger committee raises `requiredQuorum` (measured stable-state: N=3→Q=2, N=4→Q=3, N=5→Q=4).
+ *     Only three public DVT nodes can actually co-sign, so at N=5 the committee-framed runners
+ *     fail-closed at `only 3 committee signer(s) collected, validator requires 4` — **the suite broke
+ *     the environment it is testing** (FU-85). Measured on the canonical validator
+ *     `0x7ac7E9d4…` @ block 11651477: five live non-bootstrap nodes, slots 0/1/2 registered at blocks
+ *     11604055/56/58 (the real dvt1/2/3) and slots 3/4 at 11641206 / 11644624 left behind by earlier
+ *     e2e runs.
+ *
+ *     The teardown is the operator's OWN exit, not a privileged eviction:
+ *       1. the fresh operator calls `BLSAggregator.requestGuardianExit()` — files a ROLE_DVT exit
+ *          notice. Its quorum guard `_requireCommitteeSurvivesExit` early-returns for this operator
+ *          because it holds no ACTIVE BLS key on the AGGREGATOR (measured: `getBLSPublicKey(op).isActive
+ *          == false` for all five nodes — the aggregator's slot set and the committee validator's
+ *          active set are two different sets).
+ *       2. anyone calls `AAStarCommitteeValidator.syncExitNotice(nodeId)` → `_deactivate` →
+ *          `activeCount -= 1`, immediately. This exists precisely so an in-flight exit does not
+ *          deadlock `snapshotEpoch`; it does NOT wait out the 2-day notice.
+ *
+ *     `unenroll()` is NOT this. It clears `enrolledAccount[msg.sender]` — an ACCOUNT-level flag — and
+ *     never touches `activeCount`. Reaching for it by name is the trap this teardown was written after.
+ *
+ *     The teardown runs in a `finally`, because a run that registers and then fails an assertion is
+ *     exactly how slots 3 and 4 got stranded. It asserts its own effect (`activeCount` fell by one and
+ *     `isRegistered` went false): a cleanup that silently no-ops is how this defect is reintroduced.
+ *
  *   pnpm exec tsx tests/regression/onchain-evidence/dvt-onboard-e2e.ts
  *
  * Requires .env.sepolia: SEPOLIA_RPC_URL, PRIVATE_KEY_JASON (funder + GToken holder), PRIVATE_KEY_JACK.
- * PATH B locks ~33 GToken into a throwaway operator each run — intentional; it is a one-shot acceptance.
+ * PATH B locks ~33 GToken into a throwaway operator each run; the stake stays locked with the exited
+ * operator — the teardown reclaims the COMMITTEE SLOT, not the GToken.
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -99,6 +127,12 @@ async function main() {
     blsSecretKey: blsKey,
   });
 
+  // Captured the moment registration is known to have happened, so the `finally` below can tell
+  // "nothing was planted" apart from "planted, then an assertion threw". Only the second case has
+  // something to clean up, and it is the case that stranded slots 3 and 4.
+  const plantedNodeId: Hex | undefined = b.registered ? (b.nodeId as Hex) : undefined;
+  try {
+
   log(`\n=== PATH B RESULT ===`);
   log(`nodeId          = ${b.nodeId}`);
   log(`operator        = ${b.operator}`);
@@ -121,9 +155,88 @@ async function main() {
   if (!isReg || owner.toLowerCase() !== freshOp.address.toLowerCase()) throw new Error('PATH B FAIL: on-chain post-condition');
 
   log(`\n✅ PATH B PASS — onboardDvtNode staked + registered a fresh node via JASON 代付. register tx ${b.hashes.register}`);
+  } finally {
+    if (plantedNodeId) await teardownFreshNode(publicClient, freshOpWallet, funderWallet, plantedNodeId, validator, c);
+  }
   // The validator is interpolated, never spelled out: the previous literal `0x539B` outlived two
   // canonical bumps and was still being printed on runs that used a different contract entirely.
   log(`\n✅✅ CC-36 E2E PASS — onboardDvtNode proven on live Sepolia ${validator} (idempotent + full 代付 flow).`);
+}
+
+/**
+ * Return the committee slot this run took. See the PATH B TEARDOWN note in the header for why this
+ * exists and why `unenroll()` is not it.
+ *
+ * Every failure here is LOUD. A teardown that swallows its own error leaves exactly the state this
+ * function was written to prevent, and the next reader sees a green run over a committee that grew.
+ */
+async function teardownFreshNode(
+  publicClient: any,
+  operatorWallet: any,
+  funderWallet: any,
+  nodeId: Hex,
+  validator: Address,
+  c: any,
+): Promise<void> {
+  const { AAStarCommitteeValidatorABI, BLSAggregatorABI } = await import('@aastar/core');
+  const aggregator = c.blsAggregator as Address;
+  const operator = operatorWallet.account.address as Address;
+  log(`\n=== PATH B TEARDOWN — returning the committee slot ===`);
+
+  const readCount = () =>
+    publicClient.readContract({ address: validator, abi: AAStarCommitteeValidatorABI, functionName: 'activeCount' }) as Promise<bigint>;
+  const before = await readCount();
+
+  // The aggregator this validator actually binds to. `syncExitNotice` requires
+  // `blsAggregator() == registry's aggregator`, so a canonical drift must fail here with a readable
+  // message rather than as a bare revert inside the exit call.
+  const bound = (await publicClient.readContract({
+    address: validator, abi: AAStarCommitteeValidatorABI, functionName: 'blsAggregator',
+  })) as Address;
+  if (bound.toLowerCase() !== aggregator.toLowerCase()) {
+    throw new Error(
+      `TEARDOWN FAIL: validator.blsAggregator()=${bound} != CANONICAL blsAggregator=${aggregator}. ` +
+        `Fix the canonical address before running this suite — otherwise every run strands a node.`,
+    );
+  }
+
+  // The operator pays for its own exit; top it up rather than assume the onboarding left change.
+  const bal = (await publicClient.getBalance({ address: operator })) as bigint;
+  if (bal < 2_000_000_000_000_000n) {
+    const topUp = await funderWallet.sendTransaction({ to: operator, value: 3_000_000_000_000_000n });
+    await publicClient.waitForTransactionReceipt({ hash: topUp });
+    log(`  topped the exiting operator up for gas: ${topUp}`);
+  }
+
+  const exitTx = await operatorWallet.writeContract({
+    address: aggregator, abi: BLSAggregatorABI, functionName: 'requestGuardianExit', args: [],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: exitTx });
+  log(`  requestGuardianExit  ${exitTx}`);
+
+  // Read the notice back rather than trusting the receipt: `syncExitNotice` reverts "No exit notice
+  // filed" on readyAt==0, and that revert would be the FIRST place anyone learns the exit did not take.
+  const [readyAt] = (await publicClient.readContract({
+    address: aggregator, abi: BLSAggregatorABI, functionName: 'guardianExitRequests', args: [operator],
+  })) as [bigint, bigint];
+  if (readyAt === 0n) throw new Error('TEARDOWN FAIL: requestGuardianExit mined but guardianExitRequests.readyAt is still 0');
+
+  const syncTx = await funderWallet.writeContract({
+    address: validator, abi: AAStarCommitteeValidatorABI, functionName: 'syncExitNotice', args: [nodeId],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: syncTx });
+  log(`  syncExitNotice       ${syncTx}`);
+
+  // The whole point, asserted. `activeCount` is the quantity that broke the other runners, so it is
+  // the quantity checked here — not "the tx did not revert", which is true of a no-op too.
+  const after = await readCount();
+  const stillRegistered = (await publicClient.readContract({
+    address: validator, abi: AAStarCommitteeValidatorABI, functionName: 'isRegistered', args: [nodeId],
+  })) as boolean;
+  log(`  activeCount ${before} -> ${after}   isRegistered(${nodeId.slice(0, 10)}…)=${stillRegistered}`);
+  if (stillRegistered) throw new Error(`TEARDOWN FAIL: node ${nodeId} is still registered after syncExitNotice`);
+  if (after !== before - 1n) throw new Error(`TEARDOWN FAIL: activeCount ${before} -> ${after}, expected ${before - 1n}`);
+  log(`  ✅ committee slot returned — activeCount back to ${after}`);
 }
 
 main().catch((e) => { console.error('E2E FAIL:', e?.shortMessage || e?.message || e); process.exit(1); });
