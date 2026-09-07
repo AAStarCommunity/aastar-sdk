@@ -48,6 +48,12 @@ export const BASELINE: readonly (readonly [string, string, number])[] = [
 /** Total diagnostics the baseline accounts for — written out so a truncated baseline is visible. */
 export const BASELINE_TOTAL = 48;
 
+// Independent corroboration, because `BASELINE_TOTAL` is otherwise only pinned by a self-referential
+// assertion (the baseline agreeing with its own sum proves nothing about the directory). Measured by
+// review on a different program — the ROOT tsc project, filtered to this directory — the result was
+// 48 diagnostics AND a `(file, code)` distribution identical to `BASELINE` entry by entry (15 rows,
+// `diff` empty). Not just the same total: the same rows. Two programs, one answer.
+
 const DIAG_LINE = /^(?<file>[^(]+)\((?<line>\d+),(?<col>\d+)\): error (?<code>TS\d+):/;
 
 /** Parse `tsc --noEmit` output into (file, code) pairs, dropping the line/column. */
@@ -71,7 +77,35 @@ export function countLooseDiagnostics(tscOutput: string): number {
     return tscOutput.split('\n').filter((l) => LOOSE_DIAG.test(l)).length;
 }
 
-export function verdict(diags: Diag[], looseCount: number): TypeVerdict {
+/**
+ * `tscFailed` means the compiler subprocess did not complete normally — killed, buffer overflowed,
+ * spawn failed. It is a SEPARATE input from "how many diagnostics were parsed", and it has to be,
+ * because the interesting failure produces zero of both.
+ */
+export function verdict(diags: Diag[], looseCount: number, tscFailed = false): TypeVerdict {
+    // The vacuum end, which the first version left open.
+    //
+    // `verdict([], 0)` returned **ok: true** and printed "✅ 0 diagnostic(s), all within the
+    // 48-entry baseline". No tsc format change is needed to reach it: any exec failure that prints
+    // no diagnostics — `spawn ENOENT`, `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL`, a killed process —
+    // lands in the CLI's catch and flows straight here with both counts at zero. The ratio guard
+    // below cannot see it, because a ratio between two zeros is not a ratio.
+    //
+    // This gate's own docstring says a silent vacuum is worse than nothing, and the one hole it had
+    // was at the vacuum end. The rule is therefore stated on the subprocess, not on the counts:
+    // **the compiler did not finish ⇒ red**, whatever it managed to print.
+    if (tscFailed && looseCount === 0) {
+        return {
+            ok: false,
+            lines: [
+                'check-evidence-types: tsc did not complete AND emitted no diagnostics. That is not ' +
+                    '"the directory is clean" — it is no measurement at all. Usual causes: the project ' +
+                    'file is gone, the compiler could not be spawned, or the process was killed. Fix ' +
+                    'the invocation; do NOT touch the baseline.',
+            ],
+        };
+    }
+
     // Anti-vacuous, expressed as a PARSE RATIO rather than an absolute floor.
     //
     // The first version used `diags.length < 30`. Measured, it punished the correct action:
@@ -128,8 +162,16 @@ export function verdict(diags: Diag[], looseCount: number): TypeVerdict {
         lines: [
             `check-evidence-types: ✅ ${diags.length} diagnostic(s), all within the ${BASELINE_TOTAL}-entry ` +
                 'baseline; no new ones.',
+            // Reported, NOT enforced: a shrinkable entry does not fail the run. "The baseline may
+            // only shrink" is therefore carried by review, not by this code, and saying so is
+            // cheaper than implying a check that does not exist.
             ...(shrunk.length
-                ? ['', `${shrunk.length} baseline entr(ies) are now smaller than recorded — shrink them:`, ...shrunk]
+                ? [
+                      '',
+                      `${shrunk.length} baseline entr(ies) are now smaller than recorded — shrink them ` +
+                          '(reported only; this does not fail the run):',
+                      ...shrunk,
+                  ]
                 : []),
         ],
     };
