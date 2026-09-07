@@ -81,8 +81,17 @@ describe('setDifferenceSet stays out of production', () => {
     // The module says `NEVER call this from production code`. That sentence was a directive with
     // nothing executing it — the shape this repo keeps finding. This turns it into a reading:
     // adding `setDifferenceSet` to any non-test file must red this.
-    const ROOTS = ['scripts', 'packages', 'tests'];
-    const IS_CODE = (p: string) => /\.tsx?$/.test(p) && !/\.test\.tsx?$/.test(p);
+    // The name of the test below says what this list covers, because #415 review caught the earlier
+    // name claiming more than the scanner reached: it was a universal quantifier over a domain of
+    // `['scripts','packages','tests'] × /\.tsx?$/`, and `scripts/_n.mts` sat INSIDE a scanned
+    // directory and was skipped on its extension alone.
+    //
+    // `ext/` and `docs/api/` are deliberately out: the first is vendored third-party code, the
+    // second is generated typedoc output (~1200 files of permalink noise). Neither can import from
+    // `scripts/`, and pulling them in would make the count large enough that nobody reads it.
+    const ROOTS = ['scripts', 'packages', 'tests', 'lib', 'examples', 'node-onboarding-portal'];
+    // .mts / .cts included — that is the hole review found, not a hypothetical one.
+    const IS_CODE = (p: string) => /\.(m|c)?tsx?$/.test(p) && !/\.test\.(m|c)?tsx?$/.test(p);
 
     function walk(dir: string, acc: string[] = []): string[] {
         for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -94,9 +103,15 @@ describe('setDifferenceSet stays out of production', () => {
         return acc;
     }
 
-    it('no non-test file references setDifferenceSet', () => {
-        const files = ROOTS.flatMap((r) => walk(r));
-        // Both counts, because "scanned nothing" and "found nothing" are the same green otherwise.
+    it('no non-test source file under the scanned roots references setDifferenceSet', () => {
+        // Per-root, not just in total: a repo-wide floor cannot tell "every root is there" from
+        // "one root vanished and the biggest one carried the count". #415 review named this.
+        const byRoot = ROOTS.map((r) => [r, walk(r)] as const);
+        for (const [root, found] of byRoot) {
+            expect(found.length, `root "${root}" contributed zero files — it moved, and this check went blind there`).toBeGreaterThan(0);
+        }
+        const files = byRoot.flatMap(([, f]) => f);
+        // The total floor stays as a second, coarser tripwire for a repo-wide layout change.
         expect(files.length, 'scanned zero files — the layout moved and this check went blind').toBeGreaterThan(200);
         const offenders = files.filter(
             (f) => f !== 'scripts/committee-set-replay.ts' && /\bsetDifferenceSet\b/.test(readFileSync(f, 'utf8')),
