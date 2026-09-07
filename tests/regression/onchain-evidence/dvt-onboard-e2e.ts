@@ -44,6 +44,32 @@
  *     exactly how slots 3 and 4 got stranded. It asserts its own effect (`activeCount` fell by one and
  *     `isRegistered` went false): a cleanup that silently no-ops is how this defect is reintroduced.
  *
+ *     ON-CHAIN ACCEPTANCE (Sepolia, 2026-09-07). This run planted node
+ *     `0x70146b43cb8482576f0cc2fce83c93edb3d0899c6117bb80b82f3cd5dbbf4f58` (operator
+ *     `0xF36C9317…`) and then returned its slot:
+ *       requestGuardianExit  0xe4737f3924f5488e1d037532dbae71b1f0efc91fa6544f92799e112402c82d38
+ *       syncExitNotice       0xaad53b17a7a3d59ab0d171c7126a7d2341c82d54741c0f1ea04420d130425524
+ *       activeCount 5 -> 4, isRegistered false
+ *     The two nodes already stranded before this fix were dealt with separately: slot 4's operator key
+ *     is unrecoverable, so the validator owner revoked it —
+ *     `revokePublicKey` 0xfa2bfb504f72916d0b240dd156e28fcad53a3e84e9e50c06837f3d5b5a07ff00 (block
+ *     11651779, activeCount 5 -> 4). Slot 3 is JACK's node and PATH A's short-circuit depends on it,
+ *     so it stays.
+ *
+ *     WHAT THAT BOUGHT, measured rather than predicted: with activeCount=4 the keeper pins
+ *     `epochSetCount=4` and `requiredQuorum=3`, and exactly three public DVT nodes can co-sign, so the
+ *     committee-framed runners went from fail-closed to green — `tier3-composite-e2e`
+ *     (validateUserOp==0), `tier3-committee-handleops` (handleOps
+ *     0x20675b82aa5a552a2d06c5d399beff9933ea2657520fba3150d37203a4dd43c5, UserOpEvent success=true) and
+ *     `cc103-committee-positive-e2e`. Before this, the committee-framed ACCEPT path was asserted by
+ *     nothing that could actually run.
+ *
+ *     One reading that will mislead a reader who samples it at the wrong moment: `requiredQuorum`
+ *     returns `type(uint256).max` (the UNAVAILABLE sentinel) for the part of every epoch between the
+ *     rollover and the keeper's `snapshotEpoch`. At epochLength=64 that window is short but real — it
+ *     is NOT "the committee is broken", and a single sample cannot tell the two apart. Read
+ *     `epochPinned(currentEpoch())` alongside it.
+ *
  *   pnpm exec tsx tests/regression/onchain-evidence/dvt-onboard-e2e.ts
  *
  * Requires .env.sepolia: SEPOLIA_RPC_URL, PRIVATE_KEY_JASON (funder + GToken holder), PRIVATE_KEY_JACK.
@@ -54,6 +80,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {
   createPublicClient, createWalletClient, http, formatEther, keccak256, toHex, type Address, type Hex,
+  type PublicClient,
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -171,7 +198,13 @@ async function main() {
  * function was written to prevent, and the next reader sees a green run over a committee that grew.
  */
 async function teardownFreshNode(
-  publicClient: any,
+  // `publicClient` is typed, deliberately: pr-daemon mutation-tested #408's gate against this
+  // function and found it BLIND here — `readContrctTYPO()` on an `any` client stayed green while a
+  // real bug (`before - 1` vs `before - 1n`) went red. Four `any` parameters hid the whole
+  // interaction surface of the one path with no unit-test coverage. Typing this one puts the reads
+  // and writes back under the gate; the three wallet params stay `any` because the runner's callers
+  // are themselves untyped and tightening them was not measured (FU-86).
+  publicClient: PublicClient,
   operatorWallet: any,
   funderWallet: any,
   nodeId: Hex,
