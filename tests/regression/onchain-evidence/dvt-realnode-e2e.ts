@@ -1,12 +1,18 @@
 /**
- * DVT real-node E2E (cross-repo, v0.20.0) — SDK-assembled combined signature ACCEPTED by the LIVE
- * canonical on-chain verifier, against a FRESH BLS-only account.
+ * DVT real-node E2E (cross-repo) — the THREE live DVT nodes co-sign a real userOpHash, the SDK
+ * aggregates their signatures locally, and the canonical on-chain verifier is the oracle for what
+ * happens to the result.
  *
- * This is the YetAnotherAA-Validator #42 / aastar-sdk DVT-program deliverable. It proves that the
- * @aastar/core SDK (`dvtWire` encoder + @noble G2 aggregation, ABIs + addresses from @aastar/core)
- * can assemble the DVT verifier proof from the THREE real DVT nodes' co-signatures (reachable via
- * Cloudflare tunnels), and that the CANONICAL v0.20.0 `AAStarBLSAlgorithm`
- * (CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm = 0x539B…, v0.27.0 DVT-unification) ACCEPTS it (`validate(...) == 0`).
+ * This is the YetAnotherAA-Validator #42 / aastar-sdk DVT-program deliverable. It proves that
+ * `@aastar/core` (`dvtWire` encoder + @noble G2 aggregation, ABIs + addresses from `@aastar/core`)
+ * can assemble a DVT verifier proof from three real node co-signatures reachable over Cloudflare
+ * tunnels.
+ *
+ * WHAT IT NO LONGER PROVES, stated up front because the previous version of this header said the
+ * opposite: it is not evidence that the canonical verifier ACCEPTS that proof. Canonical moved to a
+ * COMMITTEE-mode validator which rejects the legacy proof SHAPE, and the release does not claim the
+ * legacy path (#392, option b) — so this runner now ASSERTS the rejection. The header used to name
+ * `0x539B…` as canonical; that address is the one `:125` now throws on.
  * Nothing is mocked: the nodes co-sign, the proof is built locally by the SDK, and the on-chain
  * pairing check is the oracle.
  *
@@ -457,8 +463,9 @@ async function main() {
     if (accepted) {
         throw new Error(
             'committeeActive() is true, yet the canonical verifier ACCEPTED a legacy [nodeIds][blsSig] ' +
-            'proof. That contradicts cc103-committee-e2e, which asserts committee mode rejects legacy ' +
-            'framing. One of the two is wrong — do not paper over it here.',
+            'proof. That contradicts `cc103-committee-e2e`, which asserts committee mode rejects legacy ' +
+            'framing (and `cc103-committee-positive-e2e` / `tier3-composite-e2e:419`, which assert the ' +
+            'committee-framed accept). One of them is wrong — do not paper over it here.',
         );
     }
     console.log(
@@ -466,8 +473,13 @@ async function main() {
         `   ${VERIFIER} REJECTS the legacy proof shape (validate = ${validateResult}). The three live DVT\n` +
         '   nodes still co-signed a real userOpHash and their signatures still aggregated — that half is\n' +
         '   unchanged and is what this runner still proves.\n' +
-        '   The committee-framed equivalent lives in `tier3-composite-e2e` and `tier3-committee-handleops`;\n' +
-        '   this file is NOT evidence about the canonical accept path any more (#392, option b).',
+        '\n' +
+        '   Where the committee-framed ACCEPT path is asserted: `tier3-composite-e2e` (validateUserOp\n' +
+        '   == 0), `tier3-committee-handleops`, `cc103-committee-positive-e2e`. ⚠️ Measured 2026-09-07,\n' +
+        '   all three are currently RED — not broken, blocked: `under quorum: 3 < 4`. The reachable\n' +
+        '   public DVT set is smaller than the quorum the validator now demands (FU-85). So the accept\n' +
+        '   path is asserted somewhere, and is NOT being exercised anywhere right now. Saying only the\n' +
+        '   first half would move coverage onto runners that do not currently run.',
     );
 }
 
