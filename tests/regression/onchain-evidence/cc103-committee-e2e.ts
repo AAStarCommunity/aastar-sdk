@@ -180,8 +180,43 @@ async function main() {
         fromBlock: 'earliest',
         toBlock: 'latest',
     });
-    const nodeIds = [...new Set(logs.map((l) => (l as any).args.nodeId as Hex))];
-    check(nodeIds.length === Number(activeCount), 'SlotAssigned set matches activeCount()', `${nodeIds.length} nodes`);
+    // SlotCleared must be replayed too. Replaying only SlotAssigned is an APPEND-ONLY reconstruction:
+    // it equals the active set exactly as long as nothing was ever removed — which was true of this
+    // validator until 2026-09-07, when a stranded node was revoked (FU-85) and this runner started
+    // asking `getMerkleProof` for a node the contract answers "node not active" for. The bug was
+    // always there; the environment was simply hiding it, and the `length === activeCount` check
+    // above could not tell "correct reconstruction" from "no deletion has happened yet".
+    const cleared = await pc.getLogs({
+        address: stack.committeeValidator,
+        event: {
+            type: 'event',
+            name: 'SlotCleared',
+            inputs: [
+                { name: 'nodeId', type: 'bytes32', indexed: true },
+                { name: 'slot', type: 'uint256', indexed: false },
+            ],
+        },
+        fromBlock: 'earliest',
+        toBlock: 'latest',
+    });
+    // Order matters, not just membership: a nodeId may be assigned, cleared and re-assigned, and only
+    // the LAST event for it decides. Sorting by (block, logIndex) and replaying is the whole fix —
+    // a set difference would drop a node that came back.
+    type Ev = { nodeId: Hex; add: boolean; block: bigint; idx: number };
+    const events: Ev[] = [
+        ...logs.map((l) => ({ nodeId: (l as any).args.nodeId as Hex, add: true, block: l.blockNumber!, idx: l.logIndex! })),
+        ...cleared.map((l) => ({ nodeId: (l as any).args.nodeId as Hex, add: false, block: l.blockNumber!, idx: l.logIndex! })),
+    ].sort((a, b) => (a.block === b.block ? a.idx - b.idx : a.block < b.block ? -1 : 1));
+    const live = new Set<Hex>();
+    for (const e of events) (e.add ? live.add(e.nodeId) : live.delete(e.nodeId));
+    const nodeIds = [...live];
+    console.log(
+        `      replayed ${logs.length} SlotAssigned + ${cleared.length} SlotCleared -> ${nodeIds.length} live`,
+    );
+    // This check is the one that would have caught the append-only reconstruction the moment a
+    // deletion happened — it is only vacuous while `cleared.length === 0`, which is why the counts
+    // are printed above rather than left implicit.
+    check(nodeIds.length === Number(activeCount), 'replayed SlotAssigned/SlotCleared matches activeCount()', `${nodeIds.length} nodes`);
 
     const signers: CommitteeSigner[] = [];
     for (const nodeId of nodeIds) {
