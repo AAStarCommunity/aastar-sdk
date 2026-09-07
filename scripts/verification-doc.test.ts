@@ -58,6 +58,11 @@ const PRESCRIPTIONS: { phrase: string; from: string }[] = [
   { phrase: '答不出②就把它写成问句', from: '#412 — 「X 在别处被覆盖」的两个成因产出同一句话' },
   { phrase: '先问它涉及几层', from: '#412 — 倒推全错不是不够仔细，是成因和被 diff 的东西不在同一层' },
   { phrase: '正对照要断言读数的「形状」', from: '#412 — 量具失败时的输出几乎总是非空的，所以「非 0」会被失败本身满足（pr-daemon 在 #409 的样本）' },
+  // Registered in the SAME PR that introduces them, per §9.1.
+  { phrase: '包括看起来支持你结论的那一个', from: '#414 — 两个量具矛盾时先停下来；BSD sort/uniq 对中文行误判重复' },
+  { phrase: '枚举出来的顺序不是身份', from: '#414 — swap-and-pop 之后 registeredNodes[] 下标不再是登记顺序，按它动手会摘错节点' },
+  { phrase: '能说明当前处于哪个相位的量', from: '#414 — 单次采样把 epoch 翻页窗口的瞬态读成了常态' },
+  { phrase: '推论必须能指到产生它的那次运行', from: '#414 — 说服性写作把「测到的」和「推出的」压进同一句（pr-daemon 收窄，#413 三次为样本）' },
 ];
 
 describe('verification.md carries the prescriptions it was written for', () => {
@@ -96,7 +101,21 @@ describe('verification.md carries the prescriptions it was written for', () => {
       'A prescription was removed. Each one was bought by a specific failure; deleting the entry ' +
         'also deletes the only thing checking that its rule is still in the document. Raise this ' +
         'floor when adding, never lower it to make a red go away.',
-    ).toBeGreaterThanOrEqual(21);
+    ).toBeGreaterThanOrEqual(25);
+  });
+
+  // A duplicate entry contributes to `length` but not to coverage, so the floor above can be
+  // satisfied by a registry that guards fewer rules than it claims. This is NOT here because a
+  // duplicate exists — measured byte-for-byte across four trees during the #412/#413 review, all
+  // zero — but because `PRESCRIPTIONS.length` is the floor's only input.
+  //
+  // `new Set(...).size`, deliberately, NOT `sort | uniq`: that pipeline is what produced a
+  // confident, entirely false duplicate report during that same review (BSD sort/uniq collates
+  // multi-byte lines by locale and calls distinct Chinese lines equal — and `LC_ALL` does not fix
+  // it). The tool that motivated this assertion is the one tool it must not use.
+  it('no duplicate prescriptions — a repeat inflates the floor without guarding anything', () => {
+    const phrases = PRESCRIPTIONS.map((p) => p.phrase);
+    expect(new Set(phrases).size, 'duplicate prescription phrase in the registry').toBe(phrases.length);
   });
 
   it('the document still exists and is substantial', () => {
