@@ -89,7 +89,12 @@ describe('setDifferenceSet stays out of production', () => {
     // `ext/` and `docs/api/` are deliberately out: the first is vendored third-party code, the
     // second is generated typedoc output (~1200 files of permalink noise). Neither can import from
     // `scripts/`, and pulling them in would make the count large enough that nobody reads it.
-    const ROOTS = ['scripts', 'packages', 'tests', 'lib', 'examples', 'node-onboarding-portal'];
+    // `lib` is deliberately absent, and the reason is a reading rather than a guess: it holds 10 TS
+    // files in a working tree but **zero tracked ones** (`lib/shared-config` is a submodule), so a
+    // clean checkout has nothing there and the per-root floor below correctly reds. CI found that
+    // within minutes of this list being written — I had enumerated the WORKING TREE while CI
+    // enumerates the REPOSITORY, which is the same provenance mismatch this whole round is about.
+    const ROOTS = ['scripts', 'packages', 'tests', 'examples', 'node-onboarding-portal'];
     // .mts / .cts included — that is the hole review found, not a hypothetical one.
     const IS_CODE = (p: string) => /\.(m|c)?tsx?$/.test(p) && !/\.test\.(m|c)?tsx?$/.test(p);
 
