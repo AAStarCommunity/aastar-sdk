@@ -6,6 +6,8 @@
  * implementations apart. Every assertion here exists to construct that difference synthetically.
  */
 import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { replaySetEvents, setDifferenceSet, type SetEvent } from './committee-set-replay.js';
 
 const ev = (nodeId: string, add: boolean, block: number, idx = 0): SetEvent => ({
@@ -58,5 +60,47 @@ describe('replaySetEvents', () => {
 
     it('an empty history has an empty live set', () => {
         expect(replaySetEvents([]).size).toBe(0);
+    });
+});
+
+/**
+ * WHICH TEST ABOVE ACTUALLY GUARDS WHAT — measured by #415 review, written down so a future prune
+ * does not remove the wrong one.
+ *
+ * Mutating `replaySetEvents` back to append-only reds THREE of them: `cleared-not-live`,
+ * `the two agree…`, and `same-block events are ordered by log index`. It does NOT red
+ * `a set difference gets exactly that input wrong` — that one asserts the set difference is wrong
+ * and the replay keeps `x`, and append-only also keeps `x`.
+ *
+ * So `a set difference gets exactly that input wrong` pins **why this implementation was chosen**,
+ * not **whether it is correct**. Deleting it loses the reason and no protection; deleting
+ * `the two agree…` is what takes the protection away. Removing the `idx` tiebreaker reds exactly
+ * one test — the same-block one — so that case has a single guard and no redundancy to spare.
+ */
+describe('setDifferenceSet stays out of production', () => {
+    // The module says `NEVER call this from production code`. That sentence was a directive with
+    // nothing executing it — the shape this repo keeps finding. This turns it into a reading:
+    // adding `setDifferenceSet` to any non-test file must red this.
+    const ROOTS = ['scripts', 'packages', 'tests'];
+    const IS_CODE = (p: string) => /\.tsx?$/.test(p) && !/\.test\.tsx?$/.test(p);
+
+    function walk(dir: string, acc: string[] = []): string[] {
+        for (const e of readdirSync(dir, { withFileTypes: true })) {
+            const p = join(dir, e.name);
+            if (e.name === 'node_modules' || e.name === 'dist' || e.name === '.git') continue;
+            if (e.isDirectory()) walk(p, acc);
+            else if (statSync(p).isFile() && IS_CODE(p)) acc.push(p);
+        }
+        return acc;
+    }
+
+    it('no non-test file references setDifferenceSet', () => {
+        const files = ROOTS.flatMap((r) => walk(r));
+        // Both counts, because "scanned nothing" and "found nothing" are the same green otherwise.
+        expect(files.length, 'scanned zero files — the layout moved and this check went blind').toBeGreaterThan(200);
+        const offenders = files.filter(
+            (f) => f !== 'scripts/committee-set-replay.ts' && /\bsetDifferenceSet\b/.test(readFileSync(f, 'utf8')),
+        );
+        expect(offenders, 'setDifferenceSet is the WRONG implementation; it exists only so a test can show what it gets wrong').toEqual([]);
     });
 });
