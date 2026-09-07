@@ -168,7 +168,17 @@ export function verdict(diags: Diag[], looseCount: number, tscFailed = false): T
                 `check-evidence-types: ${added.length} new type diagnostic(s) in the evidence runners.`,
                 'These files are executed against live contracts and are NOT typechecked anywhere else',
                 'in CI — two of them shipped uncompilable while all three checks were green (#401, #403).',
-                'Fix the diagnostic. Adding it to BASELINE is for pre-existing debt only.',
+                '',
+                'FIRST, check whether the tree is fully installed. TS2307 ("cannot find module") that',
+                'names a PACKAGE rather than a relative path means dependencies are missing, not that',
+                'the code is wrong: workspace packages carry their own node_modules (measured:',
+                '@simplewebauthn/browser under packages/airaccount, @a16z/helios under packages/core),',
+                'so a tree with only the root node_modules present produces exactly this. Run a full',
+                '`pnpm install` and re-run before doing anything else.',
+                '',
+                'Otherwise: fix the diagnostic. Adding it to BASELINE is for pre-existing debt only —',
+                'and adding a TS2307 there would blind this gate to real missing-module errors',
+                'permanently, which is worse than the red you are trying to clear.',
             ],
         };
     }
