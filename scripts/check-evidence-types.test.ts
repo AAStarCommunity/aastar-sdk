@@ -60,13 +60,27 @@ describe('verdict', () => {
         expect(v.ok).toBe(true);
     });
 
-    it('fails when tsc did not complete AND printed nothing — the vacuum end', () => {
+    it('fails when tsc did not complete — printed nothing at all', () => {
         // `verdict([], 0)` used to return ok:true and print "✅ 0 diagnostic(s), all within the
-        // 48-entry baseline". A ratio between two zeros is not a ratio, so the guard below could
+        // 48-entry baseline". A ratio between two zeros is not a ratio, so the ratio guard could
         // not see it; the rule has to be stated on the subprocess instead.
         const v = verdict([], 0, true);
         expect(v.ok).toBe(false);
-        expect(v.lines.join('\n')).toContain('no measurement at all');
+        expect(v.lines.join('\n')).toContain('did not complete');
+    });
+
+    it('fails when tsc did not complete but HAD printed some diagnostics — the narrower gap', () => {
+        // The condition was `tscFailed && looseCount === 0`, a special case of the rule rather than
+        // the rule. A tsc killed by a CI timeout prints as it goes, so its output is partial by
+        // nature, and whether that slice lands inside the baseline is luck. Measured before the
+        // fix: three in-baseline diagnostics plus a kill gave ok:true and a line BYTE-IDENTICAL to
+        // the healthy run's.
+        const partial = [...Array(3)].map(() => ({ file: 'dvt3-register.ts', code: 'TS2322' }));
+        const killed = verdict(partial, 3, true);
+        const healthy = verdict(partial, 3, false);
+        expect(killed.ok).toBe(false);
+        expect(healthy.ok).toBe(true); // control: the same output, completed, must still pass
+        expect(killed.lines.join('\n')).not.toBe(healthy.lines.join('\n'));
     });
 
     it('still passes when tsc completed and the directory is genuinely empty of diagnostics', () => {

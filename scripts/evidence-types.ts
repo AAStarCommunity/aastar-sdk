@@ -94,14 +94,29 @@ export function verdict(diags: Diag[], looseCount: number, tscFailed = false): T
     // This gate's own docstring says a silent vacuum is worse than nothing, and the one hole it had
     // was at the vacuum end. The rule is therefore stated on the subprocess, not on the counts:
     // **the compiler did not finish ⇒ red**, whatever it managed to print.
-    if (tscFailed && looseCount === 0) {
+    // NOTE THE CONDITION IS `tscFailed` ALONE. The previous revision wrote
+    // `tscFailed && looseCount === 0`, which is a SPECIAL CASE of the rule stated above, not the
+    // rule. Measured with a partially-written output (3 × `dvt3-register.ts|TS2322`, cap 4):
+    //
+    //     killed, 3 diagnostics already printed  -> ok:true, "✅ 3 diagnostic(s), all within…"
+    //     completed normally, same 3 diagnostics -> ok:true, byte-identical line
+    //
+    // The two verdicts were indistinguishable. A tsc killed by a CI timeout emits PARTIAL output by
+    // nature — it prints as it goes — and whether that partial slice happens to fall inside the
+    // baseline is luck. `maxBuffer: 64 MiB` pushed ENOBUFS out of reach (~633,000 lines), but the
+    // `e.signal` path never depended on maxBuffer at all.
+    //
+    // So: the compiler not finishing is the whole condition. What it managed to print before dying
+    // is not evidence about the directory.
+    if (tscFailed) {
         return {
             ok: false,
             lines: [
-                'check-evidence-types: tsc did not complete AND emitted no diagnostics. That is not ' +
-                    '"the directory is clean" — it is no measurement at all. Usual causes: the project ' +
-                    'file is gone, the compiler could not be spawned, or the process was killed. Fix ' +
-                    'the invocation; do NOT touch the baseline.',
+                `check-evidence-types: tsc did not complete (it printed ${looseCount} diagnostic ` +
+                    'line(s) before stopping). Whatever it printed is a partial read, not a ' +
+                    'measurement of this directory. Usual causes: the project file is gone, the ' +
+                    'compiler could not be spawned, or the process was killed (CI timeout). Fix the ' +
+                    'invocation; do NOT touch the baseline.',
             ],
         };
     }
