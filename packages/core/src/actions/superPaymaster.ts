@@ -1,7 +1,42 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, zeroAddress } from 'viem';
 import { SuperPaymasterABI } from '../abis/index.js';
-import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
+import { validateAddress, validateRequired, validateAmount, ValidationError } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
+import { superPaymasterGenerationFromVersion } from '../superPaymasterData.js';
+
+/**
+ * Functions REMOVED from SuperPaymaster in 5.5.0 (M-11 §2.1), with what replaces each. Their
+ * wrappers stay because the live Sepolia proxy is still 5.4.2; on a 5.5.0 proxy the call reverts
+ * (the selector is in neither the core nor the SuperPaymasterAdmin extension), and the catch path
+ * below turns that opaque revert into an actionable error.
+ */
+const REMOVED_IN_V550: Record<string, string> = {
+    dryRunValidation: 'use SuperPaymasterLens.dryRunValidation(sp, userOp, maxCost) via superPaymasterLensActions(lens)',
+    pendingDebts: 'no pending-debt fallback exists in 5.5.0; a failed settlement reverts postOp and releaseStaleSponsorship(opHash) restores the operator',
+    retryPendingDebt: 'no pending-debt fallback exists in 5.5.0 (see releaseStaleSponsorship / xPNTsTokenV2.releaseStaleLock)',
+    clearPendingDebt: 'no pending-debt fallback exists in 5.5.0 (see releaseStaleSponsorship / xPNTsTokenV2.releaseStaleLock)',
+};
+
+async function rethrowRemovedInV550(client: PublicClient | WalletClient, address: Address, fn: string, error: unknown): Promise<never> {
+    // Local input-validation failures never reached the chain — no reason to probe version().
+    if (error instanceof AAStarError || error instanceof ValidationError) throw AAStarError.fromViemError(error as Error, fn);
+    let version: string | undefined;
+    try {
+        version = (await (client as PublicClient).readContract({ address, abi: SuperPaymasterABI, functionName: 'version' })) as string;
+    } catch {
+        // version unreadable — fall through to the original error
+    }
+    let isV550 = false;
+    try {
+        isV550 = version !== undefined && superPaymasterGenerationFromVersion(version) === 'v5.5';
+    } catch {
+        // unknown/newer version string — do not claim a cause we did not establish
+    }
+    if (isV550) {
+        throw new AAStarError(ErrorCode.NOT_IMPLEMENTED, `${fn} was removed in ${version}: ${REMOVED_IN_V550[fn]}.`, error as Error);
+    }
+    throw AAStarError.fromViemError(error as Error, fn);
+}
 
 /**
  * ERC-4337 v0.7 PackedUserOperation tuple, matching the `struct PackedUserOperation`
@@ -114,11 +149,11 @@ export type SuperPaymasterActions = {
     updateSBTStatus: (args: { user: Address, status: boolean, account?: Account | Address }) => Promise<Hash>;
 
     // Pending-Debt Reconciliation (operator)
-    /** Read the unrecovered debt recorded for a user after a failed burn/recordDebt. */
+    /** Read the unrecovered debt recorded for a user after a failed burn/recordDebt. 5.4.x only — removed in SuperPaymaster 5.5.0. */
     pendingDebts: (args: { token: Address, user: Address }) => Promise<bigint>;
-    /** Operator retries recovering up to `amount` of the user's pending debt. */
+    /** Operator retries recovering up to `amount` of the user's pending debt. 5.4.x only — removed in SuperPaymaster 5.5.0. */
     retryPendingDebt: (args: { token: Address, user: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    /** Operator force-clears the user's pending-debt entry without recording it. */
+    /** Operator force-clears the user's pending-debt entry without recording it. 5.4.x only — removed in SuperPaymaster 5.5.0. */
     clearPendingDebt: (args: { token: Address, user: Address, account?: Account | Address }) => Promise<Hash>;
     
     // Price Management
@@ -180,11 +215,18 @@ export type SuperPaymasterActions = {
      * Off-chain pre-flight validation of a UserOp against this paymaster.
      * Returns `{ ok, reasonCode }` so callers can detect AA34-style rejections
      * before submitting the UserOp on-chain. View call; never mutates state.
+     * 5.4.x only — removed from the SP in 5.5.0; use `superPaymasterLensActions(lens).dryRunValidation`.
      */
     dryRunValidation: (args: { userOp: PackedUserOperation, maxCost: bigint }) => Promise<DryRunValidationResult>;
     
     // View Functions
     operators: (args: { operator: Address }) => Promise<OperatorConfig>;
+    /**
+     * Same selector on 5.4.x and 5.5.0, DIFFERENT meaning (M-11 addendum 1 §C): 5.4.x returns
+     * `Registry.getCreditLimit(user) − token.getDebt(user)`; 5.5.0 returns
+     * `max(0, token.effectiveCreditCap(user) − debts − creditReservedOf)`, which is 0 while the
+     * community's creditPolicy is OFF (the default), and reverts for a v1 token.
+     */
     getAvailableCredit: (args: { user: Address, token: Address }) => Promise<bigint>;
     getDeposit: () => Promise<bigint>;
     getLatestSlash: (args: { operator: Address }) => Promise<SlashRecord>;
@@ -580,7 +622,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
                 args: [token, user]
             }) as bigint;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'pendingDebts');
+            return await rethrowRemovedInV550(client, address, 'pendingDebts', error);
         }
     },
 
@@ -598,7 +640,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
                 chain: (client as any).chain
             });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'retryPendingDebt');
+            return await rethrowRemovedInV550(client, address, 'retryPendingDebt', error);
         }
     },
 
@@ -615,7 +657,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
                 chain: (client as any).chain
             });
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'clearPendingDebt');
+            return await rethrowRemovedInV550(client, address, 'clearPendingDebt', error);
         }
     },
 
@@ -1031,7 +1073,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             }
             return res as DryRunValidationResult;
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'dryRunValidation');
+            return await rethrowRemovedInV550(client, address, 'dryRunValidation', error);
         }
     },
 

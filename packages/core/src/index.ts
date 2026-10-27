@@ -19,6 +19,7 @@ export * from './networks.js';
 export * from './constants.js';
 export * from './communities.js'; // Community configurations
 export * from './abis/index.js'; // Assuming abis is a folder with index.ts
+export * from './superPaymasterData.js'; // SP paymasterAndData encoder (5.4.x + 5.5.0 layouts)
 export * from './clients.js';
 export * from './clients/doc-types.js';
 export * from './clients/types.js';

@@ -1,4 +1,5 @@
 import { type Address, concat, pad, toHex, keccak256, encodeAbiParameters, type Hex, toBytes } from 'viem';
+import { encodeSuperPaymasterData, SUPER_PAYMASTER_MIN_POST_OP_GAS } from '@aastar/core';
 
 export type PaymasterV4MiddlewareConfig = {
     paymasterAddress: Address;
@@ -83,10 +84,17 @@ export function buildPaymasterData(
 }
 
 /**
- * Build paymasterAndData for SuperPaymaster V3.
- * Layout: [Paymaster(20)] [verGas(16)] [postGas(16)] [operator(20)] [maxRate(32)]
- * Total: 104 bytes
- * 
+ * Build paymasterAndData for SuperPaymaster (NOT PaymasterV4 — that contract uses
+ * {@link buildPaymasterData}).
+ *
+ * - With `token`: the 5.5.0 layout
+ *   `[paymaster 20][verGas 16][postGas 16][operator 20][maxRate 32][token 20][flags 1]` (125 bytes).
+ *   5.4.2 reads only the first 104 bytes and ignores the tail, so this layout works on both.
+ * - Without `token`: the legacy 5.4.x layout (104 bytes). 5.5.0 REJECTS it (sigFail → AA34).
+ *
+ * `token` must equal `operators(operator).xPNTsToken` on 5.5.0, or validation sigFails.
+ * The byte packing lives in `@aastar/core` (`encodeSuperPaymasterData`), the one shared encoder.
+ *
  * IMPORTANT: SuperPaymaster contract generates validUntil internally using:
  *   validUntil = cachedPrice.updatedAt + priceStalenessThreshold
  * Do NOT include validUntil/validAfter in paymasterAndData!
@@ -98,19 +106,23 @@ export function buildSuperPaymasterData(
         verificationGasLimit?: bigint;
         postOpGasLimit?: bigint;
         maxRate?: bigint;
+        /** Operator's xPNTs token — REQUIRED by SuperPaymaster 5.5.0. */
+        token?: Address;
+        /** 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS); requires `token`. */
+        flags?: number;
     }
 ): `0x${string}` {
-    const verGas = options?.verificationGasLimit ?? 80000n;
-    const postGas = options?.postOpGasLimit ?? 100000n;
-    const maxRate = options?.maxRate ?? ((1n << 256n) - 1n); // Default: max uint256, no rate limit
-    
-    return concat([
-        paymasterAddress,
-        pad(toHex(verGas), { size: 16 }),
-        pad(toHex(postGas), { size: 16 }),
+    return encodeSuperPaymasterData({
+        paymaster: paymasterAddress,
         operator,
-        pad(toHex(maxRate), { size: 32 }) // Optional rate commitment (rug pull protection)
-    ]);
+        verificationGasLimit: options?.verificationGasLimit ?? 80000n,
+        // Default = MIN_POST_OP_GAS (200k) — enforced by BOTH 5.4.2 and 5.5.0; the previous default
+        // of 100k was below the floor and got sigFailed by the deployed contract.
+        postOpGasLimit: options?.postOpGasLimit ?? SUPER_PAYMASTER_MIN_POST_OP_GAS,
+        maxRate: options?.maxRate, // undefined -> type(uint256).max, no rate commitment
+        token: options?.token,
+        flags: options?.flags,
+    });
 }
 
 /**

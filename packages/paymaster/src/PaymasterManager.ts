@@ -7,7 +7,9 @@ import {
 /**
  * Supported paymaster types.
  * - 'v4'    → PaymasterV4 layout (84 bytes): [paymaster(20)][verGas(16)][postGas(16)][token(20)][validUntil(6)][validAfter(6)]
- * - 'super' → SuperPaymaster layout (104 bytes): [paymaster(20)][verGas(16)][postGas(16)][operator(20)][maxRate(32)]
+ * - 'super' → SuperPaymaster layout. With `token` (REQUIRED by SuperPaymaster 5.5.0, ignored by 5.4.2):
+ *             125 bytes [paymaster(20)][verGas(16)][postGas(16)][operator(20)][maxRate(32)][token(20)][flags(1)].
+ *             Without `token`: legacy 5.4.x 104 bytes, which 5.5.0 rejects.
  */
 export type PaymasterType = 'v4' | 'super';
 
@@ -33,9 +35,13 @@ export interface BuildPaymasterDataParams {
     /** Paymaster postOp gas limit (16-byte field, both layouts). */
     postOpGasLimit?: bigint;
 
-    // ── PaymasterV4-specific fields ──
-    /** Gas token address. Required for type 'v4'. */
+    // ── Token (both types) ──
+    /**
+     * Gas token address. Required for type 'v4'. For type 'super' it is the operator's configured
+     * xPNTs token (`operators(operator).xPNTsToken`) — REQUIRED by SuperPaymaster 5.5.0.
+     */
     token?: Address;
+    // ── PaymasterV4-specific fields ──
     /** Validity window in seconds (used to compute validUntil/validAfter). 'v4' only. */
     validityWindow?: number;
 
@@ -44,6 +50,8 @@ export interface BuildPaymasterDataParams {
     operator?: Address;
     /** Optional max rate commitment (rug-pull protection). 'super' only. */
     maxRate?: bigint;
+    /** SuperPaymaster 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS). 'super' only; requires `token`. */
+    flags?: number;
 }
 
 /**
@@ -148,7 +156,9 @@ export class PaymasterManager {
                 return buildSuperPaymasterData(params.paymasterAddress, params.operator, {
                     verificationGasLimit: params.verificationGasLimit,
                     postOpGasLimit: params.postOpGasLimit,
-                    maxRate: params.maxRate
+                    maxRate: params.maxRate,
+                    token: params.token,
+                    flags: params.flags
                 });
             }
             default: {
