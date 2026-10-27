@@ -455,7 +455,9 @@ export class UserClient extends BaseClient {
             const ep = this.requireEntryPoint();
 
             // #169 lesson: don't silently pass the call target as the gas token. V4 needs the real
-            // ERC-20; Super doesn't use a per-tx token (zero address is fine there).
+            // ERC-20. For Super the caller does not supply a token: PaymasterClient reads the
+            // operator's configured xPNTs token on-chain and puts it in paymasterAndData (REQUIRED by
+            // SuperPaymaster 5.5.0, ignored by 5.4.2), and applies the contract's gas floors.
             const ZERO = '0x0000000000000000000000000000000000000000' as Address;
             if (params.paymasterType === 'V4' && !params.gasToken) {
                 throw new Error('executeGasless: gasToken is required for a V4 paymaster (the ERC-20 paid for gas) — not the call target.');

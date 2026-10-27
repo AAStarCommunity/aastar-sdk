@@ -1,7 +1,8 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters } from 'viem';
-import { type PublicClient } from '@aastar/core';
+import { type PublicClient, EntryPointABI } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
+import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 
 /**
  * PaymasterClient
@@ -199,9 +200,14 @@ export class PaymasterClient {
         let paymasterAndData: Hex;
         
         if (options?.operator) {
+             // Always carry the operator's token: REQUIRED by 5.5.0, ignored by 5.4.2 (see
+             // @aastar/core encodeSuperPaymasterData). Estimating with a 104-byte layout against
+             // 5.5.0 would sigFail and produce no estimate at all.
+             const sp = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
              paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: 300000n,
-                postOpGasLimit: 300000n
+                verificationGasLimit: atLeast(300000n, sp.verificationGasFloor),
+                postOpGasLimit: atLeast(300000n, sp.minPostOpGas),
+                token: sp.token
              });
         } else {
                      paymasterAndData = buildPaymasterData(paymasterAddress, token, {
@@ -349,6 +355,10 @@ export class PaymasterClient {
             paymasterPostOpGasLimit?: bigint;
             factory?: Address;
             factoryData?: Hex;
+            /** SuperPaymaster 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS). Leave unset unless you know the renewal preconditions hold. */
+            superPaymasterFlags?: number;
+            /** Override the SDK's 5.5.0 paymasterVerificationGasLimit floor (default: spec §3.2 draft, 250k). */
+            superPaymasterVerificationGasFloor?: bigint;
         }
     ): Promise<`0x${string}`> {
         // 0. Auto-Estimate if requested or if limits missing
@@ -427,10 +437,37 @@ export class PaymasterClient {
 
         // 2. Build paymasterAndData
         let paymasterAndData: Hex;
+        let spCtx: SuperPaymasterSponsorshipContext | undefined;
+        const chainIdForGuard = client.chain?.id ?? chainId;
         if (options?.operator) {
+            spCtx = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
+            // Both generations sigFail (AA34, no reason) for an unconfigured/paused operator —
+            // say so here instead of after a signed round-trip to the bundler.
+            if (!spCtx.isConfigured || spCtx.isPaused) {
+                throw new Error(`SuperPaymaster ${spCtx.version}: operator ${options.operator} is ${spCtx.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
+            }
+            const zero = '0x0000000000000000000000000000000000000000';
+            if (token && token.toLowerCase() !== zero && token.toLowerCase() !== spCtx.token.toLowerCase()) {
+                // The SP gas token is the operator's configured xPNTs token, never a per-call choice.
+                console.warn(`[PaymasterClient] token ${token} ignored for SuperPaymaster; using operators(${options.operator}).xPNTsToken = ${spCtx.token}`);
+            }
+            if (spCtx.generation === 'v5.5') {
+                // Spec §3.2 F1: one in-flight sponsored op per sender. Checked BEFORE signing.
+                SuperPaymasterInflightGuard.assertNoneInFlight(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
+            }
+            // Floors only ever RAISE a limit. postOp: contract-enforced minPostOpGas (both
+            // generations; never trust a bundler estimate for it, spec §3.2). Verification: 5.5.0 only.
+            const verificationFloor = options?.superPaymasterVerificationGasFloor ?? spCtx.verificationGasFloor;
+            gasLimits.paymasterPostOpGasLimit = atLeast(gasLimits.paymasterPostOpGasLimit, spCtx.minPostOpGas);
+            gasLimits.paymasterVerificationGasLimit = atLeast(
+                gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
+                verificationFloor
+            );
             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
-                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit,
+                token: spCtx.token,
+                flags: options?.superPaymasterFlags
             });
         } else {
             // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
@@ -637,18 +674,25 @@ export class PaymasterClient {
                  
                  const caller = wallet.account?.address ? wallet.account.address : wallet.account;
 
-                 return await wallet.writeContract({
+                 const txHash = await wallet.writeContract({
                      address: entryPoint,
-                     abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
+                     // Named-component ABI from @aastar/core: `userOp` is an object, and viem
+                     // cannot encode an object into the unnamed tuple of a hand-written signature
+                     // (it reads userOp[0]… → "Address undefined is invalid"), so this fallback
+                     // never worked with the previous parseAbi string.
+                     abi: EntryPointABI,
                      functionName: 'handleOps',
                      args: [[userOp], caller],
                      chain: wallet.chain,
                      account: wallet.account
                  });
+                 if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, txHash);
+                 return txHash;
             }
 
             if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
             console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
+            if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, result.result);
             return result.result;
         }
 

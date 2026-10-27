@@ -194,45 +194,60 @@ describe("PaymasterManager", () => {
       expect(data).toBe("0x");
     });
 
-    it("v0.7 SuperPaymaster path: postGas=300_000 when operators() signals SuperPaymaster", async () => {
-      // SuperPaymaster detection runs inside the "custom-user-provided" + v0.7 path.
-      // Mock provider.call() so:
-      //   owner()         → 0xAAAA...
-      //   operators(addr) → [true, 0, 0xBBBB..., 0]
-      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
-      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
-
-      const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-      // The migrated detection uses viem reads (spContract.read.owner() /
-      // .operators([owner]) → provider.readContract), so mock readContract:
-      //   owner()          → OWNER
-      //   operators(owner) → [true, 0, 0xBBBB..., 0]  (tuple[0] === true ⇒ SuperPaymaster)
+    // operators() mocked in the REAL return order of SuperPaymaster 5.4.2 / 5.5.0:
+    // (aPNTsBalance, isConfigured, isPaused, xPNTsToken, reputation, minTxInterval, treasury,
+    //  totalSpent, totalTxSponsored). The previous mock used a hand-written 4-field shape that
+    // matched the code's (wrong) ABI rather than the contract.
+    const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const XPNTS = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    function mockSuperPaymaster(version: string, minPostOpGas = 200_000) {
       const provider = (pm as any).ethereum.getProvider();
       vi.spyOn(provider, "readContract").mockImplementation(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async ({ functionName }: any) => {
+          if (functionName === "version") return version;
           if (functionName === "owner") return OWNER;
           if (functionName === "operators") {
-            return [true, 0n, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 0n];
+            return [10n ** 21n, true, false, XPNTS, 0, 0, OWNER, 0n, 0n];
+          }
+          if (functionName === "gasParams") {
+            return [{ minPostOpGas, settleGasBound: 0, cWrap: 0, cPostop: 0 }, {}];
           }
           throw new Error(`unexpected read: ${functionName}`);
         }
       );
+    }
 
-      // Must use "custom-user-provided" — that is the only path where SuperPaymaster
-      // detection runs.  The named-paymaster branch (lines 224-228) just does a storage
-      // lookup and would throw "Paymaster <name> not found".
+    it("v0.7 SuperPaymaster 5.4.2: verGas 80k, postGas 300k, operator token appended (ignored by 5.4.2)", async () => {
+      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockSuperPaymaster("SuperPaymaster-5.4.2");
+
       const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
 
-      // packed layout (SuperPaymaster branch):
-      //   0x + address(40) + verGas(32) + postGas(32) + operatorAddr(40) + maxRate(64)
-      // indices:  2         42           74            106
-      const verGas  = BigInt("0x" + packed.slice(42, 74));
-      const postGas = BigInt("0x" + packed.slice(74, 106));
+      // Offsets (bytes) from SuperPaymasterStorage.sol:176-180 @ v5.5.0-rc.4:
+      //   [20:36] verGas, [36:52] postOpGas, [52:72] operator, [104:124] token, [124] flags
+      const at = (a: number, b: number) => packed.slice(2 + a * 2, 2 + b * 2);
+      expect((packed.length - 2) / 2).toBe(125);
+      expect(BigInt("0x" + at(20, 36))).toBe(BigInt(80_000));
+      expect(BigInt("0x" + at(36, 52))).toBe(BigInt(300_000));
+      expect(at(52, 72)).toBe(OWNER.slice(2));
+      expect(at(104, 124)).toBe(XPNTS.slice(2));
+      expect(at(124, 125)).toBe("00");
 
-      expect(verGas).toBe(BigInt(80_000));
-      expect(postGas).toBe(BigInt(300_000));
+      vi.restoreAllMocks();
+    });
+
+    it("v0.7 SuperPaymaster 5.5.0: verGas raised to the 250k floor, postGas >= gasParams().minPostOpGas", async () => {
+      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 350_000);
+
+      const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
+      const at = (a: number, b: number) => packed.slice(2 + a * 2, 2 + b * 2);
+      expect(BigInt("0x" + at(20, 36))).toBe(BigInt(250_000));
+      expect(BigInt("0x" + at(36, 52))).toBe(BigInt(350_000));
+      expect(at(104, 124)).toBe(XPNTS.slice(2));
 
       vi.restoreAllMocks();
     });

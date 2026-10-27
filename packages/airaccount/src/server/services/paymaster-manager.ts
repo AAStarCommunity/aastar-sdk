@@ -4,6 +4,14 @@ import { concat, getContract, numberToHex, zeroAddress, type Address, type Hex, 
 // viem's getContract / writeContract during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
+import {
+  SuperPaymasterABI,
+  SUPER_PAYMASTER_MIN_POST_OP_GAS,
+  SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR,
+  encodeSuperPaymasterData,
+  getSuperPaymasterGasParams,
+  getSuperPaymasterGeneration,
+} from "@aastar/core";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
@@ -34,10 +42,6 @@ const PAYMASTER_PRICE_ABI = parseAbi([
   "function updatePrice() external",
 ]);
 
-const SUPER_PAYMASTER_DETECT_ABI = parseAbi([
-  "function owner() view returns (address)",
-  "function operators(address) view returns (bool,uint256,address,uint256)",
-]);
 
 /**
  * Paymaster manager — extracted from NestJS PaymasterService.
@@ -170,43 +174,54 @@ export class PaymasterManager {
       if (isV07OrV08) {
         const provider = this.ethereum.getProvider();
 
-        // Detect SuperPaymaster vs PaymasterV4
-        let isSuperPaymaster = false;
-        let operatorAddress = "0x";
+        // Detect SuperPaymaster vs PaymasterV4. A SuperPaymaster answers version() with
+        // "SuperPaymaster-x.y.z"; the operator is assumed to be the SP owner (pre-existing
+        // convention of this custom-address path). operators() is decoded with the REAL core ABI:
+        // (aPNTsBalance, isConfigured, isPaused, xPNTsToken, ...) — identical on 5.4.2 and 5.5.0.
+        // The previous hand-written `(bool,uint256,address,uint256)` shape read aPNTsBalance as
+        // the "configured" flag, so detection only succeeded when that balance was exactly 1.
+        let sp:
+          | { generation: "v5.4" | "v5.5"; operator: Address; token: Address }
+          | undefined;
         try {
-          const spContract = getContract({
+          const { generation } = await getSuperPaymasterGeneration(provider, formattedAddress as Address);
+          const owner = (await provider.readContract({
             address: formattedAddress as Address,
-            abi: SUPER_PAYMASTER_DETECT_ABI,
-            client: provider,
-          });
-          const owner = (await spContract.read.owner()) as Address;
-          const opInfo = (await spContract.read.operators([owner])) as readonly [
-            boolean,
-            bigint,
-            Address,
-            bigint,
-          ];
-          if (opInfo && opInfo[0] === true) {
-            isSuperPaymaster = true;
-            operatorAddress = owner;
-            this.logger.log(`SuperPaymaster detected, operator: ${operatorAddress}`);
+            abi: SuperPaymasterABI,
+            functionName: "owner",
+          })) as Address;
+          const opInfo = (await provider.readContract({
+            address: formattedAddress as Address,
+            abi: SuperPaymasterABI,
+            functionName: "operators",
+            args: [owner],
+          })) as readonly unknown[];
+          if (opInfo && opInfo[1] === true) {
+            sp = { generation, operator: owner, token: opInfo[3] as Address };
+            this.logger.log(`SuperPaymaster (${generation}) detected, operator: ${owner}`);
           }
         } catch {
           /* not SuperPaymaster */
         }
 
-        if (isSuperPaymaster) {
-          const verGas = BigInt(80000);
-          // recordXPNTsDebt + event emit in postOp observed ~117k gas on Sepolia; 300k gives safe headroom.
-          const postGas = BigInt(300_000);
-          const maxRate = (BigInt(1) << BigInt(256)) - BigInt(1);
-          return concat([
-            formattedAddress as Hex,
-            numberToHex(verGas, { size: 16 }),
-            numberToHex(postGas, { size: 16 }),
-            operatorAddress as Hex,
-            numberToHex(maxRate, { size: 32 }),
-          ]);
+        if (sp) {
+          // postOp: 300k headroom (observed ~117k on 5.4.2), never below the contract floor
+          // (5.5.0: governable gasParams().minPostOpGas; 5.4.2: MIN_POST_OP_GAS = 200k).
+          let minPostOp = SUPER_PAYMASTER_MIN_POST_OP_GAS;
+          if (sp.generation === "v5.5") {
+            minPostOp = (await getSuperPaymasterGasParams(provider, formattedAddress as Address, "v5.5")).minPostOpGas;
+          }
+          const postGas = minPostOp > BigInt(300_000) ? minPostOp : BigInt(300_000);
+          // 5.5.0 validation measured 198k-238k (spec §3.2) — 80k would OOG; 5.4.2 keeps 80k.
+          const verGas = sp.generation === "v5.5" ? SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR : BigInt(80000);
+          // Token is REQUIRED by 5.5.0 and ignored by 5.4.2, so it is always appended.
+          return encodeSuperPaymasterData({
+            paymaster: formattedAddress as Address,
+            operator: sp.operator,
+            verificationGasLimit: verGas,
+            postOpGasLimit: postGas,
+            token: sp.token,
+          });
         }
 
         // PaymasterV4 deposit model: paymasterData contains the ERC-20 token address
