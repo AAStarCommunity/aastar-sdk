@@ -68,6 +68,7 @@
     "upstream:versions": "tsx scripts/upstream/upstream-radar.ts --versions",
     "check:abi": "tsx scripts/check-abi-completeness.ts",
     "check:abi-drift": "tsx scripts/check-abi-drift.ts",
+    "check:sp550-abis": "tsx scripts/check-sp550-abis.ts",
     "check:abi-drift:strict": "tsx scripts/check-abi-drift.ts --strict",
     "check:deployed-stack": "tsx scripts/repcredit/check-deployed-stack.ts",
     "abi:sync": "tsx scripts/abi-sync.ts",
