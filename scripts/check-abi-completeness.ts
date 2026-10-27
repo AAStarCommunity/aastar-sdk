@@ -47,6 +47,16 @@ const UPSTREAMS: Upstream[] = [
   },
 ];
 
+// Upstream contracts the SDK ships MERGED into a union ABI rather than as a file of their own name.
+// The extension halves are only reachable through the core's fallback at the SAME address, so a
+// standalone copy would invite encoding calls against the wrong address. Presence is satisfied by
+// the union file; its byte-provenance and union-equality are verified by scripts/check-sp550-abis.ts.
+const MERGED_INTO: Record<string, string> = {
+  SuperPaymasterAdmin: 'SuperPaymaster-5.5.0.full', // SP 5.5.0 core ∪ Admin (SDK #417)
+  xPNTsTokenV2: 'xPNTsTokenV2.full', // xPNTs v2 core ∪ Ext
+  xPNTsTokenV2Ext: 'xPNTsTokenV2.full',
+};
+
 const sdkAbis = new Set(
   fs.existsSync(ABIS_DIR)
     ? fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, ''))
@@ -92,12 +102,15 @@ for (const up of UPSTREAMS) {
   }
   scannedUpstreams++;
   const contracts = concreteContracts(dir).filter((c) => !(up.ignore ?? []).includes(c));
-  const present = contracts.filter((c) => sdkAbis.has(c));
-  const missing = contracts.filter((c) => !sdkAbis.has(c));
+  const has = (c: string) => sdkAbis.has(c) || (MERGED_INTO[c] !== undefined && sdkAbis.has(MERGED_INTO[c]));
+  const present = contracts.filter(has);
+  const missing = contracts.filter((c) => !has(c));
+  const merged = present.filter((c) => !sdkAbis.has(c));
   totalMissing += missing.length;
   const pct = contracts.length ? Math.round((present.length / contracts.length) * 100) : 100;
   console.log(`📦 ${up.name} (${dir.replace(SDK_ROOT + '/', '')})`);
   console.log(`   concrete contracts: ${contracts.length} | in SDK: ${present.length} (${pct}%)`);
+  if (merged.length) console.log(`   ℹ️  shipped merged: ${merged.map((c) => `${c} → ${MERGED_INTO[c]}.json`).join(', ')}`);
   if (missing.length) console.log(`   ❌ MISSING ABIs: ${missing.join(', ')}`);
   else console.log(`   ✅ all concrete contracts have an SDK ABI`);
   console.log('');

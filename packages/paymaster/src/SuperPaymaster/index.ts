@@ -1,5 +1,5 @@
-import { type Address, concat, pad, toHex } from 'viem';
-import { type PublicClient, SuperPaymasterABI as SUPERPAYMASTER_ABI } from '@aastar/core';
+import { type Address } from 'viem';
+import { type PublicClient, SuperPaymasterABI as SUPERPAYMASTER_ABI, encodeSuperPaymasterData, SUPER_PAYMASTER_MIN_POST_OP_GAS } from '@aastar/core';
 
 export type PaymasterConfig = {
     paymasterAddress: Address;
@@ -7,10 +7,20 @@ export type PaymasterConfig = {
     maxRate?: bigint;
     verificationGasLimit?: bigint;
     postOpGasLimit?: bigint;
+    /**
+     * Operator's configured xPNTs token (`operators(operator).xPNTsToken`). REQUIRED by
+     * SuperPaymaster 5.5.0; harmless on 5.4.2 (it reads only the first 104 bytes). Without it the
+     * middleware emits the legacy 104-byte layout, which 5.5.0 rejects.
+     */
+    token?: Address;
+    /** 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS); requires `token`. */
+    flags?: number;
 };
 
 const DEFAULT_VERIFICATION_GAS = 160000n;
-const DEFAULT_POSTOP_GAS = 10000n;
+// MIN_POST_OP_GAS on both 5.4.2 and 5.5.0. The old default (10k) was below it and every op built
+// with it was sigFailed by the deployed contract.
+const DEFAULT_POSTOP_GAS = SUPER_PAYMASTER_MIN_POST_OP_GAS;
 
 /**
  * Constructs the middleware for SuperPaymaster.
@@ -23,15 +33,17 @@ export function getSuperPaymasterMiddleware(config: PaymasterConfig) {
             const postGas = config.postOpGasLimit ?? DEFAULT_POSTOP_GAS;
             const maxRate = config.maxRate ?? 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffn;
 
-            // V3.2.1 Layout: [Paymaster(20)] [VerGas(16)] [PostOpGas(16)] [Operator(20)] [MaxRate(32)]
-            // Offset 72 starts MaxRate.
-            const paymasterAndData = concat([
-                config.paymasterAddress,
-                pad(toHex(verGas), { size: 16 }),
-                pad(toHex(postGas), { size: 16 }),
-                config.operator,
-                pad(toHex(maxRate), { size: 32 })
-            ]);
+            // 5.4.x: [Paymaster(20)][VerGas(16)][PostOpGas(16)][Operator(20)][MaxRate(32)]
+            // 5.5.0: ... [MaxRate(32)][Token(20)][Flags(1)] — emitted when config.token is set.
+            const paymasterAndData = encodeSuperPaymasterData({
+                paymaster: config.paymasterAddress,
+                operator: config.operator,
+                verificationGasLimit: verGas,
+                postOpGasLimit: postGas,
+                maxRate,
+                token: config.token,
+                flags: config.flags
+            });
 
             return {
                 paymasterAndData,
@@ -45,6 +57,10 @@ export function getSuperPaymasterMiddleware(config: PaymasterConfig) {
 /**
  * Enhanced eligibility check for SuperPaymaster V3.
  * Validates that user has sufficient credit with the given operator.
+ *
+ * NOTE (5.5.0): credit is OFF by default and ops are normally paid from the user's escrowed
+ * xPNTs balance, so `credit == 0` does NOT mean "cannot be sponsored" on 5.5.0. Use
+ * `superPaymasterLensActions(lens).dryRunValidation` for a real pre-flight answer there.
  */
 export async function checkEligibility(
     client: any, 
@@ -61,10 +77,13 @@ export async function checkEligibility(
             args: [operator]
         });
         
-        // operatorData structure: [token, treasury, isConfigured, isPaused, exchangeRate, ...]
-        const token = operatorData[0] as Address;
-        const isConfigured = operatorData[2] as boolean;
-        const isPaused = operatorData[3] as boolean;
+        // operators() returns (aPNTsBalance, isConfigured, isPaused, xPNTsToken, reputation,
+        // minTxInterval, treasury, totalSpent, totalTxSponsored) — identical shape on 5.4.2 and
+        // 5.5.0 (M-11 §2.6: 0 same-selector shape changes). The previous indices read
+        // aPNTsBalance as the token and were off by one for the two flags.
+        const token = operatorData[3] as Address;
+        const isConfigured = operatorData[1] as boolean;
+        const isPaused = operatorData[2] as boolean;
         
         if (!isConfigured || isPaused) {
             return { eligible: false };
