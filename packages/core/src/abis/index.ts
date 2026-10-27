@@ -13,6 +13,8 @@ import GTokenABIData from './GToken.json' with { type: 'json' };
 import GTokenAuthorizationABIData from './GTokenAuthorization.json' with { type: 'json' };
 import GTokenStakingABIData from './GTokenStaking.json' with { type: 'json' };
 import SuperPaymasterABIData from './SuperPaymaster.json' with { type: 'json' };
+import SuperPaymasterV550ABIData from './SuperPaymaster-5.5.0.full.json' with { type: 'json' };
+import SuperPaymasterLensABIData from './SuperPaymasterLens.json' with { type: 'json' };
 import PaymasterFactoryABIData from './PaymasterFactory.json' with { type: 'json' };
 import PaymasterABIData from './Paymaster.json' with { type: 'json' };
 import LivenessRegistryABIData from './LivenessRegistry.json' with { type: 'json' };
@@ -34,6 +36,12 @@ import AAStarAirAccountV7ABIData from './AAStarAirAccountV7.json' with { type: '
 // Token System
 import xPNTsTokenABIData from './xPNTsToken.json' with { type: 'json' };
 import xPNTsFactoryABIData from './xPNTsFactory.json' with { type: 'json' };
+import xPNTsTokenV2ABIData from './xPNTsTokenV2.full.json' with { type: 'json' };
+// SP 5.5.0 new contracts (NOT deployed on any shared chain yet; addresses published at A3b).
+import xPNTsFactoryV2ABIData from './xPNTsFactoryV2.json' with { type: 'json' };
+import APNTsCappedABIData from './APNTsCapped.json' with { type: 'json' };
+import AOAProtocolRegistryABIData from './AOAProtocolRegistry.json' with { type: 'json' };
+import GlobalTierSourceABIData from './GlobalTierSource.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
 // Agent Economy (SP V5.3)
@@ -87,8 +95,25 @@ export const GTokenAuthorizationArtifact = GTokenAuthorizationABIData;
 export const GTokenStakingABI = (GTokenStakingABIData as any).abi || GTokenStakingABIData;
 export const GTokenStakingArtifact = GTokenStakingABIData;
 
+// SuperPaymaster 5.4.2 — the version DEPLOYED on Sepolia today (proxy 0x09DF…4DE9). Kept as the
+// default ABI until the 5.5.0 in-place upgrade (CC-122 A3b) actually lands; 5.5.0 removes
+// dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt from this surface.
 export const SuperPaymasterABI = (SuperPaymasterABIData as any).abi || SuperPaymasterABIData;
 export const SuperPaymasterArtifact = SuperPaymasterABIData;
+
+// SuperPaymaster 5.5.0 (NOT deployed on any shared chain yet). Same proxy address as 5.4.2 after
+// the in-place upgrade. Vendored byte-for-byte from SuperPaymaster tag v5.5.0-rc.4 (fbd74fb1)
+// `abis/SuperPaymaster.full.json` = core SuperPaymaster ∪ SuperPaymasterAdmin (the extension is
+// reached through the core's fallback DELEGATECALL, so every function is called on the proxy).
+// Using the core-only `SuperPaymaster.json` of 5.5.0 would miss 43 extension functions (SDK #417).
+// Pick between the two with `getSuperPaymasterGeneration()` (reads on-chain `version()`).
+export const SuperPaymasterV550ABI = (SuperPaymasterV550ABIData as any).abi || SuperPaymasterV550ABIData;
+
+// SuperPaymasterLens (SP 5.5.0) — read-only lens; `dryRunValidation(sp, userOp, maxCost)` moved
+// here from the SP in 5.5.0. Pins `EXPECTED_SP_VERSION = keccak256("SuperPaymaster-5.5.0")` and
+// returns DRYRUN_VERSION_MISMATCH against any other SP. Vendored from tag v5.5.0-rc.4.
+export const SuperPaymasterLensABI = (SuperPaymasterLensABIData as any).abi || SuperPaymasterLensABIData;
+export const SuperPaymasterLensArtifact = SuperPaymasterLensABIData;
 
 export const PaymasterFactoryABI = (PaymasterFactoryABIData as any).abi || PaymasterFactoryABIData;
 export const PaymasterFactoryArtifact = PaymasterFactoryABIData;
@@ -118,6 +143,23 @@ export const AAStarAirAccountV7Artifact = AAStarAirAccountV7ABIData;
 // ========== Token System ==========
 export const xPNTsTokenABI = (xPNTsTokenABIData as any).abi || xPNTsTokenABIData;
 export const xPNTsTokenArtifact = xPNTsTokenABIData;
+
+// xPNTs v2 (`XPNTs-4.0.0`, SP 5.5.0 balance mode) — a NEW token template, not an upgrade of v1.
+// Vendored from tag v5.5.0-rc.4 `abis/xPNTsTokenV2.full.json` = xPNTsTokenV2 ∪ xPNTsTokenV2Ext (the
+// extension is reached via the token's fallback; call everything at the token address). SP 5.5.0
+// `configureOperator` only accepts tokens with `BALANCE_MODE_VERSION() == 1`.
+export const xPNTsTokenV2ABI = (xPNTsTokenV2ABIData as any).abi || xPNTsTokenV2ABIData;
+
+// SP 5.5.0 new contracts — exposed as ABIs only (no wrappers; low-frequency / governance surface).
+// All vendored byte-for-byte from SuperPaymaster tag v5.5.0-rc.4 `abis/`; see scripts/check-sp550-abis.ts.
+//   xPNTsFactoryV2       — deploys xPNTs v2 clones (SP.xpntsFactory() after the upgrade)
+//   APNTsCapped          — replaces aPNTs as SP.APNTS_TOKEN() (operators re-deposit into it)
+//   AOAProtocolRegistry  — codehash allowlist (SP / tier-source kinds) consulted by xPNTs v2
+//   GlobalTierSource     — tierOf(_, user) = Registry.getCreditLimit(user); input to effectiveCreditCap
+export const xPNTsFactoryV2ABI = (xPNTsFactoryV2ABIData as any).abi || xPNTsFactoryV2ABIData;
+export const APNTsCappedABI = (APNTsCappedABIData as any).abi || APNTsCappedABIData;
+export const AOAProtocolRegistryABI = (AOAProtocolRegistryABIData as any).abi || AOAProtocolRegistryABIData;
+export const GlobalTierSourceABI = (GlobalTierSourceABIData as any).abi || GlobalTierSourceABIData;
 
 export const xPNTsFactoryABI = (xPNTsFactoryABIData as any).abi || xPNTsFactoryABIData;
 export const xPNTsFactoryArtifact = xPNTsFactoryABIData;

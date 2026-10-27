@@ -147,6 +147,13 @@ const KNOWN_DRIFT = new Map<string, string>([
 // See CC-27 (upstream rename decision) and scripts/abi-sync.ts (same skip).
 const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
 
+// SP 5.5.0 union ABIs (core ∪ fallback extension, one address). Verified byte-for-byte against the
+// pinned upstream tag AND against the union of their compiled halves by scripts/check-sp550-abis.ts.
+const UNION_ABIS = new Map<string, string>([
+  ['SuperPaymaster-5.5.0.full', 'union ABI (SuperPaymaster ∪ SuperPaymasterAdmin @ SP v5.5.0-rc.4) — verified by `pnpm run check:sp550-abis`'],
+  ['xPNTsTokenV2.full', 'union ABI (xPNTsTokenV2 ∪ xPNTsTokenV2Ext @ SP v5.5.0-rc.4) — verified by `pnpm run check:sp550-abis`'],
+]);
+
 function loadAbi(file: string): any[] {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   return Array.isArray(raw) ? raw : raw.abi || [];
@@ -1199,6 +1206,13 @@ for (const file of fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json'))) 
   if (NAME_COLLISIONS.has(name)) {
     console.log(`ℹ️  ${name}: skipped — name collides with an unrelated upstream contract; SDK tracks a different source (see CC-27).`);
     skippedEntries.push({ name, reason: 'name collision with an unrelated upstream contract (CC-27)', expected: false });
+    continue;
+  }
+  if (UNION_ABIS.has(name)) {
+    // Not a single-contract artifact: a vendored core ∪ extension union. Comparing it against one
+    // half would be a guaranteed false drift; its custody chain is a separate gate, named here so
+    // the skip says where the verification actually happens.
+    skippedEntries.push({ name, reason: UNION_ABIS.get(name)!, expected: false });
     continue;
   }
   // NOTE: KNOWN_DRIFT no longer skips. See its definition — it now suppresses only the SDK-extra
