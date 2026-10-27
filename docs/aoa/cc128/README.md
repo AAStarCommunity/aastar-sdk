@@ -68,7 +68,30 @@
 
 ## 交付三（M4.2）— 五场景流程
 
-（编写中，见后续提交。）
+全文见 [`five_scenarios.md`](five_scenarios.md)。每一步都标了用户动作、系统动作、签名、等待、失败与恢复，以及 SDK 的 `file:line`（`dbb3c47f`）。没有 SDK API 或需要 UI 的步骤标 `MISSING`，**没有猜点击次数**。
+
+**实验客户端尚未确定**（已请 DSR 决定）。本文以 SDK 的代码路径为准，所以凡是界面可见性相关的步骤都标 `MISSING`。如果实验客户端选 YAAA，界面那一半要由 YAAA 补。
+
+| 场景 | 有 SDK API | MISSING | 用户签名事件 | 链上等待 |
+|---|---|---|---|---|
+| 1 已充值稳态（`UserClient` → `PaymasterClient`） | 7 | 2 | 2（+0–4 次自动重签） | 1 |
+| 1 变体 B（AirAccount，KMS + passkey） | 4 | 1 | 2（tier ≥ 2 时 DVT 再加 1） | 1 |
+| 2 首次使用（含第一笔代付） | 15 | 8 | 7（另有社区签 1） | 7 |
+| 3 充值 | 2 | 2 | 0（另有社区签 1） | 1 |
+| 4 操作失败 | 5 | 5 | 0（重试时 +2） | 0（重试时 +1） |
+| 5 赞助不可用 | 8 | 3 | 按处置路径 1–2 | 按处置路径 1 |
+
+计数口径和逐行依据见 `five_scenarios.md` 的汇总表。这些数字**只描述 SDK 在 `dbb3c47f` 上的任务结构，针对的是 5.4.2**。每个场景都附了一行「5.5.0 差异」，但 SDK 目前不支持其中任何一项。**GOMS 只用来支撑任务结构，不用来声称降低了真实的认知负担。**
+
+**影响任务结构、且已在链上确认的三条**（Sepolia block `12003768`，只读）：
+- 现役 Registry 是 **`Registry-5.8.0`**，不是 5.4.2；SP 是 `SuperPaymaster-5.4.2`。
+- **用户自注册 ENDUSER 没有可用的 SDK API**：SDK 里两处调用的 `registerRoleSelf` 不在现役 Registry 的字节码里。这是 SDK 缺陷，记入本仓清理项，本单不改。
+- 当前 Sepolia 上新用户的信用额度是 **300e18**，不是 0。
+
+**本次盘点顺带发现的 SDK 缺陷**（12 条，全部是静态推断，代码未改）见 `five_scenarios.md` 末节。对论文任务结构影响最大的三条：
+- `createEndUserClient().executeGasless` 把 postOp 写死成 50k，低于 SP 的 200k 下限，所以不能作为主路径；
+- 没有检查 `UserOperationEvent.success`，执行 revert 会被当成成功；
+- 没配 bundler 时，SDK 会静默改成由 EOA 先垫 ETH 调 `handleOps`。
 
 ## 复现
 
