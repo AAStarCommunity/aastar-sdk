@@ -1,0 +1,8 @@
+P1 before: autoAllowance(account, SP).used=70569528774141320000 balance=929430471225858680000
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150011058
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...
+P1 handleOps tx 0x9741c1b4b41c3356344058750de08f0ade9810d9c43e6bc5e95e2a7d4e140e28 status=success; UserOperationEvent.success=false; revert=RenewBlocked
+P1 after:  used=133526054565721180000 balance=866473945434278820000 (charged 62956525791579860000 xPNTs for the failed renewal)
+P2 owner-EOA execute tx 0x4e794a3fd21c7f1939c48dde0ca7537806b00bb1542cf8504e3af01421db185d status=success gasUsed=47064 paid by 0x90F79bf6EB2c4f870365E785982E1f101E93b906; used 133526054565721180000→0
+PASS renewal cannot be SP-sponsored (P1); it needs a separately funded executor (P2).
