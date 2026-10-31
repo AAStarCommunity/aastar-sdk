@@ -1,0 +1,13 @@
+SP 0x68B1D87F95878fE05B998F19b66F4baba5De1aed version()=SuperPaymaster-5.5.0 → generation v5.5
+AA account 0x299C29D4f46657D41860c9f0fE90b9e1307958b4 (owner 0x90F79bf6EB2c4f870365E785982E1f101E93b906), operator 0x70997970C51812dc3A010C7d01b50e0d17dc79C8, token 0x2C477DFdB744E3BAf87bbdE078e21D382bc40700
+SDK context: token=0x2C477DFdB744E3BAf87bbdE078e21D382bc40700 minPostOpGas=200000 verificationFloor=250000
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150012629
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...
+handleOps tx 0xb364790d764d2ba19916958cfb61855d2f9fd2221b4d0fb0e18915846b902687 status=success gasUsed=371854
+on-chain paymasterAndData: 125 bytes, layout=v5.5, token=0x2C477DFdB744E3BAf87bbdE078e21D382bc40700, flags=0, verifGas=300000, postOpGas=200000
+UserOperationEvent: opHash=0x7c36f47a3f4374587b5c50673e1e6de37d13ba424b2203b80ae70bdaca84b542 success=true actualGasCost=559990652377230
+user xPNTs burned=70569528774141320000 lockedOf 0→0 | operator aPNTs -70569528774141320000 | protocolRevenue +70569528774141320000 | nonce 0→1 | inflightOf=(0x0000000000000000000000000000000000000000, 0)
+Lens dryRun next op — 5.5.0 layout: ok=true (OK); legacy 104-byte: ok=false (TOKEN_MISMATCH)
+
+✅ SP 5.5.0 local E2E PASS — sponsored op settled in balance mode through the SDK.
