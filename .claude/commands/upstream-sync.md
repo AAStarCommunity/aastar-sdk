@@ -16,8 +16,10 @@ pnpm run upstream:check        # exits non-zero on any drift
 pnpm run upstream:rehearse     # same + real gates + a file-level upgrade worklist (no mutation)
 ```
 
-The four local repos at `/Users/jason/Dev/aastar/{airaccount-contract,SuperPaymaster,AirAccount,YetAnotherAA-Validator}`
-are the first-hand source — keep them at their latest dev/tag before reading. A moving git
+The four local repos at `../{airaccount-contract,SuperPaymaster,AirAccount,YetAnotherAA-Validator}`
+(override: `AASTAR_UPSTREAM_DIR_<KEY>`) are the first-hand source — but only when the radar's
+`checkout` anchor is green. Do NOT switch a shared checkout to make it green; run with `--fetch`
+and point the env var at your own detached worktree of origin's default branch. A moving git
 tag is NOT sufficient evidence: SuperPaymaster and AirAccount have both done **tag-invisible
 full Sepolia redeploys** (every address changed without the tag moving). Trust the upstream's
 own latest CHANGELOG "Deployed" table / openapi `info.version` / deployment record over the tag.

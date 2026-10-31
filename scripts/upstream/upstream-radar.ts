@@ -31,12 +31,27 @@
  * Flags:
  *   --json                machine-readable output (no exit-code change)
  *   --upstream <name>     filter to one upstream (airaccount|superpaymaster|kms|dvt)
+ *   --fetch               `git fetch --quiet origin` in each upstream first. Touches only
+ *                         remote-tracking refs, never the checkout, so it is safe on a
+ *                         repo another worker is using.
  *   --rehearse            after the report, run the existing gates (check:addresses,
  *                         doc-coverage, @aastar/core build) and print an "upgrade
  *                         worklist" — a dry-run of what a sync PR would touch.
  *                         NEVER modifies any SDK file.
  *
- * Run: pnpm exec tsx scripts/upstream/upstream-radar.ts [--json] [--upstream <name>] [--rehearse]
+ * Which revision it reads: the radar reads FILES from each upstream's working tree (ABIs in
+ * out/, CHANGELOG, deployment docs, openapi.yaml), so its verdict describes whatever is
+ * checked out — on a shared machine that is often another worker's branch. Every upstream
+ * therefore gets a `checkout` anchor: drift unless HEAD == origin's default branch and the
+ * tree is clean. When it is red, the other anchors describe that branch, not upstream; point
+ * the radar at a clean checkout (AASTAR_UPSTREAM_DIR_<KEY>, e.g. a `git worktree add --detach
+ * <dir> origin/main` of your own) instead of switching someone else's.
+ *
+ * Repo locations: AASTAR_UPSTREAM_DIR_{AIRACCOUNT,SUPERPAYMASTER,KMS,DVT}, else the sibling
+ * directory next to this SDK (../airaccount-contract, ../SuperPaymaster, ../AirAccount,
+ * ../YetAnotherAA-Validator).
+ *
+ * Run: pnpm exec tsx scripts/upstream/upstream-radar.ts [--json] [--upstream <name>] [--fetch] [--rehearse]
  */
 
 import { execFileSync } from "node:child_process";
@@ -56,14 +71,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, "..", "..");
 
 // ---------------------------------------------------------------------------
-// Upstream repo locations (kept locally at latest dev by convention).
+// Upstream repo locations. "Kept locally at latest dev by convention" was the old
+// assumption, and the `checkout` anchor exists because it does not hold.
 // ---------------------------------------------------------------------------
+const upstreamDir = (key: string, sibling: string): string =>
+  process.env[`AASTAR_UPSTREAM_DIR_${key.toUpperCase()}`] || join(REPO, "..", sibling);
 const UPSTREAM_REPOS = {
-  airaccount: "/Users/jason/Dev/aastar/airaccount-contract",
-  superpaymaster: "/Users/jason/Dev/aastar/SuperPaymaster",
+  airaccount: upstreamDir("airaccount", "airaccount-contract"),
+  superpaymaster: upstreamDir("superpaymaster", "SuperPaymaster"),
   // KMS spec lives inside the AirAccount runtime repo.
-  kms: "/Users/jason/Dev/aastar/AirAccount",
-  dvt: "/Users/jason/Dev/aastar/YetAnotherAA-Validator",
+  kms: upstreamDir("kms", "AirAccount"),
+  dvt: upstreamDir("dvt", "YetAnotherAA-Validator"),
 } as const;
 
 const README = join(REPO, "README.md");
@@ -80,6 +98,7 @@ const ARGV = process.argv.slice(2);
 const JSON_OUT = ARGV.includes("--json");
 const REHEARSE = ARGV.includes("--rehearse");
 const VERSIONS_OUT = ARGV.includes("--versions");
+const FETCH = ARGV.includes("--fetch");
 const UPSTREAM_FILTER = (() => {
   const i = ARGV.indexOf("--upstream");
   return i >= 0 && ARGV[i + 1] ? ARGV[i + 1].toLowerCase() : null;
@@ -92,22 +111,84 @@ function readText(p: string): string {
   return readFileSync(p, "utf8");
 }
 
-/** Latest git tag of a repo (most recent reachable; falls back to creatordate sort). */
+const STABLE_TAG_RE = /^v?\d+\.\d+\.\d+$/;
+
+/**
+ * Highest stable semver tag of a repo. Not `git describe`: that answers "newest tag reachable
+ * from the CHECKOUT", so a worker's old branch made the upstream look older than it is. Not
+ * creatordate either: it picked snapshot tags (`repcredit-pre550-snapshot-20260913`) over
+ * releases. Falls back to the newest tag of any shape when the repo has no stable one.
+ */
 function gitLatestTag(repo: string): string | null {
   try {
-    return execFileSync("git", ["-C", repo, "describe", "--tags", "--abbrev=0"], {
+    const tags = execFileSync("git", ["-C", repo, "tag", "--list", "--sort=-version:refname"], {
       encoding: "utf8",
-    }).trim();
+    })
+      .split("\n")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return tags.find((t) => STABLE_TAG_RE.test(t)) ?? tags[0] ?? null;
   } catch {
-    try {
-      const out = execFileSync("git", ["-C", repo, "tag", "--sort=-creatordate"], {
-        encoding: "utf8",
-      }).trim();
-      return out.split("\n")[0] || null;
-    } catch {
-      return null;
-    }
+    return null;
   }
+}
+
+function git(repo: string, args: string[]): string | null {
+  try {
+    return execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is this checkout what upstream actually is? The radar reads the working tree, so a green
+ * radar over another worker's branch is a green for that branch. Compared against the LOCAL
+ * remote-tracking ref: without `--fetch` "origin/main" is only as fresh as the last fetch, and
+ * the finding says when it was.
+ */
+function checkoutAnchor(repo: string): AnchorResult {
+  const findings: string[] = [];
+  if (!existsSync(join(repo, ".git"))) {
+    return { anchor: "checkout", status: "drift", findings: [`no git checkout at ${repo} (set AASTAR_UPSTREAM_DIR_<KEY>)`] };
+  }
+  const head = git(repo, ["rev-parse", "HEAD"]);
+  const branch = git(repo, ["rev-parse", "--abbrev-ref", "HEAD"]);
+  const defaultRef =
+    git(repo, ["rev-parse", "--abbrev-ref", "origin/HEAD"]) ??
+    (git(repo, ["rev-parse", "--verify", "--quiet", "origin/main"]) ? "origin/main" : null) ??
+    (git(repo, ["rev-parse", "--verify", "--quiet", "origin/master"]) ? "origin/master" : null);
+  const upstreamHead = defaultRef ? git(repo, ["rev-parse", defaultRef]) : null;
+  const dirty = (git(repo, ["status", "--porcelain", "--untracked-files=no"]) ?? "") !== "";
+  // When the remote-tracking refs were last updated = FETCH_HEAD's mtime. Not `git log FETCH_HEAD`:
+  // that is the fetched COMMIT's date, which reads as "fetched a month ago" right after a fetch.
+  // FETCH_HEAD is per-worktree; a linked worktree that never fetched itself falls back to the main one's.
+  const abs = (p: string | null) => (p ? (p.startsWith("/") ? p : join(repo, p)) : null);
+  const fetchPath = [abs(git(repo, ["rev-parse", "--git-path", "FETCH_HEAD"])), abs(git(repo, ["rev-parse", "--git-common-dir"]))]
+    .map((p, i) => (i === 1 && p ? join(p, "FETCH_HEAD") : p))
+    .find((p): p is string => !!p && existsSync(p));
+  const fetchedAt = fetchPath ? statSync(fetchPath).mtime.toISOString().slice(0, 16) + "Z" : null;
+
+  let status: AnchorStatus = "in-sync";
+  if (!head || !upstreamHead) {
+    status = "drift";
+    findings.push(`cannot resolve HEAD or origin's default branch in ${repo}`);
+  } else if (head !== upstreamHead) {
+    status = "drift";
+    const behind = git(repo, ["rev-list", "--count", `HEAD..${defaultRef}`]);
+    const ahead = git(repo, ["rev-list", "--count", `${defaultRef}..HEAD`]);
+    findings.push(
+      `checkout is ${branch === "HEAD" ? "detached" : `on \`${branch}\``} at ${head.slice(0, 8)}, ` +
+        `${defaultRef} is ${upstreamHead.slice(0, 8)} (${ahead ?? "?"} ahead / ${behind ?? "?"} behind) — ` +
+        `every other anchor below describes the checkout, NOT upstream`,
+    );
+  }
+  if (dirty) {
+    status = "drift";
+    findings.push("working tree has uncommitted changes to tracked files");
+  }
+  if (!FETCH) findings.push(`${defaultRef ?? "origin"} as of last fetch${fetchedAt ? ` (${fetchedAt})` : ""}; pass --fetch to refresh`);
+  return { anchor: "checkout", status, findings };
 }
 
 /** Strip a leading "v" / "openapi " / surrounding whitespace so versions compare cleanly. */
@@ -409,7 +490,7 @@ function aaLabelToKey(label: string): string | null {
 type AnchorStatus = "in-sync" | "drift" | "skipped";
 
 interface AnchorResult {
-  anchor: "version" | "abis" | "addresses" | "api" | "self-contradiction";
+  anchor: "checkout" | "version" | "abis" | "addresses" | "api" | "self-contradiction";
   status: AnchorStatus;
   findings: string[]; // human lines; empty when in-sync/skipped
 }
@@ -805,9 +886,18 @@ const ALL: (() => UpstreamResult)[] = [
   analyzeDvt,
 ];
 
-const results: UpstreamResult[] = ALL.map((fn) => fn()).filter(
-  (r) => !UPSTREAM_FILTER || r.key === UPSTREAM_FILTER,
-);
+if (FETCH) {
+  for (const repo of new Set(Object.values(UPSTREAM_REPOS))) {
+    if (existsSync(join(repo, ".git")) && git(repo, ["fetch", "--quiet", "--tags", "origin"]) === null) {
+      console.error(`upstream-radar: git fetch failed in ${repo}; its checkout anchor compares against a stale origin`);
+    }
+  }
+}
+
+const results: UpstreamResult[] = ALL.map((fn) => fn())
+  .filter((r) => !UPSTREAM_FILTER || r.key === UPSTREAM_FILTER)
+  // First anchor, so the human report shows what revision the rest describes before the rest.
+  .map((r) => ({ ...r, anchors: [checkoutAnchor(r.repo), ...r.anchors] }));
 
 // ---------------------------------------------------------------------------
 // Rendering
@@ -823,7 +913,7 @@ function anchorLabel(r: UpstreamResult, a: AnchorResult): string {
 function renderHuman(): string {
   const lines: string[] = [];
   lines.push("Upstream Sync Radar — AAStar SDK");
-  lines.push(`Source of truth: README pins + addresses.ts + packages/core/src/abis/ vs local upstream repos`);
+  lines.push(`Source of truth: README pins + addresses.ts + packages/core/src/abis/ vs local upstream checkouts (see each \`checkout\` anchor)`);
   lines.push("");
   for (const r of results) {
     const drift = hasDrift(r);
@@ -900,6 +990,13 @@ function worklistFor(r: UpstreamResult): string[] {
         items.push(
           `[wire] reconcile the BLS DST / wire layout in packages/core/src/crypto/{dvtWire,hashToField}.ts ` +
             `against the YAA node, then re-run the golden-vector tests`,
+        );
+        break;
+      case "checkout":
+        items.push(
+          `[checkout] re-run against a clean checkout of ${r.repo}'s default branch ` +
+            `(\`git worktree add --detach <dir> origin/main\` + AASTAR_UPSTREAM_DIR_${r.key.toUpperCase()}); ` +
+            `until then the other anchors for this upstream are not evidence about upstream`,
         );
         break;
       case "self-contradiction":
