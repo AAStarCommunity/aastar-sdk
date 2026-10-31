@@ -118,16 +118,20 @@ const STABLE_TAG_RE = /^v?\d+\.\d+\.\d+$/;
  * from the CHECKOUT", so a worker's old branch made the upstream look older than it is. Not
  * creatordate either: it picked snapshot tags (`repcredit-pre550-snapshot-20260913`) over
  * releases. Falls back to the newest tag of any shape when the repo has no stable one.
+ *
+ * `prefix` is for repos that tag several products: AirAccount tags `airaccount-kms-v0.29.0` and
+ * `airaccount-node-v0.30.0-beta.1`, and its only BARE stable tag is an old `v0.27.4` — without the
+ * prefix the KMS self-contradiction check compared the spec against that.
  */
-function gitLatestTag(repo: string): string | null {
+function gitLatestTag(repo: string, prefix = ""): string | null {
   try {
     const tags = execFileSync("git", ["-C", repo, "tag", "--list", "--sort=-version:refname"], {
       encoding: "utf8",
     })
       .split("\n")
       .map((t) => t.trim())
-      .filter(Boolean);
-    return tags.find((t) => STABLE_TAG_RE.test(t)) ?? tags[0] ?? null;
+      .filter((t) => t && t.startsWith(prefix));
+    return tags.find((t) => STABLE_TAG_RE.test(t.slice(prefix.length))) ?? tags[0] ?? null;
   } catch {
     return null;
   }
@@ -751,7 +755,8 @@ function analyzeKms(): UpstreamResult {
   const repo = UPSTREAM_REPOS.kms;
   const pinned = README_PINS["kms"] ?? null;
   const specVersion = existsSync(OPENAPI) ? openApiVersion() : null;
-  const tag = gitLatestTag(repo);
+  const KMS_TAG_PREFIX = "airaccount-kms-";
+  const tag = gitLatestTag(repo, KMS_TAG_PREFIX);
   const anchors: AnchorResult[] = [];
 
   // version — pin (e.g. "openapi 0.22.0") vs openapi.yaml info.version.
@@ -801,9 +806,9 @@ function analyzeKms(): UpstreamResult {
     const findings: string[] = [];
     let status: AnchorStatus = "skipped";
     if (specVersion && tag) {
-      status = normVersion(specVersion) === normVersion(tag) ? "in-sync" : "drift";
+      status = normVersion(specVersion) === normVersion(tag.replace(KMS_TAG_PREFIX, "")) ? "in-sync" : "drift";
       if (status === "drift")
-        findings.push(`openapi.yaml version \`${specVersion}\` != repo latest tag \`${tag}\``);
+        findings.push(`openapi.yaml version \`${specVersion}\` != repo latest KMS tag \`${tag}\``);
     }
     anchors.push({ anchor: "self-contradiction", status, findings });
   }
