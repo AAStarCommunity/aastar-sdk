@@ -145,8 +145,12 @@ describe('instrument checks (FU-27)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () 
     // The other direction, and the one the call-site scan is blind to — measured: with comment
     // stripping removed the counts went 37 → 38 and no check fired, because the extra path hides
     // among the sixteen the literal scan legitimately finds that no call site uses.
+    // Global (`g`): the audit strips comments in more than one place (the calledFrom check for
+    // KNOWN_UNDOCUMENTED does too, and comes first in the file), and the bug being replayed is
+    // "no comment stripping", not "the first one gone" — a first-match replace mutated the wrong
+    // function and left sdkPaths() intact.
     const out = withMutation(
-      (s) => s.replace(/\.replace\(\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g, ''\)\n\s*\.replace\(\/\(\^\|\[\^:\]\)\\\/\\\/\.\*\$\/gm, '\$1'\);/, ';'),
+      (s) => s.replace(/\.replace\(\/\\\/\\\*\[\\s\\S\]\*\?\\\*\\\/\/g, ''\)\n\s*\.replace\(\/\(\^\|\[\^:\]\)\\\/\\\/\.\*\$\/gm, '\$1'\);/g, ';'),
       audit,
     );
     expect(out).toMatch(/never appear in an expression/);
