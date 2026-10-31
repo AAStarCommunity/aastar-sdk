@@ -209,7 +209,11 @@ function parseReadmePins(): Record<string, string> {
   const text = readText(README);
   const pins: Record<string, string> = {};
   for (const line of text.split("\n")) {
-    const m = line.match(/^\|\s*\*\*([^*]+)\*\*[^|]*\|\s*`([^`]+)`\s*\|/);
+    // First backticked span of the pin cell — the same rule as upstream-watch's read_pin. The old
+    // pattern demanded the cell be ONLY that span, so a row with a note after it
+    // ("`v0.29.0` (ABIs) · `v0.31.0` …") parsed as no pin, and the version anchor was skipped
+    // rather than compared: AirAccount showed `pin=?` and was never reported as drifted.
+    const m = line.match(/^\|\s*\*\*([^*]+)\*\*[^|]*\|[^|`]*`([^`]+)`[^|]*\|/);
     if (m) {
       const name = m[1].trim().toLowerCase();
       pins[name] = m[2].trim();
