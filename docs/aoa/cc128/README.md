@@ -108,3 +108,15 @@ SEPOLIA_RPC=<archive-capable Sepolia RPC> scripts/cc128/rebuild-tx-userop-map.sh
 | `pm_version_at_block.csv` | `ade2319b24aa7ca57eb38d3a1c7303b5588c4848c738f77be5886fd33f3958d1` |
 
 负对照：输入只有表头时，脚本报 `zero tx hashes read` 并 exit 1；`attribution_dataset` 删掉一笔 tx 时，脚本报 `different tx sets` 并 exit 1。
+
+## 补证附录（M4.9-SDK，2026-10-31）
+
+DSR 在 2026-10-30 要求补一份针对最终论文五场景的证据附录，任务书为 `AOA_Cross_Repo_Closure_2026-10-31.md`。全文见 [`m49_appendix.md`](m49_appendix.md)，内容包括：
+- 三类签名的落点；
+- S1–S5 每一格的执行者、资金来源和等待次数；
+- permit 撤销与显式 approve 的区别；
+- 充值与 cap 续期分开列；
+- 每条结论标明是实测还是读码；
+- 论文需要更正的 8 处。
+
+新增的实测都在本地 anvil 或桩上完成，没有公链交易。脚本是 `scripts/cc128/count-signatures.ts` 和 `scripts/cc128/renew-funding-probe.ts`，日志在 `evidence/` 下。

@@ -1,0 +1,71 @@
+{
+  "root": "aastar-sdk@49714635 (CC-122 R2, draft PR #420)",
+  "results": [
+    {
+      "scenario": "A",
+      "desc": "autoEstimate (no gas limits passed), bundler accepts",
+      "signMessageCalls": 2,
+      "expected": 2,
+      "distinctHashes": 2,
+      "bundlerSendCalls": 1,
+      "walletTxs": [],
+      "reads": [
+        "version",
+        "operators",
+        "gasParams",
+        "getNonce"
+      ],
+      "pass": true
+    },
+    {
+      "scenario": "B",
+      "desc": "caller passes verificationGasLimit + callGasLimit, bundler accepts",
+      "signMessageCalls": 1,
+      "expected": 1,
+      "distinctHashes": 1,
+      "bundlerSendCalls": 1,
+      "walletTxs": [],
+      "reads": [
+        "getNonce",
+        "version",
+        "operators",
+        "gasParams"
+      ],
+      "pass": true
+    },
+    {
+      "scenario": "C",
+      "desc": "autoEstimate, bundler answers \"replacement underpriced\" once then accepts",
+      "signMessageCalls": 3,
+      "expected": 3,
+      "distinctHashes": 3,
+      "bundlerSendCalls": 2,
+      "walletTxs": [],
+      "reads": [
+        "version",
+        "operators",
+        "gasParams",
+        "getNonce"
+      ],
+      "pass": true
+    },
+    {
+      "scenario": "D",
+      "desc": "autoEstimate, bundler has no eth_sendUserOperation (-32601) -> direct handleOps fallback",
+      "signMessageCalls": 2,
+      "expected": 2,
+      "distinctHashes": 2,
+      "bundlerSendCalls": 1,
+      "walletTxs": [
+        "handleOps"
+      ],
+      "reads": [
+        "version",
+        "operators",
+        "gasParams",
+        "getNonce"
+      ],
+      "pass": true
+    }
+  ]
+}
