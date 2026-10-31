@@ -24,9 +24,17 @@ Two complementary detectors:
 
 ### 1. Local radar — `scripts/upstream/upstream-radar.ts` (authoritative)
 
-Runs against the 4 upstream repos checked out **side-by-side** on your machine
-(`/Users/jason/Dev/aastar/{airaccount-contract,SuperPaymaster,AirAccount,YetAnotherAA-Validator}`).
-For each upstream it checks 4 anchors and a best-effort self-contradiction scan:
+Runs against the 4 upstream repos checked out **side-by-side** next to this SDK
+(`../{airaccount-contract,SuperPaymaster,AirAccount,YetAnotherAA-Validator}`, or
+`AASTAR_UPSTREAM_DIR_{AIRACCOUNT,SUPERPAYMASTER,KMS,DVT}`). It reads their **working trees**,
+so its verdict describes whatever is checked out — often another worker's branch. The first
+anchor, **checkout**, is red unless HEAD equals origin's default branch and the tree is clean;
+while it is red, the other anchors are not evidence about upstream. `--fetch` refreshes the
+remote-tracking refs without touching the checkout. To get a clean read without switching a
+shared checkout, add your own `git worktree add --detach <dir> origin/main` and point the env
+var at it.
+
+For each upstream it then checks 4 anchors and a best-effort self-contradiction scan:
 
 - **version** — SDK pin (parsed from the README table + `addresses.ts` header) vs the
   upstream's latest git tag (for KMS: vs `openapi.yaml` `info.version`).
