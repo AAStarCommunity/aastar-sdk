@@ -3,24 +3,22 @@
  *
  * READ THIS BEFORE TRUSTING THE OUTPUT
  * ------------------------------------
- * The baseline is `kms/docs/api/openapi.yaml` in the airaccount-node repo, and that file declares
- * `info.version: 0.28.1`. The repo's latest tag is v0.30.0-beta.1, and **the spec has not been
- * touched since 2026-07-09** — measured: `git log -1 -- kms/docs/api/openapi.yaml` predates the
- * v0.30.0-beta.1 tag, and `git log <tag>..HEAD -- <spec>` is empty.
+ * The baseline is `kms/docs/api/openapi.yaml` in the airaccount-node repo. Until AirAccount #212 it
+ * declared `info.version: 0.28.1` while KMS shipped 0.29.0; #212 bumped it to `0.29.0` and states
+ * that the PUBLIC API is unchanged since 0.28.1 (re-measured 2026-10-31: the path set is identical,
+ * 44 paths, and `git diff airaccount-kms-v0.28.1 origin/main -- <spec>` only touches the header).
  *
- * That is not a detail; it decides what this audit can conclude. Concretely, the KMS CHANGELOG says
- * 0.29.0 shipped a `/pop` endpoint (CC-37, BLS Proof-of-Possession, with an on-chain register tx
- * quoted), and `/pop` appears **zero** times in the spec. So the spec is authoritative for the
- * 0.28.1 surface and silent about everything added after.
+ * What the spec does NOT document, by design: the 0.29.0 `/pop` (CC-37 BLS Proof-of-Possession) and
+ * `/kms/sign` endpoints are loopback-only (127.0.0.1:3100 on the board) and are kept out of the public
+ * spec. They are invisible to a spec comparison, so `KNOWN_UNDOCUMENTED` names the ones we know about
+ * — it is a list of what someone told us, not a complete inventory.
  *
  * Therefore this tool answers exactly one question:
  *
- *     Does the SDK's client agree with the 0.28.1 DOCUMENTED surface?
+ *     Does the SDK's client agree with the DOCUMENTED public surface?
  *
- * It cannot answer "does the SDK agree with the deployed server". Endpoints added in 0.29.0+ show
- * up here as `spec-only: absent` at best, or not at all — they are invisible to this comparison,
- * and the `undocumented-additions` section names the ones the CHANGELOG lets us know about rather
- * than pretending the list is complete.
+ * It cannot answer "does the SDK agree with the deployed server". Endpoints outside the spec show
+ * up here as `spec-only: absent` at best, or not at all.
  *
  * Making that limitation loud is the point. A green audit against a stale baseline is exactly the
  * "gate that reads like coverage" this repo keeps finding.
@@ -43,14 +41,41 @@ const DEFAULT_SPEC = path.join(
 );
 const SPEC = specArg ?? DEFAULT_SPEC;
 
-/** Endpoints the KMS CHANGELOG says exist but the 0.28.1 spec does not document. */
-const KNOWN_UNDOCUMENTED: { path: string; since: string; why: string }[] = [
+/**
+ * Endpoints that exist upstream but are not in the public spec.
+ *
+ * `calledFrom` is where the SDK calls one OUTSIDE the scanned `kms-*.ts` services. A loopback endpoint
+ * is reached by an operator-side signer, not by the server-side KMS client, so the service scan can
+ * never see it; without this field `/pop` read as "SDK does NOT call it" while
+ * `packages/operator/src/dvt/kmsPopSigner.ts` called it. The file must still contain the path as a
+ * request-path literal — a moved or deleted caller fails the audit instead of passing on the name.
+ */
+const KNOWN_UNDOCUMENTED: { path: string; since: string; scope: 'loopback' | 'public'; calledFrom?: string; why: string }[] = [
   {
     path: '/pop',
     since: '0.29.0',
-    why: 'CC-37 BLS Proof-of-Possession for key-less DVT nodes. In CHANGELOG with an on-chain register tx; absent from the 0.28.1 spec.',
+    scope: 'loopback',
+    calledFrom: 'packages/operator/src/dvt/kmsPopSigner.ts',
+    why: 'CC-37 BLS Proof-of-Possession for key-less DVT nodes. Loopback-only (127.0.0.1:3100), kept out of the public spec by design (AirAccount #212).',
   },
 ];
+
+/** True when `file`'s code (comments stripped) holds `p` as the end of a request-path literal, so `/pop` does not match `/popular`. */
+function calledOutsideServices(file: string, p: string): boolean {
+  const abs = path.join(SDK_ROOT, file);
+  if (!existsSync(abs)) return false;
+  const esc = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Same comment stripping as sdkPaths(): this file's doc comments quote `/pop` in backticks, which
+  // matched on its own and kept the check green with the real request path deleted.
+  const src = readFileSync(abs, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+  return new RegExp(`${esc}[\`'"?]`).test(src);
+}
+
+function knownUsed(u: (typeof KNOWN_UNDOCUMENTED)[number], sdk: Set<string>): boolean {
+  return sdk.has(u.path) || (u.calledFrom !== undefined && calledOutsideServices(u.calledFrom, u.path));
+}
 
 function fail(msg: string): never {
   console.error(`kms-endpoint-audit: ${msg}`);
@@ -215,16 +240,17 @@ function main() {
 
   console.log(`\n-- known additions the baseline cannot see (${KNOWN_UNDOCUMENTED.length}) --`);
   for (const u of KNOWN_UNDOCUMENTED) {
-    const used = sdk.has(u.path);
-    console.log(`  ${used ? '✅' : '❌'} ${u.path}  (since ${u.since}) — SDK ${used ? 'calls it' : 'does NOT call it'}`);
+    const used = knownUsed(u, sdk);
+    const where = used && !sdk.has(u.path) ? ` (${u.calledFrom})` : '';
+    console.log(`  ${used ? '✅' : '❌'} ${u.path}  (since ${u.since}, ${u.scope}) — SDK ${used ? `calls it${where}` : 'does NOT call it'}`);
     console.log(`     ${u.why}`);
   }
-  console.log('     This list is what the CHANGELOG happens to mention. It is NOT complete, and a');
-  console.log('     complete one needs the deployed server or a refreshed spec.');
+  console.log('     This list is what upstream happens to have told us. It is NOT complete, and a');
+  console.log('     complete one needs the deployed server.');
 
   console.log(
     `\nsummary: ${documented.length} documented · ${notInSpec.length} not in spec · ` +
-      `${specOnly.length} spec-only · ${KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path)).length} known-missing`,
+      `${specOnly.length} spec-only · ${KNOWN_UNDOCUMENTED.filter((u) => !knownUsed(u, sdk)).length} known-missing`,
   );
 
   // ── checks on the INSTRUMENT ───────────────────────────────────────────────────────────────
@@ -337,7 +363,7 @@ function main() {
   console.log(`   (instrument: bipartition ${documented.length}+${notInSpec.length} == ${sdk.size} ✅)`);
 
   // Exit non-zero only for the thing a human must act on: a documented addition the SDK never calls.
-  const missing = KNOWN_UNDOCUMENTED.filter((u) => !sdk.has(u.path));
+  const missing = KNOWN_UNDOCUMENTED.filter((u) => !knownUsed(u, sdk));
   if (missing.length) {
     console.error(`\n❌ ${missing.length} endpoint(s) known to exist upstream are not called by the SDK: ${missing.map((m) => m.path).join(', ')}`);
     process.exit(1);
