@@ -72,7 +72,7 @@ export function atLeast(value: bigint | undefined, floor: bigint): bigint {
  * bundler-side `same_sender_mempool_count 1` (spec §3.2, measured on Rundler) covers that.
  */
 export class SuperPaymasterInflightGuard {
-    private static readonly pending = new Map<string, { nonce: bigint; userOpHash?: string }>();
+    private static readonly pending = new Map<string, { nonce: bigint; userOpHash?: string; reservation?: symbol }>();
 
     private static key(chainId: number | bigint, entryPoint: Address, sender: Address): string {
         return `${chainId}:${entryPoint.toLowerCase()}:${sender.toLowerCase()}`;
@@ -96,6 +96,22 @@ export class SuperPaymasterInflightGuard {
             `Wait for its receipt before submitting the next one (if the bundler dropped it, call ` +
             `SuperPaymasterInflightGuard.release(chainId, entryPoint, sender)).`,
         );
+    }
+
+    /**
+     * Check-and-claim in one synchronous step: throws like assertNoneInFlight, otherwise records
+     * `currentNonce` as in flight before returning, so a concurrent caller for the same sender is
+     * rejected even while this one is still signing. Returns a release function that only drops
+     * THIS reservation (a later record() for the same sender is left alone).
+     */
+    static reserve(chainId: number | bigint, entryPoint: Address, sender: Address, currentNonce: bigint): () => void {
+        this.assertNoneInFlight(chainId, entryPoint, sender, currentNonce);
+        const k = this.key(chainId, entryPoint, sender);
+        const reservation = Symbol(k);
+        this.pending.set(k, { nonce: currentNonce, reservation });
+        return () => {
+            if (this.pending.get(k)?.reservation === reservation) this.pending.delete(k);
+        };
     }
 
     static record(chainId: number | bigint, entryPoint: Address, sender: Address, nonce: bigint, userOpHash?: string): void {
