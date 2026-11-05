@@ -115,6 +115,15 @@ function concreteContracts(dir: string): string[] {
 }
 const findArtifact = (outDir: string, name: string) => { const p = path.join(outDir, `${name}.sol`, `${name}.json`); return fs.existsSync(p) ? p : null; };
 
+// Upstream contracts the SDK ships MERGED into a union ABI rather than as a file of their own name.
+// The extension halves are only reachable through the core's fallback at the SAME address, so a
+// standalone copy would invite encoding calls against the wrong address. Presence is satisfied by
+// the union file; its byte-provenance and union-equality are verified by scripts/check-sp550-abis.ts.
+const MERGED_INTO: Record<string, string> = {
+  SuperPaymasterAdmin: 'SuperPaymaster-5.5.0.full', // SP 5.5.0 core ∪ Admin (SDK #417)
+  xPNTsTokenV2: 'xPNTsTokenV2.full', // xPNTs v2 core ∪ Ext
+  xPNTsTokenV2Ext: 'xPNTsTokenV2.full',
+};
 const sdkAbis = new Set(fs.readdirSync(ABIS_DIR).filter((f) => f.endsWith('.json')).map((f) => f.replace(/\.json$/, '')));
 
 type FnChange = { contract: string; kind: 'function' | 'event' | 'error'; sig: string; change: 'added' | 'removed' | 'return-shape'; detail?: string };
@@ -137,6 +146,7 @@ for (const lvl of LEVELS) {
   // (1) completeness — concrete contracts missing from the SDK
   for (const c of concreteContracts(src)) {
     if (lvl.ignore.includes(c) || sdkAbis.has(c)) continue;
+    if (MERGED_INTO[c] !== undefined && sdkAbis.has(MERGED_INTO[c])) { log(`   ℹ️  ${c}: shipped merged in ${MERGED_INTO[c]}.json`); continue; }
     const art = findArtifact(out, c);
     report.missing.push({ level: lvl.name, contract: c, copiedFrom: art ?? undefined });
     report.newContracts.push(c);

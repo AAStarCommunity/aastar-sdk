@@ -1,4 +1,7 @@
 import { vi } from "vitest";
+import { createPublicClient, custom, encodeFunctionResult, HttpRequestError, type Hex } from "viem";
+import { sepolia } from "viem/chains";
+import { SuperPaymasterABI } from "@aastar/core";
 import { PaymasterManager } from "../services/paymaster-manager";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { SilentLogger } from "../interfaces/logger";
@@ -25,6 +28,43 @@ function makeEthereumProvider(): EthereumProvider {
   });
 }
 
+// A contract without version(): the eth_call reaches the chain and returns empty data. This (or a
+// genuine revert) is the ONLY signal that may route a custom address to the PaymasterV4 encoding.
+function mockNoVersionFunction(pm?: PaymasterManager) {
+  const target = pm ?? currentPm;
+  const provider = (target as any).ethereum.getProvider();
+  vi.spyOn(provider, "call").mockResolvedValue({ data: undefined });
+}
+
+/** version() answered through call(), the path detection actually uses. */
+function mockVersionCall(provider: any, version: string) {
+  vi.spyOn(provider, "call").mockResolvedValue({
+    data: encodeFunctionResult({ abi: SuperPaymasterABI, functionName: "version", result: version }),
+  });
+}
+
+/**
+ * Route detection through a REAL viem PublicClient whose transport answers eth_call with `answer`,
+ * so the error goes through viem's own wrapping (the layer a mocked HttpRequestError bypasses).
+ */
+function useEthCall(pm: PaymasterManager, answer: () => unknown) {
+  const client = createPublicClient({
+    chain: sepolia,
+    transport: custom({
+      request: async ({ method }: { method: string }) => {
+        if (method === "eth_call") return answer();
+        throw Object.assign(new Error(`unexpected ${method}`), { code: -32601 });
+      },
+    }, { retryCount: 0 }),
+  });
+  vi.spyOn((pm as any).ethereum, "getProvider").mockReturnValue(client);
+}
+const rpcError = (code: number, message: string, data?: Hex) => {
+  throw Object.assign(new Error(message), { code, ...(data ? { data } : {}) });
+};
+
+let currentPm: PaymasterManager;
+
 describe("PaymasterManager", () => {
   let pm: PaymasterManager;
   let storage: MemoryStorage;
@@ -32,6 +72,11 @@ describe("PaymasterManager", () => {
   beforeEach(() => {
     storage = new MemoryStorage();
     pm = new PaymasterManager(makeEthereumProvider(), storage, new SilentLogger());
+    currentPm = pm;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("addCustomPaymaster / getAvailablePaymasters", () => {
@@ -105,6 +150,7 @@ describe("PaymasterManager", () => {
     it("should return packed data for custom user-provided v0.7 paymaster", async () => {
       const addr = "0x1234567890AbcDeF1234567890abcDEf12345678";
       const v07EntryPoint = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockNoVersionFunction();
 
       const data = await pm.getPaymasterData(
         "user-1",
@@ -194,55 +240,136 @@ describe("PaymasterManager", () => {
       expect(data).toBe("0x");
     });
 
-    it("v0.7 SuperPaymaster path: postGas=300_000 when operators() signals SuperPaymaster", async () => {
-      // SuperPaymaster detection runs inside the "custom-user-provided" + v0.7 path.
-      // Mock provider.call() so:
-      //   owner()         → 0xAAAA...
-      //   operators(addr) → [true, 0, 0xBBBB..., 0]
-      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
-      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
-
-      const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-      // The migrated detection uses viem reads (spContract.read.owner() /
-      // .operators([owner]) → provider.readContract), so mock readContract:
-      //   owner()          → OWNER
-      //   operators(owner) → [true, 0, 0xBBBB..., 0]  (tuple[0] === true ⇒ SuperPaymaster)
+    // operators() mocked in the REAL return order of SuperPaymaster 5.4.2 / 5.5.0:
+    // (aPNTsBalance, isConfigured, isPaused, xPNTsToken, reputation, minTxInterval, treasury,
+    //  totalSpent, totalTxSponsored). The previous mock used a hand-written 4-field shape that
+    // matched the code's (wrong) ABI rather than the contract.
+    const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const XPNTS = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    function mockSuperPaymaster(version: string, minPostOpGas = 200_000, configured: string[] = [OWNER]) {
       const provider = (pm as any).ethereum.getProvider();
+      mockVersionCall(provider, version);
       vi.spyOn(provider, "readContract").mockImplementation(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async ({ functionName }: any) => {
+        async ({ functionName, args }: any) => {
           if (functionName === "owner") return OWNER;
           if (functionName === "operators") {
-            return [true, 0n, "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 0n];
+            const isConfigured = configured.map((a) => a.toLowerCase()).includes(String(args[0]).toLowerCase());
+            return [10n ** 21n, isConfigured, false, XPNTS, 0, 0, OWNER, 0n, 0n];
+          }
+          if (functionName === "gasParams") {
+            return [{ minPostOpGas, settleGasBound: 0, cWrap: 0, cPostop: 0 }, {}];
           }
           throw new Error(`unexpected read: ${functionName}`);
         }
       );
+    }
 
-      // Must use "custom-user-provided" — that is the only path where SuperPaymaster
-      // detection runs.  The named-paymaster branch (lines 224-228) just does a storage
-      // lookup and would throw "Paymaster <name> not found".
+    it("v0.7 SuperPaymaster 5.4.2: verGas 80k, postGas 300k, operator token appended (ignored by 5.4.2)", async () => {
+      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockSuperPaymaster("SuperPaymaster-5.4.2");
+
       const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
 
-      // packed layout (SuperPaymaster branch):
-      //   0x + address(40) + verGas(32) + postGas(32) + operatorAddr(40) + maxRate(64)
-      // indices:  2         42           74            106
-      const verGas  = BigInt("0x" + packed.slice(42, 74));
-      const postGas = BigInt("0x" + packed.slice(74, 106));
-
-      expect(verGas).toBe(BigInt(80_000));
-      expect(postGas).toBe(BigInt(300_000));
+      // Offsets (bytes) from SuperPaymasterStorage.sol:176-180 @ v5.5.0-rc.4:
+      //   [20:36] verGas, [36:52] postOpGas, [52:72] operator, [104:124] token, [124] flags
+      const at = (a: number, b: number) => packed.slice(2 + a * 2, 2 + b * 2);
+      expect((packed.length - 2) / 2).toBe(125);
+      expect(BigInt("0x" + at(20, 36))).toBe(BigInt(80_000));
+      expect(BigInt("0x" + at(36, 52))).toBe(BigInt(300_000));
+      expect(at(52, 72)).toBe(OWNER.slice(2));
+      expect(at(104, 124)).toBe(XPNTS.slice(2));
+      expect(at(124, 125)).toBe("00");
 
       vi.restoreAllMocks();
     });
 
+    it("v0.7 SuperPaymaster 5.5.0: verGas raised to the 250k floor, postGas >= gasParams().minPostOpGas", async () => {
+      const addr = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+      const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 350_000);
+
+      const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
+      const at = (a: number, b: number) => packed.slice(2 + a * 2, 2 + b * 2);
+      expect(BigInt("0x" + at(20, 36))).toBe(BigInt(250_000));
+      expect(BigInt("0x" + at(36, 52))).toBe(BigInt(350_000));
+      expect(at(104, 124)).toBe(XPNTS.slice(2));
+
+      vi.restoreAllMocks();
+    });
+
+    const SP_ADDR = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+    const V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+    it("SP detection: a transport error is thrown, not treated as 'not a SuperPaymaster'", async () => {
+      const provider = (pm as any).ethereum.getProvider();
+      vi.spyOn(provider, "call").mockRejectedValue(
+        new HttpRequestError({ url: "http://localhost:8545", details: "ECONNREFUSED" })
+      );
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        HttpRequestError
+      );
+    });
+
+    // Through viem's real error wrapping. viem 2.43.3 readContract turns RPC -32603 into the same
+    // ContractFunctionRevertedError as a genuine revert, so a check on that class fell back to V4.
+    it.each([
+      ["-32603 upstream request timeout", () => rpcError(-32603, "upstream request timeout")],
+      ["-32000 header not found", () => rpcError(-32000, "header not found")],
+      ["-32000 execution reverted WITHOUT revert data", () => rpcError(-32000, "execution reverted")],
+    ])("SP detection (real viem transport): %s is rethrown, not routed to V4", async (_name, answer) => {
+      useEthCall(pm, answer);
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow();
+    });
+
+    it.each([
+      ["code 3 execution reverted (no data)", () => rpcError(3, "execution reverted")],
+      ["code 3 execution reverted, data 0x", () => rpcError(3, "execution reverted", "0x")],
+      ["-32603 carrying revert data", () => rpcError(-32603, "execution reverted", "0xdeadbeef")],
+      ["empty return 0x", () => "0x"],
+    ])("SP detection (real viem transport): %s means no version() → V4 encoding", async (_name, answer) => {
+      useEthCall(pm, answer);
+      const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR);
+      expect(BigInt("0x" + data.slice(42, 74))).toBe(BigInt(0x30000));
+    });
+
+    it("SP detection: a newer SP generation (5.6.0) throws instead of falling back to V4", async () => {
+      mockSuperPaymaster("SuperPaymaster-5.6.0");
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        /newer than this SDK understands/
+      );
+    });
+
+    it("SP detection: owner not a configured operator (e.g. owner moved to governance) throws", async () => {
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 200_000, []);
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        /not a configured operator .*pass options\.operator/
+      );
+    });
+
+    it("SP detection: an explicit operator is used instead of owner()", async () => {
+      const OP = "0xdddddddddddddddddddddddddddddddddddddddd";
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 200_000, [OP]);
+      const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR, { operator: OP });
+      expect(packed.slice(2 + 52 * 2, 2 + 72 * 2)).toBe(OP.slice(2));
+      await expect(
+        pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR, { operator: OWNER })
+      ).rejects.toThrow(/not a configured operator/);
+    });
+
+    it("SP detection: a non-SuperPaymaster version() string routes to the V4 encoding", async () => {
+      mockVersionCall((pm as any).ethereum.getProvider(), "PMV4-Deposit-4.3.0");
+      const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR);
+      expect(BigInt("0x" + data.slice(42, 74))).toBe(BigInt(0x30000));
+    });
+
     it("v0.7 PaymasterV4 path: encodes verGas and postGas in correct byte positions", async () => {
-      // Without a live RPC the SuperPaymaster/token() calls fail and fall through to the
-      // PaymasterV4 branch, which uses hardcoded gas limits (0x30000 each).
-      // This test validates the packed-data byte layout.
+      // The contract has no version() → PaymasterV4 branch, which uses hardcoded gas limits
+      // (0x30000 each). This test validates the packed-data byte layout.
       const addr = "0x1234567890AbcDeF1234567890abcDEf12345678";
       const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockNoVersionFunction();
 
       const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
 

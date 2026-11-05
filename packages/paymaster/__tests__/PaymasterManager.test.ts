@@ -116,6 +116,30 @@ describe('PaymasterManager', () => {
             expect(size(out)).toBe(84);
         });
 
+        it("type 'super' with token emits the SuperPaymaster 5.5.0 layout (125 bytes, token at [104:124])", () => {
+            const out = PaymasterManager.buildPaymasterData('super', {
+                paymasterAddress: PAYMASTER_SUPER,
+                operator: OPERATOR,
+                verificationGasLimit: 250000n,
+                postOpGasLimit: 200000n,
+                token: TOKEN,
+                flags: 1
+            });
+            expect(size(out)).toBe(125);
+            // TOKEN_OFFSET = 104, FLAGS_OFFSET = 124 (SuperPaymasterStorage.sol:179-180 @ v5.5.0-rc.4)
+            expect(out.slice(2 + 104 * 2, 2 + 124 * 2)).toBe(TOKEN.slice(2));
+            expect(out.slice(2 + 124 * 2)).toBe('01');
+            // Head is unchanged vs the 5.4.x layout, which is what 5.4.2 reads (length >= 104).
+            const legacy = buildSuperPaymasterData(PAYMASTER_SUPER, OPERATOR, { verificationGasLimit: 250000n, postOpGasLimit: 200000n });
+            expect(out.slice(0, 2 + 104 * 2)).toBe(legacy);
+        });
+
+        it("'super' default postOpGasLimit is MIN_POST_OP_GAS (200k), not the old sub-floor 100k", () => {
+            const sup = PaymasterManager.buildPaymasterData('super', { paymasterAddress: PAYMASTER_SUPER, operator: OPERATOR });
+            // POSTOP_GAS_OFFSET = 36, uint128
+            expect(BigInt('0x' + sup.slice(2 + 36 * 2, 2 + 52 * 2))).toBe(200000n);
+        });
+
         it('static buildPaymasterData dispatches by explicit type', () => {
             const v4 = PaymasterManager.buildPaymasterData('v4', { paymasterAddress: PAYMASTER_V4, token: TOKEN });
             const sup = PaymasterManager.buildPaymasterData('super', { paymasterAddress: PAYMASTER_SUPER, operator: OPERATOR });
