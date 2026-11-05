@@ -26,20 +26,27 @@ export type SubmitGaslessOptions = {
 };
 
 /**
- * Did the node definitively refuse a transaction (so it is NOT pending anywhere)? Judged on the
- * innermost error's JSON-RPC code: 3 (execution reverted during gas estimation), 4001 (user
- * rejected), -32000 / -32003 (node rejected: nonce too low, insufficient funds, …), -32602 (invalid
- * params) — unless the message says the tx is already known. Everything else — transport errors,
- * timeouts, -32603 (proxies report upstream timeouts with it), errors without a code — may have
- * been broadcast, so it is NOT a rejection.
+ * Did the node definitively refuse a transaction BEFORE broadcasting it (so it is pending nowhere)?
+ * Only codes / messages that cannot follow a broadcast count:
+ *   - code 3: execution reverted during gas estimation (pre-signing);
+ *   - code 4001: the user rejected the request in the wallet;
+ *   - otherwise only whitelisted node messages (insufficient funds, intrinsic gas too low, …).
+ * Anything about nonce / replacement / underpriced / already — which a node or bundler can report
+ * on its own internal retry while the original is in flight or mined — and any unrecognised
+ * message, transport error, timeout or -32603 is NOT a rejection: the slot stays reserved until
+ * the caller has looked the transaction up by hash and calls release().
  */
+const PRE_BROADCAST_REJECTION = /insufficient funds|intrinsic gas too low|exceeds block gas limit|invalid sender|fee exceeds|exceeds the configured cap/i;
+const MAYBE_BROADCAST = /nonce|replacement|underpriced|already|known transaction/i;
+
 function isExplicitTxRejection(err: unknown): boolean {
     let e: any = err;
     while (e && typeof e === 'object' && e.cause) e = e.cause;
     const code = e?.code;
     const text = `${(err as any)?.message ?? ''} ${e?.message ?? ''}`;
-    if (/already known|known transaction|already imported|replacement transaction/i.test(text)) return false;
-    return code === 3 || code === 4001 || code === -32000 || code === -32003 || code === -32602;
+    if (MAYBE_BROADCAST.test(text)) return false;
+    if (code === 3 || code === 4001) return true;
+    return PRE_BROADCAST_REJECTION.test(text);
 }
 
 /** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
@@ -182,7 +189,9 @@ export class PaymasterClient {
             factoryData?: Hex;
             /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
             superPaymasterFlags?: number;
-        }
+        },
+        /** @internal submitGaslessUserOperation's in-flight handle; see the exposure note below. */
+        guard?: InflightGuardControl
     ) {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
@@ -325,6 +334,9 @@ export class PaymasterClient {
             params: [formatUserOpV07(partialUserOp), entryPoint]
         };
 
+        // The payload carries a REAL signature over the real nonce: once it leaves, the bundler
+        // holds an executable op. Until a JSON-RPC answer is parsed, a failure is ambiguous.
+        if (guard) guard.inSend = true;
         const response = await fetch(bundlerUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -332,6 +344,7 @@ export class PaymasterClient {
         });
 
         const result = await response.json();
+        if (guard) guard.inSend = false;
         
         // Debug logging for Candide
         if (bundlerUrl.includes('candide')) {
@@ -467,7 +480,8 @@ export class PaymasterClient {
                     factoryData: options?.factoryData,
                     airAccountSig: options?.airAccountSig, // forward so internal estimate signs in the same format (#115 H-1)
                     superPaymasterFlags: options?.superPaymasterFlags
-                }
+                },
+                guard
             );
             gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
             gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;

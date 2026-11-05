@@ -180,6 +180,12 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
         ['timeout without a code (broadcast may have happened)', fail(undefined, 'The request took too long to respond.')],
         ['-32603 from an RPC proxy', fail(-32603, 'upstream request timeout')],
         ['-32000 already known (it IS in the mempool)', fail(-32000, 'already known')],
+        // A node / bundler can report these on its OWN internal retry while the original is in
+        // flight or already mined — so they say nothing about whether this tx was broadcast.
+        ['-32000 nonce too low', fail(-32000, 'nonce too low')],
+        ['-32000 replacement underpriced', fail(-32000, 'replacement underpriced')],
+        ['-32000 replacement transaction underpriced', fail(-32000, 'replacement transaction underpriced')],
+        ['-32000 with an unrecognised message (default: keep)', fail(-32000, 'some node-specific failure')],
     ])('ambiguous: %s → slot kept', async (_name, writeContract) => {
         const { submit } = harness(noSendBundler, { writeContract });
         await expect(submit()).rejects.toThrow();
@@ -187,8 +193,11 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
     });
 
     it.each([
-        ['-32000 nonce too low', fail(-32000, 'nonce too low')],
         ['-32000 insufficient funds', fail(-32000, 'insufficient funds for gas * price + value')],
+        ['-32000 intrinsic gas too low', fail(-32000, 'intrinsic gas too low')],
+        ['-32000 exceeds block gas limit', fail(-32000, 'exceeds block gas limit')],
+        ['-32000 tx fee exceeds the configured cap', fail(-32000, 'tx fee (1.20 ether) exceeds the configured cap (1.00 ether)')],
+        ['3 execution reverted (gas estimation, before signing)', fail(3, 'execution reverted')],
         ['4001 user rejected', fail(4001, 'User rejected the request.')],
     ])('explicit: %s → slot released', async (_name, writeContract) => {
         let first = true;
@@ -200,6 +209,32 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
         });
         await expect(submit()).rejects.toThrow();
         await expect(submit()).resolves.toBe('0x' + 'ee'.repeat(32));
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: the signed estimation request is an exposure', () => {
+    // eth_estimateUserOperationGas carries a real signature over the real nonce, so once it has
+    // left, only a parsed JSON-RPC answer tells us the bundler did not keep an executable op.
+    it('transport failure during estimation → slot kept', async () => {
+        let drop = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas' && drop) throw new TypeError('fetch failed');
+            return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toThrow(/fetch failed/);
+        drop = false;
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    it('estimation answered with a JSON-RPC error → slot released', async () => {
+        let reject = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas' && reject) return { error: { code: -32500, message: 'AA23 reverted' } };
+            return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toThrow(/Estimation Error/);
+        reject = false;
+        await expect(submit()).resolves.toBe(OP_HASH);
     });
 });
 
