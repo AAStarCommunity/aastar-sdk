@@ -1,8 +1,8 @@
 import {
   BaseError,
-  ContractFunctionRevertedError,
-  ContractFunctionZeroDataError,
   concat,
+  decodeFunctionResult,
+  encodeFunctionData,
   getContract,
   numberToHex,
   zeroAddress,
@@ -27,12 +27,24 @@ import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
 
-/** True only when the call reached the contract and the function is absent (revert / empty return). */
-function isMissingFunctionError(err: unknown): boolean {
-  return (
-    err instanceof BaseError &&
-    !!err.walk((e) => e instanceof ContractFunctionRevertedError || e instanceof ContractFunctionZeroDataError)
-  );
+/**
+ * True only when the node says the call itself REVERTED: JSON-RPC code 3, or an error carrying
+ * non-empty revert data. Judged on the innermost raw RPC error, because viem's readContract wraps
+ * an RPC -32603 ("upstream request timeout") into the same ContractFunctionRevertedError as a real
+ * revert and drops the cause (measured on viem 2.43.3) — which is why detection uses call().
+ * -32603 / -32000 / transport errors without revert data are NOT reverts and must be rethrown.
+ */
+function isCallRevert(err: unknown): boolean {
+  if (!(err instanceof BaseError)) return false;
+  let raw: { code?: unknown; data?: unknown } | undefined;
+  err.walk((e) => {
+    raw = e as { code?: unknown; data?: unknown };
+    return false;
+  });
+  if (!raw) return false;
+  const data = typeof raw.data === "string" ? raw.data : (raw.data as { data?: unknown } | undefined)?.data;
+  const hasRevertData = typeof data === "string" && /^0x[0-9a-fA-F]+$/.test(data) && data.length > 2;
+  return raw.code === 3 || hasRevertData;
 }
 
 /**
@@ -203,15 +215,24 @@ export class PaymasterManager {
         let sp:
           | { generation: "v5.4" | "v5.5"; operator: Address; token: Address }
           | undefined;
+        // Raw call, not readContract: see isCallRevert for why the wrapped error is unusable.
         let version: string | undefined;
+        let ret: Hex | undefined;
+        let reverted = false;
         try {
-          version = (await provider.readContract({
-            address: formattedAddress as Address,
-            abi: SuperPaymasterABI,
-            functionName: "version",
-          })) as string;
+          ret = (
+            await provider.call({
+              to: formattedAddress as Address,
+              data: encodeFunctionData({ abi: SuperPaymasterABI, functionName: "version" }),
+            })
+          ).data;
         } catch (err) {
-          if (!isMissingFunctionError(err)) throw err;
+          if (!isCallRevert(err)) throw err;
+          reverted = true;
+        }
+        // Empty return (no code / no such function) or a revert both mean "no version()".
+        if (!reverted && ret && ret !== "0x") {
+          version = decodeFunctionResult({ abi: SuperPaymasterABI, functionName: "version", data: ret }) as string;
         }
         if (version !== undefined && version.trim().startsWith("SuperPaymaster-")) {
           // Throws for an unparseable or newer-than-supported version.

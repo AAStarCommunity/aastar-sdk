@@ -1,5 +1,7 @@
 import { vi } from "vitest";
-import { ContractFunctionExecutionError, ContractFunctionZeroDataError, HttpRequestError } from "viem";
+import { createPublicClient, custom, encodeFunctionResult, HttpRequestError, type Hex } from "viem";
+import { sepolia } from "viem/chains";
+import { SuperPaymasterABI } from "@aastar/core";
 import { PaymasterManager } from "../services/paymaster-manager";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { SilentLogger } from "../interfaces/logger";
@@ -26,21 +28,41 @@ function makeEthereumProvider(): EthereumProvider {
   });
 }
 
-// A contract without version(): the call reaches the chain and returns empty data. This (or a
-// revert) is the ONLY signal that may route a custom address to the PaymasterV4 encoding.
+// A contract without version(): the eth_call reaches the chain and returns empty data. This (or a
+// genuine revert) is the ONLY signal that may route a custom address to the PaymasterV4 encoding.
 function mockNoVersionFunction(pm?: PaymasterManager) {
   const target = pm ?? currentPm;
   const provider = (target as any).ethereum.getProvider();
-  vi.spyOn(provider, "readContract").mockImplementation(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async ({ functionName }: any) => {
-      throw new ContractFunctionExecutionError(new ContractFunctionZeroDataError({ functionName }), {
-        abi: [],
-        functionName,
-      });
-    }
-  );
+  vi.spyOn(provider, "call").mockResolvedValue({ data: undefined });
 }
+
+/** version() answered through call(), the path detection actually uses. */
+function mockVersionCall(provider: any, version: string) {
+  vi.spyOn(provider, "call").mockResolvedValue({
+    data: encodeFunctionResult({ abi: SuperPaymasterABI, functionName: "version", result: version }),
+  });
+}
+
+/**
+ * Route detection through a REAL viem PublicClient whose transport answers eth_call with `answer`,
+ * so the error goes through viem's own wrapping (the layer a mocked HttpRequestError bypasses).
+ */
+function useEthCall(pm: PaymasterManager, answer: () => unknown) {
+  const client = createPublicClient({
+    chain: sepolia,
+    transport: custom({
+      request: async ({ method }: { method: string }) => {
+        if (method === "eth_call") return answer();
+        throw Object.assign(new Error(`unexpected ${method}`), { code: -32601 });
+      },
+    }, { retryCount: 0 }),
+  });
+  vi.spyOn((pm as any).ethereum, "getProvider").mockReturnValue(client);
+}
+const rpcError = (code: number, message: string, data?: Hex) => {
+  throw Object.assign(new Error(message), { code, ...(data ? { data } : {}) });
+};
+
 let currentPm: PaymasterManager;
 
 describe("PaymasterManager", () => {
@@ -226,10 +248,10 @@ describe("PaymasterManager", () => {
     const XPNTS = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     function mockSuperPaymaster(version: string, minPostOpGas = 200_000, configured: string[] = [OWNER]) {
       const provider = (pm as any).ethereum.getProvider();
+      mockVersionCall(provider, version);
       vi.spyOn(provider, "readContract").mockImplementation(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async ({ functionName, args }: any) => {
-          if (functionName === "version") return version;
           if (functionName === "owner") return OWNER;
           if (functionName === "operators") {
             const isConfigured = configured.map((a) => a.toLowerCase()).includes(String(args[0]).toLowerCase());
@@ -280,14 +302,36 @@ describe("PaymasterManager", () => {
     const SP_ADDR = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
     const V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
 
-    it("SP detection: an RPC error is thrown, not treated as 'not a SuperPaymaster'", async () => {
+    it("SP detection: a transport error is thrown, not treated as 'not a SuperPaymaster'", async () => {
       const provider = (pm as any).ethereum.getProvider();
-      vi.spyOn(provider, "readContract").mockRejectedValue(
+      vi.spyOn(provider, "call").mockRejectedValue(
         new HttpRequestError({ url: "http://localhost:8545", details: "ECONNREFUSED" })
       );
       await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
         HttpRequestError
       );
+    });
+
+    // Through viem's real error wrapping. viem 2.43.3 readContract turns RPC -32603 into the same
+    // ContractFunctionRevertedError as a genuine revert, so a check on that class fell back to V4.
+    it.each([
+      ["-32603 upstream request timeout", () => rpcError(-32603, "upstream request timeout")],
+      ["-32000 header not found", () => rpcError(-32000, "header not found")],
+      ["-32000 execution reverted WITHOUT revert data", () => rpcError(-32000, "execution reverted")],
+    ])("SP detection (real viem transport): %s is rethrown, not routed to V4", async (_name, answer) => {
+      useEthCall(pm, answer);
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow();
+    });
+
+    it.each([
+      ["code 3 execution reverted (no data)", () => rpcError(3, "execution reverted")],
+      ["code 3 execution reverted, data 0x", () => rpcError(3, "execution reverted", "0x")],
+      ["-32603 carrying revert data", () => rpcError(-32603, "execution reverted", "0xdeadbeef")],
+      ["empty return 0x", () => "0x"],
+    ])("SP detection (real viem transport): %s means no version() → V4 encoding", async (_name, answer) => {
+      useEthCall(pm, answer);
+      const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR);
+      expect(BigInt("0x" + data.slice(42, 74))).toBe(BigInt(0x30000));
     });
 
     it("SP detection: a newer SP generation (5.6.0) throws instead of falling back to V4", async () => {
@@ -315,8 +359,7 @@ describe("PaymasterManager", () => {
     });
 
     it("SP detection: a non-SuperPaymaster version() string routes to the V4 encoding", async () => {
-      const provider = (pm as any).ethereum.getProvider();
-      vi.spyOn(provider, "readContract").mockResolvedValue("PMV4-Deposit-4.3.0");
+      mockVersionCall((pm as any).ethereum.getProvider(), "PMV4-Deposit-4.3.0");
       const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR);
       expect(BigInt("0x" + data.slice(42, 74))).toBe(BigInt(0x30000));
     });
