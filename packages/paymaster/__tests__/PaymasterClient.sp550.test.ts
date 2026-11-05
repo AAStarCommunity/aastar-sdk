@@ -238,6 +238,30 @@ describe('PaymasterClient × SP 5.5.0: the signed estimation request is an expos
     });
 });
 
+describe('PaymasterClient × SP 5.5.0: a parseable but non-JSON-RPC answer is not an answer', () => {
+    // e.g. a gateway's {"message": "..."}: it proves nothing about whether the bundler got the op.
+    function gatewayHarness(failOn: string) {
+        let gateway = true;
+        const h = harness(async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }));
+        const real = (globalThis as any).fetch;
+        vi.stubGlobal('fetch', async (url: string, init: { body: string }) => {
+            if (gateway && JSON.parse(init.body).method === failOn) {
+                await real(url, init); // still recorded as sent
+                return { json: async () => ({ message: 'Internal server error' }) };
+            }
+            return real(url, init);
+        });
+        return { ...h, stopGateway: () => { gateway = false; } };
+    }
+
+    it.each(['eth_estimateUserOperationGas', 'eth_sendUserOperation'])('%s answered with a gateway body → throws, slot kept', async (method) => {
+        const { submit, stopGateway } = gatewayHarness(method);
+        await expect(submit()).rejects.toThrow(/non-JSON-RPC answer/);
+        stopGateway();
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+});
+
 describe('SuperPaymasterInflightGuard.reserve', () => {
     it('release() only drops its own reservation, not a later record()', () => {
         const release = SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 5n);

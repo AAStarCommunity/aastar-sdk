@@ -26,6 +26,17 @@ export type SubmitGaslessOptions = {
 };
 
 /**
+ * Only a well-formed JSON-RPC answer (jsonrpc + id + exactly one of result / error) proves the
+ * bundler processed the request. A gateway body such as {"message": "..."} parses as JSON but says
+ * nothing about whether the signed op reached the bundler, so it throws while the in-flight
+ * exposure flag is still set — the slot is kept, like any other ambiguous failure.
+ */
+function assertJsonRpcAnswer(r: any, method: string): void {
+    const ok = r !== null && typeof r === 'object' && r.jsonrpc === '2.0' && 'id' in r && (('result' in r) !== ('error' in r));
+    if (!ok) throw new Error(`${method}: bundler returned a non-JSON-RPC answer: ${JSON.stringify(r)?.slice(0, 200)}`);
+}
+
+/**
  * Did the node definitively refuse a transaction BEFORE broadcasting it (so it is pending nowhere)?
  * Only codes / messages that cannot follow a broadcast count:
  *   - code 3: execution reverted during gas estimation (pre-signing);
@@ -344,11 +355,11 @@ export class PaymasterClient {
         });
 
         const result = await response.json();
+        assertJsonRpcAnswer(result, 'eth_estimateUserOperationGas');
         if (guard) guard.inSend = false;
         
-        // Debug logging for Candide
+        // Debug logging for Candide. The request is NOT logged: it is a signed, executable op.
         if (bundlerUrl.includes('candide')) {
-            console.log('[PaymasterClient] Candide Request:', JSON.stringify(payload.params[0], null, 2));
             console.log('[PaymasterClient] Candide Response:', JSON.stringify(result, null, 2));
         }
 
@@ -633,6 +644,7 @@ export class PaymasterClient {
             });
 
             const result = await response.json();
+            assertJsonRpcAnswer(result, 'eth_sendUserOperation');
             guard.inSend = false;
             
             // 7. Error Handling & Retry Logic (Fee Bump)
