@@ -73,9 +73,21 @@ describe('getSuperPaymasterMiddleware', () => {
         const withToken = await getSuperPaymasterMiddleware({ paymasterAddress: SP, operator: OPERATOR, token: TOKEN })
             .sponsorUserOperation({ userOperation: {} });
         expect(size(withToken.paymasterAndData)).toBe(125);
+        // Field-by-field at the upstream offsets (SuperPaymasterStorage.sol:176-180 @ v5.5.0-rc.4):
+        // a length check alone passes with two fields swapped.
+        const at = (hex: string, a: number, b: number) => '0x' + hex.slice(2 + a * 2, 2 + b * 2);
+        const pmd = withToken.paymasterAndData;
+        expect(at(pmd, 0, 20)).toBe(SP.toLowerCase());
+        expect(BigInt(at(pmd, 36, 52))).toBe(200_000n); // postOpGasLimit default
+        expect(at(pmd, 52, 72)).toBe(OPERATOR.toLowerCase());
+        expect(BigInt(at(pmd, 72, 104))).toBe(2n ** 256n - 1n); // maxRate default = type(uint256).max
+        expect(at(pmd, 104, 124)).toBe(TOKEN.toLowerCase());
+        expect(at(pmd, 124, 125)).toBe('0x00'); // flags
         const legacy = await getSuperPaymasterMiddleware({ paymasterAddress: SP, operator: OPERATOR })
             .sponsorUserOperation({ userOperation: {} });
         expect(size(legacy.paymasterAndData)).toBe(104);
+        expect(at(legacy.paymasterAndData, 52, 72)).toBe(OPERATOR.toLowerCase());
+        expect(BigInt(at(legacy.paymasterAndData, 72, 104))).toBe(2n ** 256n - 1n);
     });
     it('default postOpGasLimit is 200k (was 10k, below MIN_POST_OP_GAS on 5.4.2 and 5.5.0)', async () => {
         const r = await getSuperPaymasterMiddleware({ paymasterAddress: SP, operator: OPERATOR }).sponsorUserOperation({ userOperation: {} });
