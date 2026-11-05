@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { ContractFunctionExecutionError, ContractFunctionZeroDataError, HttpRequestError } from "viem";
 import { PaymasterManager } from "../services/paymaster-manager";
 import { MemoryStorage } from "../adapters/memory-storage";
 import { SilentLogger } from "../interfaces/logger";
@@ -25,6 +26,23 @@ function makeEthereumProvider(): EthereumProvider {
   });
 }
 
+// A contract without version(): the call reaches the chain and returns empty data. This (or a
+// revert) is the ONLY signal that may route a custom address to the PaymasterV4 encoding.
+function mockNoVersionFunction(pm?: PaymasterManager) {
+  const target = pm ?? currentPm;
+  const provider = (target as any).ethereum.getProvider();
+  vi.spyOn(provider, "readContract").mockImplementation(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async ({ functionName }: any) => {
+      throw new ContractFunctionExecutionError(new ContractFunctionZeroDataError({ functionName }), {
+        abi: [],
+        functionName,
+      });
+    }
+  );
+}
+let currentPm: PaymasterManager;
+
 describe("PaymasterManager", () => {
   let pm: PaymasterManager;
   let storage: MemoryStorage;
@@ -32,6 +50,11 @@ describe("PaymasterManager", () => {
   beforeEach(() => {
     storage = new MemoryStorage();
     pm = new PaymasterManager(makeEthereumProvider(), storage, new SilentLogger());
+    currentPm = pm;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("addCustomPaymaster / getAvailablePaymasters", () => {
@@ -105,6 +128,7 @@ describe("PaymasterManager", () => {
     it("should return packed data for custom user-provided v0.7 paymaster", async () => {
       const addr = "0x1234567890AbcDeF1234567890abcDEf12345678";
       const v07EntryPoint = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockNoVersionFunction();
 
       const data = await pm.getPaymasterData(
         "user-1",
@@ -200,15 +224,16 @@ describe("PaymasterManager", () => {
     // matched the code's (wrong) ABI rather than the contract.
     const OWNER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const XPNTS = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-    function mockSuperPaymaster(version: string, minPostOpGas = 200_000) {
+    function mockSuperPaymaster(version: string, minPostOpGas = 200_000, configured: string[] = [OWNER]) {
       const provider = (pm as any).ethereum.getProvider();
       vi.spyOn(provider, "readContract").mockImplementation(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        async ({ functionName }: any) => {
+        async ({ functionName, args }: any) => {
           if (functionName === "version") return version;
           if (functionName === "owner") return OWNER;
           if (functionName === "operators") {
-            return [10n ** 21n, true, false, XPNTS, 0, 0, OWNER, 0n, 0n];
+            const isConfigured = configured.map((a) => a.toLowerCase()).includes(String(args[0]).toLowerCase());
+            return [10n ** 21n, isConfigured, false, XPNTS, 0, 0, OWNER, 0n, 0n];
           }
           if (functionName === "gasParams") {
             return [{ minPostOpGas, settleGasBound: 0, cWrap: 0, cPostop: 0 }, {}];
@@ -252,12 +277,56 @@ describe("PaymasterManager", () => {
       vi.restoreAllMocks();
     });
 
+    const SP_ADDR = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
+    const V07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+
+    it("SP detection: an RPC error is thrown, not treated as 'not a SuperPaymaster'", async () => {
+      const provider = (pm as any).ethereum.getProvider();
+      vi.spyOn(provider, "readContract").mockRejectedValue(
+        new HttpRequestError({ url: "http://localhost:8545", details: "ECONNREFUSED" })
+      );
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        HttpRequestError
+      );
+    });
+
+    it("SP detection: a newer SP generation (5.6.0) throws instead of falling back to V4", async () => {
+      mockSuperPaymaster("SuperPaymaster-5.6.0");
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        /newer than this SDK understands/
+      );
+    });
+
+    it("SP detection: owner not a configured operator (e.g. owner moved to governance) throws", async () => {
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 200_000, []);
+      await expect(pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR)).rejects.toThrow(
+        /not a configured operator .*pass options\.operator/
+      );
+    });
+
+    it("SP detection: an explicit operator is used instead of owner()", async () => {
+      const OP = "0xdddddddddddddddddddddddddddddddddddddddd";
+      mockSuperPaymaster("SuperPaymaster-5.5.0", 200_000, [OP]);
+      const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR, { operator: OP });
+      expect(packed.slice(2 + 52 * 2, 2 + 72 * 2)).toBe(OP.slice(2));
+      await expect(
+        pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR, { operator: OWNER })
+      ).rejects.toThrow(/not a configured operator/);
+    });
+
+    it("SP detection: a non-SuperPaymaster version() string routes to the V4 encoding", async () => {
+      const provider = (pm as any).ethereum.getProvider();
+      vi.spyOn(provider, "readContract").mockResolvedValue("PMV4-Deposit-4.3.0");
+      const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, V07, SP_ADDR);
+      expect(BigInt("0x" + data.slice(42, 74))).toBe(BigInt(0x30000));
+    });
+
     it("v0.7 PaymasterV4 path: encodes verGas and postGas in correct byte positions", async () => {
-      // Without a live RPC the SuperPaymaster/token() calls fail and fall through to the
-      // PaymasterV4 branch, which uses hardcoded gas limits (0x30000 each).
-      // This test validates the packed-data byte layout.
+      // The contract has no version() → PaymasterV4 branch, which uses hardcoded gas limits
+      // (0x30000 each). This test validates the packed-data byte layout.
       const addr = "0x1234567890AbcDeF1234567890abcDEf12345678";
       const v07 = "0x0000000071727De22E5E9d8BAf0edAc6f37da032";
+      mockNoVersionFunction();
 
       const data = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
 

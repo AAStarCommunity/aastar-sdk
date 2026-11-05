@@ -1,4 +1,15 @@
-import { concat, getContract, numberToHex, zeroAddress, type Address, type Hex, type WalletClient } from "viem";
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  concat,
+  getContract,
+  numberToHex,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type WalletClient,
+} from "viem";
 // PAYMASTER_PRICE_ABI / the SuperPaymaster-detection ABI are local human-readable
 // signature arrays (not in @aastar/core); parseAbi is required to feed them to
 // viem's getContract / writeContract during the ethers->viem migration.
@@ -10,11 +21,19 @@ import {
   SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR,
   encodeSuperPaymasterData,
   getSuperPaymasterGasParams,
-  getSuperPaymasterGeneration,
+  superPaymasterGenerationFromVersion,
 } from "@aastar/core";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+
+/** True only when the call reached the contract and the function is absent (revert / empty return). */
+function isMissingFunctionError(err: unknown): boolean {
+  return (
+    err instanceof BaseError &&
+    !!err.walk((e) => e instanceof ContractFunctionRevertedError || e instanceof ContractFunctionZeroDataError)
+  );
+}
 
 /**
  * Thrown when a paymaster's on-chain price cache is stale.
@@ -155,7 +174,7 @@ export class PaymasterManager {
     userOp: unknown,
     entryPoint: string,
     customAddress?: string,
-    options?: { tokenAddress?: string }
+    options?: { tokenAddress?: string; operator?: string }
   ): Promise<string> {
     // Handle custom user-provided paymaster addresses
     if (paymasterName === "custom-user-provided" && customAddress) {
@@ -174,34 +193,51 @@ export class PaymasterManager {
       if (isV07OrV08) {
         const provider = this.ethereum.getProvider();
 
-        // Detect SuperPaymaster vs PaymasterV4. A SuperPaymaster answers version() with
-        // "SuperPaymaster-x.y.z"; the operator is assumed to be the SP owner (pre-existing
-        // convention of this custom-address path). operators() is decoded with the REAL core ABI:
-        // (aPNTsBalance, isConfigured, isPaused, xPNTsToken, ...) — identical on 5.4.2 and 5.5.0.
-        // The previous hand-written `(bool,uint256,address,uint256)` shape read aPNTsBalance as
-        // the "configured" flag, so detection only succeeded when that balance was exactly 1.
+        // Detect SuperPaymaster vs PaymasterV4, then resolve the sponsoring operator — two separate
+        // questions, each failing loudly. Only "this contract has no version()" (revert / empty
+        // return) or a non-"SuperPaymaster-" version string means V4. An RPC error, a newer SP
+        // generation, or an SP whose operator cannot be resolved throws: silently encoding V4
+        // bytes against an SP address gets the op rejected with no usable reason.
+        // operators() is decoded with the REAL core ABI: (aPNTsBalance, isConfigured, isPaused,
+        // xPNTsToken, ...) — identical on 5.4.2 and 5.5.0.
         let sp:
           | { generation: "v5.4" | "v5.5"; operator: Address; token: Address }
           | undefined;
+        let version: string | undefined;
         try {
-          const { generation } = await getSuperPaymasterGeneration(provider, formattedAddress as Address);
-          const owner = (await provider.readContract({
+          version = (await provider.readContract({
             address: formattedAddress as Address,
             abi: SuperPaymasterABI,
-            functionName: "owner",
-          })) as Address;
+            functionName: "version",
+          })) as string;
+        } catch (err) {
+          if (!isMissingFunctionError(err)) throw err;
+        }
+        if (version !== undefined && version.trim().startsWith("SuperPaymaster-")) {
+          // Throws for an unparseable or newer-than-supported version.
+          const generation = superPaymasterGenerationFromVersion(version);
+          // Explicit operator wins; otherwise the pre-existing convention of this custom-address
+          // path (operator == SP owner), which breaks once ownership moves to governance.
+          const operator = (options?.operator ??
+            (await provider.readContract({
+              address: formattedAddress as Address,
+              abi: SuperPaymasterABI,
+              functionName: "owner",
+            }))) as Address;
           const opInfo = (await provider.readContract({
             address: formattedAddress as Address,
             abi: SuperPaymasterABI,
             functionName: "operators",
-            args: [owner],
+            args: [operator],
           })) as readonly unknown[];
-          if (opInfo && opInfo[1] === true) {
-            sp = { generation, operator: owner, token: opInfo[3] as Address };
-            this.logger.log(`SuperPaymaster (${generation}) detected, operator: ${owner}`);
+          if (opInfo?.[1] !== true) {
+            throw new Error(
+              `SuperPaymaster ${formattedAddress} (${version}): ${operator} is not a configured operator` +
+                (options?.operator ? "" : " (defaulted to owner(); pass options.operator)")
+            );
           }
-        } catch {
-          /* not SuperPaymaster */
+          sp = { generation, operator, token: opInfo[3] as Address };
+          this.logger.log(`SuperPaymaster (${generation}) detected, operator: ${operator}`);
         }
 
         if (sp) {
