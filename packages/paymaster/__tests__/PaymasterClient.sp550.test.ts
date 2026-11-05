@@ -22,17 +22,32 @@ function flagsOf(userOpJson: any): number | undefined {
 }
 
 type Bundler = (method: string, userOp: any) => Promise<object>;
+type WriteContract = () => Promise<Hex>;
 
-function harness(bundler: Bundler, opts: { signDelayMs?: number } = {}) {
-    const base = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 3 });
-    const account = {
-        ...base,
-        signMessage: async (args: any) => {
-            if (opts.signDelayMs) await new Promise((r) => setTimeout(r, opts.signDelayMs));
-            return base.signMessage(args);
-        },
+/**
+ * Each submit() runs with its OWN wallet (distinct key → distinct signatures), so signatures and
+ * requests can be attributed to the call that produced them. All share one stubbed bundler.
+ */
+function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?: WriteContract } = {}) {
+    const signs: Hex[][] = [];
+    const makeWallet = (idx: number) => {
+        const base = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 3 + idx });
+        signs[idx] = signs[idx] ?? [];
+        const account = {
+            ...base,
+            signMessage: async (args: any) => {
+                if (opts.signDelayMs) await new Promise((r) => setTimeout(r, opts.signDelayMs));
+                const sig = await base.signMessage(args);
+                signs[idx].push(sig);
+                return sig;
+            },
+        };
+        return {
+            account,
+            chain: { id: 11155111 },
+            writeContract: opts.writeContract ?? (async () => ('0x' + 'ee'.repeat(32)) as Hex),
+        };
     };
-    const wallet = { account, chain: { id: 11155111 }, writeContract: async () => ('0x' + 'ee'.repeat(32)) as Hex };
     const client = {
         chain: { id: 11155111 },
         getChainId: async () => 11155111,
@@ -48,19 +63,19 @@ function harness(bundler: Bundler, opts: { signDelayMs?: number } = {}) {
             }
         },
     };
-    const calls: { method: string; flags?: number }[] = [];
+    const calls: { method: string; flags?: number; signature?: Hex }[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
         const body = JSON.parse(init.body);
-        calls.push({ method: body.method, flags: flagsOf(body.params[0]) });
+        calls.push({ method: body.method, flags: flagsOf(body.params[0]), signature: body.params[0]?.signature });
         const out = await bundler(body.method, body.params[0]);
         return { json: async () => ({ jsonrpc: '2.0', id: 1, ...out }) };
     });
-    const submit = (options: Record<string, unknown> = {}) =>
-        PaymasterClient.submitGaslessUserOperation(client, wallet, SENDER, EP, SP, TOKEN, 'http://bundler.stub', CALLDATA, {
+    const submit = (options: Record<string, unknown> = {}, walletIdx = 0) =>
+        PaymasterClient.submitGaslessUserOperation(client, makeWallet(walletIdx), SENDER, EP, SP, TOKEN, 'http://bundler.stub', CALLDATA, {
             operator: OPERATOR,
             ...options,
         });
-    return { submit, calls };
+    return { submit, calls, signs };
 }
 
 const ESTIMATE = {
@@ -107,16 +122,23 @@ describe('PaymasterClient × SP 5.5.0: estimation carries superPaymasterFlags', 
 describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
     const okBundler: Bundler = async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH });
 
-    it('two truly concurrent submissions for one sender: exactly one reaches the bundler', async () => {
-        // The slow signer keeps both calls suspended between the guard check and the send; with a
-        // check-then-record-after-send guard both would pass.
-        const { submit, calls } = harness(okBundler, { signDelayMs: 20 });
-        const results = await Promise.allSettled([submit(), submit()]);
-        const fulfilled = results.filter((r) => r.status === 'fulfilled');
-        const rejected = results.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
-        expect(fulfilled).toHaveLength(1);
-        expect(rejected).toHaveLength(1);
-        expect(String(rejected[0].reason?.message)).toMatch(/one in-flight sponsored op per sender/);
+    it('two truly concurrent submissions for one sender: the loser signs nothing and sends nothing', async () => {
+        // The estimation step signs a complete op on the real nonce and sends it to the bundler, so
+        // the slot must be taken before it: counting only eth_sendUserOperation would miss a loser
+        // that had already handed the bundler a valid signature via eth_estimateUserOperationGas.
+        const { submit, calls, signs } = harness(okBundler, { signDelayMs: 20 });
+        const results = await Promise.allSettled([submit({}, 0), submit({}, 1)]);
+        const winner = results.findIndex((r) => r.status === 'fulfilled');
+        const loser = results.findIndex((r) => r.status === 'rejected');
+        expect(winner).not.toBe(-1);
+        expect(loser).not.toBe(-1);
+        expect(String((results[loser] as PromiseRejectedResult).reason?.message)).toMatch(/one in-flight sponsored op per sender/);
+        expect(signs[loser] ?? []).toHaveLength(0);
+        expect(signs[winner].length).toBeGreaterThan(0);
+        // Every signed request the bundler saw carries the winner's signature.
+        const signed = calls.filter((c) => c.signature && c.signature !== '0x');
+        expect(signed.length).toBeGreaterThan(0);
+        for (const c of signed) expect(signs[winner]).toContain(c.signature);
         expect(calls.filter((c) => c.method === 'eth_sendUserOperation')).toHaveLength(1);
     });
 
@@ -143,6 +165,41 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
         SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
         await expect(submit()).resolves.toBe(OP_HASH);
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot unless the node refused', () => {
+    // Bundler without eth_sendUserOperation → the SDK broadcasts handleOps from the wallet itself.
+    const noSendBundler: Bundler = async (method) =>
+        method === 'eth_estimateUserOperationGas' ? ESTIMATE : { error: { code: -32601, message: 'Method not found' } };
+    const fail = (code: number | undefined, message: string) => async (): Promise<Hex> => {
+        throw Object.assign(new Error(message), code === undefined ? {} : { code });
+    };
+
+    it.each([
+        ['timeout without a code (broadcast may have happened)', fail(undefined, 'The request took too long to respond.')],
+        ['-32603 from an RPC proxy', fail(-32603, 'upstream request timeout')],
+        ['-32000 already known (it IS in the mempool)', fail(-32000, 'already known')],
+    ])('ambiguous: %s → slot kept', async (_name, writeContract) => {
+        const { submit } = harness(noSendBundler, { writeContract });
+        await expect(submit()).rejects.toThrow();
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    it.each([
+        ['-32000 nonce too low', fail(-32000, 'nonce too low')],
+        ['-32000 insufficient funds', fail(-32000, 'insufficient funds for gas * price + value')],
+        ['4001 user rejected', fail(4001, 'User rejected the request.')],
+    ])('explicit: %s → slot released', async (_name, writeContract) => {
+        let first = true;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => {
+                if (first) { first = false; return writeContract(); }
+                return ('0x' + 'ee'.repeat(32)) as Hex;
+            },
+        });
+        await expect(submit()).rejects.toThrow();
+        await expect(submit()).resolves.toBe('0x' + 'ee'.repeat(32));
     });
 });
 

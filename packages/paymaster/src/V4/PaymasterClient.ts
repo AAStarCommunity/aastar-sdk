@@ -25,6 +25,23 @@ export type SubmitGaslessOptions = {
     superPaymasterVerificationGasFloor?: bigint;
 };
 
+/**
+ * Did the node definitively refuse a transaction (so it is NOT pending anywhere)? Judged on the
+ * innermost error's JSON-RPC code: 3 (execution reverted during gas estimation), 4001 (user
+ * rejected), -32000 / -32003 (node rejected: nonce too low, insufficient funds, …), -32602 (invalid
+ * params) — unless the message says the tx is already known. Everything else — transport errors,
+ * timeouts, -32603 (proxies report upstream timeouts with it), errors without a code — may have
+ * been broadcast, so it is NOT a rejection.
+ */
+function isExplicitTxRejection(err: unknown): boolean {
+    let e: any = err;
+    while (e && typeof e === 'object' && e.cause) e = e.cause;
+    const code = e?.code;
+    const text = `${(err as any)?.message ?? ''} ${e?.message ?? ''}`;
+    if (/already known|known transaction|already imported|replacement transaction/i.test(text)) return false;
+    return code === 3 || code === 4001 || code === -32000 || code === -32003 || code === -32602;
+}
+
 /** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
 type InflightGuardControl = { release?: () => void; inSend?: boolean };
 
@@ -402,7 +419,36 @@ export class PaymasterClient {
         options: SubmitGaslessOptions | undefined,
         guard: InflightGuardControl
     ): Promise<`0x${string}`> {
-        // 0. Auto-Estimate if requested or if limits missing
+        // 0. Nonce, SuperPaymaster context and the 5.5.0 in-flight reservation — all before the
+        // first signature (see the reservation comment).
+        const nonce = await client.readContract({
+            address: aaAddress,
+            abi: parseAbi(['function getNonce() view returns (uint256)']),
+            functionName: 'getNonce'
+        });
+        let spCtx: SuperPaymasterSponsorshipContext | undefined;
+        const chainIdForGuard = client.chain?.id ?? (await client.getChainId());
+        if (options?.operator) {
+            spCtx = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
+            // Both generations sigFail (AA34, no reason) for an unconfigured/paused operator —
+            // say so here instead of after a signed round-trip to the bundler.
+            if (!spCtx.isConfigured || spCtx.isPaused) {
+                throw new Error(`SuperPaymaster ${spCtx.version}: operator ${options.operator} is ${spCtx.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
+            }
+            const zero = '0x0000000000000000000000000000000000000000';
+            if (token && token.toLowerCase() !== zero && token.toLowerCase() !== spCtx.token.toLowerCase()) {
+                // The SP gas token is the operator's configured xPNTs token, never a per-call choice.
+                console.warn(`[PaymasterClient] token ${token} ignored for SuperPaymaster; using operators(${options.operator}).xPNTsToken = ${spCtx.token}`);
+            }
+            if (spCtx.generation === 'v5.5') {
+                // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before ANY signature:
+                // the estimation step below signs a complete op on the real nonce and hands it to the
+                // bundler, which could submit it — so a caller that loses this race must sign nothing.
+                guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
+            }
+        }
+
+        // 1. Auto-Estimate if requested or if limits missing
         let gasLimits = {
             preVerificationGas: options?.preVerificationGas,
             verificationGasLimit: options?.verificationGasLimit,
@@ -434,13 +480,6 @@ export class PaymasterClient {
                 gasLimits.paymasterPostOpGasLimit = _base > 200_000n ? _base : 200_000n;
             }
         }
-
-        // 1. Get Nonce
-        const nonce = await client.readContract({
-            address: aaAddress,
-            abi: parseAbi(['function getNonce() view returns (uint256)']),
-            functionName: 'getNonce'
-        });
 
         // 1.5 Get Gas Prices from Network if not provided
         // Strategy: testnets use aggressive floor; mainnet uses dynamic + 1.5x buffer
@@ -479,25 +518,7 @@ export class PaymasterClient {
 
         // 2. Build paymasterAndData
         let paymasterAndData: Hex;
-        let spCtx: SuperPaymasterSponsorshipContext | undefined;
-        const chainIdForGuard = client.chain?.id ?? chainId;
-        if (options?.operator) {
-            spCtx = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
-            // Both generations sigFail (AA34, no reason) for an unconfigured/paused operator —
-            // say so here instead of after a signed round-trip to the bundler.
-            if (!spCtx.isConfigured || spCtx.isPaused) {
-                throw new Error(`SuperPaymaster ${spCtx.version}: operator ${options.operator} is ${spCtx.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
-            }
-            const zero = '0x0000000000000000000000000000000000000000';
-            if (token && token.toLowerCase() !== zero && token.toLowerCase() !== spCtx.token.toLowerCase()) {
-                // The SP gas token is the operator's configured xPNTs token, never a per-call choice.
-                console.warn(`[PaymasterClient] token ${token} ignored for SuperPaymaster; using operators(${options.operator}).xPNTsToken = ${spCtx.token}`);
-            }
-            if (spCtx.generation === 'v5.5') {
-                // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before the FINAL
-                // signature (the estimation signature, if any, already happened above).
-                guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
-            }
+        if (options?.operator && spCtx) {
             // Floors only ever RAISE a limit. postOp: contract-enforced minPostOpGas (both
             // generations; never trust a bundler estimate for it, spec §3.2). Verification: 5.5.0 only.
             const verificationFloor = options?.superPaymasterVerificationGasFloor ?? spCtx.verificationGasFloor;
@@ -719,18 +740,28 @@ export class PaymasterClient {
                  
                  const caller = wallet.account?.address ? wallet.account.address : wallet.account;
 
-                 const txHash = await wallet.writeContract({
-                     address: entryPoint,
-                     // Named-component ABI from @aastar/core: `userOp` is an object, and viem
-                     // cannot encode an object into the unnamed tuple of a hand-written signature
-                     // (it reads userOp[0]… → "Address undefined is invalid"), so this fallback
-                     // never worked with the previous parseAbi string.
-                     abi: EntryPointABI,
-                     functionName: 'handleOps',
-                     args: [[userOp], caller],
-                     chain: wallet.chain,
-                     account: wallet.account
-                 });
+                 // A broadcast whose answer is lost may still be pending on-chain, so the slot is
+                 // kept unless the node EXPLICITLY refused (see isExplicitTxRejection).
+                 guard.inSend = true;
+                 let txHash: `0x${string}`;
+                 try {
+                     txHash = await wallet.writeContract({
+                         address: entryPoint,
+                         // Named-component ABI from @aastar/core: `userOp` is an object, and viem
+                         // cannot encode an object into the unnamed tuple of a hand-written signature
+                         // (it reads userOp[0]… → "Address undefined is invalid"), so this fallback
+                         // never worked with the previous parseAbi string.
+                         abi: EntryPointABI,
+                         functionName: 'handleOps',
+                         args: [[userOp], caller],
+                         chain: wallet.chain,
+                         account: wallet.account
+                     });
+                 } catch (e) {
+                     if (isExplicitTxRejection(e)) guard.inSend = false;
+                     throw e;
+                 }
+                 guard.inSend = false;
                  if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, txHash);
                  return txHash;
             }
