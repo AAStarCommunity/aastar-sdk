@@ -147,6 +147,20 @@ describe('not-found alert', () => {
         expect(notes).toHaveLength(2);
     });
 
+    it('a notifier that never settles (or throws) does not hold the tick', async () => {
+        const t = new PaymasterTracker(client([new Error('down')]), params(), 1n);
+        const lines: string[] = [];
+        const hang = { network: 'sepolia', candidateLabel: V4, operator: OPERATOR, notifyTimeoutMs: 50, log: (l: string) => lines.push(l), notify: () => new Promise<void>(() => {}) };
+        await paymasterTickStep(t, 0n, hang);
+        const started = Date.now();
+        await expect(paymasterTickStep(t, 10n, hang)).resolves.toBeNull();
+        expect(Date.now() - started).toBeLessThan(2_000);
+        expect(lines.at(-1)).toMatch(/notify timed out after 50ms/);
+        const boom = { ...hang, notify: async () => { throw new Error('telegram 502'); } };
+        await expect(paymasterTickStep(t, 20n, boom)).resolves.toBeNull();
+        expect(lines.at(-1)).toMatch(/notify failed: telegram 502/);
+    });
+
     it('threshold 0 disables the alert', async () => {
         const t = new PaymasterTracker(client([new Error('down')]), params(), 0n);
         const { c, notes } = ctx();

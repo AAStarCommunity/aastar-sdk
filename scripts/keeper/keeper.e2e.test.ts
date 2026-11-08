@@ -13,12 +13,16 @@ import { createServer, type Server } from 'node:http';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import { encodeFunctionResult, parseAbi, toFunctionSelector } from 'viem';
 
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
-const TSX_BIN = join(process.cwd(), 'node_modules', '.bin', 'tsx');
-const [LAUNCHER, LAUNCH_ARGS] = existsSync(TSX_BIN) ? [TSX_BIN, [] as string[]] : ['npx', ['tsx']];
+// The keeper runs IN this node process via the repo's pinned tsx loader — not through the tsx
+// CLI (which forks a second node that a SIGKILL on the launcher would orphan), and never via npx
+// (which could download an unpinned tsx or prompt). Missing loader = fail, not fall back.
+const TSX_LOADER = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
+if (!existsSync(TSX_LOADER)) throw new Error(`keeper e2e: pinned tsx loader not installed at ${TSX_LOADER}`);
 
 const SP = '0x09df0d2e3722ec0e401fe3819e64278a42ae4de9';
 const V4 = '0x2118e9a404c15f70b1d4f53b400c8a566a5ea4b6';
@@ -84,16 +88,25 @@ async function fakeRpc(opts: { spBroken?: boolean } = {}): Promise<Fake> {
     return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, methods, codeCalls: () => codeCalls };
 }
 
-const cleanups: (() => void)[] = [];
-afterEach(() => { for (const c of cleanups.splice(0)) c(); });
+const cleanups: (() => Promise<void> | void)[] = [];
+afterEach(async () => {
+    for (const c of cleanups.splice(0).reverse()) await c();
+});
 
-/** Run the keeper until `done(stdout)` or the timeout; returns everything it printed. */
+function closeServer(server: Server): Promise<void> {
+    return new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });
+}
+
+/**
+ * Run the keeper until `done(output)` or the timeout. Resolves only after the process has exited
+ * AND its pipes have closed, so nothing outlives the test.
+ */
 async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) => boolean, timeoutMs = 40_000): Promise<string> {
     const cwd = mkdtempSync(join(tmpdir(), 'keeper-e2e-'));
     cleanups.push(() => rmSync(cwd, { recursive: true, force: true }));
     const child: ChildProcess = spawn(
-        LAUNCHER,
-        [...LAUNCH_ARGS, KEEPER, '--network', 'sepolia', '--dry-run', '--no-logo', '--poll-interval', '1',
+        process.execPath,
+        ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--dry-run', '--no-logo', '--poll-interval', '1',
             '--superpaymaster', SP, '--paymaster', V4, ...extraArgs],
         {
             cwd,
@@ -104,22 +117,25 @@ async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) =
             stdio: ['ignore', 'pipe', 'pipe'],
         },
     );
-    cleanups.push(() => child.kill('SIGKILL'));
     let out = '';
-    return await new Promise<string>((resolve) => {
-        const finish = () => { clearTimeout(timer); child.kill('SIGKILL'); resolve(out); };
-        const timer = setTimeout(finish, timeoutMs);
-        const onData = (d: Buffer) => { out += d.toString(); if (done(out)) finish(); };
-        child.stdout!.on('data', onData);
-        child.stderr!.on('data', onData);
-        child.on('exit', finish);
-    });
+    let killed = false;
+    const kill = () => { if (!killed && child.exitCode === null && child.signalCode === null) { killed = true; child.kill('SIGKILL'); } };
+    // 'close' fires after exit AND after stdout/stderr are drained and closed.
+    const closed = new Promise<void>((r) => { child.once('close', () => r()); child.once('error', (e) => { out += `\n[spawn error] ${e.message}`; r(); }); });
+    cleanups.push(async () => { kill(); await closed; });
+    const timer = setTimeout(kill, timeoutMs);
+    const onData = (d: Buffer) => { out += d.toString(); if (done(out)) kill(); };
+    child.stdout!.on('data', onData);
+    child.stderr!.on('data', onData);
+    await closed;
+    clearTimeout(timer);
+    return out;
 }
 
 describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refreshed', () => {
     it('getCode(V4) fails at INIT and tick 1, succeeds at tick 2 → tick 2 sends V4 updatePrice (dry-run)', async () => {
         const fake = await fakeRpc();
-        cleanups.push(() => fake.server.close());
+        cleanups.push(() => closeServer(fake.server));
         const updateLine = `action=sendTx kind=paymaster method=updatePrice() target=${V4}`;
         const out = await runKeeper(fake.url, [], (o) => o.toLowerCase().includes(updateLine.toLowerCase()));
         const lower = out.toLowerCase();
@@ -134,7 +150,7 @@ describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refre
     it('a persistently failing SuperPaymaster read does not stop V4 from being resolved', async () => {
         // Codex review: resolution used to sit after the SP reads, so an SP failure skipped it.
         const fake = await fakeRpc({ spBroken: true });
-        cleanups.push(() => fake.server.close());
+        cleanups.push(() => closeServer(fake.server));
         const out = await runKeeper(fake.url, [], (o) => new RegExp(`paymaster resolved=${V4}`, 'i').test(o) || /TICK #4/.test(o));
         expect(out).toMatch(/SuperPaymaster read failing/);
         expect(out.toLowerCase()).toMatch(new RegExp(`tick #2[\\s\\S]*paymaster resolved=${V4}`));
@@ -142,7 +158,7 @@ describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refre
 
     it('--disable-paymaster: V4 is never resolved', async () => {
         const fake = await fakeRpc();
-        cleanups.push(() => fake.server.close());
+        cleanups.push(() => closeServer(fake.server));
         const out = await runKeeper(fake.url, ['--disable-paymaster'], (o) => /TICK #2/.test(o));
         expect(out).toMatch(/paymaster=disabled/);
         expect(fake.codeCalls()).toBe(0);

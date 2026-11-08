@@ -92,11 +92,12 @@ async function sendTelegramMessage(text: string): Promise<void> {
     if (!token || !chatId) return;
     const axios = (await import('axios')).default;
     try {
-        await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
-            chat_id: chatId,
-            text,
-            disable_web_page_preview: true
-        });
+        // Bounded: a Telegram request that never answers must not stall the price loop.
+        await axios.post(
+            `https://api.telegram.org/bot${token}/sendMessage`,
+            { chat_id: chatId, text, disable_web_page_preview: true },
+            { timeout: 10_000 }
+        );
     } catch (e: any) {
         const msg = e?.response?.data?.description || e?.message || String(e);
         console.warn(`[telegram] sendMessage failed: ${msg}`);

@@ -159,6 +159,8 @@ export class PaymasterTracker {
 }
 
 export interface PaymasterStepContext {
+    /** Upper bound on one notification; the step never waits longer (default 15s). */
+    notifyTimeoutMs?: number;
     network: string;
     /** For the alert text: the configured candidate, or how it is derived. */
     candidateLabel: string;
@@ -172,6 +174,24 @@ export interface PaymasterStepContext {
  * it re-resolves, logs why it is skipping, and alerts once the threshold is crossed; when a
  * previously unresolved V4 is found it says so.
  */
+/**
+ * Fire a notification without letting it hold the tick: it runs before every price read, so a
+ * notifier that never settles would otherwise stop BOTH paymasters from being refreshed.
+ */
+async function notifyBounded(ctx: PaymasterStepContext, text: string): Promise<void> {
+    const ms = ctx.notifyTimeoutMs ?? 15_000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<'timeout'>((r) => { timer = setTimeout(() => r('timeout'), ms); });
+    try {
+        const outcome = await Promise.race([ctx.notify(text).then(() => 'sent' as const), timeout]);
+        if (outcome === 'timeout') ctx.log(`paymaster notify timed out after ${ms}ms (continuing)`);
+    } catch (e) {
+        ctx.log(`paymaster notify failed: ${(e as any)?.message ?? String(e)} (continuing)`);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export async function paymasterTickStep(
     tracker: PaymasterTracker,
     nowSec: bigint,
@@ -184,7 +204,7 @@ export async function paymasterTickStep(
             const after = tracker.lastResolvedAfterSec;
             ctx.log(`paymaster resolved=${r.address} afterSec=${after.toString()}`);
             if (after > 0n) {
-                await ctx.notify(
+                await notifyBounded(ctx, 
                     `[keeper] paymaster resolved\nnetwork=${ctx.network}\npaymaster=${r.address}\nunresolvedSec=${after.toString()}`,
                 );
             }
@@ -196,7 +216,7 @@ export async function paymasterTickStep(
     ctx.log(`paymaster decision=skip reason=not-found ${why} unresolvedSec=${forSec.toString()}`);
     if (tracker.alertDue(nowSec)) {
         ctx.log(`alert kind=paymaster reason=not-found unresolvedSec=${forSec.toString()}`);
-        await ctx.notify(
+        await notifyBounded(ctx, 
             `[keeper] paymaster not found\nnetwork=${ctx.network}\n${why}\nunresolvedSec=${forSec.toString()}\n` +
                 `candidate=${ctx.candidateLabel}\noperator=${ctx.operator}`,
         );
