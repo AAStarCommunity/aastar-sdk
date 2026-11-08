@@ -1,5 +1,5 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, zeroAddress } from 'viem';
-import { SuperPaymasterABI } from '../abis/index.js';
+import { SuperPaymasterABI, SuperPaymasterV542ABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount, ValidationError } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
 import { superPaymasterGenerationFromVersion } from '../superPaymasterData.js';
@@ -617,7 +617,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             validateAddress(user, 'user');
             return await (client as PublicClient).readContract({
                 address,
-                abi: SuperPaymasterABI,
+                abi: SuperPaymasterV542ABI, // removed in 5.5.0
                 functionName: 'pendingDebts',
                 args: [token, user]
             }) as bigint;
@@ -633,7 +633,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             validateAmount(amount, 'amount');
             return await (client as any).writeContract({
                 address,
-                abi: SuperPaymasterABI,
+                abi: SuperPaymasterV542ABI, // removed in 5.5.0
                 functionName: 'retryPendingDebt',
                 args: [token, user, amount],
                 account: account as any,
@@ -650,7 +650,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
             validateAddress(user, 'user');
             return await (client as any).writeContract({
                 address,
-                abi: SuperPaymasterABI,
+                abi: SuperPaymasterV542ABI, // removed in 5.5.0
                 functionName: 'clearPendingDebt',
                 args: [token, user],
                 account: account as any,
