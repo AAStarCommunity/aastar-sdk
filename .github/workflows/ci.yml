@@ -192,8 +192,29 @@ jobs:
       # (CC-50 round-4 HIGH-1). Hand-built error objects could not have caught that bug, so the
       # regression is worthless if it is allowed to skip — REPCREDIT_ANVIL_TEST=1 below makes a
       # missing anvil a failure.
+      # A GitHub releases 504 during foundryup used to fail the whole job. Retry the entire
+      # installation with a growing wait; the third attempt is the one that may fail the job.
       - name: Install Foundry
+        id: foundry1
+        continue-on-error: true
         uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before retrying the Foundry install
+        if: steps.foundry1.outcome == 'failure'
+        run: sleep 90
+      - name: Install Foundry (retry 1)
+        id: foundry2
+        if: steps.foundry1.outcome == 'failure'
+        continue-on-error: true
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before the last Foundry install attempt
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        run: sleep 240
+      - name: Install Foundry (retry 2)
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        uses: foundry-rs/foundry-toolchain@v1
+      # The action swallows errors from its own version print, so prove both binaries run here.
+      - name: Verify Foundry is installed
+        run: forge --version && anvil --version
 
       # Hard gate: the RepCredit evidence runner's negative controls must be falsifiable.
       # These tests break each guarded security property and assert the control throws — the
@@ -312,8 +333,29 @@ jobs:
           cache-dependency-path: aastar-sdk/pnpm-lock.yaml
 
       # anvil: the suite boots a throwaway chain for the node to point at.
+      # A GitHub releases 504 during foundryup used to fail the whole job. Retry the entire
+      # installation with a growing wait; the third attempt is the one that may fail the job.
       - name: Install Foundry
+        id: foundry1
+        continue-on-error: true
         uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before retrying the Foundry install
+        if: steps.foundry1.outcome == 'failure'
+        run: sleep 90
+      - name: Install Foundry (retry 1)
+        id: foundry2
+        if: steps.foundry1.outcome == 'failure'
+        continue-on-error: true
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before the last Foundry install attempt
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        run: sleep 240
+      - name: Install Foundry (retry 2)
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        uses: foundry-rs/foundry-toolchain@v1
+      # The action swallows errors from its own version print, so prove both binaries run here.
+      - name: Verify Foundry is installed
+        run: forge --version && anvil --version
 
       - name: Install SDK dependencies
         working-directory: aastar-sdk
@@ -437,8 +479,29 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: aastar-sdk/pnpm-lock.yaml
 
+      # A GitHub releases 504 during foundryup used to fail the whole job. Retry the entire
+      # installation with a growing wait; the third attempt is the one that may fail the job.
       - name: Install Foundry
+        id: foundry1
+        continue-on-error: true
         uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before retrying the Foundry install
+        if: steps.foundry1.outcome == 'failure'
+        run: sleep 90
+      - name: Install Foundry (retry 1)
+        id: foundry2
+        if: steps.foundry1.outcome == 'failure'
+        continue-on-error: true
+        uses: foundry-rs/foundry-toolchain@v1
+      - name: Wait before the last Foundry install attempt
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        run: sleep 240
+      - name: Install Foundry (retry 2)
+        if: steps.foundry1.outcome == 'failure' && steps.foundry2.outcome == 'failure'
+        uses: foundry-rs/foundry-toolchain@v1
+      # The action swallows errors from its own version print, so prove both binaries run here.
+      - name: Verify Foundry is installed
+        run: forge --version && anvil --version
 
       - name: Install SDK dependencies
         working-directory: aastar-sdk
