@@ -1062,7 +1062,7 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         try {
             const res = await (client as PublicClient).readContract({
                 address,
-                abi: SuperPaymasterABI,
+                abi: SuperPaymasterV542ABI, // removed in 5.5.0
                 functionName: 'dryRunValidation',
                 args: [userOp, maxCost]
             }) as any;

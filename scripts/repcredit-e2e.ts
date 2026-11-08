@@ -25,7 +25,7 @@ import {
   GTokenABI,
   GTokenStakingABI,
   RegistryABI,
-  SuperPaymasterABI,
+  SuperPaymasterV542ABI,
   xPNTsTokenABI,
 } from "@aastar/core";
 // Experiment-only mocks. These deliberately do NOT come from @aastar/core: anything exported there
@@ -1127,7 +1127,7 @@ async function runE2E(
   const maxCost = 1_650_000n * userOpMaxFeePerGas;
   const preDryRun = await publicClient.readContract({
     address: deployment.superPaymaster,
-    abi: SuperPaymasterABI,
+    abi: SuperPaymasterV542ABI, // dryRunValidation is 5.4.x-only (moved to SuperPaymasterLens in 5.5.0)
     functionName: "dryRunValidation",
     args: [userOp, maxCost],
   }) as readonly [boolean, Hex];
@@ -1231,7 +1231,7 @@ async function runE2E(
 
   const postDryRun = await publicClient.readContract({
     address: deployment.superPaymaster,
-    abi: SuperPaymasterABI,
+    abi: SuperPaymasterV542ABI, // dryRunValidation is 5.4.x-only (moved to SuperPaymasterLens in 5.5.0)
     functionName: "dryRunValidation",
     args: [userOp, maxCost],
   }) as readonly [boolean, Hex];
