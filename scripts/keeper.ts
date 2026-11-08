@@ -267,10 +267,6 @@ async function main() {
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
     const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
-    // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
-    const paymasterMissingAlertSec = BigInt(
-        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
-    );
     const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
     const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
@@ -297,6 +293,11 @@ async function main() {
         }
     }
     assertTelegramConfigValid();
+    // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
+    // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
+    const paymasterMissingAlertSec = BigInt(
+        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
+    );
     const telegramEnabled = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 
     let config: ReturnType<typeof loadNetworkConfig>;
@@ -615,6 +616,19 @@ async function main() {
             dayStartSec = currentSec;
         }
 
+        // V4 resolution runs FIRST and cannot throw: an RPC outage or a failing SuperPaymaster read
+        // below must not stop V4 from being re-resolved, nor its not-found alert from being
+        // evaluated (see scripts/keeper/paymasterResolver.ts).
+        if (!disablePaymaster) {
+            paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
+                network,
+                candidateLabel: paymasterCandidate || 'derive-from-factory',
+                operator: paymasterOperator,
+                log: (line) => console.log(line),
+                notify: sendTelegramMessage,
+            });
+        }
+
         const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
         const baseFeePerGas = (latestBlock as any).baseFeePerGas as bigint | undefined;
         const baseFeeOk =
@@ -798,15 +812,7 @@ async function main() {
 
         const refreshPaymaster = async () => {
             if (disablePaymaster) return;
-            // Re-resolved every tick while unresolved (see scripts/keeper/paymasterResolver.ts).
-            paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
-                network,
-                candidateLabel: paymasterCandidate || 'derive-from-factory',
-                operator: paymasterOperator,
-                log: (line) => console.log(line),
-                notify: sendTelegramMessage,
-            });
-            if (!paymaster) return;
+            if (!paymaster) return; // unresolved this tick — logged / alerted at the top of the tick
 
             let pmPriceFeed = priceFeed;
             try {

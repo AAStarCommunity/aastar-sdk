@@ -99,6 +99,30 @@ describe('transient vs absent', () => {
         expect(r).toEqual({ kind: 'absent', reason: 'no-candidate' });
     });
 
+    it('derived from the factory and verified → found; reverse-mapping RPC failure → transient', async () => {
+        expect(await resolvePaymasterV4(client(['0x6080']), params({ candidate: null }))).toEqual({ kind: 'found', address: V4 });
+        const cl = client(['0x6080']);
+        cl.readContract.mockImplementation(async ({ functionName }: any) => {
+            if (functionName === 'getOperatorByPaymaster') throw new Error('rate limited');
+            return V4;
+        });
+        expect((await resolvePaymasterV4(cl, params())).kind).toBe('transient');
+    });
+
+    it('verifyOperatorMapping=false skips the reverse mapping (explicit candidate, no --paymaster-operator)', async () => {
+        const cl = client(['0x6080'], { mapped: OTHER });
+        expect(await resolvePaymasterV4(cl, params({ verifyOperatorMapping: false }))).toEqual({ kind: 'found', address: V4 });
+        expect(cl.readContract).not.toHaveBeenCalled();
+    });
+
+    it('an explicitly configured zero address is absent — it does NOT fall through to factory derivation', async () => {
+        const cl = client(['0x6080']);
+        const r = await resolvePaymasterV4(cl, params({ candidate: ZERO, verifyOperatorMapping: false }));
+        expect(r).toMatchObject({ kind: 'absent', reason: 'no-candidate' });
+        expect(cl.readContract).not.toHaveBeenCalled();
+        expect(cl.getBytecode).not.toHaveBeenCalled();
+    });
+
     it('both kinds are re-resolved every tick (a V4 deployed later is picked up)', async () => {
         const cl = client(['0x', '0x', '0x6080']);
         const t = new PaymasterTracker(cl, params(), 1800n);

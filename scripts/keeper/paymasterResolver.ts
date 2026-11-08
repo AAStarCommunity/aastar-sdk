@@ -43,7 +43,12 @@ export async function resolvePaymasterV4(
     p: PaymasterResolverParams,
 ): Promise<PaymasterResolution> {
     let address = p.candidate;
-    if (!address || address.toLowerCase() === ZERO) {
+    // An explicitly configured zero address means "no V4", not "derive one": deriving would pick a
+    // target the configuration never named, possibly without the operator check derived targets get.
+    if (address && address.toLowerCase() === ZERO) {
+        return { kind: 'absent', reason: 'no-candidate', detail: 'configured as the zero address' };
+    }
+    if (!address) {
         try {
             const derived = (await client.readContract({
                 address: p.factory,
