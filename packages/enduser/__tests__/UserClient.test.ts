@@ -63,7 +63,8 @@ vi.mock('@aastar/core', async () => {
 vi.mock('@aastar/paymaster', () => ({
     PaymasterClient: {
         submitGaslessUserOperation: vi.fn().mockResolvedValue('0xUserOpHash')
-    }
+    },
+    tuneGasLimit: vi.fn((estimate: bigint) => estimate)
 }));
 
 vi.mock('viem/account-abstraction', async () => {
@@ -297,6 +298,33 @@ describe('UserClient', () => {
 
           expect(client.client.extend).toHaveBeenCalled();
           expect(result).toBe('0xUserOpHash');
+      });
+
+      it('executeGasless Super: estimation is left to submit (tuneEstimate), never run before it', async () => {
+          // The estimation request carries a real signature over the real nonce; estimating here,
+          // before submit reserves the SP 5.5.0 in-flight slot, leaked a signed op (PR #420 M3-b).
+          // The @aastar/paymaster mock has no estimateUserOperationGas: calling it would throw.
+          const { PaymasterClient } = await import('@aastar/paymaster');
+          const submit = vi.mocked(PaymasterClient.submitGaslessUserOperation);
+          submit.mockClear();
+          await client.executeGasless({
+              target: '0x1111111111111111111111111111111111111111',
+              value: 0n,
+              data: '0x1234',
+              paymaster: '0x2222222222222222222222222222222222222222',
+              paymasterType: 'Super',
+              operator: '0x4444444444444444444444444444444444444444'
+          });
+          expect(submit).toHaveBeenCalledTimes(1);
+          const opts = submit.mock.calls[0][8] as any;
+          expect(opts.autoEstimate).toBeUndefined();
+          expect(typeof opts.tuneEstimate).toBe('function');
+          const tuned = opts.tuneEstimate({
+              preVerificationGas: 50_000n, verificationGasLimit: 100_000n, callGasLimit: 60_000n,
+              paymasterVerificationGasLimit: 120_000n, paymasterPostOpGasLimit: 50_000n,
+          });
+          expect(tuned.verificationGasLimit).toBe(180_000n); // + 80k safety pad
+          expect(tuned.paymasterPostOpGasLimit).toBe(200_000n); // 150k → 200k floor
       });
 
       it('executeGasless throws for a V4 paymaster without a gasToken (#169 — no silent target-as-token)', async () => {

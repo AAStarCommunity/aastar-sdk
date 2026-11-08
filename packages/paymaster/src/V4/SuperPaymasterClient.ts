@@ -1,6 +1,6 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
 import { type PublicClient } from '@aastar/core';
-import { PaymasterClient } from './PaymasterClient';
+import { PaymasterClient, type GasEstimate } from './PaymasterClient';
 import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils';
 
 export type GaslessTransactionConfig = {
@@ -59,68 +59,29 @@ export class SuperPaymasterClient {
         console.log(`   - Token: ${config.token}`);
         console.log(`   - Operator: ${config.operator}`);
 
-        console.log('[SuperPaymasterClient] ☁️  Estimating Gas usage...');
-        const est = await PaymasterClient.estimateUserOperationGas(
-            client,
-            wallet,
-            aaAddress,
-            entryPoint,
-            config.paymasterAddress,
-            config.token,
-            bundlerUrl,
-            callData,
-            { 
-                operator: config.operator,
-                factory: config.factory,
-                factoryData: config.factoryData
-            }
-        );
+        // 2-3. Estimation + Smart Buffer Strategy, run INSIDE submit (tuneEstimate): the estimation
+        // request carries a real signature over the real nonce, so it must happen after submit has
+        // reserved the SuperPaymaster 5.5.0 single-in-flight slot (PR #420 M3-b).
+        //
+        // SuperPaymaster validation common case is ~58k-66k, worst case (refresh) 115k; a nominal
+        // 60k with efficiency 0.45 gives a 133k ceiling, which satisfies the bundler's 0.4
+        // efficiency ratio (58/133 = 0.43) and execution (115 < 133). Account validation +
+        // execution is ~35k → 77k limit. postOp calls burnFromWithOpHash (~40k) + storage writes:
+        // +100k buffer, 200k floor.
+        const tuneEstimate = (est: GasEstimate): Partial<GasEstimate> => {
+            const tunedVGL = tuneGasLimit(est.verificationGasLimit, 35_000n, 0.45);
+            const tunedPMVerificationGas = tuneGasLimit(est.paymasterVerificationGasLimit || 100000n, 60_000n, 0.45);
+            const postOpBase = est.paymasterPostOpGasLimit + 100_000n;
+            const tunedPostOp = postOpBase > 200_000n ? postOpBase : 200_000n;
+            console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PMVGL=${tunedPMVerificationGas}, PostOp=${tunedPostOp}`);
+            return {
+                verificationGasLimit: tunedVGL,
+                paymasterVerificationGasLimit: tunedPMVerificationGas,
+                paymasterPostOpGasLimit: tunedPostOp,
+            };
+        };
 
-        console.log('[SuperPaymasterClient] ☁️  Bundler Estimates:', est);
-
-        // 3. Apply Smart Buffer Strategy
-        // We need to ensure:
-        // A. verificationGasLimit >= est.verificationGasLimit (Bundler's minimum)
-        // B. verificationGasLimit >= SuperPaymaster's Actual Usage (~80k-100k)
-        // C. verificationGasLimit / PreVerificationGas > 0.4 (Efficiency Ratio) PRE-CHECK
-        //    Actually, the Bundler checks: (gas limits) / (actual gas used) > efficiency.
-        //    So we must NOT set limits WAY higher than actual usage. 
-        //    Best strategy: Use Bundler's Estimate + Small Buffer (e.g. 10-20k).
-        
-        // SuperPaymaster Logic Cost: ~80,000 to 120,000 gas depending on cold storage
-        // Bundler Estimate usually returns the *actual execution path* gas.
-        
-
-
-        // CRITICAL FIX: Set paymasterVerificationGasLimit for optimal efficiency
-        // Bundler requires efficiency ratio >= 0.4 (actual_gas_used / gas_limit >= 0.4)
-        // SuperPaymaster validatePaymasterUserOp uses ~110-120k gas (measured)
-        // Analysis (Jan 19 Update-Final-Final):
-        //   Instead of fixed percentage, use "Dynamic Nominal Gas Tuning".
-        //   SuperPaymaster validation common case is ~58k-66k. Worst case (refresh) 115k.
-        //   Setting nominal benchmark to 60k gives Ceiling = 60k / 0.45 = 133,333.
-        //   This satisfies 0.4 efficiency (58/133=0.43) AND execution (115 < 133).
-        
-        // 1. Tune Account Verification Gas Limit (VGL)
-        // Bundler might return huge VGL (e.g. 250k) which kills efficiency if usage is low.
-        // We need to clamp VGL down closer to actual usage.
-        // Let's assume standard account validation + execution is ~35k.
-        // Target: 35k / 0.45 = 77k Limit.
-        const tunedVGL = tuneGasLimit(est.verificationGasLimit, 35_000n, 0.45);
-
-        // 2. Tune Paymaster Verification Gas Limit (PMVGL)
-        // Ensure bundler estimate is respected as floor for PMVGL
-        const bundlerEstimateVGL = est.paymasterVerificationGasLimit || 100000n;
-        const tunedPMVerificationGas = tuneGasLimit(bundlerEstimateVGL, 60_000n, 0.45);
-
-        // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
-        // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt to avoid Number precision loss.
-        const _postOpBase = est.paymasterPostOpGasLimit + 100_000n;
-        const tunedPostOp = _postOpBase > 200_000n ? _postOpBase : 200_000n;
-
-        console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PMVGL=${tunedPMVerificationGas}, PostOp=${tunedPostOp}`);
-
-        // 4. Submit with Tuned Limits
+        // 4. Estimate (inside submit) and submit with tuned limits
         return PaymasterClient.submitGaslessUserOperation(
             client,
             wallet,
@@ -132,12 +93,7 @@ export class SuperPaymasterClient {
             callData,
             {
                 operator: config.operator,
-                verificationGasLimit: tunedVGL,
-                callGasLimit: est.callGasLimit, 
-                preVerificationGas: est.preVerificationGas,
-                paymasterVerificationGasLimit: tunedPMVerificationGas, // EXPLICIT PM LIMIT
-                paymasterPostOpGasLimit: tunedPostOp,
-                autoEstimate: false, // We did it ourselves
+                tuneEstimate,
                 factory: config.factory,
                 factoryData: config.factoryData
             }

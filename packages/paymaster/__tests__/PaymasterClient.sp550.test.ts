@@ -3,6 +3,7 @@ import type { Address, Hex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient } from '../src/V4/PaymasterClient';
+import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
 import { SuperPaymasterInflightGuard } from '../src/SuperPaymaster/v550';
 
 // Offline harness (same stubbing as scripts/cc128/count-signatures.ts): real SDK code, a real
@@ -75,7 +76,12 @@ function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?:
             operator: OPERATOR,
             ...options,
         });
-    return { submit, calls, signs };
+    /** The same flow through SuperPaymasterClient (it used to estimate BEFORE submit reserved the slot). */
+    const submitViaSuperClient = (walletIdx = 0) =>
+        SuperPaymasterClient.submitGaslessTransaction(client, makeWallet(walletIdx), SENDER, EP, 'http://bundler.stub', {
+            token: TOKEN, recipient: OPERATOR, amount: 1n, operator: OPERATOR, paymasterAddress: SP,
+        });
+    return { submit, submitViaSuperClient, calls, signs };
 }
 
 const ESTIMATE = {
@@ -140,6 +146,29 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         expect(signed.length).toBeGreaterThan(0);
         for (const c of signed) expect(signs[winner]).toContain(c.signature);
         expect(calls.filter((c) => c.method === 'eth_sendUserOperation')).toHaveLength(1);
+    });
+
+    it('through SuperPaymasterClient too: the loser signs nothing (estimation runs inside submit)', async () => {
+        const { submitViaSuperClient, calls, signs } = harness(okBundler, { signDelayMs: 20 });
+        const results = await Promise.allSettled([submitViaSuperClient(0), submitViaSuperClient(1)]);
+        const winner = results.findIndex((r) => r.status === 'fulfilled');
+        const loser = results.findIndex((r) => r.status === 'rejected');
+        expect(winner).not.toBe(-1);
+        expect(loser).not.toBe(-1);
+        expect(signs[loser] ?? []).toHaveLength(0);
+        for (const c of calls.filter((c) => c.signature && c.signature !== '0x')) expect(signs[winner]).toContain(c.signature);
+    });
+
+    it('tuneEstimate adjusts the bundler estimate; explicit limits still win', async () => {
+        const seen: any[] = [];
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH };
+        });
+        await submit({ tuneEstimate: () => ({ verificationGasLimit: 123_456n, callGasLimit: 77_777n }), callGasLimit: 88_888n });
+        const sent = seen.find((x) => x.method === 'eth_sendUserOperation')!.op;
+        expect(BigInt(sent.verificationGasLimit)).toBe(123_456n); // from tuneEstimate
+        expect(BigInt(sent.callGasLimit)).toBe(88_888n); // explicit option beats tuneEstimate
     });
 
     it('an explicit failure releases the slot: the next submission is allowed', async () => {

@@ -23,6 +23,22 @@ export type SubmitGaslessOptions = {
     superPaymasterFlags?: number;
     /** Override the SDK's 5.5.0 paymasterVerificationGasLimit floor (default: spec §3.2 draft, 250k). */
     superPaymasterVerificationGasFloor?: bigint;
+    /**
+     * Adjust the bundler estimate before it is used. Callers that tune limits must pass this
+     * instead of estimating themselves: the estimation request carries a real signature over the
+     * real nonce, so it has to run INSIDE submit, after the 5.5.0 in-flight slot is reserved.
+     * Explicit limits in these options still win over anything returned here.
+     */
+    tuneEstimate?: (est: GasEstimate) => Partial<GasEstimate>;
+};
+
+/** What estimateUserOperationGas returns (all limits). */
+export type GasEstimate = {
+    preVerificationGas: bigint;
+    verificationGasLimit: bigint;
+    callGasLimit: bigint;
+    paymasterVerificationGasLimit: bigint;
+    paymasterPostOpGasLimit: bigint;
 };
 
 /**
@@ -494,15 +510,17 @@ export class PaymasterClient {
                 },
                 guard
             );
-            gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
-            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
-            gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
-            gasLimits.paymasterVerificationGasLimit = options?.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
+            const tuned = options?.tuneEstimate?.(est) ?? {};
+            gasLimits.preVerificationGas = options?.preVerificationGas ?? tuned.preVerificationGas ?? est.preVerificationGas;
+            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? tuned.verificationGasLimit ?? est.verificationGasLimit;
+            gasLimits.callGasLimit = options?.callGasLimit ?? tuned.callGasLimit ?? est.callGasLimit;
+            gasLimits.paymasterVerificationGasLimit =
+                options?.paymasterVerificationGasLimit ?? tuned.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
             // SuperPaymaster postOp calls burnFromWithOpHash (~40k) + storage writes.
             // Apply 100k buffer with 200k floor. Pure BigInt to avoid Number precision loss.
             if (!options?.paymasterPostOpGasLimit) {
                 const _base = est.paymasterPostOpGasLimit + 100_000n;
-                gasLimits.paymasterPostOpGasLimit = _base > 200_000n ? _base : 200_000n;
+                gasLimits.paymasterPostOpGasLimit = tuned.paymasterPostOpGasLimit ?? (_base > 200_000n ? _base : 200_000n);
             }
         }
 
