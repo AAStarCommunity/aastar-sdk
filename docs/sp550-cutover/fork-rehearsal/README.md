@@ -1,0 +1,79 @@
+# SP 5.5.0 rc.4：本地 Sepolia fork 演练（DSR 第 2 项）
+
+> **标注：这是 fork 上的 rc 结果，不是 live 结果。** 合约为 SuperPaymaster `v5.5.0-rc.4` = `fbd74fb1`，跑在本地 anvil fork 上，配本机 bundler。真正的 live 一轮放到切地址工单里做。
+>
+> 运行日期 2026-11-08。fork 区块 12090052（Sepolia）。SDK 代码为本分支 `feat/sp550-cutover`，它叠在 #420 之上。
+
+## 环境
+
+| 项 | 值 |
+|---|---|
+| 链 | `anvil --fork-url https://ethereum-sepolia-rpc.publicnode.com --fork-block-number 12090052 --auto-impersonate`，地址 127.0.0.1:28546 |
+| 升级方式 | SuperPaymaster `contracts/script/v3/UpgradeToV5_5_0.s.sol`（rc.4 原版），按 runbook 依次运行 `executePendingAPNTs` → `pauseOperators` → `run()` → `ensureStake` → `issueCommunityToken` → `configureOperatorV2` → `unpauseOperator`。`V55_APNTS_DECISION=execute`（DSR 指定） |
+| bundler | 本机 UltraRelay-AAStar（Alto 的 fork），地址 127.0.0.1:3046。executor 用 anvil 公开测试 key，配置见 `ultrarelay.fork.json` |
+| 密钥 | 只用 anvil 公开助记词。社区、operator、SP owner 的动作都靠 anvil 冒充地址完成，**没有用任何真实 key** |
+| 共享链 | 没有碰。公开节点只作为 `--fork-url` |
+| 进程 | 跑完已关闭 anvil 和 bundler，没有留下常驻进程 |
+
+## fork 专用的捷径（live 上不会这样做）
+
+1. 冒充以下地址发交易：SP owner `0xb560…df0E`、operator ANNI，以及 APNTsCapped 的 minter `0x16dF…dEBf`。
+2. 把时间推过 APNTs 时间锁的 ETA（+92784 秒）。S7 在 live 上已经排进了 `0x9Eb1…e1E7`（APNTsCapped-1.0.0）。
+3. 推进时间后，把 Chainlink aggregator 最新一轮的 `updatedAt` 改成当前时间，answer 不变。做法与 SP 的 `script/evidence/a2-full-rehearsal.sh` 中的 refresh_oracle 相同。
+4. 用冒充的 minter 给 OWNER 和 ANNI mint 新 aPNTs（数量等于它们原有的余额），给 SP mint 等于 protocolRevenue 的量，这样 step 1(4) 和 1(6) 才能执行。live 上这一步由治理自己完成。
+5. bundler 进程用 `time-shift.cjs` 把系统时钟平移到 fork 的链上时间，否则它会拿真实时间去比较 validAfter/validUntil。
+
+## 升级结果（`setup.txt`）
+
+- `SP.version()`：从 `SuperPaymaster-5.4.2` 变为 `SuperPaymaster-5.5.0`。
+- `APNTS_TOKEN` 切换到 APNTsCapped `0x9Eb1…e1E7`。
+- operator 余额快照：OWNER 1690.0、ANNI 844.5，protocolRevenue 399.6，合计 2934.1，等于 totalTracked。
+- AAStar 的 v2 token 是 `0x50a3…6DD8`，operator 已恢复。
+- 新合约地址见 `config.sepolia-fork.json`，由 SP 脚本写出。两次独立的 fork 运行部署出完全相同的地址。
+
+## 切换核对脚本 `check:sp550-cutover`
+
+| 对象 | 结果 |
+|---|---|
+| fork，使用 `pins.fork.json`，加 `--allow-rc` | **PASS 16/16** |
+| fork，把 globalTierSource 换成 AOAProtocolRegistry 的地址（负对照） | FAIL 1/16，命中 `factory.defaultTierSource()` 这一项，exit 1 |
+| Sepolia live（block 12090052），pin 为空 | FAIL 18/18：链上是 5.4.2，impl 为 `0xe25f88db`，exit 1 |
+
+注意：`pins.fork.json` 里的 `spImplCodehash` 是从同一个 fork 读回的，所以这一项是同源比较。live 上它必须来自独立的链上读回。
+
+## SDK E2E（`e2e.txt`，`scripts/sp550-fork-e2e.ts`）
+
+| 场景 | 结果 |
+|---|---|
+| S2 冷启动（AOA-Comm） | 用户签名 0 次。社区发了 4 笔交易：createAccount、GToken approve、`safeMintForRole(ENDUSER)`、mint 1000 xPNTs v2 |
+| S1 `PaymasterClient.submitGaslessUserOperation`（自动估算） | `success=true`；`signMessage` **2 次**（估算 1 次加最终 1 次）；链上等待 1 次；用户扣 84.19 xPNTs，`lockedOf=0`；operator 扣减额等于用户扣减额 |
+| S1 限频 | 紧接着发第二笔会被 bundler 拒绝：`-32503 not valid yet`。原因是 `validAfter = lastTimestamp + minTxInterval`，**live 上 AAStar operator 的 minTxInterval 是 60 秒**。**SDK 不会等待也不会重试** |
+| S1 `SuperPaymasterClient.submitGaslessTransaction`（ERC-20 转账） | `success=true`；`signMessage` 2 次；等待 1 次 |
+| S3a 充值 | 用户签名 0 次，社区 mint 1 笔，用户余额 +100 xPNTs |
+| S4a 内层调用 revert | SDK 照常返回 hash，不报错；`UserOperationEvent.success=false`；**用户照样被扣了 72.98 xPNTs**；`signMessage` 1 次（调用方传了 gas 上限） |
+| S5a 价格过期 | Lens 返回 `STALE_PRICE`；SDK 提交时被 bundler 拒绝（`-32503 expires too soon`）；任意第三方发 1 笔 `updatePrice` 之后，Lens 返回 `OK`，再提交 `success=true`，`signMessage` 2 次 |
+| S5b operator 暂停 | Lens 返回 `OPERATOR_PAUSED`；**SDK 在签名之前**就以可读错误拒绝；SP owner 恢复后可继续 |
+| C12 `createEndUserClient().executeGasless` | `success=true`；`signMessage` 1 次，另加 EOA 自己的那笔 handleOps 交易，用 ETH 付费 |
+
+## 复现
+
+```bash
+# SP fbd74fb1 的干净 checkout，并已执行 forge build
+scripts/sp550-fork/setup-fork.sh <sp-checkout> <out> 12090052
+# 准备 <out>/ultrarelay.fork.json（rpc-url 127.0.0.1:28546，port 3046，只开 v0.7 EntryPoint），然后：
+SP550_FORK_OUT=<out> ULTRARELAY_DIR=<UltraRelay-AAStar> scripts/sp550-fork/restart-bundler.sh
+SP550_FORK_CONFIG=<out>/config.sepolia-fork.json \
+SP550_FORK_REFRESH_ORACLE_CMD=scripts/sp550-fork/refresh-oracle.sh \
+SP550_FORK_AFTER_WARP_CMD="SP550_FORK_OUT=<out> ULTRARELAY_DIR=<...> scripts/sp550-fork/restart-bundler.sh" \
+  pnpm exec tsx scripts/sp550-fork-e2e.ts
+# 结束后关掉 anvil 和 bundler：kill $(cat <out>/anvil.pid) $(cat <out>/ultrarelay.pid)
+```
+
+E2E 脚本只接受本机回环地址上的 RPC 和 bundler，否则直接拒绝运行。
+
+## 局限
+
+- 账户只用了 SimpleAccount；AirAccount 的 KMS / passkey 签名仪式没有覆盖。
+- 只跑了 AAStar 这一个 operator，ANNI / Mycelium 没有配置 v2，也没有恢复。
+- S3b（cap 续期）没有跑：默认 cap 是 5000 aPNTs，几笔操作用不完。之前 anvil 上的实测见 `docs/aoa/cc128/m49_appendix.md`。
+- 计数只描述 SDK 和协议层的任务结构，**不是用户体验证据**。
