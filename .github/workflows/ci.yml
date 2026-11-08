@@ -484,3 +484,76 @@ jobs:
           REPCREDIT_REQUIRE_ONCHAIN: '1'
           SEPOLIA_RPC_URL: https://ethereum-sepolia-rpc.publicnode.com
         run: pnpm run check:deployed-stack
+
+  # ---------------------------------------------------------------------------------
+  # SuperPaymaster 5.5.0 vendored ABIs (CC-122 R2). `check-abi-drift.ts` deliberately skips the
+  # two core ∪ extension union files (SuperPaymaster-5.5.0.full, xPNTsTokenV2.full) and names
+  # `check:sp550-abis` as the gate that verifies them instead — but until this job nothing in CI
+  # ran that gate, so the skip pointed at a check that never executed (DSR review of #420).
+  #
+  # It is pinned to its OWN SuperPaymaster revision, not the `abi-provenance` job's: that job pins
+  # the deployed 5.4.2 stack, while these files come from v5.5.0-rc.4. The script itself enforces
+  # the same pin (`PINNED_COMMIT`) and fails if the tag has moved.
+  #
+  # REQUIRE_UPSTREAM=1: a missing checkout FAILS instead of printing SKIP. SP550_OUT: each union
+  # must also equal the union of its compiled halves, so a stale upstream abis/*.json cannot pass
+  # on byte-identity alone.
+  # ---------------------------------------------------------------------------------
+  sp550-abi-provenance:
+    name: SP 5.5.0 vendored ABI provenance (pinned v5.5.0-rc.4)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: aastar-sdk
+
+      - name: Check out SuperPaymaster at the pinned 5.5.0 commit
+        uses: actions/checkout@v5
+        with:
+          repository: AAStarCommunity/SuperPaymaster
+          ref: fbd74fb1e2e9d948996e6d6c02c48dc1c1778107
+          path: SuperPaymaster
+          # The gate resolves the tag and reads blobs with `git show <pinned>:abis/...`.
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: false
+
+      - name: Initialise the foundry dependency submodules
+        working-directory: SuperPaymaster
+        run: git submodule update --init --recursive contracts/lib
+
+      - name: Assert the upstream checkout is clean and at the pinned revision
+        working-directory: SuperPaymaster
+        run: |
+          test "$(git rev-parse HEAD)" = "fbd74fb1e2e9d948996e6d6c02c48dc1c1778107"
+          test "$(git rev-parse 'v5.5.0-rc.4^{commit}')" = "fbd74fb1e2e9d948996e6d6c02c48dc1c1778107"
+          test -z "$(git status --porcelain)"
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: '10.32.1'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: aastar-sdk/pnpm-lock.yaml
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install SDK dependencies
+        working-directory: aastar-sdk
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the pinned upstream artifacts
+        working-directory: SuperPaymaster
+        run: forge build
+
+      - name: SP 5.5.0 ABI provenance gate (blob identity + compiled-union equality)
+        working-directory: aastar-sdk
+        env:
+          REQUIRE_UPSTREAM: '1'
+          SP_REPO: ../SuperPaymaster
+          SP550_OUT: ../SuperPaymaster/out
+        run: pnpm run check:sp550-abis

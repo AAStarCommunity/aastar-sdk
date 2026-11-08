@@ -1,7 +1,83 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters } from 'viem';
-import { type PublicClient } from '@aastar/core';
+import { type PublicClient, EntryPointABI } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
+import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
+
+/** Options of PaymasterClient.submitGaslessUserOperation. */
+export type SubmitGaslessOptions = {
+    validityWindow?: number;
+    airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
+    verificationGasLimit?: bigint;
+    callGasLimit?: bigint;
+    preVerificationGas?: bigint;
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    autoEstimate?: boolean;
+    operator?: Address; // For SuperPaymaster
+    paymasterVerificationGasLimit?: bigint;
+    paymasterPostOpGasLimit?: bigint;
+    factory?: Address;
+    factoryData?: Hex;
+    /** SuperPaymaster 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS). Leave unset unless you know the renewal preconditions hold. */
+    superPaymasterFlags?: number;
+    /** Override the SDK's 5.5.0 paymasterVerificationGasLimit floor (default: spec §3.2 draft, 250k). */
+    superPaymasterVerificationGasFloor?: bigint;
+    /**
+     * Adjust the bundler estimate before it is used. Callers that tune limits must pass this
+     * instead of estimating themselves: the estimation request carries a real signature over the
+     * real nonce, so it has to run INSIDE submit, after the 5.5.0 in-flight slot is reserved.
+     * Explicit limits in these options still win over anything returned here.
+     */
+    tuneEstimate?: (est: GasEstimate) => Partial<GasEstimate>;
+};
+
+/** What estimateUserOperationGas returns (all limits). */
+export type GasEstimate = {
+    preVerificationGas: bigint;
+    verificationGasLimit: bigint;
+    callGasLimit: bigint;
+    paymasterVerificationGasLimit: bigint;
+    paymasterPostOpGasLimit: bigint;
+};
+
+/**
+ * Only a well-formed JSON-RPC answer (jsonrpc + id + exactly one of result / error) proves the
+ * bundler processed the request. A gateway body such as {"message": "..."} parses as JSON but says
+ * nothing about whether the signed op reached the bundler, so it throws while the in-flight
+ * exposure flag is still set — the slot is kept, like any other ambiguous failure.
+ */
+function assertJsonRpcAnswer(r: any, method: string): void {
+    const ok = r !== null && typeof r === 'object' && r.jsonrpc === '2.0' && 'id' in r && (('result' in r) !== ('error' in r));
+    if (!ok) throw new Error(`${method}: bundler returned a non-JSON-RPC answer: ${JSON.stringify(r)?.slice(0, 200)}`);
+}
+
+/**
+ * Did the node definitively refuse a transaction BEFORE broadcasting it (so it is pending nowhere)?
+ * Only codes / messages that cannot follow a broadcast count:
+ *   - code 3: execution reverted during gas estimation (pre-signing);
+ *   - code 4001: the user rejected the request in the wallet;
+ *   - otherwise only whitelisted node messages (insufficient funds, intrinsic gas too low, …).
+ * Anything about nonce / replacement / underpriced / already — which a node or bundler can report
+ * on its own internal retry while the original is in flight or mined — and any unrecognised
+ * message, transport error, timeout or -32603 is NOT a rejection: the slot stays reserved until
+ * the caller has looked the transaction up by hash and calls release().
+ */
+const PRE_BROADCAST_REJECTION = /insufficient funds|intrinsic gas too low|exceeds block gas limit|invalid sender|fee exceeds|exceeds the configured cap/i;
+const MAYBE_BROADCAST = /nonce|replacement|underpriced|already|known transaction/i;
+
+function isExplicitTxRejection(err: unknown): boolean {
+    let e: any = err;
+    while (e && typeof e === 'object' && e.cause) e = e.cause;
+    const code = e?.code;
+    const text = `${(err as any)?.message ?? ''} ${e?.message ?? ''}`;
+    if (MAYBE_BROADCAST.test(text)) return false;
+    if (code === 3 || code === 4001) return true;
+    return PRE_BROADCAST_REJECTION.test(text);
+}
+
+/** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
+type InflightGuardControl = { release?: () => void; inSend?: boolean };
 
 /**
  * PaymasterClient
@@ -138,7 +214,11 @@ export class PaymasterClient {
             operator?: Address; // For SuperPaymaster
             factory?: Address;
             factoryData?: Hex;
-        }
+            /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
+            superPaymasterFlags?: number;
+        },
+        /** @internal submitGaslessUserOperation's in-flight handle; see the exposure note below. */
+        guard?: InflightGuardControl
     ) {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
@@ -199,9 +279,15 @@ export class PaymasterClient {
         let paymasterAndData: Hex;
         
         if (options?.operator) {
+             // Always carry the operator's token: REQUIRED by 5.5.0, ignored by 5.4.2 (see
+             // @aastar/core encodeSuperPaymasterData). Estimating with a 104-byte layout against
+             // 5.5.0 would sigFail and produce no estimate at all.
+             const sp = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
              paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: 300000n,
-                postOpGasLimit: 300000n
+                verificationGasLimit: atLeast(300000n, sp.verificationGasFloor),
+                postOpGasLimit: atLeast(300000n, sp.minPostOpGas),
+                token: sp.token,
+                flags: options.superPaymasterFlags
              });
         } else {
                      paymasterAndData = buildPaymasterData(paymasterAddress, token, {
@@ -275,6 +361,9 @@ export class PaymasterClient {
             params: [formatUserOpV07(partialUserOp), entryPoint]
         };
 
+        // The payload carries a REAL signature over the real nonce: once it leaves, the bundler
+        // holds an executable op. Until a JSON-RPC answer is parsed, a failure is ambiguous.
+        if (guard) guard.inSend = true;
         const response = await fetch(bundlerUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -282,10 +371,11 @@ export class PaymasterClient {
         });
 
         const result = await response.json();
+        assertJsonRpcAnswer(result, 'eth_estimateUserOperationGas');
+        if (guard) guard.inSend = false;
         
-        // Debug logging for Candide
+        // Debug logging for Candide. The request is NOT logged: it is a signed, executable op.
         if (bundlerUrl.includes('candide')) {
-            console.log('[PaymasterClient] Candide Request:', JSON.stringify(payload.params[0], null, 2));
             console.log('[PaymasterClient] Candide Response:', JSON.stringify(result, null, 2));
         }
 
@@ -335,23 +425,70 @@ export class PaymasterClient {
         token: Address,
         bundlerUrl: string,
         callData: `0x${string}`,
-        options?: {
-            validityWindow?: number;
-            airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
-            verificationGasLimit?: bigint;
-            callGasLimit?: bigint;
-            preVerificationGas?: bigint;
-            maxFeePerGas?: bigint;
-            maxPriorityFeePerGas?: bigint;
-            autoEstimate?: boolean;
-            operator?: Address; // For SuperPaymaster
-            paymasterVerificationGasLimit?: bigint;
-            paymasterPostOpGasLimit?: bigint;
-            factory?: Address;
-            factoryData?: Hex;
-        }
+        options?: SubmitGaslessOptions
     ): Promise<`0x${string}`> {
-        // 0. Auto-Estimate if requested or if limits missing
+        // The 5.5.0 single-in-flight slot is reserved synchronously before the first await that
+        // follows the check, so concurrent calls for one sender cannot both pass. An explicit
+        // failure (anything thrown outside the bundler round-trip) releases it; a transport error
+        // DURING eth_sendUserOperation is ambiguous — the bundler may hold the op — so the slot is
+        // kept and the caller must release() it after confirming the op was dropped.
+        const guard: InflightGuardControl = {};
+        try {
+            return await PaymasterClient.submitGaslessUserOperationGuarded(
+                client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options, guard
+            );
+        } catch (e) {
+            if (guard.inSend) {
+                console.warn('[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot (SuperPaymasterInflightGuard.release to clear)');
+            } else {
+                guard.release?.();
+            }
+            throw e;
+        }
+    }
+
+    private static async submitGaslessUserOperationGuarded(
+        client: any,
+        wallet: any,
+        aaAddress: Address,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        bundlerUrl: string,
+        callData: `0x${string}`,
+        options: SubmitGaslessOptions | undefined,
+        guard: InflightGuardControl
+    ): Promise<`0x${string}`> {
+        // 0. Nonce, SuperPaymaster context and the 5.5.0 in-flight reservation — all before the
+        // first signature (see the reservation comment).
+        const nonce = await client.readContract({
+            address: aaAddress,
+            abi: parseAbi(['function getNonce() view returns (uint256)']),
+            functionName: 'getNonce'
+        });
+        let spCtx: SuperPaymasterSponsorshipContext | undefined;
+        const chainIdForGuard = client.chain?.id ?? (await client.getChainId());
+        if (options?.operator) {
+            spCtx = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
+            // Both generations sigFail (AA34, no reason) for an unconfigured/paused operator —
+            // say so here instead of after a signed round-trip to the bundler.
+            if (!spCtx.isConfigured || spCtx.isPaused) {
+                throw new Error(`SuperPaymaster ${spCtx.version}: operator ${options.operator} is ${spCtx.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
+            }
+            const zero = '0x0000000000000000000000000000000000000000';
+            if (token && token.toLowerCase() !== zero && token.toLowerCase() !== spCtx.token.toLowerCase()) {
+                // The SP gas token is the operator's configured xPNTs token, never a per-call choice.
+                console.warn(`[PaymasterClient] token ${token} ignored for SuperPaymaster; using operators(${options.operator}).xPNTsToken = ${spCtx.token}`);
+            }
+            if (spCtx.generation === 'v5.5') {
+                // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before ANY signature:
+                // the estimation step below signs a complete op on the real nonce and hands it to the
+                // bundler, which could submit it — so a caller that loses this race must sign nothing.
+                guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
+            }
+        }
+
+        // 1. Auto-Estimate if requested or if limits missing
         let gasLimits = {
             preVerificationGas: options?.preVerificationGas,
             verificationGasLimit: options?.verificationGasLimit,
@@ -368,27 +505,24 @@ export class PaymasterClient {
                     operator: options?.operator,
                     factory: options?.factory,
                     factoryData: options?.factoryData,
-                    airAccountSig: options?.airAccountSig // forward so internal estimate signs in the same format (#115 H-1)
-                }
+                    airAccountSig: options?.airAccountSig, // forward so internal estimate signs in the same format (#115 H-1)
+                    superPaymasterFlags: options?.superPaymasterFlags
+                },
+                guard
             );
-            gasLimits.preVerificationGas = options?.preVerificationGas ?? est.preVerificationGas;
-            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? est.verificationGasLimit;
-            gasLimits.callGasLimit = options?.callGasLimit ?? est.callGasLimit;
-            gasLimits.paymasterVerificationGasLimit = options?.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
+            const tuned = options?.tuneEstimate?.(est) ?? {};
+            gasLimits.preVerificationGas = options?.preVerificationGas ?? tuned.preVerificationGas ?? est.preVerificationGas;
+            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? tuned.verificationGasLimit ?? est.verificationGasLimit;
+            gasLimits.callGasLimit = options?.callGasLimit ?? tuned.callGasLimit ?? est.callGasLimit;
+            gasLimits.paymasterVerificationGasLimit =
+                options?.paymasterVerificationGasLimit ?? tuned.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
             // SuperPaymaster postOp calls burnFromWithOpHash (~40k) + storage writes.
             // Apply 100k buffer with 200k floor. Pure BigInt to avoid Number precision loss.
             if (!options?.paymasterPostOpGasLimit) {
                 const _base = est.paymasterPostOpGasLimit + 100_000n;
-                gasLimits.paymasterPostOpGasLimit = _base > 200_000n ? _base : 200_000n;
+                gasLimits.paymasterPostOpGasLimit = tuned.paymasterPostOpGasLimit ?? (_base > 200_000n ? _base : 200_000n);
             }
         }
-
-        // 1. Get Nonce
-        const nonce = await client.readContract({
-            address: aaAddress,
-            abi: parseAbi(['function getNonce() view returns (uint256)']),
-            functionName: 'getNonce'
-        });
 
         // 1.5 Get Gas Prices from Network if not provided
         // Strategy: testnets use aggressive floor; mainnet uses dynamic + 1.5x buffer
@@ -427,10 +561,20 @@ export class PaymasterClient {
 
         // 2. Build paymasterAndData
         let paymasterAndData: Hex;
-        if (options?.operator) {
+        if (options?.operator && spCtx) {
+            // Floors only ever RAISE a limit. postOp: contract-enforced minPostOpGas (both
+            // generations; never trust a bundler estimate for it, spec §3.2). Verification: 5.5.0 only.
+            const verificationFloor = options?.superPaymasterVerificationGasFloor ?? spCtx.verificationGasFloor;
+            gasLimits.paymasterPostOpGasLimit = atLeast(gasLimits.paymasterPostOpGasLimit, spCtx.minPostOpGas);
+            gasLimits.paymasterVerificationGasLimit = atLeast(
+                gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
+                verificationFloor
+            );
             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
-                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit,
+                token: spCtx.token,
+                flags: options?.superPaymasterFlags
             });
         } else {
             // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
@@ -505,6 +649,7 @@ export class PaymasterClient {
         // Retry Loop: Up to 4 retries for compound errors (PVG + fee bump + replacement)
         for (let attempt = 0; attempt < 5; attempt++) {
             // Use standard JSON-RPC for all bundlers (Pimlico/Alchemy/Stackup/etc)
+            guard.inSend = true;
             const response = await fetch(bundlerUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -517,6 +662,8 @@ export class PaymasterClient {
             });
 
             const result = await response.json();
+            assertJsonRpcAnswer(result, 'eth_sendUserOperation');
+            guard.inSend = false;
             
             // 7. Error Handling & Retry Logic (Fee Bump)
             if (result.error && attempt < 4) {
@@ -637,18 +784,35 @@ export class PaymasterClient {
                  
                  const caller = wallet.account?.address ? wallet.account.address : wallet.account;
 
-                 return await wallet.writeContract({
-                     address: entryPoint,
-                     abi: parseAbi(['function handleOps((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes)[], address) external']),
-                     functionName: 'handleOps',
-                     args: [[userOp], caller],
-                     chain: wallet.chain,
-                     account: wallet.account
-                 });
+                 // A broadcast whose answer is lost may still be pending on-chain, so the slot is
+                 // kept unless the node EXPLICITLY refused (see isExplicitTxRejection).
+                 guard.inSend = true;
+                 let txHash: `0x${string}`;
+                 try {
+                     txHash = await wallet.writeContract({
+                         address: entryPoint,
+                         // Named-component ABI from @aastar/core: `userOp` is an object, and viem
+                         // cannot encode an object into the unnamed tuple of a hand-written signature
+                         // (it reads userOp[0]… → "Address undefined is invalid"), so this fallback
+                         // never worked with the previous parseAbi string.
+                         abi: EntryPointABI,
+                         functionName: 'handleOps',
+                         args: [[userOp], caller],
+                         chain: wallet.chain,
+                         account: wallet.account
+                     });
+                 } catch (e) {
+                     if (isExplicitTxRejection(e)) guard.inSend = false;
+                     throw e;
+                 }
+                 guard.inSend = false;
+                 if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, txHash);
+                 return txHash;
             }
 
             if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
             console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
+            if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, result.result);
             return result.result;
         }
 

@@ -455,7 +455,9 @@ export class UserClient extends BaseClient {
             const ep = this.requireEntryPoint();
 
             // #169 lesson: don't silently pass the call target as the gas token. V4 needs the real
-            // ERC-20; Super doesn't use a per-tx token (zero address is fine there).
+            // ERC-20. For Super the caller does not supply a token: PaymasterClient reads the
+            // operator's configured xPNTs token on-chain and puts it in paymasterAndData (REQUIRED by
+            // SuperPaymaster 5.5.0, ignored by 5.4.2), and applies the contract's gas floors.
             const ZERO = '0x0000000000000000000000000000000000000000' as Address;
             if (params.paymasterType === 'V4' && !params.gasToken) {
                 throw new Error('executeGasless: gasToken is required for a V4 paymaster (the ERC-20 paid for gas) — not the call target.');
@@ -474,46 +476,26 @@ export class UserClient extends BaseClient {
             // We dynamic import to avoid circular dependencies if any
             const { PaymasterClient: SDKPaymasterClient } = await import('@aastar/paymaster');
             
-            let verificationGasLimit: bigint | undefined;
-            let paymasterVerificationGasLimit: bigint | undefined;
-            let paymasterPostOpGasLimit: bigint | undefined;
-            let autoEstimate = true;
-
+            // Super: the tuning is handed to submit (tuneEstimate) rather than estimating here. The
+            // estimation request carries a real signature over the real nonce, so it must run after
+            // submit has reserved the SuperPaymaster 5.5.0 single-in-flight slot (PR #420 M3-b).
+            let tuneEstimate: ((est: any) => Record<string, bigint>) | undefined;
             if (params.paymasterType === 'Super') {
-                // Apply Smart Buffer Strategy via PaymasterUtils (Same as SuperPaymasterClient)
                 const { tuneGasLimit } = await import('@aastar/paymaster');
-                
-                const est = await SDKPaymasterClient.estimateUserOperationGas(
-                    this.client,
-                    this.client, 
-                    this.accountAddress,
-                    ep,
-                    params.paymaster,
-                    gasToken,
-                    this.bundlerClient?.transport?.url || (this.client.transport as any).url || '',
-                    callData,
-                    {
-                        operator: params.operator,
-                        factory: undefined,
-                        factoryData: undefined
-                    }
-                );
-                
-                // Matches SuperPaymasterClient Logic exactly:
-                const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
-                // Nominal 60k, Efficiency 0.45
-                paymasterVerificationGasLimit = tuneGasLimit(bundlerEstimate, 60_000n, 0.45);
-                
-                // Safety Pad for VGL (Moderate, not 1M)
-                const SAFETY_PAD = 80000n;
-                verificationGasLimit = est.verificationGasLimit + SAFETY_PAD;
-                
-                // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
-                // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt to avoid Number precision loss.
-                const _postOpBase = est.paymasterPostOpGasLimit + 100_000n;
-                paymasterPostOpGasLimit = _postOpBase > 200_000n ? _postOpBase : 200_000n;
-                
-                autoEstimate = false; // logic handled
+                tuneEstimate = (est: any) => {
+                    // Matches SuperPaymasterClient: nominal 60k, efficiency 0.45.
+                    const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
+                    // Safety pad for VGL (moderate, not 1M).
+                    const SAFETY_PAD = 80000n;
+                    // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
+                    // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt.
+                    const postOpBase = est.paymasterPostOpGasLimit + 100_000n;
+                    return {
+                        paymasterVerificationGasLimit: tuneGasLimit(bundlerEstimate, 60_000n, 0.45),
+                        verificationGasLimit: est.verificationGasLimit + SAFETY_PAD,
+                        paymasterPostOpGasLimit: postOpBase > 200_000n ? postOpBase : 200_000n,
+                    };
+                };
             }
 
             const txHash = await SDKPaymasterClient.submitGaslessUserOperation(
@@ -527,10 +509,7 @@ export class UserClient extends BaseClient {
                 callData,
                 {
                     operator: params.operator,
-                    autoEstimate, 
-                    verificationGasLimit,
-                    paymasterVerificationGasLimit,
-                    paymasterPostOpGasLimit
+                    tuneEstimate
                 }
             );
 

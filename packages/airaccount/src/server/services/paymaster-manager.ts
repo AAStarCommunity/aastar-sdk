@@ -1,12 +1,51 @@
-import { concat, getContract, numberToHex, zeroAddress, type Address, type Hex, type WalletClient } from "viem";
+import {
+  BaseError,
+  concat,
+  decodeFunctionResult,
+  encodeFunctionData,
+  getContract,
+  numberToHex,
+  zeroAddress,
+  type Address,
+  type Hex,
+  type WalletClient,
+} from "viem";
 // PAYMASTER_PRICE_ABI / the SuperPaymaster-detection ABI are local human-readable
 // signature arrays (not in @aastar/core); parseAbi is required to feed them to
 // viem's getContract / writeContract during the ethers->viem migration.
 // eslint-disable-next-line no-restricted-imports
 import { parseAbi } from "viem";
+import {
+  SuperPaymasterABI,
+  SUPER_PAYMASTER_MIN_POST_OP_GAS,
+  SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR,
+  encodeSuperPaymasterData,
+  getSuperPaymasterGasParams,
+  superPaymasterGenerationFromVersion,
+} from "@aastar/core";
 import { EthereumProvider } from "../providers/ethereum-provider";
 import { IStorageAdapter, PaymasterRecord } from "../interfaces/storage-adapter";
 import { ILogger, ConsoleLogger } from "../interfaces/logger";
+
+/**
+ * True only when the node says the call itself REVERTED: JSON-RPC code 3, or an error carrying
+ * non-empty revert data. Judged on the innermost raw RPC error, because viem's readContract wraps
+ * an RPC -32603 ("upstream request timeout") into the same ContractFunctionRevertedError as a real
+ * revert and drops the cause (measured on viem 2.43.3) — which is why detection uses call().
+ * -32603 / -32000 / transport errors without revert data are NOT reverts and must be rethrown.
+ */
+function isCallRevert(err: unknown): boolean {
+  if (!(err instanceof BaseError)) return false;
+  let raw: { code?: unknown; data?: unknown } | undefined;
+  err.walk((e) => {
+    raw = e as { code?: unknown; data?: unknown };
+    return false;
+  });
+  if (!raw) return false;
+  const data = typeof raw.data === "string" ? raw.data : (raw.data as { data?: unknown } | undefined)?.data;
+  const hasRevertData = typeof data === "string" && /^0x[0-9a-fA-F]+$/.test(data) && data.length > 2;
+  return raw.code === 3 || hasRevertData;
+}
 
 /**
  * Thrown when a paymaster's on-chain price cache is stale.
@@ -34,10 +73,6 @@ const PAYMASTER_PRICE_ABI = parseAbi([
   "function updatePrice() external",
 ]);
 
-const SUPER_PAYMASTER_DETECT_ABI = parseAbi([
-  "function owner() view returns (address)",
-  "function operators(address) view returns (bool,uint256,address,uint256)",
-]);
 
 /**
  * Paymaster manager — extracted from NestJS PaymasterService.
@@ -151,7 +186,7 @@ export class PaymasterManager {
     userOp: unknown,
     entryPoint: string,
     customAddress?: string,
-    options?: { tokenAddress?: string }
+    options?: { tokenAddress?: string; operator?: string }
   ): Promise<string> {
     // Handle custom user-provided paymaster addresses
     if (paymasterName === "custom-user-provided" && customAddress) {
@@ -170,43 +205,80 @@ export class PaymasterManager {
       if (isV07OrV08) {
         const provider = this.ethereum.getProvider();
 
-        // Detect SuperPaymaster vs PaymasterV4
-        let isSuperPaymaster = false;
-        let operatorAddress = "0x";
+        // Detect SuperPaymaster vs PaymasterV4, then resolve the sponsoring operator — two separate
+        // questions, each failing loudly. Only "this contract has no version()" (revert / empty
+        // return) or a non-"SuperPaymaster-" version string means V4. An RPC error, a newer SP
+        // generation, or an SP whose operator cannot be resolved throws: silently encoding V4
+        // bytes against an SP address gets the op rejected with no usable reason.
+        // operators() is decoded with the REAL core ABI: (aPNTsBalance, isConfigured, isPaused,
+        // xPNTsToken, ...) — identical on 5.4.2 and 5.5.0.
+        let sp:
+          | { generation: "v5.4" | "v5.5"; operator: Address; token: Address }
+          | undefined;
+        // Raw call, not readContract: see isCallRevert for why the wrapped error is unusable.
+        let version: string | undefined;
+        let ret: Hex | undefined;
+        let reverted = false;
         try {
-          const spContract = getContract({
+          ret = (
+            await provider.call({
+              to: formattedAddress as Address,
+              data: encodeFunctionData({ abi: SuperPaymasterABI, functionName: "version" }),
+            })
+          ).data;
+        } catch (err) {
+          if (!isCallRevert(err)) throw err;
+          reverted = true;
+        }
+        // Empty return (no code / no such function) or a revert both mean "no version()".
+        if (!reverted && ret && ret !== "0x") {
+          version = decodeFunctionResult({ abi: SuperPaymasterABI, functionName: "version", data: ret }) as string;
+        }
+        if (version !== undefined && version.trim().startsWith("SuperPaymaster-")) {
+          // Throws for an unparseable or newer-than-supported version.
+          const generation = superPaymasterGenerationFromVersion(version);
+          // Explicit operator wins; otherwise the pre-existing convention of this custom-address
+          // path (operator == SP owner), which breaks once ownership moves to governance.
+          const operator = (options?.operator ??
+            (await provider.readContract({
+              address: formattedAddress as Address,
+              abi: SuperPaymasterABI,
+              functionName: "owner",
+            }))) as Address;
+          const opInfo = (await provider.readContract({
             address: formattedAddress as Address,
-            abi: SUPER_PAYMASTER_DETECT_ABI,
-            client: provider,
-          });
-          const owner = (await spContract.read.owner()) as Address;
-          const opInfo = (await spContract.read.operators([owner])) as readonly [
-            boolean,
-            bigint,
-            Address,
-            bigint,
-          ];
-          if (opInfo && opInfo[0] === true) {
-            isSuperPaymaster = true;
-            operatorAddress = owner;
-            this.logger.log(`SuperPaymaster detected, operator: ${operatorAddress}`);
+            abi: SuperPaymasterABI,
+            functionName: "operators",
+            args: [operator],
+          })) as readonly unknown[];
+          if (opInfo?.[1] !== true) {
+            throw new Error(
+              `SuperPaymaster ${formattedAddress} (${version}): ${operator} is not a configured operator` +
+                (options?.operator ? "" : " (defaulted to owner(); pass options.operator)")
+            );
           }
-        } catch {
-          /* not SuperPaymaster */
+          sp = { generation, operator, token: opInfo[3] as Address };
+          this.logger.log(`SuperPaymaster (${generation}) detected, operator: ${operator}`);
         }
 
-        if (isSuperPaymaster) {
-          const verGas = BigInt(80000);
-          // recordXPNTsDebt + event emit in postOp observed ~117k gas on Sepolia; 300k gives safe headroom.
-          const postGas = BigInt(300_000);
-          const maxRate = (BigInt(1) << BigInt(256)) - BigInt(1);
-          return concat([
-            formattedAddress as Hex,
-            numberToHex(verGas, { size: 16 }),
-            numberToHex(postGas, { size: 16 }),
-            operatorAddress as Hex,
-            numberToHex(maxRate, { size: 32 }),
-          ]);
+        if (sp) {
+          // postOp: 300k headroom (observed ~117k on 5.4.2), never below the contract floor
+          // (5.5.0: governable gasParams().minPostOpGas; 5.4.2: MIN_POST_OP_GAS = 200k).
+          let minPostOp = SUPER_PAYMASTER_MIN_POST_OP_GAS;
+          if (sp.generation === "v5.5") {
+            minPostOp = (await getSuperPaymasterGasParams(provider, formattedAddress as Address, "v5.5")).minPostOpGas;
+          }
+          const postGas = minPostOp > BigInt(300_000) ? minPostOp : BigInt(300_000);
+          // 5.5.0 validation measured 198k-238k (spec §3.2) — 80k would OOG; 5.4.2 keeps 80k.
+          const verGas = sp.generation === "v5.5" ? SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR : BigInt(80000);
+          // Token is REQUIRED by 5.5.0 and ignored by 5.4.2, so it is always appended.
+          return encodeSuperPaymasterData({
+            paymaster: formattedAddress as Address,
+            operator: sp.operator,
+            verificationGasLimit: verGas,
+            postOpGasLimit: postGas,
+            token: sp.token,
+          });
         }
 
         // PaymasterV4 deposit model: paymasterData contains the ERC-20 token address
