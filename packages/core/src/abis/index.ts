@@ -111,7 +111,14 @@ export const SuperPaymasterV550ABI = (SuperPaymasterV550ABIData as any).abi || S
 
 /** Default SuperPaymaster ABI = 5.5.0 (see the cutover note above). */
 export const SuperPaymasterABI = SuperPaymasterV550ABI;
-export const SuperPaymasterArtifact = SuperPaymasterV550ABIData;
+/**
+ * Deliberately still the 5.4.2 artifact: it is the one carrying `bytecode`, and consumers of
+ * `.bytecode` must not silently get `undefined` (the vendored 5.5.0 union is ABI-only — 5.5.0 is
+ * deployed by SuperPaymaster's own scripts, never from the SDK).
+ */
+export const SuperPaymasterArtifact = SuperPaymasterABIData;
+/** The vendored 5.5.0 core ∪ Admin bundle ({ abi, note } — no bytecode). */
+export const SuperPaymasterV550Artifact = SuperPaymasterV550ABIData;
 
 // SuperPaymasterLens (SP 5.5.0) — read-only lens; `dryRunValidation(sp, userOp, maxCost)` moved
 // here from the SP in 5.5.0. Pins `EXPECTED_SP_VERSION = keccak256("SuperPaymaster-5.5.0")` and

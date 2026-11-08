@@ -11,7 +11,7 @@
  * Key names match what SuperPaymaster's UpgradeToV5_5_0 / V55Bootstrap write to
  * deployments/config.<env>.json (V55_OUT_CONFIG).
  */
-import type { Address, Hex } from 'viem';
+import { isAddress, type Address, type Hex } from 'viem';
 
 export interface Sp550CutoverPins {
     /** SuperPaymaster release tag the deployment was built from (e.g. "v5.5.0"). */
@@ -58,17 +58,58 @@ export const SP550_CUTOVER_PINS: Record<number, Sp550CutoverPins> = {
     11155111: {},
 };
 
+const ZERO = '0x0000000000000000000000000000000000000000';
+const ADDRESS_FIELDS = [
+    'superPaymaster', 'spImpl', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl',
+    'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped',
+] as const;
+
+/** Release tags the 5.5.0 cutover accepts: exactly v5.5.0, or v5.5.0-rc.N only when allowed. */
+export function isSp550ReleaseTag(tag: unknown, opts: { allowRc?: boolean } = {}): boolean {
+    if (typeof tag !== 'string') return false;
+    return tag === 'v5.5.0' || (!!opts.allowRc && /^v5\.5\.0-rc\.\d+$/.test(tag));
+}
+
 /** The missing required fields for a pin set (empty array = complete). */
 export function missingSp550Pins(pins: Sp550CutoverPins | undefined): string[] {
     return SP550_REQUIRED_PIN_FIELDS.filter((k) => pins?.[k] === undefined || pins?.[k] === null || pins?.[k] === '');
 }
 
-/** Pins for a chain, or throw naming every field that is not pinned yet. */
-export function requireSp550CutoverPins(chainId: number, pins = SP550_CUTOVER_PINS[chainId]): Required<Sp550CutoverPins> {
-    const missing = missingSp550Pins(pins);
-    if (missing.length) {
+/**
+ * Everything wrong with a pin set: missing fields AND malformed values (non-address / zero
+ * address, a codehash that is not 32 bytes, a tag that is not the 5.5.0 release, a non-positive
+ * block). Empty array = usable.
+ */
+export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
+    const problems = missingSp550Pins(pins).map((k) => `${k}: unpinned`);
+    if (!pins) return problems;
+    for (const k of ADDRESS_FIELDS) {
+        const v = pins[k];
+        if (v === undefined) continue;
+        if (typeof v !== 'string' || !isAddress(v, { strict: false }) || v.toLowerCase() === ZERO) problems.push(`${k}: not a non-zero address (${String(v)})`);
+    }
+    if (pins.spImplCodehash !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(String(pins.spImplCodehash))) {
+        problems.push(`spImplCodehash: not a 32-byte hash (${String(pins.spImplCodehash)})`);
+    }
+    if (pins.tag !== undefined && !isSp550ReleaseTag(pins.tag, opts)) {
+        problems.push(`tag: ${JSON.stringify(pins.tag)} is not ${opts.allowRc ? 'v5.5.0 / v5.5.0-rc.N' : 'v5.5.0'}`);
+    }
+    if (pins.readbackBlock !== undefined && !(typeof pins.readbackBlock === 'bigint' && pins.readbackBlock > 0n)) {
+        problems.push(`readbackBlock: not a positive block number (${String(pins.readbackBlock)})`);
+    }
+    return problems;
+}
+
+/** Pins for a chain, or throw naming every missing or malformed field. */
+export function requireSp550CutoverPins(
+    chainId: number,
+    pins = SP550_CUTOVER_PINS[chainId],
+    opts: { allowRc?: boolean } = {},
+): Required<Sp550CutoverPins> {
+    const problems = sp550PinProblems(pins, opts);
+    if (problems.length) {
         throw new Error(
-            `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not filled (${missing.join(', ')}). ` +
+            `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not usable (${problems.join('; ')}). ` +
                 `They are read back from the chain after the upgrade; until then the SDK must not use 5.5.0 addresses.`,
         );
     }

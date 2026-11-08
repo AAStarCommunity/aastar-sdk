@@ -58,15 +58,21 @@ fi
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()
-printf '%s ' "$@" | grep -q -- '--superpaymaster' || { [ -n "$SUPERPAYMASTER" ] && ADDR_ARGS+=(--superpaymaster "$SUPERPAYMASTER"); }
-printf '%s ' "$@" | grep -q -- '--paymaster'      || { [ -n "$PAYMASTER_V4" ]  && ADDR_ARGS+=(--paymaster "$PAYMASTER_V4"); }
+# Explicit ifs: an empty baked value must append nothing (and must not read as a failure).
+if [ -n "$SUPERPAYMASTER" ] && ! printf '%s ' "$@" | grep -q -- '--superpaymaster'; then
+  ADDR_ARGS+=(--superpaymaster "$SUPERPAYMASTER")
+fi
+if [ -n "$PAYMASTER_V4" ] && ! printf '%s ' "$@" | grep -q -- '--paymaster'; then
+  ADDR_ARGS+=(--paymaster "$PAYMASTER_V4")
+fi
 
 EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT}"
 
-echo "keeper: network=$NETWORK sp=${SUPERPAYMASTER:-<canonical>} v4=${PAYMASTER_V4:-<canonical>}"
+# ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
+echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
 exec pnpm exec tsx scripts/keeper.ts \
   --network "$NETWORK" \
-  "${ADDR_ARGS[@]}" \
+  ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
   --external-ethusd-url "$EXT_URL" \
   --poll-interval "${KEEPER_POLL_INTERVAL:-180}" \
   --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" \
