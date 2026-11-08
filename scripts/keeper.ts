@@ -9,6 +9,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import readline from 'readline';
+import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
 
 type KeeperMode = 'cast' | 'privateKey';
 
@@ -173,6 +174,7 @@ function usage(): string {
         '   --external-ethusd-url <url>      external ETH/USD JSON endpoint (or env EXTERNAL_ETHUSD_URL)',
         '   --volatility-threshold-bps <n>   alert if external move/deviation >= n bps (default 0=off)',
         '   --volatility-cooldown <sec>      alert rate limit (default 600)',
+        '   --paymaster-missing-alert <sec>  alert when PaymasterV4 stays unresolved this long (default 1800, 0=off)',
         '',
         'Networks: anvil | sepolia | op-sepolia | op-mainnet | mainnet',
         'Config: reads .env.<network> (needs RPC_URL). Telegram is optional.'
@@ -265,6 +267,10 @@ async function main() {
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
     const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
+    // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
+    const paymasterMissingAlertSec = BigInt(
+        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
+    );
     const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
     const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
@@ -340,44 +346,27 @@ async function main() {
             (process.env.TEST_ACCOUNT_ADDRESS as `0x${string}` | undefined) ||
             ('0xb5600060e6de5E11D3636731964218E53caadf0E' as `0x${string}`)) as `0x${string}`;
 
-    let paymaster = (paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig || null) as `0x${string}` | null;
+    const paymasterCandidate = (paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig || null) as `0x${string}` | null;
     const paymasterWasExplicit = Boolean(paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig);
-    if (!disablePaymaster && !paymaster) {
-        try {
-            const derived = (await publicClient.readContract({
-                address: paymasterFactory,
-                abi: PAYMASTER_FACTORY_ABI,
-                functionName: 'paymasterByOperator',
-                args: [paymasterOperator]
-            })) as `0x${string}`;
-            if (derived && derived.toLowerCase() !== ZERO_ADDRESS) {
-                paymaster = derived;
-            }
-        } catch {}
-    }
-
-    if (!disablePaymaster && paymaster && paymaster.toLowerCase() !== ZERO_ADDRESS) {
-        try {
-            const bytecode = await publicClient.getBytecode({ address: paymaster });
-            if (!bytecode || bytecode === '0x') {
-                paymaster = null;
-            } else {
-                const shouldVerifyOperatorMapping = Boolean(paymasterOperatorFromArgs) || !paymasterWasExplicit;
-                if (shouldVerifyOperatorMapping) {
-                    const mappedOperator = (await publicClient.readContract({
-                        address: paymasterFactory,
-                        abi: PAYMASTER_FACTORY_ABI,
-                        functionName: 'getOperatorByPaymaster',
-                        args: [paymaster]
-                    })) as `0x${string}`;
-                    if (mappedOperator.toLowerCase() !== paymasterOperator.toLowerCase()) {
-                        paymaster = null;
-                    }
-                }
-            }
-        } catch {
-            paymaster = null;
-        }
+    // Resolved now for the INIT report, and again on every tick while unresolved: a failure here
+    // (e.g. RPC not up yet after a reboot) must not disable V4 for the life of the process.
+    const paymasterTracker = new PaymasterTracker(
+        publicClient,
+        {
+            candidate: paymasterCandidate,
+            factory: paymasterFactory,
+            factoryAbi: PAYMASTER_FACTORY_ABI,
+            operator: paymasterOperator,
+            verifyOperatorMapping: Boolean(paymasterOperatorFromArgs) || !paymasterWasExplicit,
+        },
+        paymasterMissingAlertSec
+    );
+    let paymaster: `0x${string}` | null = null;
+    let paymasterInit = 'disabled';
+    if (!disablePaymaster) {
+        const r = await paymasterTracker.ensure(nowSec());
+        paymaster = paymasterTracker.current;
+        paymasterInit = r.kind === 'found' ? r.address : `not-found (${describeUnresolved(r)}; retried every tick)`;
     }
 
     if (printLogo) console.log(`${logo()}\n`);
@@ -389,7 +378,7 @@ async function main() {
     console.log(`network=${network}`);
     console.log(`rpcUrl=${config.rpcUrl}`);
     console.log(`superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}`);
-    console.log(`paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`);
+    console.log(`paymaster=${paymasterInit}`);
     console.log(`paymasterFactory=${paymasterFactory}`);
     console.log(`paymasterOperator=${paymasterOperator}`);
     console.log(`priceFeed=${priceFeed}`);
@@ -397,6 +386,7 @@ async function main() {
     console.log(`pollIntervalSec=${pollIntervalSec.toString()}`);
     console.log(`safetyMarginSec=${safetyMarginSec.toString()}`);
     console.log(`healthIntervalSec=${healthIntervalSec.toString()}`);
+    console.log(`paymasterMissingAlertSec=${paymasterMissingAlertSec.toString()}`);
     console.log(`volatilityThresholdBps=${volatilityThresholdBps.toString()}`);
     console.log(`chainlinkStaleSec=${chainlinkStaleSec.toString()}`);
     console.log(`externalEthUsdUrl=${externalEthUsdUrl ? 'set' : 'not-set'}`);
@@ -808,10 +798,15 @@ async function main() {
 
         const refreshPaymaster = async () => {
             if (disablePaymaster) return;
-            if (!paymaster) {
-                console.log(`paymaster decision=skip reason=not-found`);
-                return;
-            }
+            // Re-resolved every tick while unresolved (see scripts/keeper/paymasterResolver.ts).
+            paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
+                network,
+                candidateLabel: paymasterCandidate || 'derive-from-factory',
+                operator: paymasterOperator,
+                log: (line) => console.log(line),
+                notify: sendTelegramMessage,
+            });
+            if (!paymaster) return;
 
             let pmPriceFeed = priceFeed;
             try {
