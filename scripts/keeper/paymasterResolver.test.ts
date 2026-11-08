@@ -69,14 +69,26 @@ describe('keeper PaymasterV4 resolution survives a boot-time RPC failure', () =>
         expect(cl.getBytecode).toHaveBeenCalledTimes(2);
     });
 
-    it('a resolution after an outage is announced; a first-try resolution is not', async () => {
+    it('a resolution is announced only after a not-found alert went out', async () => {
         const { c, notes } = ctx();
         await paymasterTickStep(new PaymasterTracker(client(['0x6080']), params(), 1800n), 1000n, c);
         expect(notes).toHaveLength(0);
-        const t = new PaymasterTracker(client([new Error('timeout'), '0x6080']), params(), 1800n);
-        await paymasterTickStep(t, 1000n, c);
-        await paymasterTickStep(t, 1300n, c);
-        expect(notes).toEqual([expect.stringMatching(/paymaster resolved[\s\S]*unresolvedSec=300/)]);
+
+        // Unresolved for 300s, below the 1800s alert threshold: no alert, so no "resolved" either.
+        const quiet = new PaymasterTracker(client([new Error('timeout'), '0x6080']), params(), 1800n);
+        await paymasterTickStep(quiet, 1000n, c);
+        await paymasterTickStep(quiet, 1300n, c);
+        expect(notes).toHaveLength(0);
+
+        // Unresolved past the threshold: the alert goes out, and so does the recovery.
+        const loud = new PaymasterTracker(client([new Error('timeout'), new Error('timeout'), '0x6080']), params(), 1800n);
+        await paymasterTickStep(loud, 1000n, c);
+        await paymasterTickStep(loud, 2800n, c);
+        await paymasterTickStep(loud, 2900n, c);
+        expect(notes).toEqual([
+            expect.stringMatching(/paymaster not found[\s\S]*unresolvedSec=1800/),
+            expect.stringMatching(/paymaster resolved[\s\S]*unresolvedSec=1900/),
+        ]);
     });
 });
 

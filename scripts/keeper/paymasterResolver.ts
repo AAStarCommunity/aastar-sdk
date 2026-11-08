@@ -107,6 +107,7 @@ export class PaymasterTracker {
     private unresolvedSinceSec: bigint | null = null;
     private lastAlertSec: bigint | null = null;
     private resolvedAfterSec = 0n;
+    private resolvedAfterAlert = false;
 
     constructor(
         private readonly client: PaymasterResolverClient,
@@ -128,6 +129,16 @@ export class PaymasterTracker {
         return this.resolvedAfterSec;
     }
 
+    /**
+     * Whether a not-found alert was attempted before the V4 was finally found. Attempted, not
+     * confirmed: a notify that timed out may still arrive late, and the Telegram sender swallows
+     * errors, so delivery is unknowable here. An extra recovery notice is noise; a missing one
+     * leaves the operator believing the V4 is still unrefreshed.
+     */
+    get lastResolvedAfterAlert(): boolean {
+        return this.resolvedAfterAlert;
+    }
+
     /** Seconds the V4 has been unresolved (0 when resolved or never tried). */
     unresolvedForSec(nowSec: bigint): bigint {
         return this.unresolvedSinceSec === null ? 0n : nowSec - this.unresolvedSinceSec;
@@ -140,6 +151,7 @@ export class PaymasterTracker {
         if (r.kind === 'found') {
             this.address = r.address;
             this.resolvedAfterSec = this.unresolvedSinceSec === null ? 0n : nowSec - this.unresolvedSinceSec;
+            this.resolvedAfterAlert = this.lastAlertSec !== null;
             this.unresolvedSinceSec = null;
             this.lastAlertSec = null;
         } else if (this.unresolvedSinceSec === null) {
@@ -171,8 +183,8 @@ export interface PaymasterStepContext {
 
 /**
  * The per-tick V4 step: returns the V4 to refresh this tick, or null to skip it. While unresolved
- * it re-resolves, logs why it is skipping, and alerts once the threshold is crossed; when a
- * previously unresolved V4 is found it says so.
+ * it re-resolves, logs why it is skipping, and alerts once the threshold is crossed; when a V4 is
+ * found after a not-found alert was attempted, it says so (a slow first read alone stays in the log).
  */
 /**
  * Fire a notification without letting it hold the tick: it runs before every price read, so a
@@ -203,7 +215,7 @@ export async function paymasterTickStep(
         if (!wasResolved) {
             const after = tracker.lastResolvedAfterSec;
             ctx.log(`paymaster resolved=${r.address} afterSec=${after.toString()}`);
-            if (after > 0n) {
+            if (tracker.lastResolvedAfterAlert) {
                 await notifyBounded(ctx, 
                     `[keeper] paymaster resolved\nnetwork=${ctx.network}\npaymaster=${r.address}\nunresolvedSec=${after.toString()}`,
                 );
