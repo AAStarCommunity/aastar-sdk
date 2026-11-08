@@ -1,0 +1,31 @@
+anvil pid 40851 fork block 12090052 chain 11155111
+CHECK ok   pre SP.version() = "SuperPaymaster-5.4.2"
+CHECK ok   pre SP.pendingAPNTsToken() = 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7
+fork-only: 100 ETH to OWNER / ANNI / MINTER (gas for impersonated senders)
+warp +92784 s past pendingAPNTsTokenEta 1794226596
+fork-only refresh_oracle: aggregator 0x719E22E3D4b690E5d96cCb40619180B5427F14AE round 37419 updatedAt 1794130428 -> 1794226717 (answer unchanged 223389000000)
+snapshot aPNTsBalance OWNER=1690008712737068326800 ANNI=844540702843415794600 protocolRevenue=399586525633215878600 totalTracked=2934135941213700000000
+fork-only: minted new aPNTs to OWNER/ANNI (= snapshot) and SP (= protocolRevenue) from the impersonated minter
+== forge step1-execute
+CHECK ok   SP.APNTS_TOKEN() after step 1 = 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7
+== forge step3-pause
+    step 3: paused 0xb5600060e6de5E11D3636731964218E53caadf0E
+    step 3: paused 0xEcAACb915f7D92e9916f449F7ad42BD0408733c9
+== forge step4-6-run
+    [v55] step-4 read-back OK (sealed registry, approvals, template codehash, factory->SP)
+    step-5 read-back OK: 5.5.0, immutables, BLS legs, named state, EP stake; raw slots: 96
+    step-5b read-back OK: stake (wei) / delay: 1000000000000000000 86400
+  NEXT (per community): issueCommunityToken -> configureOperatorV2 -> unpauseOperator (step 7a/7c)
+CHECK ok   SP.version() after run() = "SuperPaymaster-5.5.0"
+== forge step5b-stake
+    step-5b read-back OK: stake (wei) / delay: 1000000000000000000 86400
+fork-only refresh_oracle: aggregator 0x719E22E3D4b690E5d96cCb40619180B5427F14AE round 37419 updatedAt 1794226717 -> 1794226745 (answer unchanged 223389000000)
+== forge step7a-issue
+    step 7a: v2 token 0x50a3cc04208d6A4E2A3B443275c0adD139416DD8
+AAStar v2 token 0x50a3cc04208d6A4E2A3B443275c0adD139416DD8
+== forge step7c1-configure
+    step 7c-1: operator configured on v2 token 0xb5600060e6de5E11D3636731964218E53caadf0E 0x50a3cc04208d6A4E2A3B443275c0adD139416DD8
+== forge step7c2-unpause
+    step 7c-2: operator unpaused (balance mode only; credit stays OFF) 0xb5600060e6de5E11D3636731964218E53caadf0E
+CHECK ok   AAStar operator paused after 7c = false
+SETUP OK — fork block 12090052, head 12090086; config -> /private/tmp/claude-502/-Users-jason-Dev-aastar-aastar-sdk/890368e6-2f76-4b7e-9240-ed3913b76be1/scratchpad/fork/out/config.sepolia-fork.json
