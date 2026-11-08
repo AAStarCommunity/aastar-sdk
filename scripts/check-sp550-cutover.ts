@@ -92,7 +92,9 @@ async function main() {
     const ti = pins.xPNTsTokenV2Impl as Address | undefined;
     cmp('tokenImpl.EXTENSION() == pins.xPNTsTokenV2Ext', await read(ti, xPNTsTokenV2ABI, 'EXTENSION'), pins.xPNTsTokenV2Ext);
     cmp('tokenImpl.PROTOCOL_REGISTRY() == pins.aoaProtocolRegistry', await read(ti, xPNTsTokenV2ABI, 'PROTOCOL_REGISTRY'), pins.aoaProtocolRegistry);
-    cmp('tokenImpl.FACTORY() == pins.xPNTsFactoryV2', await read(ti, xPNTsTokenV2ABI, 'FACTORY'), pins.xPNTsFactoryV2);
+    // NOT tokenImpl.FACTORY(): FACTORY is storage written by initialize() on each CLONE
+    // (xPNTsTokenV2.sol:74); the implementation disables initializers (:44), so on the impl it is 0.
+    // EXTENSION and PROTOCOL_REGISTRY above are immutables (:26, xPNTsV2Base.sol:53), set on the impl.
 
     // 4. The Lens is the 5.5.0 one.
     const lensVersion = await read(pins.superPaymasterLens as Address | undefined, SuperPaymasterLensABI, 'EXPECTED_SP_VERSION');
