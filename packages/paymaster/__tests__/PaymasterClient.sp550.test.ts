@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { Address, Hex } from 'viem';
+import { createWalletClient, custom, defineChain, fallback, HttpRequestError, type Address, type Hex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient } from '../src/V4/PaymasterClient';
@@ -23,13 +23,13 @@ function flagsOf(userOpJson: any): number | undefined {
 }
 
 type Bundler = (method: string, userOp: any) => Promise<object>;
-type WriteContract = () => Promise<Hex>;
+type WriteContract = (args: any) => Promise<Hex>;
 
 /**
  * Each submit() runs with its OWN wallet (distinct key → distinct signatures), so signatures and
  * requests can be attributed to the call that produced them. All share one stubbed bundler.
  */
-function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?: WriteContract } = {}) {
+function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?: WriteContract; transport?: { type?: string } } = {}) {
     const signs: Hex[][] = [];
     const makeWallet = (idx: number) => {
         const base = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 3 + idx });
@@ -46,6 +46,7 @@ function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?:
         return {
             account,
             chain: { id: 11155111 },
+            transport: opts.transport ?? { type: 'http' },
             writeContract: opts.writeContract ?? (async () => ('0x' + 'ee'.repeat(32)) as Hex),
         };
     };
@@ -288,6 +289,230 @@ describe('PaymasterClient × SP 5.5.0: a parseable but non-JSON-RPC answer is no
         await expect(submit()).rejects.toThrow(/non-JSON-RPC answer/);
         stopGateway();
         await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: fallback classification on REAL viem errors', () => {
+    // The same fallback, but writeContract is a real viem WalletClient whose node answers
+    // eth_sendRawTransaction with an error — so the SDK sees viem's actual wrapper chain
+    // (ContractFunctionExecutionError → TransactionExecutionError → … → the RPC error), whose
+    // top-level message prints the tx including `nonce`. Hand-built Errors cannot show that.
+    const noSendBundler: Bundler = async (method) =>
+        method === 'eth_estimateUserOperationGas' ? ESTIMATE : { error: { code: -32601, message: 'Method not found' } };
+    const chain = defineChain({
+        id: 11155111, name: 'stub', nativeCurrency: { name: 'E', symbol: 'E', decimals: 18 },
+        rpcUrls: { default: { http: ['http://node.stub'] } },
+    });
+    const TX = ('0x' + 'dd'.repeat(32)) as Hex;
+    /** A stub node: reads succeed; `send(n)` answers the n-th eth_sendRawTransaction it receives. */
+    function node(send: (n: number) => Hex) {
+        let sends = 0;
+        return custom({
+            async request({ method }: { method: string }) {
+                switch (method) {
+                    case 'eth_chainId': return '0xaa36a7';
+                    case 'eth_getTransactionCount': return '0x7';
+                    case 'eth_estimateGas': return '0x5208';
+                    case 'eth_gasPrice': case 'eth_maxPriorityFeePerGas': return '0x3b9aca00';
+                    case 'eth_getBlockByNumber': return { baseFeePerGas: '0x3b9aca00', number: '0x1' };
+                    case 'eth_sendRawTransaction': return send(sends++);
+                    default: throw new Error(`stub node: unexpected ${method}`);
+                }
+            },
+        });
+    }
+    const nodeError = (code: number, message: string) => Object.assign(new Error(message), { code });
+    /** The harness wallet signs; its writeContract (and transport type) is a real viem WalletClient's. */
+    function viemWallet(transport: Parameters<typeof createWalletClient>[0]['transport']) {
+        const real = createWalletClient({
+            account: mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 9 }),
+            chain,
+            transport,
+        });
+        const writeContract: WriteContract = ({ address, abi, functionName, args }) => real.writeContract({ address, abi, functionName, args });
+        // The stub node is a custom() transport (no network); the guard is told it sits behind a
+        // single http endpoint, which is what these cases model. custom/fallback are tested below.
+        return { writeContract, transport: { type: 'http' } };
+    }
+    /** First broadcast fails with the node error; later ones return TX. */
+    function viemWriteContract(code: number, message: string, opts: { http503?: boolean } = {}) {
+        return viemWallet(node((n) => {
+            if (n > 0) return TX;
+            if (opts.http503) throw new HttpRequestError({ url: 'http://node.stub', status: 503, body: {}, details: message });
+            throw nodeError(code, message);
+        }));
+    }
+
+    it('the wrapper really prints `nonce` (so a top-level match would misread every failure)', async () => {
+        const err = await viemWriteContract(-32000, 'insufficient funds for gas * price + value').writeContract({
+            address: EP, abi: (await import('@aastar/core')).EntryPointABI, functionName: 'handleOps', args: [[], SENDER],
+        }).catch((e) => e);
+        expect(err.name).toBe('ContractFunctionExecutionError');
+        expect(err.message).toMatch(/nonce/i);
+    });
+
+    it.each([
+        ['insufficient funds', -32000, 'insufficient funds for gas * price + value'],
+        ['intrinsic gas too low', -32000, 'intrinsic gas too low'],
+    ])('explicit (%s) → slot released', async (_n, code, message) => {
+        const { submit } = harness(noSendBundler, viemWriteContract(code, message));
+        await expect(submit()).rejects.toThrow();
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    it.each([
+        ['nonce too low', -32000, 'nonce too low'],
+        ['already known', -32000, 'already known'],
+        ['-32603 upstream timeout', -32603, 'upstream request timeout'],
+        // Rejection WORDS without rejection provenance: viem drops the -32603 code, and a proxy's
+        // 503 body can quote an earlier node error after it forwarded the tx.
+        ['-32603 whose text says insufficient funds', -32603, 'upstream timeout; last error: insufficient funds for gas * price + value'],
+        ['HTTP 503 whose body says insufficient funds', 0, 'upstream timeout; last error: insufficient funds for gas * price + value', { http503: true }],
+    ])('ambiguous (%s) → slot kept', async (_n, code, message, opts?: { http503?: boolean }) => {
+        const { submit } = harness(noSendBundler, viemWriteContract(code, message, opts));
+        await expect(submit()).rejects.toThrow();
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: fallback transports cannot prove a refusal', () => {
+    const noSendBundler: Bundler = async (method) =>
+        method === 'eth_estimateUserOperationGas' ? ESTIMATE : { error: { code: -32601, message: 'Method not found' } };
+    const chain = defineChain({
+        id: 11155111, name: 'stub', nativeCurrency: { name: 'E', symbol: 'E', decimals: 18 },
+        rpcUrls: { default: { http: ['http://node.stub'] } },
+    });
+    const reads = (method: string) => {
+        switch (method) {
+            case 'eth_chainId': return '0xaa36a7';
+            case 'eth_getTransactionCount': return '0x7';
+            case 'eth_estimateGas': return '0x5208';
+            case 'eth_gasPrice': case 'eth_maxPriorityFeePerGas': return '0x3b9aca00';
+            case 'eth_getBlockByNumber': return { baseFeePerGas: '0x3b9aca00', number: '0x1' };
+            default: throw new Error(`stub node: unexpected ${method}`);
+        }
+    };
+
+    it('endpoint 1 takes the tx then 503s, endpoint 2 refuses it: the slot is kept', async () => {
+        const first = custom({
+            async request({ method }: { method: string }) {
+                if (method === 'eth_sendRawTransaction') {
+                    throw new HttpRequestError({ url: 'http://one.stub', status: 503, body: {}, details: 'Service Unavailable' });
+                }
+                return reads(method);
+            },
+        });
+        const second = custom({
+            async request({ method }: { method: string }) {
+                if (method === 'eth_sendRawTransaction') {
+                    throw Object.assign(new Error('insufficient funds for gas * price + value'), { code: -32000 });
+                }
+                return reads(method);
+            },
+        });
+        const real = createWalletClient({
+            account: mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 9 }),
+            chain,
+            transport: fallback([first, second], { retryCount: 0 }),
+        });
+        const { submit } = harness(noSendBundler, {
+            transport: real.transport,
+            writeContract: ({ address, abi, functionName, args }) => real.writeContract({ address, abi, functionName, args }),
+        });
+        await expect(submit()).rejects.toThrow(/insufficient funds|exceeds the balance/i);
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    const first503 = custom({
+        async request({ method }: { method: string }) {
+            if (method === 'eth_sendRawTransaction') {
+                throw new HttpRequestError({ url: 'http://one.stub', status: 503, body: {}, details: 'Service Unavailable' });
+            }
+            return reads(method);
+        },
+    });
+    const thenFails = (code: number, message: string) => custom({
+        async request({ method }: { method: string }) {
+            if (method === 'eth_sendRawTransaction') throw Object.assign(new Error(message), { code });
+            return reads(method);
+        },
+    });
+    const walletOver = (transport: any) => {
+        const real = createWalletClient({
+            account: mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 9 }),
+            chain,
+            transport,
+        });
+        return {
+            transport: real.transport,
+            writeContract: (({ address, abi, functionName, args }) => real.writeContract({ address, abi, functionName, args })) as WriteContract,
+        };
+    };
+
+    it('endpoint 1 503s, then the user rejects on endpoint 2 (4001): the slot is kept', async () => {
+        const { submit } = harness(noSendBundler, walletOver(fallback([first503, thenFails(4001, 'User rejected the request.')], { retryCount: 0 })));
+        await expect(submit()).rejects.toThrow(/rejected/i);
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    it('a custom() transport wrapping a fallback (503, then insufficient funds): the slot is kept', async () => {
+        const inner = createWalletClient({
+            chain,
+            transport: fallback([first503, thenFails(-32000, 'insufficient funds for gas * price + value')], { retryCount: 0 }),
+        });
+        const wrapped = custom({ request: (args: any) => inner.request(args) });
+        const { submit } = harness(noSendBundler, walletOver(wrapped));
+        await expect(submit()).rejects.toThrow(/insufficient funds|exceeds the balance/i);
+        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    it.each([
+        ['fallback', { type: 'fallback' }],
+        ['custom', { type: 'custom' }],
+        ['unknown transport', {}],
+    ])('%s: neither a node refusal nor a user rejection releases the slot', async (_n, transport) => {
+        for (const [code, message] of [[-32000, 'insufficient funds for gas * price + value'], [4001, 'User rejected the request.']] as const) {
+            SuperPaymasterInflightGuard.clearAll();
+            const { submit } = harness(noSendBundler, {
+                transport,
+                writeContract: async () => { throw Object.assign(new Error(message), { code }); },
+            });
+            await expect(submit()).rejects.toThrow();
+            await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+        }
+    });
+
+    it('http: a user rejection (4001) releases the slot', async () => {
+        let first = true;
+        const { submit } = harness(noSendBundler, {
+            transport: { type: 'http' },
+            writeContract: async () => {
+                if (first) { first = false; throw Object.assign(new Error('User rejected the request.'), { code: 4001 }); }
+                return ('0x' + 'ee'.repeat(32)) as Hex;
+            },
+        });
+        await expect(submit()).rejects.toThrow();
+        await expect(submit()).resolves.toBe('0x' + 'ee'.repeat(32));
+    });
+});
+
+describe('SuperPaymasterInflightGuard.record', () => {
+    it('a late answer for nonce N does not overwrite a newer reservation for N+1', () => {
+        SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 7n);
+        // The chain consumed 7 (current nonce 8); a second call reserves 8.
+        SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 8n);
+        // The first call's send answer arrives only now.
+        SuperPaymasterInflightGuard.record(31337, EP, SENDER, 7n, '0x07');
+        // A third call at nonce 8 must still be rejected (it would sign nonce 8 a second time).
+        expect(() => SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 8n)).toThrow(/one in-flight/);
+    });
+
+    it('a record for the same or a higher nonce still replaces the entry', () => {
+        SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 8n);
+        SuperPaymasterInflightGuard.record(31337, EP, SENDER, 8n, '0x08');
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 8n)).toThrow(/\(0x08\)/);
+        SuperPaymasterInflightGuard.record(31337, EP, SENDER, 9n, '0x09');
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 9n)).toThrow(/\(0x09\)/);
     });
 });
 
