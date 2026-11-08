@@ -20,14 +20,17 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NETWORK="${1:-sepolia}"
 [ $# -gt 0 ] && shift || true
 
-# ── Per-network CONFIG (v5.3.3) ───────────────────────────────────────────────
+# ── Per-network CONFIG ────────────────────────────────────────────────────────
 # SuperPaymaster proxy + the PaymasterV4 actually used on that network.
+# SuperPaymaster is NOT baked for Sepolia: it resolves from CANONICAL_ADDRESSES (the proxy
+# 0x09DF…4DE9, unchanged by in-place upgrades such as 5.4.2 -> 5.5.0). The value baked here
+# before was the SuperPaymaster-5.3.3 contract 0xFb09…266a, a different, retired deployment.
 # Sepolia PaymasterV4 = the deployer-operator's V4 (the one the on-chain E2E uses,
 # resolved via PaymasterFactory.paymasterByOperator(deployer)). NOT the canonical
 # (community) V4 — they differ.
 case "$NETWORK" in
   sepolia)
-    SUPERPAYMASTER="0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a"   # SuperPaymaster-5.3.3
+    SUPERPAYMASTER=""   # resolve from CANONICAL_ADDRESSES (see above)
     PAYMASTER_V4="0x2118e9a404C15F70B1D4f53b400c8a566A5ea4B6"     # PMV4-Deposit-4.5.0 (deployer)
     ;;
   op-mainnet|optimism)
