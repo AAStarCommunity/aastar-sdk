@@ -36,7 +36,9 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
     };
     return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined,
         /** Per-address code overrides ('0x' = no code); default codeOf(address). */
-        code: {} as Record<string, Hex> };
+        code: {} as Record<string, Hex>,
+        /** Called after each readContract answer (lets a test reorg the model mid-run). */
+        afterRead: undefined as undefined | ((functionName: string) => void) };
 }
 
 type Model = ReturnType<typeof deployment>;
@@ -66,7 +68,9 @@ function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
             log(`read ${functionName}`); atSnapshot(`read ${functionName}`, blockNumber);
             const k = `${address}.${functionName}`;
             if (!(k in m.reads)) throw Object.assign(new Error('reverted'), { shortMessage: `no ${functionName}` });
-            return m.reads[k];
+            const v = m.reads[k];
+            m.afterRead?.(functionName);
+            return v;
         }) as any,
     };
     return { label, url, client };
@@ -143,7 +147,8 @@ describe('SP 5.5.0 cutover gate fails (exit 1) when the two RPCs disagree or the
     };
     it('null block hashes on both RPCs do not count as the same block', async () => {
         const m = { ...deployment(optimismSepolia.id, 'fresh'), blockHash: null };
-        expect(await failed('op-sepolia', m, structuredClone(m))).toEqual({ exitCode: 1, failed: ['every RPC serves the same block at the snapshot'] });
+        expect(await failed('op-sepolia', m, structuredClone(m))).toEqual({ exitCode: 1, failed: [
+            'every RPC serves the same block at the snapshot', 'the snapshot block did not change during the reads (no reorg)'] });
     });
     it('different block hashes (a fork or a lagging node)', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
@@ -152,7 +157,24 @@ describe('SP 5.5.0 cutover gate fails (exit 1) when the two RPCs disagree or the
     });
     it('an RPC that answers with a different block than the one asked for (same hash on both)', async () => {
         const m = { ...deployment(optimismSepolia.id, 'fresh'), servedBlock: HEAD + 7n };
-        expect(await failed('op-sepolia', m, structuredClone(m))).toEqual({ exitCode: 1, failed: ['every RPC serves the same block at the snapshot'] });
+        expect(await failed('op-sepolia', m, structuredClone(m))).toEqual({ exitCode: 1, failed: [
+            'every RPC serves the same block at the snapshot', 'the snapshot block did not change during the reads (no reorg)'] });
+    });
+    it('a reorg on RPC2 after its version() answer: later reads agree, but the snapshot moved', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const m2 = structuredClone(m);
+        m2.afterRead = (fn) => {
+            if (fn !== 'version' || m2.blockHash !== BLOCK_HASH) return;
+            m2.blockHash = ('0x' + 'f0'.repeat(32)) as Hex; // fork B at the same height
+            m2.reads[`${m.p.sp}.version`] = 'SuperPaymaster-5.4.2';
+        };
+        expect(await failed('op-sepolia', m, m2)).toEqual({ exitCode: 1, failed: ['the snapshot block did not change during the reads (no reorg)'] });
+    });
+    it('a reorg is caught with a single RPC too (upgrade mode)', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.afterRead = (fn) => { if (fn === 'version') m.blockHash = ('0x' + 'f0'.repeat(32)) as Hex; };
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://a.example', m, [])], pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['the snapshot block did not change during the reads (no reorg)']);
     });
     it('RPC2 reports a different implementation behind the proxy', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');

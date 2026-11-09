@@ -51,7 +51,7 @@
 | `op-sepolia` | 11155420 | 全新部署整套 V5（链上是不带 proxy 的 SP 3.2.2） | `SP550_FRESH_DEPLOY_PINS` |
 | `op-mainnet` | 10 | 同上；另有发布暂停：3.2.2 的迁移或下线由作者决定 | `SP550_FRESH_DEPLOY_PINS` + `SP550_RELEASE_HOLDS` |
 
-全新部署必须用两个**不同的** RPC endpoint 读回（`--rpc2`）。只差尾斜杠或主机名大小写的，也算同一个 endpoint，直接 exit 2。两边在快照块上必须返回所要的那一块，块哈希格式合法且相同。此后每一次状态读取都在两边各读一次，包括 version、impl 槽、各项 wiring 和 code；两边不一致，就记成 `DIVERGE`，对应那项检查失败。
+全新部署必须用两个**不同的** RPC endpoint 读回（`--rpc2`）。只差尾斜杠或主机名大小写的，也算同一个 endpoint，直接 exit 2。两边在快照块上必须返回所要的那一块，块哈希格式合法且相同。此后每一次状态读取都在两边各读一次，包括 version、impl 槽、各项 wiring 和 code；两边不一致，就记成 `DIVERGE` 对象。它和任何值都不相等，包括另一个 `DIVERGE`，所以对应那项检查一定失败。每个已 pin 的地址，无论在顶层还是地址簿里，在每个 RPC 上的 code 都必须非空且相同。viem 的读调用只能按块号读，不能按块哈希读，所以全部读完以后，要在每个 RPC 上把快照块的哈希再取一次，必须和开头一致；读的过程中链若发生重组，gate 就判失败。
 
 pin 覆盖 SP 自己部署的整本地址簿，每个条目归谁由 `SP550_ADDRESS_OWNER` 规定，地址簿新增 key 却没归类，编译就会报错：
 - `sp`：必须 pin。
@@ -72,9 +72,9 @@ OP Mainnet 的发布暂停只能通过改 `SP550_RELEASE_HOLDS` 来解除，没�
 
 | 网络 | 结果 | 说明 |
 |---|---|---|
-| `op-sepolia` | FAIL 22/25，exit 1 | 读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
-| `op-mainnet` | FAIL 23/26，exit 1 | 同上，另多一项发布暂停 |
-| `sepolia` | FAIL 17/17，exit 1 | 读到 5.4.2 |
+| `op-sepolia` | FAIL 22/26，exit 1 | 读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
+| `op-mainnet` | FAIL 23/27，exit 1 | 同上，另多一项发布暂停 |
+| `sepolia` | FAIL 17/19，exit 1 | 读到 5.4.2 |
 
 chainId 错、缺 `--rpc2`、两个 RPC 是同一 endpoint、网络名未知，这几种情况都 exit 2。
 

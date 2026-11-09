@@ -74,16 +74,17 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     }
     const record = (check: string, ok: boolean, detail: string) => results.push({ check, ok, detail });
 
-    // 3. One snapshot block, identical on every RPC.
+    // 3. One snapshot block, identical on every RPC. State reads below can only name the block by
+    //    NUMBER (eth_call / getCode / getStorageAt in viem take no block hash), so the hash each RPC
+    //    served is taken again after the last read (finish()): a reorg during the run fails the gate.
     const heads = await Promise.all(rpcs.map((r) => r.client.getBlockNumber()));
     const blockNumber = input.block ?? heads.reduce((a, b) => (a < b ? a : b));
-    if (rpcs.length > 1) {
-        const blocks = await Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber })));
-        const wellFormed = blocks.every((b) => typeof b.hash === 'string' && HASH.test(b.hash) && b.number === blockNumber);
-        const same = blocks.every((b) => b.hash === blocks[0].hash);
-        record('every RPC serves the same block at the snapshot', wellFormed && same,
-            blocks.map((b, i) => `${rpcs[i].label} #${String(b.number)} ${String(b.hash)}`).join(' · '));
-    }
+    const snapshotHashes = async () => (await Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber })))).map((b) =>
+        typeof b.hash === 'string' && HASH.test(b.hash) && b.number === blockNumber ? b.hash : undefined);
+    const before = await snapshotHashes();
+    record(rpcs.length > 1 ? 'every RPC serves the same block at the snapshot' : 'the RPC serves a well-formed snapshot block',
+        before.every((h) => h !== undefined && h === before[0]),
+        before.map((h, i) => `${rpcs[i].label} #${blockNumber} ${h ?? 'malformed or other block'}`).join(' · '));
 
     // 4. Pins for the network's mode, and holds.
     const chainId = net.chainId;
@@ -95,7 +96,7 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) record('no release hold on this chain', false, hold);
 
-    // 5. State reads on every RPC; a disagreement is returned as a DIVERGE string, which fails any comparison.
+    // 5. State reads on every RPC; a disagreement is returned as a Diverge object, which fails any comparison.
     const agree = (vals: unknown[]): unknown =>
         vals.every((v) => str(v) === str(vals[0])) ? vals[0] : new Diverge(`DIVERGE ${vals.map((v, i) => `${rpcs[i].label}=${str(v)}`).join(' ')}`);
     const read = async (address: Address | undefined, abi: any, functionName: string): Promise<any> => {
@@ -117,7 +118,7 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {};
     const sp = (pins.superPaymaster ?? canonical.superPaymaster) as Address | undefined;
     if (!pins.superPaymaster) record('pins.superPaymaster', false, `(unpinned) — reading canonical ${sp ?? 'none'}`);
-    if (!sp) return finish();
+    if (!sp) return await finish();
 
     // 5a. What is behind the proxy.
     const version = await read(sp, SuperPaymasterV550ABI, 'version');
@@ -179,9 +180,12 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
 
     // 6. The readback the pins came from is not in the future of this snapshot.
     record('pins.readbackBlock <= snapshot block', pins.readbackBlock !== undefined && pins.readbackBlock <= blockNumber, `${pins.readbackBlock ?? '(unpinned)'} · snapshot ${blockNumber}`);
-    return finish();
+    return await finish();
 
-    function finish(): GateResult {
+    async function finish(): Promise<GateResult> {
+        const after = await snapshotHashes();
+        record('the snapshot block did not change during the reads (no reorg)', after.every((h, i) => h !== undefined && h === before[i]),
+            after.map((h, i) => `${rpcs[i].label} ${before[i] ?? '?'} -> ${h ?? 'malformed or other block'}`).join(' · '));
         return { exitCode: results.every((r) => r.ok) ? 0 : 1, header, results };
     }
 }
