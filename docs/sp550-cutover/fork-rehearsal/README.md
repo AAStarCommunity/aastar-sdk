@@ -51,9 +51,32 @@
 | `op-sepolia` | 11155420 | 全新部署整套 V5（链上是不带 proxy 的 SP 3.2.2） | `SP550_FRESH_DEPLOY_PINS` |
 | `op-mainnet` | 10 | 同上；另有发布暂停：3.2.2 的迁移或下线由作者决定 | `SP550_FRESH_DEPLOY_PINS` + `SP550_RELEASE_HOLDS` |
 
-全新部署必须用两个 RPC 读回（`--rpc2`）。两边在快照块上的块哈希必须一致，每个已 pin 地址在两边的 code 也必须一致。pin 覆盖 SP 自己部署的整本地址簿，哪些条目归 SP 由 `SP550_ADDRESS_OWNER` 规定；地址簿新增 key 却没归类，编译就会报错。
+全新部署必须用两个**不同的** RPC endpoint 读回（`--rpc2`）。只差尾斜杠或主机名大小写的，也算同一个 endpoint，直接 exit 2。两边在快照块上必须返回所要的那一块，块哈希格式合法且相同。此后每一次状态读取都在两边各读一次，包括 version、impl 槽、各项 wiring 和 code；两边不一致，就记成 `DIVERGE`，对应那项检查失败。
 
-2026-11-09 实跑（pin 为空）：`op-sepolia` FAIL 22/25，`op-mainnet` 另多一项发布暂停，两条链都读到 `SuperPaymaster-3.2.2` 且 impl 槽为 0，exit 1。`sepolia` 读到 5.4.2，exit 1。chainId 错、缺 `--rpc2`、网络名未知这三种情况都 exit 2。
+pin 覆盖 SP 自己部署的整本地址簿，每个条目归谁由 `SP550_ADDRESS_OWNER` 规定，地址簿新增 key 却没归类，编译就会报错：
+- `sp`：必须 pin。
+- `sp-optional`：要么 pin，要么列进 `absent`（SP 的 manifest 声明这条链上没部署）；两样都没有，就算问题。
+- `external`：EntryPoint、Chainlink、AirAccount/YAAA 这一类，包括 AirAccount 的 `agentRegistry`。它们不从 SP 的 manifest 取值，只核对 SP 自身的 wiring。
+
+OP Mainnet 的发布暂停只能通过改 `SP550_RELEASE_HOLDS` 来解除，没有任何参数能绕过去。
+
+校验逻辑在 `packages/core/src/sp550CutoverGate.ts`，脚本只是一层命令行包装。测试用模拟 RPC 覆盖了以下情况：
+- 同一个 endpoint 用了两次；
+- chainId 不对（包括只有第二个 RPC 不对）；
+- 读取顺序（chainId 必须最先读）；
+- 块哈希为 null、不一致，或者返回的不是所要的那一块；
+- RPC2 上的 impl 或 wiring 与 RPC1 不一致；
+- 发布暂停。
+
+2026-11-09 实跑（pin 为空，只读）：
+
+| 网络 | 结果 | 说明 |
+|---|---|---|
+| `op-sepolia` | FAIL 22/25，exit 1 | 读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
+| `op-mainnet` | FAIL 23/26，exit 1 | 同上，另多一项发布暂停 |
+| `sepolia` | FAIL 17/17，exit 1 | 读到 5.4.2 |
+
+chainId 错、缺 `--rpc2`、两个 RPC 是同一 endpoint、网络名未知，这几种情况都 exit 2。
 
 ## SDK E2E（`e2e.txt`，`scripts/sp550-fork-e2e.ts`）
 

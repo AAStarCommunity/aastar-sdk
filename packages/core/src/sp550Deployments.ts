@@ -54,7 +54,9 @@ export type AddressBookKey = KeysOfUnion<CanonicalAddresses>;
  * of the SDK address book, so adding a key to CANONICAL_ADDRESSES without classifying it here is
  * a compile error rather than a silently unpinned address.
  *  - `sp`: written by SP's fresh deploy; required.
- *  - `sp-optional`: SP's, but a given chain may legitimately not have it (zero in the book).
+ *  - `sp-optional`: SP's, but a given chain may legitimately not have it. A fresh pin set must
+ *    still account for every one of them: pinned, or listed in `absent` (SP's manifest says it
+ *    was not deployed). Leaving one out is a problem, so nothing disappears silently.
  *  - `external`: not SP's deploy (EntryPoint, Chainlink, AirAccount / YAAA); checked
  *    through SP's own wiring where SP exposes it, never pinned from SP's manifest.
  */
@@ -83,7 +85,6 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 
     xPNTsFactory: 'sp-optional',
     microPaymentChannel: 'sp-optional',
     blsValidator: 'sp-optional',
-    agentRegistry: 'sp-optional',
     entryPoint: 'external',
     priceFeed: 'external',
     simpleAccountFactory: 'external',
@@ -97,15 +98,19 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 
     airAccountFactoryV7: 'external',
     airAccountV7Impl: 'external',
     airAccountExtension: 'external',
+    agentRegistry: 'external', // AirAccount's agent registry, not SP's agentIdentityRegistry
 };
 
-export const SP550_FRESH_REQUIRED_ADDRESS_KEYS = (Object.keys(SP550_ADDRESS_OWNER) as AddressBookKey[]).filter(
-    (k) => SP550_ADDRESS_OWNER[k] === 'sp',
-);
+const keysOwnedAs = (o: 'sp' | 'sp-optional') =>
+    (Object.keys(SP550_ADDRESS_OWNER) as AddressBookKey[]).filter((k) => SP550_ADDRESS_OWNER[k] === o);
+export const SP550_FRESH_REQUIRED_ADDRESS_KEYS = keysOwnedAs('sp');
+export const SP550_FRESH_OPTIONAL_ADDRESS_KEYS = keysOwnedAs('sp-optional');
 
 /** A fresh-deploy pin set: the 5.5.0 pieces (as for an upgrade) plus the SP-owned address book. */
 export interface Sp550FreshDeployPins extends Sp550CutoverPins {
     addresses?: Partial<Record<AddressBookKey, Address>>;
+    /** `sp-optional` keys SP's manifest declares NOT deployed on this chain. */
+    absent?: AddressBookKey[];
 }
 
 /**
@@ -129,8 +134,16 @@ const ZERO = '0x0000000000000000000000000000000000000000';
 export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
     const problems = sp550PinProblems(pins, opts);
     const book = pins?.addresses ?? {};
+    const absent = new Set<string>(pins?.absent ?? []);
     for (const k of SP550_FRESH_REQUIRED_ADDRESS_KEYS) {
         if (book[k] === undefined) problems.push(`addresses.${k}: unpinned`);
+    }
+    for (const k of SP550_FRESH_OPTIONAL_ADDRESS_KEYS) {
+        if (book[k] === undefined && !absent.has(k)) problems.push(`addresses.${k}: neither pinned nor declared absent`);
+        if (book[k] !== undefined && absent.has(k)) problems.push(`addresses.${k}: pinned and declared absent`);
+    }
+    for (const k of absent) {
+        if (SP550_ADDRESS_OWNER[k as AddressBookKey] !== 'sp-optional') problems.push(`absent: ${k} is not an sp-optional key`);
     }
     for (const [k, v] of Object.entries(book)) {
         const owner = SP550_ADDRESS_OWNER[k as AddressBookKey];
@@ -146,14 +159,18 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     return problems;
 }
 
-/** Fresh-deploy pins for a chain, or throw naming every problem and any release hold. */
+/**
+ * Fresh-deploy pins for a chain, or throw naming every problem and any release hold. Holds come
+ * only from SP550_RELEASE_HOLDS; there is deliberately no override, so lifting one is a reviewed
+ * change to that table that records the author's decision.
+ */
 export function requireSp550FreshDeployPins(
     chainId: number,
     pins = SP550_FRESH_DEPLOY_PINS[chainId],
-    opts: { allowRc?: boolean; holds?: Record<number, string> } = {},
+    opts: { allowRc?: boolean } = {},
 ): Required<Sp550FreshDeployPins> {
     const problems = sp550FreshPinProblems(pins, opts);
-    const hold = (opts.holds ?? SP550_RELEASE_HOLDS)[chainId];
+    const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) problems.push(`release hold: ${hold}`);
     if (problems.length) {
         throw new Error(
