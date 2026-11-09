@@ -20,6 +20,15 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NETWORK="${1:-sepolia}"
 [ $# -gt 0 ] && shift || true
 
+# True when the caller passed exactly this flag. Whole-argument match, like keeper.ts's own
+# parser: a substring grep took --paymaster-missing-alert for --paymaster and silently dropped
+# the baked V4 below (PR #425 review).
+has_arg() {
+  local want="$1" a; shift
+  for a in "$@"; do [ "$a" = "$want" ] && return 0; done
+  return 1
+}
+
 # ── Per-network CONFIG (v5.3.3) ───────────────────────────────────────────────
 # SuperPaymaster proxy + the PaymasterV4 actually used on that network.
 # Sepolia PaymasterV4 = the deployer-operator's V4 (the one the on-chain E2E uses,
@@ -48,22 +57,27 @@ if [ -z "${KEEPER_PRIVATE_KEY:-}" ]; then
     [ -n "$PK" ] && export KEEPER_PRIVATE_KEY="$PK"
   fi
 fi
-if [ -z "${KEEPER_PRIVATE_KEY:-}" ] && ! printf '%s ' "$@" | grep -q -- '--dry-run'; then
+if [ -z "${KEEPER_PRIVATE_KEY:-}" ] && ! has_arg --dry-run "$@"; then
   echo "error: no signing key — set PRIVATE_KEY in $ENV_FILE (or export KEEPER_PRIVATE_KEY)" >&2
   exit 1
 fi
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()
-printf '%s ' "$@" | grep -q -- '--superpaymaster' || { [ -n "$SUPERPAYMASTER" ] && ADDR_ARGS+=(--superpaymaster "$SUPERPAYMASTER"); }
-printf '%s ' "$@" | grep -q -- '--paymaster'      || { [ -n "$PAYMASTER_V4" ]  && ADDR_ARGS+=(--paymaster "$PAYMASTER_V4"); }
+if [ -n "$SUPERPAYMASTER" ] && ! has_arg --superpaymaster "$@"; then
+  ADDR_ARGS+=(--superpaymaster "$SUPERPAYMASTER")
+fi
+if [ -n "$PAYMASTER_V4" ] && ! has_arg --paymaster "$@"; then
+  ADDR_ARGS+=(--paymaster "$PAYMASTER_V4")
+fi
 
 EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT}"
 
 echo "keeper: network=$NETWORK sp=${SUPERPAYMASTER:-<canonical>} v4=${PAYMASTER_V4:-<canonical>}"
+# ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
 exec pnpm exec tsx scripts/keeper.ts \
   --network "$NETWORK" \
-  "${ADDR_ARGS[@]}" \
+  ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
   --external-ethusd-url "$EXT_URL" \
   --poll-interval "${KEEPER_POLL_INTERVAL:-180}" \
   --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" \
