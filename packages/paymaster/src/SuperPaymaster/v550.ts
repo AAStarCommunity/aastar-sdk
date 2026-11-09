@@ -1,6 +1,9 @@
-import { type Address } from 'viem';
+import { type Address, type Hex } from 'viem';
 import {
     SuperPaymasterABI,
+    SuperPaymasterV550ABI,
+    xPNTsTokenV2ABI,
+    XPNTS_V2_LOCK_RESULT,
     SUPER_PAYMASTER_MIN_POST_OP_GAS,
     SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR,
     type SuperPaymasterGeneration,
@@ -54,6 +57,90 @@ export async function resolveSuperPaymasterSponsorship(
         minPostOpGas,
         verificationGasFloor: generation === 'v5.5' ? SUPER_PAYMASTER_V55_VERIFICATION_GAS_FLOOR : 0n,
     };
+}
+
+/**
+ * `SuperPaymasterStorage.VALIDATION_BUFFER_BPS` (internal constant, SuperPaymasterStorage.sol:209 at
+ * v5.5.0-rc.4). Not readable on chain, so it is pinned here; check:sp550-abis re-pins the tag.
+ */
+export const SUPER_PAYMASTER_VALIDATION_BUFFER_BPS = 1000n;
+
+const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
+
+/** EntryPoint v0.7 `maxCost` (requiredPrefund): every gas limit of the op times maxFeePerGas. */
+export function userOpMaxCostV07(op: {
+    verificationGasLimit: bigint;
+    callGasLimit: bigint;
+    paymasterVerificationGasLimit: bigint;
+    paymasterPostOpGasLimit: bigint;
+    preVerificationGas: bigint;
+    maxFeePerGas: bigint;
+}): bigint {
+    return (op.verificationGasLimit + op.callGasLimit + op.paymasterVerificationGasLimit
+        + op.paymasterPostOpGasLimit + op.preVerificationGas) * op.maxFeePerGas;
+}
+
+export type SpRenewDecision = {
+    spRenew: boolean;
+    /** The reservation SP 5.5.0 will ask the token for (`aPNTsAmount`, aPNTs), as computed by the SDK. */
+    a0?: bigint;
+    /** previewLock result without / with the renewal (XPNTS_V2_LOCK_RESULT names). */
+    plain?: string;
+    renewed?: string;
+    reason: string;
+};
+
+/**
+ * Whether a SuperPaymaster 5.5.0 op should carry SUPER_PAYMASTER_FLAGS.SP_RENEW: only when it is
+ * NEEDED (the auto allowance cannot cover a0 without it) and ALLOWED (the token would accept it).
+ * Both answers come from the token's own decision, `xPNTsTokenV2.previewLock`, the read-only mirror
+ * of the `tryLockForGas` call SP makes in validation (xPNTsTokenV2.sol:190-222 at v5.5.0-rc.4):
+ *
+ * - plain = previewLock(sp, user, h, a0, false). OK → no flag (renewing would spend the single K
+ *   for nothing). Anything but INSUFFICIENT → no flag (renewal cannot fix it).
+ * - renewed = previewLock(…, true). OK → flag. INVALID_RENEWAL (mode ≠ MODE_SP_K, K used, a live
+ *   lock or credit reservation) or INSUFFICIENT (the balance, not the allowance, is short) → no flag;
+ *   SP then tries credit, as it would without the flag.
+ *
+ * a0 mirrors SuperPaymaster.sol:305-310 (`_calculateAPNTsAmount(maxCost)` × (1 + fee + buffer),
+ * both roundings up) from the same reads SP makes. It is the reservation for THIS op's gas limits
+ * and fee: call it again whenever they change. A keeper price update between this read and
+ * inclusion moves a0; the decision is then off only if the remaining allowance sits within that move.
+ *
+ * Any read failure → no flag (the behaviour before this existed).
+ */
+export async function decideSuperPaymasterSpRenew(
+    client: any,
+    args: { superPaymaster: Address; token: Address; user: Address; maxCost: bigint },
+): Promise<SpRenewDecision> {
+    const { superPaymaster, token, user, maxCost } = args;
+    try {
+        const read = (functionName: string) =>
+            client.readContract({ address: superPaymaster, abi: SuperPaymasterV550ABI, functionName }) as Promise<any>;
+        const [cache, aPNTsPriceUSD, feeBps] = await Promise.all([read('cachedPrice'), read('aPNTsPriceUSD'), read('protocolFeeBPS')]);
+        const price = BigInt(cache?.price ?? cache?.[0]);
+        const decimals = BigInt(cache?.decimals ?? cache?.[3]);
+        if (price <= 0n) return { spRenew: false, reason: 'cachedPrice <= 0 (SP would revert OracleError)' };
+        const base = ceilDiv(maxCost * price * 10n ** 18n, 10n ** decimals * BigInt(aPNTsPriceUSD));
+        const a0 = ceilDiv(base * (10_000n + BigInt(feeBps) + SUPER_PAYMASTER_VALIDATION_BUFFER_BPS), 10_000n);
+        // opHash only feeds the CONFLICTING_LOCK check, and the real hash depends on the flag being
+        // decided; no lock can exist under the zero hash.
+        const h = ('0x' + '00'.repeat(32)) as Hex;
+        const preview = async (spRenew: boolean) => {
+            const r = (await client.readContract({
+                address: token, abi: xPNTsTokenV2ABI, functionName: 'previewLock', args: [superPaymaster, user, h, a0, spRenew],
+            })) as readonly [number | bigint, bigint];
+            return XPNTS_V2_LOCK_RESULT[Number(r[0])] ?? `UNKNOWN(${r[0]})`;
+        };
+        const plain = await preview(false);
+        if (plain === 'OK') return { spRenew: false, a0, plain, reason: 'the auto allowance covers a0' };
+        if (plain !== 'INSUFFICIENT') return { spRenew: false, a0, plain, reason: `${plain}: a renewal would not change it` };
+        const renewed = await preview(true);
+        if (renewed === 'OK') return { spRenew: true, a0, plain, renewed, reason: 'allowance exhausted; the inline renewal is allowed' };
+        return { spRenew: false, a0, plain, renewed, reason: `inline renewal not possible (${renewed})` };
+    } catch (e: any) {
+        return { spRenew: false, reason: `read failed: ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 120)}` };
+    }
 }
 
 /** Raise `value` to `floor` (never lowers a caller's limit). */

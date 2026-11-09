@@ -1,8 +1,8 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters } from 'viem';
-import { type PublicClient, EntryPointABI } from '@aastar/core';
+import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
-import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
+import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 
 /** Options of PaymasterClient.submitGaslessUserOperation. */
 export type SubmitGaslessOptions = {
@@ -19,15 +19,23 @@ export type SubmitGaslessOptions = {
     paymasterPostOpGasLimit?: bigint;
     factory?: Address;
     factoryData?: Hex;
-    /** SuperPaymaster 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS). Leave unset unless you know the renewal preconditions hold. */
+    /**
+     * SuperPaymaster 5.5.0 flags byte (SUPER_PAYMASTER_FLAGS). When set, it is used as is. When
+     * unset, SP_RENEW is added only when decideSuperPaymasterSpRenew says the op needs it and the
+     * token allows it (see superPaymasterAutoRenew).
+     */
     superPaymasterFlags?: number;
+    /**
+     * 5.5.0, superPaymasterFlags unset: decide SP_RENEW per op from the token's previewLock
+     * (default true). false = never set it (flags 0, the behaviour before this option existed).
+     */
+    superPaymasterAutoRenew?: boolean;
     /** Override the SDK's 5.5.0 paymasterVerificationGasLimit floor (default: spec §3.2 draft, 250k). */
     superPaymasterVerificationGasFloor?: bigint;
     /**
-     * Adjust the bundler estimate before it is used. Callers that tune limits must pass this
-     * instead of estimating themselves: the estimation request carries a real signature over the
-     * real nonce, so it has to run INSIDE submit, after the 5.5.0 in-flight slot is reserved.
-     * Explicit limits in these options still win over anything returned here.
+     * Adjust the bundler estimate before it is used, so a caller that tunes limits needs no
+     * estimation round-trip of its own. Explicit limits in these options still win over anything
+     * returned here.
      */
     tuneEstimate?: (est: GasEstimate) => Partial<GasEstimate>;
 };
@@ -134,6 +142,25 @@ export class PaymasterClient {
     ): Promise<`0x${string}`> {
         const raw = (await wallet.account.signMessage({ message: { raw: userOpHash } })) as `0x${string}`;
         return airAccountSig ? (`0x02${raw.slice(2)}` as `0x${string}`) : raw;
+    }
+
+    /**
+     * Estimation signature: r = 0xff…f0…0, s = 0x7aa…a (low half), v = 28. ecrecover yields SOME
+     * address for any hash, so the account runs its whole ECDSA check and returns
+     * SIG_VALIDATION_FAILED instead of reverting (OpenZeppelin ECDSA.recover reverts only on an
+     * unrecoverable or high-s signature). Same length and algId prefix as signUserOpHash's output.
+     */
+    static dummySignature(airAccountSig?: boolean): `0x${string}` {
+        const raw = 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c';
+        return (`0x${airAccountSig ? '02' : ''}${raw}`) as `0x${string}`;
+    }
+
+    /** 5.5.0 and flags left to the SDK: SP_RENEW is decided per op (decideSuperPaymasterSpRenew). */
+    private static autoRenewApplies(
+        sp: SuperPaymasterSponsorshipContext,
+        options: { superPaymasterFlags?: number; superPaymasterAutoRenew?: boolean }
+    ): boolean {
+        return sp.generation === 'v5.5' && options.superPaymasterFlags === undefined && options.superPaymasterAutoRenew !== false;
     }
 
     private static makePlaceholderSignature(byteLength: number): `0x${string}` {
@@ -243,9 +270,9 @@ export class PaymasterClient {
             factoryData?: Hex;
             /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
             superPaymasterFlags?: number;
-        },
-        /** @internal submitGaslessUserOperation's in-flight handle; see the exposure note below. */
-        guard?: InflightGuardControl
+            /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
+            superPaymasterAutoRenew?: boolean;
+        }
     ) {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
@@ -304,15 +331,17 @@ export class PaymasterClient {
         
         // 1. Construct a dummy UserOp for estimation
         let paymasterAndData: Hex;
+        let estSp: { ctx: SuperPaymasterSponsorshipContext; pmVerificationGas: bigint; pmPostOpGas: bigint } | undefined;
         
         if (options?.operator) {
              // Always carry the operator's token: REQUIRED by 5.5.0, ignored by 5.4.2 (see
              // @aastar/core encodeSuperPaymasterData). Estimating with a 104-byte layout against
              // 5.5.0 would sigFail and produce no estimate at all.
              const sp = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
+             estSp = { ctx: sp, pmVerificationGas: atLeast(300000n, sp.verificationGasFloor), pmPostOpGas: atLeast(300000n, sp.minPostOpGas) };
              paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
-                verificationGasLimit: atLeast(300000n, sp.verificationGasFloor),
-                postOpGasLimit: atLeast(300000n, sp.minPostOpGas),
+                verificationGasLimit: estSp.pmVerificationGas,
+                postOpGasLimit: estSp.pmPostOpGas,
                 token: sp.token,
                 flags: options.superPaymasterFlags
              });
@@ -378,8 +407,31 @@ export class PaymasterClient {
 
         partialUserOp.preVerificationGas = (PaymasterClient.estimatePreVerificationGasV07(partialUserOp) * 120n) / 100n + 5000n;
 
-        const userOpHash = getUserOpHashV07(partialUserOp, entryPoint, BigInt(client.chain.id));
-        partialUserOp.signature = await PaymasterClient.signUserOpHash(wallet, userOpHash, options?.airAccountSig);
+        // A user whose auto allowance is used up only passes 5.5.0 validation with SP_RENEW, so the
+        // estimation op needs the same decision (for its own, larger, limits) or it gets no estimate.
+        if (estSp && options?.operator && PaymasterClient.autoRenewApplies(estSp.ctx, options)) {
+            const d = await decideSuperPaymasterSpRenew(client, {
+                superPaymaster: paymasterAddress, token: estSp.ctx.token, user: aaAddress,
+                maxCost: userOpMaxCostV07({
+                    verificationGasLimit: 250000n, callGasLimit: 500000n,
+                    paymasterVerificationGasLimit: estSp.pmVerificationGas, paymasterPostOpGasLimit: estSp.pmPostOpGas,
+                    preVerificationGas: partialUserOp.preVerificationGas, maxFeePerGas,
+                }),
+            });
+            if (d.spRenew) {
+                // Same length as the flags-0 layout, so preVerificationGas above still holds.
+                partialUserOp.paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
+                    verificationGasLimit: estSp.pmVerificationGas, postOpGasLimit: estSp.pmPostOpGas,
+                    token: estSp.ctx.token, flags: SUPER_PAYMASTER_FLAGS.SP_RENEW,
+                });
+            }
+        }
+
+        // Estimation never asks the signer: a dummy in the shape of the real signature. The
+        // account rejects it (returns SIG_VALIDATION_FAILED; AirAccount and SimpleAccount never
+        // revert on a recoverable, low-s signature), the bundler still simulates the full
+        // validation and execution, and the op it receives can never be executed.
+        partialUserOp.signature = PaymasterClient.dummySignature(options?.airAccountSig);
 
         const payload = {
             jsonrpc: '2.0',
@@ -388,9 +440,8 @@ export class PaymasterClient {
             params: [formatUserOpV07(partialUserOp), entryPoint]
         };
 
-        // The payload carries a REAL signature over the real nonce: once it leaves, the bundler
-        // holds an executable op. Until a JSON-RPC answer is parsed, a failure is ambiguous.
-        if (guard) guard.inSend = true;
+        // The payload carries only the dummy signature, so a lost answer is not ambiguous: the
+        // bundler cannot hold an executable op from it.
         const response = await fetch(bundlerUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -399,9 +450,8 @@ export class PaymasterClient {
 
         const result = await response.json();
         assertJsonRpcAnswer(result, 'eth_estimateUserOperationGas');
-        if (guard) guard.inSend = false;
         
-        // Debug logging for Candide. The request is NOT logged: it is a signed, executable op.
+        // Debug logging for Candide.
         if (bundlerUrl.includes('candide')) {
             console.log('[PaymasterClient] Candide Response:', JSON.stringify(result, null, 2));
         }
@@ -508,9 +558,9 @@ export class PaymasterClient {
                 console.warn(`[PaymasterClient] token ${token} ignored for SuperPaymaster; using operators(${options.operator}).xPNTsToken = ${spCtx.token}`);
             }
             if (spCtx.generation === 'v5.5') {
-                // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before ANY signature:
-                // the estimation step below signs a complete op on the real nonce and hands it to the
-                // bundler, which could submit it — so a caller that loses this race must sign nothing.
+                // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before the signature,
+                // so a caller that loses this race signs nothing. (Estimation below uses a dummy
+                // signature and asks the signer nothing.)
                 guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
             }
         }
@@ -532,10 +582,10 @@ export class PaymasterClient {
                     operator: options?.operator,
                     factory: options?.factory,
                     factoryData: options?.factoryData,
-                    airAccountSig: options?.airAccountSig, // forward so internal estimate signs in the same format (#115 H-1)
-                    superPaymasterFlags: options?.superPaymasterFlags
-                },
-                guard
+                    airAccountSig: options?.airAccountSig, // forward so the estimation dummy has the same format (#115 H-1)
+                    superPaymasterFlags: options?.superPaymasterFlags,
+                    superPaymasterAutoRenew: options?.superPaymasterAutoRenew
+                }
             );
             const tuned = options?.tuneEstimate?.(est) ?? {};
             gasLimits.preVerificationGas = options?.preVerificationGas ?? tuned.preVerificationGas ?? est.preVerificationGas;
@@ -663,10 +713,38 @@ export class PaymasterClient {
         */
 
 
+        // 3.5 SP 5.5.0 inline renewal: decided for THIS op's limits and fee, and again before every
+        // re-sign below (a fee or preVerificationGas bump raises maxCost, hence a0).
+        const autoRenew = !!(options?.operator && spCtx && PaymasterClient.autoRenewApplies(spCtx, options));
+        const refreshSpRenew = async () => {
+            if (!autoRenew || !options?.operator || !spCtx) return;
+            const d = await decideSuperPaymasterSpRenew(client, {
+                superPaymaster: paymasterAddress, token: spCtx.token, user: aaAddress,
+                maxCost: userOpMaxCostV07({
+                    verificationGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(2, 34)),
+                    callGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(34)),
+                    paymasterVerificationGasLimit: gasLimits.paymasterVerificationGasLimit!,
+                    paymasterPostOpGasLimit: gasLimits.paymasterPostOpGasLimit!,
+                    preVerificationGas: BigInt(userOp.preVerificationGas),
+                    maxFeePerGas: BigInt('0x' + userOp.gasFees.slice(34)),
+                }),
+            });
+            if (d.spRenew) console.log(`[PaymasterClient] SP_RENEW set: ${d.reason} (a0=${d.a0})`);
+            userOp.paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit!,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit!,
+                token: spCtx.token,
+                flags: d.spRenew ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0
+            });
+        };
+        const resign = async () => {
+            await refreshSpRenew();
+            const h = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
+            userOp.signature = await PaymasterClient.signUserOpHash(wallet, h, options?.airAccountSig);
+        };
+
         // 4. Final Hashing and Signing
-        const userOpHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-        const signature = await PaymasterClient.signUserOpHash(wallet, userOpHash, options?.airAccountSig);
-        userOp.signature = signature;
+        await resign();
 
 
         // 6. Submit to Bundler (Unified JSON-RPC)
@@ -727,8 +805,7 @@ export class PaymasterClient {
                      ]) as Hex;
 
                      // Re-Sign
-                     const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                     userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
+                     await resign();
                      
                      continue; // Retry
                 }
@@ -776,8 +853,7 @@ export class PaymasterClient {
                     ]) as Hex;
 
                     // Re-Sign
-                    const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                    userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
+                    await resign();
                     
                     continue; // Retry
                 }
@@ -798,8 +874,7 @@ export class PaymasterClient {
                         
                         // Update PVG and re-sign
                         userOp.preVerificationGas = bufferedPVG;
-                        const newHash = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
-                        userOp.signature = await PaymasterClient.signUserOpHash(wallet, newHash, options?.airAccountSig);
+                        await resign();
                         
                         continue; // Retry
                     }

@@ -29,7 +29,16 @@ type WriteContract = (args: any) => Promise<Hex>;
  * Each submit() runs with its OWN wallet (distinct key → distinct signatures), so signatures and
  * requests can be attributed to the call that produced them. All share one stubbed bundler.
  */
-function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?: WriteContract; transport?: { type?: string } } = {}) {
+function harness(
+    bundler: Bundler,
+    opts: {
+        signDelayMs?: number;
+        writeContract?: WriteContract;
+        transport?: { type?: string };
+        /** Answers a readContract first; return undefined to fall through to the defaults. */
+        readContract?: (functionName: string, args: readonly any[] | undefined) => unknown;
+    } = {},
+) {
     const signs: Hex[][] = [];
     const makeWallet = (idx: number) => {
         const base = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 3 + idx });
@@ -55,7 +64,9 @@ function harness(bundler: Bundler, opts: { signDelayMs?: number; writeContract?:
         getChainId: async () => 11155111,
         estimateFeesPerGas: async () => ({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n }),
         getGasPrice: async () => 1_000_000_000n,
-        readContract: async ({ functionName }: { functionName: string }) => {
+        readContract: async ({ functionName, args }: { functionName: string; args?: readonly any[] }) => {
+            const own = opts.readContract?.(functionName, args);
+            if (own !== undefined) return own;
             switch (functionName) {
                 case 'getNonce': return 7n;
                 case 'version': return 'SuperPaymaster-5.5.0';
@@ -130,9 +141,8 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
     const okBundler: Bundler = async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH });
 
     it('two truly concurrent submissions for one sender: the loser signs nothing and sends nothing', async () => {
-        // The estimation step signs a complete op on the real nonce and sends it to the bundler, so
-        // the slot must be taken before it: counting only eth_sendUserOperation would miss a loser
-        // that had already handed the bundler a valid signature via eth_estimateUserOperationGas.
+        // The slot is taken before anything is signed. Estimation carries only the dummy signature,
+        // so every REAL signature the bundler saw must be the winner's.
         const { submit, calls, signs } = harness(okBundler, { signDelayMs: 20 });
         const results = await Promise.allSettled([submit({}, 0), submit({}, 1)]);
         const winner = results.findIndex((r) => r.status === 'fulfilled');
@@ -142,8 +152,10 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         expect(String((results[loser] as PromiseRejectedResult).reason?.message)).toMatch(/one in-flight sponsored op per sender/);
         expect(signs[loser] ?? []).toHaveLength(0);
         expect(signs[winner].length).toBeGreaterThan(0);
-        // Every signed request the bundler saw carries the winner's signature.
-        const signed = calls.filter((c) => c.signature && c.signature !== '0x');
+        for (const c of calls.filter((c) => c.method === 'eth_estimateUserOperationGas')) {
+            expect(c.signature).toBe(PaymasterClient.dummySignature());
+        }
+        const signed = calls.filter((c) => c.method === 'eth_sendUserOperation');
         expect(signed.length).toBeGreaterThan(0);
         for (const c of signed) expect(signs[winner]).toContain(c.signature);
         expect(calls.filter((c) => c.method === 'eth_sendUserOperation')).toHaveLength(1);
@@ -157,7 +169,7 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         expect(winner).not.toBe(-1);
         expect(loser).not.toBe(-1);
         expect(signs[loser] ?? []).toHaveLength(0);
-        for (const c of calls.filter((c) => c.signature && c.signature !== '0x')) expect(signs[winner]).toContain(c.signature);
+        for (const c of calls.filter((c) => c.method === 'eth_sendUserOperation')) expect(signs[winner]).toContain(c.signature);
     });
 
     it('tuneEstimate adjusts the bundler estimate; explicit limits still win', async () => {
@@ -242,10 +254,39 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
     });
 });
 
-describe('PaymasterClient × SP 5.5.0: the signed estimation request is an exposure', () => {
-    // eth_estimateUserOperationGas carries a real signature over the real nonce, so once it has
-    // left, only a parsed JSON-RPC answer tells us the bundler did not keep an executable op.
-    it('transport failure during estimation → slot kept', async () => {
+describe('PaymasterClient: estimation asks the signer nothing', () => {
+    // DSR request 2: a real signature at estimation time is a second wallet prompt for a KMS or
+    // passkey signer. The estimation op carries a dummy in the real signature's shape instead.
+    it('one op = one signMessage, and the estimation op carries the dummy, not a signature', async () => {
+        const { submit, calls, signs } = harness(async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }));
+        await submit();
+        expect(signs[0]).toHaveLength(1);
+        expect(calls.map((c) => c.method)).toEqual(['eth_estimateUserOperationGas', 'eth_sendUserOperation']);
+        expect(calls[0].signature).toBe(PaymasterClient.dummySignature());
+        expect(calls[1].signature).toBe(signs[0][0]);
+    });
+
+    it('airAccountSig: the dummy has the same [0x02] prefix and length as the real signature', async () => {
+        const { submit, calls, signs } = harness(async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }));
+        await submit({ airAccountSig: true });
+        expect(calls[0].signature).toBe(PaymasterClient.dummySignature(true));
+        expect(calls[0].signature!.slice(0, 4)).toBe('0x02');
+        expect(calls[0].signature!.length).toBe(calls[1].signature!.length);
+        expect(signs[0]).toHaveLength(1);
+    });
+
+    it('the dummy is a recoverable low-s ECDSA signature (so accounts return SIG_VALIDATION_FAILED, not revert)', async () => {
+        const { recoverAddress, keccak256, toHex } = await import('viem');
+        const sig = PaymasterClient.dummySignature();
+        expect(sig.length).toBe(2 + 65 * 2);
+        const s = BigInt('0x' + sig.slice(66, 130));
+        expect(s <= 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0n).toBe(true);
+        for (let i = 0; i < 4; i++) {
+            await expect(recoverAddress({ hash: keccak256(toHex(i)), signature: sig })).resolves.toMatch(/^0x[0-9a-fA-F]{40}$/);
+        }
+    });
+
+    it('transport failure during estimation → slot released (the request held no executable op)', async () => {
         let drop = true;
         const { submit } = harness(async (method) => {
             if (method === 'eth_estimateUserOperationGas' && drop) throw new TypeError('fetch failed');
@@ -253,7 +294,7 @@ describe('PaymasterClient × SP 5.5.0: the signed estimation request is an expos
         });
         await expect(submit()).rejects.toThrow(/fetch failed/);
         drop = false;
-        await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+        await expect(submit()).resolves.toBe(OP_HASH);
     });
 
     it('estimation answered with a JSON-RPC error → slot released', async () => {
@@ -284,11 +325,18 @@ describe('PaymasterClient × SP 5.5.0: a parseable but non-JSON-RPC answer is no
         return { ...h, stopGateway: () => { gateway = false; } };
     }
 
-    it.each(['eth_estimateUserOperationGas', 'eth_sendUserOperation'])('%s answered with a gateway body → throws, slot kept', async (method) => {
-        const { submit, stopGateway } = gatewayHarness(method);
+    it('eth_sendUserOperation answered with a gateway body → throws, slot kept', async () => {
+        const { submit, stopGateway } = gatewayHarness('eth_sendUserOperation');
         await expect(submit()).rejects.toThrow(/non-JSON-RPC answer/);
         stopGateway();
         await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
+    });
+
+    it('eth_estimateUserOperationGas answered with a gateway body → throws, slot released (dummy signature only)', async () => {
+        const { submit, stopGateway } = gatewayHarness('eth_estimateUserOperationGas');
+        await expect(submit()).rejects.toThrow(/non-JSON-RPC answer/);
+        stopGateway();
+        await expect(submit()).resolves.toBe(OP_HASH);
     });
 });
 
@@ -522,5 +570,189 @@ describe('SuperPaymasterInflightGuard.reserve', () => {
         SuperPaymasterInflightGuard.record(31337, EP, SENDER, 5n, '0xabc');
         release();
         expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 5n)).toThrow(/one in-flight/);
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op', () => {
+    // A model of the chain: SuperPaymaster's a0 (SuperPaymaster.sol:305-310 at v5.5.0-rc.4) and the
+    // token's _lockDecision (xPNTsTokenV2.sol:190-214), written here independently of the SDK. The
+    // bundler stub applies the lock exactly as validation would, so an SDK whose flag or a0 is wrong
+    // gets AA34 instead of a receipt.
+    const PRICE = 3000n * 10n ** 8n;
+    const DECIMALS = 8;
+    const APNTS_PRICE_USD = 2n * 10n ** 16n; // $0.02
+    const FEE_BPS = 1000n;
+    const BUFFER_BPS = 1000n;
+    const K = 1;
+    const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
+    const a0Of = (op: any) => {
+        const maxCost = (BigInt(op.verificationGasLimit) + BigInt(op.callGasLimit) + BigInt(op.paymasterVerificationGasLimit)
+            + BigInt(op.paymasterPostOpGasLimit) + BigInt(op.preVerificationGas)) * BigInt(op.maxFeePerGas);
+        const base = ceil(maxCost * PRICE * 10n ** 18n, 10n ** BigInt(DECIMALS) * APNTS_PRICE_USD);
+        return ceil(base * (10_000n + FEE_BPS + BUFFER_BPS), 10_000n);
+    };
+    const LOCK = { OK: 0, INSUFFICIENT: 1, INVALID_RENEWAL: 4 };
+
+    function chain(init: { cap: bigint; used: bigint; balanceShort?: boolean; renewalMode?: number }) {
+        const tok = { cap: init.cap, used: init.used, autoRenewUsed: 0, renewalMode: init.renewalMode ?? 0, lockedOf: 0n, credit: 0n };
+        const decide = (a0: bigint, spRenew: boolean) => {
+            if (spRenew && (tok.renewalMode !== 0 || tok.autoRenewUsed >= K || tok.lockedOf !== 0n || tok.credit !== 0n)) return LOCK.INVALID_RENEWAL;
+            const used = spRenew ? 0n : tok.used;
+            if (tok.cap - used < a0) return LOCK.INSUFFICIENT;
+            if (init.balanceShort) return LOCK.INSUFFICIENT;
+            return LOCK.OK;
+        };
+        const previews: { a0: bigint; spRenew: boolean }[] = [];
+        const readContract = (fn: string, args: readonly any[] | undefined) => {
+            switch (fn) {
+                case 'cachedPrice': return { price: PRICE, updatedAt: 0n, roundId: 0n, decimals: DECIMALS };
+                case 'aPNTsPriceUSD': return APNTS_PRICE_USD;
+                case 'protocolFeeBPS': return FEE_BPS;
+                case 'previewLock': {
+                    const [, , , a0, spRenew] = args!;
+                    previews.push({ a0, spRenew });
+                    return [decide(a0, spRenew), 0n];
+                }
+                default: return undefined;
+            }
+        };
+        const sent: { flags?: number; a0: bigint }[] = [];
+        const bundler: Bundler = async (method, op) => {
+            const spRenew = flagsOf(op) === SUPER_PAYMASTER_FLAGS.SP_RENEW;
+            const a0 = a0Of(op);
+            // No credit in this model: anything but OK is SP's sigFail.
+            if (decide(a0, spRenew) !== LOCK.OK) return { error: { code: -32500, message: 'AA34 signature error' } };
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (spRenew) { tok.autoRenewUsed += 1; tok.used = 0n; }
+            tok.used += a0;
+            sent.push({ flags: flagsOf(op), a0 });
+            return { result: OP_HASH };
+        };
+        /** The user's own renewForSelf(sp): resets the epoch and the K counter (xPNTsV2Base.sol:300-307). */
+        const renewForSelf = () => { tok.used = 0n; tok.autoRenewUsed = 0; };
+        const exhaust = () => { tok.used = tok.cap; };
+        return { tok, readContract, bundler, sent, previews, renewForSelf, exhaust };
+    }
+    const CAP = 10n ** 30n; // large: room for several ops; `exhaust()` empties it
+
+    /** Each op mines before the next one: drop the in-flight record the way a receipt would. */
+    const mined = () => SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
+
+    it('exhausted epoch → inline renewal; K used → no flag, refused; explicit renewal → plain ops again', async () => {
+        const c = chain({ cap: CAP, used: 0n });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+
+        // 1. Room left: no flag (renewing now would waste the single K).
+        await expect(submit()).resolves.toBe(OP_HASH); mined();
+        expect(c.sent.at(-1)!.flags).toBe(0);
+        expect(c.tok.autoRenewUsed).toBe(0);
+
+        // 2. Epoch exhausted: SP_RENEW on both estimation and submission; K is spent once.
+        c.exhaust();
+        await expect(submit()).resolves.toBe(OP_HASH); mined();
+        expect(calls.slice(-2).map((x) => [x.method, x.flags])).toEqual([
+            ['eth_estimateUserOperationGas', SUPER_PAYMASTER_FLAGS.SP_RENEW],
+            ['eth_sendUserOperation', SUPER_PAYMASTER_FLAGS.SP_RENEW],
+        ]);
+        expect(c.tok.autoRenewUsed).toBe(1);
+
+        // 3. Right after the renewal there is room again: no flag.
+        await expect(submit()).resolves.toBe(OP_HASH); mined();
+        expect(c.sent.at(-1)!.flags).toBe(0);
+
+        // 4. Exhausted again with K used: the flag would be INVALID_RENEWAL, so it is not sent; with
+        //    no credit the op is refused (estimation AA34) and nothing is signed for it.
+        c.exhaust();
+        const sentBefore = c.sent.length;
+        await expect(submit()).rejects.toThrow(/AA34/);
+        expect(calls.at(-1)!.flags).toBe(0);
+        expect(c.sent.length).toBe(sentBefore);
+
+        // 5. The user's explicit renewForSelf restores the epoch: plain op, K counter back at 0.
+        c.renewForSelf();
+        await expect(submit()).resolves.toBe(OP_HASH); mined();
+        expect(c.sent.at(-1)!.flags).toBe(0);
+
+        // 6. And the next exhaustion can be renewed inline again.
+        c.exhaust();
+        await expect(submit()).resolves.toBe(OP_HASH); mined();
+        expect(c.sent.at(-1)!.flags).toBe(SUPER_PAYMASTER_FLAGS.SP_RENEW);
+        expect(c.sent.map((x) => x.flags)).toEqual([0, SUPER_PAYMASTER_FLAGS.SP_RENEW, 0, 0, SUPER_PAYMASTER_FLAGS.SP_RENEW]);
+    });
+
+    it('the a0 the SDK previews is the a0 SP reserves for the submitted op', async () => {
+        const c = chain({ cap: CAP, used: 0n });
+        const { submit } = harness(c.bundler, { readContract: c.readContract });
+        await submit();
+        // Last preview before the send is the final op's (the estimation op's limits are larger).
+        expect(c.previews.at(-1)!.a0).toBe(c.sent[0].a0);
+        expect(c.previews[0].a0).toBeGreaterThan(c.sent[0].a0);
+    });
+
+    it('remaining allowance between the final a0 and a0 + 1: decided on the exact a0, not a margin', async () => {
+        // Find the final op's a0, then leave exactly that much: no flag. One less: flag.
+        const probe = chain({ cap: CAP, used: 0n });
+        await harness(probe.bundler, { readContract: probe.readContract }).submit();
+        const a0 = probe.sent[0].a0;
+        SuperPaymasterInflightGuard.clearAll();
+
+        const exact = chain({ cap: CAP, used: CAP - a0 });
+        // Estimation needs its own (larger) a0, so it renews; the submission does not need to.
+        await harness(exact.bundler, { readContract: exact.readContract }).submit();
+        expect(exact.sent[0].flags).toBe(0);
+        SuperPaymasterInflightGuard.clearAll();
+
+        const short = chain({ cap: CAP, used: CAP - a0 + 1n });
+        await harness(short.bundler, { readContract: short.readContract }).submit();
+        expect(short.sent[0].flags).toBe(SUPER_PAYMASTER_FLAGS.SP_RENEW);
+    });
+
+    it('balance (not allowance) short: no flag — a renewal cannot fix it', async () => {
+        const c = chain({ cap: CAP, used: CAP, balanceShort: true });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+        await expect(submit()).rejects.toThrow(/AA34/);
+        expect(calls.every((x) => x.flags === 0)).toBe(true);
+        expect(c.tok.autoRenewUsed).toBe(0);
+    });
+
+    it('renewalMode is not MODE_SP_K: no flag', async () => {
+        const c = chain({ cap: CAP, used: CAP, renewalMode: 1 });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+        await expect(submit()).rejects.toThrow(/AA34/);
+        expect(calls.every((x) => x.flags === 0)).toBe(true);
+    });
+
+    it('superPaymasterAutoRenew: false → never sets the flag', async () => {
+        const c = chain({ cap: CAP, used: CAP });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+        await expect(submit({ superPaymasterAutoRenew: false })).rejects.toThrow(/AA34/);
+        expect(calls.every((x) => x.flags === 0)).toBe(true);
+        expect(c.previews).toHaveLength(0);
+    });
+
+    it('an explicit superPaymasterFlags wins: no previewLock reads', async () => {
+        const c = chain({ cap: CAP, used: 0n });
+        const { submit } = harness(c.bundler, { readContract: c.readContract });
+        await submit({ superPaymasterFlags: 0 });
+        expect(c.previews).toHaveLength(0);
+    });
+
+    it('a fee bump after "replacement underpriced" re-decides on the larger a0', async () => {
+        let underpriced = true;
+        const c = chain({ cap: CAP, used: 0n });
+        const bundler: Bundler = async (method, op) => {
+            if (method === 'eth_sendUserOperation' && underpriced) {
+                underpriced = false;
+                return { error: { code: -32602, message: 'replacement underpriced' } };
+            }
+            return c.bundler(method, op);
+        };
+        const { submit } = harness(bundler, { readContract: c.readContract });
+        await submit();
+        const finals = c.previews.filter((p) => !p.spRenew).map((p) => p.a0);
+        // estimation, first sign, re-sign after the 15% bump
+        expect(finals).toHaveLength(3);
+        expect(finals[2]).toBeGreaterThan(finals[1]);
+        expect(c.sent[0].a0).toBe(finals[2]);
     });
 });
