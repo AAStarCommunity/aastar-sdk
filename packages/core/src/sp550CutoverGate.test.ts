@@ -34,21 +34,36 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${p.tokenImpl}.EXTENSION`]: p.ext, [`${p.tokenImpl}.PROTOCOL_REGISTRY`]: p.aoa,
         [`${p.lens}.EXPECTED_SP_VERSION`]: keccak256(toHex('SuperPaymaster-5.5.0')),
     };
-    return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined };
+    return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined,
+        /** Per-address code overrides ('0x' = no code); default codeOf(address). */
+        code: {} as Record<string, Hex> };
 }
 
 type Model = ReturnType<typeof deployment>;
 
+const IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
+
+/** A mocked RPC over model `m`. State reads must name the snapshot block (HEAD) — a read without it throws. */
 function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
     const log = (s: string) => calls.push(`${label}:${s}`);
+    const atSnapshot = (what: string, blockNumber: unknown) => {
+        if (blockNumber !== HEAD) throw new Error(`${label} ${what}: read not pinned to the snapshot block (got ${String(blockNumber)})`);
+    };
     const client: GateClient = {
         getChainId: async () => { log('getChainId'); return m.chainId; },
         getBlockNumber: async () => { log('getBlockNumber'); return HEAD; },
         getBlock: (async ({ blockNumber }: any) => { log('getBlock'); return { number: m.servedBlock ?? blockNumber, hash: m.blockHash }; }) as any,
-        getStorageAt: (async () => { log('getStorageAt'); return m.slot; }) as any,
-        getCode: (async ({ address }: any) => { log('getCode'); return codeOf(address); }) as any,
-        readContract: (async ({ address, functionName }: any) => {
-            log(`read ${functionName}`);
+        getStorageAt: (async ({ slot, blockNumber }: any) => {
+            log('getStorageAt'); atSnapshot('getStorageAt', blockNumber);
+            if (slot !== IMPL_SLOT) throw new Error(`unexpected slot ${slot}`);
+            return m.slot;
+        }) as any,
+        getCode: (async ({ address, blockNumber }: any) => {
+            log('getCode'); atSnapshot('getCode', blockNumber);
+            return m.code[address] ?? codeOf(address);
+        }) as any,
+        readContract: (async ({ address, functionName, blockNumber }: any) => {
+            log(`read ${functionName}`); atSnapshot(`read ${functionName}`, blockNumber);
             const k = `${address}.${functionName}`;
             if (!(k in m.reads)) throw Object.assign(new Error('reverted'), { shortMessage: `no ${functionName}` });
             return m.reads[k];
@@ -153,6 +168,49 @@ describe('SP 5.5.0 cutover gate fails (exit 1) when the two RPCs disagree or the
         const r = await failed('op-sepolia', m, m2);
         expect(r.exitCode).toBe(1);
         expect(r.failed.some((c) => c.includes(`SP.${fn}()`))).toBe(true);
+    });
+});
+
+describe('SP 5.5.0 cutover gate: every pinned address is real, identical code', () => {
+    const failed = async (m: Model, m2: Model) => {
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m, m2), pins: m.pins });
+        return { exitCode: r.exitCode, failed: r.results.filter((c) => !c.ok).map((c) => c.check) };
+    };
+    it.each(['aoaProtocolRegistry', 'globalTierSource'])('a top-level pin with no code on either RPC (%s), though getters return it', async (k) => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        m.code[(m.pins as any)[k]] = '0x';
+        expect(await failed(m, structuredClone(m))).toEqual({ exitCode: 1, failed: [`${k} has the same non-empty code on every RPC`] });
+    });
+    it('the Lens has different code on RPC2 while EXPECTED_SP_VERSION agrees', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const m2 = structuredClone(m);
+        m2.code[m.p.lens] = '0x6080dead';
+        expect(await failed(m, m2)).toEqual({ exitCode: 1, failed: ['superPaymasterLens has the same non-empty code on every RPC'] });
+    });
+    it('each RPC self-consistent but different (code A + hash A vs code B + hash B): two DIVERGE results never compare equal', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const m2 = structuredClone(m);
+        m2.code[m.p.ext] = '0x6080beef';
+        m2.reads[`${m.p.factory}.extensionCodehash`] = keccak256('0x6080beef');
+        const r = await failed(m, m2);
+        expect(r.exitCode).toBe(1);
+        expect(r.failed).toEqual(expect.arrayContaining([
+            'factory.extensionCodehash() == keccak256(code(xPNTsTokenV2Ext))', 'xPNTsTokenV2Ext has the same non-empty code on every RPC',
+        ]));
+    });
+    it('the same for the implementation: RPC2 serves other impl code and reports nothing else differently', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const m2 = structuredClone(m);
+        m2.code[m.p.impl] = '0x6080cafe';
+        expect((await failed(m, m2)).failed).toEqual(expect.arrayContaining([
+            'keccak256(code(impl)) == pins.spImplCodehash', 'spImpl has the same non-empty code on every RPC',
+        ]));
+    });
+    it('upgrade mode checks the top-level pins too', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.code[m.p.aoa] = '0x';
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://a.example', m, [])], pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['aoaProtocolRegistry has the same non-empty code on every RPC']);
     });
 });
 

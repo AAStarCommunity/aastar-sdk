@@ -8,10 +8,12 @@
  *  3. snapshot: one block number, and with two RPCs a well-formed, identical block hash on both;
  *  4. pins: complete and well-formed for the network's mode, and no release hold;
  *  5. every state read (SP version, impl slot, wiring, code) is taken on EVERY RPC at the
- *     snapshot block; any disagreement between RPCs fails the check it feeds.
+ *     snapshot block. A disagreement between RPCs is a Diverge object, not a value: it is never
+ *     equal to anything (not even another Diverge), so it fails every check it feeds;
+ *  6. every pinned address (top-level and address book) has the same non-empty code on every RPC.
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
-import { getAddress, keccak256, toHex, type Address, type Hex, type PublicClient } from 'viem';
+import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import { APNTsCappedABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { SP550_CUTOVER_PINS, sp550PinProblems } from './sp550Cutover.js';
@@ -43,7 +45,12 @@ export function rpcEndpointKey(url: string): string {
     return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}${u.search}`;
 }
 
-const str = (v: unknown) => (typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
+/** RPCs disagreed on a read. Deliberately not a string: every comparison below requires strings. */
+class Diverge {
+    constructor(readonly detail: string) {}
+}
+
+const str = (v: unknown): string => (v instanceof Diverge ? v.detail : typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 
@@ -89,19 +96,19 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     if (hold) record('no release hold on this chain', false, hold);
 
     // 5. State reads on every RPC; a disagreement is returned as a DIVERGE string, which fails any comparison.
-    const agree = (vals: unknown[]) =>
-        vals.every((v) => str(v) === str(vals[0])) ? vals[0] : `DIVERGE ${vals.map((v, i) => `${rpcs[i].label}=${str(v)}`).join(' ')}`;
+    const agree = (vals: unknown[]): unknown =>
+        vals.every((v) => str(v) === str(vals[0])) ? vals[0] : new Diverge(`DIVERGE ${vals.map((v, i) => `${rpcs[i].label}=${str(v)}`).join(' ')}`);
     const read = async (address: Address | undefined, abi: any, functionName: string): Promise<any> => {
         if (!address) return '(unpinned address)';
         return agree(await Promise.all(rpcs.map((r) =>
             r.client.readContract({ address, abi, functionName, blockNumber } as any).catch((e: any) => `ERR ${e?.shortMessage ?? e?.message}`))));
     };
-    const codeHash = async (address?: Address): Promise<Hex | string | undefined> => {
+    const codeHash = async (address?: Address): Promise<unknown> => {
         if (!address) return undefined;
         return agree(await Promise.all(rpcs.map(async (r) => {
             const code = await r.client.getCode({ address, blockNumber });
             return code && code !== '0x' ? keccak256(code) : undefined;
-        }))) as Hex | string | undefined;
+        })));
     };
     const cmp = (check: string, observed: unknown, expected: unknown, what = 'pinned') =>
         record(check, eq(observed, expected), `observed ${str(observed)} · ${what} ${expected === undefined ? '(unpinned)' : str(expected)}`);
@@ -155,10 +162,19 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
         cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint, 'SDK book');
         cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed, 'SDK book');
-        for (const [k, a] of Object.entries(book)) {
-            const h = await codeHash(a as Address);
-            record(`addresses.${k} has the same code on every RPC`, typeof h === 'string' && HASH.test(h), `${a} · ${h ?? 'no code'}`);
-        }
+    }
+
+    // 5f. Every pinned address, top-level and address book, is real code and the same code on every RPC.
+    const pinnedAddresses: Record<string, unknown> = {
+        superPaymaster: pins.superPaymaster, spImpl: pins.spImpl, superPaymasterLens: pins.superPaymasterLens,
+        xPNTsFactoryV2: pins.xPNTsFactoryV2, xPNTsTokenV2Impl: pins.xPNTsTokenV2Impl, xPNTsTokenV2Ext: pins.xPNTsTokenV2Ext,
+        aoaProtocolRegistry: pins.aoaProtocolRegistry, globalTierSource: pins.globalTierSource, aPNTsCapped: pins.aPNTsCapped,
+        ...Object.fromEntries(Object.entries(pins.addresses ?? {}).map(([k, a]) => [`addresses.${k}`, a])),
+    };
+    for (const [k, a] of Object.entries(pinnedAddresses)) {
+        if (typeof a !== 'string') continue; // unpinned: already a failure in 'pins complete and well-formed'
+        const h = await codeHash(a as Address);
+        record(`${k} has the same non-empty code on every RPC`, typeof h === 'string' && HASH.test(h), `${a} · ${h === undefined ? 'no code' : str(h)}`);
     }
 
     // 6. The readback the pins came from is not in the future of this snapshot.
