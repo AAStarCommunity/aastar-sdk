@@ -107,6 +107,9 @@ export type SpRenewDecision = {
  * and fee: call it again whenever they change. A keeper price update between this read and
  * inclusion moves a0; the decision is then off only if the remaining allowance sits within that move.
  *
+ * Every read is pinned to one block, so the two previews and the price inputs describe the same
+ * state (an unpinned pair could straddle the user's own renewForSelf and spend K for nothing).
+ *
  * Any read failure → no flag (the behaviour before this existed).
  */
 export async function decideSuperPaymasterSpRenew(
@@ -115,8 +118,9 @@ export async function decideSuperPaymasterSpRenew(
 ): Promise<SpRenewDecision> {
     const { superPaymaster, token, user, maxCost } = args;
     try {
+        const blockNumber = BigInt(await client.getBlockNumber());
         const read = (functionName: string) =>
-            client.readContract({ address: superPaymaster, abi: SuperPaymasterV550ABI, functionName }) as Promise<any>;
+            client.readContract({ address: superPaymaster, abi: SuperPaymasterV550ABI, functionName, blockNumber }) as Promise<any>;
         const [cache, aPNTsPriceUSD, feeBps] = await Promise.all([read('cachedPrice'), read('aPNTsPriceUSD'), read('protocolFeeBPS')]);
         const price = BigInt(cache?.price ?? cache?.[0]);
         const decimals = BigInt(cache?.decimals ?? cache?.[3]);
@@ -128,7 +132,7 @@ export async function decideSuperPaymasterSpRenew(
         const h = ('0x' + '00'.repeat(32)) as Hex;
         const preview = async (spRenew: boolean) => {
             const r = (await client.readContract({
-                address: token, abi: xPNTsTokenV2ABI, functionName: 'previewLock', args: [superPaymaster, user, h, a0, spRenew],
+                address: token, abi: xPNTsTokenV2ABI, functionName: 'previewLock', args: [superPaymaster, user, h, a0, spRenew], blockNumber,
             })) as readonly [number | bigint, bigint];
             return XPNTS_V2_LOCK_RESULT[Number(r[0])] ?? `UNKNOWN(${r[0]})`;
         };

@@ -36,7 +36,7 @@ function harness(
         writeContract?: WriteContract;
         transport?: { type?: string };
         /** Answers a readContract first; return undefined to fall through to the defaults. */
-        readContract?: (functionName: string, args: readonly any[] | undefined) => unknown;
+        readContract?: (functionName: string, args: readonly any[] | undefined, blockNumber?: bigint) => unknown;
     } = {},
 ) {
     const signs: Hex[][] = [];
@@ -64,8 +64,9 @@ function harness(
         getChainId: async () => 11155111,
         estimateFeesPerGas: async () => ({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n }),
         getGasPrice: async () => 1_000_000_000n,
-        readContract: async ({ functionName, args }: { functionName: string; args?: readonly any[] }) => {
-            const own = opts.readContract?.(functionName, args);
+        getBlockNumber: async () => 1234n,
+        readContract: async ({ functionName, args, blockNumber }: { functionName: string; args?: readonly any[]; blockNumber?: bigint }) => {
+            const own = opts.readContract?.(functionName, args, blockNumber);
             if (own !== undefined) return own;
             switch (functionName) {
                 case 'getNonce': return 7n;
@@ -578,10 +579,12 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
     // token's _lockDecision (xPNTsTokenV2.sol:190-214), written here independently of the SDK. The
     // bundler stub applies the lock exactly as validation would, so an SDK whose flag or a0 is wrong
     // gets AA34 instead of a receipt.
-    const PRICE = 3000n * 10n ** 8n;
+    // Deliberately non-round, so both divisions leave a remainder: a floor instead of a ceiling in
+    // the SDK's a0 is off by one and the boundary test below fails.
+    const PRICE = 301_234_567_891n; // $3012.34567891
     const DECIMALS = 8;
-    const APNTS_PRICE_USD = 2n * 10n ** 16n; // $0.02
-    const FEE_BPS = 1000n;
+    const APNTS_PRICE_USD = 21_300_000_000_000_007n; // ~$0.0213
+    const FEE_BPS = 1037n;
     const BUFFER_BPS = 1000n;
     const K = 1;
     const ceil = (a: bigint, b: bigint) => (a + b - 1n) / b;
@@ -603,13 +606,17 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
             return LOCK.OK;
         };
         const previews: { a0: bigint; spRenew: boolean }[] = [];
-        const readContract = (fn: string, args: readonly any[] | undefined) => {
+        const blocks = new Set<bigint | undefined>();
+        const readContract = (fn: string, args: readonly any[] | undefined, blockNumber?: bigint) => {
+            if (['cachedPrice', 'aPNTsPriceUSD', 'protocolFeeBPS', 'previewLock'].includes(fn)) blocks.add(blockNumber);
             switch (fn) {
                 case 'cachedPrice': return { price: PRICE, updatedAt: 0n, roundId: 0n, decimals: DECIMALS };
                 case 'aPNTsPriceUSD': return APNTS_PRICE_USD;
                 case 'protocolFeeBPS': return FEE_BPS;
                 case 'previewLock': {
-                    const [, , , a0, spRenew] = args!;
+                    const [spender, user, , a0, spRenew] = args!;
+                    // previewLock evaluates as if `spender` called tryLockForGas: it must be SP itself.
+                    if (spender !== SP || user !== SENDER) throw new Error(`previewLock(${spender}, ${user}): wrong spender/user`);
                     previews.push({ a0, spRenew });
                     return [decide(a0, spRenew), 0n];
                 }
@@ -631,7 +638,7 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         /** The user's own renewForSelf(sp): resets the epoch and the K counter (xPNTsV2Base.sol:300-307). */
         const renewForSelf = () => { tok.used = 0n; tok.autoRenewUsed = 0; };
         const exhaust = () => { tok.used = tok.cap; };
-        return { tok, readContract, bundler, sent, previews, renewForSelf, exhaust };
+        return { tok, readContract, bundler, sent, previews, blocks, renewForSelf, exhaust };
     }
     const CAP = 10n ** 30n; // large: room for several ops; `exhaust()` empties it
 
@@ -687,6 +694,8 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         // Last preview before the send is the final op's (the estimation op's limits are larger).
         expect(c.previews.at(-1)!.a0).toBe(c.sent[0].a0);
         expect(c.previews[0].a0).toBeGreaterThan(c.sent[0].a0);
+        // Price, fee and both previews read at one pinned block, never `latest`.
+        expect([...c.blocks]).toEqual([1234n]);
     });
 
     it('remaining allowance between the final a0 and a0 + 1: decided on the exact a0, not a margin', async () => {
@@ -705,6 +714,29 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         const short = chain({ cap: CAP, used: CAP - a0 + 1n });
         await harness(short.bundler, { readContract: short.readContract }).submit();
         expect(short.sent[0].flags).toBe(SUPER_PAYMASTER_FLAGS.SP_RENEW);
+    });
+
+    it('explicit gas limits (no estimation): an exhausted epoch is renewed on the final op', async () => {
+        const c = chain({ cap: CAP, used: CAP });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+        await expect(submit({ verificationGasLimit: 200_000n, callGasLimit: 100_000n, preVerificationGas: 60_000n })).resolves.toBe(OP_HASH);
+        expect(calls.map((x) => [x.method, x.flags])).toEqual([['eth_sendUserOperation', SUPER_PAYMASTER_FLAGS.SP_RENEW]]);
+    });
+
+    it('known limit: a cap below the ESTIMATION op\'s a0 fails estimation, with or without the renewal', async () => {
+        // The estimation op reserves for its own oversized limits (VGL 250k, CGL 500k, PM 300k/300k).
+        // With the cap between the final a0 and that, no flag makes the estimation op fit; this is
+        // independent of renewal (a fresh epoch with such a cap fails the same way). Explicit limits
+        // (previous test) avoid it.
+        const probe = chain({ cap: CAP, used: 0n });
+        await harness(probe.bundler, { readContract: probe.readContract }).submit();
+        const [aEst, aFinal] = [probe.previews[0].a0, probe.sent[0].a0];
+        SuperPaymasterInflightGuard.clearAll();
+        const cap = (aEst + aFinal) / 2n;
+        const c = chain({ cap, used: cap });
+        const { submit, calls } = harness(c.bundler, { readContract: c.readContract });
+        await expect(submit()).rejects.toThrow(/AA34/);
+        expect(calls.map((x) => x.method)).toEqual(['eth_estimateUserOperationGas']);
     });
 
     it('balance (not allowance) short: no flag — a renewal cannot fix it', async () => {
