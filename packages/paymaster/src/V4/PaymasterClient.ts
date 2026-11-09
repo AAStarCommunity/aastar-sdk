@@ -62,18 +62,45 @@ function assertJsonRpcAnswer(r: any, method: string): void {
  * on its own internal retry while the original is in flight or mined — and any unrecognised
  * message, transport error, timeout or -32603 is NOT a rejection: the slot stays reserved until
  * the caller has looked the transaction up by hash and calls release().
+ *
+ * A rejection needs provenance, not just matching words:
+ *   - any transport-level error in the chain (HTTP status, timeout, socket) is ambiguous, whatever
+ *     its body says — a proxy can answer 503 "upstream timeout; last error: insufficient funds"
+ *     after forwarding the tx;
+ *   - the innermost JSON-RPC code must be one a node uses for a refusal (3, 4001, -32000,
+ *     -32003). No code at all is ambiguous: viem turns a -32603 into a code-less
+ *     ContractFunctionRevertedError, so its message alone proves nothing.
+ *   - any refusal, including a user rejection (4001), counts only on one of viem's own
+ *     single-endpoint transports (http / webSocket / ipc). Behind `fallback` the caller sees the
+ *     LAST endpoint's error: an earlier one may have accepted the tx and then failed (503) before
+ *     a second endpoint refused it — or before the user rejected a retry. A `custom` (EIP-1193)
+ *     transport can wrap any number of endpoints, and an unknown one says nothing, so both keep
+ *     the slot; the caller releases it after looking the transaction up. (viem 2.43.3 sends a tx
+ *     with retryCount 0 on http, and webSocket / ipc do not replay requests on reconnect. A
+ *     user-supplied retrying fetchFn behind an `http` label is outside what this can see.)
+ * Only the NODE's text is then matched, never a wrapper's: viem's ContractFunctionExecutionError
+ * message prints the call (handleOps args, and the tx's `nonce`), so matching it would read every
+ * handleOps failure as "maybe broadcast". viem carries the node's own message up the chain as
+ * `details`; a plain error without it falls back to the innermost message.
  */
 const PRE_BROADCAST_REJECTION = /insufficient funds|intrinsic gas too low|exceeds block gas limit|invalid sender|fee exceeds|exceeds the configured cap/i;
 const MAYBE_BROADCAST = /nonce|replacement|underpriced|already|known transaction/i;
+const TRANSPORT_ERROR_NAMES = new Set(['HttpRequestError', 'TimeoutError', 'WebSocketRequestError', 'SocketClosedError']);
+const NODE_REFUSAL_CODES = new Set([-32000, -32003]);
+const SINGLE_ENDPOINT_TRANSPORTS = new Set(['http', 'webSocket', 'ipc']);
 
-function isExplicitTxRejection(err: unknown): boolean {
-    let e: any = err;
-    while (e && typeof e === 'object' && e.cause) e = e.cause;
-    const code = e?.code;
-    const text = `${(err as any)?.message ?? ''} ${e?.message ?? ''}`;
+function isExplicitTxRejection(err: unknown, transportType: unknown): boolean {
+    const chain: any[] = [];
+    for (let e: any = err; e && typeof e === 'object' && chain.length < 16; e = e.cause) chain.push(e);
+    if (chain.some((e) => TRANSPORT_ERROR_NAMES.has(e.name) || typeof e.status === 'number')) return false;
+    const root = chain[chain.length - 1];
+    const code = [...chain].reverse().find((e) => typeof e.code === 'number')?.code;
+    const details = chain.map((e) => e.details).find((d) => typeof d === 'string' && d.length > 0);
+    const text = String(details ?? root?.message ?? '');
     if (MAYBE_BROADCAST.test(text)) return false;
+    if (typeof transportType !== 'string' || !SINGLE_ENDPOINT_TRANSPORTS.has(transportType)) return false;
     if (code === 3 || code === 4001) return true;
-    return PRE_BROADCAST_REJECTION.test(text);
+    return NODE_REFUSAL_CODES.has(code) && PRE_BROADCAST_REJECTION.test(text);
 }
 
 /** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
@@ -802,7 +829,7 @@ export class PaymasterClient {
                          account: wallet.account
                      });
                  } catch (e) {
-                     if (isExplicitTxRejection(e)) guard.inSend = false;
+                     if (isExplicitTxRejection(e, wallet.transport?.type)) guard.inSend = false;
                      throw e;
                  }
                  guard.inSend = false;

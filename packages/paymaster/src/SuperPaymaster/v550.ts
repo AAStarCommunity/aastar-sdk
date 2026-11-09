@@ -114,8 +114,16 @@ export class SuperPaymasterInflightGuard {
         };
     }
 
+    /**
+     * Record a submitted op. Never lowers the recorded nonce: a send for nonce N whose answer
+     * arrives after the chain consumed N and another call reserved N+1 must not overwrite N+1 —
+     * that would let a third call clear the stale N and sign N+1 a second time.
+     */
     static record(chainId: number | bigint, entryPoint: Address, sender: Address, nonce: bigint, userOpHash?: string): void {
-        this.pending.set(this.key(chainId, entryPoint, sender), { nonce, userOpHash });
+        const k = this.key(chainId, entryPoint, sender);
+        const prev = this.pending.get(k);
+        if (prev && prev.nonce > nonce) return;
+        this.pending.set(k, { nonce, userOpHash });
     }
 
     /** Drop a record (e.g. after the caller observed a receipt or decided the op was dropped). */
