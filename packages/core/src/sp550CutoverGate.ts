@@ -76,7 +76,10 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
 
     // 3. One snapshot block, identical on every RPC. State reads below can only name the block by
     //    NUMBER (eth_call / getCode / getStorageAt in viem take no block hash), so the hash each RPC
-    //    served is taken again after the last read (finish()): a reorg during the run fails the gate.
+    //    served is taken again after the last read (finish()): a reorg that is still in place when
+    //    the reads end fails the gate. Known limit: a fork that goes A -> B -> A between the two
+    //    hash reads is invisible (equal hashes). Reads are not hash-bound; pass --block a few
+    //    blocks behind the head (or a finalized block) to make that window irrelevant.
     const heads = await Promise.all(rpcs.map((r) => r.client.getBlockNumber()));
     const blockNumber = input.block ?? heads.reduce((a, b) => (a < b ? a : b));
     const snapshotHashes = async () => (await Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber })))).map((b) =>
