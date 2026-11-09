@@ -1,55 +1,90 @@
 #!/usr/bin/env tsx
 /**
- * SuperPaymaster 5.5.0 cutover gate (read-only). Compares the cutover pins
- * (packages/core/src/sp550Cutover.ts, or a --pins JSON file) against the chain, field by field.
+ * SuperPaymaster 5.5.0 cutover gate (read-only). Compares the 5.5.0 pins for the selected network
+ * (packages/core/src/sp550Cutover.ts / sp550Deployments.ts, or a --pins JSON file) against the
+ * chain, field by field.
  *
- *   pnpm exec tsx scripts/check-sp550-cutover.ts --rpc <url> [--pins <file.json>] [--block <n>] [--allow-rc]
+ *   pnpm exec tsx scripts/check-sp550-cutover.ts --network <sepolia|op-sepolia|op-mainnet> \
+ *       --rpc <url> [--rpc2 <url>] [--pins <file.json>] [--block <n>] [--allow-rc]
  *
- * Every read is taken at ONE block (--block, default: the head when the run starts), so a PASS
- * describes a single consistent snapshot rather than values read across a concurrent upgrade.
+ * The network alone selects the pins and the deploy mode: `upgrade` (Sepolia, in-place 5.4.2 ->
+ * 5.5.0) or `fresh` (OP chains, a new full V5 stack). Before any other read, every RPC's chainId
+ * is asserted to be the network's; a mismatch exits 2. A fresh deploy is read back from TWO
+ * RPCs (--rpc2 required): both must serve the same block hash at the snapshot block, and every
+ * pinned address must have the same non-empty code on both.
  *
- * Exit 0 only if every required pin is filled AND every check reads back as pinned. A missing pin
- * is a failure that prints the value observed on chain — the pin must be written from a readback,
- * never from this script's output alone (DSR cutover work order). Sends no transaction.
+ * Every read is taken at ONE block (--block, default: the lower of the RPC heads when the run
+ * starts), so a PASS describes a single consistent snapshot rather than values read across a
+ * concurrent upgrade.
+ *
+ * Exit 0 only if every required pin is filled, no release hold applies, AND every check reads back
+ * as pinned. A missing pin is a failure that prints the value observed on chain — the pin must be
+ * written from a readback, never from this script's output alone (DSR cutover work order). Sends
+ * no transaction.
  */
 import * as fs from 'fs';
-import { createPublicClient, http, keccak256, toHex, getAddress, type Address, type Hex } from 'viem';
+import { createPublicClient, http, keccak256, toHex, getAddress, type Address, type Hex, type PublicClient } from 'viem';
 import { SuperPaymasterV550ABI, SuperPaymasterLensABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI, APNTsCappedABI } from '../packages/core/src/abis/index.js';
-import { SP550_CUTOVER_PINS, sp550PinProblems, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
+import { SP550_CUTOVER_PINS, sp550PinProblems } from '../packages/core/src/sp550Cutover.js';
+import {
+    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems,
+    type Sp550FreshDeployPins,
+} from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
 const EXPECTED_VERSION = 'SuperPaymaster-5.5.0';
+const USAGE = 'usage: check-sp550-cutover.ts --network <sepolia|op-sepolia|op-mainnet> --rpc <url> [--rpc2 <url>] [--pins <file.json>] [--block <n>] [--allow-rc]';
 
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const rpc = arg('--rpc') || process.env.RPC_URL;
+const rpc2 = arg('--rpc2');
 const allowRc = args.includes('--allow-rc');
-if (!rpc) { console.error('usage: check-sp550-cutover.ts --rpc <url> [--pins <file.json>] [--block <n>] [--allow-rc]'); process.exit(2); }
+const usage = (msg: string): never => { console.error(`${msg}\n${USAGE}`); process.exit(2); };
+if (!rpc) usage('--rpc is required');
+let net: ReturnType<typeof resolveSp550Network>;
+try { net = resolveSp550Network(arg('--network')); } catch (e: any) { usage(e.message); }
+if (net!.mode === 'fresh' && !rpc2) usage(`--network ${net!.network} is a fresh deploy: its read-back needs two RPCs (--rpc2)`);
 
-const client = createPublicClient({ transport: http(rpc) });
+const client = createPublicClient({ transport: http(rpc) }) as PublicClient;
+const client2 = rpc2 ? (createPublicClient({ transport: http(rpc2) }) as PublicClient) : undefined;
 const results: { check: string; ok: boolean; detail: string }[] = [];
 const record = (check: string, ok: boolean, detail: string) => results.push({ check, ok, detail });
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 
 async function main() {
-    const chainId = await client.getChainId();
-    const blockNumber = arg('--block') ? BigInt(arg('--block')!) : await client.getBlockNumber();
-    let pins: Sp550CutoverPins;
+    // 0. Chain identity first: nothing else is read from an RPC that is on the wrong chain.
+    const chainId = net.chainId;
+    for (const [label, c] of [['--rpc', client], ['--rpc2', client2]] as const) {
+        if (!c) continue;
+        try { assertSp550ChainId(net.network, await c.getChainId()); } catch (e: any) { usage(`${label}: ${e.message}`); }
+    }
+    const heads = await Promise.all([client, client2].filter(Boolean).map((c) => c!.getBlockNumber()));
+    const blockNumber = arg('--block') ? BigInt(arg('--block')!) : heads.reduce((a, b) => (a < b ? a : b));
+    if (client2) {
+        const [h1, h2] = await Promise.all([client.getBlock({ blockNumber }), client2.getBlock({ blockNumber })]);
+        record('both RPCs serve the same block at the snapshot', h1.hash === h2.hash, `${h1.hash} · ${h2.hash}`);
+    }
+
+    let pins: Sp550FreshDeployPins;
     let source: string;
     const file = arg('--pins');
+    const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
     if (file) {
         const j = JSON.parse(fs.readFileSync(file, 'utf8'));
         pins = { ...j, readbackBlock: j.readbackBlock !== undefined ? BigInt(j.readbackBlock) : undefined };
         source = file;
     } else {
-        pins = SP550_CUTOVER_PINS[chainId] ?? {};
-        source = `SP550_CUTOVER_PINS[${chainId}]`;
+        pins = (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[chainId] ?? {};
+        source = `${table}[${chainId}]`;
     }
-    console.log(`=== SP 5.5.0 cutover gate — chain ${chainId}, all reads at block ${blockNumber}, pins from ${source} ===`);
+    console.log(`=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}, pins from ${source} ===`);
 
-    const problems = sp550PinProblems(pins, { allowRc });
+    const problems = net.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc }) : sp550PinProblems(pins, { allowRc });
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
+    const hold = SP550_RELEASE_HOLDS[chainId];
+    if (hold) record('no release hold on this chain', false, hold);
 
     // Unpinned proxy: still READ the canonical proxy, so the report shows what the chain holds.
     const sp = (pins.superPaymaster ?? (CANONICAL_ADDRESSES as Record<number, any>)[chainId]?.superPaymaster) as Address | undefined;
@@ -60,9 +95,9 @@ async function main() {
         address
             ? (client.readContract({ address, abi, functionName, blockNumber } as any).catch((e: any) => `ERR ${e?.shortMessage ?? e?.message}`) as Promise<any>)
             : Promise.resolve('(unpinned address)');
-    const codeHash = async (address?: Address) => {
+    const codeHash = async (address?: Address, c: PublicClient = client) => {
         if (!address) return undefined;
-        const code = await client.getCode({ address, blockNumber });
+        const code = await c.getCode({ address, blockNumber });
         return code && code !== '0x' ? keccak256(code) : undefined;
     };
     const cmp = (check: string, observed: unknown, pinned: unknown) =>
@@ -100,7 +135,37 @@ async function main() {
     const lensVersion = await read(pins.superPaymasterLens as Address | undefined, SuperPaymasterLensABI, 'EXPECTED_SP_VERSION');
     record('Lens.EXPECTED_SP_VERSION() == keccak256("SuperPaymaster-5.5.0")', eq(lensVersion, keccak256(toHex(EXPECTED_VERSION))), String(lensVersion));
 
-    // 5. The readback the pins came from is not in the future of this snapshot.
+    // 5. Fresh deploy: the SP-owned address book is the one SP is wired to, and is real code.
+    if (net.mode === 'fresh') {
+        const book = pins.addresses ?? {};
+        const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {};
+        cmp('SP.REGISTRY() == addresses.registry', await read(sp, SuperPaymasterV550ABI, 'REGISTRY'), book.registry);
+        cmp('SP.BLS_AGGREGATOR() == addresses.blsAggregator', await read(sp, SuperPaymasterV550ABI, 'BLS_AGGREGATOR'), book.blsAggregator);
+        cmp('SP.agentIdentityRegistry() == addresses.agentIdentityRegistry', await read(sp, SuperPaymasterV550ABI, 'agentIdentityRegistry'), book.agentIdentityRegistry);
+        cmp('SP.agentReputationRegistry() == addresses.agentReputationRegistry', await read(sp, SuperPaymasterV550ABI, 'agentReputationRegistry'), book.agentReputationRegistry);
+        cmp('addresses.aPNTs == pins.aPNTsCapped', book.aPNTs, pins.aPNTsCapped);
+        // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
+        cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint);
+        cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed);
+        for (const [k, a] of Object.entries(book)) {
+            const h = await codeHash(a as Address);
+            record(`addresses.${k} has code`, h !== undefined, `${a} · ${h ?? 'no code'}`);
+        }
+    }
+
+    // 6. Two-RPC read-back: every pinned address has the same code on both RPCs.
+    if (client2) {
+        const all = { ...(pins.addresses ?? {}), spImpl: pins.spImpl, superPaymasterLens: pins.superPaymasterLens, xPNTsFactoryV2: pins.xPNTsFactoryV2,
+            xPNTsTokenV2Impl: pins.xPNTsTokenV2Impl, xPNTsTokenV2Ext: pins.xPNTsTokenV2Ext, aoaProtocolRegistry: pins.aoaProtocolRegistry,
+            globalTierSource: pins.globalTierSource, aPNTsCapped: pins.aPNTsCapped };
+        for (const [k, a] of Object.entries(all)) {
+            if (!a) continue;
+            const [h1, h2] = await Promise.all([codeHash(a as Address), codeHash(a as Address, client2)]);
+            record(`code(${k}) identical on both RPCs`, h1 !== undefined && h1 === h2, `${h1 ?? 'no code'} · ${h2 ?? 'no code'}`);
+        }
+    }
+
+    // 7. The readback the pins came from is not in the future of this snapshot.
     record('pins.readbackBlock <= snapshot block', pins.readbackBlock !== undefined && pins.readbackBlock <= blockNumber, `${pins.readbackBlock ?? '(unpinned)'} · snapshot ${blockNumber}`);
     report();
 }

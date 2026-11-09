@@ -41,6 +41,20 @@
 
 注意：`pins.fork.json` 里的 `spImplCodehash` 是从同一个 fork 读回的，所以这一项是同源比较。live 上它必须来自独立的链上读回。
 
+### 按网络选择（2026-11-09 起）
+
+`--network` 现在必填，pin 和部署方式只由它决定。脚本在读任何东西之前，先断言每个 RPC 的 chainId 等于该网络的 chainId；不一致就 exit 2。
+
+| `--network` | chainId | 方式 | pin 表 |
+|---|---|---|---|
+| `sepolia` | 11155111 | 原地升级 5.4.2 → 5.5.0，proxy 不变（fork 演练也用它，anvil fork 的 chainId 不变） | `SP550_CUTOVER_PINS` |
+| `op-sepolia` | 11155420 | 全新部署整套 V5（链上是不带 proxy 的 SP 3.2.2） | `SP550_FRESH_DEPLOY_PINS` |
+| `op-mainnet` | 10 | 同上；另有发布暂停：3.2.2 的迁移或下线由作者决定 | `SP550_FRESH_DEPLOY_PINS` + `SP550_RELEASE_HOLDS` |
+
+全新部署必须用两个 RPC 读回（`--rpc2`）。两边在快照块上的块哈希必须一致，每个已 pin 地址在两边的 code 也必须一致。pin 覆盖 SP 自己部署的整本地址簿，哪些条目归 SP 由 `SP550_ADDRESS_OWNER` 规定；地址簿新增 key 却没归类，编译就会报错。
+
+2026-11-09 实跑（pin 为空）：`op-sepolia` FAIL 22/25，`op-mainnet` 另多一项发布暂停，两条链都读到 `SuperPaymaster-3.2.2` 且 impl 槽为 0，exit 1。`sepolia` 读到 5.4.2，exit 1。chainId 错、缺 `--rpc2`、网络名未知这三种情况都 exit 2。
+
 ## SDK E2E（`e2e.txt`，`scripts/sp550-fork-e2e.ts`）
 
 | 场景 | 结果 |
