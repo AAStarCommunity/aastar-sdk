@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, superPaymasterWithdrawalActions, superPaymasterHasTwoStepWithdrawal, SuperPaymasterABI, type OperatorWithdrawalStatus } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, superPaymasterWithdrawalActions, resolveSuperPaymasterWithdrawalMode, type SuperPaymasterWithdrawalMode, type OperatorWithdrawalStatus } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -347,13 +347,11 @@ export class PaymasterOperatorClient extends BaseClient {
     }
 
     /**
-     * SuperPaymaster version() of the configured SP, read live: the withdrawal path depends on it
-     * (5.5.1+ is two-step, see {@link requestCollateralWithdrawal}).
+     * The withdrawal mode for the configured SP, decided by the read-back-verified pins.spVersion
+     * (never by an unverified version() alone) — see resolveSuperPaymasterWithdrawalMode.
      */
-    private async superPaymasterVersion(): Promise<string> {
-        return (await this.getStartPublicClient() as any).readContract({
-            address: this.superPaymasterAddress, abi: SuperPaymasterABI, functionName: 'version',
-        }) as Promise<string>;
+    async collateralWithdrawalMode(): Promise<SuperPaymasterWithdrawalMode> {
+        return resolveSuperPaymasterWithdrawalMode(this.getStartPublicClient(), this.superPaymasterAddress);
     }
 
     /** Where this operator's aPNTs collateral withdrawal stands (request, maturity, balance). 5.5.1+. */
@@ -369,8 +367,8 @@ export class PaymasterOperatorClient extends BaseClient {
      * On 5.4.2 there is no request step: this throws and points at executeCollateralWithdrawal.
      */
     async requestCollateralWithdrawal(amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        const version = await this.superPaymasterVersion();
-        if (!superPaymasterHasTwoStepWithdrawal(version)) {
+        const { mode, version } = await this.collateralWithdrawalMode();
+        if (mode !== 'two-step') {
             throw new Error(`${version} withdraws in one call: use executeCollateralWithdrawal(amount)`);
         }
         return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
@@ -393,8 +391,8 @@ export class PaymasterOperatorClient extends BaseClient {
      * its name said for an operator.
      */
     async executeCollateralWithdrawal(amount?: bigint, options?: TransactionOptions): Promise<Hash> {
-        const version = await this.superPaymasterVersion();
-        if (superPaymasterHasTwoStepWithdrawal(version)) {
+        const { mode, version } = await this.collateralWithdrawalMode();
+        if (mode === 'two-step') {
             return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
                 .executeWithdraw({ operator: this.getAddress(), amount, account: options?.account });
         }

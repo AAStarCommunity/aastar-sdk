@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => {
     mockPaymasterActions: vi.fn(() => () => mockPaymaster),
     mockSuperPaymasterActions: vi.fn(() => () => mockSuperPaymaster),
     mockWithdrawalActions: vi.fn(() => () => mockWithdrawal),
+    mockResolveMode: vi.fn(),
     mockRegistryActions: vi.fn(() => () => mockRegistry),
   };
 });
@@ -63,6 +64,7 @@ vi.mock('@aastar/core', async () => {
     paymasterActions: mocks.mockPaymasterActions,
     superPaymasterActions: mocks.mockSuperPaymasterActions,
     superPaymasterWithdrawalActions: mocks.mockWithdrawalActions,
+    resolveSuperPaymasterWithdrawalMode: mocks.mockResolveMode,
     registryActions: mocks.mockRegistryActions,
   };
 });
@@ -167,10 +169,9 @@ describe('OperatorLifecycle', () => {
            expect(mocks.mockSuperPaymaster.unlockStake).toHaveBeenCalled();
       });
 
-      const asVersion = (v: string) => (mockPublicClient.readContract as any).mockImplementation(async (p: any) => {
-          if (p.functionName === 'version') return v;
-          throw new Error(`unexpected read ${p.functionName}`);
-      });
+      // The mode comes from the read-back-verified pin (resolveSuperPaymasterWithdrawalMode, tested in core).
+      const asVersion = (v: string) => mocks.mockResolveMode.mockResolvedValue(
+          v === 'SuperPaymaster-5.4.2' ? { mode: 'one-call', version: v, source: 'pre-cutover' } : { mode: 'two-step', version: v, source: 'pin' });
       const status = (o: Partial<{ amount: bigint; readyAt: bigint; balance: bigint; now: bigint; matured: boolean }>) =>
           mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue({ amount: 0n, readyAt: 0n, balance: 50n, now: 100n, matured: false, slashQueued: false, ...o });
 
@@ -233,6 +234,16 @@ describe('OperatorLifecycle', () => {
       it('a recipient other than the operator is refused: SuperPaymaster has no recipient parameter', async () => {
           await expect(lifecycle.withdrawAllFunds('0x000000000000000000000000000000000000dEaD')).rejects.toThrow(/to the operator itself/);
           expect(mocks.mockSuperPaymaster.withdraw).not.toHaveBeenCalled();
+      });
+
+      it('a pin / live version() disagreement stops the flow before anything is sent', async () => {
+          mocks.mockResolveMode.mockRejectedValue(new Error('reports "SuperPaymaster-5.4.2" but the read-back pinned "SuperPaymaster-5.5.1"; refusing to guess'));
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/refusing to guess/);
+          for (const f of [mocks.mockSuperPaymaster.withdraw, mocks.mockSuperPaymaster.withdrawTo, mocks.mockWithdrawal.requestWithdraw, mocks.mockWithdrawal.executeWithdraw, mocks.mockRegistry.exitRole]) {
+              expect(f).not.toHaveBeenCalled();
+          }
       });
 
       it('requestCollateralWithdrawal on 5.4.2 is refused (no request step there)', async () => {

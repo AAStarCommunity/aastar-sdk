@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
+import { resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
 
 const SP = '0x' + '5a'.repeat(20) as `0x${string}`;
@@ -91,5 +91,50 @@ describe('superPaymasterHasTwoStepWithdrawal', () => {
         expect(await a.pendingWithdrawal({ operator: OP })).toEqual({ amount: 1n, readyAt: 2n });
         await a.requestWithdraw({ amount: 1n });
         expect([reads.length, writes.length]).toEqual([1, 1]);
+    });
+});
+
+describe('resolveSuperPaymasterWithdrawalMode: the read-back-verified pin decides, never an unverified version()', () => {
+    const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
+    const PINS = {
+        tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: SP, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
+        superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6), aoaProtocolRegistry: A(7),
+        globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 1n,
+    };
+    const live = (version: string, chainId = 11155111) => ({
+        getChainId: async () => chainId,
+        readContract: async (p: any) => { if (p.functionName !== 'version') throw new Error(p.functionName); return version; },
+    }) as any;
+
+    it('usable pins and a matching live version(): the pin decides (5.5.1 -> two-step)', async () => {
+        expect(await resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1'), SP, { pins: PINS }))
+            .toEqual({ mode: 'two-step', version: 'SuperPaymaster-5.5.1', source: 'pin' });
+    });
+    it('pin and live version() differ: refuses rather than guess (both directions)', async () => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.4.2'), SP, { pins: PINS })).rejects.toThrow(/reports "SuperPaymaster-5\.4\.2" but the read-back pinned "SuperPaymaster-5\.5\.1"/);
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.2'), SP, { pins: PINS })).rejects.toThrow(/refusing to guess/);
+        const err = await resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.2'), SP, { pins: PINS }).catch((e) => e);
+        expect(err.code).toBe(ErrorCode.ABI_SHAPE_MISMATCH);
+    });
+    it('pins that name another proxy do not certify this one', async () => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1'), A(0x77), { pins: PINS })).rejects.toThrow(/uncertified proxy/);
+    });
+    it('no usable pins: a pre-cutover 5.4.2 is one call', async () => {
+        expect(await resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.4.2'), SP, { pins: {} }))
+            .toEqual({ mode: 'one-call', version: 'SuperPaymaster-5.4.2', source: 'pre-cutover' });
+    });
+    it.each([
+        ['empty pins', {}],
+        ['pins missing spVersion', { ...PINS, spVersion: undefined }],
+        ['an rc tag without allowRc', { ...PINS, tag: 'v5.5.0-rc.8' }],
+    ])('a live 5.5.x with %s is refused (nothing certifies its withdrawal)', async (_n, pins) => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1'), SP, { pins: pins as any })).rejects.toThrow(/no read-back-verified 5\.5 pins/);
+    });
+    it('the shipped Sepolia table is empty today, so a live 5.5.1 there is refused and 5.4.2 is one call', async () => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1'), SP)).rejects.toThrow(/no read-back-verified/);
+        expect((await resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.4.2'), SP)).mode).toBe('one-call');
+    });
+    it('OP Mainnet stays held: even complete fresh pins do not certify chain 10', async () => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1', 10), SP)).rejects.toThrow(/no read-back-verified/);
     });
 });

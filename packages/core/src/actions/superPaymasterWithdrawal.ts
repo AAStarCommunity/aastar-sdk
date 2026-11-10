@@ -2,6 +2,10 @@ import { type Account, type Address, type Hash, type Hex, type PublicClient, typ
 import { SuperPaymasterV550ABI } from '../abis/index.js';
 import { validateAddress, validateAmount } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
+import { SuperPaymasterABI } from '../abis/index.js';
+import { requireSp550CutoverPins, type Sp550CutoverPins } from '../sp550Cutover.js';
+import { SP550_NETWORKS, requireSp550FreshDeployPins } from '../sp550Deployments.js';
+import { superPaymasterGenerationFromVersion } from '../superPaymasterData.js';
 
 /** `pendingWithdrawals(operator)` (SuperPaymaster-5.5.1). amount 0 = no request. */
 export type PendingOperatorWithdrawal = { amount: bigint; readyAt: bigint };
@@ -69,6 +73,61 @@ export function superPaymasterHasTwoStepWithdrawal(version: string): boolean {
     if (!m) throw new Error(`Unrecognised SuperPaymaster version() string: "${version}"`);
     const [maj, min, pat] = [Number(m[1]), Number(m[2]), Number(m[3])];
     return maj > 5 || (maj === 5 && (min > 5 || (min === 5 && pat >= 1)));
+}
+
+export type SuperPaymasterWithdrawalMode = {
+    mode: 'one-call' | 'two-step';
+    /** The live version() — equal to the pin whenever `source` is 'pin'. */
+    version: string;
+    /** 'pin': read-back-verified pins.spVersion decided it; 'pre-cutover': no usable pins, live 5.4.x. */
+    source: 'pin' | 'pre-cutover';
+};
+
+/**
+ * How to withdraw operator collateral from `superPaymaster`, decided by the READ-BACK-VERIFIED pin
+ * (`pins.spVersion`, the value the SP 5.5.0 cutover gate certified), never by an unverified
+ * version() alone, so the withdrawal flow and the gate cannot disagree:
+ *  - usable pins for the chain (complete, well-formed, no release hold): the live version() must
+ *    equal pins.spVersion and the pinned proxy must be `superPaymaster`; the mode follows the pin;
+ *  - no usable pins: only a pre-cutover 5.4.x is accepted (one call); a chain reporting 5.5.x
+ *    without verified pins is refused — nothing to certify which withdrawal it runs.
+ * Any disagreement throws ABI_SHAPE_MISMATCH / INVALID_CONFIGURATION instead of guessing.
+ * `opts.pins` overrides the table (tests, a --pins file); `opts.chainId` skips eth_chainId.
+ */
+export async function resolveSuperPaymasterWithdrawalMode(
+    reader: PublicClient | WalletClient,
+    superPaymaster: Address,
+    opts: { pins?: Sp550CutoverPins; chainId?: number; allowRc?: boolean } = {},
+): Promise<SuperPaymasterWithdrawalMode> {
+    validateAddress(superPaymaster, 'superPaymaster');
+    const pub = reader as PublicClient;
+    const chainId = opts.chainId ?? (await pub.getChainId());
+    const network = Object.values(SP550_NETWORKS).find((n) => n.chainId === chainId);
+    let pins: Sp550CutoverPins | undefined;
+    try {
+        pins = network?.mode === 'fresh'
+            ? requireSp550FreshDeployPins(chainId, opts.pins, { allowRc: opts.allowRc })
+            : requireSp550CutoverPins(chainId, opts.pins, { allowRc: opts.allowRc });
+    } catch {
+        pins = undefined; // not cut over (or held): only a pre-cutover 5.4.x is acceptable below
+    }
+    const version = (await pub.readContract({ address: superPaymaster, abi: SuperPaymasterABI, functionName: 'version' })) as string;
+    if (pins) {
+        if (pins.superPaymaster!.toLowerCase() !== superPaymaster.toLowerCase()) {
+            throw new AAStarError(ErrorCode.INVALID_CONFIGURATION,
+                `chain ${chainId}: the read-back-verified pins name SuperPaymaster ${pins.superPaymaster}, not ${superPaymaster}; refusing to pick a withdrawal mode for an uncertified proxy`);
+        }
+        if (version !== pins.spVersion) {
+            throw new AAStarError(ErrorCode.ABI_SHAPE_MISMATCH,
+                `chain ${chainId}: SuperPaymaster ${superPaymaster} reports "${version}" but the read-back pinned "${pins.spVersion}"; refusing to guess the withdrawal mode`);
+        }
+        return { mode: superPaymasterHasTwoStepWithdrawal(pins.spVersion!) ? 'two-step' : 'one-call', version, source: 'pin' };
+    }
+    let generation: string;
+    try { generation = superPaymasterGenerationFromVersion(version); } catch (e: any) { throw new AAStarError(ErrorCode.ABI_SHAPE_MISMATCH, e.message); }
+    if (generation === 'v5.4') return { mode: 'one-call', version, source: 'pre-cutover' };
+    throw new AAStarError(ErrorCode.INVALID_CONFIGURATION,
+        `chain ${chainId}: SuperPaymaster ${superPaymaster} reports "${version}" but this SDK has no read-back-verified 5.5 pins for the chain; refusing to guess the withdrawal mode`);
 }
 
 /**

@@ -1,7 +1,7 @@
 import { type Address, type Hash, type Hex, parseEther } from 'viem';
 import { type TransactionOptions } from '@aastar/core';
 import { PaymasterOperatorClient, type OperatorClientConfig } from './PaymasterOperatorClient.js';
-import { tokenActions, registryActions, superPaymasterHasTwoStepWithdrawal, SuperPaymasterABI } from '@aastar/core'; // L2/L1 Actions
+import { tokenActions, registryActions } from '@aastar/core'; // L2/L1 Actions
 
 export interface OperatorStatus {
     isConfigured: boolean;
@@ -126,10 +126,9 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
         // 1. Collateral (aPNTs) held by SuperPaymaster.
         const stats = await this.checkReadiness();
         if (stats.balance > 0n) {
-            const version = await (this.getStartPublicClient() as any).readContract({
-                address: this.superPaymasterAddress, abi: SuperPaymasterABI, functionName: 'version',
-            }) as string;
-            if (!superPaymasterHasTwoStepWithdrawal(version)) {
+            // Mode from the read-back-verified pin; a pin / live version() disagreement throws here.
+            const { mode } = await this.collateralWithdrawalMode();
+            if (mode === 'one-call') {
                 hashes.push(await this.executeCollateralWithdrawal(stats.balance, options));
             } else {
                 const w = await this.collateralWithdrawalStatus();
