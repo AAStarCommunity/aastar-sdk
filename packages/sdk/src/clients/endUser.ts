@@ -254,15 +254,22 @@ export function createEndUserClient({
                 pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })  // 2 gwei
             ]) as Hex;
 
-            // 5. Build PaymasterAndData (v0.7 packed format)
-            const paymasterVerificationGas = 250000n;
-            const paymasterPostOpGas = 50000n;
-            const paymasterAndData = concat([
-                usedAddresses.superPaymaster,
-                pad(`0x${paymasterVerificationGas.toString(16)}`, { dir: 'left', size: 16 }),
-                pad(`0x${paymasterPostOpGas.toString(16)}`, { dir: 'left', size: 16 }),
-                operator
-            ]);
+            // 5. Build PaymasterAndData from what the deployed SP actually reads (both generations).
+            // The previous hand-rolled bytes were the 72-byte 5.4.x prefix with no token and a 50k
+            // postOp: SuperPaymaster 5.5.0 sigFails that (token REQUIRED, postOp below the
+            // governable minPostOpGas), and even 5.4.2 enforces MIN_POST_OP_GAS = 200k.
+            const { resolveSuperPaymasterSponsorship, buildSuperPaymasterData, atLeast } = await import('@aastar/paymaster');
+            const sp = await resolveSuperPaymasterSponsorship(client as any, usedAddresses.superPaymaster, operator);
+            if (!sp.isConfigured || sp.isPaused) {
+                throw new Error(`SuperPaymaster ${sp.version}: operator ${operator} is ${sp.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
+            }
+            const paymasterAndData = buildSuperPaymasterData(usedAddresses.superPaymaster, operator, {
+                // 250k covers 5.5.0 validation (spec §3.2: 198k-238k measured); floors only raise.
+                verificationGasLimit: atLeast(250_000n, sp.verificationGasFloor),
+                // 300k headroom (observed ~117k on 5.4.2), never below the contract's floor.
+                postOpGasLimit: atLeast(300_000n, sp.minPostOpGas),
+                token: sp.token,
+            });
 
             // 6. Construct UserOperation v0.7
             const userOp = {

@@ -29,14 +29,17 @@ has_arg() {
   return 1
 }
 
-# ── Per-network CONFIG (v5.3.3) ───────────────────────────────────────────────
+# ── Per-network CONFIG ────────────────────────────────────────────────────────
 # SuperPaymaster proxy + the PaymasterV4 actually used on that network.
+# SuperPaymaster is NOT baked for Sepolia: it resolves from CANONICAL_ADDRESSES (the proxy
+# 0x09DF…4DE9, unchanged by in-place upgrades such as 5.4.2 -> 5.5.0). The value baked here
+# before was the SuperPaymaster-5.3.3 contract 0xFb09…266a, a different, retired deployment.
 # Sepolia PaymasterV4 = the deployer-operator's V4 (the one the on-chain E2E uses,
 # resolved via PaymasterFactory.paymasterByOperator(deployer)). NOT the canonical
 # (community) V4 — they differ.
 case "$NETWORK" in
   sepolia)
-    SUPERPAYMASTER="0xFb090E82bD041C6e9787eDEbE1D3BE55b3c7266a"   # SuperPaymaster-5.3.3
+    SUPERPAYMASTER=""   # resolve from CANONICAL_ADDRESSES (see above)
     PAYMASTER_V4="0x2118e9a404C15F70B1D4f53b400c8a566A5ea4B6"     # PMV4-Deposit-4.5.0 (deployer)
     ;;
   op-mainnet|optimism)
@@ -64,6 +67,7 @@ fi
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()
+# Explicit ifs: an empty baked value must append nothing (and must not read as a failure).
 if [ -n "$SUPERPAYMASTER" ] && ! has_arg --superpaymaster "$@"; then
   ADDR_ARGS+=(--superpaymaster "$SUPERPAYMASTER")
 fi
@@ -73,8 +77,8 @@ fi
 
 EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT}"
 
-echo "keeper: network=$NETWORK sp=${SUPERPAYMASTER:-<canonical>} v4=${PAYMASTER_V4:-<canonical>}"
 # ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
+echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
 exec pnpm exec tsx scripts/keeper.ts \
   --network "$NETWORK" \
   ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
