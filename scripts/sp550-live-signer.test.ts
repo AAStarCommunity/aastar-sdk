@@ -68,6 +68,15 @@ describe('keystore v3 decryption', () => {
     it('decrypts the published Web3 Secret Storage PBKDF2 test vector', () => {
         expect(privateKeyToAccount(decryptKeystoreV3(SPEC_VECTOR, 'testpassword')).address).toBe(SPEC_ADDRESS);
     });
+    it('decrypts a scrypt keystore produced by a standard tool (foundry cast 1.7.1 `cast wallet new`)', () => {
+        // A throwaway key generated for this fixture only, never funded or used; its password is
+        // public on purpose. Pinned by address. Cross-checks the in-house KDF/MAC against a
+        // keystore this repo did not build.
+        const ks = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/keystore/cast-1.7.1-scrypt.json'), 'utf8'));
+        expect(ks.crypto.kdf).toBe('scrypt');
+        expect(privateKeyToAccount(decryptKeystoreV3(ks, 'throwaway-test-only')).address).toBe('0x2435BfEfe5225Ce043f26449d6c3FE42248CF3aB');
+        expect(() => decryptKeystoreV3(ks, 'throwaway-test-onlY')).toThrow(/wrong password/);
+    });
     it('decrypts a scrypt keystore built independently with node:crypto', () => {
         expect(decryptKeystoreV3(scryptKeystore(KEY, PASSWORD), PASSWORD)).toBe(KEY);
     });
