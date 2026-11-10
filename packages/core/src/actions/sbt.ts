@@ -43,6 +43,11 @@ export type SBTActions = {
     getCommunityMembership: (args: { tokenId: bigint, community: Address }) => Promise<SBTMembership>;
     getMemberships: (args: { tokenId: bigint }) => Promise<SBTMembership[]>;
     getActiveMemberships: (args: { tokenId: bigint }) => Promise<Address[]>;
+    /**
+     * Raw `MySBT.verifyCommunityMembership`. NOT sufficient on its own to decide membership (SP rc.8
+     * Registry R-1, a documented limitation): also require `Registry.hasRole(ROLE_ENDUSER, user)` —
+     * {@link getCommunityEndUserStatus} reads both at one block.
+     */
     verifyCommunityMembership: (args: { user: Address, community: Address }) => Promise<boolean>;
     userToSBT: (args: { user: Address }) => Promise<bigint>;
     sbtData: (args: { tokenId: bigint }) => Promise<SBTData>;

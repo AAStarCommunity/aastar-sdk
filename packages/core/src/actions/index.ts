@@ -1,6 +1,7 @@
 export * from './registry.js';
 export * from './staking.js';
 export * from './sbt.js';
+export * from './membership.js'; // R-1: an end user's membership = Registry ROLE_ENDUSER AND MySBT membership
 export * from './superPaymaster.js';
 export * from './superPaymasterV550.js'; // SP 5.5.0: generation detection, Lens dry-run, xPNTs v2 reads
 export * from './paymaster.js';
