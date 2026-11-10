@@ -4,6 +4,7 @@ export * from './sbt.js';
 export * from './membership.js'; // R-1: an end user's membership = Registry ROLE_ENDUSER AND MySBT membership
 export * from './superPaymaster.js';
 export * from './superPaymasterV550.js'; // SP 5.5.0: generation detection, Lens dry-run, xPNTs v2 reads
+export * from './superPaymasterWithdrawal.js'; // SP 5.5.1: request -> 48 h -> withdraw for operator aPNTs
 export * from './paymaster.js';
 export * from './reputation.js';
 export * from './tokens.js';

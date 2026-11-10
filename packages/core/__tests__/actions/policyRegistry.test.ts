@@ -103,6 +103,25 @@ describe('PolicyRegistryActions', () => {
     });
   });
 
+  describe('getTargetSpend (3.0.2)', () => {
+    it('passes (sender, target, asset) and decodes (spentInWindow, windowStart)', async () => {
+      publicClient.readContract.mockResolvedValue([77n, 1700000000n]);
+      const actions = policyRegistryActions(PR_ADDRESS)(publicClient);
+      expect(await actions.getTargetSpend({ sender: SENDER, target: TARGET, asset: ASSET })).toEqual({ spentInWindow: 77n, windowStart: 1700000000n });
+      const call = publicClient.readContract.mock.calls[0][0];
+      expect(call.functionName).toBe('getTargetSpend');
+      expect(call.args).toEqual([SENDER, TARGET, ASSET]);
+    });
+    it('the vendored ABI is 3.0.2: getTargetSpend 0x0c4752d2 and VelocityDisabled 0x071caaf1', async () => {
+      const { PolicyRegistryABI } = await import('../../src/abis/index');
+      const { toFunctionSelector, toFunctionSignature, keccak256, toHex } = await import('viem');
+      const fn = (PolicyRegistryABI as any[]).find((e) => e.type === 'function' && e.name === 'getTargetSpend');
+      expect(toFunctionSelector(toFunctionSignature(fn))).toBe('0x0c4752d2');
+      expect((PolicyRegistryABI as any[]).some((e) => e.type === 'error' && e.name === 'VelocityDisabled')).toBe(true);
+      expect(keccak256(toHex('VelocityDisabled()')).slice(0, 10)).toBe('0x071caaf1');
+    });
+  });
+
   describe('isSelectorAllowed / isFrozen / isAuthorizedConsumer', () => {
     it('isSelectorAllowed passes (sender, target, selector)', async () => {
       publicClient.readContract.mockResolvedValue(true);
