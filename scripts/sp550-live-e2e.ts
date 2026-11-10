@@ -16,14 +16,15 @@
  *     "gate": { "pinsFile"?: "<pins.json>", "block"?: "finalized" | "latest" | <n>, "allowRc"?: bool },
  *     "operator": "0x…",                    // the community operator whose xPNTs v2 token pays
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
- *     "userKey": { "env": "<VAR>" } | { "anvilIndex": <n> },   // the account's owner key
+ *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8                           // ops to spend before giving up on reaching renewal
  *   }
  *
  * Order, each step refusing before the next:
  *  1. usage: mode fork => every URL loopback and the key is anvil's public mnemonic; mode live =>
  *     `--live-go <network>` must repeat the config's network (the author's go, DSR rule), and the
- *     key is read from the named env var and never printed;
+ *     signer comes ONLY from an encrypted keystore whose password the author types at a hidden
+ *     prompt (scripts/sp550-live-signer.ts) — never from an env var, argument or file;
  *  2. the SP 5.5.0 read-back gate (sp550CutoverGate) on the config's RPCs must exit 0 — this E2E
  *     only runs AFTER a passing read-back, against the addresses that read-back pinned;
  *  3. preconditions the SDK cannot create for a user (no community key is used here): account
@@ -42,13 +43,14 @@ import {
     type Address, type Hex, createPublicClient, createWalletClient, decodeEventLog, decodeFunctionData,
     encodeFunctionData, getAddress, http, keccak256, toHex,
 } from 'viem';
-import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
+import { mnemonicToAccount } from 'viem/accounts';
 import {
     EntryPointABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
     SP550_CUTOVER_PINS, SP550_FRESH_DEPLOY_PINS, SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS,
 } from '@aastar/core';
 import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
+import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -75,7 +77,8 @@ async function main() {
         if (cfg.userKey?.anvilIndex === undefined) refuse('mode fork: userKey must be { anvilIndex } (anvil\'s public mnemonic)');
     } else if (cfg.mode === 'live') {
         if (arg('--live-go') !== net.network) refuse(`mode live sends real ops: pass --live-go ${net.network} (the author's go for this network)`);
-        if (typeof cfg.userKey?.env !== 'string' || !process.env[cfg.userKey.env]) refuse('mode live: userKey.env must name a set env var');
+        const problem = liveKeySourceProblem(cfg.userKey);
+        if (problem) refuse(problem);
     } else refuse('config.mode must be "fork" or "live"');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
@@ -115,9 +118,13 @@ async function main() {
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
 
     // ---- the user's signer, counted ----
-    const base = cfg.mode === 'fork'
-        ? mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: Number(cfg.userKey.anvilIndex) })
-        : privateKeyToAccount(process.env[cfg.userKey.env] as Hex);
+    // Prompted only now, after the gate passed, so a failing read-back never asks for the password.
+    let base;
+    try {
+        base = cfg.mode === 'fork'
+            ? mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: Number(cfg.userKey.anvilIndex) })
+            : await loadLiveSigner(cfg.userKey);
+    } catch (e: any) { return refuse(String(e?.message ?? e)); }
     let signs = 0;
     const user = { ...base, signMessage: async (a: any) => { signs++; return base.signMessage(a); } };
     const userWallet = createWalletClient({ account: user as any, transport: http(rpcUrls[0]) });
