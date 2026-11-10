@@ -205,7 +205,10 @@ await communityClient.configureSBTRules({
 const status = await operatorClient.checkResources(myAddress);
 
 if (status.hasRole) {
-    await operatorClient.withdrawCollateral(parseEther("50"));
+    // SuperPaymaster 5.5.1+: request now, withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h)
+    await operatorClient.requestCollateralWithdrawal(parseEther("50"));
+    // ...48 h later:
+    await operatorClient.executeCollateralWithdrawal();
 } else {
     console.log(status.recommendations); 
     // "Fund aPNTs for collateral", "Stake GToken"

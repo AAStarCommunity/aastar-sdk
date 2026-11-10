@@ -1,7 +1,7 @@
 import { type Address, type Hash, type Hex, parseEther } from 'viem';
 import { type TransactionOptions } from '@aastar/core';
 import { PaymasterOperatorClient, type OperatorClientConfig } from './PaymasterOperatorClient.js';
-import { tokenActions, registryActions } from '@aastar/core'; // L2/L1 Actions
+import { tokenActions, registryActions, superPaymasterHasTwoStepWithdrawal, SuperPaymasterABI } from '@aastar/core'; // L2/L1 Actions
 
 export interface OperatorStatus {
     isConfigured: boolean;
@@ -107,19 +107,40 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
     }
 
     /**
-     * Finalize exit: Withdraw all funds (Collateral + Rewards)
+     * Finalize exit: withdraw the aPNTs collateral, then exit the Registry role. Staged on
+     * SuperPaymaster 5.5.1+ (request -> 48 h -> withdraw); call it again until the role exit is in
+     * the returned hashes:
+     *  - balance > 0, no request: sends requestWithdraw(balance) and returns — call again after it matures;
+     *  - request open but not matured: throws, naming when it matures (nothing sent);
+     *  - request matured: withdraws it; exits the role only once no collateral is left.
+     * On 5.4.2 the collateral is withdrawn in one call. Funds always go to the operator itself;
+     * `to` is accepted only when it IS the operator (SuperPaymaster has no recipient parameter).
      */
     async withdrawAllFunds(to?: Address, options?: TransactionOptions): Promise<Hash[]> {
-        const recipient = to || this.getAddress();
+        const self = this.getAddress();
+        if (to && to.toLowerCase() !== self.toLowerCase()) {
+            throw new Error(`withdrawAllFunds: SuperPaymaster pays a collateral withdrawal to the operator itself (${self}); it cannot send to ${to}`);
+        }
         const hashes: Hash[] = [];
 
-        // 1. Withdraw Collateral from SuperPaymaster (if any)
-        // Note: We need to know the balance to withdraw exact amount.
-        // For current L3 pattern, we assume the user tracks it or we fetch it.
+        // 1. Collateral (aPNTs) held by SuperPaymaster.
         const stats = await this.checkReadiness();
         if (stats.balance > 0n) {
-             const hCol = await this.withdrawCollateral(recipient, stats.balance, options);
-             hashes.push(hCol);
+            const version = await (this.getStartPublicClient() as any).readContract({
+                address: this.superPaymasterAddress, abi: SuperPaymasterABI, functionName: 'version',
+            }) as string;
+            if (!superPaymasterHasTwoStepWithdrawal(version)) {
+                hashes.push(await this.executeCollateralWithdrawal(stats.balance, options));
+            } else {
+                const w = await this.collateralWithdrawalStatus();
+                if (w.amount === 0n) {
+                    hashes.push(await this.requestCollateralWithdrawal(w.balance, options));
+                    return hashes; // the delay has started; the role exit waits for the collateral
+                }
+                if (!w.matured) throw new Error(`withdrawAllFunds: the collateral withdrawal matures at ${w.readyAt} (now ${w.now}); call again then`);
+                hashes.push(await this.executeCollateralWithdrawal(undefined, options));
+                if (w.amount < w.balance) return hashes; // collateral left over: request the rest next call
+            }
         }
 
         // 2. Exit Role in Registry (Unstake GToken)

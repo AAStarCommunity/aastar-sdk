@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, superPaymasterWithdrawalActions, superPaymasterHasTwoStepWithdrawal, SuperPaymasterABI, type OperatorWithdrawalStatus } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -346,17 +346,60 @@ export class PaymasterOperatorClient extends BaseClient {
         }
     }
 
-    async withdrawCollateral(to: Address, amount: bigint, options?: TransactionOptions): Promise<Hash> {
-        try {
-            const sp = superPaymasterActions(this.superPaymasterAddress);
-            return await sp(this.client).withdrawTo({
-                to,
-                amount,
-                account: options?.account
-            });
-        } catch (error) {
-            throw error;
+    /**
+     * SuperPaymaster version() of the configured SP, read live: the withdrawal path depends on it
+     * (5.5.1+ is two-step, see {@link requestCollateralWithdrawal}).
+     */
+    private async superPaymasterVersion(): Promise<string> {
+        return (await this.getStartPublicClient() as any).readContract({
+            address: this.superPaymasterAddress, abi: SuperPaymasterABI, functionName: 'version',
+        }) as Promise<string>;
+    }
+
+    /** Where this operator's aPNTs collateral withdrawal stands (request, maturity, balance). 5.5.1+. */
+    async collateralWithdrawalStatus(): Promise<OperatorWithdrawalStatus> {
+        return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
+            .withdrawalStatus({ operator: this.getAddress() });
+    }
+
+    /**
+     * Step 1 of withdrawing aPNTs collateral on SuperPaymaster 5.5.1+: `requestWithdraw(amount)`.
+     * The funds stay at work (sponsorship, slashing) until the request matures after
+     * OPERATOR_WITHDRAWAL_DELAY (48 h); then call {@link executeCollateralWithdrawal}.
+     * On 5.4.2 there is no request step: this throws and points at executeCollateralWithdrawal.
+     */
+    async requestCollateralWithdrawal(amount: bigint, options?: TransactionOptions): Promise<Hash> {
+        const version = await this.superPaymasterVersion();
+        if (!superPaymasterHasTwoStepWithdrawal(version)) {
+            throw new Error(`${version} withdraws in one call: use executeCollateralWithdrawal(amount)`);
         }
+        return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
+            .requestWithdraw({ amount, account: options?.account });
+    }
+
+    /** Cancel the open collateral withdrawal request (5.5.1+). */
+    async cancelCollateralWithdrawal(options?: TransactionOptions): Promise<Hash> {
+        return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
+            .cancelWithdraw({ account: options?.account });
+    }
+
+    /**
+     * Withdraw aPNTs collateral to THIS operator's own address (SuperPaymaster has no recipient
+     * parameter). 5.5.1+: only a matured request, defaulting to the whole request; refused before
+     * sending otherwise. 5.4.2: the one-call `withdraw(amount)`, `amount` required.
+     *
+     * Replaces `withdrawCollateral(to, amount)`, which called `withdrawTo` — BasePaymaster's
+     * owner-only EntryPoint ETH-deposit withdrawal, not the operator's aPNTs — so it never did what
+     * its name said for an operator.
+     */
+    async executeCollateralWithdrawal(amount?: bigint, options?: TransactionOptions): Promise<Hash> {
+        const version = await this.superPaymasterVersion();
+        if (superPaymasterHasTwoStepWithdrawal(version)) {
+            return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
+                .executeWithdraw({ operator: this.getAddress(), amount, account: options?.account });
+        }
+        if (amount === undefined) throw new Error(`${version}: executeCollateralWithdrawal needs an amount`);
+        return superPaymasterActions(this.superPaymasterAddress)(this.client).withdraw({ amount, account: options?.account });
     }
 
     async isOperator(operator: Address): Promise<boolean> {

@@ -23,7 +23,15 @@ const mocks = vi.hoisted(() => {
     exitRole: vi.fn().mockResolvedValue('0xExitHash')
   };
   
+  const mockWithdrawal = {
+      withdrawalStatus: vi.fn(),
+      requestWithdraw: vi.fn().mockResolvedValue('0xRequestHash'),
+      executeWithdraw: vi.fn().mockResolvedValue('0xWithdrawHash551'),
+      cancelWithdraw: vi.fn(),
+  };
   const mockSuperPaymaster = {
+      withdraw: vi.fn().mockResolvedValue('0xWithdraw542'),
+      withdrawTo: vi.fn().mockResolvedValue('0xWRONG_withdrawTo'),
       unlockStake: vi.fn().mockResolvedValue('0xUnstakeHash'),
       withdrawStake: vi.fn().mockResolvedValue('0xWithdrawHash'),
       operators: vi.fn().mockResolvedValue({ isConfigured: true, aPNTsBalance: 100n })
@@ -34,12 +42,14 @@ const mocks = vi.hoisted(() => {
     mockStaking,
     mockPaymaster,
     mockSuperPaymaster,
+    mockWithdrawal,
     mockRegistry,
     // Factory functions
     mockTokenActions: vi.fn(() => () => mockToken),
     mockStakingActions: vi.fn(() => () => mockStaking),
     mockPaymasterActions: vi.fn(() => () => mockPaymaster),
     mockSuperPaymasterActions: vi.fn(() => () => mockSuperPaymaster),
+    mockWithdrawalActions: vi.fn(() => () => mockWithdrawal),
     mockRegistryActions: vi.fn(() => () => mockRegistry),
   };
 });
@@ -52,6 +62,7 @@ vi.mock('@aastar/core', async () => {
     stakingActions: mocks.mockStakingActions,
     paymasterActions: mocks.mockPaymasterActions,
     superPaymasterActions: mocks.mockSuperPaymasterActions,
+    superPaymasterWithdrawalActions: mocks.mockWithdrawalActions,
     registryActions: mocks.mockRegistryActions,
   };
 });
@@ -156,17 +167,77 @@ describe('OperatorLifecycle', () => {
            expect(mocks.mockSuperPaymaster.unlockStake).toHaveBeenCalled();
       });
 
-      it('withdrawAllFunds should withdraw collateral and exit role', async () => {
-           mocks.mockRegistry.hasRole.mockResolvedValue(true);
-           mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
-           
-           const spyWithdrawCollateral = vi.spyOn(lifecycle, 'withdrawCollateral' as any).mockResolvedValue('0xCollateralHash');
-           
-           const hashes = await lifecycle.withdrawAllFunds('0xRecipient');
+      const asVersion = (v: string) => (mockPublicClient.readContract as any).mockImplementation(async (p: any) => {
+          if (p.functionName === 'version') return v;
+          throw new Error(`unexpected read ${p.functionName}`);
+      });
+      const status = (o: Partial<{ amount: bigint; readyAt: bigint; balance: bigint; now: bigint; matured: boolean }>) =>
+          mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue({ amount: 0n, readyAt: 0n, balance: 50n, now: 100n, matured: false, slashQueued: false, ...o });
 
-           expect(hashes).toContain('0xCollateralHash');
-           expect(hashes).toContain('0xExitHash');
-           expect(mocks.mockRegistry.exitRole).toHaveBeenCalled();
+      it('the old withdrawCollateral path is gone, and nothing on the exit path calls withdrawTo', async () => {
+          // withdrawCollateral(to, amount) called SuperPaymaster.withdrawTo: BasePaymaster's owner-only
+          // EntryPoint ETH-deposit withdrawal, not the operator's aPNTs.
+          expect((lifecycle as any).withdrawCollateral).toBeUndefined();
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          for (const v of ['SuperPaymaster-5.4.2', 'SuperPaymaster-5.5.1']) {
+              asVersion(v); status({ amount: 50n, matured: true });
+              await lifecycle.withdrawAllFunds();
+          }
+          expect(mocks.mockSuperPaymaster.withdrawTo).not.toHaveBeenCalled();
+      });
+
+      it('5.4.2: withdraws the collateral in one call (withdraw, not withdrawTo) and exits the role', async () => {
+          asVersion('SuperPaymaster-5.4.2');
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          const hashes = await lifecycle.withdrawAllFunds();
+          expect(mocks.mockSuperPaymaster.withdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
+          expect(hashes).toEqual(['0xWithdraw542', '0xExitHash']);
+      });
+
+      it('5.5.1, no request yet: requests the whole balance and stops; the role exit waits', async () => {
+          asVersion('SuperPaymaster-5.5.1'); status({});
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          const hashes = await lifecycle.withdrawAllFunds();
+          expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
+          expect(hashes).toEqual(['0xRequestHash']);
+          expect(mocks.mockRegistry.exitRole).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, request not matured: throws naming the maturity, sends nothing', async () => {
+          asVersion('SuperPaymaster-5.5.1'); status({ amount: 50n, readyAt: 200n, now: 100n, matured: false });
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/matures at 200 \(now 100\)/);
+          expect(mocks.mockWithdrawal.executeWithdraw).not.toHaveBeenCalled();
+          expect(mocks.mockRegistry.exitRole).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, matured request for the whole balance: withdraws it, then exits the role', async () => {
+          asVersion('SuperPaymaster-5.5.1'); status({ amount: 50n, readyAt: 90n, now: 100n, matured: true });
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          const hashes = await lifecycle.withdrawAllFunds();
+          expect(hashes).toEqual(['0xWithdrawHash551', '0xExitHash']);
+      });
+
+      it('5.5.1, matured request smaller than the balance: withdraws it and does not exit yet', async () => {
+          asVersion('SuperPaymaster-5.5.1'); status({ amount: 20n, balance: 50n, matured: true });
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 50n });
+          expect(await lifecycle.withdrawAllFunds()).toEqual(['0xWithdrawHash551']);
+          expect(mocks.mockRegistry.exitRole).not.toHaveBeenCalled();
+      });
+
+      it('a recipient other than the operator is refused: SuperPaymaster has no recipient parameter', async () => {
+          await expect(lifecycle.withdrawAllFunds('0x000000000000000000000000000000000000dEaD')).rejects.toThrow(/to the operator itself/);
+          expect(mocks.mockSuperPaymaster.withdraw).not.toHaveBeenCalled();
+      });
+
+      it('requestCollateralWithdrawal on 5.4.2 is refused (no request step there)', async () => {
+          asVersion('SuperPaymaster-5.4.2');
+          await expect(lifecycle.requestCollateralWithdrawal(1n)).rejects.toThrow(/withdraws in one call/);
       });
   });
 

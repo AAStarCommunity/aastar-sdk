@@ -21,9 +21,9 @@
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Setup** | `setupNode()` | `type: 'SUPER'`<br>`stakeAmount`<br>`depositAmount` | - 持有 GToken<br>- 有 `ROLE_COMMUNITY` | - 获得 `ROLE_PAYMASTER_SUPER`<br>- Registry: GToken 被质押<br>- Paymaster: 存入初始 Collateral | 一键完成 `Approve` + `RegisterRole` + `Deposit`。 |
 | **Operate** | `depositCollateral()` | `amount` | - 节点运行中<br>- Collateral 余额不足 | - Paymaster: Collateral 增加 | 用于补充 Gas 代付备用金。 |
-| **Operate** | `withdrawCollateral()` | `amount` | - Paymaster 有余额 | - Paymaster: Collateral 减少<br>- 钱包收到退回的 GToken | 随时可提，无锁定期 (除非涉及 ETH Stake)。 |
+| **Operate** | `requestCollateralWithdrawal()` → 等 48 h → `executeCollateralWithdrawal()` | `amount` | - Paymaster 有余额 | - Paymaster: aPNTs Collateral 减少<br>- operator 自己的地址收到 aPNTs | SuperPaymaster 5.5.1 起分两步：先发起请求，48 h 后才能提；等待期间资金仍会用于代付，也可能被 slash。5.4.2 上一步完成（`executeCollateralWithdrawal(amount)`）。旧的 `withdrawCollateral()` 已删除：它调的是 `withdrawTo`，提的是 EntryPoint 里的 ETH 押金，而且只有 owner 能调。 |
 | **Query** | `checkReadiness()` | - | - | 返回 `{ isConfigured, isActive, balance }` | 检查节点是否配置完成及当前余额。 |
-| **Exit** | `withdrawAllFunds()` | `to` (可选) | - 节点运行中<br>- 有质押和存款 | - Paymaster: Collateral 清零<br>- Registry: **触发退出锁定期** (如30天) | **注意**: 如果 Role 有锁定期 (如30天)，此调用会触发 `exitRole` 并**Revert** (或进入冷却期)，资金需等待期满后方可完全提取。 |
+| **Exit** | `withdrawAllFunds()` | `to`（可选；只能是 operator 自己） | - 节点运行中<br>- 有质押和存款 | - Paymaster: Collateral 清零<br>- Registry: **触发退出锁定期** (如30天) | **注意**: 如果 Role 有锁定期 (如30天)，此调用会触发 `exitRole` 并**Revert** (或进入冷却期)，资金需等待期满后方可完全提取。 |
 
 ### 开发者示例
 ```typescript
