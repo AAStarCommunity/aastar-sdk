@@ -95,19 +95,30 @@ export const GTokenAuthorizationArtifact = GTokenAuthorizationABIData;
 export const GTokenStakingABI = (GTokenStakingABIData as any).abi || GTokenStakingABIData;
 export const GTokenStakingArtifact = GTokenStakingABIData;
 
-// SuperPaymaster 5.4.2 — the version DEPLOYED on Sepolia today (proxy 0x09DF…4DE9). Kept as the
-// default ABI until the 5.5.0 in-place upgrade (CC-122 A3b) actually lands; 5.5.0 removes
-// dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt from this surface.
-export const SuperPaymasterABI = (SuperPaymasterABIData as any).abi || SuperPaymasterABIData;
-export const SuperPaymasterArtifact = SuperPaymasterABIData;
+// SP 5.5.0 CUTOVER (draft, not merged until SP 5.5.0 is live): the DEFAULT SuperPaymaster ABI is
+// the 5.5.0 core ∪ Admin union below. It is a strict superset of 5.4.2 except four functions 5.5.0
+// removed (dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt): identical events
+// and errors, and no shared function changed its outputs (checked by
+// packages/core/src/abis/superPaymasterAbiCompat.test.ts). Callers of those four use
+// SuperPaymasterV542ABI explicitly.
+//
+// SuperPaymaster 5.4.2 (proxy 0x09DF…4DE9 before the in-place upgrade). Still needed for those four
+// legacy calls and for reading a not-yet-upgraded deployment.
+export const SuperPaymasterV542ABI = (SuperPaymasterABIData as any).abi || SuperPaymasterABIData;
+export const SuperPaymasterV542Artifact = SuperPaymasterABIData;
 
-// SuperPaymaster 5.5.0 (NOT deployed on any shared chain yet). Same proxy address as 5.4.2 after
-// the in-place upgrade. Vendored byte-for-byte from SuperPaymaster tag v5.5.0-rc.4 (fbd74fb1)
-// `abis/SuperPaymaster.full.json` = core SuperPaymaster ∪ SuperPaymasterAdmin (the extension is
-// reached through the core's fallback DELEGATECALL, so every function is called on the proxy).
-// Using the core-only `SuperPaymaster.json` of 5.5.0 would miss 43 extension functions (SDK #417).
-// Pick between the two with `getSuperPaymasterGeneration()` (reads on-chain `version()`).
 export const SuperPaymasterV550ABI = (SuperPaymasterV550ABIData as any).abi || SuperPaymasterV550ABIData;
+
+/** Default SuperPaymaster ABI = 5.5.0 (see the cutover note above). */
+export const SuperPaymasterABI = SuperPaymasterV550ABI;
+/**
+ * Deliberately still the 5.4.2 artifact: it is the one carrying `bytecode`, and consumers of
+ * `.bytecode` must not silently get `undefined` (the vendored 5.5.0 union is ABI-only — 5.5.0 is
+ * deployed by SuperPaymaster's own scripts, never from the SDK).
+ */
+export const SuperPaymasterArtifact = SuperPaymasterABIData;
+/** The vendored 5.5.0 core ∪ Admin bundle ({ abi, note } — no bytecode). */
+export const SuperPaymasterV550Artifact = SuperPaymasterV550ABIData;
 
 // SuperPaymasterLens (SP 5.5.0) — read-only lens; `dryRunValidation(sp, userOp, maxCost)` moved
 // here from the SP in 5.5.0. Pins `EXPECTED_SP_VERSION = keccak256("SuperPaymaster-5.5.0")` and

@@ -10,7 +10,7 @@
  * and `M-11-downstream-changes.md` §4.
  */
 import { type Address, type Hex, type PublicClient, encodeFunctionData, hexToString, size, slice, trim } from 'viem';
-import { SuperPaymasterABI, SuperPaymasterV550ABI, SuperPaymasterLensABI, xPNTsTokenV2ABI } from '../abis/index.js';
+import { SuperPaymasterABI, SuperPaymasterV542ABI, SuperPaymasterV550ABI, SuperPaymasterLensABI, xPNTsTokenV2ABI } from '../abis/index.js';
 import {
     SUPER_PAYMASTER_MIN_POST_OP_GAS,
     type SuperPaymasterGeneration,
@@ -31,9 +31,9 @@ export async function getSuperPaymasterGeneration(
     return { version, generation: superPaymasterGenerationFromVersion(version) };
 }
 
-/** The ABI matching a generation (5.4.2 core ABI vs 5.5.0 core ∪ Admin union). */
+/** The ABI matching a generation (5.4.2 ABI vs 5.5.0 core ∪ Admin union, the default). */
 export function superPaymasterAbiFor(generation: SuperPaymasterGeneration) {
-    return generation === 'v5.5' ? SuperPaymasterV550ABI : SuperPaymasterABI;
+    return generation === 'v5.5' ? SuperPaymasterV550ABI : SuperPaymasterV542ABI;
 }
 
 export type SuperPaymasterGasParams = {

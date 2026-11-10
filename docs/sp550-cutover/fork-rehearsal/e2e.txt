@@ -1,0 +1,84 @@
+fork: SP 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9 SuperPaymaster-5.5.0 · token 0x50a3cc04208d6A4E2A3B443275c0adD139416DD8 · lens 0xAE86C09787a668fc404594994ee30f22a75D2183 · bundler http://127.0.0.1:3046
+RESULT S2 cold start (AOA-Comm): user signer calls=0, community txs/waits=4; account 0xA4B43330919Da938f0D8aE29d1e04CA63460671d deployed=true ENDUSER=true xPNTs=1000000000000000000000
+[PaymasterClient] Gas Estimation Result: {
+  "preVerificationGas": "0x1232e",
+  "verificationGasLimit": "0xe7a8",
+  "callGasLimit": "0x7f86",
+  "paymasterVerificationGasLimit": "0x2dfd6",
+  "paymasterPostOpGasLimit": "0x57e40"
+}
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] ✅ Submitted via unknown hash: 0xcd7505ed391ce48b21e33a709c21dfbfd8a4a4fc999dd06bd60bf967a2260642
+RESULT S1 PaymasterClient.submitGaslessUserOperation (auto-estimate): success=true S_user signMessage=2 W_chain=1 · user xPNTs -84193714030298473587 lockedOf=0 · operator aPNTs -84193714030298473587 · tx 0x0204450ff7fd407a80b2cf9655a75b06f04a50a634902081c571b0b717ff33ee
+[PaymasterClient] Gas Estimation Result: {
+  "preVerificationGas": "0x1233b",
+  "verificationGasLimit": "0x7815",
+  "callGasLimit": "0x7f86",
+  "paymasterVerificationGasLimit": "0x2e13e",
+  "paymasterPostOpGasLimit": "0x57e40"
+}
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+RESULT S1 rate limit (operator minTxInterval=60s): a second op right after the first is rejected: Bundler Error: {"message":"User operation is not valid yet, validAfter=1794226833, now=1794226774","code":-32503} — the SDK does not wait or retry
+[SuperPaymasterClient] 🎯 Target Info:
+   - Paymaster: 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9
+   - Token: 0x50a3cc04208d6A4E2A3B443275c0adD139416DD8
+   - Operator: 0xb5600060e6de5E11D3636731964218E53caadf0E
+[PaymasterClient] Gas Estimation Result: {
+  "preVerificationGas": "0x12657",
+  "verificationGasLimit": "0x7815",
+  "callGasLimit": "0x12b2e",
+  "paymasterVerificationGasLimit": "0x2e198",
+  "paymasterPostOpGasLimit": "0x57e40"
+}
+[SuperPaymasterClient] 🔧 Tuned Limits: VGL=30741, PMVGL=77777, PostOp=460000
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] ✅ Submitted via unknown hash: 0xc014a1ae80d072ee7d09464b8b07bea8294ef0def2b572b9bb61e9e996361dce
+RESULT S1 SuperPaymasterClient.submitGaslessTransaction (ERC-20 transfer): success=true S_user signMessage=2 W_chain=1 · user xPNTs -81703132741490913662 lockedOf=0 · operator aPNTs -81703132741490913661 · tx 0xd698368740a93970913df31c124dc0c883d38c099e7c220a57b8b0babc9a2771
+RESULT S3a top-up: user signer calls=0, community waits=1, xPNTs +100000000000000000000
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] ✅ Submitted via unknown hash: 0xc209a12a6905032d48957fbce703697b3ccb040fbc1ee0162e63080d7a45ac71
+RESULT S4a inner revert: SDK returned a hash without error; UserOperationEvent.success=false · user still paid 72977973851921251178 xPNTs · S_user=1 W_chain=1
+fork-only: bundler restarted, clock shift 95661000ms
+[PaymasterClient] Gas Estimation Result: {
+  "preVerificationGas": "0x1233b",
+  "verificationGasLimit": "0x7815",
+  "callGasLimit": "0x7f86",
+  "paymasterVerificationGasLimit": "0x2e13e",
+  "paymasterPostOpGasLimit": "0x57e40"
+}
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+fork-only refresh_oracle: round 37419 updatedAt 1794226745 -> 1794231163
+RESULT S5a price unavailable: Lens before refresh ok=false (STALE_PRICE); SDK submit before refresh rejected: Bundler Error: {"message":"UserOperation expires too soon, validUntil=1794230945, now=1794231164","code":-32503}; refresh by an unrelated account (1 tx, 1 wait); Lens after ok=true (OK)
+[PaymasterClient] Gas Estimation Result: {
+  "preVerificationGas": "0x1233b",
+  "verificationGasLimit": "0x7815",
+  "callGasLimit": "0x7f86",
+  "paymasterVerificationGasLimit": "0x2e13e",
+  "paymasterPostOpGasLimit": "0x57e40"
+}
+[PaymasterClient] Gas Pricing: TESTNET (0.5 Gwei floor) | priority=1150000000 maxFee=1150000009
+[PaymasterClient] Using unknown Bundler
+[PaymasterClient] ✅ Submitted via unknown hash: 0x52ee770bee73f64a949a2186a3ce7c3bd3c74270bb0b5512644f728a2b864831
+RESULT S5a after refresh: PaymasterClient op: success=true S_user signMessage=2 W_chain=1 · user xPNTs -76967538342235556624 lockedOf=0 · operator aPNTs -76967538342235556624 · tx 0x5e544e1315858b0239562ea1d1a840277175c8463c5667888aaa55a58512766c
+RESULT S5b operator paused: Lens ok=false (OPERATOR_PAUSED); SDK rejected before signing: SuperPaymaster SuperPaymaster-5.5.0: operator 0xb5600060e6de5E11D3636731964218E53caadf0E is paused; the op wou; unpaused by SP owner
+   SDK: Using SimpleAccountFactory: 0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985 (Owner: 0x90F79bf6EB2c4f870365E785982E1f101E93b906, Salt: 0)
+   SDK: Executing gasless via AA 0xA4B43330919Da938f0D8aE29d1e04CA63460671d Sponsored by 0xb5600060e6de5E11D3636731964218E53caadf0E
+   SDK: Submitting UserOp 0x09cd80c8cc9283ff8aef78e6f88a40c87569a6a751229d43d0a79bf4d3a8b7f0...
+RESULT C12 createEndUserClient().executeGasless: tx success UserOperationEvent.success=true · user xPNTs -120557547930600000000 · S_user signMessage=1 (+ the EOA's own handleOps tx, paid in ETH)
+
+RESULTS (fork rc result — v5.5.0-rc.4 on a local Sepolia fork, local bundler; NOT live):
+  S2 cold start (AOA-Comm): user signer calls=0, community txs/waits=4; account 0xA4B43330919Da938f0D8aE29d1e04CA63460671d deployed=true ENDUSER=true xPNTs=1000000000000000000000
+  S1 PaymasterClient.submitGaslessUserOperation (auto-estimate): success=true S_user signMessage=2 W_chain=1 · user xPNTs -84193714030298473587 lockedOf=0 · operator aPNTs -84193714030298473587 · tx 0x0204450ff7fd407a80b2cf9655a75b06f04a50a634902081c571b0b717ff33ee
+  S1 rate limit (operator minTxInterval=60s): a second op right after the first is rejected: Bundler Error: {"message":"User operation is not valid yet, validAfter=1794226833, now=1794226774","code":-32503} — the SDK does not wait or retry
+  S1 SuperPaymasterClient.submitGaslessTransaction (ERC-20 transfer): success=true S_user signMessage=2 W_chain=1 · user xPNTs -81703132741490913662 lockedOf=0 · operator aPNTs -81703132741490913661 · tx 0xd698368740a93970913df31c124dc0c883d38c099e7c220a57b8b0babc9a2771
+  S3a top-up: user signer calls=0, community waits=1, xPNTs +100000000000000000000
+  S4a inner revert: SDK returned a hash without error; UserOperationEvent.success=false · user still paid 72977973851921251178 xPNTs · S_user=1 W_chain=1
+  S5a price unavailable: Lens before refresh ok=false (STALE_PRICE); SDK submit before refresh rejected: Bundler Error: {"message":"UserOperation expires too soon, validUntil=1794230945, now=1794231164","code":-32503}; refresh by an unrelated account (1 tx, 1 wait); Lens after ok=true (OK)
+  S5a after refresh: PaymasterClient op: success=true S_user signMessage=2 W_chain=1 · user xPNTs -76967538342235556624 lockedOf=0 · operator aPNTs -76967538342235556624 · tx 0x5e544e1315858b0239562ea1d1a840277175c8463c5667888aaa55a58512766c
+  S5b operator paused: Lens ok=false (OPERATOR_PAUSED); SDK rejected before signing: SuperPaymaster SuperPaymaster-5.5.0: operator 0xb5600060e6de5E11D3636731964218E53caadf0E is paused; the op wou; unpaused by SP owner
+  C12 createEndUserClient().executeGasless: tx success UserOperationEvent.success=true · user xPNTs -120557547930600000000 · S_user signMessage=1 (+ the EOA's own handleOps tx, paid in ETH)
