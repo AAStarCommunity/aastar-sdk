@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, encodeFunctionData, decodeFunctionResult } from 'viem';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, encodeAbiParameters, encodeFunctionData, decodeFunctionResult, keccak256 } from 'viem';
 import { BLSAggregatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -22,8 +22,9 @@ export enum GuardianSlashStatus {
 /**
  * One queued guardian-slash case, decoded from `guardianSlashCases(uint256)`.
  *
- * Field order is the DEPLOYED BLSAggregator-4.11.0 struct. It is not stable across versions —
- * see {@link AggregatorActions.guardianSlashCase} for why that matters and what guards it.
+ * Field order is the BLSAggregator-4.13.0 struct (rc.8; same layout as the 4.12.0 source). It is
+ * not stable across versions — 4.11.0 had no `slashBps` — see
+ * {@link AggregatorActions.guardianSlashCase} for why that matters and what guards it.
  */
 export type GuardianSlashCase = {
     /** Commitment to the guardian set the case was queued against. */
@@ -37,28 +38,33 @@ export type GuardianSlashCase = {
     guardianCount: number;
     /** Guardians that have already resolved (slashed or cleared). */
     resolvedCount: number;
-    /** Fraud-proof verifier bound to this case at queue time. */
+    /** Slash fraction in basis points, frozen at queue time (4.12.0+). */
+    slashBps: number;
+    /** Fraud-proof verifier bound to this case at queue time (audit only since 4.12.0). */
     verifier: Address;
 };
 
 /**
- * Words `guardianSlashCases` returns on the DEPLOYED aggregator (4.11.0): 7 static fields → 224 bytes.
+ * Words `guardianSlashCases` returns on BLSAggregator-4.13.0 (rc.8): 8 static fields → 256 bytes.
  *
- * SuperPaymaster's `contracts/src` is at 4.12.0, which adds a field to this struct **without changing
- * the selector**. 4.11.0 is otherwise a strict subset — 71 of 72 functions behave identically — so this
- * one return is the whole difference, and it is the kind that does not announce itself: a 7-parameter
- * ABI decoding a 256-byte return does not revert. If the added field lands anywhere but the end, every
- * field after it silently shifts. Hence the byte-length assertion in
- * {@link AggregatorActions.guardianSlashCase} rather than a plain `readContract`.
+ * The deployed Sepolia aggregator is still 4.11.0, whose struct has 7 fields **under the same
+ * selector**: 4.12.0 inserted `uint16 slashBps` BEFORE `verifier`, not at the end. A decode with the
+ * wrong field count does not revert — the fields after the insertion shift silently. Hence the exact
+ * byte-length assertion in {@link AggregatorActions.guardianSlashCase} rather than a plain
+ * `readContract`. This build targets 4.13.0 and refuses the 4.11.0 width by name.
  */
-const GUARDIAN_SLASH_CASE_WORDS = 7;
+const GUARDIAN_SLASH_CASE_WORDS = 8;
 const GUARDIAN_SLASH_CASE_BYTES = GUARDIAN_SLASH_CASE_WORDS * 32;
+/** Width of the deployed 4.11.0 struct, recognised only to name it in the refusal. */
+const GUARDIAN_SLASH_CASE_BYTES_4_11 = 7 * 32;
+/** 0-based index of the `slashBps` word: a uint16, so its high 30 bytes must be zero. */
+const GUARDIAN_SLASH_CASE_BPS_WORD = 6;
 /**
- * 0-based index of the `verifier` word — the only field whose valid values are constrained enough to
- * detect a SAME-WIDTH struct change, which the byte-length check above cannot see. An address must
- * have 12 zero high bytes; any displaced `uint256`/`bytes32` almost certainly does not.
+ * 0-based index of the `verifier` word — an address, so its high 12 bytes must be zero. Together with
+ * the slashBps word these are the fields constrained enough to detect a SAME-WIDTH struct change,
+ * which the byte-length check above cannot see.
  */
-const GUARDIAN_SLASH_CASE_VERIFIER_WORD = 6;
+const GUARDIAN_SLASH_CASE_VERIFIER_WORD = 7;
 
 /**
  * BLSAggregator slash severity levels (SP #329 unified slash consensus). The
@@ -183,22 +189,22 @@ export type AggregatorActions = {
      * One queued guardian-slash case, decoded from `guardianSlashCases(uint256)`.
      *
      * Deliberately NOT a plain `readContract`: it raw-`call`s and asserts the return is exactly
-     * {@link GUARDIAN_SLASH_CASE_BYTES} (7 words) before decoding. The deployed 4.11.0 struct has 7
-     * fields while SuperPaymaster `src` 4.12.0 has 8 **under the same selector**, and viem decoding 7
-     * static parameters out of a longer return does not revert — a field added anywhere but the end
-     * shifts every later field with no error. Throws a named `AAStarError` on any other length, so a
-     * contract upgrade shows up as a loud failure here rather than as plausible wrong values
+     * {@link GUARDIAN_SLASH_CASE_BYTES} (8 words, BLSAggregator-4.13.0) before decoding. The deployed
+     * 4.11.0 struct has 7 fields **under the same selector**, and a decode with the wrong field count
+     * does not revert — a field inserted anywhere but the end shifts every later field with no error.
+     * Throws a named `AAStarError` on any other length (naming 4.11.0 when it sees that width), so a
+     * version mismatch shows up as a loud failure here rather than as plausible wrong values
      * downstream.
      *
      * ## What is actually holding, in three layers — do not read this as "verified"
-     * 1. **Width (224 bytes)** — chain-anchored. Measured against the live aggregator, ids 0/1/2.
-     * 2. **Field order** — anchored to `BLSAggregator-4.11.0.deployed.json`, which was matched
-     *    70/70 on non-tuple selectors against the deployed bytecode. The chain cannot corroborate
-     *    this further: a selector does not encode its outputs.
-     * 3. **These two runtime guards** — **ASLEEP TODAY.** No guardian-slash case has ever been
-     *    queued, so every read returns 224 zero bytes, and the zero address is legitimately
-     *    zero-padded. On today's data neither guard can tell a correct decode from a wrong one.
-     *    They wake up when the first real case is queued. What is doing real work right now is the
+     * 1. **Width (256 bytes)** — NOT chain-anchored yet: no 4.13.0 aggregator is deployed. Taken
+     *    from the forge build of SuperPaymaster's rc.8 refs; re-measure on the deployed instance.
+     * 2. **Field order** — anchored to the 4.13.0 source struct (`BLSAggregator.sol`
+     *    `GuardianSlashCase`) via the vendored ABI. A selector does not encode its outputs, so the
+     *    chain cannot corroborate this beyond the width.
+     * 3. **The same-width guards (slashBps / verifier words)** — **ASLEEP until a case exists.** An id
+     *    with no case reads as all zero bytes, which every guard accepts and which decodes the same
+     *    under any field order. They wake up when the first real case is queued. What is doing real work right now is the
      *    sentinel fixture in `aggregator.guardianSlash.test.ts`, and what it pins is the
      *    decoder-against-ABI-file link — the right link, but not the on-chain one.
      */
@@ -207,7 +213,23 @@ export type AggregatorActions = {
     // Proposal & Execution
     executeProposal: (args: { proposalId: bigint, target: Address, callData: Hex, requiredThreshold: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     verifyAndExecute: (args: { proposalId: bigint, operator: Address, slashLevel: number, repUsers: Address[], newScores: bigint[], epoch: bigint, evidenceHash: Hex, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * The raw `executedProposals(uint256)` slot. Since BLSAggregator-4.13.0 the KEY depends on the
+     * path: `verifyAndExecute` (slash / reputation) marks the raw id, which must be below 2^128;
+     * `executeProposal` (generic) marks `uint256(keccak256(abi.encode(TAG_PROPOSAL, proposalId)))`.
+     * For a generic proposal use {@link isGenericProposalExecuted} — reading the raw id answers
+     * `false` forever.
+     */
     executedProposals: (args: { proposalId: bigint }) => Promise<boolean>;
+    /** The typed replay key a generic `executeProposal` id is stored under (`TAG_PROPOSAL` read from chain). */
+    genericProposalReplayKey: (args: { proposalId: bigint }) => Promise<bigint>;
+    /** Whether a generic `executeProposal` id has executed (reads its typed replay key). */
+    isGenericProposalExecuted: (args: { proposalId: bigint }) => Promise<boolean>;
+    /**
+     * The signer commitment recorded for a proposal key (`proposalSignersCommitment`, 4.13.0); the
+     * `SignersCommitted(key, signerMask)` event carries the same key. Zero = none recorded.
+     */
+    signersCommitment: (args: { key: bigint }) => Promise<Hex>;
     proposalNonces: (args: { proposalId: bigint }) => Promise<bigint>;
     
     // Aggregated Signatures
@@ -614,10 +636,10 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             throw AAStarError.fromViemError(error as Error, 'guardianSlashCase');
         }
 
-        // The shape gate. See GUARDIAN_SLASH_CASE_WORDS: this is the ONE place the deployed 4.11.0
-        // and the 4.12.0 source diverge, and it diverges without changing the selector — so length is
-        // the only signal available before the values are already wrong. Checked BEFORE decoding, so a
-        // longer return can never reach the decoder and produce plausible-looking shifted fields.
+        // The shape gate. See GUARDIAN_SLASH_CASE_WORDS: 4.11.0 and 4.13.0 diverge here without
+        // changing the selector — so length is the only signal available before the values are
+        // already wrong. Checked BEFORE decoding, so a return of the wrong width can never reach the
+        // decoder and produce plausible-looking shifted fields.
         const byteLength = (raw.length - 2) / 2;
         // An EMPTY return is a different diagnosis and deserves a different one. `eth_call` answers
         // `0x` when there is no code at the address, or when the contract has no such function and no
@@ -633,50 +655,51 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             );
         }
         if (byteLength !== GUARDIAN_SLASH_CASE_BYTES) {
+            const which = byteLength === GUARDIAN_SLASH_CASE_BYTES_4_11
+                ? `That is the BLSAggregator-4.11.0 struct (no slashBps): this aggregator predates ` +
+                  `rc.8 and needs an SDK build whose ABI matches it, not this one.`
+                : `The selector is unchanged across aggregator versions while the struct is not, so ` +
+                  `this is a version mismatch, not a bad caseId.`;
             throw new AAStarError(
                 ErrorCode.ABI_SHAPE_MISMATCH,
                 `guardianSlashCase: aggregator ${address} returned ${byteLength} bytes for ` +
                 `guardianSlashCases(${caseId}), expected ${GUARDIAN_SLASH_CASE_BYTES} ` +
-                `(${GUARDIAN_SLASH_CASE_WORDS} words = the deployed BLSAggregator-4.11.0 struct). ` +
-                `The selector is unchanged across 4.11.0/4.12.0 while the struct is not, so this is a ` +
-                `contract upgrade, not a bad caseId. Refusing to decode: a 7-parameter decode of a ` +
-                `longer return does not revert, it silently shifts every field after the added one. ` +
-                `Re-sync the BLSAggregator ABI (pnpm run abi:sync) and update GUARDIAN_SLASH_CASE_WORDS.`,
+                `(${GUARDIAN_SLASH_CASE_WORDS} words = the BLSAggregator-4.13.0 struct). ${which} ` +
+                `Refusing to decode: a decode with the wrong field count does not revert, it silently ` +
+                `shifts every field after the inserted one. Check version() and the vendored ABI.`,
             );
         }
 
         // Length is NECESSARY BUT NOT SUFFICIENT: a same-width change (a field REPLACED rather than
-        // added) is still 7 words and sails through the check above. The cheap complement is the one
-        // word whose valid values are constrained — `verifier` is an address, so its high 12 bytes
-        // MUST be zero.
-        //
-        // BE PRECISE ABOUT WHAT THIS DOES NOT COVER. It catches displacement only when the displaced
-        // value is LARGE. Measured against the actual 4.12.0 struct
-        // (SuperPaymaster@d651646a BLSAggregator.sol:143), which inserts `uint16 slashBps` BEFORE
-        // `verifier`: a 7-parameter decode would read `slashBps` in the `verifier` slot, and a uint16
-        // is right-aligned with 30 zero high bytes — so this check passes. The width check is what
-        // stops that one, and it is the reason both exist. Do not describe this as a general
-        // field-shift detector; the very next upstream change is the case it misses.
-        const verifierWord = raw.slice(2 + GUARDIAN_SLASH_CASE_VERIFIER_WORD * 64);
-        if (!/^0{24}/.test(verifierWord)) {
-            throw new AAStarError(
-                ErrorCode.ABI_SHAPE_MISMATCH,
-                `guardianSlashCase: word ${GUARDIAN_SLASH_CASE_VERIFIER_WORD} of ` +
-                `guardianSlashCases(${caseId}) on ${address} is 0x${verifierWord.slice(0, 64)}, whose ` +
-                `high 12 bytes are not zero — it cannot be the \`verifier\` address. The return is the ` +
-                `expected ${GUARDIAN_SLASH_CASE_BYTES} bytes, so this is a same-width struct change ` +
-                `(a field replaced or reordered), which the length check cannot see. Refusing to ` +
-                `decode: every field would be plausible and wrong. Re-sync the BLSAggregator ABI.`,
-            );
+        // added) is still 8 words and sails through the check above. The cheap complement is the two
+        // words whose valid values are constrained: `slashBps` is a uint16 (high 30 bytes zero) and
+        // `verifier` is an address (high 12 bytes zero). This catches displacement only when the
+        // displaced value is LARGE — a small integer landing in either slot passes. It is not a
+        // general field-shift detector; the width check is the primary guard.
+        for (const [w, zeroHex, what] of [
+            [GUARDIAN_SLASH_CASE_BPS_WORD, 60, 'the uint16 `slashBps`'],
+            [GUARDIAN_SLASH_CASE_VERIFIER_WORD, 24, 'the `verifier` address'],
+        ] as const) {
+            const value = raw.slice(2 + w * 64, 2 + (w + 1) * 64);
+            if (!new RegExp(`^0{${zeroHex}}`).test(value)) {
+                throw new AAStarError(
+                    ErrorCode.ABI_SHAPE_MISMATCH,
+                    `guardianSlashCase: word ${w} of guardianSlashCases(${caseId}) on ${address} is ` +
+                    `0x${value}, whose high ${zeroHex / 2} bytes are not zero — it cannot be ${what}. ` +
+                    `The return is the expected ${GUARDIAN_SLASH_CASE_BYTES} bytes, so this is a ` +
+                    `same-width struct change (a field replaced or reordered), which the length check ` +
+                    `cannot see. Refusing to decode: every field would be plausible and wrong.`,
+                );
+            }
         }
 
         try {
-            const [guardiansHash, fraudProofHash, deadline, status, guardianCount, resolvedCount, verifier] =
+            const [guardiansHash, fraudProofHash, deadline, status, guardianCount, resolvedCount, slashBps, verifier] =
                 decodeFunctionResult({
                     abi: BLSAggregatorABI,
                     functionName: 'guardianSlashCases',
                     data: raw,
-                }) as readonly [Hex, Hex, bigint | number, number, number, number, Address];
+                }) as readonly [Hex, Hex, bigint | number, number, number, number, number, Address];
             return {
                 guardiansHash,
                 fraudProofHash,
@@ -684,6 +707,7 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
                 status: Number(status) as GuardianSlashStatus,
                 guardianCount: Number(guardianCount),
                 resolvedCount: Number(resolvedCount),
+                slashBps: Number(slashBps),
                 verifier,
             };
         } catch (error) {
@@ -713,6 +737,14 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
     },
 
     async verifyAndExecute({ proposalId, operator, slashLevel, repUsers, newScores, epoch, evidenceHash, proof, account }) {
+        // 4.13.0: slash / reputation ids live below 2^128 (separation from the keccak-derived generic
+        // and queue keys); the contract reverts InvalidProposalId otherwise. Refuse before signing gas.
+        if (typeof proposalId === 'bigint' && (proposalId <= 0n || proposalId >> 128n !== 0n)) {
+            throw new AAStarError(
+                ErrorCode.INVALID_PARAMETER,
+                `verifyAndExecute: proposalId ${proposalId} is outside 1..2^128-1; BLSAggregator-4.13.0 reverts InvalidProposalId`,
+            );
+        }
         try {
             validateRequired(proposalId, 'proposalId');
             validateAddress(operator, 'operator');
@@ -749,6 +781,40 @@ export const aggregatorActions = (address: Address) => (client: PublicClient | W
             }) as Promise<boolean>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'executedProposals');
+        }
+    },
+
+    async genericProposalReplayKey({ proposalId }) {
+        try {
+            validateRequired(proposalId, 'proposalId');
+            const tag = await (client as PublicClient).readContract({
+                address, abi: BLSAggregatorABI, functionName: 'TAG_PROPOSAL', args: []
+            }) as Hex;
+            return BigInt(keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'uint256' }], [tag, proposalId])));
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'genericProposalReplayKey');
+        }
+    },
+
+    async isGenericProposalExecuted({ proposalId }) {
+        const key = await aggregatorActions(address)(client).genericProposalReplayKey({ proposalId });
+        try {
+            return await (client as PublicClient).readContract({
+                address, abi: BLSAggregatorABI, functionName: 'executedProposals', args: [key]
+            }) as boolean;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'isGenericProposalExecuted');
+        }
+    },
+
+    async signersCommitment({ key }) {
+        try {
+            validateRequired(key, 'key');
+            return await (client as PublicClient).readContract({
+                address, abi: BLSAggregatorABI, functionName: 'proposalSignersCommitment', args: [key]
+            }) as Hex;
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'signersCommitment');
         }
     },
 
