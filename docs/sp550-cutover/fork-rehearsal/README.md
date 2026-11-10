@@ -61,6 +61,16 @@
 
 注意：读 finalized 块上的状态，需要 RPC 提供非链头状态。OP Mainnet 的 `optimism-rpc.publicnode.com` 免费档会把这种读取当成 archive 请求拒掉（`-32602 Archive requests require a personal token`），换一个 endpoint 即可。
 
+**两个 RPC：** 正式读回一律要两个**不同的** RPC。只有在本地回环地址上做 fork 演练时，才允许只用一个 RPC；否则在读任何状态之前就 exit 2（clestons N4）。RPC 在快照块上 `getBlock` 或 `getCode` 抛错时，记为该项检查失败、exit 1，不会让脚本崩掉（N3）。
+
+**版本来自 pin：** SP 的 `version()` 必须和 `pins.spVersion` **完全相等**。Lens 的 `EXPECTED_SP_VERSION` 必须等于 `keccak256(pins.spVersion)`，两项检查用的是同一个 pin。gate 里不写死任何版本号：5.5.0 这条发布线里的 SP 合约版本是 `SuperPaymaster-5.5.1`，版本一变就是一次要评审的 pin 改动。`spVersion` 为空、缺失，或者不是 `SuperPaymaster-5.5.x` 格式，都算 pin 不完整。
+
+**gate 认证的必须是 SDK 实际在用的：** 下面几种情况都判失败，否则 gate 报 PASS 的合约，和 SDK 实际调用的合约可以不是同一个（clestons B1、N1、N2）。
+- 两种模式下，`pins.superPaymaster` 都必须等于 SDK 地址簿里的 `superPaymaster`。
+- 原地升级模式下，地址簿里的 `aPNTs` 和 `xPNTsFactory` 必须分别等于链上的 `SP.APNTS_TOKEN()` 和 `SP.xpntsFactory()`。也就是说，切换时地址簿必须一起更新：今天 Sepolia 上地址簿里的 `xPNTsFactory` 是 v1 factory，升级后 SP 会指向 V2 factory。
+- 全新部署模式下，地址簿里每个 pin 过的条目都必须等于 pin 值，声明为 absent 的 key 不能出现在地址簿里。
+- pin 之间不能有地址重复，例外只有三对本来就该相同的：`superPaymaster` = `addresses.superPaymaster`，`aPNTsCapped` = `addresses.aPNTs`，`xPNTsFactoryV2` = `addresses.xPNTsFactory`。
+
 pin 覆盖 SP 自己部署的整本地址簿，每个条目归谁由 `SP550_ADDRESS_OWNER` 规定，地址簿新增 key 却没归类，编译就会报错：
 - `sp`：必须 pin。
 - `sp-optional`：要么 pin，要么列进 `absent`（SP 的 manifest 声明这条链上没部署）；两样都没有，就算问题。
@@ -82,7 +92,7 @@ OP Mainnet 的发布暂停只能通过改 `SP550_RELEASE_HOLDS` 来解除，没�
 |---|---|---|---|---|
 | `op-sepolia` | `sepolia.optimism.io` + `optimism-sepolia-rpc.publicnode.com` | 51236181 | FAIL 22/26，exit 1 | 两边块哈希相同；读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
 | `op-mainnet` | `mainnet.optimism.io` + `optimism.drpc.org` | 159338166 | FAIL 23/27，exit 1 | 同上，另多一项发布暂停 |
-| `sepolia` | 私有 Sepolia RPC（单个，原地升级） | 12101458 | FAIL 17/19，exit 1 | 读到 5.4.2 |
+| `sepolia` | 私有 Sepolia RPC（单个，原地升级） | 12101458 | FAIL 17/19，exit 1 | 读到 5.4.2。按现在的规则（N4），单个非回环 RPC 会在读任何东西之前就 exit 2 |
 
 chainId 错、缺 `--rpc2`、两个 RPC 是同一 endpoint、网络名未知、`--block` 取值非法、拿不到 finalized 块，这几种情况都 exit 2。
 

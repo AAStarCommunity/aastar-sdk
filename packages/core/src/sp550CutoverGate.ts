@@ -3,7 +3,8 @@
  * kept here so it runs against injected clients in tests. Not exported from the package index.
  *
  * Order of operations, each step refusing before the next one reads anything:
- *  1. usage: a known --network, at least one RPC, two DISTINCT RPC endpoints for a fresh deploy;
+ *  1. usage: a known --network and two DISTINCT RPC endpoints (a single RPC only for a local,
+ *     loopback fork rehearsal of the upgrade);
  *  2. chain identity: every RPC's chainId must be the network's;
  *  3. snapshot: one block number (default: the lowest FINALIZED block across the RPCs), and with
  *     two RPCs a well-formed, identical block hash on both;
@@ -11,7 +12,9 @@
  *  5. every state read (SP version, impl slot, wiring, code) is taken on EVERY RPC at the
  *     snapshot block. A disagreement between RPCs is a Diverge object, not a value: it is never
  *     equal to anything (not even another Diverge), so it fails every check it feeds;
- *  6. every pinned address (top-level and address book) has the same non-empty code on every RPC.
+ *  6. every pinned address (top-level and address book) has the same non-empty code on every RPC;
+ *  7. the SDK's own address book names what was certified: the proxy, and the entries SP is wired
+ *     to (a PASS for a proxy the SDK does not use would authorise nothing it actually calls).
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
@@ -19,12 +22,11 @@ import { APNTsCappedABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFact
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { SP550_CUTOVER_PINS, sp550PinProblems } from './sp550Cutover.js';
 import {
-    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems,
+    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550PinAliasProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
-const EXPECTED_VERSION = 'SuperPaymaster-5.5.0';
 
 export type GateClient = Pick<PublicClient, 'getChainId' | 'getBlockNumber' | 'getBlock' | 'readContract' | 'getStorageAt' | 'getCode'>;
 export interface GateRpc { label: string; url: string; client: GateClient }
@@ -37,6 +39,8 @@ export interface GateInput {
     /** Snapshot block: a number, or the lowest 'finalized' (default) / 'latest' block across the RPCs. */
     block?: bigint | 'finalized' | 'latest';
     allowRc?: boolean;
+    /** The SDK address book to hold the pins against; default CANONICAL_ADDRESSES[chainId] (tests inject). */
+    book?: Record<string, unknown>;
 }
 export interface GateCheck { check: string; ok: boolean; detail: string }
 export interface GateResult { exitCode: 0 | 1 | 2; error?: string; header?: string; results: GateCheck[] }
@@ -55,6 +59,7 @@ class Diverge {
 const str = (v: unknown): string => (v instanceof Diverge ? v.detail : typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const HASH = /^0x[0-9a-fA-F]{64}$/;
+const isLoopback = (url: string) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
 
 export async function runSp550CutoverGate(input: GateInput): Promise<GateResult> {
     const results: GateCheck[] = [];
@@ -66,6 +71,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const rpcs = input.rpcs;
     if (rpcs.length === 0) return refuse('--rpc is required');
     if (net.mode === 'fresh' && rpcs.length < 2) return refuse(`--network ${net.network} is a fresh deploy: its read-back needs two RPCs (--rpc2)`);
+    if (rpcs.length < 2 && !rpcs.every((r) => isLoopback(r.url))) {
+        return refuse(`--network ${net.network}: a read-back needs two independent RPCs (--rpc2); a single RPC is accepted only for a loopback fork rehearsal`);
+    }
     let keys: string[];
     try { keys = rpcs.map((r) => rpcEndpointKey(r.url)); } catch (e: any) { return refuse(`malformed RPC URL: ${e.message}`); }
     if (new Set(keys).size !== keys.length) return refuse('--rpc and --rpc2 are the same endpoint; a two-RPC read-back needs two independent endpoints');
@@ -97,8 +105,11 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         if (bad >= 0) return refuse(`${rpcs[bad].label} served no ${at} block number; pass --block <n>`);
         blockNumber = (tips as bigint[]).reduce((a, b) => (a < b ? a : b));
     }
-    const snapshotHashes = async () => (await Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber })))).map((b) =>
-        typeof b.hash === 'string' && HASH.test(b.hash) && b.number === blockNumber ? b.hash : undefined);
+    // An RPC that cannot serve the block yields `undefined` (fails every comparison) rather than throwing.
+    const snapshotHashes = async () => Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber }).then(
+        (b) => (typeof b?.hash === 'string' && HASH.test(b.hash) && b.number === blockNumber ? b.hash : undefined),
+        () => undefined,
+    )));
     const before = await snapshotHashes();
     record(rpcs.length > 1 ? 'every RPC serves the same block at the snapshot' : 'the RPC serves a well-formed snapshot block',
         before.every((h) => h !== undefined && h === before[0]),
@@ -109,7 +120,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
     const pins: Sp550FreshDeployPins = input.pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[chainId] ?? {};
     const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${table}[${chainId}]`} ===`;
-    const problems = net.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc: input.allowRc }) : sp550PinProblems(pins, { allowRc: input.allowRc });
+    const problems = net.mode === 'fresh'
+        ? sp550FreshPinProblems(pins, { allowRc: input.allowRc })
+        : [...sp550PinProblems(pins, { allowRc: input.allowRc }), ...sp550PinAliasProblems(pins)];
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) record('no release hold on this chain', false, hold);
@@ -125,30 +138,44 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const codeHash = async (address?: Address): Promise<unknown> => {
         if (!address) return undefined;
         return agree(await Promise.all(rpcs.map(async (r) => {
-            const code = await r.client.getCode({ address, blockNumber });
-            return code && code !== '0x' ? keccak256(code) : undefined;
+            try {
+                const code = await r.client.getCode({ address, blockNumber });
+                return code && code !== '0x' ? keccak256(code) : undefined;
+            } catch (e: any) { return `ERR ${e?.shortMessage ?? e?.message}`; }
         })));
     };
     const cmp = (check: string, observed: unknown, expected: unknown, what = 'pinned') =>
         record(check, eq(observed, expected), `observed ${str(observed)} · ${what} ${expected === undefined ? '(unpinned)' : str(expected)}`);
 
     // Unpinned proxy: still READ the canonical one, so the report shows what the chain holds.
-    const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {};
+    const canonical = (input.book ?? (CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {}) as Record<string, any>;
     const sp = (pins.superPaymaster ?? canonical.superPaymaster) as Address | undefined;
     if (!pins.superPaymaster) record('pins.superPaymaster', false, `(unpinned) — reading canonical ${sp ?? 'none'}`);
     if (!sp) return await finish();
 
-    // 5a. What is behind the proxy.
+    // The proxy the gate certifies must be the one the SDK talks to (executeGasless, the keeper).
+    cmp('pins.superPaymaster == SDK book superPaymaster', pins.superPaymaster, canonical.superPaymaster, 'SDK book');
+
+    // 5a. What is behind the proxy. The expected version is a reviewed pin, never a constant here.
     const version = await read(sp, SuperPaymasterV550ABI, 'version');
-    record(`SP.version() == "${EXPECTED_VERSION}"`, version === EXPECTED_VERSION, str(version));
+    record('SP.version() == pins.spVersion', typeof pins.spVersion === 'string' && pins.spVersion !== '' && version === pins.spVersion,
+        `observed ${str(version)} · pinned ${pins.spVersion === undefined || pins.spVersion === '' ? '(unpinned)' : JSON.stringify(pins.spVersion)}`);
     const slot = agree(await Promise.all(rpcs.map((r) => r.client.getStorageAt({ address: sp, slot: ERC1967_IMPL_SLOT, blockNumber }))));
     const impl = typeof slot === 'string' && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress(('0x' + slot.slice(-40)) as Address) : undefined;
     cmp('ERC-1967 impl == pins.spImpl', impl ?? `malformed slot ${str(slot)}`, pins.spImpl);
     cmp('keccak256(code(impl)) == pins.spImplCodehash', await codeHash(impl), pins.spImplCodehash);
 
     // 5b. SP's own 5.5.0 wiring.
-    cmp('SP.APNTS_TOKEN() == pins.aPNTsCapped', await read(sp, SuperPaymasterV550ABI, 'APNTS_TOKEN'), pins.aPNTsCapped);
-    cmp('SP.xpntsFactory() == pins.xPNTsFactoryV2', await read(sp, SuperPaymasterV550ABI, 'xpntsFactory'), pins.xPNTsFactoryV2);
+    const apntsToken = await read(sp, SuperPaymasterV550ABI, 'APNTS_TOKEN');
+    const xpntsFactory = await read(sp, SuperPaymasterV550ABI, 'xpntsFactory');
+    cmp('SP.APNTS_TOKEN() == pins.aPNTsCapped', apntsToken, pins.aPNTsCapped);
+    cmp('SP.xpntsFactory() == pins.xPNTsFactoryV2', xpntsFactory, pins.xPNTsFactoryV2);
+    if (net.mode === 'upgrade') {
+        // The upgrade keeps the book's addresses, so after the APNTS / factory switch the book must be
+        // updated with the cutover: the SDK deposits aPNTs and deploys xPNTs through these entries.
+        cmp('SDK book aPNTs == SP.APNTS_TOKEN()', canonical.aPNTs, apntsToken, 'chain');
+        cmp('SDK book xPNTsFactory == SP.xpntsFactory()', canonical.xPNTsFactory, xpntsFactory, 'chain');
+    }
     const apntsVersion = await read(pins.aPNTsCapped, APNTsCappedABI, 'version');
     record('aPNTsCapped.version() is APNTsCapped-*', typeof apntsVersion === 'string' && apntsVersion.startsWith('APNTsCapped-'), str(apntsVersion));
 
@@ -166,9 +193,10 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     // (xPNTsTokenV2.sol:74); the implementation disables initializers (:44), so on the impl it is 0.
     // EXTENSION and PROTOCOL_REGISTRY above are immutables (:26, xPNTsV2Base.sol:53), set on the impl.
 
-    // 5d. The Lens is the 5.5.0 one.
+    // 5d. The Lens expects exactly the pinned SP version (derived from the same pin, not a constant).
     const lensVersion = await read(pins.superPaymasterLens, SuperPaymasterLensABI, 'EXPECTED_SP_VERSION');
-    record('Lens.EXPECTED_SP_VERSION() == keccak256("SuperPaymaster-5.5.0")', eq(lensVersion, keccak256(toHex(EXPECTED_VERSION))), str(lensVersion));
+    const expectedLens = typeof pins.spVersion === 'string' && pins.spVersion !== '' ? keccak256(toHex(pins.spVersion)) : undefined;
+    cmp('Lens.EXPECTED_SP_VERSION() == keccak256(pins.spVersion)', lensVersion, expectedLens);
 
     // 5e. Fresh deploy: the SP-owned address book is the one SP is wired to, and every pinned address is code.
     if (net.mode === 'fresh') {
@@ -181,6 +209,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
         cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint, 'SDK book');
         cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed, 'SDK book');
+        // A fresh stack replaces every SP-owned entry: the SDK book ships them, so it must BE them.
+        for (const [k, a] of Object.entries(book)) cmp(`SDK book ${k} == addresses.${k}`, canonical[k], a, 'pinned');
+        for (const k of pins.absent ?? []) record(`SDK book has no ${k} (declared absent)`, canonical[k] === undefined, `SDK book ${str(canonical[k] ?? '(none)')}`);
     }
 
     // 5f. Every pinned address, top-level and address book, is real code and the same code on every RPC.

@@ -9,7 +9,7 @@ import {
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const BOOK = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => [k, A(100 + i)]));
 const FULL = {
-    tag: 'v5.5.0', superPaymaster: BOOK.superPaymaster, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
+    tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: BOOK.superPaymaster, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
     addresses: BOOK,
@@ -93,8 +93,8 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
     it.each([
         ['zero address', { registry: '0x0000000000000000000000000000000000000000' }, /addresses\.registry: not a non-zero address/],
         ['short address', { staking: '0x12' }, /addresses\.staking: not a non-zero address/],
-        ['external key pinned from SP', { entryPoint: A(5) }, /addresses\.entryPoint: external/],
-        ['unknown key', { notAKey: A(5) }, /addresses\.notAKey: not an address-book key/],
+        ['external key pinned from SP', { entryPoint: A(500) }, /addresses\.entryPoint: external/],
+        ['unknown key', { notAKey: A(501) }, /addresses\.notAKey: not an address-book key/],
     ])('a bad book entry is refused: %s', (_n, patch, msg) => {
         expect(sp550FreshPinProblems({ ...FULL, addresses: { ...BOOK, ...(patch as any) } })).toEqual([expect.stringMatching(msg)]);
     });

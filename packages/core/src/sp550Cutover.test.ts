@@ -5,7 +5,7 @@ import {
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const FULL = {
-    tag: 'v5.5.0', superPaymaster: '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9', spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
+    tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9', spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
 } as const;
@@ -13,7 +13,7 @@ const FULL = {
 describe('SP 5.5.0 cutover pins fail closed', () => {
     it('Sepolia is unpinned until the post-upgrade readback, so requiring it throws and names every field', () => {
         expect(missingSp550Pins(SP550_CUTOVER_PINS[11155111])).toEqual([...SP550_REQUIRED_PIN_FIELDS]);
-        expect(() => requireSp550CutoverPins(11155111)).toThrow(/tag: unpinned; superPaymaster: unpinned; spImpl/);
+        expect(() => requireSp550CutoverPins(11155111)).toThrow(/tag: unpinned; spVersion: unpinned; superPaymaster: unpinned; spImpl/);
     });
     it('a chain with no entry at all also fails closed', () => {
         expect(() => requireSp550CutoverPins(10)).toThrow(/chain 10/);
