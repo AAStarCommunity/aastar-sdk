@@ -7,8 +7,9 @@
  * public client are stubs; the account is a real viem LocalAccount (anvil's public test mnemonic,
  * index 3) wrapped to count `signMessage`. Nothing is signed for, or sent to, any network.
  *
- * What it measures (per scenario): how many times the SDK asks the signer to sign, which hashes,
- * and whether the estimation signature covers a different UserOp than the submitted one. It does
+ * What it measures (per scenario): how many times the SDK asks the signer to sign, and which
+ * hashes. Estimation carries a dummy signature and asks the signer nothing (before that change it
+ * signed the estimation op too: A=2, C=3, D=2). It does
  * NOT measure wallet prompts: whether a signMessage call surfaces as a prompt depends on the
  * account implementation the integrator passes in (a LocalAccount never prompts; a KMS / passkey
  * account runs its ceremony per call).
@@ -36,10 +37,10 @@ type SendMode = 'ok' | 'underpriced-once' | 'method-not-found';
 type Scenario = { id: string; desc: string; explicitGas: boolean; send: SendMode; expect: number };
 
 const SCENARIOS: Scenario[] = [
-    { id: 'A', desc: 'autoEstimate (no gas limits passed), bundler accepts', explicitGas: false, send: 'ok', expect: 2 },
+    { id: 'A', desc: 'autoEstimate (no gas limits passed), bundler accepts', explicitGas: false, send: 'ok', expect: 1 },
     { id: 'B', desc: 'caller passes verificationGasLimit + callGasLimit, bundler accepts', explicitGas: true, send: 'ok', expect: 1 },
-    { id: 'C', desc: 'autoEstimate, bundler answers "replacement underpriced" once then accepts', explicitGas: false, send: 'underpriced-once', expect: 3 },
-    { id: 'D', desc: 'autoEstimate, bundler has no eth_sendUserOperation (-32601) -> direct handleOps fallback', explicitGas: false, send: 'method-not-found', expect: 2 },
+    { id: 'C', desc: 'autoEstimate, bundler answers "replacement underpriced" once then accepts', explicitGas: false, send: 'underpriced-once', expect: 2 },
+    { id: 'D', desc: 'autoEstimate, bundler has no eth_sendUserOperation (-32601) -> direct handleOps fallback', explicitGas: false, send: 'method-not-found', expect: 1 },
 ];
 
 async function main() {
