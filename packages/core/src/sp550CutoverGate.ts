@@ -5,7 +5,8 @@
  * Order of operations, each step refusing before the next one reads anything:
  *  1. usage: a known --network, at least one RPC, two DISTINCT RPC endpoints for a fresh deploy;
  *  2. chain identity: every RPC's chainId must be the network's;
- *  3. snapshot: one block number, and with two RPCs a well-formed, identical block hash on both;
+ *  3. snapshot: one block number (default: the lowest FINALIZED block across the RPCs), and with
+ *     two RPCs a well-formed, identical block hash on both;
  *  4. pins: complete and well-formed for the network's mode, and no release hold;
  *  5. every state read (SP version, impl slot, wiring, code) is taken on EVERY RPC at the
  *     snapshot block. A disagreement between RPCs is a Diverge object, not a value: it is never
@@ -33,7 +34,8 @@ export interface GateInput {
     /** Pins to check; default: the network's table entry. */
     pins?: Sp550FreshDeployPins;
     pinsSource?: string;
-    block?: bigint;
+    /** Snapshot block: a number, or the lowest 'finalized' (default) / 'latest' block across the RPCs. */
+    block?: bigint | 'finalized' | 'latest';
     allowRc?: boolean;
 }
 export interface GateCheck { check: string; ok: boolean; detail: string }
@@ -78,10 +80,23 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     //    NUMBER (eth_call / getCode / getStorageAt in viem take no block hash), so the hash each RPC
     //    served is taken again after the last read (finish()): a reorg that is still in place when
     //    the reads end fails the gate. Known limit: a fork that goes A -> B -> A between the two
-    //    hash reads is invisible (equal hashes). Reads are not hash-bound; pass --block a few
-    //    blocks behind the head (or a finalized block) to make that window irrelevant.
-    const heads = await Promise.all(rpcs.map((r) => r.client.getBlockNumber()));
-    const blockNumber = input.block ?? heads.reduce((a, b) => (a < b ? a : b));
+    //    hash reads is invisible (equal hashes). Reads are not hash-bound, so the default snapshot
+    //    is the lowest FINALIZED block across the RPCs, where that window cannot open. 'latest' is
+    //    for a local fork (whose finalized block predates the rehearsed upgrade), not a read-back.
+    const at = input.block ?? 'finalized';
+    let blockNumber: bigint;
+    if (typeof at === 'bigint') blockNumber = at;
+    else {
+        let tips: unknown[];
+        try {
+            tips = at === 'latest'
+                ? await Promise.all(rpcs.map((r) => r.client.getBlockNumber()))
+                : (await Promise.all(rpcs.map((r) => r.client.getBlock({ blockTag: 'finalized' })))).map((b) => b?.number);
+        } catch (e: any) { return refuse(`could not read the ${at} block (${e.shortMessage ?? e.message}); pass --block <n>`); }
+        const bad = tips.findIndex((n) => typeof n !== 'bigint');
+        if (bad >= 0) return refuse(`${rpcs[bad].label} served no ${at} block number; pass --block <n>`);
+        blockNumber = (tips as bigint[]).reduce((a, b) => (a < b ? a : b));
+    }
     const snapshotHashes = async () => (await Promise.all(rpcs.map((r) => r.client.getBlock({ blockNumber })))).map((b) =>
         typeof b.hash === 'string' && HASH.test(b.hash) && b.number === blockNumber ? b.hash : undefined);
     const before = await snapshotHashes();
@@ -93,7 +108,7 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const chainId = net.chainId;
     const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
     const pins: Sp550FreshDeployPins = input.pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[chainId] ?? {};
-    const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}, pins from ${input.pinsSource ?? `${table}[${chainId}]`} ===`;
+    const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${table}[${chainId}]`} ===`;
     const problems = net.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc: input.allowRc }) : sp550PinProblems(pins, { allowRc: input.allowRc });
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
     const hold = SP550_RELEASE_HOLDS[chainId];

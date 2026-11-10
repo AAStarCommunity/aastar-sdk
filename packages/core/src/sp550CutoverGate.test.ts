@@ -35,6 +35,8 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${p.lens}.EXPECTED_SP_VERSION`]: keccak256(toHex('SuperPaymaster-5.5.0')),
     };
     return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined,
+        /** The block this RPC reports as finalized (default HEAD); null = it serves none. */
+        finalized: HEAD as bigint | null,
         /** Per-address code overrides ('0x' = no code); default codeOf(address). */
         code: {} as Record<string, Hex>,
         /** Called after each readContract answer (lets a test reorg the model mid-run). */
@@ -54,7 +56,15 @@ function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
     const client: GateClient = {
         getChainId: async () => { log('getChainId'); return m.chainId; },
         getBlockNumber: async () => { log('getBlockNumber'); return HEAD; },
-        getBlock: (async ({ blockNumber }: any) => { log('getBlock'); return { number: m.servedBlock ?? blockNumber, hash: m.blockHash }; }) as any,
+        getBlock: (async ({ blockNumber, blockTag }: any) => {
+            if (blockTag !== undefined) {
+                log(`getBlock ${blockTag}`);
+                if (blockTag !== 'finalized') throw new Error(`unexpected blockTag ${blockTag}`);
+                if (m.finalized === null) throw Object.assign(new Error('unsupported'), { shortMessage: 'finalized tag not supported' });
+                return { number: m.finalized, hash: m.blockHash };
+            }
+            log('getBlock'); return { number: m.servedBlock ?? blockNumber, hash: m.blockHash };
+        }) as any,
         getStorageAt: (async ({ slot, blockNumber }: any) => {
             log('getStorageAt'); atSnapshot('getStorageAt', blockNumber);
             if (slot !== IMPL_SLOT) throw new Error(`unexpected slot ${slot}`);
@@ -248,5 +258,48 @@ describe('SP 5.5.0 cutover gate: pins and holds', () => {
         const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m) });
         expect(r.exitCode).toBe(1);
         expect(r.results.find((c) => c.check === 'pins complete and well-formed')).toMatchObject({ ok: false });
+    });
+});
+
+describe('SP 5.5.0 cutover gate: the snapshot block defaults to finalized', () => {
+    it('with no --block, every read is at the lowest finalized block, and the head is never asked for', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const m2 = { ...structuredClone(m), finalized: HEAD + 3n }; // RPC2 finalized further; the snapshot must be the lower one
+        const calls: string[] = [];
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m, m2, calls), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+        expect(r.header).toMatch(new RegExp(`block ${HEAD} \\(lowest finalized\\)`));
+        expect(calls.slice(2, 4)).toEqual(['--rpc:getBlock finalized', '--rpc2:getBlock finalized']);
+        expect(calls.some((c) => c.endsWith('getBlockNumber'))).toBe(false);
+    });
+    it('an RPC that serves no finalized block is refused before any state read (exit 2)', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const calls: string[] = [];
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m, { ...structuredClone(m), finalized: null }, calls), pins: m.pins });
+        expect(r).toMatchObject({ exitCode: 2, error: expect.stringMatching(/could not read the finalized block .*pass --block/) });
+        expect(calls.some((c) => /getStorageAt|getCode|read /.test(c))).toBe(false);
+    });
+    it('a finalized answer without a block number is refused, not read at an undefined block (exit 2)', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const [a, b] = twin(m);
+        const getBlock = b.client.getBlock;
+        b.client.getBlock = (async (q: any) => (q.blockTag ? { number: null, hash: null } : getBlock(q))) as any;
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: [a, b], pins: m.pins });
+        expect(r).toMatchObject({ exitCode: 2, error: expect.stringMatching(/--rpc2 served no finalized block number/) });
+    });
+    it("'latest' (fork rehearsal) takes the lower head instead", async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const calls: string[] = [];
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://a.example', { ...m, finalized: null }, calls)], pins: m.pins, block: 'latest' });
+        expect(r.exitCode).toBe(0);
+        expect(r.header).toMatch(/\(lowest latest\)/);
+        expect(calls).toContain('--rpc:getBlockNumber');
+    });
+    it('an explicit block number is used as given', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://a.example', { ...m, finalized: null }, [])], pins: m.pins, block: HEAD });
+        expect(r.exitCode).toBe(0);
+        expect(r.header).toMatch(new RegExp(`block ${HEAD}, pins`));
     });
 });

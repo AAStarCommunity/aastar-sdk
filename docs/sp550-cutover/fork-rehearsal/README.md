@@ -39,6 +39,8 @@
 | fork，把 globalTierSource 换成 AOAProtocolRegistry 的地址（负对照） | FAIL 1/16，命中 `factory.defaultTierSource()` 这一项，exit 1 |
 | Sepolia live（block 12090052），pin 为空 | FAIL 18/18：链上是 5.4.2，impl 为 `0xe25f88db`，exit 1 |
 
+上表是 2026-11-08 的结果，当时默认快照是链头。现在在 fork 上重跑，要加 `--block latest`，理由见下文。
+
 注意：`pins.fork.json` 里的 `spImplCodehash` 是从同一个 fork 读回的，所以这一项是同源比较。live 上它必须来自独立的链上读回。
 
 ### 按网络选择（2026-11-09 起）
@@ -51,7 +53,13 @@
 | `op-sepolia` | 11155420 | 全新部署整套 V5（链上是不带 proxy 的 SP 3.2.2） | `SP550_FRESH_DEPLOY_PINS` |
 | `op-mainnet` | 10 | 同上；另有发布暂停：3.2.2 的迁移或下线由作者决定 | `SP550_FRESH_DEPLOY_PINS` + `SP550_RELEASE_HOLDS` |
 
-全新部署必须用两个**不同的** RPC endpoint 读回（`--rpc2`）。只差尾斜杠或主机名大小写的，也算同一个 endpoint，直接 exit 2。两边在快照块上必须返回所要的那一块，块哈希格式合法且相同。此后每一次状态读取都在两边各读一次，包括 version、impl 槽、各项 wiring 和 code；两边不一致，就记成 `DIVERGE` 对象。它和任何值都不相等，包括另一个 `DIVERGE`，所以对应那项检查一定失败。每个已 pin 的地址，无论在顶层还是地址簿里，在每个 RPC 上的 code 都必须非空且相同。viem 的读调用只能按块号读，不能按块哈希读，所以全部读完以后，要在每个 RPC 上把快照块的哈希再取一次，必须和开头一致。读完时重组还没退回去，gate 就判失败。**已知限制：**如果在两次取哈希之间，链从 A 切到 B 又回到 A，两次哈希相同，这次重组就发现不了，因为读取并没有绑定块哈希。正式读回时用 `--block` 指定一个比链头早几块的块，或者直接用 finalized 块，这个窗口就无关紧要了。
+全新部署必须用两个**不同的** RPC endpoint 读回（`--rpc2`）。只差尾斜杠或主机名大小写的，也算同一个 endpoint，直接 exit 2。两边在快照块上必须返回所要的那一块，块哈希格式合法且相同。此后每一次状态读取都在两边各读一次，包括 version、impl 槽、各项 wiring 和 code；两边不一致，就记成 `DIVERGE` 对象。它和任何值都不相等，包括另一个 `DIVERGE`，所以对应那项检查一定失败。每个已 pin 的地址，无论在顶层还是地址簿里，在每个 RPC 上的 code 都必须非空且相同。viem 的读调用只能按块号读，不能按块哈希读，所以全部读完以后，要在每个 RPC 上把快照块的哈希再取一次，必须和开头一致。读完时重组还没退回去，gate 就判失败。**已知限制（A→B→A 重组）：**如果在两次取哈希之间，链从 A 切到 B 又回到 A，两次哈希相同，这次重组就发现不了，因为读取并没有绑定块哈希。所以快照块**默认取 finalized 块**：在所有 RPC 报告的 finalized 块里取最低的那个。finalized 块不会再被重组，这个窗口也就不存在了。哪个 RPC 给不出 finalized 块（报错，或者没有块号），就在读状态之前 exit 2。正式读回必须用这个默认值，不要用“链头往前几块”。
+
+`--block` 的另外两种取值：
+- 一个具体块号：原样使用，例如复核某次读回。
+- `latest`：取各 RPC 链头里最低的那个，**只用于本地 fork 演练**。fork 上的升级发生在 fork 块之后，而 fork 的 finalized 块早于这次升级，用默认值会读到升级前的状态。
+
+注意：读 finalized 块上的状态，需要 RPC 提供非链头状态。OP Mainnet 的 `optimism-rpc.publicnode.com` 免费档会把这种读取当成 archive 请求拒掉（`-32602 Archive requests require a personal token`），换一个 endpoint 即可。
 
 pin 覆盖 SP 自己部署的整本地址簿，每个条目归谁由 `SP550_ADDRESS_OWNER` 规定，地址簿新增 key 却没归类，编译就会报错：
 - `sp`：必须 pin。
@@ -68,15 +76,15 @@ OP Mainnet 的发布暂停只能通过改 `SP550_RELEASE_HOLDS` 来解除，没�
 - RPC2 上的 impl 或 wiring 与 RPC1 不一致；
 - 发布暂停。
 
-2026-11-09 实跑（pin 为空，只读）：
+2026-11-10 实跑（pin 为空，只读，默认快照 = 最低 finalized 块）：
 
-| 网络 | 结果 | 说明 |
-|---|---|---|
-| `op-sepolia` | FAIL 22/26，exit 1 | 读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
-| `op-mainnet` | FAIL 23/27，exit 1 | 同上，另多一项发布暂停 |
-| `sepolia` | FAIL 17/19，exit 1 | 读到 5.4.2 |
+| 网络 | RPC | 快照块 | 结果 | 说明 |
+|---|---|---|---|---|
+| `op-sepolia` | `sepolia.optimism.io` + `optimism-sepolia-rpc.publicnode.com` | 51236181 | FAIL 22/26，exit 1 | 两边块哈希相同；读到 `SuperPaymaster-3.2.2`，impl 槽为 0 |
+| `op-mainnet` | `mainnet.optimism.io` + `optimism.drpc.org` | 159338166 | FAIL 23/27，exit 1 | 同上，另多一项发布暂停 |
+| `sepolia` | 私有 Sepolia RPC（单个，原地升级） | 12101458 | FAIL 17/19，exit 1 | 读到 5.4.2 |
 
-chainId 错、缺 `--rpc2`、两个 RPC 是同一 endpoint、网络名未知，这几种情况都 exit 2。
+chainId 错、缺 `--rpc2`、两个 RPC 是同一 endpoint、网络名未知、`--block` 取值非法、拿不到 finalized 块，这几种情况都 exit 2。
 
 ## SDK E2E（`e2e.txt`，`scripts/sp550-fork-e2e.ts`）
 
