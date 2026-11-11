@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -209,6 +209,13 @@ describe('writeAll: all or nothing, never clobbering another writer', () => {
         expect(err?.message).toMatch(/table\.ts could not be restored/);
         expect(err?.unrestored).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
     });
+    it('a temp file that cannot be removed does not mask the rollback status (Codex r9)', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => p === '/r/book.ts' });
+        io.remove = () => { throw new Error('EBUSY'); };
+        let err: any;
+        try { writeAll(F, '/r', io); } catch (e) { err = e; }
+        expect(err?.unrestored).toEqual(expect.arrayContaining([expect.stringMatching(/pin-fill\.tmp could not be removed \(EBUSY\)/)]));
+    });
     it('restore() attempts every file and reports each failure', () => {
         const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
         const restore = writeAll(F, '/r', io);
@@ -273,9 +280,27 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         const rb = live(); mutate(rb);
         expect(spLiveReadbackProblems(rb, pins, 11155111, entries)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
     });
+    it('fresh aliases (addresses.aPNTs / xPNTsFactory / superPaymaster) are read back under their top-level names (Codex r9)', () => {
+        const aliased: any = { ...pins, addresses: { ...pins.addresses, aPNTs: pins.aPNTsCapped, xPNTsFactory: pins.xPNTsFactoryV2, superPaymaster: pins.superPaymaster },
+            codehashes: { ...pins.codehashes, 'addresses.aPNTs': pins.codehashes!.aPNTsCapped, 'addresses.xPNTsFactory': pins.codehashes!.xPNTsFactoryV2, 'addresses.superPaymaster': pins.codehashes!.superPaymaster } };
+        expect(spLiveReadbackProblems(live(), aliased, 11155111, sp550PinnedAddressEntries(aliased))).toEqual([]);
+        const split: any = { ...aliased, addresses: { ...aliased.addresses, aPNTs: A(0x77) } };
+        expect(spLiveReadbackProblems(live(), split, 11155111, sp550PinnedAddressEntries(split))).toEqual([expect.stringMatching(/pins: addresses\.aPNTs .* != aPNTsCapped .*declared alias/)]);
+    });
     it('a staking book entry is looked up under contracts.gTokenStaking', () => {
         const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } };
         const rb = live(); rb.contracts.gTokenStaking = { address: A(0x2a), codehash: '0x' + '2a'.repeat(32) };
         expect(spLiveReadbackProblems(rb, withStaking, 11155111, sp550PinnedAddressEntries(withStaking))).toEqual([]);
     });
+});
+
+describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)', () => {
+    const C = 'a'.repeat(40);
+    it('a plain path is fetched at exactly that commit', () => {
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C)).toBe(`repos/AAStarCommunity/SuperPaymaster/contents/deployments/release/rc8/sepolia.readback.live.json?ref=${C}`);
+    });
+    it.each(['x.json?ref=main#', 'x.json#frag', '../x.json', 'a/./x.json', 'a/x.txt', '/abs.json', 'a//x.json', 'x%3Fref=main.json', 'x .json'])('%s is refused', (p) => {
+        expect(() => spReadbackApiPath(p, C)).toThrow(/not a plain repository path/);
+    });
+    it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('x.json', 'main')).toThrow(/not a 40-hex sha/));
 });

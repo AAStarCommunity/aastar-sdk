@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
-import type { Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
 
 export type PinFillMode = 'upgrade' | 'fresh';
 
@@ -207,7 +207,10 @@ export function writeAll(files: { path: string; before: string; after: string }[
     try { for (const f of files) { io.rename(`${f.path}.pin-fill.tmp`, f.path); done.push(f); } }
     catch (e) {
         const left = restoreEach(done);
-        for (const f of files) io.remove(`${f.path}.pin-fill.tmp`);
+        // Cleanup must not mask the rollback status: a temp file that cannot be removed is reported too.
+        for (const f of files) {
+            try { io.remove(`${f.path}.pin-fill.tmp`); } catch (re) { left.push(`${path.relative(root, f.path)}.pin-fill.tmp could not be removed (${(re as Error).message})`); }
+        }
         // `unrestored` tells the caller to KEEP its recovery data (journal + before-images).
         throw Object.assign(new Error(`write failed (${(e as Error).message})${left.length ? `; ${left.join('; ')}` : '; nothing left changed'}`), { unrestored: left });
     }
@@ -230,8 +233,18 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     const h = pins.codehashes ?? {};
     // spImpl / registryImpl are the proxies' erc1967Impl fields in the read-back.
     const viaProxy: Record<string, [string, string, string]> = { spImpl: ['superPaymaster', 'erc1967Impl', 'implCodehash'], registryImpl: ['registry', 'erc1967Impl', 'implCodehash'] };
+    // A declared alias (addresses.aPNTs = aPNTsCapped, …) is one contract, read back under its top-level
+    // name: compared there, after requiring the two pins to agree.
+    const byName = Object.fromEntries(pinnedEntries);
+    const aliasBook = new Map(SP550_PIN_ALIASES.map(([top, book]) => [book, top] as const));
     for (const [name, addr] of pinnedEntries) {
         if (typeof addr !== 'string') continue;
+        const top = aliasBook.get(name);
+        if (top !== undefined) {
+            if (!eqi(addr, byName[top])) p.push(`pins: ${name} ${addr} != ${top} ${String(byName[top])} (declared alias)`);
+            if (!eqi(h[name], h[top])) p.push(`pins: codehashes.${name} != codehashes.${top} (declared alias)`);
+            continue;
+        }
         const proxy = viaProxy[name];
         if (proxy) {
             const e = c[proxy[0]];
@@ -247,4 +260,16 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     }
     if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
     return p;
+}
+
+/**
+ * The GitHub contents-API path for SP's live read-back at one commit. A plain repository path only:
+ * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
+ */
+export function spReadbackApiPath(repoPath: string, commit: string): string {
+    if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
+    if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
+        throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
+    }
+    return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
 }

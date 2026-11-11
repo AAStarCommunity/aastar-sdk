@@ -36,7 +36,7 @@ import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -100,7 +100,9 @@ async function main() {
     // SP commits it as deployments/release/rc8/<network>.readback.live.json in the data PR after SEND.
     const spPath = arg('--sp-readback-path') ?? `deployments/release/rc8/${net.network}.readback.live.json`;
     if (!spCommit || !/^[0-9a-f]{40}$/.test(spCommit)) refuse('--write needs --sp-readback-commit <40-hex SP commit of the data PR with the live read-back>');
-    const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', `repos/AAStarCommunity/SuperPaymaster/contents/${spPath}?ref=${spCommit}`], { encoding: 'utf8' });
+    let apiPath = '';
+    try { apiPath = spReadbackApiPath(spPath, spCommit!); } catch (e) { refuse((e as Error).message); }
+    const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', apiPath], { encoding: 'utf8' });
     if (fetched.status !== 0) refuse(`--write: could not fetch SP's live read-back ${spPath}@${spCommit} (${(fetched.stderr || '').trim().split('\n')[0]})`);
     let spRb: unknown;
     try { spRb = JSON.parse(fetched.stdout); } catch { refuse(`--write: SP's live read-back ${spPath}@${spCommit} is not JSON`); }
@@ -163,7 +165,9 @@ async function main() {
         catch (e) {
             console.error((e as Error).message);
             // A rename failed and a rollback did too: the checkout is half-written — keep the recovery data.
-            if (((e as { unrestored?: string[] }).unrestored ?? []).length) keepLock = true;
+            // Keep the recovery data unless writeAll positively reports a clean rollback.
+            const unrestored = (e as { unrestored?: string[] }).unrestored;
+            if (!Array.isArray(unrestored) || unrestored.length) keepLock = true;
             break write;
         }
         const recheck = ['exec', 'tsx', 'scripts/check-sp550-cutover.ts', '--network', net.network, ...urls.flat(),
