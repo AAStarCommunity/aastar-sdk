@@ -438,7 +438,7 @@ describe('a pinned timelock must be in the read-back (schema 543f3498: timelockC
 describe('a contract the pins declare absent must not be in the read-back (Grok)', () => {
     it('pins absent: [timelockController] and a read-back with one fail', async () => {
         const rb = good(); rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:none', roles: {} };
-        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([`contracts.timelockController: deployed at ${A(0x26)}, but the pins declare timelockController absent`]);
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([expect.stringMatching(/contracts\.timelockController: not an "n\/a:" not-deployed placeholder/)]);
     });
     it('an "n/a:not deployed" placeholder is not a contradiction (Codex r14)', async () => {
         const rb = good();

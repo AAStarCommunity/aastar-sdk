@@ -51,7 +51,8 @@ describe('parseManifestPins: the manifest is read the way the gate reads --pins,
 
 describe('bookSwitch', () => {
     it('upgrade: the book follows SP onto the capped aPNTs and the v2 factory, plus the certified entries', () => {
-        expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14) });
+        // MANIFEST declares timelockController: "n/a:none", so the live entry is removed too.
+        expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14), timelockController: null });
     });
     it('only entries whose address changes are rewritten', () => {
         expect(changedEntries({ registry: A(1), aPNTs: A(2), pnts: A(3) }, { registry: A(1).toUpperCase().replace('0X', '0x'), aPNTs: A(9) })).toEqual({ aPNTs: A(2), pnts: A(3) });
@@ -291,10 +292,15 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
     });
     it('a contract the pins declare absent must not appear in the live read-back (Grok)', () => {
         const rb = live(); rb.contracts.timelockController = { address: A(0x26), codehash: '0x' + '26'.repeat(32) };
-        expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([`SP read-back: contracts.timelockController is deployed at ${A(0x26)}, but the pins declare timelockController absent`]);
-        // an explicit not-deployed placeholder is not a contradiction (Codex r14)
+        expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([expect.stringMatching(/contracts\.timelockController is not an "n\/a:" not-deployed placeholder/)]);
+        // an explicit not-deployed placeholder is not a contradiction (Codex r14) …
         rb.contracts.timelockController = { address: 'n/a:not deployed', codehash: 'n/a:not deployed' };
         expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([]);
+        // … but a placeholder address with a real codehash, or an unreadable address, is (Grok r15)
+        for (const e of [{ address: 'n/a:not deployed', codehash: '0x' + '26'.repeat(32) }, { address: 'unreadable:timeout', codehash: 'n/a:x' }]) {
+            rb.contracts.timelockController = e;
+            expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([expect.stringMatching(/not an "n\/a:" not-deployed placeholder/)]);
+        }
     });
     it('a staking book entry is looked up under contracts.gTokenStaking', () => {
         const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } }; // as parsed (with _aliases)
@@ -306,21 +312,21 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
 describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)', () => {
     const C = 'a'.repeat(40);
     it('a plain path is fetched at exactly that commit', () => {
-        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia')).toBe(`repos/AAStarCommunity/SuperPaymaster/contents/deployments/release/rc8/sepolia.readback.live.json?ref=${C}`);
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', undefined, true)).toBe(`repos/AAStarCommunity/SuperPaymaster/contents/deployments/release/rc8/sepolia.readback.live.json?ref=${C}`);
     });
     it.each(['x.json?ref=main#', 'x.json#frag', '../x.json', 'a/./x.json', 'a/x.txt', '/abs.json', 'a//x.json', 'x%3Fref=main.json', 'x .json'])('%s is refused', (p) => {
-        expect(() => spReadbackApiPath(p, C, 'sepolia')).toThrow(/not a plain repository path/);
+        expect(() => spReadbackApiPath(p, C, 'sepolia', undefined, true)).toThrow(/not a plain repository path/);
     });
     it.each(['test/fixtures/live.json', 'deployments/release/rc8/sepolia.readback.a7.json', 'deployments/release/rc8/sepolia.pins.json', 'docs/release/a7/aoa-a7-readback-1.live.example.json'])(
-        'any other JSON in the commit is refused (Grok): %s', (p) => expect(() => spReadbackApiPath(p, C, 'sepolia')).toThrow(/not an SP release live read-back/));
-    it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', 'main', 'sepolia')).toThrow(/not a 40-hex sha/));
+        'any other JSON in the commit is refused (Grok): %s', (p) => expect(() => spReadbackApiPath(p, C, 'sepolia', undefined, true)).toThrow(/not an SP release live read-back/));
+    it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', 'main', 'sepolia', undefined, true)).toThrow(/not a 40-hex sha/));
     it("another network's live read-back is refused (Grok)", () => {
-        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia')).toContain('sepolia.readback.live.json');
-        expect(() => spReadbackApiPath('deployments/release/rc8/op-sepolia.readback.live.json', C, 'sepolia')).toThrow(/is not the sepolia live read-back/);
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', undefined, true)).toContain('sepolia.readback.live.json');
+        expect(() => spReadbackApiPath('deployments/release/rc8/op-sepolia.readback.live.json', C, 'sepolia', undefined, true)).toThrow(/is not the sepolia live read-back/);
     });
     it("another release's directory is refused: tag v5.5.0-rc.8 means deployments/release/rc8/ (Grok)", () => {
-        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0-rc.8')).toContain('/rc8/');
-        expect(() => spReadbackApiPath('deployments/release/rc7/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0-rc.8')).toThrow(/not under deployments\/release\/rc8/);
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0-rc.8', true)).toContain('/rc8/');
+        expect(() => spReadbackApiPath('deployments/release/rc7/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0-rc.8', true)).toThrow(/not under deployments\/release\/rc8/);
     });
 });
 
@@ -395,6 +401,15 @@ describe('the replaced timelock is kept only as history (DSR 2026-11-11)', () =>
     it('switching timelockController writes the old value as timelockControllerLegacy', () => {
         expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: OLD })).toEqual({ timelockController: NEW, timelockControllerLegacy: OLD });
     });
+    it('an upgrade declaring no timelock removes the live entry and keeps the old one as history (Grok r15)', () => {
+        const pins = parseManifestPins(MANIFEST, 'upgrade'); // MANIFEST declares timelockController: "n/a:none"
+        const sw = bookSwitch('upgrade', pins);
+        expect(sw.timelockController).toBeNull();
+        expect(withTimelockLegacy(changedEntries(sw, { timelockController: OLD }), { timelockController: OLD })).toMatchObject({ timelockController: null, timelockControllerLegacy: OLD });
+    });
+    it('a zero book entry (not deployed) is not kept as history (Grok r15)', () => {
+        expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: '0x' + '0'.repeat(40) })).toEqual({ timelockController: NEW });
+    });
     it('no switch, the same address, or no old entry: nothing extra', () => {
         expect(withTimelockLegacy({ aPNTs: A(1) }, { timelockController: OLD })).toEqual({ aPNTs: A(1) });
         expect(withTimelockLegacy({ timelockController: OLD.toLowerCase() }, { timelockController: OLD })).toEqual({ timelockController: OLD.toLowerCase() });
@@ -412,6 +427,7 @@ describe('a final tag names no rc directory: the path must be explicit (Grok)', 
     const C = 'a'.repeat(40);
     it('v5.5.0 with the default path is refused; with an explicit path it is accepted', () => {
         expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
+        expect(() => spReadbackApiPath('', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
         expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', true)).toContain('/rc8/');
     });
 });

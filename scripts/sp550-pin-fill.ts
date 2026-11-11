@@ -5,7 +5,7 @@
  *
  *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> \
  *       --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] \
- *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]
+ *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]   (path default: deployments/release/rc<N>/<network>.readback.live.json from pins.tag)
  *
  * Order, each step refusing before the next:
  *  1. the manifest parses as a pins JSON for the network's deploy mode (unknown keys are refused);
@@ -80,12 +80,8 @@ async function main() {
     console.log(`\nPASS. ${table}[${net.chainId}] = ${renderPinsLiteral(pins, '')}`);
     const changed = withTimelockLegacy(changedEntries(switched, shipped), shipped);
     console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
-    // An upgrade whose manifest declares no timelock while the shipped book names one: a decision, not a
-    // regeneration (the v5.4 TimelockController may still govern) — stop until it is made explicitly.
-    const timelockDecision = net.mode === 'upgrade' && (pins.absent ?? []).includes('timelockController') && typeof shipped.timelockController === 'string';
-    if (timelockDecision) console.log(`\nNOTE: the manifest declares no timelock, but CANONICAL_ADDRESSES[${net.chainId}].timelockController is ${shipped.timelockController}; --write will refuse until that entry's fate is decided`);
+    if (changed.timelockControllerLegacy !== undefined) console.log(`\nNOTE: timelockController ${String(shipped.timelockController)} -> ${changed.timelockController === null ? '(removed: the manifest declares none)' : changed.timelockController}; the old value is kept as timelockControllerLegacy (history, never live)`);
     if (!args.includes('--write')) { console.log('\n(preview only: pass --write to fill the source)'); return; }
-    if (timelockDecision) refuse(`--write: the manifest declares timelockController "n/a:none" but the SDK book names ${String(shipped.timelockController)}; remove it in a reviewed change first (DSR rule: never kept or deleted silently)`);
 
     // A fork can sit behind a public host and report any client version, and two hostnames can front ONE
     // remote fork: the endpoint checks below narrow that but cannot close it (all their evidence comes from

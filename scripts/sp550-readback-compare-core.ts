@@ -319,8 +319,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     // the file; an "n/a:not deployed" placeholder is fine.
     for (const k of pins.absent ?? []) {
         const key = BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
-        const addr = contracts[key]?.address;
-        if (typeof addr === 'string' && /^0x[0-9a-fA-F]{40}$/.test(addr)) p.push(`contracts.${key}: deployed at ${addr}, but the pins declare ${k} absent`);
+        const e = contracts[key];
+        const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
+        if (e !== undefined && e !== null && !(na(e.address) && na(e.codehash))) p.push(`contracts.${key}: not an "n/a:" not-deployed placeholder (address ${show(e.address)}, codehash ${show(e.codehash)}), but the pins declare ${k} absent`);
     }
 
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).

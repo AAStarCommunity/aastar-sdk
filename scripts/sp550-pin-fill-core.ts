@@ -92,6 +92,11 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
     const out: Record<string, string> = mode === 'upgrade'
         ? { ...(pins.addresses ?? {}), aPNTs: pins.aPNTsCapped as string, xPNTsFactory: pins.xPNTsFactoryV2 as string }
         : { ...(pins.addresses ?? {}) } as Record<string, string>;
+    // An upgrade declaring no timelock removes the live entry too (withTimelockLegacy keeps it as history).
+    if (mode === 'upgrade' && (pins.absent ?? []).includes('timelockController')) {
+        for (const [k, a] of Object.entries(out)) if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
+        return { ...out, timelockController: null };
+    }
     for (const [k, a] of Object.entries(out)) {
         if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
     }
@@ -304,7 +309,7 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     // placeholder is fine; a real address is a contradiction that would never be compared).
     for (const k of pins.absent ?? []) {
         const key = (PINS_FILE_ALIASES[k] ?? `contracts.${k}`).replace(/^contracts\./, '');
-        if (typeof c[key]?.address === 'string' && /^0x[0-9a-fA-F]{40}$/.test(c[key].address)) p.push(`SP read-back: contracts.${key} is deployed at ${c[key].address}, but the pins declare ${k} absent`);
+        if (!isNotDeployedPlaceholder(c[key])) p.push(`SP read-back: contracts.${key} is not an "n/a:" not-deployed placeholder (address ${JSON.stringify(c[key]?.address)}, codehash ${JSON.stringify(c[key]?.codehash)}), but the pins declare ${k} absent`);
     }
     if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
     if (!eqi(c.superPaymaster?.extensionCodehash, h.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extensionCodehash ${JSON.stringify(c.superPaymaster?.extensionCodehash)} != pins.codehashes.spAdminExtension ${h.spAdminExtension}`);
@@ -315,7 +320,8 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
  * The GitHub contents-API path for SP's live read-back at one commit. A plain repository path only:
  * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
  */
-export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag?: string, explicit = true): string {
+export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag: string | undefined, explicit: boolean): string {
+    if (!repoPath) throw new Error(`pins.tag ${String(tag)} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
     if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
@@ -354,6 +360,20 @@ export function addressesOverlap(a: string[], b: string[]): boolean {
  */
 export function withTimelockLegacy(changed: Record<string, string | null>, shipped: Record<string, unknown>): Record<string, string | null> {
     const old = shipped.timelockController;
-    if (typeof changed.timelockController !== 'string' || typeof old !== 'string' || old.toLowerCase() === changed.timelockController.toLowerCase()) return changed;
-    return { ...changed, timelockControllerLegacy: old };
+    if (!('timelockController' in changed)) return changed;
+    // A zero entry means "not deployed" in the book: there is nothing to keep.
+    if (typeof old !== 'string' || /^0x0{40}$/i.test(old)) return changed;
+    const next = changed.timelockController;
+    if (typeof next === 'string' && old.toLowerCase() === next.toLowerCase()) return changed;
+    return { ...changed, timelockControllerLegacy: old }; // replaced (address) or removed (null): history either way
+}
+
+/**
+ * A read-back entry that explicitly says "not deployed": every identity field is an "n/a:" placeholder
+ * (or null). Anything carrying a real address or codehash — or an unreadable one — is NOT that.
+ */
+export function isNotDeployedPlaceholder(c: any): boolean {
+    if (c === undefined || c === null) return true;
+    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
+    return na(c.address) && na(c.codehash) && (c.erc1967Impl === undefined || na(c.erc1967Impl)) && (c.implCodehash === undefined || na(c.implCodehash));
 }
