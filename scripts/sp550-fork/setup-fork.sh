@@ -28,10 +28,15 @@ NEW_APNTS=0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7  # APNTsCapped-1.0.0 (pendi
 MINTER=0x16dF788ed4ed1Fc384e52dC832A6a6C3A23bdEBf    # APNTsCapped.minter()
 PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
 
-anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
-echo $! > "$OUT/anvil.pid"
-for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
-log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"
+# SP550_FORK_ATTACH=1: use the anvil already on $PORT (run-a7.sh starts it; this is then its deploy step).
+if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
+  log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
+else
+  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+  echo $! > "$OUT/anvil.pid"
+  for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
+  log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"
+fi
 check "pre SP.version()" "$(cast call $SP 'version()(string)' --rpc-url $RPC)" '"SuperPaymaster-5.4.2"'
 check "pre SP.pendingAPNTsToken()" "$(cast call $SP 'pendingAPNTsToken()(address)' --rpc-url $RPC)" "$NEW_APNTS"
 

@@ -142,6 +142,7 @@ async function main() {
         refuse(`the SP 5.5.0 read-back gate did not pass (exit ${gate.exitCode}${gate.error ? `: ${gate.error}` : ''}); this E2E runs only after it does`);
     }
     console.log(gate.header);
+    for (const c of gate.results) console.log(`  gate ✅ ${c.check} — ${c.detail}`);
     // The SuperPaymaster the gate just passed: the --pins file, else the network's pin table — the
     // same source the gate read, so the E2E cannot drift onto an address the read-back did not check.
     const pinned = pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[net.chainId];
