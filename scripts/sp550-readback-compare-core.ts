@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 3bf4bba28506a23f7c741f281846340afe2f86a9 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * 543f349889b21d32ff9b738bc26b1aea5d5ec47c docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = '0ac860742f997120cec3a7f185323e090f30371f6e67c27fda200b3a18a6e131';
+export const READBACK_SCHEMA_SHA256 = 'b1505b47ae871800a7f7569bfe89ad852951b669dbfb17afc87265205396194f';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -40,9 +40,10 @@ export function loadReadbackValidator(file = READBACK_SCHEMA_FILE, sha256 = READ
     const raw = fs.readFileSync(file);
     const got = createHash('sha256').update(new Uint8Array(raw)).digest('hex');
     if (got !== sha256) throw new Error(`read-back schema ${file}: sha256 ${got} != pinned ${sha256}; refusing to validate against it`);
-    // strictRequired off: schema 3bf4bba2 requires the 20 contract keys under additionalProperties (valid
-    // Draft 2020-12; ajv's strict mode only lints it). Every other strict check stays on.
-    const ajv = new (Ajv2020 as any)({ strict: true, strictRequired: false, allErrors: true });
+    // ajv's strict LINTS (strictRequired: keys required under additionalProperties; strictTypes: `required`
+    // without a sibling `type`) are off: both are valid Draft 2020-12 and SP's validator accepts them.
+    // strictSchema stays on, so an unknown keyword in the schema still fails to compile.
+    const ajv = new (Ajv2020 as any)({ strict: true, strictRequired: false, strictTypes: false, allErrors: true });
     // x-readMethods (revision 3) documents how each field is read; an annotation, not a validation rule.
     ajv.addKeyword({ keyword: 'x-readMethods', schemaType: 'object' });
     const validate = ajv.compile(JSON.parse(raw.toString('utf8')));

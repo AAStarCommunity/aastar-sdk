@@ -324,3 +324,21 @@ describe('_aliases is required when a renamed key is pinned (Grok)', () => {
         expect(parseManifestPins({ ...m, _aliases: { staking: 'contracts.gTokenStaking' } }, 'upgrade').addresses?.staking).toBe(A(0x2a));
     });
 });
+
+describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
+    it('an address becomes a certified book entry, its codehash re-keyed', () => {
+        const p = parseManifestPins({ ...MANIFEST, timelockController: A(0x26), codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, 'upgrade');
+        expect(p.addresses?.timelockController).toBe(A(0x26));
+        expect(p.codehashes?.['addresses.timelockController']).toBe('0x' + '26'.repeat(32));
+        expect('timelockController' in p).toBe(false);
+    });
+    it('"n/a:none" means no timelock', () => {
+        const p = parseManifestPins({ ...MANIFEST, timelockController: 'n/a:none' }, 'upgrade');
+        expect(p.addresses?.timelockController).toBeUndefined();
+    });
+    it.each([
+        ['"n/a:none" with a pinned book entry', { timelockController: 'n/a:none', addresses: { ...MANIFEST.addresses, timelockController: A(0x26) } }, /"n\/a:none" but addresses\.timelockController is pinned/],
+        ['two different addresses', { timelockController: A(0x26), addresses: { ...MANIFEST.addresses, timelockController: A(0x27) } }, /!= addresses\.timelockController/],
+        ['neither an address nor n/a', { timelockController: 'none' }, /neither an address nor "n\/a:none"/],
+    ])('refused: %s', (_n, patch, msg) => expect(() => parseManifestPins({ ...MANIFEST, ...patch }, 'upgrade')).toThrow(msg));
+});

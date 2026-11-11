@@ -39,6 +39,28 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         const renamed = Object.keys((obj.addresses ?? {}) as object).filter((k) => k in PINS_FILE_ALIASES);
         if (renamed.length) throw new Error(`manifest pins: addresses.${renamed.join(', addresses.')} pinned without _aliases (SP's pins files declare ${JSON.stringify(PINS_FILE_ALIASES)})`);
     }
+    // The pins file declares the timelock's presence (SP, schema 543f3498): an address is a certified
+    // book entry (addresses.timelockController, its codehash under the same name); "n/a:none" = not deployed.
+    if ('timelockController' in obj) {
+        const t = obj.timelockController;
+        const { timelockController: _t, ...rest } = obj;
+        const book = { ...((rest.addresses ?? {}) as Record<string, unknown>) };
+        if (t === 'n/a:none') {
+            if ('timelockController' in book) throw new Error('manifest pins: timelockController is "n/a:none" but addresses.timelockController is pinned');
+        } else if (typeof t === 'string' && isAddress(t)) {
+            if (book.timelockController !== undefined && String(book.timelockController).toLowerCase() !== t.toLowerCase()) throw new Error(`manifest pins: timelockController ${t} != addresses.timelockController ${String(book.timelockController)}`);
+            book.timelockController = t;
+            const h = { ...((rest.codehashes ?? {}) as Record<string, unknown>) };
+            if (h.timelockController !== undefined) {
+                if (h['addresses.timelockController'] !== undefined && h['addresses.timelockController'] !== h.timelockController) throw new Error('manifest pins: codehashes.timelockController != codehashes["addresses.timelockController"]');
+                h['addresses.timelockController'] = h.timelockController;
+                delete h.timelockController;
+            }
+            rest.codehashes = h;
+        } else throw new Error(`manifest pins: timelockController ${JSON.stringify(t)} is neither an address nor "n/a:none"`);
+        rest.addresses = book;
+        obj = rest;
+    }
     const unknown = Object.keys(obj).filter((k) => !allowed.includes(k));
     if (unknown.length) throw new Error(`manifest pins: unknown key(s) for a ${mode} deploy: ${unknown.join(', ')} (refusing rather than dropping them)`);
     const j = obj as Record<string, any>;
