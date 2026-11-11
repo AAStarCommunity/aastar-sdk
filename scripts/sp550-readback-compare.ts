@@ -23,7 +23,7 @@ import { createPublicClient, getAddress, http, keccak256, type Abi, type Address
 import { SuperPaymasterLensABI, SuperPaymasterV550ABI } from '../packages/core/src/abis/index.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
-import { isLoopbackUrl } from './sp550-pin-fill-core.js';
+import { isLoopbackUrl, parseManifestPins } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
@@ -42,10 +42,12 @@ async function main() {
     const pinsFile = arg('--pins') ?? refuse('--pins is required');
     const urls = [arg('--rpc'), arg('--rpc2')].filter((u): u is string => !!u);
     if (!urls.length) refuse('--rpc is required');
-    const j = JSON.parse(fs.readFileSync(pinsFile, 'utf8'));
-    const rb = j.readbackBlock;
-    if (!(typeof rb === 'number' || (typeof rb === 'string' && /^\d+$/.test(rb)))) refuse(`pins.readbackBlock ${JSON.stringify(rb)} is not a block number`);
-    const pins = { ...j, readbackBlock: BigInt(rb) };
+    // SP's manifest pins JSON, parsed exactly as pin-fill parses it: the top-level timelock declaration
+    // becomes addresses.timelockController (+ its codehash) or absent[], and `_aliases` is checked. The raw
+    // JSON would fail a pinned timelock ("no pinned address of that name") and lose a declared absence.
+    let pins: ReturnType<typeof parseManifestPins>;
+    try { pins = parseManifestPins(JSON.parse(fs.readFileSync(pinsFile, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }
+    if (pins.readbackBlock === undefined) refuse('pins.readbackBlock is required: reads are taken at the block the file describes');
     const blockNumber = pins.readbackBlock as bigint;
     const clients = urls.map((url) => createPublicClient({ transport: http(url) }));
     for (const [i, c] of clients.entries()) {
