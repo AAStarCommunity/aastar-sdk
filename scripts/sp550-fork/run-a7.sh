@@ -73,14 +73,15 @@ else
 fi
 FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
 SDK="$(cd "$(dirname "$0")/../.." && pwd)"; RPC=http://127.0.0.1:28546; BUNDLER=http://127.0.0.1:3046
+# Usage errors exit 2 before <out>/run.log is touched, so a refused start never wipes a previous run's log.
+[[ "$OPERATOR" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "operator must be an address" >&2; exit 2; }
+[[ "$FORK_BLOCK" =~ ^[0-9]+$ ]] || { echo "fork block must be a number" >&2; exit 2; }
+for port in 28546 3046; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; LOG="$OUT/run.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
 STAGE=0
 FAILED=0
 fail() { FAILED=1; log "A7 FAIL at stage $STAGE: $*"; exit 1; }
-[[ "$OPERATOR" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "operator must be an address" >&2; exit 2; }
-[[ "$FORK_BLOCK" =~ ^[0-9]+$ ]] || { echo "fork block must be a number" >&2; exit 2; }
-for port in 28546 3046; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
 # pid files left in a reused <out> name processes this run did not start (possibly reused pids):
 # drop them before the trap, so cleanup only ever kills what this invocation wrote.
 rm -f "$OUT/anvil.pid" "$OUT/ultrarelay.pid"

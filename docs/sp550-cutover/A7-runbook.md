@@ -104,8 +104,9 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 部署交易发出之后，SP 的实链 readback 用的是同一个 schema（`aoa-a7-readback/1`）。拿它和冻结的 manifest pins 比对，并用两个节点在 readbackBlock 读链：
 
 ```bash
-pnpm exec tsx scripts/sp550-readback-compare.ts --readback <live-readback.json> --pins <冻结的 manifest pins.json> \
-    --chain-id 11155111 --rpc <节点 A> --rpc2 <节点 B> --sp-commit <rc.8 commit> 2>&1 | tee <out>/live-readback.log
+set -o pipefail   # 否则 tee 会吞掉比对脚本的退出码
+pnpm exec tsx scripts/sp550-readback-compare.ts --network sepolia --allow-rc --readback <live-readback.json> \
+    --pins <冻结的 manifest pins.json> --rpc <节点 A> --rpc2 <节点 B> --sp-commit <rc.8 commit> 2>&1 | tee <out>/live-readback.log
 ```
 
 实链上没有导出文件，所以 forkBlock、dumpSha256、hardfork 这几个头部字段只检查是否存在，SP 应写成 `n/a:live`。退出码为 0 才能进行下一步。
@@ -144,6 +145,7 @@ pnpm exec tsx scripts/sp550-pin-fill.ts ... --write --sp-readback-commit <SP 数
 `expectMinPostOpGas` 必须写上 rc.8 发布元组的值（500,000）。E2E 会把链上 `gasParams().minPostOpGas` 和它比对，不相等就 FAIL；配置里没有这一项时，E2E 直接拒绝运行。
 
 ```bash
+set -o pipefail   # 退出码要来自 E2E，不是 tee
 # 在 pin 填充分支上执行（门读的是已经写进源码的 pins，实链不允许 bookOverrides）
 pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia --preflight 2>&1 | tee <out>/live-preflight.log
 pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia 2>&1 | tee <out>/live-e2e.log
