@@ -434,3 +434,10 @@ describe('a pinned timelock must be in the read-back (schema 543f3498: timelockC
     });
     it('pins without a timelock and a read-back without one pass', async () => expect(await run(good())).toEqual([]));
 });
+
+describe('a contract the pins declare absent must not be in the read-back (Grok)', () => {
+    it('pins absent: [timelockController] and a read-back with one fail', async () => {
+        const rb = good(); rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:none', roles: {} };
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual(['contracts.timelockController: present, but the pins declare timelockController absent']);
+    });
+});

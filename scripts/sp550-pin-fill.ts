@@ -80,7 +80,12 @@ async function main() {
     console.log(`\nPASS. ${table}[${net.chainId}] = ${renderPinsLiteral(pins, '')}`);
     const changed = changedEntries(switched, shipped);
     console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
+    // An upgrade whose manifest declares no timelock while the shipped book names one: a decision, not a
+    // regeneration (the v5.4 TimelockController may still govern) — stop until it is made explicitly.
+    const timelockDecision = net.mode === 'upgrade' && (pins.absent ?? []).includes('timelockController') && typeof shipped.timelockController === 'string';
+    if (timelockDecision) console.log(`\nNOTE: the manifest declares no timelock, but CANONICAL_ADDRESSES[${net.chainId}].timelockController is ${shipped.timelockController}; --write will refuse until that entry's fate is decided`);
     if (!args.includes('--write')) { console.log('\n(preview only: pass --write to fill the source)'); return; }
+    if (timelockDecision) refuse(`--write: the manifest declares timelockController "n/a:none" but the SDK book names ${String(shipped.timelockController)}; remove or keep it in a reviewed change first`);
 
     // A fork can sit behind a public host and report any client version, and two hostnames can front ONE
     // remote fork: the endpoint checks below narrow that but cannot close it (all their evidence comes from
@@ -103,7 +108,7 @@ async function main() {
     const spPath = arg('--sp-readback-path') ?? `deployments/release/rc8/${net.network}.readback.live.json`;
     if (!spCommit || !/^[0-9a-f]{40}$/.test(spCommit)) refuse('--write needs --sp-readback-commit <40-hex SP commit of the data PR with the live read-back>');
     let apiPath = '';
-    try { apiPath = spReadbackApiPath(spPath, spCommit!, net.network); } catch (e) { refuse((e as Error).message); }
+    try { apiPath = spReadbackApiPath(spPath, spCommit!, net.network, pins.tag); } catch (e) { refuse((e as Error).message); }
     const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', apiPath], { encoding: 'utf8' });
     if (fetched.status !== 0) refuse(`--write: could not fetch SP's live read-back ${spPath}@${spCommit} (${(fetched.stderr || '').trim().split('\n')[0]})`);
     let spRb: unknown;

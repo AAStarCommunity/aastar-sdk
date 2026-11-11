@@ -315,6 +315,12 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
     p.push(...recordedProbeProblems(f.amsterdamProbe, providers));
 
+    // A contract the pins declare absent (e.g. timelockController: "n/a:none") must not appear in the file.
+    for (const k of pins.absent ?? []) {
+        const key = BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
+        if (contracts[key] !== undefined && contracts[key] !== null) p.push(`contracts.${key}: present, but the pins declare ${k} absent`);
+    }
+
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
     const bh2 = await read('', 'blockHash');
     if (bh.kind === 'value' && (bh2.kind !== 'value' || !eq(bh2.value, bh.value))) p.push(`snapshot: block ${pins.readbackBlock} changed during the reads (${bh.value} -> ${bh2.kind === 'value' ? bh2.value : bh2.kind})`);
