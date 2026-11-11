@@ -5,6 +5,7 @@ import {
     SP550_ADDRESS_OWNER, SP550_FRESH_DEPLOY_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_NETWORKS, SP550_RELEASE_HOLDS,
     assertSp550ChainId, requireSp550FreshDeployPins, resolveSp550Network, sp550FreshPinProblems,
 } from './sp550Deployments.js';
+import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const BOOK = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => [k, A(100 + i)]));
@@ -15,6 +16,12 @@ const FULL = {
     addresses: BOOK,
     absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS],
 };
+// A codehash for every name that can be pinned: the top-level pieces and every SP-owned book key, so
+// a test that adds an optional entry does not also have to add its hash.
+Object.assign(FULL as any, { codehashes: Object.fromEntries([
+    ...sp550PinnedAddressEntries({ ...FULL, addresses: {} } as any).map(([k]) => k),
+    ...[...SP550_FRESH_REQUIRED_ADDRESS_KEYS, ...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].map((k) => `addresses.${k}`),
+].map((k, i) => [k, k === 'spImpl' ? FULL.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)])) });
 
 describe('SP 5.5.0 network selection', () => {
     it('maps each network name to its viem chainId and deploy mode', () => {

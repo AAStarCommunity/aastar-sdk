@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { OPERATOR_WITHDRAWAL_WINDOW, resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
+import { sp550PinnedAddressEntries } from '../sp550Cutover.js';
 
 const SP = '0x' + '5a'.repeat(20) as `0x${string}`;
 const OP = '0x' + '0b'.repeat(20) as `0x${string}`;
@@ -123,7 +124,10 @@ describe('resolveSuperPaymasterWithdrawalMode: the read-back-verified pin decide
         tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: SP, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
         superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6), aoaProtocolRegistry: A(7),
         globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 1n,
-    };
+    } as Record<string, any>;
+    // Complete pins carry a runtime codehash per pinned address (#435); spImpl's is spImplCodehash.
+    PINS.codehashes = Object.fromEntries(sp550PinnedAddressEntries(PINS as any).filter(([, a]) => a !== undefined)
+        .map(([k], i) => [k, k === 'spImpl' ? PINS.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
     const live = (version: string, chainId = 11155111) => ({
         getChainId: async () => chainId,
         readContract: async (p: any) => { if (p.functionName !== 'version') throw new Error(p.functionName); return version; },
