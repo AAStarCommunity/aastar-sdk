@@ -260,6 +260,12 @@ export function spCommitOnMain(status: unknown): boolean {
     return status === 'identical' || status === 'behind';
 }
 
+/** The compare call spCommitOnMain reads: base main, head the commit (the order fixes what "behind" means). */
+export function spCompareApiPath(commit: string): string {
+    if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
+    return `repos/${SP_REPO}/compare/main...${commit}`;
+}
+
 /** The file operations writeAll needs (tests inject failures). */
 export interface WriteIo { read(p: string): string; write(p: string, s: string): void; rename(a: string, b: string): void; remove(p: string): void }
 const nodeIo: WriteIo = {

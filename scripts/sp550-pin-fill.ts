@@ -37,7 +37,7 @@ import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, upgradeBookProblems, SP_REPO, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -111,7 +111,7 @@ async function main() {
     let apiPath = '';
     try { apiPath = spReadbackApiPath(spPath, spCommit!, net.network, pins.tag, arg('--sp-readback-path') !== undefined); } catch (e) { refuse((e as Error).message); }
     // The commit must be on SP's main (the merged data PR), not a branch or a fork commit GitHub also serves.
-    const onMain = spawnSync('gh', ['api', `repos/${SP_REPO}/compare/main...${spCommit}`, '-q', '.status'], { encoding: 'utf8' });
+    const onMain = spawnSync('gh', ['api', spCompareApiPath(spCommit!), '-q', '.status'], { encoding: 'utf8' });
     if (onMain.status !== 0) refuse(`--write: could not check that ${spCommit} is on ${SP_REPO} main (${(onMain.stderr || '').trim().split('\n')[0]})`);
     if (!spCommitOnMain(onMain.stdout.trim())) refuse(`--write: --sp-readback-commit ${spCommit} is not on ${SP_REPO} main (compare status ${JSON.stringify(onMain.stdout.trim())}); pass the main commit of the merged data PR`);
     const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', apiPath], { encoding: 'utf8' });
@@ -156,7 +156,11 @@ async function main() {
         backups.map(([f, bk]) => `writing ${path.relative(ROOT, f)} · before-image ${path.relative(ROOT, bk)}`).join('\n') +
         `\nif this file outlives the run, the source may be half-written: restore each file from its before-image (cp), then delete this lock and the before-images\n`;
     try { fs.writeFileSync(lock, journal, { flag: 'wx' }); }
-    catch {
+    catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') {
+            console.error(`nothing written: could not create ${path.relative(ROOT, lock)} (${(e as NodeJS.ErrnoException).code ?? (e as Error).message})`);
+            process.exit(1);
+        }
         let prev = ''; try { prev = fs.readFileSync(lock, 'utf8'); } catch { /* unreadable */ }
         console.error(`nothing written: ${path.relative(ROOT, lock)} exists — another fill is running, or an earlier one stopped mid-write:\n${prev}`);
         process.exit(1);

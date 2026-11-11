@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, SP_REPO, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -471,6 +471,11 @@ describe('PR-Daemon B1: an upgrade cannot move the proxy or a non-switchable boo
 describe('PR-Daemon F2: the SP read-back commit must be on SP main', () => {
     it.each([['identical', true], ['behind', true], ['ahead', false], ['diverged', false], ['', false], [undefined, false]])('compare status %s -> %s', (s, ok) => expect(spCommitOnMain(s)).toBe(ok));
     it('the repository is SP', () => expect(SP_REPO).toBe('AAStarCommunity/SuperPaymaster'));
+    it('the compare is main...<commit>, so "behind" means the commit is an ancestor of main (Grok r18)', () => {
+        const c = 'ab'.repeat(20);
+        expect(spCompareApiPath(c)).toBe(`repos/AAStarCommunity/SuperPaymaster/compare/main...${c}`);
+        expect(() => spCompareApiPath('main')).toThrow(/not a 40-hex sha/);
+    });
 });
 
 describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns) is loopback', () => {
