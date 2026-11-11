@@ -42,6 +42,17 @@ export function flagsFromPaymasterData(paymasterData: unknown): number | undefin
  * Wrap globalThis.fetch so every request to `bundlerUrl` is recorded into `sink` before it is sent.
  * Returns the function that restores the original fetch.
  */
+/**
+ * The client a bundler's web3_clientVersion reply names, "not reported: …" for method-not-found
+ * (-32601, the method is optional), or undefined for anything else: a non-JSON-RPC body, a non-string
+ * result, or any other JSON-RPC error (auth, rate limit, internal) — not a usable gas source.
+ */
+export function gasSourceClient(reply: any): string | undefined {
+    if (reply?.jsonrpc !== '2.0') return undefined;
+    if (reply.error !== undefined) return reply.error?.code === -32601 ? 'not reported: no web3_clientVersion' : undefined;
+    return typeof reply.result === 'string' && reply.result !== '' ? reply.result : undefined;
+}
+
 export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: BundlerCall[]): () => void {
     const original = globalThis.fetch;
     globalThis.fetch = (async (input: any, init?: any) => {

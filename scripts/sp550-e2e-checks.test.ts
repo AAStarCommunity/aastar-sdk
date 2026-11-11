@@ -3,7 +3,7 @@ import { encodeAbiParameters, encodeEventTopics, slice, type Abi, type Hex } fro
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
-import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient } from './sp550-e2e-checks.js';
 
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
@@ -141,4 +141,19 @@ describe('isSpRelayedRenewal decodes AllowanceRenewed with the SHIPPED xPNTsToke
     ])('%s -> not', (_n, l) => {
         expect(isSpRelayedRenewal(l as any, abi, { token: TOKEN, user: USER, sp: SP })).toBe(false);
     });
+});
+
+describe('gasSourceClient: only a client version or method-not-found is a usable gas source (Codex r4)', () => {
+    it('a client version is recorded', () => expect(gasSourceClient({ jsonrpc: '2.0', id: 1, result: 'alto/0.0.1' })).toBe('alto/0.0.1'));
+    it('method-not-found (-32601) is recorded as not reported', () => expect(gasSourceClient({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'x' } })).toBe('not reported: no web3_clientVersion'));
+    it.each([
+        ['an auth error', { jsonrpc: '2.0', id: 1, error: { code: -32001, message: 'unauthorized' } }],
+        ['a rate limit', { jsonrpc: '2.0', id: 1, error: { code: 429, message: 'rate limited' } }],
+        ['an internal error', { jsonrpc: '2.0', id: 1, error: { code: -32603, message: 'internal' } }],
+        ['an error without a code', { jsonrpc: '2.0', id: 1, error: {} }],
+        ['a non-string result', { jsonrpc: '2.0', id: 1, result: 42 }],
+        ['an empty result', { jsonrpc: '2.0', id: 1, result: '' }],
+        ['no jsonrpc field', { result: 'alto' }],
+        ['not an object', 'ok'],
+    ])('%s is not', (_n, reply) => expect(gasSourceClient(reply)).toBeUndefined());
 });

@@ -201,7 +201,7 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
     it('gate.switchBook in a live config is refused, even with --live-go and --fork-setup passed', () => {
         const r = run({ gate: { switchBook: true } }, ['--fork-setup']);
         expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: (gate\.switchBook is fork-only|--fork-setup impersonates accounts)/);
+        expect(r.output).toMatch(/refused: --fork-setup impersonates accounts: mode fork only/); // checked first; switchBook alone is the next test
         expect(r.output).not.toMatch(/cutover gate|fork-only SDK book switch/);
     }, 60_000);
     it('gate.switchBook alone in a live config is refused', () => {

@@ -8,7 +8,8 @@ SHIFT=$(( ($(cast block latest --field timestamp --rpc-url $R) - $(date +%s)) * 
 cd "${ULTRARELAY_DIR:?set ULTRARELAY_DIR to an UltraRelay-AAStar / Alto checkout}"
 TIME_SHIFT_MS=$SHIFT nohup node -r "$S/time-shift.cjs" src/esm/cli/alto.js run --config "$OUT/ultrarelay.fork.json" >> "$OUT/ultrarelay.log" 2>&1 &
 echo $! > "$OUT/ultrarelay.pid"
-up() { curl -sf -X POST localhost:3046 -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' >/dev/null; }
+# Up = answers eth_chainId with Sepolia's id within a bounded time (a silent listener or an error body is not up).
+up() { curl -sf --connect-timeout 2 --max-time 5 -X POST localhost:3046 -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' | grep -E '"result" *: *"0xaa36a7"' >/dev/null; }  # not -q: an early grep exit could SIGPIPE curl under pipefail
 for _ in $(seq 1 30); do up && break; sleep 1; done
-up || { echo "fork-only: the bundler did not answer on :3046 within 30s (ultrarelay.log)" >&2; exit 1; }
+up || { echo "fork-only: the bundler did not answer eth_chainId 0xaa36a7 on :3046 after 30 tries (ultrarelay.log)" >&2; exit 1; }
 echo "fork-only: bundler restarted, clock shift ${SHIFT}ms"

@@ -75,8 +75,8 @@ import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster'
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
-import { applyBookSwitch, bookSwitch, parseManifestPins } from './sp550-pin-fill-core.js';
-import { isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
+import { gasSourceClient, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -126,10 +126,10 @@ async function main() {
         try { pins = parseManifestPins(JSON.parse(fs.readFileSync(cfg.gate.pinsFile, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }
     }
     const block = cfg.gate?.block;
-    // The gate holds the pins against the SDK's own address book. Before the pin-fill PR that book
-    // still names the pre-cutover aPNTs / xPNTsFactory, so a fork rehearsal of the upgrade has to say
-    // which entries that PR will switch. Live mode reads the shipped book and nothing else.
-    // switchBook applies pin-fill's own bookSwitch, so the fork run and the gate preview hold the same book.
+    // The gate holds the pins against the SDK's own address book. Before the pin-fill PR that book still
+    // names the pre-cutover entries, so a fork rehearsal derives the book the pin-fill PR would write:
+    // pin-fill's own upgradeBookProblems (against the SHIPPED book) and bookSwitch, so the fork run and the
+    // gate preview hold the same book. Live mode reads the shipped book and nothing else.
     let book: Record<string, unknown> | undefined;
     if (cfg.gate?.switchBook !== undefined) {
         if (cfg.gate.switchBook !== true) refuse('gate.switchBook must be true when given');
@@ -137,6 +137,10 @@ async function main() {
         const shipped: Record<string, unknown> = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
         let switched: Record<string, string | null>;
         try { switched = bookSwitch(net.mode, fromPins); } catch (e) { return refuse((e as Error).message); }
+        if (net.mode === 'upgrade') {
+            const moved = upgradeBookProblems(fromPins, switched, shipped);
+            if (moved.length) refuse(`gate.switchBook: the pins move book entries an upgrade keeps: ${moved.join('; ')}`);
+        }
         for (const [k, a] of Object.entries(switched)) console.log(`fork-only SDK book switch: ${k} ${String(shipped[k] ?? '(absent)')} -> ${a ?? '(removed)'}`);
         book = applyBookSwitch(shipped, switched);
     }
@@ -184,17 +188,19 @@ async function main() {
     // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its
     // own node — never from a local forge simulation. Recorded as the host and the client it reports
     // (the full URL usually embeds a key and is never printed).
-    // An unreachable bundler, or one that does not answer JSON-RPC, fails here; a bundler without
-    // web3_clientVersion is still the gas source and is recorded as such (the method is optional).
+    // An unreachable bundler, a non-2xx answer, a non-JSON-RPC body, or any JSON-RPC error other than
+    // method-not-found (-32601: the method is optional) fails here — an auth / rate-limit / internal error
+    // is not a usable gas source (Codex r4).
+    const bundlerHost = new URL(cfg.bundlerUrl).host;
     let bundlerReply: any;
     try {
-        bundlerReply = await (await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }) })).json();
-    } catch (e: any) { return fail(`GAS SOURCE: bundler ${new URL(cfg.bundlerUrl).host} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
-    if (bundlerReply?.jsonrpc !== '2.0' || (bundlerReply.result === undefined && bundlerReply.error === undefined)) {
-        fail(`GAS SOURCE: bundler ${new URL(cfg.bundlerUrl).host} replied with something other than JSON-RPC`);
-    }
-    const bundlerClient = typeof bundlerReply.result === 'string' ? bundlerReply.result : 'not reported: no web3_clientVersion';
-    console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${new URL(cfg.bundlerUrl).host} (client ${bundlerClient}); the SDK estimates nothing locally`);
+        const res = await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }), signal: AbortSignal.timeout(15_000) });
+        if (!res.ok) return fail(`GAS SOURCE: bundler ${bundlerHost} answered HTTP ${res.status}`);
+        bundlerReply = await res.json();
+    } catch (e: any) { return fail(`GAS SOURCE: bundler ${bundlerHost} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
+    const bundlerClient = gasSourceClient(bundlerReply);
+    if (bundlerClient === undefined) fail(`GAS SOURCE: bundler ${bundlerHost} did not give a client version or method-not-found (error ${JSON.stringify(bundlerReply?.error?.code ?? null)})`);
+    console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${bundlerHost} (client ${bundlerClient}); the SDK estimates nothing locally`);
 
     // ---- the user's signer, counted ----
     // Prompted only now, after the gate passed, so a failing read-back never asks for the password.

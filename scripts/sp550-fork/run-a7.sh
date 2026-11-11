@@ -115,7 +115,8 @@ if [ -n "$DUMP" ]; then
   # The dump carries no funded accounts (SP's anvil runs --accounts 0): fund the bundler executors
   # and the user (mnemonic indexes 0-3, see ultrarelay.fork.json and userKey.anvilIndex).
   for i in 0 1 2 3; do
-    cast rpc anvil_setBalance "$(cast wallet address --mnemonic "test test test test test test test test test test test junk" --mnemonic-index $i)" 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null 2>>"$LOG"
+    KEY_ADDR=$(cast wallet address --mnemonic "test test test test test test test test test test test junk" --mnemonic-index $i 2>>"$LOG")
+    cast rpc anvil_setBalance "$KEY_ADDR" 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null 2>>"$LOG"
   done
   log "stage 1 ok: loaded the dump on a fork of 11155111 at $FORK_BLOCK (hardfork $HARDFORK), head $(cast block-number --rpc-url $RPC); 100 ETH to test keys 0-3"
 else
