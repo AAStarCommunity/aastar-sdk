@@ -275,13 +275,37 @@ describe('OperatorLifecycle', () => {
           expect(mocks.mockWithdrawal.cancelWithdraw).not.toHaveBeenCalled();
       });
 
-      it('5.5.1, window closed but the cancel reverts: stops, requests nothing', async () => {
+      it('5.5.1, window closed but the cancel reverts with the request still pending: stops, requests nothing', async () => {
           asVersion('SuperPaymaster-5.5.1');
           mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
           mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
           mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
           mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
-          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/cancelWithdraw 0xCancelHash reverted/);
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/cancelWithdraw 0xCancelHash reverted and the request is still pending/);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, someone called expireWithdraw first (the cancel reverts): the escrow is back, re-requests it (Grok M2)', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
+          mocks.mockWithdrawal.withdrawalStatus
+              .mockResolvedValueOnce(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }))
+              .mockResolvedValueOnce(statusOf({ amount: 0n, now: 86_402n, balance: 50n }));
+          mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          expect(await lifecycle.withdrawAllFunds()).toEqual(['0xCancelHash', '0xRequestHash']);
+          expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
+      });
+
+      it('5.5.1, window closed and the escrow slashed away: nothing left, so the role exits in the same call', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
+          mocks.mockWithdrawal.withdrawalStatus
+              .mockResolvedValueOnce(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }))
+              .mockResolvedValueOnce(statusOf({ amount: 0n, now: 86_402n, balance: 0n }));
+          mocks.mockRegistry.hasRole.mockResolvedValue(true);
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          expect(await lifecycle.withdrawAllFunds()).toEqual(['0xCancelHash', '0xExitHash']);
           expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
       });
 
@@ -290,7 +314,7 @@ describe('OperatorLifecycle', () => {
           mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
           mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
           mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
-          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/still reads as open/);
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/still reads as pending/);
           expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
       });
 

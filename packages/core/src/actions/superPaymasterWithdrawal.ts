@@ -1,4 +1,4 @@
-import { type Account, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from 'viem';
+import { getAddress, keccak256, type Account, type Address, type Hash, type Hex, type PublicClient, type WalletClient } from 'viem';
 import { SuperPaymasterV550ABI } from '../abis/index.js';
 import { validateAddress, validateAmount } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -115,12 +115,18 @@ export type SuperPaymasterWithdrawalMode = {
  * (`pins.spVersion`, the value the SP 5.5.0 cutover gate certified), never by an unverified
  * version() alone, so the withdrawal flow and the gate cannot disagree:
  *  - usable pins for the chain (complete, well-formed, no release hold): the live version() must
- *    equal pins.spVersion and the pinned proxy must be `superPaymaster`; the mode follows the pin;
+ *    equal pins.spVersion, the pinned proxy must be `superPaymaster`, and its ERC-1967 implementation
+ *    must be pins.spImpl with runtime code hashing to pins.spImplCodehash; the mode follows the pin;
  *  - no usable pins: only a pre-cutover 5.4.x is accepted (one call); a chain reporting 5.5.x
  *    without verified pins is refused — nothing to certify which withdrawal it runs.
  * Any disagreement throws ABI_SHAPE_MISMATCH / INVALID_CONFIGURATION instead of guessing.
  * `opts.pins` overrides the table (tests, a --pins file); `opts.chainId` skips eth_chainId.
  */
+/** Seconds of window `executeWithdraw` requires before expiresAt, so the tx does not land after it. */
+export const EXECUTE_WITHDRAW_MARGIN = 60n;
+
+const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
+
 export async function resolveSuperPaymasterWithdrawalMode(
     reader: PublicClient | WalletClient,
     superPaymaster: Address,
@@ -147,6 +153,17 @@ export async function resolveSuperPaymasterWithdrawalMode(
         if (version !== pins.spVersion) {
             throw new AAStarError(ErrorCode.ABI_SHAPE_MISMATCH,
                 `chain ${chainId}: SuperPaymaster ${superPaymaster} reports "${version}" but the read-back pinned "${pins.spVersion}"; refusing to guess the withdrawal mode`);
+        }
+        // version() does not identify a build (two SP-a builds both answer 5.5.1 with different
+        // withdrawal semantics): the implementation behind the proxy must be the pinned code too.
+        const slot = await pub.getStorageAt({ address: superPaymaster, slot: ERC1967_IMPL_SLOT });
+        const impl = slot && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress(('0x' + slot.slice(-40)) as Address) : undefined;
+        const code = impl ? await pub.getCode({ address: impl }) : undefined;
+        const implHash = code && code !== '0x' ? keccak256(code) : undefined;
+        if (!impl || impl.toLowerCase() !== pins.spImpl!.toLowerCase() || !implHash || implHash.toLowerCase() !== pins.spImplCodehash!.toLowerCase()) {
+            throw new AAStarError(ErrorCode.ABI_SHAPE_MISMATCH,
+                `chain ${chainId}: SuperPaymaster ${superPaymaster} runs implementation ${impl ?? `(slot ${slot})`} with code ${implHash ?? '(none)'}, ` +
+                `but the read-back pinned ${pins.spImpl} / ${pins.spImplCodehash}; refusing to pick a withdrawal mode for code the pins do not certify`);
         }
         return { mode: superPaymasterHasTwoStepWithdrawal(pins.spVersion!) ? 'two-step' : 'one-call', version, source: 'pin' };
     }
@@ -232,6 +249,9 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             if (s.amount === 0n) refuse(`no withdrawal request for ${operator}: call requestWithdraw first, then wait the withdrawal delay`);
             if (s.phase === 'waiting') refuse(`the request matures at ${s.readyAt} (latest block time ${s.now})`);
             if (s.phase === 'expired') refuse(`the withdrawal window closed at ${s.expiresAt} (latest block time ${s.now}; withdraw reverts WithdrawalExpired): cancelWithdraw returns the escrow, then requestWithdraw again`);
+            // The next block's timestamp is later than the latest one: too close to expiresAt and the tx
+            // lands after it (reverts WithdrawalExpired, escrow stays locked, gas lost).
+            if (s.expiresAt - s.now < EXECUTE_WITHDRAW_MARGIN) refuse(`only ${s.expiresAt - s.now}s left before the window closes at ${s.expiresAt}; under ${EXECUTE_WITHDRAW_MARGIN}s the withdraw would likely land after it — cancel or expire the request and request again`);
             const value = amount ?? s.amount;
             // Paid from the escrow, not from aPNTsBalance (which no longer includes it).
             if (value <= 0n || value > s.amount) refuse(`amount ${value} is outside 1..${s.amount} (the escrowed request)`);
@@ -241,6 +261,7 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             const s = await actions.withdrawalStatus({ operator });
             const refuse = (m: string): never => { throw new AAStarError(ErrorCode.INVALID_PARAMETER, `expireWithdraw: ${m}; nothing was sent`); };
             if (s.amount === 0n) refuse(`no withdrawal request for ${operator} (expireWithdraw reverts NoPendingWithdrawal)`);
+            if (s.phase === 'waiting') refuse(`the request has not matured yet (readyAt ${s.readyAt}, latest block time ${s.now}); its window closes at ${s.expiresAt} (expireWithdraw reverts WithdrawalNotReady until then)`);
             if (s.phase !== 'expired') refuse(`the window is still open until ${s.expiresAt} (latest block time ${s.now}; expireWithdraw reverts WithdrawalNotReady)`);
             try { return await write('expireWithdraw', [operator], account); } catch (e) { throw AAStarError.fromViemError(e as Error, 'expireWithdraw'); }
         },

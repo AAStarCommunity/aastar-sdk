@@ -108,7 +108,7 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
 
     /**
      * Finalize exit: withdraw the aPNTs collateral, then exit the Registry role. Staged on
-     * SuperPaymaster 5.5.1+ (request -> 48 h -> withdraw within 24 h); call it again until the role
+     * SuperPaymaster 5.5.1+ (request -> OPERATOR_WITHDRAWAL_DELAY -> withdraw within OPERATOR_WITHDRAWAL_WINDOW, read from the contract); call it again until the role
      * exit is in the returned hashes. The collateral is aPNTsBalance PLUS the withdrawal escrow: a
      * request moves its amount out of aPNTsBalance, so a zero balance with an open request still
      * has collateral to withdraw and must not exit the role yet.
@@ -117,7 +117,8 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
      *  - request inside its window: withdraws the escrow; exits the role only once no collateral is left;
      *  - window closed (withdraw would revert WithdrawalExpired): sends cancelWithdraw (the escrow
      *    returns to the balance), waits for it to be mined, re-reads, and sends requestWithdraw(balance)
-     *    again, and returns — the delay restarts.
+     *    again, and returns — the delay restarts. A cancel that reverts because someone else already
+     *    called expireWithdraw is fine (the escrow is back either way); with nothing left, the role exits.
      * On 5.4.2 the collateral is withdrawn in one call. Funds always go to the operator itself;
      * `to` is accepted only when it IS the operator (SuperPaymaster has no recipient parameter).
      */
@@ -154,11 +155,16 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 const cancel = await this.cancelCollateralWithdrawal(options);
                 hashes.push(cancel);
                 const receipt = await reader.waitForTransactionReceipt({ hash: cancel });
-                if (receipt.status !== 'success') throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted; nothing else was sent`);
                 const after = await this.collateralWithdrawalStatus();
-                if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as open (RPC lag?); call again`);
-                if (after.balance > 0n) hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
-                return hashes; // the window closed at w.expiresAt; the delay restarts
+                // expireWithdraw is permissionless: if someone expired the request first, the cancel reverts
+                // (NoPendingWithdrawal) but the escrow is back in the balance all the same — carry on.
+                if (receipt.status !== 'success' && after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted and the request is still pending; nothing else was sent`);
+                if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as pending (RPC lag?); call again`);
+                if (after.balance > 0n) {
+                    hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
+                    return hashes; // the window closed at w.expiresAt; the delay restarts
+                }
+                // Nothing left (slashed away while escrowed): no collateral, so the role exit below proceeds.
             }
             if (w.phase === 'open') {
                 hashes.push(await this.executeCollateralWithdrawal(undefined, options));

@@ -1,7 +1,7 @@
-import { decodeErrorResult, decodeEventLog, encodeAbiParameters, encodeEventTopics, encodeFunctionData, getAddress, keccak256, toFunctionSelector, toHex } from 'viem';
+import { decodeErrorResult, decodeEventLog, encodeAbiParameters, encodeEventTopics, encodeFunctionData, getAddress, keccak256, pad, toFunctionSelector, toHex } from 'viem';
 import { SuperPaymasterV550ABI } from '../abis/index.js';
 import { describe, it, expect } from 'vitest';
-import { resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
+import { EXECUTE_WITHDRAW_MARGIN, resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
 import { sp550PinnedAddressEntries } from '../sp550Cutover.js';
 
@@ -105,7 +105,7 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
     it.each([
         ['no request', { amount: 0n }, /no withdrawal request .*NoPendingWithdrawal/],
         ['still open (last second)', { amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW }, /still open until .*WithdrawalNotReady/],
-        ['not matured yet', { amount: 300n, readyAt: NOW + 1n }, /still open until/],
+        ['not matured yet', { amount: 300n, readyAt: NOW + 1n }, /has not matured yet \(readyAt/],
     ])('expireWithdraw refuses before sending: %s', async (_n, o, msg) => {
         const { a, writes } = chain(o);
         await expect(a.expireWithdraw({ operator: OP })).rejects.toThrow(msg);
@@ -125,10 +125,15 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
         await a.executeWithdraw({ operator: OP });
         expect(writes[0]).toMatchObject({ functionName: 'withdraw', args: [300n] });
     });
-    it('the last second of the window still sends', async () => {
-        const { a, writes } = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW });
-        await a.executeWithdraw({ operator: OP });
-        expect(writes).toHaveLength(1);
+    it('the last EXECUTE_WITHDRAW_MARGIN seconds refuse (the tx would land after expiresAt); just before them it sends', async () => {
+        const last = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW });
+        await expect(last.a.executeWithdraw({ operator: OP })).rejects.toThrow(/only 0s left before the window closes/);
+        expect(last.writes).toEqual([]);
+        const edge = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW + EXECUTE_WITHDRAW_MARGIN - 1n });
+        await expect(edge.a.executeWithdraw({ operator: OP })).rejects.toThrow(/only 59s left/);
+        const ok = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW + EXECUTE_WITHDRAW_MARGIN });
+        await ok.a.executeWithdraw({ operator: OP });
+        expect(ok.writes).toHaveLength(1);
     });
     it('getters decode their tuples', async () => {
         const { a } = chain({ amount: 7n, readyAt: 8n });
@@ -167,18 +172,28 @@ describe('superPaymasterHasTwoStepWithdrawal', () => {
 
 describe('resolveSuperPaymasterWithdrawalMode: the read-back-verified pin decides, never an unverified version()', () => {
     const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
+    const IMPL_CODE = '0x6080604052' as `0x${string}`;
     const PINS = {
-        tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: SP, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
+        tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: SP, spImpl: A(1), spImplCodehash: keccak256(IMPL_CODE),
         superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6), aoaProtocolRegistry: A(7),
         globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 1n,
     } as Record<string, any>;
     // Complete pins carry a runtime codehash per pinned address (#435); spImpl's is spImplCodehash.
     PINS.codehashes = Object.fromEntries(sp550PinnedAddressEntries(PINS as any).filter(([, a]) => a !== undefined)
         .map(([k], i) => [k, k === 'spImpl' ? PINS.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
-    const live = (version: string, chainId = 11155111) => ({
+    /** The live SP: version(), the ERC-1967 slot (default: the pinned impl) and the code behind it. */
+    const live = (version: string, chainId = 11155111, o: { impl?: `0x${string}`; code?: `0x${string}` } = {}) => ({
         getChainId: async () => chainId,
         readContract: async (p: any) => { if (p.functionName !== 'version') throw new Error(p.functionName); return version; },
+        getStorageAt: async () => pad(o.impl ?? A(1), { size: 32 }),
+        getCode: async ({ address }: any) => (address.toLowerCase() === (o.impl ?? A(1)).toLowerCase() ? o.code ?? IMPL_CODE : '0x'),
     }) as any;
+    it('the same version() on other code is refused: the pinned implementation and codehash decide too', async () => {
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1', 11155111, { code: '0x6001' }), SP, { pins: PINS }))
+            .rejects.toThrow(/runs implementation .* with code 0x.* but the read-back pinned/);
+        await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1', 11155111, { impl: A(0x99) }), SP, { pins: PINS }))
+            .rejects.toThrow(/code the pins do not certify/);
+    });
 
     it('usable pins and a matching live version(): the pin decides (5.5.1 -> two-step)', async () => {
         expect(await resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1'), SP, { pins: PINS }))

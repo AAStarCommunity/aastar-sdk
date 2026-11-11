@@ -206,7 +206,7 @@ const status = await operatorClient.checkResources(myAddress);
 
 if (status.hasRole) {
     // SuperPaymaster 5.5.1+: request now (the amount moves into escrow and stops backing sponsorship),
-    // withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h) and within the following 24 h window
+    // withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h) and within OPERATOR_WITHDRAWAL_WINDOW (read from the contract; 24 h on 5.5.1)
     await operatorClient.requestCollateralWithdrawal(parseEther("50"));
     // ...48 h later:
     await operatorClient.executeCollateralWithdrawal();
