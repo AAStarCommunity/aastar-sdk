@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { OPERATOR_WITHDRAWAL_WINDOW, resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
+import { resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
 import { sp550PinnedAddressEntries } from '../sp550Cutover.js';
 
 const SP = '0x' + '5a'.repeat(20) as `0x${string}`;
 const OP = '0x' + '0b'.repeat(20) as `0x${string}`;
 const NOW = 1_800_000_000n;
+/** The window the mocked contract reports (OPERATOR_WITHDRAWAL_WINDOW() = 24 h on 5.5.1). */
+const OPERATOR_WITHDRAWAL_WINDOW = 86_400n;
 
 /** A mocked chain: pending request, balance, slash flag; writes are recorded, never sent. */
-function chain(o: { amount?: bigint; readyAt?: bigint; balance?: bigint; slash?: boolean } = {}) {
+function chain(o: { amount?: bigint; readyAt?: bigint; balance?: bigint; slash?: boolean; window?: number } = {}) {
     const reads: any[] = [], writes: any[] = [];
     const client: any = {
         getBlock: async () => ({ number: 9n, timestamp: NOW }),
@@ -19,6 +21,7 @@ function chain(o: { amount?: bigint; readyAt?: bigint; balance?: bigint; slash?:
                 case 'operators': return [o.balance ?? 1000n, true, false, '0x' + '00'.repeat(20), 0, 60, '0x' + '00'.repeat(20), 0n, 0n];
                 case 'isSlashPending': return o.slash ?? false;
                 case 'OPERATOR_WITHDRAWAL_DELAY': return 172800;
+                case 'OPERATOR_WITHDRAWAL_WINDOW': return o.window ?? 86400;
                 case 'slashQueues': return ['0x' + '11'.repeat(20), 123, true];
                 case 'inflightReserved': return 42n;
             }
@@ -63,9 +66,32 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
         });
         expect(reads.every((r) => r.blockNumber === 9n)).toBe(true);
     });
+    it('the window is read from the contract (OPERATOR_WITHDRAWAL_WINDOW()), not assumed', async () => {
+        const at = async (readyAt: bigint) => (await chain({ amount: 5n, readyAt, window: 3600 }).a.withdrawalStatus({ operator: OP }));
+        expect((await at(NOW - 3600n)).phase).toBe('open');
+        expect((await at(NOW - 3601n)).phase).toBe('expired');
+        expect((await at(NOW - 3600n)).expiresAt).toBe(NOW);
+        const { a, reads } = chain({ amount: 5n, readyAt: NOW });
+        await a.withdrawalStatus({ operator: OP });
+        expect(reads.find((r) => r.functionName === 'OPERATOR_WITHDRAWAL_WINDOW')).toMatchObject({ blockNumber: 9n });
+        expect(await a.withdrawalWindow()).toBe(86_400n);
+    });
+    it('expireWithdraw sends only after the window has closed, for anyone', async () => {
+        const { a, writes } = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW - 1n });
+        await a.expireWithdraw({ operator: OP });
+        expect(writes.map((w) => [w.functionName, w.args])).toEqual([['expireWithdraw', [OP]]]);
+    });
+    it.each([
+        ['no request', { amount: 0n }, /no withdrawal request .*NoPendingWithdrawal/],
+        ['still open (last second)', { amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW }, /still open until .*WithdrawalNotReady/],
+        ['not matured yet', { amount: 300n, readyAt: NOW + 1n }, /still open until/],
+    ])('expireWithdraw refuses before sending: %s', async (_n, o, msg) => {
+        const { a, writes } = chain(o);
+        await expect(a.expireWithdraw({ operator: OP })).rejects.toThrow(msg);
+        expect(writes).toEqual([]);
+    });
     it('the window is [readyAt, readyAt + 24 h], both ends inclusive', async () => {
         const phase = async (readyAt: bigint) => (await chain({ amount: 5n, readyAt }).a.withdrawalStatus({ operator: OP })).phase;
-        expect(OPERATOR_WITHDRAWAL_WINDOW).toBe(86_400n);
         expect(await phase(NOW + 1n)).toBe('waiting');
         expect(await phase(NOW)).toBe('open');
         expect(await phase(NOW - OPERATOR_WITHDRAWAL_WINDOW)).toBe('open');

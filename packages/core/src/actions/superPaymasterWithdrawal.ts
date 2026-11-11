@@ -10,13 +10,6 @@ import { superPaymasterGenerationFromVersion } from '../superPaymasterData.js';
 /** `pendingWithdrawals(operator)` (SuperPaymaster-5.5.1). amount 0 = no request. */
 export type PendingOperatorWithdrawal = { amount: bigint; readyAt: bigint };
 
-/**
- * How long a matured request stays withdrawable: `withdraw` succeeds in [readyAt, readyAt + 24 h]
- * and reverts WithdrawalExpired after it (SP rc.8 SP-a, #619, as announced 2026-11-11). Kept here
- * until #619's final head lands; replace with the contract's constant if it exposes one.
- */
-export const OPERATOR_WITHDRAWAL_WINDOW = 24n * 60n * 60n;
-
 /** none: no request · waiting: before readyAt · open: withdrawable now · expired: cancel and request again. */
 export type OperatorWithdrawalPhase = 'none' | 'waiting' | 'open' | 'expired';
 
@@ -31,7 +24,7 @@ export type OperatorWithdrawalStatus = PendingOperatorWithdrawal & {
     available: bigint;
     /** aPNTs held in the withdrawal escrow (= `amount`). Not available for sponsorship; still slashable. */
     escrowed: bigint;
-    /** `readyAt + OPERATOR_WITHDRAWAL_WINDOW`, the last second `withdraw` succeeds; 0 when there is no request. */
+    /** `readyAt + OPERATOR_WITHDRAWAL_WINDOW()` (read from the contract), the last second `withdraw` succeeds; 0 when there is no request. */
     expiresAt: bigint;
     /** Block timestamp the status was read at. */
     now: bigint;
@@ -50,6 +43,8 @@ export type OperatorSlashQueue = { queuedBy: Address; queuedAt: bigint; guardian
 export type SuperPaymasterWithdrawalActions = {
     /** `OPERATOR_WITHDRAWAL_DELAY()` — 48 h on 5.5.1. */
     withdrawalDelay: () => Promise<bigint>;
+    /** `OPERATOR_WITHDRAWAL_WINDOW()` — how long a matured request stays withdrawable (24 h on 5.5.1). */
+    withdrawalWindow: () => Promise<bigint>;
     /** `GUARDIAN_SLASH_FREEZE()` — how long a guardian-queued freeze lasts unconfirmed (7 days). */
     guardianSlashFreeze: () => Promise<bigint>;
     pendingWithdrawal: (args: { operator: Address }) => Promise<PendingOperatorWithdrawal>;
@@ -75,6 +70,14 @@ export type SuperPaymasterWithdrawalActions = {
      * request sent close to `expiresAt` can still mine after it; leave margin.
      */
     executeWithdraw: (args: { operator: Address, amount?: bigint, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * Permissionless: `expireWithdraw(operator)` once the window has closed (now > expiresAt). The
+     * escrow goes back to the operator's aPNTsBalance (not to anyone's wallet) and the request is
+     * deleted; emits OperatorWithdrawalExpired. Checked before sending: a request exists and the
+     * latest block is past expiresAt (the contract reverts NoPendingWithdrawal / WithdrawalNotReady);
+     * otherwise this throws INVALID_PARAMETER and sends nothing.
+     */
+    expireWithdraw: (args: { operator: Address, account?: Account | Address }) => Promise<Hash>;
     /**
      * Permissionless: pause an operator whose role or effective stake is below the minimum.
      * Reverts OperatorNotConfigured / OperatorMeetsMinimumStake.
@@ -171,6 +174,9 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
         async withdrawalDelay() {
             try { return BigInt(await read('OPERATOR_WITHDRAWAL_DELAY')); } catch (e) { throw AAStarError.fromViemError(e as Error, 'withdrawalDelay'); }
         },
+        async withdrawalWindow() {
+            try { return BigInt(await read('OPERATOR_WITHDRAWAL_WINDOW')); } catch (e) { throw AAStarError.fromViemError(e as Error, 'withdrawalWindow'); }
+        },
         async guardianSlashFreeze() {
             try { return BigInt(await read('GUARDIAN_SLASH_FREEZE')); } catch (e) { throw AAStarError.fromViemError(e as Error, 'guardianSlashFreeze'); }
         },
@@ -197,11 +203,12 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             try {
                 const block = await pub.getBlock({ blockTag: 'latest' });
                 const bn = block.number as bigint;
-                const [pending, op, slashPending] = await Promise.all([
+                const [pending, op, slashPending, window] = await Promise.all([
                     read('pendingWithdrawals', [operator], bn), read('operators', [operator], bn), read('isSlashPending', [operator], bn),
+                    read('OPERATOR_WITHDRAWAL_WINDOW', [], bn),
                 ]);
                 const amount = BigInt(pending[0]), readyAt = BigInt(pending[1]), now = BigInt(block.timestamp);
-                const expiresAt = amount > 0n ? readyAt + OPERATOR_WITHDRAWAL_WINDOW : 0n;
+                const expiresAt = amount > 0n ? readyAt + BigInt(window) : 0n;
                 const phase: OperatorWithdrawalPhase = amount === 0n ? 'none' : now < readyAt ? 'waiting' : now <= expiresAt ? 'open' : 'expired';
                 // operators(): (aPNTsBalance, isConfigured, isPaused, xPNTsToken, …)
                 const balance = BigInt(op[0]);
@@ -229,6 +236,13 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             // Paid from the escrow, not from aPNTsBalance (which no longer includes it).
             if (value <= 0n || value > s.amount) refuse(`amount ${value} is outside 1..${s.amount} (the escrowed request)`);
             try { return await write('withdraw', [value], account); } catch (e) { throw AAStarError.fromViemError(e as Error, 'executeWithdraw'); }
+        },
+        async expireWithdraw({ operator, account }) {
+            const s = await actions.withdrawalStatus({ operator });
+            const refuse = (m: string): never => { throw new AAStarError(ErrorCode.INVALID_PARAMETER, `expireWithdraw: ${m}; nothing was sent`); };
+            if (s.amount === 0n) refuse(`no withdrawal request for ${operator} (expireWithdraw reverts NoPendingWithdrawal)`);
+            if (s.phase !== 'expired') refuse(`the window is still open until ${s.expiresAt} (latest block time ${s.now}; expireWithdraw reverts WithdrawalNotReady)`);
+            try { return await write('expireWithdraw', [operator], account); } catch (e) { throw AAStarError.fromViemError(e as Error, 'expireWithdraw'); }
         },
         async pauseUnderstakedOperator({ operator, account }) {
             validateAddress(operator, 'operator');
