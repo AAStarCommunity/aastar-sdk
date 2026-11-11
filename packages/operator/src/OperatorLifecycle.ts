@@ -1,4 +1,4 @@
-import { type Address, type Hash, type Hex, parseEther } from 'viem';
+import { type Address, type Hash, type Hex, type PublicClient, parseEther } from 'viem';
 import { type TransactionOptions } from '@aastar/core';
 import { PaymasterOperatorClient, type OperatorClientConfig } from './PaymasterOperatorClient.js';
 import { tokenActions, registryActions } from '@aastar/core'; // L2/L1 Actions
@@ -144,11 +144,16 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 throw new Error(`withdrawAllFunds: the collateral withdrawal matures at ${w.readyAt} and stays open until ${w.expiresAt} (now ${w.now}); call again then`);
             }
             if (w.phase === 'expired') {
+                // Re-read only once the cancel is mined: the escrow is then back in the balance (less any
+                // slash meanwhile). Reading before it lands would request a stale, smaller balance. So the
+                // reader must be able to wait for a receipt — checked before anything is sent.
+                const reader = this.getStartPublicClient() as Partial<Pick<PublicClient, 'waitForTransactionReceipt'>>;
+                if (typeof reader.waitForTransactionReceipt !== 'function') {
+                    throw new Error('withdrawAllFunds: the window closed, and re-requesting needs a client that can wait for the cancel receipt (pass a publicClient); nothing was sent');
+                }
                 const cancel = await this.cancelCollateralWithdrawal(options);
                 hashes.push(cancel);
-                // Re-read only once the cancel is mined: the escrow is then back in the balance (less any
-                // slash meanwhile). Reading before it lands would request a stale, smaller balance.
-                const receipt = await this.getStartPublicClient().waitForTransactionReceipt({ hash: cancel });
+                const receipt = await reader.waitForTransactionReceipt({ hash: cancel });
                 if (receipt.status !== 'success') throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted; nothing else was sent`);
                 const after = await this.collateralWithdrawalStatus();
                 if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as open (RPC lag?); call again`);

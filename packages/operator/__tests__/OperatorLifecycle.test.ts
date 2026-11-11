@@ -247,14 +247,32 @@ describe('OperatorLifecycle', () => {
               .mockResolvedValueOnce(statusOf({ amount: 0n, now: 86_402n, balance: 45n })); // slashed by 5 meanwhile
           mocks.mockRegistry.hasRole.mockResolvedValue(true);
           mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
-          expect(await lifecycle.withdrawAllFunds()).toEqual(['0xCancelHash', '0xRequestHash']);
+          // The cancel's receipt is held back: nothing may be re-read or requested until it resolves (Codex on #433).
+          let mine!: (r: { status: string }) => void;
+          mockPublicClient.waitForTransactionReceipt.mockReturnValueOnce(new Promise((r) => { mine = r; }));
+          const run = lifecycle.withdrawAllFunds();
+          await vi.waitFor(() => expect(mockPublicClient.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: '0xCancelHash' }));
+          await new Promise((r) => setTimeout(r, 20));
+          expect(mocks.mockWithdrawal.withdrawalStatus).toHaveBeenCalledTimes(1);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
+          mine({ status: 'success' });
+          expect(await run).toEqual(['0xCancelHash', '0xRequestHash']);
+          expect(mocks.mockWithdrawal.withdrawalStatus).toHaveBeenCalledTimes(2);
           expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 45n }));
-          // The re-read happens only after the cancel is mined (Codex M on #433).
-          expect(mockPublicClient.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: '0xCancelHash' });
-          const mined = mockPublicClient.waitForTransactionReceipt.mock.invocationCallOrder.at(-1)!;
-          expect(mocks.mockWithdrawal.withdrawalStatus.mock.invocationCallOrder[1]).toBeGreaterThan(mined);
           expect(mocks.mockWithdrawal.executeWithdraw).not.toHaveBeenCalled();
           expect(mocks.mockRegistry.exitRole).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, window closed with a reader that cannot wait for receipts: refuses before sending the cancel', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          const wait = mockPublicClient.waitForTransactionReceipt;
+          (mockPublicClient as any).waitForTransactionReceipt = undefined;
+          try {
+              await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/needs a client that can wait for the cancel receipt/);
+          } finally { (mockPublicClient as any).waitForTransactionReceipt = wait; }
+          expect(mocks.mockWithdrawal.cancelWithdraw).not.toHaveBeenCalled();
       });
 
       it('5.5.1, window closed but the cancel reverts: stops, requests nothing', async () => {
