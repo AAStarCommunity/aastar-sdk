@@ -66,7 +66,12 @@ function good(): any {
     }
     Object.assign(contracts.superPaymaster, { erc1967Impl: PINS.spImpl, implCodehash: PINS.spImplCodehash, extension: PINS.spAdminExtension, extensionCodehash: PINS.codehashes.spAdminExtension, owner: A(0xb0), pendingOwner: A(0), OPERATOR_WITHDRAWAL_WINDOW: 86400 });
     Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: A(0) }); // from its ERC-7201 slot
-    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: 'n/a:Safe library, no version()' }; // not a pin: not compared
+    // Contracts the schema requires but the SDK does not pin: schema-checked only, not compared.
+    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: 'n/a:Safe library, no version()' };
+    contracts.gTokenStaking = { ...contracts.xPNTsTokenV2Ext, address: A(0x9a), version: 'GTokenStaking-3.2.0' };
+    contracts.entryPoint = { ...contracts.xPNTsTokenV2Ext, address: A(0x9b), version: 'n/a:EntryPoint v0.7 has no version()', getDepositInfo: { deposit: '0', staked: false } };
+    contracts.ownerSafe = { ...contracts.xPNTsTokenV2Ext, address: A(0x9c), version: '1.4.1' };
+    contracts.evaluationCommunityToken = { ...contracts.xPNTsTokenV2Ext, address: A(0x9d), version: 'XPNTs-4.0.3' }; // not a pin: not compared
     return {
         schema: READBACK_SCHEMA,
         header: {
@@ -100,8 +105,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('148224aa64140cdf287a60ee16fe8d0be7f8512657e6c4677bd55e339b455206');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('49c6492b73078d82aee0b5b454e65b82259107e7e568888a668731a93c602432');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('5b18f574d7bbdbba6ec787d62625ddd45217b38ae170d2d8df3779b659177dc2');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('bdbf3085add03c1080e438f60bcc37e91a4e702a58dbb30fa0129058e234f5c8');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -115,6 +120,7 @@ describe('the binding schema (sha256-pinned)', () => {
         ['a bare "unreadable"', (rb: any) => { rb.contracts.xPNTsTokenV2Ext.owner = 'unreadable'; }],
         ['a top-level key outside the schema', (rb: any) => { rb.extra = 1; }],
         ['no amsterdamProbe', (rb: any) => { delete rb.amsterdamProbe; }],
+        ['a required contract dropped (schema 3bf4bba2)', (rb: any) => { delete rb.contracts.ownerSafe; }],
         ['a malformed forkId', (rb: any) => { rb.header.ethConfig.forkId = '0x6c1d94'; }],
         ['a version on a contract without version() by design (schema 2228c0b6)', (rb: any) => { rb.contracts.spAdminExtension.version = 'Admin-1'; }],
         ['a null version on any other contract (schema 2228c0b6)', (rb: any) => { rb.contracts.registry.version = null; }],
@@ -174,7 +180,6 @@ describe('readbackProblems refuses', () => {
         ['no Amsterdam-only header fields on the second provider', (rb: any) => { rb.header.ethConfig.corroboration.slotNumber = false; }, /corroboration: Amsterdam-only header fields not both present/],
         ['the same provider corroborating itself', (rb: any) => { rb.header.ethConfig.corroboration.provider = 'alchemy'; }, /must be a second one/],
         ['corroboration at another block', (rb: any) => { rb.header.ethConfig.corroboration.blockNumber = 1; }, /corroboration\.blockNumber 1 != header\.forkBlock 400/],
-        ['a pinned contract left out', (rb: any) => { delete rb.contracts.dvtValidator; }, /^contracts\.dvtValidator: omitted$/],
         ['another address', (rb: any) => { rb.contracts.superPaymasterLens.address = A(0x99); }, /contracts\.superPaymasterLens\.address .* != pinned/],
         ['another codehash', (rb: any) => { rb.contracts.xPNTsTokenV2Ext.codehash = H(0x99); }, /contracts\.xPNTsTokenV2Ext\.codehash .* != pins\.codehashes\.xPNTsTokenV2Ext/],
         ['a book entry with another codehash', (rb: any) => { rb.contracts.blsAggregator.codehash = H(0x99); }, /contracts\.blsAggregator\.codehash .* != pins\.codehashes\.addresses\.blsAggregator/],
