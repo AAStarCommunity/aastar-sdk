@@ -159,6 +159,10 @@ describe('readbackProblems refuses', () => {
         AMSTERDAM = obs as Observed;
         expect(await run(good())).toEqual([expect.stringMatching(msg)]);
     });
+    it('an upstream answer that is not JSON is a problem, not a crash', async () => {
+        AMSTERDAM = { kind: 'value', value: 'not json' };
+        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not JSON/)]));
+    });
     it('an upstream without eth_config is fine when the header fields are there', async () => {
         AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [] }) };
         expect(await run(good())).toEqual([]);

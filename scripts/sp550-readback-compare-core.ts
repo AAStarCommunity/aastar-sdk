@@ -200,7 +200,8 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
     if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
     else {
-        const seen = JSON.parse(am.value) as { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] };
+        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } = {};
+        try { seen = JSON.parse(am.value); } catch { p.push(`header.ethConfig: the upstream answer is not JSON (${am.value.slice(0, 60)})`); }
         if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
         for (const cfg of seen.ethConfigs ?? []) {
             if (ref && (cfg.activationTime !== ref.activationTime || !eq(cfg.forkId, ref.forkId))) p.push(`header.ethConfig: the upstream eth_config reports ${show(cfg)}, not Amsterdam ${show(ref)}`);

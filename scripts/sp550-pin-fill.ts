@@ -88,6 +88,10 @@ async function main() {
     if (urls.length < 2) refuse('--write needs --rpc and --rpc2 on two different providers');
     const hosts = urls.map(([, u]) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } });
     if (new Set(hosts).size < 2) refuse('--write needs --rpc and --rpc2 on two different hosts (two paths on one host are one provider)');
+    // Two names for one machine are one provider too: the resolved addresses must not overlap.
+    const resolvedSets = await Promise.all(hosts.map((h) => lookup(h.replace(/^\[|\]$/g, ''), { all: true }).then((r) => r.map((x) => x.address)).catch(() => [] as string[])));
+    if (resolvedSets.some((r) => !r.length)) refuse('--write: an RPC host does not resolve');
+    if (resolvedSets[0].some((a) => resolvedSets[1].includes(a))) refuse('--write: --rpc and --rpc2 resolve to the same address (one provider behind two names)');
     if (b !== undefined && b !== 'finalized') refuse('--write reads at the finalized block only (no --block override)');
 
     // Independent cross-check (DSR): SP's own LIVE read-back, committed in its manifest PR and fetched
@@ -121,7 +125,7 @@ async function main() {
         // Not knowing the node is not "not anvil": a failed or empty answer refuses the write too.
         let client: unknown;
         try { client = await createPublicClient({ transport: http(url) }).request({ method: 'web3_clientVersion' } as never); }
-        catch (e) { refuse(`--write refused: ${label} did not answer web3_clientVersion (${(e as Error).message.split('\n')[0]}); cannot rule out a local fork`); }
+        catch (e) { refuse(`--write refused: ${label} did not answer web3_clientVersion (${(e as Error).name}); cannot rule out a local fork`); }
         if (typeof client !== 'string' || client === '') refuse(`--write refused: ${label} gave no client version; cannot rule out a local fork`);
         if (/^anvil\//i.test(client as string)) refuse(`--write refused: ${label} is an anvil node (${client}); fork addresses never go into the source`);
     }

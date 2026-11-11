@@ -87,7 +87,9 @@ async function main() {
                 const blk = await u.request({ method: 'eth_getBlockByNumber', params: [`0x${block.toString(16)}`, false] } as never) as Record<string, unknown> | null;
                 if (!blk) return 'no block';
                 const cfg = await u.request({ method: 'eth_config', params: [] } as never).then((c: any) => c?.current, () => undefined) as any;
-                return JSON.stringify({ blockAccessListHash: typeof blk.blockAccessListHash === 'string', slotNumber: blk.slotNumber !== undefined && blk.slotNumber !== null,
+                // Amsterdam-only header fields, well-formed: a 32-byte hash and a hex quantity (not merely present).
+                return JSON.stringify({ blockAccessListHash: typeof blk.blockAccessListHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(blk.blockAccessListHash),
+                    slotNumber: typeof blk.slotNumber === 'string' && /^0x[0-9a-fA-F]+$/.test(blk.slotNumber),
                     ethConfig: cfg ? { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } : null });
             } catch (e) { return `ERR ${(e as Error).name}`; } // an upstream URL embeds a key: no message text
         }));
@@ -168,7 +170,8 @@ async function runProbe(forkUrl: string, upstreamUrl: string, probe: { initcode:
         const r = await upstream.request({ method: 'eth_simulateV1', params: [{ blockStateCalls: [{ calls: [tx] }], validation: false }, at] } as never) as any[];
         const used = r?.[0]?.calls?.[0]?.gasUsed;
         const status = r?.[0]?.calls?.[0]?.status;
-        simulateUpstream = typeof used === 'string' && status === '0x1' ? { kind: 'value', value: BigInt(used) } : { kind: 'error', detail: `eth_simulateV1 call status ${status} (expected 0x1)` };
+        const ok = typeof status === 'string' && /^0x[0-9a-fA-F]+$/.test(status) && BigInt(status) === 1n;
+        simulateUpstream = typeof used === 'string' && ok ? { kind: 'value', value: BigInt(used) } : { kind: 'error', detail: `eth_simulateV1 call status ${status} (expected 1)` };
     } catch (e) {
         const code = (e as { code?: number }).code;
         // Only -32601 (method not found) means the provider has no eth_simulateV1 (n/a, not judged); any

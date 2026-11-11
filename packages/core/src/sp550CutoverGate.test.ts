@@ -532,3 +532,16 @@ describe('the BLS / DVT / Registry wiring: every leg names the certified contrac
         expect(failed(r)).toEqual([check]);
     });
 });
+
+describe('a single loopback RPC: every loopback spelling (Grok Low)', () => {
+    it.each(['http://127.0.0.2:8545', 'http://[::1]:8545', 'http://0.0.0.0:8545', 'http://[::ffff:127.0.0.1]:8545', 'http://localhost.:8545'])('%s is accepted as a fork rehearsal', async (url) => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', url, m, [])], pins: m.pins });
+        expect(r.exitCode).toBe(0);
+    });
+    it('a public host alone is refused', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://rpc.example/', m, [])], pins: m.pins });
+        expect(r.exitCode).toBe(2);
+    });
+});

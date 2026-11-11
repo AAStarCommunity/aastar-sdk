@@ -61,7 +61,14 @@ class Diverge {
 const str = (v: unknown): string => (v instanceof Diverge ? v.detail : typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const HASH = /^0x[0-9a-fA-F]{64}$/;
-const isLoopback = (url: string) => { try { return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(new URL(url).hostname); } catch { return false; } };
+/** A loopback / unspecified host by its parsed name: localhost, 127/8, 0.0.0.0, ::1, ::, IPv4-mapped forms. */
+const isLoopback = (url: string) => {
+    let h: string;
+    try { h = new URL(url).hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, ''); } catch { return false; }
+    if (h === 'localhost' || h.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(h) || h === '0.0.0.0' || h === '::1' || h === '::') return true;
+    const m = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(h);
+    return !!m && (parseInt(m[1], 16) >> 8 === 0x7f || (parseInt(m[1], 16) === 0 && parseInt(m[2], 16) === 0));
+};
 
 export async function runSp550CutoverGate(input: GateInput): Promise<GateResult> {
     const results: GateCheck[] = [];
