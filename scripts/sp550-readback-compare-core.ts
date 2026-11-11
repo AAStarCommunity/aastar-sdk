@@ -57,8 +57,18 @@ export const AMSTERDAM_ETH_CONFIG: Record<number, { activationTime: number; fork
     11155111: { activationTime: 1791294816, forkId: '0x6c1d9423' },
 };
 
-/** The read-back's contract key for a pin name: book entries drop their `addresses.` prefix. */
-export const contractKeyOf = (pinName: string) => (pinName.startsWith('addresses.') ? pinName.slice('addresses.'.length) : pinName);
+/**
+ * Book keys whose read-back contract key differs (SP, 2026-11-11). Every SP pins file declares the same
+ * map in `_aliases` (as "contracts.<key>"); parseManifestPins refuses a file whose map differs.
+ */
+export const BOOK_KEY_CONTRACT_ALIASES: Readonly<Record<string, string>> = { staking: 'gTokenStaking' };
+
+/** The read-back's contract key for a pin name: book entries drop their `addresses.` prefix (and follow the alias map). */
+export const contractKeyOf = (pinName: string) => {
+    if (!pinName.startsWith('addresses.')) return pinName;
+    const k = pinName.slice('addresses.'.length);
+    return BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
+};
 /** Pinned names the read-back may cover through a proxy's fields instead of an entry of their own. */
 const COVERED_BY_PROXY = new Set(['spImpl', 'registryImpl']);
 export const READBACK_CONTRACT_FIELDS = [

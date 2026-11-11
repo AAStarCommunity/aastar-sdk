@@ -381,3 +381,11 @@ describe('classifyCallError on real viem error graphs', () => {
         expect(classifyCallError(new Error('socket hang up'))).toEqual({ kind: 'error', detail: 'Error: socket hang up' });
     });
 });
+
+describe('book keys renamed in the read-back (SP: staking -> gTokenStaking)', () => {
+    it('addresses.staking is compared as contracts.gTokenStaking; other book keys keep their name', () => {
+        expect(contractKeyOf('addresses.staking')).toBe('gTokenStaking');
+        expect(contractKeyOf('addresses.registry')).toBe('registry');
+        expect(contractKeyOf('superPaymaster')).toBe('superPaymaster');
+    });
+});

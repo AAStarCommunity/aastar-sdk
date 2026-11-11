@@ -18,14 +18,24 @@ const UPGRADE_KEYS = [
     'registryImpl', 'disclosureRegistry', 'addresses', 'readbackBlock', 'codehashes',
 ] as const;
 const FRESH_KEYS = [...UPGRADE_KEYS, 'absent'] as const;
+/** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (mirrors the comparator's table). */
+export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = { staking: 'contracts.gTokenStaking' };
 
 /** The manifest's pins JSON -> pins, the way check-sp550-cutover.ts --pins reads it, but strict about keys. */
 export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshDeployPins {
     if (!json || typeof json !== 'object' || Array.isArray(json)) throw new Error('manifest pins: not a JSON object');
     const allowed: readonly string[] = mode === 'fresh' ? FRESH_KEYS : UPGRADE_KEYS;
-    const unknown = Object.keys(json).filter((k) => !allowed.includes(k));
+    // `_aliases` is metadata, not a pin: it must be exactly the alias map the SDK reads with, then it is dropped.
+    let obj = json as Record<string, unknown>;
+    if ('_aliases' in obj) {
+        const a = obj._aliases;
+        if (JSON.stringify(a) !== JSON.stringify(PINS_FILE_ALIASES)) throw new Error(`manifest pins: _aliases ${JSON.stringify(a)} != the SDK's ${JSON.stringify(PINS_FILE_ALIASES)} (a renamed key would be compared under the wrong name)`);
+        const { _aliases: _drop, ...rest } = obj;
+        obj = rest;
+    }
+    const unknown = Object.keys(obj).filter((k) => !allowed.includes(k));
     if (unknown.length) throw new Error(`manifest pins: unknown key(s) for a ${mode} deploy: ${unknown.join(', ')} (refusing rather than dropping them)`);
-    const j = json as Record<string, any>;
+    const j = obj as Record<string, any>;
     const rb = j.readbackBlock;
     if (rb !== undefined && !(typeof rb === 'number' && Number.isSafeInteger(rb) && rb >= 0) && !(typeof rb === 'string' && /^\d+$/.test(rb))) {
         throw new Error(`manifest pins: readbackBlock ${JSON.stringify(rb)} is not a block number`);
@@ -198,7 +208,43 @@ export function writeAll(files: { path: string; before: string; after: string }[
     catch (e) {
         const left = restoreEach(done);
         for (const f of files) io.remove(`${f.path}.pin-fill.tmp`);
-        throw new Error(`write failed (${(e as Error).message})${left.length ? `; ${left.join('; ')}` : '; nothing left changed'}`);
+        // `unrestored` tells the caller to KEEP its recovery data (journal + before-images).
+        throw Object.assign(new Error(`write failed (${(e as Error).message})${left.length ? `; ${left.join('; ')}` : '; nothing left changed'}`), { unrestored: left });
     }
     return () => restoreEach(files);
+}
+
+/**
+ * --write's independent cross-check (DSR, H3): SP's own LIVE read-back (schema aoa-a7-readback/1,
+ * source "live", gathered by SP on its own two providers and committed in the step-13 manifest PR)
+ * must name every pinned address and codehash the manifest pins name. Pure: the caller validated
+ * the file against the schema. One bad pair of endpoints on the SDK side cannot satisfy this.
+ */
+export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chainId: number, pinnedEntries: [string, unknown][]): string[] {
+    const p: string[] = [];
+    const eqi = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+    if (rb?.header?.source !== 'live') p.push(`SP read-back: header.source ${JSON.stringify(rb?.header?.source)} is not "live"`);
+    if (rb?.header?.chainId !== chainId) p.push(`SP read-back: header.chainId ${rb?.header?.chainId} != ${chainId}`);
+    if (rb?.header?.tag !== pins.tag) p.push(`SP read-back: header.tag ${JSON.stringify(rb?.header?.tag)} != pins.tag ${JSON.stringify(pins.tag)}`);
+    const c = rb?.contracts ?? {};
+    const h = pins.codehashes ?? {};
+    // spImpl / registryImpl are the proxies' erc1967Impl fields in the read-back.
+    const viaProxy: Record<string, [string, string, string]> = { spImpl: ['superPaymaster', 'erc1967Impl', 'implCodehash'], registryImpl: ['registry', 'erc1967Impl', 'implCodehash'] };
+    for (const [name, addr] of pinnedEntries) {
+        if (typeof addr !== 'string') continue;
+        const proxy = viaProxy[name];
+        if (proxy) {
+            const e = c[proxy[0]];
+            if (!eqi(e?.[proxy[1]], addr)) p.push(`SP read-back: contracts.${proxy[0]}.${proxy[1]} ${JSON.stringify(e?.[proxy[1]])} != pins.${name} ${addr}`);
+            if (!eqi(e?.[proxy[2]], h[name])) p.push(`SP read-back: contracts.${proxy[0]}.${proxy[2]} ${JSON.stringify(e?.[proxy[2]])} != pins.codehashes.${name} ${h[name]}`);
+            continue;
+        }
+        const key = name.startsWith('addresses.') ? (PINS_FILE_ALIASES[name.slice('addresses.'.length)]?.replace(/^contracts\./, '') ?? name.slice('addresses.'.length)) : name;
+        const e = c[key];
+        if (!e) { p.push(`SP read-back: contracts.${key} missing (pins.${name})`); continue; }
+        if (!eqi(e.address, addr)) p.push(`SP read-back: contracts.${key}.address ${JSON.stringify(e.address)} != pins.${name} ${addr}`);
+        if (!eqi(e.codehash, h[name])) p.push(`SP read-back: contracts.${key}.codehash ${JSON.stringify(e.codehash)} != pins.codehashes.${name} ${h[name]}`);
+    }
+    if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
+    return p;
 }

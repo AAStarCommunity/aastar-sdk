@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -199,6 +199,16 @@ describe('writeAll: all or nothing, never clobbering another writer', () => {
         expect(() => writeAll(F, '/r', io)).toThrow(/table\.ts changed since this run wrote it/);
         expect(io.files['/r/table.ts']).toBe('their-edit');
     });
+    it('a failed rename whose rollback also fails reports the unrestored file (the caller keeps its recovery data)', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, {
+            rename: (p) => p === '/r/book.ts',
+            write: (p) => p === '/r/table.ts', // the rollback of the already-renamed table fails
+        });
+        let err: any;
+        try { writeAll(F, '/r', io); } catch (e) { err = e; }
+        expect(err?.message).toMatch(/table\.ts could not be restored/);
+        expect(err?.unrestored).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
+    });
     it('restore() attempts every file and reports each failure', () => {
         const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
         const restore = writeAll(F, '/r', io);
@@ -219,5 +229,53 @@ describe('Codex r3: the last property of a chain block', () => {
         expect(key in removed.CANONICAL_ADDRESSES[11155420]).toBe(false);
         const moved = await load('last-mv', switchBook(src, 11155420, { [key]: A(0x41) }, 'n'));
         expect(moved.CANONICAL_ADDRESSES[11155420][key]).toBe(getAddress(A(0x41)));
+    });
+});
+
+describe("SP pins files: _aliases (SP, 2026-11-11)", () => {
+    it('the exact alias map is accepted and dropped', () => {
+        const p = parseManifestPins({ ...MANIFEST, _aliases: { staking: 'contracts.gTokenStaking' } }, 'upgrade');
+        expect('_aliases' in p).toBe(false);
+        expect(PINS_FILE_ALIASES).toEqual({ staking: 'contracts.gTokenStaking' });
+    });
+    it('any other alias map is refused', () => {
+        expect(() => parseManifestPins({ ...MANIFEST, _aliases: { staking: 'contracts.staking' } }, 'upgrade')).toThrow(/_aliases .* != the SDK's/);
+        expect(() => parseManifestPins({ ...MANIFEST, _aliases: {} }, 'upgrade')).toThrow(/_aliases/);
+    });
+});
+
+describe("--write's cross-check against SP's own live read-back (DSR, H3)", () => {
+    const pins = parseManifestPins(MANIFEST, 'upgrade');
+    const entries = sp550PinnedAddressEntries(pins);
+    /** SP's live read-back naming exactly the manifest pins. */
+    const live = (): any => {
+        const contracts: Record<string, any> = {};
+        for (const [k, a] of entries) {
+            if (k === 'spImpl' || k === 'registryImpl') continue;
+            contracts[k.startsWith('addresses.') ? k.slice(10) : k] = { address: a, codehash: pins.codehashes![k] };
+        }
+        Object.assign(contracts.superPaymaster, { erc1967Impl: pins.spImpl, implCodehash: pins.codehashes!.spImpl, extension: pins.spAdminExtension });
+        Object.assign(contracts.registry, { erc1967Impl: pins.registryImpl, implCodehash: pins.codehashes!.registryImpl });
+        return { header: { source: 'live', chainId: 11155111, tag: pins.tag }, contracts };
+    };
+    it('agreement passes', () => expect(spLiveReadbackProblems(live(), pins, 11155111, entries)).toEqual([]));
+    it.each([
+        ['a fork read-back instead of the live one', (rb: any) => { rb.header.source = 'fork'; }, /header\.source "fork" is not "live"/],
+        ['another chain', (rb: any) => { rb.header.chainId = 10; }, /header\.chainId 10 != 11155111/],
+        ['another tag', (rb: any) => { rb.header.tag = 'v5.5.0-rc.7'; }, /header\.tag/],
+        ['another address', (rb: any) => { rb.contracts.dvtValidator.address = A(0x99); }, /contracts\.dvtValidator\.address .* != pins\.addresses\.dvtValidator/],
+        ['another codehash', (rb: any) => { rb.contracts.superPaymasterLens.codehash = '0x' + '99'.repeat(32); }, /contracts\.superPaymasterLens\.codehash .* != pins\.codehashes\.superPaymasterLens/],
+        ['another SP implementation', (rb: any) => { rb.contracts.superPaymaster.erc1967Impl = A(0x99); }, /contracts\.superPaymaster\.erc1967Impl .* != pins\.spImpl/],
+        ['another Registry implementation hash', (rb: any) => { rb.contracts.registry.implCodehash = '0x' + '99'.repeat(32); }, /contracts\.registry\.implCodehash .* != pins\.codehashes\.registryImpl/],
+        ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /superPaymaster\.extension .* != pins\.spAdminExtension/],
+        ['a pinned contract missing', (rb: any) => { delete rb.contracts.policyRegistry; }, /contracts\.policyRegistry missing/],
+    ])('a disagreement stops --write: %s', (_n, mutate, msg) => {
+        const rb = live(); mutate(rb);
+        expect(spLiveReadbackProblems(rb, pins, 11155111, entries)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it('a staking book entry is looked up under contracts.gTokenStaking', () => {
+        const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } };
+        const rb = live(); rb.contracts.gTokenStaking = { address: A(0x2a), codehash: '0x' + '2a'.repeat(32) };
+        expect(spLiveReadbackProblems(rb, withStaking, 11155111, sp550PinnedAddressEntries(withStaking))).toEqual([]);
     });
 });
