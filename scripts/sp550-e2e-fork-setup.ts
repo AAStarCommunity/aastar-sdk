@@ -18,7 +18,7 @@
 import {
     type Address, type PublicClient, createWalletClient, encodeAbiParameters, getAddress, http, parseEther,
 } from 'viem';
-import { GTokenABI, GTokenStakingABI, RegistryABI, SimpleAccountFactoryABI, xPNTsTokenV2ABI } from '@aastar/core';
+import { GTokenABI, GTokenStakingABI, RegistryABI, SimpleAccountFactoryABI, xPNTsTokenV2ABI } from '../packages/core/src/abis/index.js';
 
 export type ForkSetupInput = {
     pub: PublicClient;
