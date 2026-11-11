@@ -273,9 +273,12 @@ describe('amsterdamProbe (revision 3: simulateV1 judged, estimates recorded only
         expect(recordedProbeProblems(pr)).toEqual([]);
     });
     it.each([
-        ['callAtGasUsed for an unrelated provider', (pr: any) => { pr.callAtGasUsed = { unrelated: true }; }, /callAtGasUsed covers providers \[unrelated\], not header\.providers \[alchemy,tenderly\]/],
-        ['estimateSimulate for an unrelated provider', (pr: any) => { pr.estimateSimulate = { unrelated: 256645 }; }, /estimateSimulate covers providers \[unrelated\]/],
-        ['a provider missing from callAtGasUsed', (pr: any) => { delete pr.callAtGasUsed.tenderly; }, /callAtGasUsed covers providers \[alchemy\]/],
+        ['callAtGasUsed for an unrelated provider', (pr: any) => { pr.callAtGasUsed = { unrelated: true }; }, /callAtGasUsed covers providers \["unrelated"\], not header\.providers \["alchemy","tenderly"\]/],
+        ['estimateSimulate for an unrelated provider', (pr: any) => { pr.estimateSimulate = { unrelated: 256645 }; }, /estimateSimulate covers providers \["unrelated"\]/],
+        ['a provider missing from callAtGasUsed', (pr: any) => { delete pr.callAtGasUsed.tenderly; }, /callAtGasUsed covers providers \["alchemy"\]/],
+        ['one key spelling two providers ("alchemy,tenderly", Codex r5)', (pr: any) => {
+            for (const m of ['estimateLive', 'estimateSimulate', 'callAtGasUsed', 'callAtGasUsedMinusOne']) pr[m] = { 'alchemy,tenderly': Object.values(pr[m])[0] };
+        }, /estimateLive covers providers \["alchemy,tenderly"\], not header\.providers \["alchemy","tenderly"\]/],
     ])('provider coverage (Codex r4): %s', async (_n, mutate, msg) => {
         const rb = good(); mutate(rb.amsterdamProbe);
         expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));

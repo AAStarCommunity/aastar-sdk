@@ -304,10 +304,11 @@ export function recordedProbeProblems(probe: Record<string, any>, providers?: re
     // Every per-provider map covers exactly header.providers: a missing or unrelated provider name
     // would otherwise let "every provider" pass on a subset.
     if (providers) {
-        const want = [...new Set(providers.map(String))].sort().join(',');
+        // Compared as sorted arrays (JSON), never joined strings: a key "alchemy,tenderly" is one provider.
+        const want = JSON.stringify([...new Set(providers.map(String))].sort());
         for (const m of ['estimateLive', 'estimateSimulate', 'callAtGasUsed', 'callAtGasUsedMinusOne'] as const) {
-            const got = Object.keys((probe[m] ?? {}) as object).sort().join(',');
-            if (got !== want) p.push(`amsterdamProbe.${m} covers providers [${got}], not header.providers [${want}]`);
+            const got = JSON.stringify(Object.keys((probe[m] ?? {}) as object).sort());
+            if (got !== want) p.push(`amsterdamProbe.${m} covers providers ${got}, not header.providers ${want}`);
         }
     }
     const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
