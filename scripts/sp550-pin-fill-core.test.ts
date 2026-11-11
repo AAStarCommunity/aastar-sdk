@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { bookSwitch, changedEntries, fillPinsTable, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -81,6 +81,10 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
         const once = fillPinsTable(source, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'));
         expect(() => fillPinsTable(once, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/already filled/);
     });
+    it('two entries for one chain are refused, even when one is empty (Codex M7)', () => {
+        const twice = source.replace('    11155111: {},', '    11155111: { tag: "x" },\n    11155111: {},');
+        expect(() => fillPinsTable(twice, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/2 entries for this chain/);
+    });
     it('a chain with no entry, or a missing table, is refused', () => {
         expect(() => fillPinsTable(source, 'SP550_CUTOVER_PINS', 1, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/no entry for this chain/);
         expect(() => fillPinsTable(source, 'NOPE', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/NOPE: not found/);
@@ -106,10 +110,28 @@ describe('switchBook on the real addresses.ts: only the switched entries change'
         expect({ ...now[11155111], aPNTs: 0, xPNTsFactory: 0 }).toEqual({ ...was[11155111], aPNTs: 0, xPNTsFactory: 0 });
         for (const c of [10, 11155420]) expect(now[c]).toEqual(was[c]);
     });
-    it('a key the book lacks is added to that chain only', async () => {
-        const m = await load('add', switchBook(source, 11155420, { policyRegistry: A(0x31) }, 'note'));
+    it('a key the book lacks is added to that chain only, once', async () => {
+        // Remove the key first, so the test exercises insertion, not replacement (Codex L10).
+        const without = source.replace(/\n    policyRegistry: "0x[0-9a-fA-F]{40}",[^\n]*(?=[\s\S]*\n  11155420: \{)/, '');
+        const opSep = (src: string) => src.slice(src.indexOf('\n  11155420: {'));
+        expect(opSep(without).includes('\n    policyRegistry:')).toBe(true);
+        const stripped = without.slice(0, without.indexOf('\n  11155420: {')) + opSep(without).replace(/\n    policyRegistry: "0x[0-9a-fA-F]{40}",[^\n]*/, '');
+        expect(opSep(stripped).includes('\n    policyRegistry:')).toBe(false);
+        const out = switchBook(stripped, 11155420, { policyRegistry: A(0x31) }, 'note');
+        expect(opSep(out).split('\n    policyRegistry:').length - 1).toBe(1);
+        const m = await load('add', out);
         expect(m.CANONICAL_ADDRESSES[11155420].policyRegistry).toBe(getAddress(A(0x31)));
-        expect(m.CANONICAL_ADDRESSES[11155111]).toEqual((CANONICAL_ADDRESSES as any)[11155111]);
+    });
+    it('a null entry removes the key (a fresh deploy declaring it absent)', async () => {
+        const m = await load('rm', switchBook(source, 11155420, { microPaymentChannel: null }, 'note'));
+        expect('microPaymentChannel' in m.CANONICAL_ADDRESSES[11155420]).toBe(false);
+        expect({ ...m.CANONICAL_ADDRESSES[11155420], microPaymentChannel: 0 }).toEqual({ ...(CANONICAL_ADDRESSES as any)[11155420], microPaymentChannel: 0 });
+    });
+    it('a duplicate declaration, or a block comment in the block, is refused', () => {
+        const dup = source.replace('\n  11155111: {\n', '\n  11155111: {\n    aPNTs: "0x0000000000000000000000000000000000000001",\n');
+        expect(() => switchBook(dup, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/aPNTs: 2 declarations/);
+        const commented = source.replace('\n  11155111: {\n', '\n  11155111: {\n    /* aPNTs: "0x0000000000000000000000000000000000000001", */\n');
+        expect(() => switchBook(commented, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/block comment/);
     });
     it('a chain with no block is refused', () => {
         expect(() => switchBook(source, 1, { aPNTs: A(1) }, 'n')).toThrow(/CANONICAL_ADDRESSES\[1\]: no block/);
@@ -119,4 +141,18 @@ describe('switchBook on the real addresses.ts: only the switched entries change'
         expect(odd).not.toBe(source);
         expect(() => switchBook(odd, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/not a plain address literal/);
     });
+});
+
+describe('fresh absent keys and loopback detection', () => {
+    it('absent keys are removed from the switched book; pinned-and-absent is refused', () => {
+        const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x21) }, absent: ['pnts'] }, 'fresh');
+        const sw = bookSwitch('fresh', pins);
+        expect(sw).toEqual({ registry: A(0x21), pnts: null });
+        expect(applyBookSwitch({ registry: A(1), pnts: A(2), entryPoint: A(3) }, sw)).toEqual({ registry: A(0x21), entryPoint: A(3) });
+        expect(changedEntries(sw, { registry: A(0x21) })).toEqual({});
+        expect(() => bookSwitch('fresh', parseManifestPins({ ...MANIFEST, addresses: { pnts: A(1) }, absent: ['pnts'] }, 'fresh'))).toThrow(/both pinned and declared absent/);
+    });
+    it.each(['http://127.0.0.1:8545', 'http://127.1:8545', 'http://user:pass@127.0.0.1:8545', 'http://LOCALHOST:8545', 'http://[::1]:8545', 'http://0.0.0.0:8545', 'http://a.localhost/', 'not a url'])(
+        '%s is loopback (or unparsable)', (u) => expect(isLoopbackUrl(u)).toBe(true));
+    it.each(['https://sepolia.example.org/v2/key', 'https://127.0.0.1.example.org/'])('%s is not loopback', (u) => expect(isLoopbackUrl(u)).toBe(false));
 });

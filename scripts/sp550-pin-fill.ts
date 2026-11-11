@@ -28,7 +28,7 @@ import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
-import { bookSwitch, changedEntries, fillPinsTable, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -40,7 +40,26 @@ const FILES = {
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const refuse = (m: string): never => { console.error(`${m}\n${USAGE}`); process.exit(2); };
-const LOOPBACK = /^https?:\/\/(127\.\d+\.\d+\.\d+|localhost|\[::1\])(:\d+)?(\/|$)/i;
+/**
+ * Write every file or none: each goes to a temp file first, then all are renamed into place. If a
+ * step fails, the files already renamed are restored. Returns a restore() that puts the originals
+ * back only where the file still holds what this run wrote (another writer's edit is never clobbered).
+ */
+function writeAll(files: { path: string; before: string; after: string }[]): () => string[] {
+    for (const f of files) fs.writeFileSync(`${f.path}.pin-fill.tmp`, f.after);
+    const done: typeof files = [];
+    try { for (const f of files) { fs.renameSync(`${f.path}.pin-fill.tmp`, f.path); done.push(f); } }
+    catch (e) {
+        for (const f of done) fs.writeFileSync(f.path, f.before);
+        for (const f of files) fs.rmSync(`${f.path}.pin-fill.tmp`, { force: true });
+        throw e;
+    }
+    return () => files.flatMap((f) => {
+        if (fs.readFileSync(f.path, 'utf8') !== f.after) return [`${path.relative(ROOT, f.path)} changed since this run wrote it; left as is, restore it by hand`];
+        fs.writeFileSync(f.path, f.before);
+        return [];
+    });
+}
 
 async function main() {
     const net = (() => { try { return resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); } })();
@@ -53,10 +72,10 @@ async function main() {
     const b = arg('--block');
     if (b !== undefined && !/^(\d+|finalized|latest)$/.test(b)) refuse('--block must be a block number, finalized or latest');
     const block = b === undefined ? undefined : b === 'finalized' || b === 'latest' ? b : BigInt(b);
-    let switched: Record<string, string>;
+    let switched: Record<string, string | null>;
     try { switched = bookSwitch(net.mode, pins); } catch (e) { return refuse((e as Error).message); }
     const shipped = (CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[net.chainId] ?? {};
-    const book = { ...shipped, ...switched };
+    const book = applyBookSwitch(shipped, switched);
 
     // ---- 2. the gate, on exactly what would be written ----
     const r = await runSp550CutoverGate({ network: net.network, rpcs, pins, pinsSource: file, book, block, allowRc: args.includes('--allow-rc') });
@@ -76,27 +95,40 @@ async function main() {
 
     // ---- 4. write, then let the gate read the written source ----
     for (const [label, url] of urls) {
-        if (LOOPBACK.test(url)) refuse(`--write refused: ${label} is a loopback URL (a local fork); fork addresses never go into the source`);
-        const client = await createPublicClient({ transport: http(url) }).request({ method: 'web3_clientVersion' } as never).catch(() => '') as string;
-        if (/^anvil\//i.test(client)) refuse(`--write refused: ${label} is an anvil node (${client}); fork addresses never go into the source`);
+        if (isLoopbackUrl(url)) refuse(`--write refused: ${label} is a loopback URL (a local fork); fork addresses never go into the source`);
+        // Not knowing the node is not "not anvil": a failed or empty answer refuses the write too.
+        let client: unknown;
+        try { client = await createPublicClient({ transport: http(url) }).request({ method: 'web3_clientVersion' } as never); }
+        catch (e) { refuse(`--write refused: ${label} did not answer web3_clientVersion (${(e as Error).message.split('\n')[0]}); cannot rule out a local fork`); }
+        if (typeof client !== 'string' || client === '') refuse(`--write refused: ${label} gave no client version; cannot rule out a local fork`);
+        if (/^anvil\//i.test(client as string)) refuse(`--write refused: ${label} is an anvil node (${client}); fork addresses never go into the source`);
     }
-    const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
-    const before = { table: fs.readFileSync(tableFile, 'utf8'), book: fs.readFileSync(FILES.book, 'utf8') };
-    let after;
-    try { after = { table: fillPinsTable(before.table, table, net.chainId, pins), book: switchBook(before.book, net.chainId, changed, note) }; }
-    catch (e) { console.error(`nothing written: ${(e as Error).message}`); process.exit(1); }
-    fs.writeFileSync(tableFile, after.table);
-    fs.writeFileSync(FILES.book, after.book);
-    const recheck = ['exec', 'tsx', 'scripts/check-sp550-cutover.ts', '--network', net.network, ...urls.flat(),
-        ...(b !== undefined ? ['--block', b] : []), ...(args.includes('--allow-rc') ? ['--allow-rc'] : [])];
-    const rc = spawnSync('pnpm', recheck, { cwd: ROOT, stdio: 'inherit' });
-    if (rc.status !== 0) {
-        fs.writeFileSync(tableFile, before.table);
-        fs.writeFileSync(FILES.book, before.book);
-        console.error(`\nthe gate did not pass on the written source (exit ${rc.status}); both files restored.`);
-        process.exit(1);
+    // One fill at a time in this checkout: the lock is created exclusively and removed on every exit path.
+    const lock = path.join(ROOT, '.sp550-pin-fill.lock');
+    try { fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' }); }
+    catch { console.error(`nothing written: ${path.relative(ROOT, lock)} exists (another fill is running, or a stale lock to remove by hand)`); process.exit(1); }
+    let code = 1;
+    try { write: {
+        const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
+        const before = { table: fs.readFileSync(tableFile, 'utf8'), book: fs.readFileSync(FILES.book, 'utf8') };
+        let after;
+        try { after = { table: fillPinsTable(before.table, table, net.chainId, pins), book: switchBook(before.book, net.chainId, changed, note) }; }
+        catch (e) { console.error(`nothing written: ${(e as Error).message}`); break write; }
+        const restore = writeAll([{ path: tableFile, before: before.table, after: after.table }, { path: FILES.book, before: before.book, after: after.book }]);
+        const recheck = ['exec', 'tsx', 'scripts/check-sp550-cutover.ts', '--network', net.network, ...urls.flat(),
+            ...(b !== undefined ? ['--block', b] : []), ...(args.includes('--allow-rc') ? ['--allow-rc'] : [])];
+        const rc = spawnSync('pnpm', recheck, { cwd: ROOT, stdio: 'inherit' });
+        if (rc.status !== 0) {
+            const left = restore();
+            console.error(`\nthe gate did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'both files restored'}.`);
+            break write;
+        }
+        console.log(`\nwritten and re-verified from source: ${path.relative(ROOT, tableFile)}, ${path.relative(ROOT, FILES.book)}`);
+        code = 0;
+    } } finally {
+        fs.rmSync(lock, { force: true });
     }
-    console.log(`\nwritten and re-verified from source: ${path.relative(ROOT, tableFile)}, ${path.relative(ROOT, FILES.book)}`);
+    process.exit(code);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

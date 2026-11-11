@@ -1,8 +1,8 @@
 /**
  * Field-by-field comparison of SP's read-back file (schema "aoa-a7-readback/1": the A7 fork export,
- * and the live read-back after SEND) against the SDK pins and what the SDK itself reads on chain.
- * The read-back gate (sp550CutoverGate) proves chain == pins; this proves SP's file == pins == the
- * SDK's own reads, so the three agree on one deployment.
+ * and the live read-back after SEND) against the SDK pins AND what the SDK itself reads on chain at
+ * pins.readbackBlock: every field compared here is also read by the SDK, so a file and a pin set
+ * that agree with each other but not with the chain fail.
  *
  * Value conventions (DSR, binding on SP's generator): a field is never omitted; `null` = the function
  * does not exist by design; "unreadable:<reason>" = the call failed; "n/a:<reason>" = not applicable.
@@ -12,7 +12,11 @@
  * extension; owner and pendingOwner for SuperPaymaster and the Registry. guardian, roles and
  * checks{} are only required to be present (DVT and DSR compare them).
  */
+import {
+    BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError,
+} from 'viem';
 import { sp550PinnedAddressEntries, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
+import { sp550FreshPinProblems, sp550UpgradePinProblems, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
 
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 export const READBACK_HEADER_FIELDS = ['spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'anvilVersion', 'dumpSha256'] as const;
@@ -20,13 +24,26 @@ export const READBACK_CONTRACT_FIELDS = [
     'address', 'version', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash', 'owner', 'pendingOwner', 'guardian', 'roles',
 ] as const;
 
-/** What the SDK read: a value, a revert (the function is absent), or a failed call. */
+/** What the SDK read: a value, a revert (the function is absent, or reverted), or a failed call. */
 export type Observed = { kind: 'value'; value: string } | { kind: 'reverted' } | { kind: 'error'; detail: string };
-export type ChainReader = (address: string, fn: 'version' | 'owner' | 'pendingOwner') => Promise<Observed>;
+/**
+ * The SDK's reads at the read-back block. `codehash` = keccak256 of the runtime code ('0x' code is a
+ * value of "none"); `erc1967Impl` = the ERC-1967 implementation slot as an address; the rest are calls.
+ */
+export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl';
+export type ChainReader = (address: string, what: ReadKind) => Promise<Observed>;
+
+/** Classify a thrown contract-call error: a revert / empty return is 'reverted', anything else an error. */
+export function classifyCallError(e: unknown): Observed {
+    const reverted = e instanceof BaseError && !!e.walk((x) => x instanceof ContractFunctionRevertedError || x instanceof ContractFunctionZeroDataError);
+    return reverted ? { kind: 'reverted' } : { kind: 'error', detail: e instanceof BaseError ? e.shortMessage : String(e) };
+}
 
 /** Facts about this run the header must match; undefined = compare presence only (e.g. no dump on a live read-back). */
 export interface ReadbackContext {
     chainId: number;
+    mode: 'upgrade' | 'fresh';
+    allowRc?: boolean;
     forkBlock?: bigint;
     dumpSha256?: string;
     hardfork?: string;
@@ -43,7 +60,7 @@ const asBig = (v: unknown): bigint | undefined => {
     return undefined;
 };
 
-/** Proxies and what their ERC-1967 slot / extension must name, from the pins. */
+/** Proxies: what their ERC-1967 slot / extension must name, from the pins. */
 function proxyPins(pins: Sp550CutoverPins): Record<string, { impl?: [unknown, unknown]; ext?: [unknown, unknown] }> {
     const h = pins.codehashes ?? {};
     return {
@@ -51,11 +68,19 @@ function proxyPins(pins: Sp550CutoverPins): Record<string, { impl?: [unknown, un
         'addresses.registry': { impl: [pins.registryImpl, h.registryImpl] },
     };
 }
-/** Contracts whose version() is itself a pin. */
+/** Contracts whose version() is itself a pin, or must exist; a revert there is a failure, never `null`. */
 const versionPin = (pins: Sp550CutoverPins): Record<string, unknown> => ({ superPaymaster: pins.spVersion, superPaymasterLens: pins.lensVersion });
-const OWNED = ['superPaymaster', 'addresses.registry'];
+const VERSION_REQUIRED = new Set(['superPaymaster', 'superPaymasterLens', 'aPNTsCapped']);
+/** owner()/pendingOwner() read back for these; `true` = the function must exist (Ownable2Step SP). */
+const OWNED: Record<string, { owner: boolean; pendingOwner: boolean }> = {
+    superPaymaster: { owner: true, pendingOwner: true },
+    'addresses.registry': { owner: true, pendingOwner: false },
+};
 
-export async function readbackProblems(rb: unknown, pins: Sp550CutoverPins, ctx: ReadbackContext, read: ChainReader): Promise<string[]> {
+export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader): Promise<string[]> {
+    // The pins must be complete first: the comparison set is derived from them.
+    const pinIssues = ctx.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc: ctx.allowRc }) : sp550UpgradePinProblems(pins, { allowRc: ctx.allowRc });
+    if (pinIssues.length) return pinIssues.map((x) => `pins: ${x}`);
     const p: string[] = [];
     if (!rb || typeof rb !== 'object' || Array.isArray(rb)) return ['read-back: not a JSON object'];
     const f = rb as Record<string, any>;
@@ -68,7 +93,7 @@ export async function readbackProblems(rb: unknown, pins: Sp550CutoverPins, ctx:
         for (const k of READBACK_HEADER_FIELDS) if (hd[k] === undefined) p.push(`header.${k}: omitted`);
         if (hd.chainId !== undefined && asBig(hd.chainId) !== BigInt(ctx.chainId)) p.push(`header.chainId ${show(hd.chainId)} != ${ctx.chainId}`);
         if (hd.tag !== undefined && hd.tag !== pins.tag) p.push(`header.tag ${show(hd.tag)} != pins.tag ${show(pins.tag)}`);
-        if (hd.readbackBlock !== undefined && asBig(hd.readbackBlock) !== pins.readbackBlock) p.push(`header.readbackBlock ${show(hd.readbackBlock)} != pins.readbackBlock ${show(pins.readbackBlock)}`);
+        if (hd.readbackBlock !== undefined && (asBig(hd.readbackBlock) === undefined || asBig(hd.readbackBlock) !== pins.readbackBlock)) p.push(`header.readbackBlock ${show(hd.readbackBlock)} != pins.readbackBlock ${show(pins.readbackBlock)}`);
         if (ctx.forkBlock !== undefined && hd.forkBlock !== undefined && asBig(hd.forkBlock) !== ctx.forkBlock) p.push(`header.forkBlock ${show(hd.forkBlock)} != ${ctx.forkBlock}`);
         if (ctx.dumpSha256 !== undefined && hd.dumpSha256 !== undefined && !eq(String(hd.dumpSha256).replace(/^0x/, ''), ctx.dumpSha256.replace(/^0x/, ''))) p.push(`header.dumpSha256 ${show(hd.dumpSha256)} != the loaded dump ${ctx.dumpSha256}`);
         if (ctx.hardfork !== undefined && hd.hardfork !== undefined && hd.hardfork !== ctx.hardfork) p.push(`header.hardfork ${show(hd.hardfork)} != ${ctx.hardfork}`);
@@ -76,7 +101,7 @@ export async function readbackProblems(rb: unknown, pins: Sp550CutoverPins, ctx:
     }
     if (f.checks === undefined) p.push('checks: omitted');
 
-    // Contracts: exactly the pinned names, every field present.
+    // Contracts: exactly the pinned names, every field present, every compared field also read by the SDK.
     const contracts = f.contracts;
     if (!contracts || typeof contracts !== 'object') return [...p, 'contracts: missing'];
     const pinned = sp550PinnedAddressEntries(pins).filter(([, a]) => typeof a === 'string') as [string, string][];
@@ -84,40 +109,71 @@ export async function readbackProblems(rb: unknown, pins: Sp550CutoverPins, ctx:
     for (const k of Object.keys(contracts)) if (!names.has(k)) p.push(`contracts.${k}: not a pinned name`);
     const proxies = proxyPins(pins);
     const versions = versionPin(pins);
+    const value = (o: Observed, what: string, k: string): string | undefined => {
+        if (o.kind === 'value') return o.value;
+        p.push(`contracts.${k}: the SDK could not read ${what} (${o.kind === 'error' ? o.detail : 'reverted'})`);
+        return undefined;
+    };
     for (const [k, address] of pinned) {
         const c = contracts[k];
         if (!c || typeof c !== 'object') { p.push(`contracts.${k}: omitted`); continue; }
         for (const field of READBACK_CONTRACT_FIELDS) if (c[field] === undefined) p.push(`contracts.${k}.${field}: omitted`);
         if (!eq(c.address, address)) p.push(`contracts.${k}.address ${show(c.address)} != pinned ${address}`);
-        const hash = pins.codehashes?.[k];
-        if (!eq(c.codehash, hash)) p.push(`contracts.${k}.codehash ${show(c.codehash)} != pins.codehashes.${k} ${show(hash)}`);
 
-        // version: what the SDK reads decides whether the contract has one.
+        // codehash: file == pin == the SDK's read.
+        const hash = pins.codehashes?.[k];
+        const seen = value(await read(address, 'codehash'), 'the code hash', k);
+        if (!eq(c.codehash, hash)) p.push(`contracts.${k}.codehash ${show(c.codehash)} != pins.codehashes.${k} ${show(hash)}`);
+        if (seen !== undefined && !eq(seen, hash)) p.push(`contracts.${k}: code on chain ${seen} != pins.codehashes.${k} ${show(hash)}`);
+
+        // version: the SDK's read decides; contracts that must have one fail on a revert.
         const v = await read(address, 'version');
         if (v.kind === 'error') p.push(`contracts.${k}.version: the SDK could not read version() (${v.detail})`);
-        else if (v.kind === 'reverted') { if (c.version !== null && c.version !== undefined) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`); }
-        else {
+        else if (v.kind === 'reverted') {
+            if (VERSION_REQUIRED.has(k)) p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
+            else if (c.version !== null && c.version !== undefined) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`);
+        } else {
             if (c.version !== v.value) p.push(`contracts.${k}.version ${show(c.version)} != version() on chain ${show(v.value)}`);
             if (k in versions && v.value !== versions[k]) p.push(`contracts.${k}: version() ${show(v.value)} != its pin ${show(versions[k])}`);
         }
 
-        // ERC-1967 implementation and extension: pinned for the proxies, not applicable elsewhere.
-        for (const [slot, hashField, pin] of [['erc1967Impl', 'implCodehash', proxies[k]?.impl], ['extension', 'extensionCodehash', proxies[k]?.ext]] as const) {
-            if (pin) {
-                if (!eq(c[slot], pin[0])) p.push(`contracts.${k}.${slot} ${show(c[slot])} != pinned ${show(pin[0])}`);
-                if (!eq(c[hashField], pin[1])) p.push(`contracts.${k}.${hashField} ${show(c[hashField])} != pinned ${show(pin[1])}`);
-            } else {
-                for (const x of [slot, hashField]) if (c[x] !== undefined && !notApplicable(c[x])) p.push(`contracts.${k}.${x} ${show(c[x])}: ${k} is not a proxy here (expected null or "n/a:…")`);
+        // ERC-1967 implementation and extension: pinned and read for the proxies, not applicable elsewhere.
+        const px = proxies[k];
+        if (px?.impl) {
+            const impl = value(await read(address, 'erc1967Impl'), 'the ERC-1967 slot', k);
+            if (!eq(c.erc1967Impl, px.impl[0])) p.push(`contracts.${k}.erc1967Impl ${show(c.erc1967Impl)} != pinned ${show(px.impl[0])}`);
+            if (impl !== undefined && !eq(impl, px.impl[0])) p.push(`contracts.${k}: ERC-1967 slot on chain ${impl} != pinned ${show(px.impl[0])}`);
+            if (!eq(c.implCodehash, px.impl[1])) p.push(`contracts.${k}.implCodehash ${show(c.implCodehash)} != pinned ${show(px.impl[1])}`);
+            if (impl !== undefined) {
+                const ih = value(await read(impl, 'codehash'), 'the implementation code hash', k);
+                if (ih !== undefined && !eq(ih, px.impl[1])) p.push(`contracts.${k}: implementation code on chain ${ih} != pinned ${show(px.impl[1])}`);
             }
+        }
+        if (px?.ext) {
+            const ext = value(await read(address, 'EXTENSION'), 'EXTENSION()', k);
+            if (!eq(c.extension, px.ext[0])) p.push(`contracts.${k}.extension ${show(c.extension)} != pinned ${show(px.ext[0])}`);
+            if (ext !== undefined && !eq(ext, px.ext[0])) p.push(`contracts.${k}: EXTENSION() on chain ${ext} != pinned ${show(px.ext[0])}`);
+            if (!eq(c.extensionCodehash, px.ext[1])) p.push(`contracts.${k}.extensionCodehash ${show(c.extensionCodehash)} != pinned ${show(px.ext[1])}`);
+            if (ext !== undefined) {
+                const eh = value(await read(ext, 'codehash'), 'the extension code hash', k);
+                if (eh !== undefined && !eq(eh, px.ext[1])) p.push(`contracts.${k}: extension code on chain ${eh} != pinned ${show(px.ext[1])}`);
+            }
+        }
+        for (const [slot, hashField, isPinned] of [['erc1967Impl', 'implCodehash', !!px?.impl], ['extension', 'extensionCodehash', !!px?.ext]] as const) {
+            if (isPinned) continue;
+            for (const x of [slot, hashField]) if (c[x] !== undefined && !notApplicable(c[x])) p.push(`contracts.${k}.${x} ${show(c[x])}: ${k} is not a proxy here (expected null or "n/a:…")`);
         }
 
         // owner / pendingOwner, read back by the SDK for SP and the Registry.
-        if (OWNED.includes(k)) {
+        const own = OWNED[k];
+        if (own) {
             for (const fn of ['owner', 'pendingOwner'] as const) {
                 const o = await read(address, fn);
                 if (o.kind === 'error') p.push(`contracts.${k}.${fn}: the SDK could not read ${fn}() (${o.detail})`);
-                else if (o.kind === 'reverted') { if (c[fn] !== null && c[fn] !== undefined) p.push(`contracts.${k}.${fn} ${show(c[fn])}, but ${fn}() reverts on chain (expected null)`); }
-                else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
+                else if (o.kind === 'reverted') {
+                    if (own[fn]) p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
+                    else if (c[fn] !== null && c[fn] !== undefined) p.push(`contracts.${k}.${fn} ${show(c[fn])}, but ${fn}() reverts on chain (expected null)`);
+                } else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
             }
         }
     }

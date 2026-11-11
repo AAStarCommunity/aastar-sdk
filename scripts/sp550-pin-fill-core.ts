@@ -37,19 +37,31 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
  * certified `addresses` entry; a fresh deploy takes every SP-owned entry from the manifest. Entries
  * whose address does not change are dropped by `changedEntries` before anything is written.
  */
-export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Record<string, string> {
+export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Record<string, string | null> {
     const out: Record<string, string> = mode === 'upgrade'
         ? { ...(pins.addresses ?? {}), aPNTs: pins.aPNTsCapped as string, xPNTsFactory: pins.xPNTsFactoryV2 as string }
         : { ...(pins.addresses ?? {}) } as Record<string, string>;
     for (const [k, a] of Object.entries(out)) {
         if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
     }
+    // A fresh deploy's `absent` keys leave the book (null = remove the entry).
+    const removed: Record<string, null> = mode === 'fresh' ? Object.fromEntries((pins.absent ?? []).map((k) => [k, null])) : {};
+    for (const k of Object.keys(removed)) if (k in out) throw new Error(`book switch ${k}: both pinned and declared absent`);
+    return { ...out, ...removed };
+}
+
+/** The book after the switch: entries set, `null` entries removed. */
+export function applyBookSwitch(book: Record<string, unknown>, entries: Record<string, string | null>): Record<string, unknown> {
+    const out = { ...book };
+    for (const [k, a] of Object.entries(entries)) { if (a === null) delete out[k]; else out[k] = a; }
     return out;
 }
 
 /** The switch entries whose address differs from the shipped book (case-insensitive); only these are rewritten. */
-export function changedEntries(entries: Record<string, string>, book: Record<string, unknown>): Record<string, string> {
-    return Object.fromEntries(Object.entries(entries).filter(([k, a]) => typeof book[k] !== 'string' || (book[k] as string).toLowerCase() !== a.toLowerCase()));
+export function changedEntries(entries: Record<string, string | null>, book: Record<string, unknown>): Record<string, string | null> {
+    return Object.fromEntries(Object.entries(entries).filter(([k, a]) => a === null
+        ? k in book
+        : typeof book[k] !== 'string' || (book[k] as string).toLowerCase() !== a.toLowerCase()));
 }
 
 const q = (s: string) => JSON.stringify(s);
@@ -87,7 +99,10 @@ export function fillPinsTable(source: string, table: string, chainId: number, pi
     const end = source.indexOf('\n};', start);
     if (end < 0) throw new Error(`${table}: table end not found`);
     const block = source.slice(start, end);
-    for (const k of TABLE_KEY[chainId] ?? [String(chainId)]) {
+    const spellings = TABLE_KEY[chainId] ?? [String(chainId)];
+    const decls = spellings.reduce((n, k) => n + (block.split(`\n    ${k}: {`).length - 1), 0);
+    if (decls > 1) throw new Error(`${table}[${chainId}]: ${decls} entries for this chain, refusing to guess which one ships`);
+    for (const k of spellings) {
         const empty = `\n    ${k}: {},`;
         const i = block.indexOf(empty);
         if (i >= 0) return source.slice(0, start) + block.slice(0, i) + `\n    ${k}: ${renderPinsLiteral(pins as Sp550FreshDeployPins)},` + block.slice(i + empty.length) + source.slice(end);
@@ -98,9 +113,11 @@ export function fillPinsTable(source: string, table: string, chainId: number, pi
 
 /**
  * Point `CANONICAL_ADDRESSES[chainId].<key>` at each switched address. An existing line is replaced
- * whole (its old comment described the old contract); a key the book lacks is appended to the block.
+ * whole (its old comment described the old contract); a key the book lacks is appended to the block;
+ * a `null` entry removes the key's line. A declaration is a line starting `    <key>:` (comment lines
+ * start `    //`); a block with a `/*` comment is refused rather than parsed around.
  */
-export function switchBook(source: string, chainId: number, entries: Record<string, string>, note: string): string {
+export function switchBook(source: string, chainId: number, entries: Record<string, string | null>, note: string): string {
     const start = source.indexOf('export const CANONICAL_ADDRESSES');
     if (start < 0) throw new Error('CANONICAL_ADDRESSES: not found in source');
     const end = source.indexOf('\n} as const;', start);
@@ -111,13 +128,22 @@ export function switchBook(source: string, chainId: number, entries: Record<stri
     const close = m ? open + m.index : -1;
     if (close < 0 || close > end) throw new Error(`CANONICAL_ADDRESSES[${chainId}]: block end not found`);
     let block = source.slice(open, close);
+    if (block.includes('/*')) throw new Error(`CANONICAL_ADDRESSES[${chainId}]: block comment inside the chain's block, refusing to rewrite around it`);
     for (const [k, a] of Object.entries(entries)) {
-        const line = `\n    ${k}: ${q(getAddress(a))},  // ${note}`;
+        const decls = block.split(`\n    ${k}:`).length - 1;
+        if (decls > 1) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: ${decls} declarations, refusing to guess which`);
         const re = new RegExp(`\\n    ${k}: "0x[0-9a-fA-F]{40}",[^\\n]*`);
-        const hits = block.match(new RegExp(re.source, 'g'))?.length ?? 0;
-        if (hits > 1) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: ${hits} lines, refusing to guess which`);
-        if (!hits && block.includes(`\n    ${k}:`)) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: not a plain address literal, refusing to rewrite it`);
-        block = hits ? block.replace(re, () => line) : block + line;
+        if (decls === 1 && !re.test(block)) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: not a plain address literal, refusing to rewrite it`);
+        if (a === null) { if (decls) block = block.replace(re, () => ''); continue; }
+        const line = `\n    ${k}: ${q(getAddress(a))},  // ${note}`;
+        block = decls ? block.replace(re, () => line) : block + line;
     }
     return source.slice(0, open) + block + source.slice(close);
+}
+
+/** Loopback by the PARSED host (WHATWG URL normalises 127.1, userinfo, case); an unparsable URL counts as loopback. */
+export function isLoopbackUrl(url: string): boolean {
+    let host: string;
+    try { host = new URL(url).hostname.toLowerCase(); } catch { return true; }
+    return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || host === '0.0.0.0' || /^127\.\d+\.\d+\.\d+$/.test(host);
 }
