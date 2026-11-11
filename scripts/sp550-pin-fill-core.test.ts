@@ -52,7 +52,7 @@ describe('parseManifestPins: the manifest is read the way the gate reads --pins,
 describe('bookSwitch', () => {
     it('upgrade: the book follows SP onto the capped aPNTs and the v2 factory, plus the certified entries', () => {
         // MANIFEST declares timelockController: "n/a:none", so the live entry is removed too.
-        expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14), timelockController: null });
+        expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14), timelockController: A(0) });
     });
     it('only entries whose address changes are rewritten', () => {
         expect(changedEntries({ registry: A(1), aPNTs: A(2), pnts: A(3) }, { registry: A(1).toUpperCase().replace('0X', '0x'), aPNTs: A(9) })).toEqual({ aPNTs: A(2), pnts: A(3) });
@@ -404,8 +404,17 @@ describe('the replaced timelock is kept only as history (DSR 2026-11-11)', () =>
     it('an upgrade declaring no timelock removes the live entry and keeps the old one as history (Grok r15)', () => {
         const pins = parseManifestPins(MANIFEST, 'upgrade'); // MANIFEST declares timelockController: "n/a:none"
         const sw = bookSwitch('upgrade', pins);
-        expect(sw.timelockController).toBeNull();
-        expect(withTimelockLegacy(changedEntries(sw, { timelockController: OLD }), { timelockController: OLD })).toMatchObject({ timelockController: null, timelockControllerLegacy: OLD });
+        expect(sw.timelockController).toBe(A(0)); // zeroed: every chain keeps every key
+        expect(withTimelockLegacy(changedEntries(sw, { timelockController: OLD }), { timelockController: OLD })).toMatchObject({ timelockController: A(0), timelockControllerLegacy: OLD });
+    });
+    it('a second replacement never overwrites an existing history entry', () => {
+        expect(() => withTimelockLegacy({ timelockController: NEW }, { timelockController: A(0x55), timelockControllerLegacy: OLD })).toThrow(/already holds/);
+        expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: OLD, timelockControllerLegacy: A(0) })).toMatchObject({ timelockControllerLegacy: OLD });
+    });
+    it('bookSwitch refuses a pinned and absent timelock even when called directly (Grok r16)', () => {
+        const pins: any = { ...parseManifestPins(MANIFEST, 'upgrade') };
+        pins.addresses = { ...pins.addresses, timelockController: A(0x26) };
+        expect(() => bookSwitch('upgrade', pins)).toThrow(/both pinned and declared absent/);
     });
     it('a zero book entry (not deployed) is not kept as history (Grok r15)', () => {
         expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: '0x' + '0'.repeat(40) })).toEqual({ timelockController: NEW });
@@ -428,6 +437,7 @@ describe('a final tag names no rc directory: the path must be explicit (Grok)', 
     it('v5.5.0 with the default path is refused; with an explicit path it is accepted', () => {
         expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
         expect(() => spReadbackApiPath('', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
+        expect(() => spReadbackApiPath('', C, 'sepolia', 'v5.5.0-rc.8', true)).toThrow(/--sp-readback-path is empty/);
         expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', true)).toContain('/rc8/');
     });
 });

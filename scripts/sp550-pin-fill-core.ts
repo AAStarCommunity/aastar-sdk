@@ -8,7 +8,8 @@ import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
-import { BOOK_KEY_CONTRACT_ALIASES } from './sp550-readback-compare-core.js';
+import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
+export { isNotDeployedPlaceholder };
 import { isIP } from 'net';
 
 export type PinFillMode = 'upgrade' | 'fresh';
@@ -93,9 +94,12 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
         ? { ...(pins.addresses ?? {}), aPNTs: pins.aPNTsCapped as string, xPNTsFactory: pins.xPNTsFactoryV2 as string }
         : { ...(pins.addresses ?? {}) } as Record<string, string>;
     // An upgrade declaring no timelock removes the live entry too (withTimelockLegacy keeps it as history).
+    // The book's "not deployed" is the zero address (every chain carries every key), so the entry is zeroed,
+    // not deleted; withTimelockLegacy keeps the replaced value as history.
     if (mode === 'upgrade' && (pins.absent ?? []).includes('timelockController')) {
+        if ('timelockController' in out) throw new Error('book switch timelockController: both pinned and declared absent');
         for (const [k, a] of Object.entries(out)) if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
-        return { ...out, timelockController: null };
+        return { ...out, timelockController: '0x0000000000000000000000000000000000000000' };
     }
     for (const [k, a] of Object.entries(out)) {
         if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
@@ -321,7 +325,7 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
  * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
  */
 export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag: string | undefined, explicit: boolean): string {
-    if (!repoPath) throw new Error(`pins.tag ${String(tag)} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
+    if (!repoPath) throw new Error(explicit ? '--sp-readback-path is empty' : `pins.tag ${String(tag)} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
     if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
@@ -365,15 +369,11 @@ export function withTimelockLegacy(changed: Record<string, string | null>, shipp
     if (typeof old !== 'string' || /^0x0{40}$/i.test(old)) return changed;
     const next = changed.timelockController;
     if (typeof next === 'string' && old.toLowerCase() === next.toLowerCase()) return changed;
-    return { ...changed, timelockControllerLegacy: old }; // replaced (address) or removed (null): history either way
+    // One history slot: an earlier replaced timelock is never overwritten silently.
+    const prev = shipped.timelockControllerLegacy;
+    if (typeof prev === 'string' && !/^0x0{40}$/i.test(prev) && prev.toLowerCase() !== old.toLowerCase()) {
+        throw new Error(`timelockControllerLegacy already holds ${prev}; replacing ${old} would overwrite that history — decide in a reviewed change`);
+    }
+    return { ...changed, timelockControllerLegacy: old }; // replaced or zeroed: the old value is history either way
 }
 
-/**
- * A read-back entry that explicitly says "not deployed": every identity field is an "n/a:" placeholder
- * (or null). Anything carrying a real address or codehash — or an unreadable one — is NOT that.
- */
-export function isNotDeployedPlaceholder(c: any): boolean {
-    if (c === undefined || c === null) return true;
-    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
-    return na(c.address) && na(c.codehash) && (c.erc1967Impl === undefined || na(c.erc1967Impl)) && (c.implCodehash === undefined || na(c.implCodehash));
-}

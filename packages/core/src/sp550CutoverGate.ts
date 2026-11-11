@@ -238,7 +238,11 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     cmp('ReputationSystem.REGISTRY() == addresses.registry', await read(certified.reputationSystem as Address | undefined, ReputationSystemABI, 'REGISTRY'), reg);
     for (const [k, a] of Object.entries(certified)) cmp(`SDK book ${k} == addresses.${k}`, canonical[k], a, 'pinned');
     // A key the pins declare absent is not a live book entry, in either mode (an upgrade declares only the timelock).
-    if (net.mode === 'upgrade') for (const k of pins.absent ?? []) record(`SDK book has no live ${k} (declared absent)`, canonical[k] === undefined, `SDK book ${str(canonical[k] ?? '(none)')}`);
+    // ("not deployed" in the book is the zero address — every chain carries every key — or no entry at all.)
+    if (net.mode === 'upgrade') for (const k of pins.absent ?? []) {
+        const v = canonical[k];
+        record(`SDK book has no live ${k} (declared absent)`, v === undefined || (typeof v === 'string' && /^0x0{40}$/i.test(v)), `SDK book ${str(v ?? '(none)')}`);
+    }
 
     // 5e'. Fresh deploy: the rest of the SP-owned book is the one SP is wired to.
     if (net.mode === 'fresh') {

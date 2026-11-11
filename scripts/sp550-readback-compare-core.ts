@@ -320,8 +320,7 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     for (const k of pins.absent ?? []) {
         const key = BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
         const e = contracts[key];
-        const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
-        if (e !== undefined && e !== null && !(na(e.address) && na(e.codehash))) p.push(`contracts.${key}: not an "n/a:" not-deployed placeholder (address ${show(e.address)}, codehash ${show(e.codehash)}), but the pins declare ${k} absent`);
+        if (!isNotDeployedPlaceholder(e)) p.push(`contracts.${key}: not an "n/a:" not-deployed placeholder (address ${show(e?.address)}, codehash ${show(e?.codehash)}), but the pins declare ${k} absent`);
     }
 
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
@@ -410,4 +409,16 @@ export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; sl
     const hashOk = typeof r0.blockAccessListHash === 'string' && HASH.test(r0.blockAccessListHash) && !/^0x0{64}$/.test(r0.blockAccessListHash);
     const slotOk = typeof r0.slotNumber === 'string' && /^0x[0-9a-fA-F]+$/.test(r0.slotNumber);
     return { kind: 'value', value: JSON.stringify({ blockAccessListHash: hashOk, slotNumber: slotOk, ethConfigs: rows.map((r) => r.ethConfig).filter(Boolean) }) };
+}
+
+/**
+ * A read-back entry that explicitly says "not deployed": every identity field (address, codehash, and
+ * any implementation / extension identity) is an "n/a:" placeholder or null. Anything carrying a real
+ * address or hash — or an unreadable one — is NOT that. Shared by the comparator and pin-fill's live check.
+ */
+export function isNotDeployedPlaceholder(c: any): boolean {
+    if (c === undefined || c === null) return true;
+    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
+    return ['address', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash'].every((f) => c[f] === undefined || na(c[f]))
+        && na(c.address) && na(c.codehash);
 }

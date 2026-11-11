@@ -445,4 +445,13 @@ describe('a contract the pins declare absent must not be in the read-back (Grok)
         rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: 'n/a:not deployed', codehash: 'n/a:not deployed', version: 'n/a:not deployed', roles: 'unreadable:not deployed' };
         expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([]);
     });
+    it.each([
+        ['an n/a address with a real codehash', { address: 'n/a:x', codehash: H(0x26) }],
+        ['an unreadable address', { address: 'unreadable:timeout', codehash: 'n/a:x' }],
+        ['n/a address/codehash but a real implementation (Codex r16)', { address: 'n/a:x', codehash: 'n/a:x', erc1967Impl: A(0x27), implCodehash: H(0x27) }],
+    ])('a declared-absent contract with %s is a contradiction', async (_n, patch) => {
+        const rb = good();
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, version: 'n/a:none', roles: 'unreadable:x', ...patch };
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual(expect.arrayContaining([expect.stringMatching(/not an "n\/a:" not-deployed placeholder/)]));
+    });
 });
