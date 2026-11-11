@@ -73,7 +73,29 @@ async function main() {
             return { kind: 'value', value: String(await c.readContract({ address: address as Address, abi: ABI, functionName: what, blockNumber })) };
         } catch (e) { return classifyCallError(e); }
     };
-    const read = async (address: string, what: ReadKind): Promise<Observed> => {
+    // Amsterdam facts come from the real chain: the --rpc endpoints on a live read-back, the fork's
+    // upstream (SP550_FORK_URL) on a fork one — never the anvil fork itself.
+    const upstreamFor = () => (arg('--dump-sha256') !== undefined
+        ? (process.env.SP550_FORK_URL ? [createPublicClient({ transport: http(process.env.SP550_FORK_URL) })] : [])
+        : clients);
+    const amsterdam = async (block?: bigint): Promise<Observed> => {
+        const ups = upstreamFor();
+        if (!ups.length) return { kind: 'error', detail: 'a fork read-back needs SP550_FORK_URL (the upstream) to check Amsterdam' };
+        if (block === undefined) return { kind: 'error', detail: 'no forkBlock' };
+        const seen = await Promise.all(ups.map(async (u) => {
+            try {
+                const blk = await u.request({ method: 'eth_getBlockByNumber', params: [`0x${block.toString(16)}`, false] } as never) as Record<string, unknown> | null;
+                if (!blk) return 'no block';
+                const cfg = await u.request({ method: 'eth_config', params: [] } as never).then((c: any) => c?.current, () => undefined) as any;
+                return JSON.stringify({ blockAccessListHash: typeof blk.blockAccessListHash === 'string', slotNumber: blk.slotNumber !== undefined && blk.slotNumber !== null,
+                    ...(cfg ? { ethConfig: { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } } : {}) });
+            } catch (e) { return `ERR ${(e as Error).name}`; } // an upstream URL embeds a key: no message text
+        }));
+        if (seen.some((x) => !x.startsWith('{'))) return { kind: 'error', detail: seen.find((x) => !x.startsWith('{'))! };
+        return seen.every((x) => x === seen[0]) ? { kind: 'value', value: seen[0] } : { kind: 'error', detail: `upstreams disagree: ${seen.join(' vs ')}` };
+    };
+    const read = async (address: string, what: ReadKind, at?: { block?: bigint }): Promise<Observed> => {
+        if (what === 'amsterdamAtForkBlock') return amsterdam(at?.block);
         const all = await Promise.all(clients.map((c) => one(c, address, what)));
         const k = JSON.stringify(all[0]);
         return all.every((o) => JSON.stringify(o) === k) ? all[0] : { kind: 'error', detail: `RPCs disagree: ${all.map((o) => JSON.stringify(o)).join(' vs ')}` };
@@ -139,11 +161,12 @@ async function runProbe(forkUrl: string, upstreamUrl: string, probe: { initcode:
         const r = await upstream.request({ method: 'eth_simulateV1', params: [{ blockStateCalls: [{ calls: [tx] }], validation: false }, at] } as never) as any[];
         const used = r?.[0]?.calls?.[0]?.gasUsed;
         const status = r?.[0]?.calls?.[0]?.status;
-        simulateUpstream = typeof used === 'string' && status !== '0x0' ? { kind: 'value', value: BigInt(used) } : { kind: 'error', detail: `eth_simulateV1 call status ${status}` };
+        simulateUpstream = typeof used === 'string' && status === '0x1' ? { kind: 'value', value: BigInt(used) } : { kind: 'error', detail: `eth_simulateV1 call status ${status} (expected 0x1)` };
     } catch (e) {
         const code = (e as { code?: number }).code;
-        // -32601 (method not found) / -32600: the provider has no eth_simulateV1 — recorded as n/a, not judged.
-        simulateUpstream = code === -32601 || code === -32600 ? { kind: 'n/a', detail: `upstream has no eth_simulateV1 (${code})` } : { kind: 'error', detail: why(e) };
+        // Only -32601 (method not found) means the provider has no eth_simulateV1 (n/a, not judged); any
+        // other error — -32600 included — is a failed measurement.
+        simulateUpstream = code === -32601 ? { kind: 'n/a', detail: `upstream has no eth_simulateV1 (${code})` } : { kind: 'error', detail: why(e) };
     }
     const callUpstream = await call(upstream);
     const callFork = await call(fork);

@@ -74,6 +74,13 @@ async function main() {
     console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
     if (!args.includes('--write')) { console.log('\n(preview only: pass --write to fill the source)'); return; }
 
+    // A fork can sit behind a public host and report any client version, so --write also needs what a
+    // single fork cannot fake cheaply: two RPCs on different hosts, read at the finalized block.
+    if (urls.length < 2) refuse('--write needs --rpc and --rpc2 on two different providers');
+    const hosts = urls.map(([, u]) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } });
+    if (new Set(hosts).size < 2) refuse('--write needs --rpc and --rpc2 on two different hosts (two paths on one host are one provider)');
+    if (b !== undefined && b !== 'finalized') refuse('--write reads at the finalized block only (no --block override)');
+
     // ---- 4. write, then let the gate read the written source ----
     for (const [label, url] of urls) {
         // By spelling, then by what the name resolves to (a hosts-file alias of 127.0.0.1 is a fork too).
@@ -91,8 +98,17 @@ async function main() {
     }
     // One fill at a time in this checkout: the lock is created exclusively and removed on every exit path.
     const lock = path.join(ROOT, '.sp550-pin-fill.lock');
-    try { fs.writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' }); }
-    catch { console.error(`nothing written: ${path.relative(ROOT, lock)} exists (another fill is running, or a stale lock to remove by hand)`); process.exit(1); }
+    // The lock doubles as a journal: a run killed between the two renames leaves it behind, naming the
+    // files that may be half-written and how to recover (they are tracked: git restore puts them back).
+    const tableFile0 = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
+    const journal = `pid ${process.pid} · ${new Date().toISOString()}\nwriting ${path.relative(ROOT, tableFile0)} and ${path.relative(ROOT, FILES.book)}\n` +
+        `if this file outlives the run: git diff those two files; git restore them unless the gate passed on them; then delete this lock\n`;
+    try { fs.writeFileSync(lock, journal, { flag: 'wx' }); }
+    catch {
+        let prev = ''; try { prev = fs.readFileSync(lock, 'utf8'); } catch { /* unreadable */ }
+        console.error(`nothing written: ${path.relative(ROOT, lock)} exists — another fill is running, or an earlier one stopped mid-write:\n${prev}`);
+        process.exit(1);
+    }
     let code = 1;
     try { write: {
         const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;

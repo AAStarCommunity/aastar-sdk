@@ -217,6 +217,11 @@ export function requireSp550CutoverPins(
     opts: { allowRc?: boolean } = {},
 ): Required<Sp550CutoverPins> {
     const problems = [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins)];
+    // Every certified book entry carries its codehash (ownership / alias rules need the book table:
+    // requireSp550UpgradePins in sp550Deployments.ts applies those too, and is what consumers use).
+    for (const k of Object.keys(pins?.addresses ?? {})) {
+        if (pins?.codehashes?.[`addresses.${k}`] === undefined) problems.push(`codehashes.addresses.${k}: unpinned`);
+    }
     if (problems.length) {
         throw new Error(
             `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not usable (${problems.join('; ')}). ` +

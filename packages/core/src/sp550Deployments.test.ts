@@ -126,3 +126,26 @@ describe('declared aliases are one contract: one codehash (Grok on #433)', () =>
         expect(sp550FreshPinProblems(pins)).toEqual([expect.stringMatching(/codehashes\.superPaymaster .* != codehashes\.addresses\.superPaymaster .*one contract/)]);
     });
 });
+
+describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok High)', async () => {
+    const { requireSp550UpgradePins } = await import('./sp550Deployments.js');
+    const { requireSp550CutoverPins, SP550_CERTIFIED_ADDRESS_KEYS } = await import('./sp550Cutover.js');
+    const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
+    const UP: any = { ...FULL, superPaymaster: A(0x2ff), addresses: book, absent: undefined };
+    delete UP.absent;
+    UP.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.'))),
+        ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x70 + i).toString(16).repeat(32)])) };
+    it('a complete upgrade set passes both', () => {
+        expect(requireSp550UpgradePins(11155111, UP, { allowRc: true })).toBe(UP);
+        expect(requireSp550CutoverPins(11155111, UP, { allowRc: true })).toBe(UP);
+    });
+    it('a certified book entry without its codehash is refused by both', () => {
+        const pins = { ...UP, codehashes: { ...UP.codehashes, 'addresses.registry': undefined } };
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
+        expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
+    });
+    it('an external key in addresses is refused by the consumer rule set', () => {
+        const pins = { ...UP, addresses: { ...UP.addresses, entryPoint: A(0x77) }, codehashes: { ...UP.codehashes, 'addresses.entryPoint': '0x' + '77'.repeat(32) } };
+        expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/addresses\.entryPoint: external/);
+    });
+});

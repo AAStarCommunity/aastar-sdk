@@ -40,9 +40,11 @@ for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
 const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
 let PENDING_SLOT: Record<string, string> = { [A(0x21)]: A(0) };
+let AMSTERDAM: Observed = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1791294816, forkId: '0x6c1d9423' } }) };
 const reader = (chain = CHAIN, code = CODE, slots = SLOTS, blockHash = BLOCK_HASH): ChainReader => async (address, what) => {
     if (what === 'blockHash') return { kind: 'value', value: blockHash };
     if (what === 'ownership2StepSlot') return { kind: 'value', value: PENDING_SLOT[address] ?? A(0) };
+    if (what === 'amsterdamAtForkBlock') return AMSTERDAM;
     if (what === 'codehash') return { kind: 'value', value: code[address.toLowerCase()] ?? 'none' };
     if (what === 'erc1967Impl') return { kind: 'value', value: slots[address] ?? A(0) };
     if (what === 'EXTENSION') return address === A(0x10) ? { kind: 'value', value: A(0x12) } : { kind: 'reverted' };
@@ -139,7 +141,22 @@ describe('readbackProblems: a read-back that agrees with the pins and the chain 
 });
 
 describe('readbackProblems refuses', () => {
-    afterEach(() => { PENDING_SLOT = { [A(0x21)]: A(0) }; });
+    afterEach(() => {
+        PENDING_SLOT = { [A(0x21)]: A(0) };
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1791294816, forkId: '0x6c1d9423' } }) };
+    });
+    it.each([
+        ['an upstream block without Amsterdam header fields', { kind: 'value', value: JSON.stringify({ blockAccessListHash: false, slotNumber: false }) }, /the upstream block 400 lacks Amsterdam header fields/],
+        ['an upstream eth_config that is not Amsterdam', { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1, forkId: '0x00000000' } }) }, /the upstream eth_config reports .*not Amsterdam/],
+        ['no upstream to check against', { kind: 'error', detail: 'a fork read-back needs SP550_FORK_URL' }, /the SDK could not read the upstream at forkBlock 400/],
+    ] as const)('the file copying Amsterdam constants is not enough (Grok High): %s', async (_n, obs, msg) => {
+        AMSTERDAM = obs as Observed;
+        expect(await run(good())).toEqual([expect.stringMatching(msg)]);
+    });
+    it('an upstream without eth_config is fine when the header fields are there', async () => {
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true }) };
+        expect(await run(good())).toEqual([]);
+    });
     it.each([
         ['another source', (rb: any) => { rb.header.source = 'live'; }, /header\.source "live" != fork/],
         ['another chain', (rb: any) => { rb.header.chainId = 1; }, /header\.chainId 1 != 11155111/],
@@ -269,8 +286,8 @@ describe('amsterdamProbe (revision 3: simulateV1 judged, estimates recorded only
         expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]);
     });
     it('estimates with headroom are recorded, never judged (reth 259849 vs exact 256645)', () => {
-        const pr = good().amsterdamProbe; pr.estimateLive = { alchemy: 259849 }; pr.estimateFork = 1;
-        expect(recordedProbeProblems(pr)).toEqual([]);
+        const rb = good(); rb.amsterdamProbe.estimateLive = { alchemy: 259849, tenderly: 259849 }; rb.amsterdamProbe.estimateFork = 1;
+        expect(recordedProbeProblems(rb.amsterdamProbe, rb.header.providers)).toEqual([]);
     });
     it.each([
         ['callAtGasUsed for an unrelated provider', (pr: any) => { pr.callAtGasUsed = { unrelated: true }; }, /callAtGasUsed covers providers \["unrelated"\], not header\.providers \["alchemy","tenderly"\]/],

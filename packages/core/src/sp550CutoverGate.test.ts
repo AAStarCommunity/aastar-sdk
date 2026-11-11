@@ -48,6 +48,11 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${p.factory}.implementationCodehash`]: keccak256(codeOf(p.tokenImpl)), [`${p.factory}.extensionCodehash`]: keccak256(codeOf(p.ext)),
         [`${p.tokenImpl}.EXTENSION`]: p.ext, [`${p.tokenImpl}.PROTOCOL_REGISTRY`]: p.aoa,
         [`${p.lens}.EXPECTED_SP_VERSION`]: keccak256(toHex(SP_VERSION)),
+        // The BLS / DVT / Registry wiring legs, all naming the certified contracts.
+        [`${book.registry}.blsAggregator`]: book.blsAggregator, [`${book.registry}.SUPER_PAYMASTER`]: p.sp,
+        [`${book.dvtValidator}.BLS_AGGREGATOR`]: book.blsAggregator, [`${book.dvtValidator}.REGISTRY`]: book.registry,
+        [`${book.blsAggregator}.DVT_VALIDATOR`]: book.dvtValidator, [`${book.blsAggregator}.REGISTRY`]: book.registry,
+        [`${book.blsAggregator}.SUPERPAYMASTER`]: p.sp, [`${book.reputationSystem}.REGISTRY`]: book.registry,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -509,5 +514,21 @@ describe('pins schema v2: admin extension, Lens version, Registry impl, certifie
         const r = await run(m, pins);
         expect(r.exitCode).toBe(1);
         expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(msg);
+    });
+});
+
+describe('the BLS / DVT / Registry wiring: every leg names the certified contracts (Grok Critical)', () => {
+    it.each([
+        ['Registry pointing at another aggregator (the 2026-08-26 split)', 'registry', 'blsAggregator', 'Registry.blsAggregator() == addresses.blsAggregator'],
+        ['DVTValidator pointing at another aggregator', 'dvtValidator', 'BLS_AGGREGATOR', 'DVTValidator.BLS_AGGREGATOR() == addresses.blsAggregator'],
+        ['the aggregator naming another DVTValidator', 'blsAggregator', 'DVT_VALIDATOR', 'BLSAggregator.DVT_VALIDATOR() == addresses.dvtValidator'],
+        ['the aggregator wired to another SP', 'blsAggregator', 'SUPERPAYMASTER', 'BLSAggregator.SUPERPAYMASTER() == pins.superPaymaster'],
+        ['the Registry wired to another SP', 'registry', 'SUPER_PAYMASTER', 'Registry.SUPER_PAYMASTER() == pins.superPaymaster'],
+        ['ReputationSystem on another Registry', 'reputationSystem', 'REGISTRY', 'ReputationSystem.REGISTRY() == addresses.registry'],
+    ] as const)('%s fails exactly that row', async (_n, key, fn, check) => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.reads[`${(m.pins.addresses as any)[key]}.${fn}`] = A(0xbad);
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins: m.pins });
+        expect(failed(r)).toEqual([check]);
     });
 });

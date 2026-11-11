@@ -18,7 +18,9 @@
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
-import { APNTsCappedABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
+import {
+    APNTsCappedABI, BLSAggregatorABI, DVTValidatorABI, RegistryABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+} from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { SP550_CUTOVER_PINS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
@@ -59,7 +61,7 @@ class Diverge {
 const str = (v: unknown): string => (v instanceof Diverge ? v.detail : typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const HASH = /^0x[0-9a-fA-F]{64}$/;
-const isLoopback = (url: string) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
+const isLoopback = (url: string) => { try { return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(new URL(url).hostname); } catch { return false; } };
 
 export async function runSp550CutoverGate(input: GateInput): Promise<GateResult> {
     const results: GateCheck[] = [];
@@ -216,6 +218,17 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         const r = await implOf(certified.registry as Address);
         cmp('ERC-1967 impl of addresses.registry == pins.registryImpl', r.shown, pins.registryImpl);
     } else record('ERC-1967 impl of addresses.registry == pins.registryImpl', false, 'addresses.registry (unpinned)');
+    // Every leg of the BLS / DVT / Registry wiring names the certified contracts: SP alone is not enough
+    // (2026-08-26..09-01 the Registry pointed at a new aggregator while SP and DVT kept the old one).
+    const reg = certified.registry as Address | undefined, bls = certified.blsAggregator as Address | undefined, dvt = certified.dvtValidator as Address | undefined;
+    cmp('Registry.blsAggregator() == addresses.blsAggregator', await read(reg, RegistryABI, 'blsAggregator'), bls);
+    cmp('Registry.SUPER_PAYMASTER() == pins.superPaymaster', await read(reg, RegistryABI, 'SUPER_PAYMASTER'), pins.superPaymaster);
+    cmp('DVTValidator.BLS_AGGREGATOR() == addresses.blsAggregator', await read(dvt, DVTValidatorABI, 'BLS_AGGREGATOR'), bls);
+    cmp('DVTValidator.REGISTRY() == addresses.registry', await read(dvt, DVTValidatorABI, 'REGISTRY'), reg);
+    cmp('BLSAggregator.DVT_VALIDATOR() == addresses.dvtValidator', await read(bls, BLSAggregatorABI, 'DVT_VALIDATOR'), dvt);
+    cmp('BLSAggregator.REGISTRY() == addresses.registry', await read(bls, BLSAggregatorABI, 'REGISTRY'), reg);
+    cmp('BLSAggregator.SUPERPAYMASTER() == pins.superPaymaster', await read(bls, BLSAggregatorABI, 'SUPERPAYMASTER'), pins.superPaymaster);
+    cmp('ReputationSystem.REGISTRY() == addresses.registry', await read(certified.reputationSystem as Address | undefined, ReputationSystemABI, 'REGISTRY'), reg);
     for (const [k, a] of Object.entries(certified)) cmp(`SDK book ${k} == addresses.${k}`, canonical[k], a, 'pinned');
 
     // 5e'. Fresh deploy: the rest of the SP-owned book is the one SP is wired to.

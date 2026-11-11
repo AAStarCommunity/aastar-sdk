@@ -69,7 +69,7 @@ export type Observed = { kind: 'value'; value: string } | { kind: 'reverted' } |
  * The SDK's reads at the read-back block. `codehash` = keccak256 of the runtime code ('0x' code is a
  * value of "none"); `erc1967Impl` = the ERC-1967 implementation slot as an address; the rest are calls.
  */
-export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash' | 'ownership2StepSlot';
+export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash' | 'ownership2StepSlot' | 'amsterdamAtForkBlock';
 
 /**
  * ERC-7201 slot of Ownable2StepNamespaced's pending owner (SP 248ef831
@@ -77,7 +77,13 @@ export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'cod
  * The Registry's pendingOwner() returns sload(slot); the SDK reads both and requires them equal.
  */
 export const OWNERSHIP_2STEP_SLOT = '0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00';
-export type ChainReader = (address: string, what: ReadKind) => Promise<Observed>;
+/**
+ * `amsterdamAtForkBlock` (address ignored, `at.block` = header.forkBlock) answers a JSON value
+ * `{ blockAccessListHash: bool, slotNumber: bool, ethConfig?: { activationTime, forkId } }` read from
+ * the UPSTREAM chain (never the fork): the block header's Amsterdam-only fields, and eth_config.current
+ * when the node serves it.
+ */
+export type ChainReader = (address: string, what: ReadKind, at?: { block?: bigint }) => Promise<Observed>;
 
 /** Classify a thrown contract-call error: a revert / empty return is 'reverted', anything else an error. */
 export function classifyCallError(e: unknown): Observed {
@@ -177,6 +183,16 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     else {
         if (ec.activationTime !== ref.activationTime) p.push(`header.ethConfig.activationTime ${show(ec.activationTime)} != Amsterdam ${ref.activationTime}`);
         if (!eq(ec.forkId, ref.forkId)) p.push(`header.ethConfig.forkId ${show(ec.forkId)} != Amsterdam ${ref.forkId}`);
+    }
+    // The SDK's own upstream read at forkBlock: the file's ethConfig / corroboration are not taken on trust.
+    const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
+    if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
+    else {
+        const seen = JSON.parse(am.value) as { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfig?: { activationTime?: number; forkId?: string } };
+        if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
+        if (seen.ethConfig && ref && (seen.ethConfig.activationTime !== ref.activationTime || !eq(seen.ethConfig.forkId, ref.forkId))) {
+            p.push(`header.ethConfig: the upstream eth_config reports ${show(seen.ethConfig)}, not Amsterdam ${show(ref)}`);
+        }
     }
     const co = ec.corroboration as Record<string, any>;
     if (co.blockAccessListHash !== true || co.slotNumber !== true) p.push(`header.ethConfig.corroboration: Amsterdam-only header fields not both present (blockAccessListHash ${show(co.blockAccessListHash)}, slotNumber ${show(co.slotNumber)})`);
