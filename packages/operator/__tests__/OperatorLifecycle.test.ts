@@ -297,6 +297,26 @@ describe('OperatorLifecycle', () => {
           expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
       });
 
+      it('5.5.1, the request was expired by someone else before the cancel was even submitted: recovers (Codex r4)', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockRejectedValueOnce(new Error('execution reverted: NoPendingWithdrawal()'));
+          mocks.mockWithdrawal.withdrawalStatus
+              .mockResolvedValueOnce(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }))
+              .mockResolvedValue(statusOf({ amount: 0n, now: 86_402n, balance: 50n }));
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          expect(await lifecycle.withdrawAllFunds()).toEqual(['0xRequestHash']);
+          expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
+      });
+
+      it('5.5.1, the cancel fails at submission for another reason (request still pending): the error propagates', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockRejectedValueOnce(new Error('insufficient funds for gas'));
+          mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/insufficient funds for gas/);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
+      });
+
       it('5.5.1, window closed and the escrow slashed away: nothing left, so the role exits in the same call', async () => {
           asVersion('SuperPaymaster-5.5.1');
           mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');

@@ -135,6 +135,15 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
         await ok.a.executeWithdraw({ operator: OP });
         expect(ok.writes).toHaveLength(1);
     });
+    it('minRemainingSeconds overrides the margin; 0 sends at the last second (the window is inclusive); negative is refused', async () => {
+        const last = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW });
+        await last.a.executeWithdraw({ operator: OP, minRemainingSeconds: 0n });
+        expect(last.writes).toHaveLength(1);
+        const strict = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW + 100n });
+        await expect(strict.a.executeWithdraw({ operator: OP, minRemainingSeconds: 300n })).rejects.toThrow(/only 100s left .*under 300s/);
+        await expect(strict.a.executeWithdraw({ operator: OP, minRemainingSeconds: -1n })).rejects.toThrow(/negative/);
+        expect(strict.writes).toEqual([]);
+    });
     it('getters decode their tuples', async () => {
         const { a } = chain({ amount: 7n, readyAt: 8n });
         expect(await a.pendingWithdrawal({ operator: OP })).toEqual({ amount: 7n, readyAt: 8n });

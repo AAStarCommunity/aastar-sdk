@@ -62,14 +62,15 @@ export type SuperPaymasterWithdrawalActions = {
     /** Cancel the open request (`cancelWithdraw()`): the escrow goes back to aPNTsBalance. */
     cancelWithdraw: (args: { account?: Account | Address }) => Promise<Hash>;
     /**
-     * Step 2: `withdraw(amount)` inside the window [readyAt, readyAt + 24 h]. The aPNTs come out of
-     * the escrow and go to the OPERATOR (msg.sender) — there is no recipient parameter. Checked
-     * before sending: a request exists, the latest block is inside its window (not before, not
-     * after: WithdrawalExpired), `amount` does not exceed the escrow, and no slash is queued;
-     * otherwise this throws INVALID_PARAMETER and sends nothing (the contract would revert). A
-     * request sent close to `expiresAt` can still mine after it; leave margin.
+     * Step 2: `withdraw(amount)` inside the window [readyAt, readyAt + OPERATOR_WITHDRAWAL_WINDOW()]
+     * (read from the contract; 24 h on 5.5.1). The aPNTs come out of the escrow and go to the OPERATOR
+     * (msg.sender) — there is no recipient parameter. Checked before sending: a request exists, the
+     * latest block is inside its window, `amount` does not exceed the escrow, no slash is queued, and
+     * at least `minRemainingSeconds` (default EXECUTE_WITHDRAW_MARGIN, 60 s; 0 to disable) of the
+     * window remain — a tx sent closer to `expiresAt` usually lands after it and reverts
+     * WithdrawalExpired. Otherwise this throws INVALID_PARAMETER and sends nothing.
      */
-    executeWithdraw: (args: { operator: Address, amount?: bigint, account?: Account | Address }) => Promise<Hash>;
+    executeWithdraw: (args: { operator: Address, amount?: bigint, account?: Account | Address, minRemainingSeconds?: bigint }) => Promise<Hash>;
     /**
      * Permissionless: `expireWithdraw(operator)` once the window has closed (now > expiresAt). The
      * escrow goes back to the operator's aPNTsBalance (not to anyone's wallet) and the request is
@@ -242,7 +243,7 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
         async cancelWithdraw({ account }) {
             try { return await write('cancelWithdraw', [], account); } catch (e) { throw AAStarError.fromViemError(e as Error, 'cancelWithdraw'); }
         },
-        async executeWithdraw({ operator, amount, account }) {
+        async executeWithdraw({ operator, amount, account, minRemainingSeconds = EXECUTE_WITHDRAW_MARGIN }) {
             const s = await actions.withdrawalStatus({ operator });
             const refuse = (m: string): never => { throw new AAStarError(ErrorCode.INVALID_PARAMETER, `executeWithdraw: ${m}; nothing was sent`); };
             if (s.slashQueued) refuse(`a slash is queued for ${operator} (withdraw reverts SlashPending)`);
@@ -251,7 +252,8 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             if (s.phase === 'expired') refuse(`the withdrawal window closed at ${s.expiresAt} (latest block time ${s.now}; withdraw reverts WithdrawalExpired): cancelWithdraw returns the escrow, then requestWithdraw again`);
             // The next block's timestamp is later than the latest one: too close to expiresAt and the tx
             // lands after it (reverts WithdrawalExpired, escrow stays locked, gas lost).
-            if (s.expiresAt - s.now < EXECUTE_WITHDRAW_MARGIN) refuse(`only ${s.expiresAt - s.now}s left before the window closes at ${s.expiresAt}; under ${EXECUTE_WITHDRAW_MARGIN}s the withdraw would likely land after it — cancel or expire the request and request again`);
+            if (minRemainingSeconds < 0n) refuse(`minRemainingSeconds ${minRemainingSeconds} is negative`);
+            if (s.expiresAt - s.now < minRemainingSeconds) refuse(`only ${s.expiresAt - s.now}s left before the window closes at ${s.expiresAt}; under ${minRemainingSeconds}s the withdraw would likely land after it (pass a smaller minRemainingSeconds to send anyway) — or cancel / expire the request and request again`);
             const value = amount ?? s.amount;
             // Paid from the escrow, not from aPNTsBalance (which no longer includes it).
             if (value <= 0n || value > s.amount) refuse(`amount ${value} is outside 1..${s.amount} (the escrowed request)`);

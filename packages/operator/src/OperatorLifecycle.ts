@@ -152,13 +152,22 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 if (typeof reader.waitForTransactionReceipt !== 'function') {
                     throw new Error('withdrawAllFunds: the window closed, and re-requesting needs a client that can wait for the cancel receipt (pass a publicClient); nothing was sent');
                 }
-                const cancel = await this.cancelCollateralWithdrawal(options);
-                hashes.push(cancel);
-                const receipt = await reader.waitForTransactionReceipt({ hash: cancel });
-                const after = await this.collateralWithdrawalStatus();
                 // expireWithdraw is permissionless: if someone expired the request first, the cancel reverts
-                // (NoPendingWithdrawal) but the escrow is back in the balance all the same — carry on.
-                if (receipt.status !== 'success' && after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted and the request is still pending; nothing else was sent`);
+                // (NoPendingWithdrawal) — at submission (gas estimation) or once mined — but the escrow is back
+                // in the balance all the same, so that case carries on. Any other failure stops here.
+                let cancel: Hash | undefined;
+                try { cancel = await this.cancelCollateralWithdrawal(options); }
+                catch (e) {
+                    const now = await this.collateralWithdrawalStatus();
+                    if (now.amount !== 0n) throw e; // the request is still there: not the expiry race
+                }
+                let mined = true;
+                if (cancel) {
+                    hashes.push(cancel);
+                    mined = (await reader.waitForTransactionReceipt({ hash: cancel })).status === 'success';
+                }
+                const after = await this.collateralWithdrawalStatus();
+                if (!mined && after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted and the request is still pending; nothing else was sent`);
                 if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as pending (RPC lag?); call again`);
                 if (after.balance > 0n) {
                     hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
