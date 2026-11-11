@@ -20,6 +20,8 @@ export * from './constants.js';
 export * from './communities.js'; // Community configurations
 export * from './abis/index.js'; // Assuming abis is a folder with index.ts
 export * from './superPaymasterData.js'; // SP paymasterAndData encoder (5.4.x + 5.5.0 layouts)
+export * from './sp550Cutover.js'; // SP 5.5.0 cutover pins (fail-closed until read back from the chain)
+export * from './sp550Deployments.js'; // SP 5.5.0 per-network selection: upgrade (Sepolia) vs fresh stack (OP), fail-closed
 export * from './clients.js';
 export * from './clients/doc-types.js';
 export * from './clients/types.js';
