@@ -179,3 +179,6 @@ ext/**/*.js
 ext/**/*.js.map
 ext/**/*.d.ts
 ext/**/*.d.ts.map
+
+# scripts/sp550-pin-fill.ts lock / journal and before-images (left behind only by an interrupted run)
+.sp550-pin-fill.*

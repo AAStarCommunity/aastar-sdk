@@ -17,7 +17,7 @@
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import type { CanonicalAddresses } from './addresses.js';
-import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
+import { SP550_CERTIFIED_ADDRESS_KEYS, SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
 
@@ -177,6 +177,31 @@ export function sp550BookOwnershipProblems(pins: Sp550CutoverPins | undefined): 
     return problems;
 }
 
+/**
+ * Upgrade pins for a chain, or throw naming every problem — the full upgrade rule set (fields,
+ * codehashes, book ownership, aliases) and any release hold. Consumers use this, not the field-level
+ * requireSp550CutoverPins.
+ */
+export function requireSp550UpgradePins(
+    chainId: number,
+    pins = SP550_CUTOVER_PINS[chainId],
+    opts: { allowRc?: boolean } = {},
+): Required<Sp550CutoverPins> {
+    const problems = sp550UpgradePinProblems(pins, opts);
+    const hold = SP550_RELEASE_HOLDS[chainId];
+    if (hold) problems.push(`release hold: ${hold}`);
+    if (problems.length) {
+        throw new Error(
+            `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not usable (${problems.join('; ')}). ` +
+                `They are read back from the chain after the upgrade; until then the SDK must not use 5.5.0 addresses.`,
+        );
+    }
+    return pins as Required<Sp550CutoverPins>;
+}
+
+/** Pins for a chain, or throw naming every problem: the full upgrade rule set (same as requireSp550UpgradePins). */
+export const requireSp550CutoverPins = requireSp550UpgradePins;
+
 /** Everything wrong with an in-place upgrade's pin set (empty array = usable, hold aside). */
 export function sp550UpgradePinProblems(pins: Sp550CutoverPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
     return [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins), ...sp550BookOwnershipProblems(pins), ...sp550PinAliasProblems(pins)];
@@ -224,8 +249,15 @@ export function sp550PinAliasProblems(pins: Sp550FreshDeployPins | undefined): s
     const problems: string[] = [];
     for (let i = 0; i < entries.length; i++) {
         for (let j = i + 1; j < entries.length; j++) {
-            if (entries[i][1] === entries[j][1] && !allowed(entries[i][0], entries[j][0])) {
+            if (entries[i][1] !== entries[j][1]) continue;
+            if (!allowed(entries[i][0], entries[j][0])) {
                 problems.push(`${entries[i][0]} and ${entries[j][0]} are the same address (${entries[i][1]}); only ${SP550_PIN_ALIASES.map((p) => p.join(' = ')).join(', ')} may alias`);
+                continue;
+            }
+            // One contract, one runtime code: a declared alias carrying two different codehash pins cannot both be true.
+            const [hi, hj] = [pins.codehashes?.[entries[i][0]], pins.codehashes?.[entries[j][0]]];
+            if (hi !== undefined && hj !== undefined && String(hi).toLowerCase() !== String(hj).toLowerCase()) {
+                problems.push(`codehashes.${entries[i][0]} ${hi} != codehashes.${entries[j][0]} ${hj}, but they are one contract (declared alias)`);
             }
         }
     }

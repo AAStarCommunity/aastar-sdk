@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-    SP550_CUTOVER_PINS, SP550_REQUIRED_PIN_FIELDS, isSp550ReleaseTag, missingSp550Pins, requireSp550CutoverPins, sp550PinProblems,
+    SP550_CUTOVER_PINS, SP550_REQUIRED_PIN_FIELDS, isSp550ReleaseTag, missingSp550Pins, sp550PinProblems,
     sp550PinnedAddressEntries, SP550_CERTIFIED_ADDRESS_KEYS,
 } from './sp550Cutover.js';
+import { requireSp550CutoverPins } from './sp550Deployments.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const FULL = {

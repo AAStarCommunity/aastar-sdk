@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 61d30b82ed824bd8eecc9e4e7e5ff32579fdae99 docs/release/a7/ (docs/sp550-cutover/a7/README.md).
+ * 3bf4bba28506a23f7c741f281846340afe2f86a9 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = '584fd69707e3bd4df4a68e946a50691c029462ecdc66fee400ab6020e05c42a5';
+export const READBACK_SCHEMA_SHA256 = '0ac860742f997120cec3a7f185323e090f30371f6e67c27fda200b3a18a6e131';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -40,7 +40,11 @@ export function loadReadbackValidator(file = READBACK_SCHEMA_FILE, sha256 = READ
     const raw = fs.readFileSync(file);
     const got = createHash('sha256').update(new Uint8Array(raw)).digest('hex');
     if (got !== sha256) throw new Error(`read-back schema ${file}: sha256 ${got} != pinned ${sha256}; refusing to validate against it`);
-    const ajv = new (Ajv2020 as any)({ strict: true, allErrors: true });
+    // strictRequired off: schema 3bf4bba2 requires the 20 contract keys under additionalProperties (valid
+    // Draft 2020-12; ajv's strict mode only lints it). Every other strict check stays on.
+    const ajv = new (Ajv2020 as any)({ strict: true, strictRequired: false, allErrors: true });
+    // x-readMethods (revision 3) documents how each field is read; an annotation, not a validation rule.
+    ajv.addKeyword({ keyword: 'x-readMethods', schemaType: 'object' });
     const validate = ajv.compile(JSON.parse(raw.toString('utf8')));
     return (x) => (validate(x) ? [] : ((validate.errors ?? []) as any[]).map((e) => `schema: ${e.instancePath || '(root)'} ${e.message}${e.params && Object.keys(e.params).length ? ` ${JSON.stringify(e.params)}` : ''}`));
 }
@@ -53,8 +57,18 @@ export const AMSTERDAM_ETH_CONFIG: Record<number, { activationTime: number; fork
     11155111: { activationTime: 1791294816, forkId: '0x6c1d9423' },
 };
 
-/** The read-back's contract key for a pin name: book entries drop their `addresses.` prefix. */
-export const contractKeyOf = (pinName: string) => (pinName.startsWith('addresses.') ? pinName.slice('addresses.'.length) : pinName);
+/**
+ * Book keys whose read-back contract key differs (SP, 2026-11-11). Every SP pins file declares the same
+ * map in `_aliases` (as "contracts.<key>"); parseManifestPins refuses a file whose map differs.
+ */
+export const BOOK_KEY_CONTRACT_ALIASES: Readonly<Record<string, string>> = { staking: 'gTokenStaking' };
+
+/** The read-back's contract key for a pin name: book entries drop their `addresses.` prefix (and follow the alias map). */
+export const contractKeyOf = (pinName: string) => {
+    if (!pinName.startsWith('addresses.')) return pinName;
+    const k = pinName.slice('addresses.'.length);
+    return BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
+};
 /** Pinned names the read-back may cover through a proxy's fields instead of an entry of their own. */
 const COVERED_BY_PROXY = new Set(['spImpl', 'registryImpl']);
 export const READBACK_CONTRACT_FIELDS = [
@@ -67,8 +81,21 @@ export type Observed = { kind: 'value'; value: string } | { kind: 'reverted' } |
  * The SDK's reads at the read-back block. `codehash` = keccak256 of the runtime code ('0x' code is a
  * value of "none"); `erc1967Impl` = the ERC-1967 implementation slot as an address; the rest are calls.
  */
-export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash';
-export type ChainReader = (address: string, what: ReadKind) => Promise<Observed>;
+export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash' | 'ownership2StepSlot' | 'amsterdamAtForkBlock';
+
+/**
+ * ERC-7201 slot of Ownable2StepNamespaced's pending owner (SP 248ef831
+ * contracts/src/utils/Ownable2StepNamespaced.sol:36; = cast index-erc7201 "aastar.storage.Ownership2Step").
+ * The Registry's pendingOwner() returns sload(slot); the SDK reads both and requires them equal.
+ */
+export const OWNERSHIP_2STEP_SLOT = '0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00';
+/**
+ * `amsterdamAtForkBlock` (address ignored, `at.block` = header.forkBlock) answers a JSON value
+ * `{ blockAccessListHash: bool, slotNumber: bool, ethConfigs: [{ activationTime, forkId }] }` read from
+ * the UPSTREAM chain (never the fork): the block header's Amsterdam-only fields (agreed across
+ * providers), and eth_config.current from every provider that serves it.
+ */
+export type ChainReader = (address: string, what: ReadKind, at?: { block?: bigint }) => Promise<Observed>;
 
 /** Classify a thrown contract-call error: a revert / empty return is 'reverted', anything else an error. */
 export function classifyCallError(e: unknown): Observed {
@@ -115,10 +142,15 @@ const versionPin = (pins: Sp550CutoverPins): Record<string, unknown> => ({ super
  * revert with `null`. A revert anywhere else is a failure — absence is never inferred from a revert.
  */
 export const VERSION_ABSENT_BY_DESIGN = new Set(['spAdminExtension', 'xPNTsTokenV2Ext']);
-/** owner()/pendingOwner() read back for these; `true` = the function must exist (Ownable2Step SP). */
-const OWNED: Record<string, { owner: boolean; pendingOwner: boolean }> = {
-    superPaymaster: { owner: true, pendingOwner: true },
-    registry: { owner: true, pendingOwner: false },
+/**
+ * Book contracts whose standard interface has no version() (the core ABI has none — asserted in the
+ * tests): a revert there must be reported "n/a:…" (schema 2228c0b6 forbids null outside the set above).
+ */
+export const VERSION_NOT_IN_INTERFACE = new Set(['timelockController']);
+/** owner() / pendingOwner() the SDK reads back and compares (both must exist). */
+const OWNED: Record<string, ReadonlyArray<'owner' | 'pendingOwner'>> = {
+    superPaymaster: ['owner', 'pendingOwner'],
+    registry: ['owner', 'pendingOwner'],
 };
 
 export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader,
@@ -164,9 +196,25 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         if (ec.activationTime !== ref.activationTime) p.push(`header.ethConfig.activationTime ${show(ec.activationTime)} != Amsterdam ${ref.activationTime}`);
         if (!eq(ec.forkId, ref.forkId)) p.push(`header.ethConfig.forkId ${show(ec.forkId)} != Amsterdam ${ref.forkId}`);
     }
+    // The SDK's own upstream read at forkBlock: the file's ethConfig / corroboration are not taken on trust.
+    const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
+    if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
+    else {
+        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } = {};
+        try { seen = JSON.parse(am.value); } catch { p.push(`header.ethConfig: the upstream answer is not JSON (${am.value.slice(0, 60)})`); }
+        if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
+        for (const cfg of seen.ethConfigs ?? []) {
+            if (ref && (cfg.activationTime !== ref.activationTime || !eq(cfg.forkId, ref.forkId))) p.push(`header.ethConfig: the upstream eth_config reports ${show(cfg)}, not Amsterdam ${show(ref)}`);
+        }
+    }
     const co = ec.corroboration as Record<string, any>;
     if (co.blockAccessListHash !== true || co.slotNumber !== true) p.push(`header.ethConfig.corroboration: Amsterdam-only header fields not both present (blockAccessListHash ${show(co.blockAccessListHash)}, slotNumber ${show(co.slotNumber)})`);
-    if (ec.provider !== undefined && co.provider === ec.provider) p.push(`header.ethConfig.corroboration.provider ${show(co.provider)} is the eth_config provider; it must be a second one`);
+    // eth_config's provider is optional in the schema but required here: corroboration means a second, different provider.
+    if (typeof ec.provider !== 'string') p.push('header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)');
+    else if (co.provider === ec.provider) p.push(`header.ethConfig.corroboration.provider ${show(co.provider)} is the eth_config provider; it must be a second one`);
+    for (const [what, prov] of [['ethConfig.provider', ec.provider], ['ethConfig.corroboration.provider', co.provider]] as const) {
+        if (typeof prov === 'string' && !providers.includes(prov)) p.push(`header.${what} ${show(prov)} is not in header.providers`);
+    }
     if (co.blockNumber !== hd.forkBlock) p.push(`header.ethConfig.corroboration.blockNumber ${show(co.blockNumber)} != header.forkBlock ${show(hd.forkBlock)}`);
 
     // Contracts: every pinned name (book entries without their prefix), every compared field also read by the SDK.
@@ -176,7 +224,10 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const entries = sp550PinnedAddressEntries(pins).filter(([, a]) => typeof a === 'string') as [string, string][];
     const byName = Object.fromEntries(entries);
     for (const [top, book] of SP550_PIN_ALIASES) {
-        if (byName[book] !== undefined && !eq(byName[book], byName[top])) p.push(`pins: ${book} ${byName[book]} != ${top} ${byName[top]} (declared alias)`);
+        if (byName[book] === undefined) continue;
+        if (!eq(byName[book], byName[top])) p.push(`pins: ${book} ${byName[book]} != ${top} ${byName[top]} (declared alias)`);
+        // Deduplicated below, so the alias's own codehash pin must be the same one that is compared.
+        if (!eq(pins.codehashes?.[book], pins.codehashes?.[top])) p.push(`pins: codehashes.${book} ${show(pins.codehashes?.[book])} != codehashes.${top} ${show(pins.codehashes?.[top])} (declared alias)`);
     }
     const aliasBook = new Set(SP550_PIN_ALIASES.map(([, b]) => b));
     const pinned = entries.filter(([k]) => !aliasBook.has(k)).map(([k, a]) => [contractKeyOf(k), a, k] as const);
@@ -207,8 +258,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         const v = await read(address, 'version');
         if (v.kind === 'error') p.push(`contracts.${k}.version: the SDK could not read version() (${v.detail})`);
         else if (v.kind === 'reverted') {
-            if (!VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
-            else if (c.version !== null) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`);
+            if (VERSION_ABSENT_BY_DESIGN.has(k)) { if (c.version !== null) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`); }
+            else if (VERSION_NOT_IN_INTERFACE.has(k)) { if (!notApplicable(c.version) || c.version === null) p.push(`contracts.${k}.version ${show(c.version)}: ${k}'s interface has no version() (expected "n/a:…")`); }
+            else p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
         } else {
             if (VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() answers ${show(v.value)}, but ${k} has none by design (is this the pinned code?)`);
             if (c.version !== v.value) p.push(`contracts.${k}.version ${show(c.version)} != version() on chain ${show(v.value)}`);
@@ -232,6 +284,8 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
             if (!eq(c.extension, px.ext[0])) p.push(`contracts.${k}.extension ${show(c.extension)} != pinned ${show(px.ext[0])}`);
             if (ext !== undefined && !eq(ext, px.ext[0])) p.push(`contracts.${k}: EXTENSION() on chain ${ext} != pinned ${show(px.ext[0])}`);
             if (!eq(c.extensionCodehash, px.ext[1])) p.push(`contracts.${k}.extensionCodehash ${show(c.extensionCodehash)} != pinned ${show(px.ext[1])}`);
+            // x-readMethods: the extension's codehash MUST equal the spAdminExtension entry's own.
+            if (contracts.spAdminExtension && !eq(c.extensionCodehash, contracts.spAdminExtension.codehash)) p.push(`contracts.${k}.extensionCodehash ${show(c.extensionCodehash)} != contracts.spAdminExtension.codehash ${show(contracts.spAdminExtension.codehash)}`);
             if (ext !== undefined) {
                 const eh = value(await read(ext, 'codehash'), 'the extension code hash', k);
                 if (eh !== undefined && !eq(eh, px.ext[1])) p.push(`contracts.${k}: extension code on chain ${eh} != pinned ${show(px.ext[1])}`);
@@ -243,51 +297,85 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         }
 
         // owner / pendingOwner, read back by the SDK for SP and the Registry.
-        const own = OWNED[k];
-        if (own) {
-            for (const fn of ['owner', 'pendingOwner'] as const) {
-                const o = await read(address, fn);
-                if (o.kind === 'error') p.push(`contracts.${k}.${fn}: the SDK could not read ${fn}() (${o.detail})`);
-                else if (o.kind === 'reverted') {
-                    if (own[fn]) p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
-                    else if (c[fn] !== null && c[fn] !== undefined) p.push(`contracts.${k}.${fn} ${show(c[fn])}, but ${fn}() reverts on chain (expected null)`);
-                } else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
-            }
+        for (const fn of OWNED[k] ?? []) {
+            const o = await read(address, fn);
+            if (o.kind === 'error') p.push(`contracts.${k}.${fn}: the SDK could not read ${fn}() (${o.detail})`);
+            else if (o.kind === 'reverted') p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
+            else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
+        }
+        // The Registry keeps its pending owner in an ERC-7201 slot: the raw slot must agree with the getter and the file.
+        if (k === 'registry') {
+            const slot = await read(address, 'ownership2StepSlot');
+            if (slot.kind !== 'value') p.push(`contracts.registry.pendingOwner: the SDK could not read the ERC-7201 slot ${OWNERSHIP_2STEP_SLOT} (${slot.kind === 'error' ? slot.detail : 'reverted'})`);
+            else if (!eq(c.pendingOwner, slot.value)) p.push(`contracts.registry.pendingOwner ${show(c.pendingOwner)} != ERC-7201 slot ${OWNERSHIP_2STEP_SLOT} on chain ${slot.value}`);
         }
     }
+    // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
+    p.push(...recordedProbeProblems(f.amsterdamProbe, providers));
+
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
     const bh2 = await read('', 'blockHash');
     if (bh.kind === 'value' && (bh2.kind !== 'value' || !eq(bh2.value, bh.value))) p.push(`snapshot: block ${pins.readbackBlock} changed during the reads (${bh.value} -> ${bh2.kind === 'value' ? bh2.value : bh2.kind})`);
     return p;
 }
 
-/** The probe's pass rule as SP's generator writes it; any other predicate text is refused, not reinterpreted. */
-export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateLive[p] == estimateFork for p in estimateLive) and estimateFork == expected.estimate and gasUsedFork == expected.gasUsed';
-
-/** A number the SDK measured itself, or why it could not. */
-export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detail: string };
+/** The probe's pass rule as SP's generator writes it (revision 3); any other predicate text is refused, not reinterpreted. */
+export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateSimulate[p] == gasUsedFork == expected.gasUsed for p if int) and all(callAtGasUsed.values())';
 
 /**
- * The Amsterdam positive control (EIP-8037 CREATE gas): SP's recorded numbers must satisfy the
- * predicate, AND the SDK's own measurements must equal them, like with like: the SDK's estimate on
- * its fork == SP's estimateFork, the SDK's whole-tx receipt gasUsed on its fork == SP's gasUsedFork,
- * and the SDK's own upstream (live) estimate == expected.estimate.
+ * SP's recorded probe on its own terms (revision 3): JUDGED — every integer estimateSimulate[p] ==
+ * gasUsedFork == expected.gasUsed, at least one provider supplies one, and callAtGasUsed[p] is true for
+ * every provider. RECORDED ONLY — estimateLive, estimateFork (an upstream estimate may add headroom),
+ * callAtGasUsedMinusOne.
  */
-export function probeProblems(probe: Record<string, any>, mine: { estimateFork: Measured; gasUsedFork: Measured; estimateLive: Measured }): string[] {
+export function recordedProbeProblems(probe: Record<string, any>, providers?: readonly unknown[]): string[] {
     const p: string[] = [];
+    // Every per-provider map covers exactly header.providers: a missing or unrelated provider name
+    // would otherwise let "every provider" pass on a subset.
+    if (providers) {
+        // Compared as sorted arrays (JSON), never joined strings: a key "alchemy,tenderly" is one provider.
+        const want = JSON.stringify([...new Set(providers.map(String))].sort());
+        for (const m of ['estimateLive', 'estimateSimulate', 'callAtGasUsed', 'callAtGasUsedMinusOne'] as const) {
+            const got = JSON.stringify(Object.keys((probe[m] ?? {}) as object).sort());
+            if (got !== want) p.push(`amsterdamProbe.${m} covers providers ${got}, not header.providers ${want}`);
+        }
+    }
     const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
     if (norm(probe.predicate) !== AMSTERDAM_PROBE_PREDICATE) p.push(`amsterdamProbe.predicate ${show(probe.predicate)} is not the agreed rule "${AMSTERDAM_PROBE_PREDICATE}"`);
-    const live = Object.entries(probe.estimateLive as Record<string, number>);
-    if (!live.length) p.push('amsterdamProbe.estimateLive: no provider');
-    for (const [prov, v] of live) if (v !== probe.estimateFork) p.push(`amsterdamProbe.estimateLive.${prov} ${v} != estimateFork ${probe.estimateFork}`);
-    if (probe.estimateFork !== probe.expected.estimate) p.push(`amsterdamProbe.estimateFork ${probe.estimateFork} != expected.estimate ${probe.expected.estimate}`);
+    for (const [k, v] of [['gasUsedFork', probe.gasUsedFork], ['expected.gasUsed', probe.expected.gasUsed]] as const) {
+        if (!(Number.isSafeInteger(v) && v > 0)) p.push(`amsterdamProbe.${k} ${show(v)} is not a positive gas amount`);
+    }
     if (probe.gasUsedFork !== probe.expected.gasUsed) p.push(`amsterdamProbe.gasUsedFork ${probe.gasUsedFork} != expected.gasUsed ${probe.expected.gasUsed}`);
-    const cmpMine = (what: string, m: Measured, theirs: unknown) => {
+    const sims = Object.entries(probe.estimateSimulate as Record<string, unknown>).filter(([, v]) => typeof v === 'number');
+    if (!sims.length) p.push('amsterdamProbe.estimateSimulate: no provider supplied eth_simulateV1');
+    for (const [prov, v] of sims) if (v !== probe.gasUsedFork) p.push(`amsterdamProbe.estimateSimulate.${prov} ${v} != gasUsedFork ${probe.gasUsedFork}`);
+    const calls = Object.entries(probe.callAtGasUsed as Record<string, boolean>);
+    if (!calls.length) p.push('amsterdamProbe.callAtGasUsed: no provider');
+    for (const [prov, ok] of calls) if (ok !== true) p.push(`amsterdamProbe.callAtGasUsed.${prov} is ${show(ok)}: eth_call with gas = expected.gasUsed must succeed`);
+    return p;
+}
+
+/** A number the SDK measured itself, or why it could not ('n/a' = the provider has no such method). */
+export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detail: string } | { kind: 'n/a'; detail: string };
+
+/**
+ * The SDK's own measurements, judged like SP's (revision 3): its fork's whole-tx receipt gasUsed ==
+ * SP's gasUsedFork; its own upstream's eth_simulateV1 gasUsed (when the upstream has the method) ==
+ * expected.gasUsed; eth_call with gas = expected.gasUsed succeeds on its upstream and on its fork.
+ * Estimates are not measured: they are recorded only.
+ */
+export function probeProblems(probe: Record<string, any>, mine: { gasUsedFork: Measured; simulateUpstream: Measured; callUpstream: Measured; callFork: Measured }): string[] {
+    const p: string[] = [];
+    const cmp = (what: string, m: Measured, theirs: unknown) => {
         if (m.kind === 'error') p.push(`amsterdamProbe: the SDK could not measure ${what} (${m.detail})`);
-        else if (m.value !== BigInt(theirs as number)) p.push(`amsterdamProbe: the SDK's ${what} ${m.value} != SP's ${theirs}`);
+        else if (m.kind === 'value' && m.value !== BigInt(theirs as number)) p.push(`amsterdamProbe: the SDK's ${what} ${m.value} != SP's ${theirs}`);
     };
-    cmpMine('estimate on its fork', mine.estimateFork, probe.estimateFork);
-    cmpMine('whole-tx receipt gasUsed on its fork', mine.gasUsedFork, probe.gasUsedFork);
-    cmpMine('live estimate from its own upstream', mine.estimateLive, probe.expected.estimate);
+    cmp('whole-tx receipt gasUsed on its fork', mine.gasUsedFork, probe.gasUsedFork);
+    if (mine.gasUsedFork.kind === 'n/a') p.push(`amsterdamProbe: the SDK's fork gasUsed is required (${mine.gasUsedFork.detail})`);
+    cmp('eth_simulateV1 gasUsed on its own upstream', mine.simulateUpstream, probe.expected.gasUsed);
+    for (const [what, m] of [['eth_call at gas = expected.gasUsed on its own upstream', mine.callUpstream], ['eth_call at gas = expected.gasUsed on its fork', mine.callFork]] as const) {
+        if (m.kind === 'error') p.push(`amsterdamProbe: ${what} failed (${m.detail})`);
+        else if (m.kind === 'n/a') p.push(`amsterdamProbe: ${what} is required (${m.detail})`);
+    }
     return p;
 }

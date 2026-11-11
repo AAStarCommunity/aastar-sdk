@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -6,7 +6,7 @@ import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import {
-    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
+    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
     classifyCallError, contractKeyOf, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
@@ -30,7 +30,7 @@ const CHAIN: Record<string, Partial<Record<'version' | 'owner' | 'pendingOwner',
     [A(0x10)]: { version: { kind: 'value', value: 'SuperPaymaster-5.5.1' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'value', value: A(0) } },
     [A(0x13)]: { version: { kind: 'value', value: 'SuperPaymasterLens-1.2.2' } },
     [A(0x19)]: { version: { kind: 'value', value: 'APNTsCapped-1.0.0' } },
-    [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'reverted' } },
+    [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'value', value: A(0) } },
 };
 // Every other pinned contract has a version() except the two that have none by design (spAdminExtension, xPNTsTokenV2Ext).
 for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
@@ -39,8 +39,12 @@ for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
 /** Code on chain: each pinned address holds the code its pin names. */
 const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
+let PENDING_SLOT: Record<string, string> = { [A(0x21)]: A(0) };
+let AMSTERDAM: Observed = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
 const reader = (chain = CHAIN, code = CODE, slots = SLOTS, blockHash = BLOCK_HASH): ChainReader => async (address, what) => {
     if (what === 'blockHash') return { kind: 'value', value: blockHash };
+    if (what === 'ownership2StepSlot') return { kind: 'value', value: PENDING_SLOT[address] ?? A(0) };
+    if (what === 'amsterdamAtForkBlock') return AMSTERDAM;
     if (what === 'codehash') return { kind: 'value', value: code[address.toLowerCase()] ?? 'none' };
     if (what === 'erc1967Impl') return { kind: 'value', value: slots[address] ?? A(0) };
     if (what === 'EXTENSION') return address === A(0x10) ? { kind: 'value', value: A(0x12) } : { kind: 'reverted' };
@@ -61,8 +65,13 @@ function good(): any {
         };
     }
     Object.assign(contracts.superPaymaster, { erc1967Impl: PINS.spImpl, implCodehash: PINS.spImplCodehash, extension: PINS.spAdminExtension, extensionCodehash: PINS.codehashes.spAdminExtension, owner: A(0xb0), pendingOwner: A(0), OPERATOR_WITHDRAWAL_WINDOW: 86400 });
-    Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: null });
-    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: null }; // not a pin: not compared
+    Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: A(0) }); // from its ERC-7201 slot
+    // Contracts the schema requires but the SDK does not pin: schema-checked only, not compared.
+    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: 'n/a:Safe library, no version()' };
+    contracts.gTokenStaking = { ...contracts.xPNTsTokenV2Ext, address: A(0x9a), version: 'GTokenStaking-3.2.0' };
+    contracts.entryPoint = { ...contracts.xPNTsTokenV2Ext, address: A(0x9b), version: 'n/a:EntryPoint v0.7 has no version()', getDepositInfo: { deposit: '0', staked: false } };
+    contracts.ownerSafe = { ...contracts.xPNTsTokenV2Ext, address: A(0x9c), version: '1.4.1' };
+    contracts.evaluationCommunityToken = { ...contracts.xPNTsTokenV2Ext, address: A(0x9d), version: 'XPNTs-4.0.3' }; // not a pin: not compared
     return {
         schema: READBACK_SCHEMA,
         header: {
@@ -74,9 +83,10 @@ function good(): any {
         contracts,
         checks: { 'superPaymaster.OPERATOR_WITHDRAWAL_WINDOW': 86400, 'community.creditPolicy': 'unreadable:example' },
         amsterdamProbe: {
-            initcode: '0x6000600055', sender: A(0xdd), method: 'eth_estimateGas at forkBlock; receipt gasUsed',
-            estimateLive: { alchemy: 53000, tenderly: 53000 }, estimateFork: 53000, gasUsedFork: 52000,
-            expected: { estimate: 53000, gasUsed: 52000, source: 'live estimate; SP gasUsed' }, predicate: AMSTERDAM_PROBE_PREDICATE,
+            initcode: '0x60206000f3', sender: A(0xdd), method: 'eth_simulateV1 / eth_call at forkBlock; receipt gasUsed',
+            estimateLive: { alchemy: 259849, tenderly: 259849 }, estimateFork: 256645, estimateSimulate: { alchemy: 256645, tenderly: 'n/a:no eth_simulateV1' },
+            gasUsedFork: 256645, callAtGasUsed: { alchemy: true, tenderly: true }, callAtGasUsedMinusOne: { alchemy: false, tenderly: false },
+            expected: { gasUsed: 256645, source: 'SP A7 fork receipt; upstream eth_simulateV1' }, predicate: AMSTERDAM_PROBE_PREDICATE,
         },
     };
 }
@@ -95,8 +105,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('319e767788ab7efd2e64183ad52612a3585fd67f6ae3d133e588e7f21e8b06b0');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('d44a9e220231d986e6d641e78ef55b1f30b86f845efbe33b59d102bc215adfbb');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('5b18f574d7bbdbba6ec787d62625ddd45217b38ae170d2d8df3779b659177dc2');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('bdbf3085add03c1080e438f60bcc37e91a4e702a58dbb30fa0129058e234f5c8');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -110,7 +120,10 @@ describe('the binding schema (sha256-pinned)', () => {
         ['a bare "unreadable"', (rb: any) => { rb.contracts.xPNTsTokenV2Ext.owner = 'unreadable'; }],
         ['a top-level key outside the schema', (rb: any) => { rb.extra = 1; }],
         ['no amsterdamProbe', (rb: any) => { delete rb.amsterdamProbe; }],
+        ['a required contract dropped (schema 3bf4bba2)', (rb: any) => { delete rb.contracts.ownerSafe; }],
         ['a malformed forkId', (rb: any) => { rb.header.ethConfig.forkId = '0x6c1d94'; }],
+        ['a version on a contract without version() by design (schema 2228c0b6)', (rb: any) => { rb.contracts.spAdminExtension.version = 'Admin-1'; }],
+        ['a null version on any other contract (schema 2228c0b6)', (rb: any) => { rb.contracts.registry.version = null; }],
     ])('an invalid file is refused before anything is compared: %s', async (_n, mutate) => {
         const rb = good(); mutate(rb);
         const p = await run(rb);
@@ -121,7 +134,7 @@ describe('the binding schema (sha256-pinned)', () => {
 
 describe('readbackProblems: a read-back that agrees with the pins and the chain passes', () => {
     it('A7 fork: every fact checked', async () => expect(await run(good())).toEqual([]));
-    it('live: no anvil, no dump (schema 61d30b82 accepts anvilVersion "n/a:…"; d893b790 did not)', async () => {
+    it('live: no anvil, no dump (anvilVersion "n/a:…" valid since schema 61d30b82)', async () => {
         const rb = good();
         Object.assign(rb.header, { source: 'live', anvilVersion: 'n/a:live', anvilCommit: 'n/a:live', dumpSha256: 'n/a:live' });
         expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } })).toEqual([]);
@@ -134,6 +147,29 @@ describe('readbackProblems: a read-back that agrees with the pins and the chain 
 });
 
 describe('readbackProblems refuses', () => {
+    afterEach(() => {
+        PENDING_SLOT = { [A(0x21)]: A(0) };
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
+    });
+    it.each([
+        ['an upstream block without Amsterdam header fields', { kind: 'value', value: JSON.stringify({ blockAccessListHash: false, slotNumber: false }) }, /the upstream block 400 lacks Amsterdam header fields/],
+        ['an upstream eth_config that is not Amsterdam', { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }, { activationTime: 1, forkId: '0x00000000' }] }) }, /the upstream eth_config reports .*not Amsterdam/],
+        ['no upstream to check against', { kind: 'error', detail: 'a fork read-back needs SP550_FORK_URL' }, /the SDK could not read the upstream at forkBlock 400/],
+    ] as const)('the file copying Amsterdam constants is not enough (Grok High): %s', async (_n, obs, msg) => {
+        AMSTERDAM = obs as Observed;
+        expect(await run(good())).toEqual([expect.stringMatching(msg)]);
+    });
+    it('an upstream answer that is not JSON is a problem, not a crash', async () => {
+        AMSTERDAM = { kind: 'value', value: 'not json' };
+        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not JSON/)]));
+    });
+    it('an upstream without eth_config is fine when the header fields are there', async () => {
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [] }) };
+        expect(await run(good())).toEqual([]);
+        // one provider serves eth_config and one does not (the schema's corroboration case): its config is checked alone
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
+        expect(await run(good())).toEqual([]);
+    });
     it.each([
         ['another source', (rb: any) => { rb.header.source = 'live'; }, /header\.source "live" != fork/],
         ['another chain', (rb: any) => { rb.header.chainId = 1; }, /header\.chainId 1 != 11155111/],
@@ -146,36 +182,54 @@ describe('readbackProblems refuses', () => {
         ['a null tag', (rb: any) => { rb.header.tag = null; }, /header\.tag null != pins\.tag/],
         ['another readback block', (rb: any) => { rb.header.readbackBlock = 499; }, /header\.readbackBlock 499 != pins\.readbackBlock 500/],
         ['another block hash at the read-back block', (rb: any) => { rb.header.readbackBlockHash = H(0xcc); }, /header\.readbackBlockHash .* != block 500 on chain/],
-        ['a provider URL', (rb: any) => { rb.header.providers = ['https://x.example/key']; }, /not a provider NAME/],
-        ['no provider', (rb: any) => { rb.header.providers = []; }, /header\.providers: empty/],
         ['another Amsterdam activation', (rb: any) => { rb.header.ethConfig.activationTime = 1; }, /activationTime 1 != Amsterdam 1791294816/],
         ['another fork id', (rb: any) => { rb.header.ethConfig.forkId = '0x00000000'; }, /forkId "0x00000000" != Amsterdam 0x6c1d9423/],
         ['no Amsterdam-only header fields on the second provider', (rb: any) => { rb.header.ethConfig.corroboration.slotNumber = false; }, /corroboration: Amsterdam-only header fields not both present/],
         ['the same provider corroborating itself', (rb: any) => { rb.header.ethConfig.corroboration.provider = 'alchemy'; }, /must be a second one/],
         ['corroboration at another block', (rb: any) => { rb.header.ethConfig.corroboration.blockNumber = 1; }, /corroboration\.blockNumber 1 != header\.forkBlock 400/],
-        ['a pinned contract left out', (rb: any) => { delete rb.contracts.dvtValidator; }, /^contracts\.dvtValidator: omitted$/],
         ['another address', (rb: any) => { rb.contracts.superPaymasterLens.address = A(0x99); }, /contracts\.superPaymasterLens\.address .* != pinned/],
-        ['another codehash', (rb: any) => { rb.contracts.spAdminExtension.codehash = H(0x99); }, /contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/],
+        ['another codehash', (rb: any) => { rb.contracts.xPNTsTokenV2Ext.codehash = H(0x99); }, /contracts\.xPNTsTokenV2Ext\.codehash .* != pins\.codehashes\.xPNTsTokenV2Ext/],
         ['a book entry with another codehash', (rb: any) => { rb.contracts.blsAggregator.codehash = H(0x99); }, /contracts\.blsAggregator\.codehash .* != pins\.codehashes\.addresses\.blsAggregator/],
-        ['a null version on a contract that has version()', (rb: any) => { rb.contracts.registry.version = null; }, /contracts\.registry\.version null != version\(\) on chain "Registry-5\.10\.0"/],
+        ['"n/a:…" as the version of a contract that has version()', (rb: any) => { rb.contracts.registry.version = 'n/a:none'; }, /contracts\.registry\.version "n\/a:none" != version\(\) on chain "Registry-5\.10\.0"/],
         ['"unreadable:…" where the SDK reads a version', (rb: any) => { rb.contracts.aPNTsCapped.version = 'unreadable:timeout'; }, /contracts\.aPNTsCapped\.version "unreadable:timeout" != version\(\) on chain/],
-        ['a version on a contract without version()', (rb: any) => { rb.contracts.spAdminExtension.version = 'Admin-1'; }, /contracts\.spAdminExtension\.version "Admin-1", but version\(\) reverts on chain/],
         ['another SP implementation', (rb: any) => { rb.contracts.superPaymaster.erc1967Impl = A(0x99); }, /contracts\.superPaymaster\.erc1967Impl .* != pinned/],
         ['another Registry implementation hash', (rb: any) => { rb.contracts.registry.implCodehash = H(0x99); }, /contracts\.registry\.implCodehash .* != pinned/],
         ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /contracts\.superPaymaster\.extension .* != pinned/],
         ['an implementation on a non-proxy', (rb: any) => { rb.contracts.superPaymasterLens.erc1967Impl = A(0x99); }, /superPaymasterLens\.erc1967Impl .* not a proxy here/],
         ['another SP owner', (rb: any) => { rb.contracts.superPaymaster.owner = A(0x99); }, /contracts\.superPaymaster\.owner .* != owner\(\) on chain/],
-        ['a Registry pendingOwner although it has none', (rb: any) => { rb.contracts.registry.pendingOwner = A(0); }, /registry\.pendingOwner .*, but pendingOwner\(\) reverts on chain/],
+        ['another Registry pendingOwner than its getter', (rb: any) => { rb.contracts.registry.pendingOwner = A(0x55); PENDING_SLOT = { [A(0x21)]: A(0x55) }; }, /contracts\.registry\.pendingOwner .* != pendingOwner\(\) on chain/],
     ])('%s', async (_n, mutate, msg) => {
         const rb = good(); mutate(rb);
         const p = await run(rb);
         expect(p).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
         expect(p).toHaveLength(1);
     });
+    it("the SP entry's extensionCodehash must equal the spAdminExtension entry's codehash (x-readMethods)", async () => {
+        const rb = good(); rb.contracts.spAdminExtension.codehash = H(0x99);
+        const p = await run(rb);
+        expect(p).toHaveLength(2);
+        expect(p).toEqual(expect.arrayContaining([
+            expect.stringMatching(/contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/),
+            expect.stringMatching(/contracts\.superPaymaster\.extensionCodehash .* != contracts\.spAdminExtension\.codehash/),
+        ]));
+    });
+    it("the Registry's ERC-7201 pending-owner slot must agree with its getter and the file (SP 248ef831)", async () => {
+        PENDING_SLOT = { [A(0x21)]: A(0x66) };
+        try { expect(await run(good())).toEqual([`contracts.registry.pendingOwner "${A(0)}" != ERC-7201 slot 0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00 on chain ${A(0x66)}`]); }
+        finally { PENDING_SLOT = { [A(0x21)]: A(0) }; }
+    });
     it('a live read-back that names an anvil or a dump', async () => {
         const rb = good(); rb.header.source = 'live';
         expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } }))
             .toEqual(['anvilVersion', 'anvilCommit', 'dumpSha256'].map((k) => expect.stringMatching(new RegExp(`header\\.${k} .*expected "n/a:…"`))));
+    });
+    it('a provider URL', async () => {
+        const rb = good(); rb.header.providers = ['alchemy', 'tenderly', 'https://x.example/key'];
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(/not a provider NAME/)]));
+    });
+    it('no provider at all', async () => {
+        const rb = good(); rb.header.providers = [];
+        expect(await run(rb)).toEqual(expect.arrayContaining(['header.providers: empty']));
     });
     it('a fork comparison without the loaded dump facts is refused', async () => {
         expect(await run(good(), { ctx: { ...CTX, anvilCommit: undefined } })).toEqual([expect.stringMatching(/^context: a fork read-back/)]);
@@ -201,16 +255,19 @@ describe('readbackProblems refuses', () => {
     });
     it.each(['superPaymaster', 'superPaymasterLens', 'aPNTsCapped'])('a reverting version() on %s is a failure, never "absent by design"', async (k) => {
         const a = PINS[k];
-        const rb = good(); rb.contracts[k].version = null;
+        const rb = good(); rb.contracts[k].version = 'unreadable:execution reverted';
         expect(await run(rb, { chain: { ...CHAIN, [a]: { ...CHAIN[a], version: { kind: 'reverted' } } } })).toContain(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
     });
     it('a reverting version() on the Registry is a failure too: absence comes from the interface, not a revert (Codex r2 H3)', async () => {
-        const rb = good(); rb.contracts.registry.version = null;
+        const rb = good(); rb.contracts.registry.version = 'unreadable:execution reverted';
         expect(await run(rb, { chain: { ...CHAIN, [A(0x21)]: { ...CHAIN[A(0x21)], version: { kind: 'reverted' } } } })).toEqual(['contracts.registry: version() reverts on chain, but registry must have one']);
     });
     it('a contract without version() by design answering one is a failure (other code at that address?)', async () => {
-        const rb = good(); rb.contracts.spAdminExtension.version = 'X-1';
-        expect(await run(rb, { chain: { ...CHAIN, [A(0x12)]: { version: { kind: 'value', value: 'X-1' } } } })).toEqual(['contracts.spAdminExtension: version() answers "X-1", but spAdminExtension has none by design (is this the pinned code?)']);
+        const rb = good(); // the file says null (as the schema requires); the chain answers a version
+        expect(await run(rb, { chain: { ...CHAIN, [A(0x12)]: { version: { kind: 'value', value: 'X-1' } } } })).toEqual([
+            'contracts.spAdminExtension: version() answers "X-1", but spAdminExtension has none by design (is this the pinned code?)',
+            'contracts.spAdminExtension.version null != version() on chain "X-1"',
+        ]);
     });
     it('the snapshot block changing during the reads fails', async () => {
         let n = 0;
@@ -233,26 +290,84 @@ describe('readbackProblems refuses', () => {
     });
 });
 
-describe('amsterdamProbe', () => {
+describe('amsterdamProbe (revision 3: simulateV1 judged, estimates recorded only)', () => {
     const v = (n: number): Measured => ({ kind: 'value', value: BigInt(n) });
-    const OK = { estimateFork: v(53000), gasUsedFork: v(52000), estimateLive: v(53000) };
-    it("passes when SP's numbers satisfy the predicate and the SDK measured the same", () => expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]));
-    it.each([
-        ['another predicate', (pr: any) => { pr.predicate = 'gasUsedFork > 0'; }, OK, /predicate .* is not the agreed rule/],
-        ['a provider disagreeing', (pr: any) => { pr.estimateLive.tenderly = 53001; }, OK, /estimateLive\.tenderly 53001 != estimateFork 53000/],
-        ['no provider', (pr: any) => { pr.estimateLive = {}; }, OK, /estimateLive: no provider/],
-        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 52001; }, { ...OK, gasUsedFork: v(52001) }, /gasUsedFork 52001 != expected\.gasUsed 52000/],
-        ["the SDK's fork estimate differs", () => {}, { ...OK, estimateFork: v(1) }, /the SDK's estimate on its fork 1 != SP's 53000/],
-        ["the SDK's fork gasUsed differs (CREATE priced like 1.8.6)", () => {}, { ...OK, gasUsedFork: v(52000 - 183600 + 300000) }, /the SDK's whole-tx receipt gasUsed on its fork .* != SP's 52000/],
-        ["the SDK's own live estimate differs", () => {}, { ...OK, estimateLive: v(9) }, /the SDK's live estimate from its own upstream 9 != SP's 53000/],
-        ['a measurement the SDK could not make', () => {}, { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
-    ])('fails: %s', (_n, mutate, mine, msg) => {
-        const pr = good().amsterdamProbe; mutate(pr);
-        expect(probeProblems(pr, mine as any)).toEqual([expect.stringMatching(msg)]);
+    const OK = { gasUsedFork: v(256645), simulateUpstream: v(256645), callUpstream: v(1), callFork: v(1) };
+    it("SP's recorded probe passes on its own terms, and the SDK's matching measurements pass", () => {
+        expect(recordedProbeProblems(good().amsterdamProbe)).toEqual([]);
+        expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]);
     });
-    it('estimateFork off expected is caught even when every live provider agrees with it', () => {
-        const pr = good().amsterdamProbe; pr.estimateFork = 53001; pr.estimateLive = { alchemy: 53001 };
-        expect(probeProblems(pr, { ...OK, estimateFork: v(53001) })).toEqual(['amsterdamProbe.estimateFork 53001 != expected.estimate 53000']);
+    it('estimates with headroom are recorded, never judged (reth 259849 vs exact 256645)', () => {
+        const rb = good(); rb.amsterdamProbe.estimateLive = { alchemy: 259849, tenderly: 259849 }; rb.amsterdamProbe.estimateFork = 1;
+        expect(recordedProbeProblems(rb.amsterdamProbe, rb.header.providers)).toEqual([]);
+    });
+    it.each([
+        ['callAtGasUsed for an unrelated provider', (pr: any) => { pr.callAtGasUsed = { unrelated: true }; }, /callAtGasUsed covers providers \["unrelated"\], not header\.providers \["alchemy","tenderly"\]/],
+        ['estimateSimulate for an unrelated provider', (pr: any) => { pr.estimateSimulate = { unrelated: 256645 }; }, /estimateSimulate covers providers \["unrelated"\]/],
+        ['a provider missing from callAtGasUsed', (pr: any) => { delete pr.callAtGasUsed.tenderly; }, /callAtGasUsed covers providers \["alchemy"\]/],
+        ['one key spelling two providers ("alchemy,tenderly", Codex r5)', (pr: any) => {
+            for (const m of ['estimateLive', 'estimateSimulate', 'callAtGasUsed', 'callAtGasUsedMinusOne']) pr[m] = { 'alchemy,tenderly': Object.values(pr[m])[0] };
+        }, /estimateLive covers providers \["alchemy,tenderly"\], not header\.providers \["alchemy","tenderly"\]/],
+    ])('provider coverage (Codex r4): %s', async (_n, mutate, msg) => {
+        const rb = good(); mutate(rb.amsterdamProbe);
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it.each([
+        ['another predicate', (pr: any) => { pr.predicate = 'true'; }, /predicate "true" is not the agreed rule/],
+        ['a simulateV1 gasUsed off the fork receipt', (pr: any) => { pr.estimateSimulate.alchemy = 256646; }, /estimateSimulate\.alchemy 256646 != gasUsedFork 256645/],
+        ['no provider with simulateV1', (pr: any) => { pr.estimateSimulate = { alchemy: 'n/a:no eth_simulateV1' }; }, /no provider supplied eth_simulateV1/],
+        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 256646; pr.estimateSimulate.alchemy = 256646; }, /gasUsedFork 256646 != expected\.gasUsed 256645/],
+        ['eth_call at gasUsed failing on a provider', (pr: any) => { pr.callAtGasUsed.tenderly = false; }, /callAtGasUsed\.tenderly is false/],
+        ['no callAtGasUsed provider', (pr: any) => { pr.callAtGasUsed = {}; }, /callAtGasUsed(: no provider| covers providers \[\])/],
+        ['a non-positive gas amount', (pr: any) => { pr.gasUsedFork = 0; pr.expected.gasUsed = 0; pr.estimateSimulate.alchemy = 0; }, /gasUsedFork 0 is not a positive gas amount/],
+    ])('the recorded probe fails, with or without --probe: %s', async (_n, mutate, msg) => {
+        const pr = good().amsterdamProbe; mutate(pr);
+        expect(recordedProbeProblems(pr)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+        const rb = good(); mutate(rb.amsterdamProbe);
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it.each([
+        ["the SDK's fork gasUsed differs (CREATE priced like stable 1.8.6)", { ...OK, gasUsedFork: v(256645 - 183600) }, /the SDK's whole-tx receipt gasUsed on its fork 73045 != SP's 256645/],
+        ["the SDK's upstream simulateV1 differs", { ...OK, simulateUpstream: v(256600) }, /eth_simulateV1 gasUsed on its own upstream 256600 != SP's 256645/],
+        ['eth_call at gasUsed failing on the upstream', { ...OK, callUpstream: { kind: 'error', detail: 'CallExecutionError' } as Measured }, /eth_call at gas = expected\.gasUsed on its own upstream failed/],
+        ['eth_call at gasUsed failing on the fork', { ...OK, callFork: { kind: 'error', detail: 'CallExecutionError' } as Measured }, /on its fork failed/],
+        ['a fork measurement the SDK could not make', { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
+    ])('the SDK measurement fails: %s', (_n, mine, msg) => {
+        expect(probeProblems(good().amsterdamProbe, mine as any)).toEqual([expect.stringMatching(msg)]);
+    });
+    it('an upstream without eth_simulateV1 is n/a, not a failure (SP must still supply one)', () => {
+        expect(probeProblems(good().amsterdamProbe, { ...OK, simulateUpstream: { kind: 'n/a', detail: 'upstream has no eth_simulateV1 (-32601)' } })).toEqual([]);
+    });
+});
+
+describe('Codex r3: version by interface, alias hashes, independent corroboration', () => {
+    it('the no-version() interface table matches the core ABI (it cannot drift silently)', async () => {
+        const { TimelockControllerABI, SuperPaymasterV550ABI } = await import('../packages/core/src/abis/index.js');
+        const hasVersion = (abi: any[]) => abi.some((e) => e.type === 'function' && e.name === 'version' && !e.inputs?.length);
+        expect(VERSION_NOT_IN_INTERFACE).toEqual(new Set(['timelockController']));
+        expect(hasVersion(TimelockControllerABI as any[])).toBe(false);
+        expect(hasVersion(SuperPaymasterV550ABI as any[])).toBe(true);
+    });
+    it('a book contract whose interface has no version() reports "n/a:…" (null is reserved by the schema)', async () => {
+        const pins = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
+        const rb = good();
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:no version() in the OZ TimelockController interface' };
+        const code = { ...CODE, [A(0x26)]: H(0x26) };
+        expect(await run(rb, { pins, code })).toEqual([]);
+        rb.contracts.timelockController.version = 'unreadable:timeout';
+        expect(await run(rb, { pins, code })).toEqual([expect.stringMatching(/timelockController\.version "unreadable:timeout": timelockController's interface has no version\(\)/)]);
+    });
+    it('an alias book entry with its own, different codehash pin is refused (it would never be compared)', async () => {
+        const pins = { ...PINS, addresses: { ...PINS.addresses, superPaymaster: PINS.superPaymaster }, codehashes: { ...PINS.codehashes, 'addresses.superPaymaster': H(0x77) } };
+        expect(await run(good(), { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/^pins: codehashes\.(addresses\.)?superPaymaster .* != codehashes\.(addresses\.)?superPaymaster/)]));
+    });
+    it('an unnamed eth_config provider cannot vouch for independent corroboration', async () => {
+        const rb = good(); delete rb.header.ethConfig.provider; rb.header.providers = ['alchemy']; rb.header.ethConfig.corroboration.provider = 'alchemy';
+        expect(await run(rb)).toEqual(expect.arrayContaining(['header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)']));
+    });
+    it('a corroborating provider outside header.providers is refused', async () => {
+        const rb = good(); rb.header.ethConfig.corroboration.provider = 'infura';
+        expect(await run(rb)).toEqual(['header.ethConfig.corroboration.provider "infura" is not in header.providers']);
     });
 });
 
@@ -268,5 +383,13 @@ describe('classifyCallError on real viem error graphs', () => {
     it('a transport failure is an error, never "reverted"', () => {
         expect(classifyCallError(wrap(new BaseError('fetch failed'))).kind).toBe('error');
         expect(classifyCallError(new Error('socket hang up'))).toEqual({ kind: 'error', detail: 'Error: socket hang up' });
+    });
+});
+
+describe('book keys renamed in the read-back (SP: staking -> gTokenStaking)', () => {
+    it('addresses.staking is compared as contracts.gTokenStaking; other book keys keep their name', () => {
+        expect(contractKeyOf('addresses.staking')).toBe('gTokenStaking');
+        expect(contractKeyOf('addresses.registry')).toBe('registry');
+        expect(contractKeyOf('superPaymaster')).toBe('superPaymaster');
     });
 });
