@@ -492,6 +492,11 @@ describe('pins schema v2: admin extension, Lens version, Registry impl, certifie
         m.reads[`${m.p.sp}.BLS_AGGREGATOR`] = A(0xbad);
         expect(failed(await run(m))).toEqual(['SP.BLS_AGGREGATOR() == addresses.blsAggregator']);
     });
+    it('pins read back after the snapshot block fail (PR-Daemon F4: this predicate had no red test)', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = { ...m.pins, readbackBlock: HEAD + 1n };
+        expect(failed(await run(m, pins, BOOKS.get(m.pins)!))).toEqual(['pins.readbackBlock <= snapshot block']);
+    });
     it.each(['registry', 'policyRegistry', 'blsAggregator', 'dvtValidator', 'reputationSystem'])(
         'upgrade: an SDK book %s that is not the certified address fails', async (k) => {
             const m = deployment(sepolia.id, 'upgrade');
@@ -501,6 +506,7 @@ describe('pins schema v2: admin extension, Lens version, Registry impl, certifie
         ['addresses.aPNTs listed', (p: any) => ({ ...p, addresses: { ...p.addresses, aPNTs: p.aPNTsCapped } }), /addresses\.aPNTs: an upgrade derives it from aPNTsCapped/],
         ['addresses.xPNTsFactory listed', (p: any) => ({ ...p, addresses: { ...p.addresses, xPNTsFactory: p.xPNTsFactoryV2 } }), /addresses\.xPNTsFactory: an upgrade derives it from xPNTsFactoryV2/],
         ['an external key', (p: any) => ({ ...p, addresses: { ...p.addresses, entryPoint: A(0x77) } }), /addresses\.entryPoint: external/],
+        ['addresses.superPaymaster listed (a moved proxy)', (p: any) => ({ ...p, addresses: { ...p.addresses, superPaymaster: A(0x778) } }), /addresses\.superPaymaster: an upgrade keeps the proxy address/],
         ['a certified key missing', (p: any) => { const { dvtValidator: _d, ...rest } = p.addresses; return { ...p, addresses: rest }; }, /addresses\.dvtValidator: unpinned/],
         ['no hash for a certified entry', (p: any) => { const { 'addresses.registry': _d, ...rest } = p.codehashes; return { ...p, codehashes: rest }; }, /codehashes\.addresses\.registry: unpinned/],
         ['no hash for the admin extension', (p: any) => { const { spAdminExtension: _d, ...rest } = p.codehashes; return { ...p, codehashes: rest }; }, /codehashes\.spAdminExtension: unpinned/],

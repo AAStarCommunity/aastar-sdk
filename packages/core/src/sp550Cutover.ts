@@ -208,11 +208,15 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
 
 /**
  * Upgrade-only: the book entries the cutover derives from top-level pins are not ALSO listed in
- * `addresses` (one value, one source).
+ * `addresses` (one value, one source), and the proxy is not listed at all: an upgrade keeps the SP
+ * proxy's address, so `addresses.superPaymaster` would only let a manifest move the book's proxy while
+ * the gate's "pins.superPaymaster == SDK book" check compared the book with itself (PR-Daemon B1).
  */
 export function sp550UpgradeAddressProblems(pins: Sp550CutoverPins | undefined): string[] {
     const derived: Record<string, string> = { aPNTs: 'aPNTsCapped', xPNTsFactory: 'xPNTsFactoryV2' };
-    return Object.keys(pins?.addresses ?? {}).filter((k) => derived[k]).map((k) => `addresses.${k}: an upgrade derives it from ${derived[k]}; do not list it`);
+    return Object.keys(pins?.addresses ?? {}).flatMap((k) => k === 'superPaymaster'
+        ? ['addresses.superPaymaster: an upgrade keeps the proxy address (pins.superPaymaster is checked against the shipped book); do not list it']
+        : derived[k] ? [`addresses.${k}: an upgrade derives it from ${derived[k]}; do not list it`] : []);
 }
 
 // requireSp550CutoverPins lives in sp550Deployments.ts: it needs the address-book owner table to apply

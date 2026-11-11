@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, SP_REPO, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -289,6 +289,9 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         expect(spLiveReadbackProblems(live(), aliased, 11155111, sp550PinnedAddressEntries(aliased))).toEqual([]);
         const split: any = { ...aliased, addresses: { ...aliased.addresses, aPNTs: A(0x77) } };
         expect(spLiveReadbackProblems(live(), split, 11155111, sp550PinnedAddressEntries(split))).toEqual([expect.stringMatching(/pins: addresses\.aPNTs .* != aPNTsCapped .*declared alias/)]);
+        // same address, another codehash: the alias is still two contracts (PR-Daemon F4: this predicate had no red test)
+        const hashSplit: any = { ...aliased, codehashes: { ...aliased.codehashes, 'addresses.aPNTs': '0x' + '77'.repeat(32) } };
+        expect(spLiveReadbackProblems(live(), hashSplit, 11155111, sp550PinnedAddressEntries(hashSplit))).toEqual([expect.stringMatching(/pins: codehashes\.addresses\.aPNTs != codehashes\.aPNTsCapped \(declared alias\)/)]);
     });
     it('a contract the pins declare absent must not appear in the live read-back (Grok)', () => {
         const rb = live(); rb.contracts.timelockController = { address: A(0x26), codehash: '0x' + '26'.repeat(32) };
@@ -440,4 +443,31 @@ describe('a final tag names no rc directory: the path must be explicit (Grok)', 
         expect(() => spReadbackApiPath('', C, 'sepolia', 'v5.5.0-rc.8', true)).toThrow(/--sp-readback-path is empty/);
         expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', true)).toContain('/rc8/');
     });
+});
+
+describe('PR-Daemon B1: an upgrade cannot move the proxy or a non-switchable book entry', () => {
+    const pins = parseManifestPins(MANIFEST, 'upgrade');
+    const shipped = CANONICAL_ADDRESSES[11155111] as unknown as Record<string, unknown>;
+    it('the manifest proxy equal to the shipped one, only switchable entries changing: no problem', () => {
+        expect(upgradeBookProblems(pins, bookSwitch('upgrade', pins), shipped)).toEqual([]);
+    });
+    it('a manifest that moves the proxy is refused against the SHIPPED book', () => {
+        const moved = { ...pins, superPaymaster: A(0x778) };
+        expect(upgradeBookProblems(moved as any, bookSwitch('upgrade', moved as any), shipped)).toEqual([expect.stringMatching(/pins\.superPaymaster 0x0+778 != the shipped book's superPaymaster .*keeps the proxy address/)]);
+    });
+    it('a switched entry outside the switchable set is refused', () => {
+        expect(upgradeBookProblems(pins, { ...bookSwitch('upgrade', pins), superPaymaster: A(0x778) }, shipped)).toEqual([expect.stringMatching(/book superPaymaster: .* -> 0x0+778 — an upgrade does not move superPaymaster/)]);
+        expect(upgradeBookProblems(pins, { ...bookSwitch('upgrade', pins), gToken: A(0x779) }, shipped)).toEqual([expect.stringMatching(/book gToken: .*an upgrade does not move gToken/)]);
+        expect(UPGRADE_SWITCHABLE_KEYS).toEqual(['registry', 'policyRegistry', 'blsAggregator', 'dvtValidator', 'reputationSystem', 'aPNTs', 'xPNTsFactory', 'timelockController']);
+    });
+});
+
+describe('PR-Daemon F2: the SP read-back commit must be on SP main', () => {
+    it.each([['identical', true], ['behind', true], ['ahead', false], ['diverged', false], ['', false], [undefined, false]])('compare status %s -> %s', (s, ok) => expect(spCommitOnMain(s)).toBe(ok));
+    it('the repository is SP', () => expect(SP_REPO).toBe('AAStarCommunity/SuperPaymaster'));
+});
+
+describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns) is loopback', () => {
+    it.each(['::ffff:127.0.0.1', '[::ffff:127.0.0.53]', '::ffff:0.0.0.0'])('%s', (h) => expect(isLoopbackHost(h)).toBe(true));
+    it.each(['::ffff:128.0.0.1', '::ffff:10.0.0.1'])('%s is not', (h) => expect(isLoopbackHost(h)).toBe(false));
 });
