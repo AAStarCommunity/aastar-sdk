@@ -337,8 +337,11 @@ describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
         expect(p.addresses?.timelockController).toBeUndefined();
     });
     it.each([
-        ['"n/a:none" with a pinned book entry', { timelockController: 'n/a:none', addresses: { ...MANIFEST.addresses, timelockController: A(0x26) } }, /"n\/a:none" but addresses\.timelockController is pinned/],
-        ['two different addresses', { timelockController: A(0x26), addresses: { ...MANIFEST.addresses, timelockController: A(0x27) } }, /!= addresses\.timelockController/],
+        ['an addresses.timelockController entry (DSR: top-level only)', { timelockController: A(0x26), addresses: { ...MANIFEST.addresses, timelockController: A(0x26) } }, /declared only by the top-level/],
+        ['a codehash under addresses.*', { timelockController: A(0x26), codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32), 'addresses.timelockController': '0x' + '26'.repeat(32) } }, /goes under codehashes\.timelockController/],
+        ['an address without its codehash', { timelockController: A(0x26) }, /pinned without codehashes\.timelockController/],
+        ['"n/a:none" with a codehash', { timelockController: 'n/a:none', codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, /"n\/a:none" but codehashes\.timelockController is given/],
+        ['a codehash without the declaration', { codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, /without a top-level timelockController/],
         ['neither an address nor n/a', { timelockController: 'none' }, /neither an address nor "n\/a:none"/],
     ])('refused: %s', (_n, patch, msg) => expect(() => parseManifestPins({ ...MANIFEST, ...patch }, 'upgrade')).toThrow(msg));
 });
