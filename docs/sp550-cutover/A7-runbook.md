@@ -97,7 +97,7 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 1. 作者发出部署交易（SEND）。
 2. SP 用自己的两家 provider 读回 live 状态，通过一个小的数据 PR 提交到 SP 仓库：`deployments/release/rc8/<chain>.readback.live.json`。同一目录下还有 `<chain>.pins.json`（manifest 的 pins，带 `_aliases`）和 `<chain>.readback.a7.json`（fork 那份）。
-3. SDK 依次跑下面第 1 步、第 1b 步；`pin-fill --write` 时用 `--sp-readback-commit <数据 PR 的 commit>` 交叉核对 SP 的那份 live 读回。
+3. SDK 依次跑下面第 1 步、第 1b 步；数据 PR **合并之后**，`pin-fill --write` 用 `--sp-readback-commit <SP main 上含该数据的 commit>` 交叉核对 SP 的那份 live 读回。工具会用 `gh api compare/main...<sha>` 确认这个 commit 在 SP 的 main 上，分支上的 commit 和 fork 网络里的 commit 都拒绝。
 
 **在 rc.8 替换之前，不向 Sepolia 现网 SP 5.4.2（0x09DF…4DE9）发任何 op。** 这包括测试、E2E 和演示，原因是它在 Amsterdam 下的 postOp 行为没有测过（DSR）。
 
@@ -119,7 +119,7 @@ pnpm exec tsx scripts/sp550-readback-compare.ts --network sepolia --allow-rc --r
 pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 manifest pins.json> \
     --rpc <节点 A> --rpc2 <节点 B> --allow-rc              # 先预览（rc.8 是 release candidate，不带 --allow-rc 会被拒）
 pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 manifest pins.json> \
-    --rpc <节点 A> --rpc2 <节点 B> --allow-rc --write --sp-readback-commit <SP 数据 PR 的 commit>   # 门通过后写进源码
+    --rpc <节点 A> --rpc2 <节点 B> --allow-rc --write --sp-readback-commit <SP main 上的 commit>   # 门通过后写进源码
 ```
 
 `--write` 还有两道额外的门槛：
