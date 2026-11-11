@@ -87,6 +87,14 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 前提：作者已经亲自输入 keystore 密码发出部署交易（清单第二节第 3 步）。下面每一步都是只读的，或者只在作者给 go 之后才发送。
 
+### 0. 顺序与文件（SP，2026-11-11）
+
+1. 作者发出部署交易（SEND）。
+2. SP 用自己的两家 provider 读回 live 状态，通过一个小的数据 PR 提交到 SP 仓库：`deployments/release/rc8/<chain>.readback.live.json`。同一目录下还有 `<chain>.pins.json`（manifest 的 pins，带 `_aliases`）和 `<chain>.readback.a7.json`（fork 那份）。
+3. SDK 依次跑下面第 1 步、第 1b 步；`pin-fill --write` 时用 `--sp-readback-commit <数据 PR 的 commit>` 交叉核对 SP 的那份 live 读回。
+
+**在 rc.8 替换之前，不向 Sepolia 现网 SP 5.4.2（0x09DF…4DE9）发任何 op。** 这包括测试、E2E 和演示，原因是它在 Amsterdam 下的 postOp 行为没有测过（DSR）。
+
 ### 1. 比对 SP 的实链 readback
 
 部署交易发出之后，SP 的实链 readback 用的是同一个 schema（`aoa-a7-readback/1`）。拿它和冻结的 manifest pins 比对，并用两个节点在 readbackBlock 读链：
@@ -103,10 +111,14 @@ pnpm exec tsx scripts/sp550-readback-compare.ts --readback <live-readback.json> 
 ```bash
 pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 manifest pins.json> \
     --rpc <节点 A> --rpc2 <节点 B> [--allow-rc]            # 先预览
-pnpm exec tsx scripts/sp550-pin-fill.ts ... --write      # 门通过后写进源码
+pnpm exec tsx scripts/sp550-pin-fill.ts ... --write --sp-readback-commit <SP 数据 PR 的 commit>   # 门通过后写进源码
 ```
 
-工具只在读回门对 manifest pins 和切换后的地址簿全部通过之后，才去填 `SP550_CUTOVER_PINS[11155111]` 和 `CANONICAL_ADDRESSES[11155111]` 的切换项。写完会再跑一次不带 `--pins` 的 `check:sp550-cutover`，这次读的是刚写进去的源码；不通过就把两个文件还原。只要有一个 RPC 是回环地址或 anvil，工具就拒绝 `--write`。这一步的产物走 pin 填充 PR，按常规流程评审。
+`--write` 还有两道额外的门槛：
+- 两个 RPC 必须在不同主机上，解析出的地址不能有交集，并且只在 finalized 块上读；
+- 从 GitHub 按那个 commit 拉取 SP 自己的 live 读回，每个 pin 的地址和 codehash 都必须与它一致，否则 STOP（DSR）。
+
+即便如此，「两个主机名指向同一个远端 fork」这种情况工具无法完全排除，所以 PR 评审，以及作者和 DSR 用两家 provider 做的哈希核对，仍然保留。工具只在读回门对 manifest pins 和切换后的地址簿全部通过之后，才去填 `SP550_CUTOVER_PINS[11155111]` 和 `CANONICAL_ADDRESSES[11155111]` 的切换项。写完会再跑一次不带 `--pins` 的 `check:sp550-cutover`，这次读的是刚写进去的源码；不通过就把两个文件还原。只要有一个 RPC 是回环地址或 anvil，工具就拒绝 `--write`。这一步的产物走 pin 填充 PR，按常规流程评审。
 
 ### 2. 预检，然后正式跑
 
