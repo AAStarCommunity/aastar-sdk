@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
-import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
+import { SP550_CERTIFIED_ADDRESS_KEYS, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
 import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
 export { isNotDeployedPlaceholder };
@@ -108,6 +108,28 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
     const removed: Record<string, null> = mode === 'fresh' ? Object.fromEntries((pins.absent ?? []).map((k) => [k, null])) : {};
     for (const k of Object.keys(removed)) if (k in out) throw new Error(`book switch ${k}: both pinned and declared absent`);
     return { ...out, ...removed };
+}
+
+/** SP's GitHub repository: the live read-back is fetched from it, and its main must contain the commit. */
+export const SP_REPO = 'AAStarCommunity/SuperPaymaster';
+
+/** The book entries an upgrade may move: the certified ones, the two derived ones and the timelock. */
+export const UPGRADE_SWITCHABLE_KEYS: readonly string[] = [...SP550_CERTIFIED_ADDRESS_KEYS, 'aPNTs', 'xPNTsFactory', 'timelockController'];
+
+/**
+ * Upgrade-only, against the SHIPPED book (not the switched one, which the gate reads and which is built
+ * from these pins): the proxy keeps its address, and no entry outside UPGRADE_SWITCHABLE_KEYS changes.
+ * The gate's own proxy check compares the pins with the switched book, so on its own it is a
+ * self-comparison (PR-Daemon B1).
+ */
+export function upgradeBookProblems(pins: Sp550FreshDeployPins, switched: Record<string, string | null>, shipped: Record<string, unknown>): string[] {
+    const p: string[] = [];
+    const same = (a: unknown, b: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+    if (!same(pins.superPaymaster, shipped.superPaymaster)) p.push(`pins.superPaymaster ${String(pins.superPaymaster)} != the shipped book's superPaymaster ${String(shipped.superPaymaster)}: an upgrade keeps the proxy address`);
+    for (const [k, a] of Object.entries(changedEntries(switched, shipped))) {
+        if (!UPGRADE_SWITCHABLE_KEYS.includes(k)) p.push(`book ${k}: ${String(shipped[k] ?? '(absent)')} -> ${a ?? '(removed)'} — an upgrade does not move ${k}`);
+    }
+    return p;
 }
 
 /** The book after the switch: entries set, `null` entries removed. */
@@ -229,6 +251,21 @@ export function isLoopbackHost(host: string): boolean {
     return /^::ffff:(127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(h);
 }
 
+/**
+ * GitHub's compare status of `main...<commit>`: the commit is on SP's main only when main is identical
+ * to it or ahead of it ("behind" from the commit's side). "ahead" / "diverged" mean a branch or fork
+ * commit (GitHub serves fork-network commits under the parent repo), which the cross-check refuses.
+ */
+export function spCommitOnMain(status: unknown): boolean {
+    return status === 'identical' || status === 'behind';
+}
+
+/** The compare call spCommitOnMain reads: base main, head the commit (the order fixes what "behind" means). */
+export function spCompareApiPath(commit: string): string {
+    if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
+    return `repos/${SP_REPO}/compare/main...${commit}`;
+}
+
 /** The file operations writeAll needs (tests inject failures). */
 export interface WriteIo { read(p: string): string; write(p: string, s: string): void; rename(a: string, b: string): void; remove(p: string): void }
 const nodeIo: WriteIo = {
@@ -338,7 +375,7 @@ export function spReadbackApiPath(repoPath: string, commit: string, network: str
     if (rc === undefined && tag !== undefined && !explicit) throw new Error(`pins.tag ${tag} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
     if (rc !== undefined && repoPath.split('/')[2] !== `rc${rc}`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not under deployments/release/rc${rc}/ (pins.tag ${tag})`);
     if (repoPath.split('/').pop() !== `${network}.readback.live.json`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not the ${network} live read-back (${network}.readback.live.json)`);
-    return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
+    return `repos/${SP_REPO}/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
 }
 
 /** One canonical spelling per IP: IPv4-mapped IPv6 becomes IPv4; IPv6 is lower-cased and compressed. */

@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 769e17d2edbe86cdeeec44e06b5116e11a9050d5 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * 7c7827c02f59ef809c4cf852cfff269e99344eb3 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = 'b58405f1d0a70375f9bd67bd5a26d92d64f6434aa4fbafd81d529fa917b93e6e';
+export const READBACK_SCHEMA_SHA256 = 'cb49395f6a88bb3dd75c08385d4bb1f22798b8b664366557c7b04b41df4a08ef';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -412,13 +412,18 @@ export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; sl
 }
 
 /**
- * A read-back entry that explicitly says "not deployed": every identity field (address, codehash, and
- * any implementation / extension identity) is an "n/a:" placeholder or null. Anything carrying a real
- * address or hash — or an unreadable one — is NOT that. Shared by the comparator and pin-fill's live check.
+ * A read-back entry that explicitly says "not deployed": an object whose every field — identity, owner,
+ * pendingOwner, guardian, roles and any extra — is exactly "n/a:not deployed" (schema 7c7827c0). A real,
+ * unreadable or otherwise-reasoned value in any field ("n/a:rpc failed", an owner, populated roles), null,
+ * or an omitted / empty entry is NOT that (Codex r19, Grok r19). Shared by the comparator and pin-fill's live check.
  */
+/** The one spelling of "this contract is not deployed" in a read-back entry (schema 7c7827c0). */
+export const NOT_DEPLOYED = 'n/a:not deployed';
+
 export function isNotDeployedPlaceholder(c: any): boolean {
-    if (c === undefined || c === null) return true;
-    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
-    return ['address', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash'].every((f) => c[f] === undefined || na(c[f]))
-        && na(c.address) && na(c.codehash);
+    // Omission is not absence (DSR, schema 7c7827c0): a contract the pins declare absent is written out;
+    // a missing, null or scalar entry is refused (PR-Daemon F1).
+    if (c === undefined || c === null || typeof c !== 'object' || Array.isArray(c)) return false;
+    const values = Object.values(c);
+    return 'address' in c && 'codehash' in c && values.length > 0 && values.every((v) => v === NOT_DEPLOYED);
 }
