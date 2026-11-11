@@ -8,7 +8,8 @@
  * DECODED result. An independent reviewer measured that this cannot see the hazard it documents:
  *
  *   - upstream reshapes `BLSAggregator.guardianSlashCases` from 5 outputs to 7 (SuperPaymaster
- *     BLSAggregator 4.8.0, CC-48: `fraudProofHash` inserted at index 1, `verifier` appended);
+ *     BLSAggregator 4.8.0, CC-48: `fraudProofHash` inserted at index 1, `verifier` appended; it
+ *     later went to 8 in 4.13.0, `slashBps` before `verifier`, the shape reviewed below);
  *   - every member is statically sized, so the node returns SEVEN 32-byte words and viem, holding
  *     the five-output ABI, decodes the first five and returns without error;
  *   - the ABI-shape check then compares the OLD ABI against the OLD reviewed names — it matches,
@@ -85,18 +86,20 @@ export type ReviewedStruct = {
 export const GUARDIAN_SLASH_CASE: ReviewedStruct = {
   functionName: 'guardianSlashCases',
   label: 'BLSAggregator.guardianSlashCases',
-  // CC-115 B4, 2026-09-04: re-reviewed against the DEPLOYED 4.11.0 artifact
-  // (SuperPaymaster@d651646a:abis/BLSAggregator-4.11.0.deployed.json, sha256 df667b4d…06ce) and
-  // confirmed against the chain: `cast call 0xEaeC2F51… guardianSlashCases(uint256) 0` returns 224
-  // bytes = 7 words, the 7-type list below decodes it, and the 8-type 4.12.0 list raises.
+  // SP rc.8, 2026-11-11: re-reviewed against BLSAggregator-4.13.0 (SuperPaymaster
+  // cc125/rc8-bls @ f00be603, built from source): `slashBps` (uint16) sits between
+  // `resolvedCount` and `verifier`, 8 static words. The rc.8 build vendors that ABI into
+  // packages/core, and the RepCredit runner deploys from the sibling SuperPaymaster tree, so 8 is
+  // what both sides of the pair now say.
   //
-  // Two moves happened between the old 5-output review and this one, and the second is the reason
-  // this constant is a literal rather than something derived from the ABI:
+  // History, and the reason this constant is a literal rather than something derived from the ABI:
   //   5 -> 7  upstream inserted `fraudProofHash` at index 1 and appended `verifier` (SP 4.8.0)
-  //   7 -> 8  #400 inserted `uint16 slashBps` before `verifier` — that is 4.12.0, which is on NO
-  //           chain, and MUST NOT be adopted here while the deployed contract is 4.11.0.
-  // Every member is statically sized, so a wrong list does not revert; it decodes into the wrong
-  // fields. The word-count assertion in this module is what turns that into a failure.
+  //   7 -> 8  #400 inserted `uint16 slashBps` before `verifier` (4.12.0 source, shipped as 4.13.0)
+  // The deployed Sepolia aggregator 0xEaeC2F51… is still 4.11.0 and returns 7 words (224 bytes).
+  // Reading it with this constant is refused by the word-count check below, which is the intended
+  // outcome: point this build at a 4.13.0 aggregator. Every member is statically sized, so a wrong
+  // list does not revert; it decodes into the wrong fields. The word-count assertion in this module
+  // is what turns that into a failure.
   outputs: [
     { name: 'guardiansHash', type: 'bytes32' },
     { name: 'fraudProofHash', type: 'bytes32' },
@@ -104,6 +107,7 @@ export const GUARDIAN_SLASH_CASE: ReviewedStruct = {
     { name: 'status', type: 'uint8' },
     { name: 'guardianCount', type: 'uint16' },
     { name: 'resolvedCount', type: 'uint16' },
+    { name: 'slashBps', type: 'uint16' },
     { name: 'verifier', type: 'address' },
   ],
 };
@@ -236,8 +240,9 @@ export function assertReviewedAbiShape(abi: Abi, spec: ReviewedStruct): void {
       `${spec.label} outputs are [${render(declared)}], but this repo has reviewed ` +
         `[${render(spec.outputs)}]. The vendored ABI was reshaped: review the new layout and update ` +
         'the reviewed constant AND the readers of security-controls.json in the same commit. ' +
-        '(Upstream SP 4.8.0 inserts fraudProofHash at index 1 of guardianSlashCases and appends ' +
-        'verifier; every member is statically sized, so a mismatched pair does NOT revert.)',
+        '(guardianSlashCases: SP 4.8.0 inserted fraudProofHash at index 1 and appended verifier; ' +
+        '4.13.0 inserted slashBps before verifier. Every member is statically sized, so a ' +
+        'mismatched pair does NOT revert.)',
     );
   }
 }
@@ -394,8 +399,8 @@ export function decodeNamedStruct(abi: Abi, spec: ReviewedStruct, returnData: He
       `${spec.label}: the chain returned ${words} word(s) but the vendored ABI declares ` +
         `${expectedWords} statically-sized output(s) [${render(spec.outputs)}]. The deployed contract ` +
         'is NOT the one this ABI describes — decoding would silently shift every field ' +
-        '(SP BLSAggregator 4.8.0 inserts fraudProofHash at index 1 and appends verifier, taking ' +
-        'guardianSlashCases from 5 outputs to 7). Re-vendor the ABI and the reviewed constant, and ' +
+        '(guardianSlashCases has one selector and three widths: 5 words before SP BLSAggregator ' +
+        '4.8.0, 7 in 4.8.0-4.11.0, 8 from 4.13.0, which adds slashBps). Re-vendor the ABI and the reviewed constant, and ' +
         're-review every reader of security-controls.json, before recording this run.',
     );
   }

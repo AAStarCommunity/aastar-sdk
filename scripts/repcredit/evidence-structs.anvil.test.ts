@@ -1,6 +1,7 @@
 /**
  * REAL viem + REAL anvil regression for the `guardianSlashCases` arity hazard (CC-50 round-10 HIGH;
- * re-polarised to 7 -> 8 by CC-115 B4, when the reviewed constant moved to the deployed 4.11.0 shape).
+ * re-polarised to 7 -> 8 by CC-115 B4, and again by SP rc.8, when the shipped ABI and the reviewed
+ * constant both moved to the 8-word BLSAggregator-4.13.0 shape).
  *
  * WHY THIS FILE EXISTS
  * --------------------
@@ -9,20 +10,20 @@
  * hand-built array can express that. An independent reviewer reproduced it by hand; this file makes
  * the reproduction a regression.
  *
- * The chain here is real: `anvil_setCode` installs a contract that always returns the SEVEN static
- * words of the upstream BLSAggregator 4.8.0 struct, and the reads below go through real viem
- * against it.
+ * The chain here is real: `anvil_setCode` installs contracts that always return fixed static words,
+ * one with the 4.13.0 struct (8 words) and one with the deployed 4.11.0 struct (7 words), and the
+ * reads below go through real viem against them.
  *
- *   - `publicClient.readContract` with this repo's FIVE-output vendored ABI is shown to succeed and
- *     to hand back `fraudProofHash` in the `deadline` slot. That is the bypass, measured, not
- *     described — if viem ever starts rejecting it, this assertion fails and the comment above it
- *     stops being true.
+ *   - `publicClient.readContract` with the 4.11.0 ABI (`scripts/repcredit/abis/`, the deployed
+ *     artifact) against the 8-word contract is shown to succeed and to hand back slashBps in the
+ *     `verifier` slot. That is the bypass, measured, not described: viem drops trailing words in
+ *     silence. If viem ever starts rejecting it, this assertion fails and the comment stops being
+ *     true.
  *   - `readNamedStruct`, on the SAME address with the SAME ABI, is shown to THROW before decoding.
- *     That is the fix, and it is what aborts the evidence runner.
- *   - a matched pair (7-output ABI + 7-field reviewed constant) is shown to decode the right values
- *     off the same contract, so the refusal is about the mismatch and not about strictness.
- *   - a 5-word contract read with the shipped ABI decodes correctly, so the gate has no false
- *     positive on today's pinned upstream.
+ *   - the SHIPPED (4.13.0) ABI + reviewed constant reads the 8-word contract correctly: no false
+ *     positive on the rc.8 shape.
+ *   - the shipped pair REFUSES the 7-word (deployed 4.11.0) contract by word count, which is what an
+ *     rc.8 build pointed at today's Sepolia aggregator must do.
  *
  * GATING: anvil is required. Without it the suite skips LOUDLY, and REPCREDIT_ANVIL_TEST=1 turns
  * that skip into a failure — the same discipline as `revert-data.anvil.test.ts`.
@@ -53,37 +54,26 @@ const PORT = Number(process.env.REPCREDIT_STRUCT_ANVIL_PORT ?? 18_994);
 const RPC = `http://127.0.0.1:${PORT}`;
 
 const SDK_REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-/** The SHIPPED five-output ABI — the same file `check:abi-drift` pins by sha256. */
+/** The SHIPPED ABI (BLSAggregator-4.13.0, 8 outputs) — the same file `check:abi-drift` pins by sha256. */
 const SHIPPED_BLS_ABI = JSON.parse(
   readFileSync(join(SDK_REPO, 'packages/core/src/abis/BLSAggregator.json'), 'utf8'),
 ).abi as Abi;
+/** The DEPLOYED 4.11.0 artifact (7 outputs), as vendored for the deployed-stack check. */
+const DEPLOYED_4110_ABI = JSON.parse(
+  readFileSync(join(SDK_REPO, 'scripts/repcredit/abis/BLSAggregator-4.11.0.deployed.json'), 'utf8'),
+).abi as Abi;
 
-/**
- * The 4.12.0 SOURCE outputs (#400 inserted `uint16 slashBps` before `verifier`).
- *
- * CC-115 B4 moved the reviewed constant to the deployed 4.11.0 shape (7 outputs), so the live
- * hazard is no longer 5-vs-7 but 7-vs-8 — and 8 is what upstream `contracts/src` already emits.
- */
-const RESHAPED_OUTPUTS = [
+/** The 4.11.0 outputs, as a literal: a build pinned to the deployed stack would review exactly these. */
+const DEPLOYED_SEVEN_OUTPUTS = [
   { name: 'guardiansHash', type: 'bytes32' },
   { name: 'fraudProofHash', type: 'bytes32' },
   { name: 'deadline', type: 'uint64' },
   { name: 'status', type: 'uint8' },
   { name: 'guardianCount', type: 'uint16' },
   { name: 'resolvedCount', type: 'uint16' },
-  { name: 'slashBps', type: 'uint16' },
   { name: 'verifier', type: 'address' },
 ] as const;
-const RESHAPED_ABI = [
-  {
-    type: 'function',
-    name: 'guardianSlashCases',
-    stateMutability: 'view',
-    inputs: [{ name: '', type: 'uint256' }],
-    outputs: RESHAPED_OUTPUTS,
-  },
-] as unknown as Abi;
-const RESHAPED_SPEC = { ...GUARDIAN_SLASH_CASE, outputs: [...RESHAPED_OUTPUTS] };
+const DEPLOYED_SEVEN_SPEC = { ...GUARDIAN_SLASH_CASE, outputs: [...DEPLOYED_SEVEN_OUTPUTS] };
 
 /** Distinctive values, so every mis-slotting is identifiable. */
 const GUARDIANS_HASH = `0x${'aa'.repeat(32)}` as Hex;
@@ -96,15 +86,15 @@ const VERIFIER = `0x${'cc'.repeat(20)}` as Address;
 
 const SLASH_BPS = 500;
 
-/** What the REVIEWED (= deployed 4.11.0) contract returns. */
-const SEVEN_WORDS = encodeAbiParameters(
-  GUARDIAN_SLASH_CASE.outputs.map(o => ({ type: o.type })),
-  [GUARDIANS_HASH, FRAUD_PROOF_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT, VERIFIER],
-);
-/** What a 4.12.0 contract would return: the live hazard, same selector. */
+/** What the REVIEWED (= 4.13.0, rc.8) contract returns. */
 const EIGHT_WORDS = encodeAbiParameters(
-  RESHAPED_OUTPUTS.map(o => ({ type: o.type })),
+  GUARDIAN_SLASH_CASE.outputs.map(o => ({ type: o.type })),
   [GUARDIANS_HASH, FRAUD_PROOF_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT, SLASH_BPS, VERIFIER],
+);
+/** What the deployed 4.11.0 contract returns: same selector, one word shorter. */
+const SEVEN_WORDS = encodeAbiParameters(
+  DEPLOYED_SEVEN_OUTPUTS.map(o => ({ type: o.type })),
+  [GUARDIANS_HASH, FRAUD_PROOF_HASH, DEADLINE, STATUS, GUARDIAN_COUNT, RESOLVED_COUNT, VERIFIER],
 );
 
 /**
@@ -126,10 +116,10 @@ function returnerRuntime(data: Hex): Hex {
 
 /** Distinct address per case so a mixed-up address can never look like a pass. */
 const ADDR = {
-  /** returns the REVIEWED 7 words (= deployed 4.11.0) */
-  reviewedSeven: '0x00000000000000000000000000000000000000b1' as Address,
-  /** returns the 4.12.0 SOURCE shape's 8 words, at the same selector */
-  sourceEight: '0x00000000000000000000000000000000000000b2' as Address,
+  /** returns the deployed 4.11.0 shape's 7 words */
+  deployedSeven: '0x00000000000000000000000000000000000000b1' as Address,
+  /** returns the REVIEWED 8 words (= 4.13.0), at the same selector */
+  reviewedEight: '0x00000000000000000000000000000000000000b2' as Address,
   noCode: '0x00000000000000000000000000000000000000b3' as Address,
 };
 
@@ -176,8 +166,8 @@ describe('guardianSlashCases 7 -> 8 against a real chain', () => {
       unavailable ||= `anvil did not answer on ${RPC} within 15s`;
       return;
     }
-    await rpc('anvil_setCode', [ADDR.reviewedSeven, returnerRuntime(SEVEN_WORDS)]);
-    await rpc('anvil_setCode', [ADDR.sourceEight, returnerRuntime(EIGHT_WORDS)]);
+    await rpc('anvil_setCode', [ADDR.deployedSeven, returnerRuntime(SEVEN_WORDS)]);
+    await rpc('anvil_setCode', [ADDR.reviewedEight, returnerRuntime(EIGHT_WORDS)]);
     publicClient = createPublicClient({ chain: foundry, transport: http(RPC) }) as PublicClient;
     booted = true;
   }, 40_000);
@@ -193,20 +183,20 @@ describe('guardianSlashCases 7 -> 8 against a real chain', () => {
     return false;
   }
 
-  it('THE BYPASS: real viem readContract with the 7-output ABI silently accepts the 8-word answer', async () => {
+  it('THE BYPASS: real viem readContract with the 7-output 4.11.0 ABI silently accepts the 8-word answer', async () => {
     if (!guard()) return;
     // Measured, not asserted in prose: viem does not revert and does not warn. It decodes the
     // first seven words and drops the eighth, so `verifier` comes back holding slashBps and the
     // real verifier address is gone. Nothing downstream can tell.
     const raw = (await publicClient.readContract({
-      address: ADDR.sourceEight,
-      abi: SHIPPED_BLS_ABI,
+      address: ADDR.reviewedEight,
+      abi: DEPLOYED_4110_ABI,
       functionName: 'guardianSlashCases',
       args: [1n],
     })) as readonly unknown[];
     expect(raw).toHaveLength(7);
     expect(raw[0]).toBe(GUARDIANS_HASH);
-    // Slot 6 is `verifier` per the vendored ABI, but the bytes at that offset are slashBps's.
+    // Slot 6 is `verifier` per the 4.11.0 ABI, but the bytes at that offset are slashBps's.
     expect(raw[6]).not.toBe(getAddress(VERIFIER));
   });
 
@@ -215,24 +205,22 @@ describe('guardianSlashCases 7 -> 8 against a real chain', () => {
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.sourceEight,
-        abi: SHIPPED_BLS_ABI,
-        spec: GUARDIAN_SLASH_CASE,
+        address: ADDR.reviewedEight,
+        abi: DEPLOYED_4110_ABI,
+        spec: DEPLOYED_SEVEN_SPEC,
         args: [1n],
       }),
     ).rejects.toThrow(/returned 8 word\(s\) but the vendored ABI declares 7 statically-sized output\(s\)/);
   });
 
-  it('a MATCHED 8-output ABI + matching constant reads the right values off that same contract', async () => {
+  it('NO false positive: the shipped 4.13.0 ABI + reviewed constant read the 8-word contract correctly', async () => {
     if (!guard()) return;
-    // Proves the refusal above is about the mismatch, not about the reader being unable to read a
-    // 7-field struct: this is the positive case the B2 re-vendor will land.
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.sourceEight,
-        abi: RESHAPED_ABI,
-        spec: RESHAPED_SPEC,
+        address: ADDR.reviewedEight,
+        abi: SHIPPED_BLS_ABI,
+        spec: GUARDIAN_SLASH_CASE,
         args: [1n],
       }),
     ).resolves.toEqual({
@@ -247,25 +235,30 @@ describe('guardianSlashCases 7 -> 8 against a real chain', () => {
     });
   });
 
-  it('NO false positive: the shipped ABI reads the real 7-word contract correctly', async () => {
+  it('THE LIVE ONE: the shipped pair refuses the 7-word deployed 4.11.0 contract by word count', async () => {
     if (!guard()) return;
     await expect(
       readNamedStruct({
         client: publicClient,
-        address: ADDR.reviewedSeven,
+        address: ADDR.deployedSeven,
         abi: SHIPPED_BLS_ABI,
         spec: GUARDIAN_SLASH_CASE,
         args: [1n],
       }),
-    ).resolves.toEqual({
-      guardiansHash: GUARDIANS_HASH,
-      fraudProofHash: FRAUD_PROOF_HASH,
-      deadline: DEADLINE,
-      status: STATUS,
-      guardianCount: GUARDIAN_COUNT,
-      resolvedCount: RESOLVED_COUNT,
-      verifier: getAddress(VERIFIER),
-    });
+    ).rejects.toThrow(/returned 7 word\(s\) but the vendored ABI declares 8 statically-sized output\(s\)/);
+  });
+
+  it('a matched 4.11.0 pair still reads the 7-word contract: the refusal is about the mismatch', async () => {
+    if (!guard()) return;
+    await expect(
+      readNamedStruct({
+        client: publicClient,
+        address: ADDR.deployedSeven,
+        abi: DEPLOYED_4110_ABI,
+        spec: DEPLOYED_SEVEN_SPEC,
+        args: [1n],
+      }),
+    ).resolves.toMatchObject({ resolvedCount: RESOLVED_COUNT, verifier: getAddress(VERIFIER) });
   });
 
   it('an address with no code is a failure, not an all-zero struct', async () => {
