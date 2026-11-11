@@ -34,7 +34,8 @@
 #   3 oracle timestamp refresh + bundler with the fork's clock          oracle.log, ultrarelay.log
 #   4 SDK E2E (scripts/sp550-live-e2e.ts --fork-setup): the gate again, then account / ENDUSER /
 #     xPNTs / renewalMode SP_K by impersonation, S1, then S3b until the SDK selects SP_RENEW;
-#     every op held to C-30i / C-30j                                     e2e.log
+#     every op held to C-30i / C-30j; the account must be brand-new and S1 (its first sponsored op,
+#     the Amsterdam first-write state-gas case) must succeed                 e2e.log
 # The last line of run.log is "A7 PASS" or "A7 FAIL at stage <n>".
 set -euo pipefail
 export PATH="$HOME/.foundry/bin:$PATH"
@@ -89,7 +90,7 @@ else
   # Deploy mode (a rehearsal of this script): the default anvil keeps its own hardfork; a pinned
   # --anvil runs the chain's real tier, so the bundler is exercised on Amsterdam blocks too.
   HF_ARG=(); [ "$ANVIL" = anvil ] || HF_ARG=(--hardfork "$HARDFORK")
-  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port 28546 --auto-impersonate --silent "${HF_ARG[@]}" > "$OUT/anvil.log" 2>&1 &
+  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port 28546 --auto-impersonate --silent ${HF_ARG[@]+"${HF_ARG[@]}"} > "$OUT/anvil.log" 2>&1 &  # bash 3.2: empty array under set -u
 fi
 echo $! > "$OUT/anvil.pid"
 for _ in $(seq 1 60); do cast block-number --rpc-url $RPC >/dev/null 2>&1 && break; sleep 1; done
@@ -132,7 +133,7 @@ jq -n --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERAT
     network: "sepolia", mode: "fork", rpcUrls: [$rpc], bundlerUrl: $bundler,
     gate: { pinsFile: $pins, block: "latest", allowRc: true, bookOverrides: { aPNTs: $apnts, xPNTsFactory: $xf } },
     operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8,
-    forkSetup: { simpleAccountFactory: $fac, salt: 0 } }' > "$OUT/e2e.json"
+    forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true }' > "$OUT/e2e.json"
 set +e
 (cd "$SDK" && pnpm exec tsx scripts/sp550-live-e2e.ts --config "$OUT/e2e.json" --fork-setup) 2>&1 | tee "$OUT/e2e.log"
 rc=${PIPESTATUS[0]}

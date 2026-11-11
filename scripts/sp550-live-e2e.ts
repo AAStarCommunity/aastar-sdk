@@ -27,7 +27,9 @@
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
- *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 }   // --fork-setup, when the account has no code yet
+ *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
+ *     "requireFreshAccount"?: true          // mode fork (A7): the account must not exist before the run, and S1
+ *                                            // (its first sponsored op: fresh lock / allowance slots) must succeed
  *   }
  *
  * Order, each step refusing before the next:
@@ -162,6 +164,12 @@ async function main() {
     const token = getAddress(opCfg[3]) as Address;
     const minTxInterval = BigInt(opCfg[5]);
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
+    // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its
+    // own node — never from a local forge simulation. Recorded as the host and the client it reports
+    // (the full URL usually embeds a key and is never printed).
+    const bundlerClient = await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }) })
+        .then((r) => r.json()).then((j: any) => (typeof j?.result === 'string' ? j.result : 'not reported: no web3_clientVersion')).catch((e: Error) => `not reported: ${e.name}`);
+    console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${new URL(cfg.bundlerUrl).host} (client ${bundlerClient}); the SDK estimates nothing locally`);
 
     // ---- the user's signer, counted ----
     // Prompted only now, after the gate passed, so a failing read-back never asks for the password.
@@ -174,6 +182,12 @@ async function main() {
     let signs = 0;
     const user = { ...base, signMessage: async (a: any) => { signs++; return base.signMessage(a); } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
+    // Whether the account exists before this run: A7 must prove the FIRST sponsored op of a brand-new
+    // account (fresh lock / allowance slots: the Amsterdam state-gas case, DSR) succeeds.
+    const codeBefore = await pub.getCode({ address: account });
+    const freshAccount = !codeBefore || codeBefore === '0x';
+    if (cfg.requireFreshAccount === true && cfg.mode !== 'fork') refuse('requireFreshAccount is a fork (A7) check: a live account is the user\'s own');
+    if (cfg.requireFreshAccount === true && !freshAccount) refuse(`requireFreshAccount: account ${account} already has code; A7 needs a brand-new account`);
     if (args.includes('--fork-setup')) {
         try {
             await forkSetup({
@@ -275,6 +289,13 @@ async function main() {
 
     // ---- 4. S1 ----
     const s1 = await op('S1 PaymasterClient.submitGaslessUserOperation', noop);
+    if (cfg.requireFreshAccount === true) {
+        // op() already failed the run unless UserOperationEvent.success; these make "first op of a new account" checkable.
+        if (s1.before.used !== 0n || s1.before.locked !== 0n || s1.before.renewUsed !== 0n) {
+            fail(`requireFreshAccount: S1 was not the account's first sponsored op (allowance used ${s1.before.used}, lockedOf ${s1.before.locked}, autoRenewUsed ${s1.before.renewUsed})`);
+        }
+        result(`A7 FRESH ACCOUNT: account ${account} created in this run (no code before it), S1 is its first sponsored op (allowance used 0, lockedOf 0, autoRenewUsed 0) and succeeded · tx ${s1.txHash}`);
+    }
 
     // ---- 5. S3b inline renewal ----
     let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;

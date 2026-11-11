@@ -74,6 +74,8 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 另外，S3b 里带 SP_RENEW 的那个 op 还要求 `UserOperationEvent.success = true`。
 
+**全新账户的第一笔 op（Amsterdam state gas）。** A7 要求用户账户在这次运行之前不存在（`requireFreshAccount`）。S1 就是这个账户的第一笔赞助 op，xPNTs 的 lock 和 allowance 槽都是第一次写入，在 Amsterdam 下要多付 state gas，这笔 op 必须成功。日志里会单独打一行 `A7 FRESH ACCOUNT`。
+
 每个 op 打一行 `RESULT`，内容是：`S_user`（signMessage 次数）、估算次数、发送次数、SDK 选的 flags、allowance 变化、`autoRenewUsed` 变化、`AllowanceRenewed(bySP)`、tx hash。
 
 ### 跑完之后
@@ -132,6 +134,7 @@ pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia 2
 - 签名器**只**从加密 keystore 加载，密码由作者在隐藏提示符下输入；不在 TTY 下运行会被拒绝（`scripts/sp550-live-signer.ts`）。
 - 实链没有 `--fork-setup`。账户已部署、有 ENDUSER、xPNTs 有余额、renewalMode = SP_K，这几项要事先准备好，而且准备它们的交易同样要作者给 go。`--preflight` 会逐项核对，不发任何 op。
 - 逐 op 硬检查与分叉完全相同；退出码 0 才算通过。
+- **gas 只来自实链。** 每个 op 的 gas 都取自实链 bundler 的 `eth_estimateUserOperationGas`，SDK 和本地 forge 都不估算（DSR：stable forge 1.7.1 不懂 Amsterdam 的 gas 规则）。`live-e2e.log` 的 `GAS SOURCE` 行会记下 bundler 的主机名和它报告的 client 版本，不记完整 URL。
 
 ### 3. 日志
 

@@ -10,7 +10,10 @@
 # Usage: setup-fork.sh <sp checkout at fbd74fb1> <out dir> [fork block]
 set -euo pipefail
 SPW="$1"; OUT="$2"; FORK_BLOCK="${3:-12090052}"
-export PATH="$HOME/.foundry/bin:$PATH"
+# SP550_FORGE_ARGS: extra forge script flags, e.g. --gas-estimate-multiplier 300: forge simulates gas on
+# foundry.toml's evm_version (cancun), which under-provisions Amsterdam state gas. Not --evm-version: it recompiles.
+# SP550_FOUNDRY_BIN: a pinned toolchain dir (forge must price the same hardfork as the anvil it sends to).
+export PATH="${SP550_FOUNDRY_BIN:-$HOME/.foundry/bin}:$PATH"
 PORT=28546; RPC="http://127.0.0.1:$PORT"
 # Fork source. The public node prunes old state and anvil reads untouched slots lazily, so a long
 # run can fail mid-op with "pruned history unavailable"; point SP550_FORK_URL at an archive node.
@@ -83,7 +86,7 @@ run_step() { # <label> <sig> [args...] — forge script as OWNER unless SENDER i
   local label="$1" sig="$2"; shift 2
   log "== forge $label"
   (cd "$SPW" && ENV=sepolia V55_OUT_CONFIG="cache/sdk-fork/config.sepolia-fork.json" forge script contracts/script/v3/UpgradeToV5_5_0.s.sol:UpgradeToV5_5_0 \
-     --sig "$sig" "$@" --rpc-url $RPC --unlocked --sender "${SENDER:-$OWNER}" --broadcast --slow) >> "$OUT/forge-$label.log" 2>&1 \
+     --sig "$sig" "$@" --rpc-url $RPC --unlocked --sender "${SENDER:-$OWNER}" --broadcast --slow ${SP550_FORGE_ARGS:-}) >> "$OUT/forge-$label.log" 2>&1 \
      || { log "forge $label FAILED (see forge-$label.log)"; tail -30 "$OUT/forge-$label.log"; exit 1; }
   grep -E "step|CHECK|read-back|V55" "$OUT/forge-$label.log" | grep -v "^ *$" | tail -12 >> "$LOG" || true
 }
