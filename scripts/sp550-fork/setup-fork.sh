@@ -11,7 +11,11 @@
 set -euo pipefail
 SPW="$1"; OUT="$2"; FORK_BLOCK="${3:-12090052}"
 export PATH="$HOME/.foundry/bin:$PATH"
-PORT=28546; RPC="http://127.0.0.1:$PORT"; FORK_URL="https://ethereum-sepolia-rpc.publicnode.com"
+PORT=28546; RPC="http://127.0.0.1:$PORT"
+# Fork source. The public node prunes old state and anvil reads untouched slots lazily, so a long
+# run can fail mid-op with "pruned history unavailable"; point SP550_FORK_URL at an archive node.
+# Never logged: it usually embeds a provider key.
+FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
 mkdir -p "$OUT" "$SPW/cache/sdk-fork"; OUT="$(cd "$OUT" && pwd)"; rm -f "$SPW/cache/sdk-fork/config.sepolia-fork.json"
 LOG="$OUT/setup.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }

@@ -4,7 +4,15 @@
  * INLINE allowance renewal (SUPER_PAYMASTER_FLAGS.SP_RENEW), each recorded with what it cost the
  * user's signer.
  *
- *   pnpm exec tsx scripts/sp550-live-e2e.ts --config <run.json> [--live-go <network>]
+ *   pnpm exec tsx scripts/sp550-live-e2e.ts --config <run.json> [--live-go <network>] [--preflight]
+ *
+ * --fork-setup (mode fork only, anvil only) first puts the user into the step-3 state by anvil
+ * impersonation: deploys the account, grants ENDUSER, mints xPNTs, sets renewalMode SP_K
+ * (scripts/sp550-e2e-fork-setup.ts). Step 3 still re-checks all of it afterwards.
+ *
+ * --preflight runs steps 1-3 (usage, read-back gate, preconditions) and exits without sending an op;
+ * in live mode it still needs --live-go and the keystore, because step 3 checks the signer owns the
+ * account.
  *
  * Everything chain-specific comes from the config file and the SDK pins — nothing here names a
  * chain, an RPC, or an address:
@@ -13,11 +21,13 @@
  *     "mode": "fork" | "live",
  *     "rpcUrls": ["<rpc>", "<rpc2>"],     // the read-back gate's RPCs; the first one sends
  *     "bundlerUrl": "<bundler>",
- *     "gate": { "pinsFile"?: "<pins.json>", "block"?: "finalized" | "latest" | <n>, "allowRc"?: bool },
+ *     "gate": { "pinsFile"?: "<pins.json>", "block"?: "finalized" | "latest" | <n>, "allowRc"?: bool,
+ *               "bookOverrides"?: { "<key>": "0x…" } },   // mode fork only: entries the cutover PR would switch
  *     "operator": "0x…",                    // the community operator whose xPNTs v2 token pays
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
- *     "maxOps"?: 8                           // ops to spend before giving up on reaching renewal
+ *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
+ *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 }   // --fork-setup, when the account has no code yet
  *   }
  *
  * Order, each step refusing before the next:
@@ -33,24 +43,36 @@
  *  5. S3b: lower the SP auto allowance to SP_CAP_FLOOR (a sponsored op of its own) if needed, then
  *     send ops until one carries SP_RENEW. For that op it asserts, from the chain: the flags byte
  *     in the bundled handleOps calldata, UserOperationEvent.success, AllowanceRenewed(user, SP,
- *     inline=true) in the same receipt, and autoRenewUsed 0 -> 1.
+ *     bySP=true) in the same receipt, and autoRenewUsed 0 -> 1.
  *
  * Every op prints one RESULT line: S_user (signMessage calls), the flags byte, success, tx hash.
+ * Every op is also held to three checks (scripts/sp550-e2e-checks.ts), read from what the SDK sent
+ * to the bundler and what the chain did, and the run fails on any of them:
+ *   - placeholder-signature estimation: each eth_estimateUserOperationGas carries
+ *     PaymasterClient.dummySignature() and leaves before the signer is asked;
+ *   - one signature per op: one eth_sendUserOperation, a real signature, signMessage called once
+ *     (a fee/PVG retry re-signs, so a retried op fails this rather than being counted as one);
+ *   - SP_RENEW chosen by the SDK (superPaymasterFlags is never passed here): the flags byte sent
+ *     equals the bundled one; SP_RENEW => AllowanceRenewed(bySP=true) and autoRenewUsed +1; no SP_RENEW
+ *     => neither.
  * Exit 2 = refused before sending; 1 = something sent or read back wrong; 0 = all assertions held.
  */
 import * as fs from 'fs';
 import {
-    type Address, type Hex, createPublicClient, createWalletClient, decodeEventLog, decodeFunctionData,
-    encodeFunctionData, getAddress, http, keccak256, toHex,
+    type Abi, type Address, type Hex, createPublicClient, createWalletClient, decodeFunctionData,
+    encodeFunctionData, extractChain, getAddress, http, isAddress, keccak256, toHex,
 } from 'viem';
+import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import {
-    EntryPointABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
+    CANONICAL_ADDRESSES, EntryPointABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
     SP550_CUTOVER_PINS, SP550_FRESH_DEPLOY_PINS, SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS,
 } from '@aastar/core';
 import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
+import { forkSetup } from './sp550-e2e-fork-setup.js';
+import { isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -80,6 +102,9 @@ async function main() {
         const problem = liveKeySourceProblem(cfg.userKey);
         if (problem) refuse(problem);
     } else refuse('config.mode must be "fork" or "live"');
+    // Fork-only switches are refused here, before anything is read from a network.
+    if (cfg.mode !== 'fork' && args.includes('--fork-setup')) refuse('--fork-setup impersonates accounts: mode fork only');
+    if (cfg.mode !== 'fork' && cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is fork-only: a live run is held against the SDK book it ships with');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
     const maxOps = Number(cfg.maxOps ?? 8);
@@ -94,8 +119,22 @@ async function main() {
         pins = { ...j, readbackBlock: j.readbackBlock !== undefined ? BigInt(j.readbackBlock) : undefined };
     }
     const block = cfg.gate?.block;
+    // The gate holds the pins against the SDK's own address book. Before the pin-fill PR that book
+    // still names the pre-cutover aPNTs / xPNTsFactory, so a fork rehearsal of the upgrade has to say
+    // which entries that PR will switch. Live mode reads the shipped book and nothing else.
+    let book: Record<string, unknown> | undefined;
+    if (cfg.gate?.bookOverrides !== undefined) {
+        const o = cfg.gate.bookOverrides;
+        if (typeof o !== 'object' || o === null || Array.isArray(o)) refuse('gate.bookOverrides must be an object of address entries');
+        book = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
+        for (const [k, v] of Object.entries(o)) {
+            if (typeof v !== 'string' || !isAddress(v, { strict: false })) refuse(`gate.bookOverrides.${k} is not an address`);
+            console.log(`fork-only SDK book override: ${k} ${String((book as any)[k] ?? '(absent)')} -> ${getAddress(v as string)}`);
+            book[k] = getAddress(v as string);
+        }
+    }
     const gate = await runSp550CutoverGate({
-        network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc,
+        network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc, book,
         block: block === undefined || block === 'finalized' || block === 'latest' ? block : BigInt(block),
     });
     if (gate.exitCode !== 0) {
@@ -107,7 +146,13 @@ async function main() {
     // same source the gate read, so the E2E cannot drift onto an address the read-back did not check.
     const pinned = pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[net.chainId];
     const sp = getAddress(pinned?.superPaymaster ?? fail('no pinned superPaymaster (the gate should have refused)'));
-    const pub = createPublicClient({ transport: http(rpcUrls[0]) });
+    // The SDK hashes the op with client.chain.id, so the clients carry the network's chain, and the
+    // sending RPC must report that chain id (an anvil fork keeps the forked chain's id).
+    const chain = extractChain({ chains: [sepolia, optimismSepolia, optimism], id: net.chainId as 11155111 | 11155420 | 10 });
+    if (!chain) fail(`no viem chain for chain id ${net.chainId}`);
+    const pub = createPublicClient({ chain, transport: http(rpcUrls[0]) });
+    const rpcChainId = await pub.getChainId();
+    if (rpcChainId !== net.chainId) refuse(`${rpcUrls[0]} reports chain ${rpcChainId}, not ${net.network} (${net.chainId})`);
     const ep = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'entryPoint' })) as Address;
     const registry = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'REGISTRY' })) as Address;
     // operators(): (aPNTsBalance, isConfigured, isPaused, xPNTsToken, reputation, minTxInterval, …)
@@ -127,7 +172,17 @@ async function main() {
     } catch (e: any) { return refuse(String(e?.message ?? e)); }
     let signs = 0;
     const user = { ...base, signMessage: async (a: any) => { signs++; return base.signMessage(a); } };
-    const userWallet = createWalletClient({ account: user as any, transport: http(rpcUrls[0]) });
+    const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
+    if (args.includes('--fork-setup')) {
+        try {
+            await forkSetup({
+                pub: pub as any, rpcUrl: rpcUrls[0], registry, token, account, owner: base.address, roleEnduser: ROLE_ENDUSER, modeSpK: MODE_SP_K,
+                simpleAccountFactory: cfg.forkSetup?.simpleAccountFactory ? getAddress(cfg.forkSetup.simpleAccountFactory) : undefined,
+                salt: cfg.forkSetup?.salt !== undefined ? BigInt(cfg.forkSetup.salt) : undefined,
+                log: console.log,
+            });
+        } catch (e: any) { return fail(String(e?.shortMessage ?? e?.message ?? e)); }
+    }
     const owner = (await pub.readContract({ address: account, abi: SimpleAccountABI, functionName: 'owner' }).catch(() => undefined)) as Address | undefined;
     if (!owner || getAddress(owner) !== getAddress(base.address)) refuse(`account ${account} is not deployed or not owned by the configured key`);
 
@@ -148,6 +203,10 @@ async function main() {
     const K = BigInt(await tok('K'));
     if (s0.renewUsed >= K) missing.push(`autoRenewUsed < K (${s0.renewUsed}/${K}; the user can renewForSelf first)`);
     if (missing.length) refuse(`preconditions not met for ${account}: ${missing.join(', ')}`);
+    if (args.includes('--preflight')) {
+        result(`preflight: gate passed, preconditions met for ${account} (allowance ${s0.used}/${s0.cap}, autoRenewUsed ${s0.renewUsed}/${K}); no op sent`);
+        return;
+    }
 
     // ---- helpers ----
     const receipt = async (opHash: Hex) => {
@@ -169,6 +228,9 @@ async function main() {
         if ((pmd.length - 2) / 2 <= SUPER_PAYMASTER_PMD_OFFSETS.FLAGS) return 0; // 124-byte layout: flags omitted = 0
         return parseInt(pmd.slice(2 + SUPER_PAYMASTER_PMD_OFFSETS.FLAGS * 2, 4 + SUPER_PAYMASTER_PMD_OFFSETS.FLAGS * 2), 16);
     };
+    const bundlerCalls: BundlerCall[] = [];
+    tapBundler(cfg.bundlerUrl, () => signs, bundlerCalls);
+    const DUMMY_SIGNATURE = PaymasterClient.dummySignature();
     let lastSent = 0;
     const spaced = async () => {
         const wait = lastSent + (Number(minTxInterval) + 2) * 1000 - Date.now();
@@ -179,31 +241,39 @@ async function main() {
         SuperPaymasterInflightGuard.clearAll();
         signs = 0;
         const before = await state();
+        const first = bundlerCalls.length;
+        // No superPaymasterFlags: SP_RENEW is the SDK's per-op decision, which is what is under test.
         const opHash = (await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, callData, { operator })) as Hex;
         lastSent = Date.now();
+        const submitted = bundlerCalls.slice(first);
+        const signsForOp = signs;
         const rc = await receipt(opHash);
         const txHash = rc.receipt?.transactionHash as Hex;
         const flags = await flagsOnChain(txHash, BigInt(rc.nonce));
         const logs = (rc.receipt?.logs ?? []) as any[];
-        const renewedInline = logs.some((l) => {
-            if (getAddress(l.address) !== token) return false;
-            try {
-                const ev = decodeEventLog({ abi: xPNTsTokenV2ABI, data: l.data, topics: l.topics }) as any;
-                return ev.eventName === 'AllowanceRenewed' && getAddress(ev.args.user) === account && getAddress(ev.args.spender) === sp && ev.args.inline === true;
-            } catch { return false; }
-        });
+        const renewedInline = logs.some((l) => isSpRelayedRenewal(l, xPNTsTokenV2ABI as Abi, { token, user: account, sp }));
         const after = await state();
-        result(`${label}: success=${rc.success} S_user signMessage=${signs} flags=0x${flags.toString(16).padStart(2, '0')} ` +
+        const estimates = submitted.filter((c) => c.method === 'eth_estimateUserOperationGas').length;
+        const sends = submitted.filter((c) => c.method === 'eth_sendUserOperation');
+        result(`${label}: success=${rc.success} S_user signMessage=${signsForOp} estimates=${estimates} (placeholder sig) sends=${sends.length} ` +
+            `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
-            `AllowanceRenewed(inline)=${renewedInline} · tx ${txHash}`);
+            `AllowanceRenewed(bySP)=${renewedInline} · tx ${txHash}`);
         if (rc.success !== true) fail(`${label}: UserOperationEvent.success=${rc.success}`);
+        const problems = [
+            ...opSigningProblems(submitted, signsForOp, DUMMY_SIGNATURE),
+            ...renewalConsistencyProblems({
+                onChainFlags: flags, sentFlags: sends.at(-1)?.flags, renewedInline,
+                renewUsedBefore: before.renewUsed, renewUsedAfter: after.renewUsed,
+            }),
+        ];
+        if (problems.length) fail(`${label}: ${problems.join('; ')}`);
         return { flags, renewedInline, before, after, txHash };
     };
     const noop = encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
 
     // ---- 4. S1 ----
     const s1 = await op('S1 PaymasterClient.submitGaslessUserOperation', noop);
-    if (s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW && !s1.renewedInline) fail('S1 carried SP_RENEW but no inline AllowanceRenewed was emitted');
 
     // ---- 5. S3b inline renewal ----
     let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
@@ -221,9 +291,8 @@ async function main() {
         }
     }
     if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
-    if (!renewal!.renewedInline) fail('S3b: the op carried SP_RENEW but the receipt has no AllowanceRenewed(user, SP, inline=true)');
-    if (renewal!.after.renewUsed !== renewal!.before.renewUsed + 1n) fail(`S3b: autoRenewUsed ${renewal!.before.renewUsed} -> ${renewal!.after.renewUsed}, expected +1`);
-    result(`S3b inline renewal: SP_RENEW in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed inline; autoRenewUsed +1; extra user signatures for the renewal: 0 beyond the op's own`);
+    // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
+    result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
     console.log('\nPASS');
 }
 

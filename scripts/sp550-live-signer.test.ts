@@ -184,3 +184,35 @@ describe('sp550-live-e2e.ts live mode refuses a key from an env var (exit 2, not
         expect(leaks(output)).toEqual([]);
     }, 60_000);
 });
+
+describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, before any network read)', () => {
+    const run = (extra: Record<string, unknown>, flags: string[]) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
+        const cfg = path.join(dir, 'run.json');
+        fs.writeFileSync(cfg, JSON.stringify({
+            network: 'sepolia', mode: 'live', rpcUrls: ['https://rpc.invalid'], bundlerUrl: 'https://bundler.invalid',
+            operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20), userKey: { keystore: path.join(dir, 'absent.json') }, ...extra,
+        }));
+        try {
+            const out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg, '--live-go', 'sepolia', ...flags], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+            return { status: 0, output: out };
+        } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
+    };
+    it('gate.bookOverrides in a live config is refused, even with --live-go and --fork-setup passed', () => {
+        const r = run({ gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, ['--fork-setup']);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: (gate\.bookOverrides is fork-only|--fork-setup impersonates accounts)/);
+        expect(r.output).not.toMatch(/cutover gate|fork-only SDK book override/);
+    }, 60_000);
+    it('gate.bookOverrides alone in a live config is refused', () => {
+        const r = run({ gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: gate\.bookOverrides is fork-only/);
+        expect(r.output).not.toMatch(/fork-only SDK book override/);
+    }, 60_000);
+    it('--fork-setup alone in live mode is refused', () => {
+        const r = run({}, ['--fork-setup']);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: --fork-setup impersonates accounts: mode fork only/);
+    }, 60_000);
+});

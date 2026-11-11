@@ -126,6 +126,27 @@ SP550_FORK_AFTER_WARP_CMD="SP550_FORK_OUT=<out> ULTRARELAY_DIR=<...> scripts/sp5
 
 E2E 脚本只接受本机回环地址上的 RPC 和 bundler，否则直接拒绝运行。
 
+## 读回之后的 E2E：`scripts/sp550-live-e2e.ts`（`live-e2e-rc4.txt`，2026-11-11）
+
+DSR 第 4 项的脚本在 rc.4 fork 上的演练结果。**这仍然是 fork 上的 rc 结果，不是 live。** 运行参数：`--fork-setup`，pins 用 `pins.fork.json` 加 `spVersion`，`--block latest`，`allowRc`；另外设了 `gate.bookOverrides`，只在 fork 模式下允许，把地址簿里的 aPNTs/xPNTsFactory 换成 pin-fill PR 将来要切成的值。结果 **PASS**，退出码 0。
+
+| op | S_user | 估算 | 发送 | flags（SDK 自选） | 续期 |
+|---|---|---|---|---|---|
+| S1 | 1 | 1 次，占位签名 | 1 | 0x00 | 无，`autoRenewUsed` 0→0 |
+| S3b 准备：`setAutoAllowance(SP, SP_CAP_FLOOR)` | 1 | 1 次，占位签名 | 1 | 0x00 | 无 |
+| S3b spend 1 | 1 | 1 次，占位签名 | 1 | **0x01 SP_RENEW** | `AllowanceRenewed(bySP=true)`，`autoRenewUsed` 0→1，已用额度 162→81 |
+
+每个 op 都硬性核对了 C-30i/C-30j，数据来自 bundler 请求，以及链上 handleOps 的 calldata 和 receipt：
+- 估算请求里带的是占位签名，发出时签名器还没被调用过；
+- 每个 op 只发送一次，带真签名，`signMessage` 只调用一次；
+- 发出的 flags 与 handleOps 里打包的 flags 一致；SP_RENEW 和链上续期必须同时出现、同时缺席。
+
+这次演练抓到 harness 自己的两个 bug，都已修复：
+1. viem 客户端没带 chain，SDK 用 `client.chain.id` 算 userOpHash 时崩在签名之前，什么都没发出去；
+2. 事件字段名错了。`AllowanceRenewed` 的字段是 `bySP`，不是 `inline`，所以链上真实发生的续期被报告成"没有续期"。现在 `isSpRelayedRenewal` 用 SDK 发布的 ABI 做离线测试。
+
+另外，publicnode 会裁剪 12090052 的历史状态，而 anvil 是按需去拉未访问过的槽位，所以跑到一半会报 `pruned history unavailable`。`setup-fork.sh` 现在可以从 `SP550_FORK_URL` 读归档节点，这个值不写日志。
+
 ## 局限
 
 - 账户只用了 SimpleAccount；AirAccount 的 KMS / passkey 签名仪式没有覆盖。
