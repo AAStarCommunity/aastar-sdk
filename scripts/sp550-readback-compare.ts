@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import { createPublicClient, getAddress, http, keccak256, type Abi, type Address } from 'viem';
 import { SuperPaymasterLensABI, SuperPaymasterV550ABI } from '../packages/core/src/abis/index.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
-import { classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
+import { OWNERSHIP_2STEP_SLOT, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
 import { isLoopbackUrl } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
@@ -61,6 +61,10 @@ async function main() {
             if (what === 'codehash') {
                 const code = await c.getCode({ address: address as Address, blockNumber });
                 return { kind: 'value', value: code && code !== '0x' ? keccak256(code) : 'none' };
+            }
+            if (what === 'ownership2StepSlot') {
+                const word = await c.getStorageAt({ address: address as Address, slot: OWNERSHIP_2STEP_SLOT, blockNumber });
+                return word && /^0x0{24}[0-9a-fA-F]{40}$/.test(word) ? { kind: 'value', value: getAddress('0x' + word.slice(-40)) } : { kind: 'error', detail: `slot word ${word} is not an address` };
             }
             if (what === 'erc1967Impl') {
                 const slot = await c.getStorageAt({ address: address as Address, slot: ERC1967_IMPL_SLOT, blockNumber });

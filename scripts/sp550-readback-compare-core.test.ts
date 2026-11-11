@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -30,7 +30,7 @@ const CHAIN: Record<string, Partial<Record<'version' | 'owner' | 'pendingOwner',
     [A(0x10)]: { version: { kind: 'value', value: 'SuperPaymaster-5.5.1' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'value', value: A(0) } },
     [A(0x13)]: { version: { kind: 'value', value: 'SuperPaymasterLens-1.2.2' } },
     [A(0x19)]: { version: { kind: 'value', value: 'APNTsCapped-1.0.0' } },
-    [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'reverted' } },
+    [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'value', value: A(0) } },
 };
 // Every other pinned contract has a version() except the two that have none by design (spAdminExtension, xPNTsTokenV2Ext).
 for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
@@ -39,8 +39,10 @@ for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
 /** Code on chain: each pinned address holds the code its pin names. */
 const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
+let PENDING_SLOT: Record<string, string> = { [A(0x21)]: A(0) };
 const reader = (chain = CHAIN, code = CODE, slots = SLOTS, blockHash = BLOCK_HASH): ChainReader => async (address, what) => {
     if (what === 'blockHash') return { kind: 'value', value: blockHash };
+    if (what === 'ownership2StepSlot') return { kind: 'value', value: PENDING_SLOT[address] ?? A(0) };
     if (what === 'codehash') return { kind: 'value', value: code[address.toLowerCase()] ?? 'none' };
     if (what === 'erc1967Impl') return { kind: 'value', value: slots[address] ?? A(0) };
     if (what === 'EXTENSION') return address === A(0x10) ? { kind: 'value', value: A(0x12) } : { kind: 'reverted' };
@@ -137,6 +139,7 @@ describe('readbackProblems: a read-back that agrees with the pins and the chain 
 });
 
 describe('readbackProblems refuses', () => {
+    afterEach(() => { PENDING_SLOT = { [A(0x21)]: A(0) }; });
     it.each([
         ['another source', (rb: any) => { rb.header.source = 'live'; }, /header\.source "live" != fork/],
         ['another chain', (rb: any) => { rb.header.chainId = 1; }, /header\.chainId 1 != 11155111/],
@@ -166,7 +169,7 @@ describe('readbackProblems refuses', () => {
         ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /contracts\.superPaymaster\.extension .* != pinned/],
         ['an implementation on a non-proxy', (rb: any) => { rb.contracts.superPaymasterLens.erc1967Impl = A(0x99); }, /superPaymasterLens\.erc1967Impl .* not a proxy here/],
         ['another SP owner', (rb: any) => { rb.contracts.superPaymaster.owner = A(0x99); }, /contracts\.superPaymaster\.owner .* != owner\(\) on chain/],
-        ['a Registry pendingOwner that is not an address (it is read from an ERC-7201 slot)', (rb: any) => { rb.contracts.registry.pendingOwner = 'n/a:no getter'; }, /registry\.pendingOwner "n\/a:no getter": read from the Registry's ERC-7201 slot/],
+        ['another Registry pendingOwner than its getter', (rb: any) => { rb.contracts.registry.pendingOwner = A(0x55); PENDING_SLOT = { [A(0x21)]: A(0x55) }; }, /contracts\.registry\.pendingOwner .* != pendingOwner\(\) on chain/],
     ])('%s', async (_n, mutate, msg) => {
         const rb = good(); mutate(rb);
         const p = await run(rb);
@@ -181,6 +184,11 @@ describe('readbackProblems refuses', () => {
             expect.stringMatching(/contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/),
             expect.stringMatching(/contracts\.superPaymaster\.extensionCodehash .* != contracts\.spAdminExtension\.codehash/),
         ]));
+    });
+    it("the Registry's ERC-7201 pending-owner slot must agree with its getter and the file (SP 248ef831)", async () => {
+        PENDING_SLOT = { [A(0x21)]: A(0x66) };
+        try { expect(await run(good())).toEqual([`contracts.registry.pendingOwner "${A(0)}" != ERC-7201 slot 0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00 on chain ${A(0x66)}`]); }
+        finally { PENDING_SLOT = { [A(0x21)]: A(0) }; }
     });
     it('a live read-back that names an anvil or a dump', async () => {
         const rb = good(); rb.header.source = 'live';

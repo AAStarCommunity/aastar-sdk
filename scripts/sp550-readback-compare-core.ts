@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * be4912018365c73091108541ffb54dd7364e8481 docs/release/a7/ (revision 3, frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * 248ef83180619fdcd0d8603f70996df9c37493aa docs/release/a7/ (revision 3, re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = 'c1a8dbd321fed1e85ebcf3f6b1ea46719aeb32e981ab1fc6577148f35fb98952';
+export const READBACK_SCHEMA_SHA256 = 'a6b9174192bfda61614f4b4b2f98ee9a5a4ae8898a3c73bf060b31d268470f6b';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -69,7 +69,14 @@ export type Observed = { kind: 'value'; value: string } | { kind: 'reverted' } |
  * The SDK's reads at the read-back block. `codehash` = keccak256 of the runtime code ('0x' code is a
  * value of "none"); `erc1967Impl` = the ERC-1967 implementation slot as an address; the rest are calls.
  */
-export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash';
+export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'codehash' | 'erc1967Impl' | 'blockHash' | 'ownership2StepSlot';
+
+/**
+ * ERC-7201 slot of Ownable2StepNamespaced's pending owner (SP 248ef831
+ * contracts/src/utils/Ownable2StepNamespaced.sol:36; = cast index-erc7201 "aastar.storage.Ownership2Step").
+ * The Registry's pendingOwner() returns sload(slot); the SDK reads both and requires them equal.
+ */
+export const OWNERSHIP_2STEP_SLOT = '0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00';
 export type ChainReader = (address: string, what: ReadKind) => Promise<Observed>;
 
 /** Classify a thrown contract-call error: a revert / empty return is 'reverted', anything else an error. */
@@ -122,14 +129,10 @@ export const VERSION_ABSENT_BY_DESIGN = new Set(['spAdminExtension', 'xPNTsToken
  * tests): a revert there must be reported "n/a:…" (schema 2228c0b6 forbids null outside the set above).
  */
 export const VERSION_NOT_IN_INTERFACE = new Set(['timelockController']);
-/**
- * owner() / pendingOwner() the SDK reads back and compares (both must exist). The Registry's
- * pendingOwner comes from its ERC-7201 slot per x-readMethods, not a getter: it is required to be an
- * address but not compared here (no slot pinned in the SDK).
- */
+/** owner() / pendingOwner() the SDK reads back and compares (both must exist). */
 const OWNED: Record<string, ReadonlyArray<'owner' | 'pendingOwner'>> = {
     superPaymaster: ['owner', 'pendingOwner'],
-    registry: ['owner'],
+    registry: ['owner', 'pendingOwner'],
 };
 
 export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader,
@@ -271,8 +274,11 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
             else if (o.kind === 'reverted') p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
             else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
         }
-        if (k === 'registry' && !(typeof c.pendingOwner === 'string' && /^0x[0-9a-fA-F]{40}$/.test(c.pendingOwner))) {
-            p.push(`contracts.registry.pendingOwner ${show(c.pendingOwner)}: read from the Registry's ERC-7201 slot per x-readMethods, so an address is expected`);
+        // The Registry keeps its pending owner in an ERC-7201 slot: the raw slot must agree with the getter and the file.
+        if (k === 'registry') {
+            const slot = await read(address, 'ownership2StepSlot');
+            if (slot.kind !== 'value') p.push(`contracts.registry.pendingOwner: the SDK could not read the ERC-7201 slot ${OWNERSHIP_2STEP_SLOT} (${slot.kind === 'error' ? slot.detail : 'reverted'})`);
+            else if (!eq(c.pendingOwner, slot.value)) p.push(`contracts.registry.pendingOwner ${show(c.pendingOwner)} != ERC-7201 slot ${OWNERSHIP_2STEP_SLOT} on chain ${slot.value}`);
         }
     }
     // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
