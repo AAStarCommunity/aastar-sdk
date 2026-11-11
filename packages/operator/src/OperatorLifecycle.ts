@@ -116,7 +116,8 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
      *  - request not matured: throws, naming when it matures and when its window closes (nothing sent);
      *  - request inside its window: withdraws the escrow; exits the role only once no collateral is left;
      *  - window closed (withdraw would revert WithdrawalExpired): sends cancelWithdraw (the escrow
-     *    returns to the balance) and requestWithdraw(balance) again, and returns — the delay restarts.
+     *    returns to the balance), waits for it to be mined, re-reads, and sends requestWithdraw(balance)
+     *    again, and returns — the delay restarts.
      * On 5.4.2 the collateral is withdrawn in one call. Funds always go to the operator itself;
      * `to` is accepted only when it IS the operator (SuperPaymaster has no recipient parameter).
      */
@@ -143,9 +144,14 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 throw new Error(`withdrawAllFunds: the collateral withdrawal matures at ${w.readyAt} and stays open until ${w.expiresAt} (now ${w.now}); call again then`);
             }
             if (w.phase === 'expired') {
-                hashes.push(await this.cancelCollateralWithdrawal(options));
-                // Re-read after the cancel: the escrow is back in the balance (less any slash meanwhile).
+                const cancel = await this.cancelCollateralWithdrawal(options);
+                hashes.push(cancel);
+                // Re-read only once the cancel is mined: the escrow is then back in the balance (less any
+                // slash meanwhile). Reading before it lands would request a stale, smaller balance.
+                const receipt = await this.getStartPublicClient().waitForTransactionReceipt({ hash: cancel });
+                if (receipt.status !== 'success') throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted; nothing else was sent`);
                 const after = await this.collateralWithdrawalStatus();
+                if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as open (RPC lag?); call again`);
                 if (after.balance > 0n) hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
                 return hashes; // the window closed at w.expiresAt; the delay restarts
             }

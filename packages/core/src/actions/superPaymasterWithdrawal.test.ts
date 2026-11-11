@@ -1,3 +1,5 @@
+import { decodeErrorResult, decodeEventLog, encodeAbiParameters, encodeEventTopics, encodeFunctionData, getAddress, keccak256, toFunctionSelector, toHex } from 'viem';
+import { SuperPaymasterV550ABI } from '../abis/index.js';
 import { describe, it, expect } from 'vitest';
 import { resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
@@ -76,10 +78,29 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
         expect(reads.find((r) => r.functionName === 'OPERATOR_WITHDRAWAL_WINDOW')).toMatchObject({ blockNumber: 9n });
         expect(await a.withdrawalWindow()).toBe(86_400n);
     });
-    it('expireWithdraw sends only after the window has closed, for anyone', async () => {
+    it('expireWithdraw sends only after the window has closed, from any caller', async () => {
         const { a, writes } = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW - 1n });
-        await a.expireWithdraw({ operator: OP });
-        expect(writes.map((w) => [w.functionName, w.args])).toEqual([['expireWithdraw', [OP]]]);
+        const stranger = '0x' + '99'.repeat(20) as `0x${string}`;
+        await a.expireWithdraw({ operator: OP, account: stranger });
+        expect(writes.map((w) => [w.functionName, w.args, w.account])).toEqual([['expireWithdraw', [OP], stranger]]);
+    });
+    it('the vendored ABI encodes / decodes the #619 surface (selectors, 4-field request event, expiry event, error)', () => {
+        expect(encodeFunctionData({ abi: SuperPaymasterV550ABI, functionName: 'expireWithdraw', args: [OP] }).slice(0, 10))
+            .toBe(toFunctionSelector('expireWithdraw(address)'));
+        expect(toFunctionSelector('OPERATOR_WITHDRAWAL_WINDOW()')).toBe(encodeFunctionData({ abi: SuperPaymasterV550ABI, functionName: 'OPERATOR_WITHDRAWAL_WINDOW' }));
+        const req = encodeEventTopics({ abi: SuperPaymasterV550ABI, eventName: 'OperatorWithdrawalRequested', args: { operator: OP } });
+        expect(req[0]).toBe(keccak256(toHex('OperatorWithdrawalRequested(address,uint256,uint48,uint48)')));
+        const data = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint48' }, { type: 'uint48' }], [300n, 1000, 87400]);
+        expect(decodeEventLog({ abi: SuperPaymasterV550ABI, topics: req as any, data })).toMatchObject({
+            eventName: 'OperatorWithdrawalRequested', args: { operator: getAddress(OP), amount: 300n, readyAt: 1000, expiresAt: 87400 },
+        });
+        const exp = encodeEventTopics({ abi: SuperPaymasterV550ABI, eventName: 'OperatorWithdrawalExpired', args: { operator: OP } });
+        expect(exp[0]).toBe(keccak256(toHex('OperatorWithdrawalExpired(address,uint256)')));
+        expect(decodeEventLog({ abi: SuperPaymasterV550ABI, topics: exp as any, data: encodeAbiParameters([{ type: 'uint256' }], [300n]) }))
+            .toMatchObject({ eventName: 'OperatorWithdrawalExpired', args: { amount: 300n } });
+        const err = toFunctionSelector('WithdrawalExpired(uint48)') + encodeAbiParameters([{ type: 'uint48' }], [87400]).slice(2);
+        expect(decodeErrorResult({ abi: SuperPaymasterV550ABI, data: err as `0x${string}` })).toMatchObject({ errorName: 'WithdrawalExpired', args: [87400] });
+        expect((SuperPaymasterV550ABI as any[]).some((e) => e.name === 'WithdrawalRequestAdjusted')).toBe(false);
     });
     it.each([
         ['no request', { amount: 0n }, /no withdrawal request .*NoPendingWithdrawal/],

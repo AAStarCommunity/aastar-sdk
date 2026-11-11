@@ -249,8 +249,31 @@ describe('OperatorLifecycle', () => {
           mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
           expect(await lifecycle.withdrawAllFunds()).toEqual(['0xCancelHash', '0xRequestHash']);
           expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 45n }));
+          // The re-read happens only after the cancel is mined (Codex M on #433).
+          expect(mockPublicClient.waitForTransactionReceipt).toHaveBeenCalledWith({ hash: '0xCancelHash' });
+          const mined = mockPublicClient.waitForTransactionReceipt.mock.invocationCallOrder.at(-1)!;
+          expect(mocks.mockWithdrawal.withdrawalStatus.mock.invocationCallOrder[1]).toBeGreaterThan(mined);
           expect(mocks.mockWithdrawal.executeWithdraw).not.toHaveBeenCalled();
           expect(mocks.mockRegistry.exitRole).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, window closed but the cancel reverts: stops, requests nothing', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
+          mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
+          mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/cancelWithdraw 0xCancelHash reverted/);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
+      });
+
+      it('5.5.1, window closed, cancel mined but the RPC still shows the request: stops rather than request a stale balance', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockResolvedValue('0xCancelHash');
+          mocks.mockWithdrawal.withdrawalStatus.mockResolvedValue(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }));
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/still reads as open/);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
       });
 
       it('5.5.1, no collateral and no request: goes straight to the role exit', async () => {

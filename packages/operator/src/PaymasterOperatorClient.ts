@@ -362,8 +362,9 @@ export class PaymasterOperatorClient extends BaseClient {
 
     /**
      * Step 1 of withdrawing aPNTs collateral on SuperPaymaster 5.5.1+: `requestWithdraw(amount)`.
-     * The funds stay at work (sponsorship, slashing) until the request matures after
-     * OPERATOR_WITHDRAWAL_DELAY (48 h); then call {@link executeCollateralWithdrawal}.
+     * The amount moves out of aPNTsBalance into escrow at once: it no longer backs sponsorship but
+     * can still be slashed. After OPERATOR_WITHDRAWAL_DELAY (48 h) call {@link executeCollateralWithdrawal}
+     * within OPERATOR_WITHDRAWAL_WINDOW (24 h).
      * On 5.4.2 there is no request step: this throws and points at executeCollateralWithdrawal.
      */
     async requestCollateralWithdrawal(amount: bigint, options?: TransactionOptions): Promise<Hash> {
