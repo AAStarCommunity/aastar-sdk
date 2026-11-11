@@ -79,7 +79,8 @@ function good(): any {
     // SP's own fork example, so the fixture follows the binding schema instead of a hand-kept copy.
     const example = JSON.parse(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), 'aoa-a7-readback-1.example.json'), 'utf8'));
     for (const [k, c] of Object.entries(example.contracts as Record<string, Record<string, unknown>>)) {
-        if (!contracts[k] || c === null) continue;
+        // the example's timelock is deployed (minDelay, rolesSource); the fixture's is not
+        if (!contracts[k] || c === null || k === 'timelockController') continue;
         for (const [f, v] of Object.entries(c)) if (!(READBACK_CONTRACT_FIELDS as readonly string[]).includes(f)) contracts[k][f] = v;
     } // not a pin: not compared
     return {
@@ -435,8 +436,9 @@ describe('the timelock entry is required (schema 7c7827c0; omission is not absen
         const rb = good(); delete rb.contracts.timelockController;
         expect(await run(rb, { pins: pinned, code: { ...CODE, [A(0x26)]: H(0x26) } })).toEqual([expect.stringMatching(/schema: \/contracts must have required property 'timelockController'/)]);
     });
-    it('pins with addresses.timelockController and a "not deployed" read-back fail', async () => {
-        expect(await run(good(), { pins: pinned, code: { ...CODE, [A(0x26)]: H(0x26) } })).toEqual(expect.arrayContaining([expect.stringMatching(/timelockController/)]));
+    it('pins with addresses.timelockController and a "not deployed" read-back fail on the address AND the codehash (Grok r19)', async () => {
+        const problems = await run(good(), { pins: pinned, code: { ...CODE, [A(0x26)]: H(0x26) } });
+        expect(problems).toEqual(expect.arrayContaining([expect.stringMatching(/^contracts\.timelockController\.address /), expect.stringMatching(/^contracts\.timelockController\.codehash /)]));
     });
     it('pins declaring no timelock and an explicit "n/a:not deployed" entry pass', async () => expect(await run(good(), { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([]));
     it('pins declaring no timelock and a read-back that omits the entry fail at the schema (the comparator test below holds the same without it)', async () => {
@@ -458,8 +460,22 @@ describe('a contract the pins declare absent must not be in the read-back (Grok)
     });
     it('an "n/a:not deployed" placeholder is not a contradiction (Codex r14)', async () => {
         const rb = good();
-        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: 'n/a:not deployed', codehash: 'n/a:not deployed', version: 'n/a:not deployed', roles: 'unreadable:not deployed' };
+        // good() already writes it out that way (every field "n/a:not deployed")
         expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([]);
+    });
+    it.each([
+        ['a real owner', { owner: A(0xb0) }],
+        ['populated roles', { roles: { PROPOSER_ROLE: [A(0x67)] } }],
+        ['an unreadable guardian', { guardian: 'unreadable:timeout' }],
+        ['a null field', { pendingOwner: null }],
+        ['an extra numeric field', { minDelay: 172800 }],
+        ['a failed read spelled n/a', { address: 'n/a:rpc failed' }],
+        ['another n/a reason', { codehash: 'n/a:no code' }],
+    ])('a "not deployed" entry with %s is not one (Codex r19)', async (_n, patch) => {
+        const rb = good(); Object.assign(rb.contracts.timelockController, patch);
+        const problems = [...await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })];
+        expect(problems.some((x) => /not an "n\/a:" not-deployed placeholder/.test(x) || /^schema:/.test(x))).toBe(true);
+        expect(isNotDeployedPlaceholder(rb.contracts.timelockController)).toBe(false);
     });
     it.each([
         ['an n/a address with a real codehash', { address: 'n/a:x', codehash: H(0x26) }],

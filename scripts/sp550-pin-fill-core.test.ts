@@ -474,7 +474,7 @@ describe('PR-Daemon F2: the SP read-back commit must be on SP main', () => {
     it('the compare is main...<commit>, so "behind" means the commit is an ancestor of main (Grok r18)', () => {
         const c = 'ab'.repeat(20);
         expect(spCompareApiPath(c)).toBe(`repos/AAStarCommunity/SuperPaymaster/compare/main...${c}`);
-        expect(() => spCompareApiPath('main')).toThrow(/not a 40-hex sha/);
+        for (const bad of ['main', 'ab'.repeat(19) + 'a', 'AB'.repeat(20), 'zz'.repeat(20), `${c}?x=1`]) expect(() => spCompareApiPath(bad)).toThrow(/not a 40-hex sha/);
     });
 });
 

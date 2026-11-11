@@ -412,15 +412,18 @@ export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; sl
 }
 
 /**
- * A read-back entry that explicitly says "not deployed": every identity field (address, codehash, and
- * any implementation / extension identity) is an "n/a:" placeholder or null. Anything carrying a real
- * address or hash — or an unreadable one — is NOT that. Shared by the comparator and pin-fill's live check.
+ * A read-back entry that explicitly says "not deployed": an object whose every field — identity, owner,
+ * pendingOwner, guardian, roles and any extra — is exactly "n/a:not deployed" (schema 7c7827c0). A real,
+ * unreadable or otherwise-reasoned value in any field ("n/a:rpc failed", an owner, populated roles), null,
+ * or an omitted / empty entry is NOT that (Codex r19, Grok r19). Shared by the comparator and pin-fill's live check.
  */
+/** The one spelling of "this contract is not deployed" in a read-back entry (schema 7c7827c0). */
+export const NOT_DEPLOYED = 'n/a:not deployed';
+
 export function isNotDeployedPlaceholder(c: any): boolean {
-    // Omission is not absence (DSR, schema 7c7827c0): a contract the pins declare absent is written out
-    // as an object whose fields are all "n/a:…"; a missing or null entry is refused (PR-Daemon F1).
-    if (c === undefined || c === null || typeof c !== 'object') return false;
-    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
-    return ['address', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash'].every((f) => c[f] === undefined || na(c[f]))
-        && na(c.address) && na(c.codehash);
+    // Omission is not absence (DSR, schema 7c7827c0): a contract the pins declare absent is written out;
+    // a missing, null or scalar entry is refused (PR-Daemon F1).
+    if (c === undefined || c === null || typeof c !== 'object' || Array.isArray(c)) return false;
+    const values = Object.values(c);
+    return 'address' in c && 'codehash' in c && values.length > 0 && values.every((v) => v === NOT_DEPLOYED);
 }
