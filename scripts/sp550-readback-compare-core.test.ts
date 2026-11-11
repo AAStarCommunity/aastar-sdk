@@ -7,7 +7,7 @@ import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedErro
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import {
     AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
-    classifyCallError, contractKeyOf, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
+    classifyCallError, contractKeyOf, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
@@ -73,6 +73,8 @@ function good(): any {
     contracts.ownerSafe = { ...contracts.xPNTsTokenV2Ext, address: A(0x9c), version: '1.4.1' };
     contracts.evaluationCommunityToken = { ...contracts.xPNTsTokenV2Ext, address: A(0x9d), version: 'XPNTs-4.0.3' };
     contracts.registry.roles = { ROLE_COMMUNITY: [A(0x66)] }; // the registry has a role system
+    // Required since schema 7c7827c0: no timelock is written out, every field "n/a:not deployed".
+    contracts.timelockController = Object.fromEntries(['address', 'version', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash', 'owner', 'pendingOwner', 'guardian', 'roles'].map((f) => [f, 'n/a:not deployed']));
     // Contract-specific fields the schema requires (BLS, entryPoint, evaluation community, …): taken from
     // SP's own fork example, so the fixture follows the binding schema instead of a hand-kept copy.
     const example = JSON.parse(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), 'aoa-a7-readback-1.example.json'), 'utf8'));
@@ -113,8 +115,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('a5effd05cf469c01d05090b0e56704f4ccc9b55021c294f57c4d2d1e498706c2');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('8558aa7d74460c9c8bb74e5dab4bbfe98436ea76777a460aa79ba998cc18116f');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('4888f3644565b9fb9ecfc2facf11786a3c11ef4b8bb6dad0411975787a271359');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('6c460198c7ae0b27cc268b4c97b889a9c8096a76ade97913c55ee26cdf32d004');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -427,12 +429,26 @@ describe('aggregateAmsterdam: header VALUES agree across upstreams (Grok)', () =
     });
 });
 
-describe('a pinned timelock must be in the read-back (schema 543f3498: timelockController optional)', () => {
+describe('the timelock entry is required (schema 7c7827c0; omission is not absence — DSR, PR-Daemon F1)', () => {
+    const pinned = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
     it('pins with addresses.timelockController and a read-back without it fail', async () => {
-        const pins = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
-        expect(await run(good(), { pins, code: { ...CODE, [A(0x26)]: H(0x26) } })).toContain('contracts.timelockController: omitted');
+        const rb = good(); delete rb.contracts.timelockController;
+        expect(await run(rb, { pins: pinned, code: { ...CODE, [A(0x26)]: H(0x26) } })).toEqual([expect.stringMatching(/schema: \/contracts must have required property 'timelockController'/)]);
     });
-    it('pins without a timelock and a read-back without one pass', async () => expect(await run(good())).toEqual([]));
+    it('pins with addresses.timelockController and a "not deployed" read-back fail', async () => {
+        expect(await run(good(), { pins: pinned, code: { ...CODE, [A(0x26)]: H(0x26) } })).toEqual(expect.arrayContaining([expect.stringMatching(/timelockController/)]));
+    });
+    it('pins declaring no timelock and an explicit "n/a:not deployed" entry pass', async () => expect(await run(good(), { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([]));
+    it('pins declaring no timelock and a read-back that omits the entry fail at the schema (the comparator test below holds the same without it)', async () => {
+        const rb = good(); delete rb.contracts.timelockController;
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([expect.stringMatching(/schema: \/contracts must have required property 'timelockController'/)]);
+    });
+    it('the comparator alone refuses an omitted or null entry for a declared-absent contract', () => {
+        expect(isNotDeployedPlaceholder(undefined)).toBe(false);
+        expect(isNotDeployedPlaceholder(null)).toBe(false);
+        expect(isNotDeployedPlaceholder('n/a:not deployed')).toBe(false);
+        expect(isNotDeployedPlaceholder({ address: 'n/a:not deployed', codehash: 'n/a:not deployed' })).toBe(true);
+    });
 });
 
 describe('a contract the pins declare absent must not be in the read-back (Grok)', () => {

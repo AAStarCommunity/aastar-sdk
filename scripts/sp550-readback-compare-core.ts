@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 8f3305047a72f3f0132827447d70af1375debe8a docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * 7c7827c02f59ef809c4cf852cfff269e99344eb3 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = 'bc009b278348c25be8858ef04b0dd3decf24489421a6dbc98d67956e619dc106';
+export const READBACK_SCHEMA_SHA256 = 'cb49395f6a88bb3dd75c08385d4bb1f22798b8b664366557c7b04b41df4a08ef';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -417,7 +417,9 @@ export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; sl
  * address or hash — or an unreadable one — is NOT that. Shared by the comparator and pin-fill's live check.
  */
 export function isNotDeployedPlaceholder(c: any): boolean {
-    if (c === undefined || c === null) return true;
+    // Omission is not absence (DSR, schema 7c7827c0): a contract the pins declare absent is written out
+    // as an object whose fields are all "n/a:…"; a missing or null entry is refused (PR-Daemon F1).
+    if (c === undefined || c === null || typeof c !== 'object') return false;
     const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
     return ['address', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash'].every((f) => c[f] === undefined || na(c[f]))
         && na(c.address) && na(c.codehash);

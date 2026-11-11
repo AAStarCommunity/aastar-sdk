@@ -264,6 +264,8 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         }
         Object.assign(contracts.superPaymaster, { erc1967Impl: pins.spImpl, implCodehash: pins.codehashes!.spImpl, extension: pins.spAdminExtension, extensionCodehash: pins.codehashes!.spAdminExtension });
         Object.assign(contracts.registry, { erc1967Impl: pins.registryImpl, implCodehash: pins.codehashes!.registryImpl });
+        // MANIFEST declares no timelock: SP writes it out explicitly (schema 7c7827c0).
+        contracts.timelockController = { address: 'n/a:not deployed', codehash: 'n/a:not deployed' };
         return { header: { source: 'live', chainId: 11155111, tag: pins.tag, readbackBlock: Number(pins.readbackBlock) }, contracts };
     };
     it('agreement passes', () => expect(spLiveReadbackProblems(live(), pins, 11155111, entries)).toEqual([]));
@@ -292,6 +294,10 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         // same address, another codehash: the alias is still two contracts (PR-Daemon F4: this predicate had no red test)
         const hashSplit: any = { ...aliased, codehashes: { ...aliased.codehashes, 'addresses.aPNTs': '0x' + '77'.repeat(32) } };
         expect(spLiveReadbackProblems(live(), hashSplit, 11155111, sp550PinnedAddressEntries(hashSplit))).toEqual([expect.stringMatching(/pins: codehashes\.addresses\.aPNTs != codehashes\.aPNTsCapped \(declared alias\)/)]);
+    });
+    it('a declared-absent timelock omitted from the live read-back stops --write (DSR: explicit beats omission; PR-Daemon F1)', () => {
+        const rb = live(); delete rb.contracts.timelockController;
+        expect(spLiveReadbackProblems(rb, pins, 11155111, entries)).toEqual([expect.stringMatching(/contracts\.timelockController is not an "n\/a:" not-deployed placeholder/)]);
     });
     it('a contract the pins declare absent must not appear in the live read-back (Grok)', () => {
         const rb = live(); rb.contracts.timelockController = { address: A(0x26), codehash: '0x' + '26'.repeat(32) };
