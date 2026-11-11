@@ -147,9 +147,14 @@ describe('superPaymasterGenerationFromVersion', () => {
     it('classifies the deployed and the candidate version strings', () => {
         // On-chain Sepolia today (M-11 §0.1) and the tag's SuperPaymaster.sol version().
         expect(superPaymasterGenerationFromVersion('SuperPaymaster-5.4.2')).toBe('v5.4');
-        expect(superPaymasterGenerationFromVersion('SuperPaymaster-5.4.0')).toBe('v5.4');
         expect(superPaymasterGenerationFromVersion('SuperPaymaster-5.5.0')).toBe('v5.5');
         expect(superPaymasterGenerationFromVersion('SuperPaymaster-5.5.1')).toBe('v5.5');
+    });
+    it('refuses generations older than 5.4.2 (e.g. the sunset OP 3.2.2) instead of treating them as v5.4', () => {
+        for (const v of ['SuperPaymaster-3.2.2', 'SuperPaymaster-4.9.9', 'SuperPaymaster-5.3.0', 'SuperPaymaster-5.4.0', 'SuperPaymaster-5.4.1']) {
+            expect(() => superPaymasterGenerationFromVersion(v)).toThrow(/older than this SDK supports \(min 5\.4\.2\)/);
+        }
+        expect(superPaymasterGenerationFromVersion('SuperPaymaster-5.4.3')).toBe('v5.4');
     });
     it('refuses to guess for newer or unrecognised versions', () => {
         expect(() => superPaymasterGenerationFromVersion('SuperPaymaster-5.6.0')).toThrow(/newer/);

@@ -16,6 +16,12 @@ import { isAddress, type Address, type Hex } from 'viem';
 export interface Sp550CutoverPins {
     /** SuperPaymaster release tag the deployment was built from (e.g. "v5.5.0"). */
     tag?: string;
+    /**
+     * The exact `SuperPaymaster.version()` string the read-back must return (release 5.5.0 ships
+     * contract "SuperPaymaster-5.5.1"). A reviewed per-chain pin, not a constant in the gate: the
+     * Lens check (`EXPECTED_SP_VERSION == keccak256(spVersion)`) is derived from it too.
+     */
+    spVersion?: string;
     /** The proxy (unchanged by the upgrade) — present only so the check script is self-contained. */
     superPaymaster?: Address;
     /** ERC-1967 implementation behind the proxy after the upgrade. */
@@ -37,6 +43,7 @@ export interface Sp550CutoverPins {
 /** Fields that MUST be filled before the cutover can ship. */
 export const SP550_REQUIRED_PIN_FIELDS = [
     'tag',
+    'spVersion',
     'superPaymaster',
     'spImpl',
     'spImplCodehash',
@@ -93,6 +100,9 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
     }
     if (pins.tag !== undefined && !isSp550ReleaseTag(pins.tag, opts)) {
         problems.push(`tag: ${JSON.stringify(pins.tag)} is not ${opts.allowRc ? 'v5.5.0 / v5.5.0-rc.N' : 'v5.5.0'}`);
+    }
+    if (pins.spVersion !== undefined && !(typeof pins.spVersion === 'string' && /^SuperPaymaster-5\.5\.\d+$/.test(pins.spVersion))) {
+        problems.push(`spVersion: ${JSON.stringify(pins.spVersion)} is not a SuperPaymaster-5.5.x version() string`);
     }
     if (pins.readbackBlock !== undefined && !(typeof pins.readbackBlock === 'bigint' && pins.readbackBlock > 0n)) {
         problems.push(`readbackBlock: not a positive block number (${String(pins.readbackBlock)})`);

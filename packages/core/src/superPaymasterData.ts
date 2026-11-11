@@ -230,7 +230,15 @@ export function superPaymasterGenerationFromVersion(version: string): SuperPayma
     if (!m) throw new Error(`Unrecognised SuperPaymaster version() string: "${version}"`);
     const major = Number(m[1]);
     const minor = Number(m[2]);
-    if (major < 5 || (major === 5 && minor < 5)) return 'v5.4';
+    const patch = Number(m[3]);
+    // Floor 5.4.2: the 125-byte 5.5.x superset paymasterAndData is only established as accepted by
+    // 5.4.2 (it reads maxRate at length >= 104 and never bounds the length). Older generations —
+    // e.g. the SuperPaymaster-3.2.2 still on the OP chains, which is sunset — have a different
+    // operators() layout and are not supported: refuse rather than send them a 5.4 request.
+    if (major < 5 || (major === 5 && minor < 4) || (major === 5 && minor === 4 && patch < 2)) {
+        throw new Error(`SuperPaymaster ${version} is older than this SDK supports (min 5.4.2).`);
+    }
+    if (major === 5 && minor === 4) return 'v5.4';
     if (major === 5 && minor === 5) return 'v5.5';
     throw new Error(
         `SuperPaymaster ${version} is newer than this SDK understands (max 5.5.x). Upgrade @aastar/sdk.`,

@@ -156,6 +156,7 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
     }
+    problems.push(...sp550PinAliasProblems(pins));
     return problems;
 }
 
@@ -179,4 +180,36 @@ export function requireSp550FreshDeployPins(
         );
     }
     return pins as Required<Sp550FreshDeployPins>;
+}
+
+/**
+ * The only top-level pin / address-book pairs that legitimately name the same contract. Any other
+ * two entries sharing an address is a mis-pin (e.g. addresses.xPNTsFactory = the SP proxy would
+ * otherwise only be checked for non-empty code, and pass).
+ */
+const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
+    ['superPaymaster', 'addresses.superPaymaster'],
+    ['aPNTsCapped', 'addresses.aPNTs'],
+    ['xPNTsFactoryV2', 'addresses.xPNTsFactory'],
+];
+
+/** Every pair of pinned entries that share an address without being a declared alias. */
+export function sp550PinAliasProblems(pins: Sp550FreshDeployPins | undefined): string[] {
+    if (!pins) return [];
+    const top = ['superPaymaster', 'spImpl', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl', 'xPNTsTokenV2Ext',
+        'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped'] as const;
+    const entries: [string, string][] = [
+        ...top.map((k) => [k, pins[k]] as [string, unknown]),
+        ...Object.entries(pins.addresses ?? {}).map(([k, a]) => [`addresses.${k}`, a] as [string, unknown]),
+    ].filter((e): e is [string, string] => typeof e[1] === 'string' && isAddress(e[1], { strict: false })).map(([k, a]) => [k, a.toLowerCase()]);
+    const allowed = (a: string, b: string) => SP550_PIN_ALIASES.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+    const problems: string[] = [];
+    for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+            if (entries[i][1] === entries[j][1] && !allowed(entries[i][0], entries[j][0])) {
+                problems.push(`${entries[i][0]} and ${entries[j][0]} are the same address (${entries[i][1]}); only ${SP550_PIN_ALIASES.map((p) => p.join(' = ')).join(', ')} may alias`);
+            }
+        }
+    }
+    return problems;
 }
