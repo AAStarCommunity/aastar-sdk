@@ -97,19 +97,28 @@ async function main() {
         if (/^anvil\//i.test(client as string)) refuse(`--write refused: ${label} is an anvil node (${client}); fork addresses never go into the source`);
     }
     // One fill at a time in this checkout: the lock is created exclusively and removed on every exit path.
-    const lock = path.join(ROOT, '.sp550-pin-fill.lock');
+    const lockBase = path.join(ROOT, '.sp550-pin-fill');
+    const lock = `${lockBase}.lock`;
     // The lock doubles as a journal: a run killed between the two renames leaves it behind, naming the
     // files that may be half-written and how to recover (they are tracked: git restore puts them back).
     const tableFile0 = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
-    const journal = `pid ${process.pid} · ${new Date().toISOString()}\nwriting ${path.relative(ROOT, tableFile0)} and ${path.relative(ROOT, FILES.book)}\n` +
-        `if this file outlives the run: git diff those two files; git restore them unless the gate passed on them; then delete this lock\n`;
-    try { fs.writeFileSync(lock, journal, { flag: 'wx' }); }
+    // Before-images go next to the lock, so recovery never depends on git (which would also drop
+    // unrelated local edits): copy each .before back over its file, then delete the lock and backups.
+    const backups = [tableFile0, FILES.book].map((f) => [f, `${lockBase}.${path.basename(f)}.before`] as const);
+    const journal = `pid ${process.pid} · ${new Date().toISOString()}\n` +
+        backups.map(([f, bk]) => `writing ${path.relative(ROOT, f)} · before-image ${path.relative(ROOT, bk)}`).join('\n') +
+        `\nif this file outlives the run, the source may be half-written: restore each file from its before-image (cp), then delete this lock and the before-images\n`;
+    try {
+        fs.writeFileSync(lock, journal, { flag: 'wx' });
+        for (const [f, bk] of backups) fs.copyFileSync(f, bk);
+    }
     catch {
         let prev = ''; try { prev = fs.readFileSync(lock, 'utf8'); } catch { /* unreadable */ }
         console.error(`nothing written: ${path.relative(ROOT, lock)} exists — another fill is running, or an earlier one stopped mid-write:\n${prev}`);
         process.exit(1);
     }
     let code = 1;
+    let keepLock = false;
     try { write: {
         const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
         const before = { table: fs.readFileSync(tableFile, 'utf8'), book: fs.readFileSync(FILES.book, 'utf8') };
@@ -125,12 +134,17 @@ async function main() {
         if (rc.status !== 0) {
             const left = restore();
             console.error(`\nthe gate did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'both files restored'}.`);
+            if (left.length) keepLock = true; // unrestored files: the journal and before-images stay
             break write;
         }
         console.log(`\nwritten and re-verified from source: ${path.relative(ROOT, tableFile)}, ${path.relative(ROOT, FILES.book)}`);
         code = 0;
-    } } finally {
-        fs.rmSync(lock, { force: true });
+    } } catch (e) {
+        keepLock = true; // an unexpected failure mid-write: keep the journal and before-images for recovery
+        throw e;
+    } finally {
+        if (keepLock) console.error(`\n${path.relative(ROOT, lock)} kept: recover from the before-images it names`);
+        else { fs.rmSync(lock, { force: true }); for (const [, bk] of backups) fs.rmSync(bk, { force: true }); }
     }
     process.exit(code);
 }

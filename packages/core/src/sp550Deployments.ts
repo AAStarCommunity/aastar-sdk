@@ -199,6 +199,9 @@ export function requireSp550UpgradePins(
     return pins as Required<Sp550CutoverPins>;
 }
 
+/** Pins for a chain, or throw naming every problem: the full upgrade rule set (same as requireSp550UpgradePins). */
+export const requireSp550CutoverPins = requireSp550UpgradePins;
+
 /** Everything wrong with an in-place upgrade's pin set (empty array = usable, hold aside). */
 export function sp550UpgradePinProblems(pins: Sp550CutoverPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
     return [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins), ...sp550BookOwnershipProblems(pins), ...sp550PinAliasProblems(pins)];

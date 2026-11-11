@@ -129,7 +129,8 @@ describe('declared aliases are one contract: one codehash (Grok on #433)', () =>
 
 describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok High)', async () => {
     const { requireSp550UpgradePins } = await import('./sp550Deployments.js');
-    const { requireSp550CutoverPins, SP550_CERTIFIED_ADDRESS_KEYS } = await import('./sp550Cutover.js');
+    const { SP550_CERTIFIED_ADDRESS_KEYS } = await import('./sp550Cutover.js');
+    const { requireSp550CutoverPins } = await import('./sp550Deployments.js');
     const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
     const UP: any = { ...FULL, superPaymaster: A(0x2ff), addresses: book, absent: undefined };
     delete UP.absent;
@@ -144,8 +145,13 @@ describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok
         expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
         expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
     });
-    it('an external key in addresses is refused by the consumer rule set', () => {
+    it('an external key in addresses is refused — by the public requireSp550CutoverPins too (Codex r7)', () => {
         const pins = { ...UP, addresses: { ...UP.addresses, entryPoint: A(0x77) }, codehashes: { ...UP.codehashes, 'addresses.entryPoint': '0x' + '77'.repeat(32) } };
         expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/addresses\.entryPoint: external/);
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/addresses\.entryPoint: external/);
+    });
+    it('an undeclared alias is refused by the public requireSp550CutoverPins', () => {
+        const pins = { ...UP, globalTierSource: UP.aoaProtocolRegistry, codehashes: { ...UP.codehashes, globalTierSource: UP.codehashes.aoaProtocolRegistry } };
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/aoaProtocolRegistry and globalTierSource are the same address/);
     });
 });

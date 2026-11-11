@@ -88,11 +88,16 @@ async function main() {
                 if (!blk) return 'no block';
                 const cfg = await u.request({ method: 'eth_config', params: [] } as never).then((c: any) => c?.current, () => undefined) as any;
                 return JSON.stringify({ blockAccessListHash: typeof blk.blockAccessListHash === 'string', slotNumber: blk.slotNumber !== undefined && blk.slotNumber !== null,
-                    ...(cfg ? { ethConfig: { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } } : {}) });
+                    ethConfig: cfg ? { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } : null });
             } catch (e) { return `ERR ${(e as Error).name}`; } // an upstream URL embeds a key: no message text
         }));
         if (seen.some((x) => !x.startsWith('{'))) return { kind: 'error', detail: seen.find((x) => !x.startsWith('{'))! };
-        return seen.every((x) => x === seen[0]) ? { kind: 'value', value: seen[0] } : { kind: 'error', detail: `upstreams disagree: ${seen.join(' vs ')}` };
+        // Header facts must agree across providers; eth_config is per provider (some do not serve it),
+        // so every config that IS served is handed on and checked on its own.
+        const parsed = seen.map((x) => JSON.parse(x));
+        const facts = parsed.map((x) => `${x.blockAccessListHash}/${x.slotNumber}`);
+        if (!facts.every((f) => f === facts[0])) return { kind: 'error', detail: `upstreams disagree on the block header: ${facts.join(' vs ')}` };
+        return { kind: 'value', value: JSON.stringify({ blockAccessListHash: parsed[0].blockAccessListHash, slotNumber: parsed[0].slotNumber, ethConfigs: parsed.map((x) => x.ethConfig).filter(Boolean) }) };
     };
     const read = async (address: string, what: ReadKind, at?: { block?: bigint }): Promise<Observed> => {
         if (what === 'amsterdamAtForkBlock') return amsterdam(at?.block);
@@ -106,20 +111,22 @@ async function main() {
     const probe = args.includes('--probe');
     if (probe && (source !== 'fork' || urls.length !== 1 || !isLoopbackUrl(urls[0]))) refuse('--probe sends a transaction: fork read-backs only, on one loopback RPC');
     if (probe && !process.env.SP550_FORK_URL) refuse('--probe needs SP550_FORK_URL (the upstream the fork was started from) for the live estimate');
-    if (probe) {
-        // The live estimate must come from the real chain, never from the fork itself (or another local node).
+    // Any upstream evidence (the Amsterdam header / eth_config on a fork read-back, and --probe) must come
+    // from the real chain, never from the fork itself or another local node.
+    if (source === 'fork' && process.env.SP550_FORK_URL) {
         const up = process.env.SP550_FORK_URL!;
-        if (isLoopbackUrl(up)) refuse('--probe: SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node');
+        if (isLoopbackUrl(up)) refuse('SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node');
         let same = false;
-        try { same = new URL(up).host.toLowerCase() === new URL(urls[0]).host.toLowerCase(); } catch { refuse('--probe: SP550_FORK_URL is not a URL'); }
-        if (same) refuse('--probe: SP550_FORK_URL is the --rpc endpoint; the live estimate must be independent of the fork');
+        try { same = new URL(up).host.toLowerCase() === new URL(urls[0]).host.toLowerCase(); } catch { refuse('SP550_FORK_URL is not a URL'); }
+        if (same) refuse('SP550_FORK_URL is the --rpc endpoint; the live estimate must be independent of the fork');
         const upstream = createPublicClient({ transport: http(up) });
         // Errors here never print the URL (it embeds a provider key).
         const upId = await upstream.getChainId().catch(() => undefined);
-        if (upId !== net.chainId) refuse(`--probe: the upstream reports chainId ${upId ?? '(no answer)'}, not ${net.chainId}`);
+        if (upId !== net.chainId) refuse(`SP550_FORK_URL reports chainId ${upId ?? '(no answer)'}, not ${net.chainId}`);
         const cv = await upstream.request({ method: 'web3_clientVersion' } as never).catch(() => '') as string;
-        if (/^anvil\//i.test(cv)) refuse('--probe: the upstream is an anvil node, not the live chain');
+        if (/^anvil\//i.test(cv)) refuse('SP550_FORK_URL is an anvil node, not the live chain');
     }
+    if (source === 'fork' && !process.env.SP550_FORK_URL) refuse('a fork read-back needs SP550_FORK_URL (the upstream the fork was started from) for the Amsterdam checks');
     const rbJson = JSON.parse(fs.readFileSync(rbFile, 'utf8'));
     const problems = await readbackProblems(rbJson, pins, {
         chainId: net.chainId, mode: net.mode, source, allowRc: args.includes('--allow-rc'),

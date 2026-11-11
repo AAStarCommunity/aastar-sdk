@@ -210,23 +210,5 @@ export function sp550UpgradeAddressProblems(pins: Sp550CutoverPins | undefined):
     return Object.keys(pins?.addresses ?? {}).filter((k) => derived[k]).map((k) => `addresses.${k}: an upgrade derives it from ${derived[k]}; do not list it`);
 }
 
-/** Pins for a chain, or throw naming every missing or malformed field. */
-export function requireSp550CutoverPins(
-    chainId: number,
-    pins = SP550_CUTOVER_PINS[chainId],
-    opts: { allowRc?: boolean } = {},
-): Required<Sp550CutoverPins> {
-    const problems = [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins)];
-    // Every certified book entry carries its codehash (ownership / alias rules need the book table:
-    // requireSp550UpgradePins in sp550Deployments.ts applies those too, and is what consumers use).
-    for (const k of Object.keys(pins?.addresses ?? {})) {
-        if (pins?.codehashes?.[`addresses.${k}`] === undefined) problems.push(`codehashes.addresses.${k}: unpinned`);
-    }
-    if (problems.length) {
-        throw new Error(
-            `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not usable (${problems.join('; ')}). ` +
-                `They are read back from the chain after the upgrade; until then the SDK must not use 5.5.0 addresses.`,
-        );
-    }
-    return pins as Required<Sp550CutoverPins>;
-}
+// requireSp550CutoverPins lives in sp550Deployments.ts: it needs the address-book owner table to apply
+// the full upgrade rule set (ownership, aliases, holds), and a field-level variant here was a bypass.

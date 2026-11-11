@@ -81,9 +81,9 @@ export type ReadKind = 'version' | 'owner' | 'pendingOwner' | 'EXTENSION' | 'cod
 export const OWNERSHIP_2STEP_SLOT = '0xdb5a3168abaa6147a9f3a4cb66016161119d4d50b6393344d27120286f742a00';
 /**
  * `amsterdamAtForkBlock` (address ignored, `at.block` = header.forkBlock) answers a JSON value
- * `{ blockAccessListHash: bool, slotNumber: bool, ethConfig?: { activationTime, forkId } }` read from
- * the UPSTREAM chain (never the fork): the block header's Amsterdam-only fields, and eth_config.current
- * when the node serves it.
+ * `{ blockAccessListHash: bool, slotNumber: bool, ethConfigs: [{ activationTime, forkId }] }` read from
+ * the UPSTREAM chain (never the fork): the block header's Amsterdam-only fields (agreed across
+ * providers), and eth_config.current from every provider that serves it.
  */
 export type ChainReader = (address: string, what: ReadKind, at?: { block?: bigint }) => Promise<Observed>;
 
@@ -190,10 +190,10 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
     if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
     else {
-        const seen = JSON.parse(am.value) as { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfig?: { activationTime?: number; forkId?: string } };
+        const seen = JSON.parse(am.value) as { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] };
         if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
-        if (seen.ethConfig && ref && (seen.ethConfig.activationTime !== ref.activationTime || !eq(seen.ethConfig.forkId, ref.forkId))) {
-            p.push(`header.ethConfig: the upstream eth_config reports ${show(seen.ethConfig)}, not Amsterdam ${show(ref)}`);
+        for (const cfg of seen.ethConfigs ?? []) {
+            if (ref && (cfg.activationTime !== ref.activationTime || !eq(cfg.forkId, ref.forkId))) p.push(`header.ethConfig: the upstream eth_config reports ${show(cfg)}, not Amsterdam ${show(ref)}`);
         }
     }
     const co = ec.corroboration as Record<string, any>;

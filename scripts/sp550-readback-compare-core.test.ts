@@ -40,7 +40,7 @@ for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
 const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
 let PENDING_SLOT: Record<string, string> = { [A(0x21)]: A(0) };
-let AMSTERDAM: Observed = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1791294816, forkId: '0x6c1d9423' } }) };
+let AMSTERDAM: Observed = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
 const reader = (chain = CHAIN, code = CODE, slots = SLOTS, blockHash = BLOCK_HASH): ChainReader => async (address, what) => {
     if (what === 'blockHash') return { kind: 'value', value: blockHash };
     if (what === 'ownership2StepSlot') return { kind: 'value', value: PENDING_SLOT[address] ?? A(0) };
@@ -149,18 +149,21 @@ describe('readbackProblems: a read-back that agrees with the pins and the chain 
 describe('readbackProblems refuses', () => {
     afterEach(() => {
         PENDING_SLOT = { [A(0x21)]: A(0) };
-        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1791294816, forkId: '0x6c1d9423' } }) };
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
     });
     it.each([
         ['an upstream block without Amsterdam header fields', { kind: 'value', value: JSON.stringify({ blockAccessListHash: false, slotNumber: false }) }, /the upstream block 400 lacks Amsterdam header fields/],
-        ['an upstream eth_config that is not Amsterdam', { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfig: { activationTime: 1, forkId: '0x00000000' } }) }, /the upstream eth_config reports .*not Amsterdam/],
+        ['an upstream eth_config that is not Amsterdam', { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }, { activationTime: 1, forkId: '0x00000000' }] }) }, /the upstream eth_config reports .*not Amsterdam/],
         ['no upstream to check against', { kind: 'error', detail: 'a fork read-back needs SP550_FORK_URL' }, /the SDK could not read the upstream at forkBlock 400/],
     ] as const)('the file copying Amsterdam constants is not enough (Grok High): %s', async (_n, obs, msg) => {
         AMSTERDAM = obs as Observed;
         expect(await run(good())).toEqual([expect.stringMatching(msg)]);
     });
     it('an upstream without eth_config is fine when the header fields are there', async () => {
-        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true }) };
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [] }) };
+        expect(await run(good())).toEqual([]);
+        // one provider serves eth_config and one does not (the schema's corroboration case): its config is checked alone
+        AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
         expect(await run(good())).toEqual([]);
     });
     it.each([
