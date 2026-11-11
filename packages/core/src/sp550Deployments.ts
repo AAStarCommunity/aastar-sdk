@@ -17,7 +17,7 @@
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import type { CanonicalAddresses } from './addresses.js';
-import { sp550PinProblems, type Sp550CutoverPins } from './sp550Cutover.js';
+import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
 
@@ -136,7 +136,8 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     const book = pins?.addresses ?? {};
     const absent = new Set<string>(pins?.absent ?? []);
     for (const k of SP550_FRESH_REQUIRED_ADDRESS_KEYS) {
-        if (book[k] === undefined) problems.push(`addresses.${k}: unpinned`);
+        // The certified keys are already reported by sp550PinProblems.
+        if (book[k] === undefined && !(SP550_CERTIFIED_ADDRESS_KEYS as readonly string[]).includes(k)) problems.push(`addresses.${k}: unpinned`);
     }
     for (const k of SP550_FRESH_OPTIONAL_ADDRESS_KEYS) {
         if (book[k] === undefined && !absent.has(k)) problems.push(`addresses.${k}: neither pinned nor declared absent`);
@@ -145,30 +146,40 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     for (const k of absent) {
         if (SP550_ADDRESS_OWNER[k as AddressBookKey] !== 'sp-optional') problems.push(`absent: ${k} is not an sp-optional key`);
     }
-    for (const [k, v] of Object.entries(book)) {
-        const owner = SP550_ADDRESS_OWNER[k as AddressBookKey];
-        if (owner === undefined) { problems.push(`addresses.${k}: not an address-book key`); continue; }
-        if (owner === 'external') { problems.push(`addresses.${k}: external, not pinned from SP's deploy`); continue; }
-        if (typeof v !== 'string' || !isAddress(v, { strict: false }) || v.toLowerCase() === ZERO) {
-            problems.push(`addresses.${k}: not a non-zero address (${String(v)})`);
-        }
-    }
+    problems.push(...sp550BookOwnershipProblems(pins));
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
     }
-    // Every SP-owned book entry is held to its codehash too; the `addresses.` names are checked here
-    // because only this table knows which keys SP deploys.
+    problems.push(...sp550PinAliasProblems(pins));
+    return problems;
+}
+
+/**
+ * `addresses` names only SP-owned book keys, and so does every `codehashes.addresses.<key>` (a
+ * hash for each listed entry is required by sp550PinProblems). Only this table knows which keys SP deploys.
+ */
+export function sp550BookOwnershipProblems(pins: Sp550CutoverPins | undefined): string[] {
+    const problems: string[] = [];
+    for (const k of Object.keys(pins?.addresses ?? {})) {
+        const owner = SP550_ADDRESS_OWNER[k as AddressBookKey];
+        if (owner === undefined) problems.push(`addresses.${k}: not an address-book key`);
+        else if (owner === 'external') problems.push(`addresses.${k}: external, not pinned from SP's deploy`);
+    }
     const spOwned = (k: string) => SP550_ADDRESS_OWNER[k as AddressBookKey] === 'sp' || SP550_ADDRESS_OWNER[k as AddressBookKey] === 'sp-optional';
     if (pins?.codehashes && typeof pins.codehashes === 'object') {
-        for (const k of Object.keys(book)) {
+        for (const k of Object.keys(pins.addresses ?? {})) {
             if (spOwned(k) && pins.codehashes[`addresses.${k}`] === undefined) problems.push(`codehashes.addresses.${k}: unpinned (every pinned address needs its runtime codehash)`);
         }
         for (const name of Object.keys(pins.codehashes)) {
             if (name.startsWith('addresses.') && !spOwned(name.slice('addresses.'.length))) problems.push(`codehashes.${name}: not an SP-owned address-book key`);
         }
     }
-    problems.push(...sp550PinAliasProblems(pins));
     return problems;
+}
+
+/** Everything wrong with an in-place upgrade's pin set (empty array = usable, hold aside). */
+export function sp550UpgradePinProblems(pins: Sp550CutoverPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
+    return [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins), ...sp550BookOwnershipProblems(pins), ...sp550PinAliasProblems(pins)];
 }
 
 /**
@@ -198,7 +209,7 @@ export function requireSp550FreshDeployPins(
  * two entries sharing an address is a mis-pin (e.g. addresses.xPNTsFactory = the SP proxy would
  * otherwise only be checked for non-empty code, and pass).
  */
-const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
+export const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
     ['superPaymaster', 'addresses.superPaymaster'],
     ['aPNTsCapped', 'addresses.aPNTs'],
     ['xPNTsFactoryV2', 'addresses.xPNTsFactory'],
@@ -207,12 +218,8 @@ const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
 /** Every pair of pinned entries that share an address without being a declared alias. */
 export function sp550PinAliasProblems(pins: Sp550FreshDeployPins | undefined): string[] {
     if (!pins) return [];
-    const top = ['superPaymaster', 'spImpl', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl', 'xPNTsTokenV2Ext',
-        'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped'] as const;
-    const entries: [string, string][] = [
-        ...top.map((k) => [k, pins[k]] as [string, unknown]),
-        ...Object.entries(pins.addresses ?? {}).map(([k, a]) => [`addresses.${k}`, a] as [string, unknown]),
-    ].filter((e): e is [string, string] => typeof e[1] === 'string' && isAddress(e[1], { strict: false })).map(([k, a]) => [k, a.toLowerCase()]);
+    // Derived from the same list the gate checks code for, so a new pinned field is covered here too.
+    const entries: [string, string][] = sp550PinnedAddressEntries(pins).filter((e): e is [string, string] => typeof e[1] === 'string' && isAddress(e[1], { strict: false })).map(([k, a]) => [k, a.toLowerCase()]);
     const allowed = (a: string, b: string) => SP550_PIN_ALIASES.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
     const problems: string[] = [];
     for (let i = 0; i < entries.length; i++) {

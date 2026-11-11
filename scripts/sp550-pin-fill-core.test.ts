@@ -1,0 +1,210 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+import { getAddress } from 'viem';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
+import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
+
+const SRC = path.resolve(import.meta.dirname, '../packages/core/src');
+const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
+const MANIFEST = {
+    tag: 'v5.5.0-rc.8', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9',
+    spImpl: A(0x11), spImplCodehash: '0x' + 'ab'.repeat(32), superPaymasterLens: A(0x13), xPNTsFactoryV2: A(0x14),
+    xPNTsTokenV2Impl: A(0x15), xPNTsTokenV2Ext: A(0x16), aoaProtocolRegistry: A(0x17), globalTierSource: A(0x18),
+    aPNTsCapped: A(0x19), readbackBlock: 12_345_678,
+    spAdminExtension: A(0x1a), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0x1b), disclosureRegistry: A(0x1c),
+    addresses: { registry: A(0x21), policyRegistry: A(0x22), blsAggregator: A(0x23), dvtValidator: A(0x24), reputationSystem: A(0x25) },
+} as Record<string, any>;
+MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as any).map(([k], i) =>
+    [k, k === 'spImpl' ? MANIFEST.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
+
+/** Write `source` next to the real module so its imports resolve, import it, delete it. */
+const temps: string[] = [];
+afterEach(() => { for (const f of temps.splice(0)) fs.rmSync(f, { force: true }); });
+async function load(name: string, source: string) {
+    const f = path.join(SRC, `.pinfill-test-${process.pid}-${name}.ts`);
+    temps.push(f);
+    fs.writeFileSync(f, source);
+    return import(f);
+}
+
+describe('parseManifestPins: the manifest is read the way the gate reads --pins, strictly', () => {
+    it('readbackBlock becomes a bigint; the rest passes through', () => {
+        const p = parseManifestPins(MANIFEST, 'upgrade');
+        expect(p.readbackBlock).toBe(12_345_678n);
+        expect(p.codehashes).toEqual(MANIFEST.codehashes);
+    });
+    it('an unknown key is refused, not dropped (a renamed field would otherwise vanish)', () => {
+        expect(() => parseManifestPins({ ...MANIFEST, lens: A(1) }, 'upgrade')).toThrow(/unknown key\(s\) for a upgrade deploy: lens/);
+        expect(() => parseManifestPins({ ...MANIFEST, absent: [] }, 'upgrade')).toThrow(/absent/);
+        expect(parseManifestPins({ ...MANIFEST, addresses: {}, absent: [] }, 'fresh').addresses).toEqual({});
+    });
+    it('a readbackBlock that is not a block number is refused', () => {
+        for (const rb of [-1, 1.5, '0x10', 'latest', 2 ** 60]) expect(() => parseManifestPins({ ...MANIFEST, readbackBlock: rb }, 'upgrade')).toThrow(/readbackBlock/);
+        expect(parseManifestPins({ ...MANIFEST, readbackBlock: '99999999999999999999' }, 'upgrade').readbackBlock).toBe(99999999999999999999n);
+    });
+    it('not an object is refused', () => {
+        for (const j of [null, [], 'x']) expect(() => parseManifestPins(j, 'upgrade')).toThrow(/not a JSON object/);
+    });
+});
+
+describe('bookSwitch', () => {
+    it('upgrade: the book follows SP onto the capped aPNTs and the v2 factory, plus the certified entries', () => {
+        expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14) });
+    });
+    it('only entries whose address changes are rewritten', () => {
+        expect(changedEntries({ registry: A(1), aPNTs: A(2), pnts: A(3) }, { registry: A(1).toUpperCase().replace('0X', '0x'), aPNTs: A(9) })).toEqual({ aPNTs: A(2), pnts: A(3) });
+    });
+    it('fresh: every manifest address-book entry', () => {
+        expect(bookSwitch('fresh', parseManifestPins({ ...MANIFEST, addresses: { registry: A(1), aPNTs: A(0x19) } }, 'fresh'))).toEqual({ registry: A(1), aPNTs: A(0x19) });
+    });
+    it('a missing or malformed address is refused', () => {
+        const { aPNTsCapped: _d, ...rest } = MANIFEST;
+        expect(() => bookSwitch('upgrade', parseManifestPins(rest, 'upgrade'))).toThrow(/book switch aPNTs: undefined is not an address/);
+        expect(() => bookSwitch('fresh', parseManifestPins({ ...MANIFEST, addresses: { registry: '0x12' } }, 'fresh'))).toThrow(/registry/);
+    });
+});
+
+describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the manifest', () => {
+    const source = fs.readFileSync(path.join(SRC, 'sp550Cutover.ts'), 'utf8');
+    it('the filled table, imported, holds the manifest pins and they pass the pin check', async () => {
+        const pins = parseManifestPins(MANIFEST, 'upgrade');
+        const m = await load('cut', fillPinsTable(source, 'SP550_CUTOVER_PINS', 11155111, pins));
+        const got = m.SP550_CUTOVER_PINS[11155111];
+        const checksummed = Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([k]) => !k.startsWith('addresses.')).map(([k, a]) => [k, getAddress(a as string)]));
+        const book = Object.fromEntries(Object.entries(pins.addresses!).map(([k, a]) => [k, getAddress(a!)]));
+        expect(got).toEqual({ ...pins, ...checksummed, addresses: book });
+        expect(sp550PinProblems(got, { allowRc: true })).toEqual([]);
+    });
+    it('a filled entry is never overwritten', () => {
+        const once = fillPinsTable(source, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'));
+        expect(() => fillPinsTable(once, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/already filled/);
+    });
+    it('two entries for one chain are refused, even when one is empty (Codex M7)', () => {
+        const twice = source.replace('    11155111: {},', '    11155111: { tag: "x" },\n    11155111: {},');
+        expect(() => fillPinsTable(twice, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/2 entries for this chain/);
+    });
+    it('a chain with no entry, or a missing table, is refused', () => {
+        expect(() => fillPinsTable(source, 'SP550_CUTOVER_PINS', 1, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/no entry for this chain/);
+        expect(() => fillPinsTable(source, 'NOPE', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/NOPE: 0 declarations at line start/);
+    });
+    it('fresh: the [optimismSepolia.id] spelling is filled in sp550Deployments.ts', async () => {
+        const dep = fs.readFileSync(path.join(SRC, 'sp550Deployments.ts'), 'utf8');
+        const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x21) }, absent: ['pnts'] }, 'fresh');
+        const m = await load('dep', fillPinsTable(dep, 'SP550_FRESH_DEPLOY_PINS', 11155420, pins));
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155420].addresses).toEqual({ registry: getAddress(A(0x21)) });
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155420].absent).toEqual(['pnts']);
+        expect(m.SP550_FRESH_DEPLOY_PINS[10]).toEqual({});
+    });
+});
+
+describe('switchBook on the real addresses.ts: only the switched entries change', () => {
+    const source = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
+    it('Sepolia aPNTs / xPNTsFactory point at the new contracts; every other entry and chain is untouched', async () => {
+        const m = await load('book', switchBook(source, 11155111, { aPNTs: A(0x19), xPNTsFactory: A(0x14) }, 'note'));
+        const was = CANONICAL_ADDRESSES as Record<number, Record<string, string>>;
+        const now = m.CANONICAL_ADDRESSES as Record<number, Record<string, string>>;
+        expect(now[11155111].aPNTs).toBe(getAddress(A(0x19)));
+        expect(now[11155111].xPNTsFactory).toBe(getAddress(A(0x14)));
+        expect({ ...now[11155111], aPNTs: 0, xPNTsFactory: 0 }).toEqual({ ...was[11155111], aPNTs: 0, xPNTsFactory: 0 });
+        for (const c of [10, 11155420]) expect(now[c]).toEqual(was[c]);
+    });
+    it('a key the book lacks is added to that chain only, once', async () => {
+        // Remove the key first, so the test exercises insertion, not replacement (Codex L10).
+        const without = source.replace(/\n    policyRegistry: "0x[0-9a-fA-F]{40}",[^\n]*(?=[\s\S]*\n  11155420: \{)/, '');
+        const opSep = (src: string) => src.slice(src.indexOf('\n  11155420: {'));
+        expect(opSep(without).includes('\n    policyRegistry:')).toBe(true);
+        const stripped = without.slice(0, without.indexOf('\n  11155420: {')) + opSep(without).replace(/\n    policyRegistry: "0x[0-9a-fA-F]{40}",[^\n]*/, '');
+        expect(opSep(stripped).includes('\n    policyRegistry:')).toBe(false);
+        const out = switchBook(stripped, 11155420, { policyRegistry: A(0x31) }, 'note');
+        expect(opSep(out).split('\n    policyRegistry:').length - 1).toBe(1);
+        const m = await load('add', out);
+        expect(m.CANONICAL_ADDRESSES[11155420].policyRegistry).toBe(getAddress(A(0x31)));
+    });
+    it('a null entry removes the key (a fresh deploy declaring it absent)', async () => {
+        const m = await load('rm', switchBook(source, 11155420, { microPaymentChannel: null }, 'note'));
+        expect('microPaymentChannel' in m.CANONICAL_ADDRESSES[11155420]).toBe(false);
+        expect({ ...m.CANONICAL_ADDRESSES[11155420], microPaymentChannel: 0 }).toEqual({ ...(CANONICAL_ADDRESSES as any)[11155420], microPaymentChannel: 0 });
+    });
+    it('a duplicate declaration, or a block comment in the block, is refused', () => {
+        const dup = source.replace('\n  11155111: {\n', '\n  11155111: {\n    aPNTs: "0x0000000000000000000000000000000000000001",\n');
+        expect(() => switchBook(dup, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/aPNTs: 2 declarations/);
+        const commented = source.replace('\n  11155111: {\n', '\n  11155111: {\n    /* aPNTs: "0x0000000000000000000000000000000000000001", */\n');
+        expect(() => switchBook(commented, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/block comment/);
+    });
+    it('a chain with no block is refused', () => {
+        expect(() => switchBook(source, 1, { aPNTs: A(1) }, 'n')).toThrow(/CANONICAL_ADDRESSES\[1\]: no block/);
+    });
+    it('a key whose line is not a plain address literal is refused rather than duplicated', () => {
+        const odd = source.replace(/\n    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89",[^\n]*/, '\n    aPNTs: SOME_CONST,');
+        expect(odd).not.toBe(source);
+        expect(() => switchBook(odd, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/not a plain address literal/);
+    });
+});
+
+describe('fresh absent keys and loopback detection', () => {
+    it('absent keys are removed from the switched book; pinned-and-absent is refused', () => {
+        const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x21) }, absent: ['pnts'] }, 'fresh');
+        const sw = bookSwitch('fresh', pins);
+        expect(sw).toEqual({ registry: A(0x21), pnts: null });
+        expect(applyBookSwitch({ registry: A(1), pnts: A(2), entryPoint: A(3) }, sw)).toEqual({ registry: A(0x21), entryPoint: A(3) });
+        expect(changedEntries(sw, { registry: A(0x21) })).toEqual({});
+        expect(() => bookSwitch('fresh', parseManifestPins({ ...MANIFEST, addresses: { pnts: A(1) }, absent: ['pnts'] }, 'fresh'))).toThrow(/both pinned and declared absent/);
+    });
+    it.each(['http://127.0.0.1:8545', 'http://127.1:8545', 'http://user:pass@127.0.0.1:8545', 'http://LOCALHOST:8545', 'http://[::1]:8545', 'http://0.0.0.0:8545', 'http://a.localhost/', 'not a url',
+        'http://localhost.:8545', 'http://[::ffff:127.0.0.1]:8545', 'http://[0:0:0:0:0:0:0:1]:8545', 'http://[::]:8545', 'http://[::ffff:0.0.0.0]:8545'])(
+        '%s is loopback (or unparsable)', (u) => expect(isLoopbackUrl(u)).toBe(true));
+    it.each(['https://sepolia.example.org/v2/key', 'https://127.0.0.1.example.org/'])('%s is not loopback', (u) => expect(isLoopbackUrl(u)).toBe(false));
+});
+
+describe('round-2 rewrite guards (Codex r2 on 7cefda78)', () => {
+    const book = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
+    const table = fs.readFileSync(path.join(SRC, 'sp550Cutover.ts'), 'utf8');
+    it('a declaration sharing its line with another property is refused, never rewritten whole', () => {
+        const two = book.replace(/\n    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89",[^\n]*/, '\n    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89", pnts: "0x0000000000000000000000000000000000000001",');
+        expect(two).not.toBe(book);
+        expect(() => switchBook(two, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/not a plain address literal on its own line/);
+    });
+    it('a second block for the same chain is refused (the last one would win)', () => {
+        const dup = book.replace('\n  11155420: {\n', '\n  11155111: {\n    aPNTs: "0x0000000000000000000000000000000000000001",\n  },\n  11155420: {\n');
+        expect(() => switchBook(dup, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/2 blocks for this chain/);
+    });
+    it('a commented-out table declaration is not the table (and two real ones are refused)', () => {
+        const commented = table.replace('\nexport const SP550_CUTOVER_PINS', '\n// export const SP550_CUTOVER_PINS: Record<number, Sp550CutoverPins> = {\n//     11155111: {},\n// };\nexport const SP550_CUTOVER_PINS');
+        const out = fillPinsTable(commented, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'));
+        expect(out).toContain('//     11155111: {},');
+        expect(out.split('\n    11155111: {\n').length - 1).toBe(1);
+        const twice = table.replace('\nexport const SP550_CUTOVER_PINS', '\nexport const SP550_CUTOVER_PINS_OLD = {};\nexport const SP550_CUTOVER_PINS');
+        expect(() => fillPinsTable(twice, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/2 declarations at line start/);
+    });
+});
+
+describe('writeAll: all or nothing, never clobbering another writer', () => {
+    const memIo = (files: Record<string, string>, fail: Partial<Record<'rename' | 'read' | 'write', (p: string) => boolean>> = {}): WriteIo & { files: Record<string, string> } => ({
+        files,
+        read: (p) => { if (fail.read?.(p)) throw new Error(`ENOENT ${p}`); if (!(p in files)) throw new Error(`ENOENT ${p}`); return files[p]; },
+        write: (p, v) => { if (fail.write?.(p)) throw new Error(`EACCES ${p}`); files[p] = v; },
+        rename: (a, b) => { if (fail.rename?.(b)) throw new Error(`EACCES ${b}`); files[b] = files[a]; delete files[a]; },
+        remove: (p) => { delete files[p]; },
+    });
+    const F = [{ path: '/r/table.ts', before: 'old-table', after: 'new-table' }, { path: '/r/book.ts', before: 'old-book', after: 'new-book' }];
+    it('the second rename failing restores the first; no temp file is left', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => p === '/r/book.ts' });
+        expect(() => writeAll(F, '/r', io)).toThrow(/write failed .*nothing left changed/);
+        expect(io.files).toEqual({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
+    });
+    it('…but a file another writer changed in between is left alone and reported', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => { if (p === '/r/book.ts') { io.files['/r/table.ts'] = 'their-edit'; return true; } return false; } });
+        expect(() => writeAll(F, '/r', io)).toThrow(/table\.ts changed since this run wrote it/);
+        expect(io.files['/r/table.ts']).toBe('their-edit');
+    });
+    it('restore() attempts every file and reports each failure', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
+        const restore = writeAll(F, '/r', io);
+        expect(io.files).toEqual({ '/r/table.ts': 'new-table', '/r/book.ts': 'new-book' });
+        delete io.files['/r/table.ts'];
+        expect(restore()).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
+        expect(io.files['/r/book.ts']).toBe('old-book');
+    });
+});

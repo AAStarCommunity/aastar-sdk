@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     SP550_CUTOVER_PINS, SP550_REQUIRED_PIN_FIELDS, isSp550ReleaseTag, missingSp550Pins, requireSp550CutoverPins, sp550PinProblems,
-    sp550PinnedAddressEntries,
+    sp550PinnedAddressEntries, SP550_CERTIFIED_ADDRESS_KEYS,
 } from './sp550Cutover.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
@@ -9,6 +9,8 @@ const FULL = {
     tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9', spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
+    spAdminExtension: A(0xa), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0xb), disclosureRegistry: A(0xc),
+    addresses: Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x20 + i)])),
 } as const;
 /** A distinct hash per pinned address; spImpl's is spImplCodehash. */
 const hashesFor = (pins: any) => Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([, a]) => a !== undefined)

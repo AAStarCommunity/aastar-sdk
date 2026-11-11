@@ -3,11 +3,12 @@ import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS } from './sp550Deployments.js';
-import { sp550PinnedAddressEntries } from './sp550Cutover.js';
+import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
 const SP_VERSION = 'SuperPaymaster-5.5.1';
+const LENS_VERSION = 'SuperPaymasterLens-1.2.2';
 /** Each fixture's SDK address book, keyed by its pins object, so every call site stays as written. */
 const BOOKS = new WeakMap<object, Record<string, unknown>>();
 const runSp550CutoverGate = (i: GateInput) => rawGate({ ...i, book: i.book ?? (i.pins ? BOOKS.get(i.pins) : undefined) });
@@ -23,18 +24,22 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
     const book = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => [k, A(0x100 + i)])) as Record<string, Address>;
     const p = {
         sp: book.superPaymaster, impl: A(1), lens: A(3), factory: A(4), tokenImpl: A(5), ext: A(6), aoa: A(7), tier: A(8), apnts: book.aPNTs,
+        admin: A(0xa), registryImpl: A(0xb), disclosure: A(0xc),
     };
+    // An upgrade certifies the SP-owned entries every read-back names; a fresh deploy the whole SP-owned book.
+    const certified = mode === 'fresh' ? book : Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k) => [k, book[k]])) as Record<string, Address>;
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId];
     const base = {
         tag: 'v5.5.0', spVersion: SP_VERSION, superPaymaster: p.sp, spImpl: p.impl, spImplCodehash: keccak256(codeOf(p.impl)), superPaymasterLens: p.lens,
         xPNTsFactoryV2: p.factory, xPNTsTokenV2Impl: p.tokenImpl, xPNTsTokenV2Ext: p.ext, aoaProtocolRegistry: p.aoa,
         globalTierSource: p.tier, aPNTsCapped: p.apnts, readbackBlock: HEAD - 10n,
-        ...(mode === 'fresh' ? { addresses: book, absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS] } : {}),
+        spAdminExtension: p.admin, lensVersion: LENS_VERSION, registryImpl: p.registryImpl, disclosureRegistry: p.disclosure,
+        addresses: certified, ...(mode === 'fresh' ? { absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS] } : {}),
     };
     // The read-back runtime codehash of every pinned address (the model serves codeOf(address)).
     const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
     const reads: Record<string, unknown> = {
-        [`${p.sp}.version`]: SP_VERSION, [`${p.sp}.APNTS_TOKEN`]: p.apnts, [`${p.sp}.xpntsFactory`]: p.factory,
+        [`${p.sp}.version`]: SP_VERSION, [`${p.sp}.EXTENSION`]: p.admin, [`${p.lens}.version`]: LENS_VERSION, [`${p.sp}.APNTS_TOKEN`]: p.apnts, [`${p.sp}.xpntsFactory`]: p.factory,
         [`${p.sp}.REGISTRY`]: book.registry, [`${p.sp}.BLS_AGGREGATOR`]: book.blsAggregator,
         [`${p.sp}.agentIdentityRegistry`]: book.agentIdentityRegistry, [`${p.sp}.agentReputationRegistry`]: book.agentReputationRegistry,
         [`${p.sp}.entryPoint`]: canonical.entryPoint, [`${p.sp}.ETH_USD_PRICE_FEED`]: canonical.priceFeed,
@@ -48,9 +53,11 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
     const sdkBook: Record<string, unknown> = mode === 'fresh'
         ? { ...book, entryPoint: canonical.entryPoint, priceFeed: canonical.priceFeed }
-        : { ...canonical, superPaymaster: p.sp, aPNTs: p.apnts, xPNTsFactory: p.factory };
+        : { ...canonical, ...certified, superPaymaster: p.sp, aPNTs: p.apnts, xPNTsFactory: p.factory };
     BOOKS.set(pins, sdkBook);
-    return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined,
+    return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex,
+        /** ERC-1967 slots of proxies other than SP (the Registry); SP's is `slot`. */
+        slots: { [book.registry]: pad(p.registryImpl, { size: 32 }) } as Record<string, Hex>, blockHash: BLOCK_HASH as Hex | null, servedBlock: undefined as bigint | undefined,
         /** The block this RPC reports as finalized (default HEAD); null = it serves none. */
         finalized: HEAD as bigint | null,
         /** Per-address code overrides ('0x' = no code); default codeOf(address). */
@@ -81,10 +88,10 @@ function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
             }
             log('getBlock'); return { number: m.servedBlock ?? blockNumber, hash: m.blockHash };
         }) as any,
-        getStorageAt: (async ({ slot, blockNumber }: any) => {
+        getStorageAt: (async ({ address, slot, blockNumber }: any) => {
             log('getStorageAt'); atSnapshot('getStorageAt', blockNumber);
             if (slot !== IMPL_SLOT) throw new Error(`unexpected slot ${slot}`);
-            return m.slot;
+            return address in m.slots ? m.slots[address] : m.slot;
         }) as any,
         getCode: (async ({ address, blockNumber }: any) => {
             log('getCode'); atSnapshot('getCode', blockNumber);
@@ -449,5 +456,58 @@ describe('a single RPC is only for a loopback fork rehearsal (clestons N4)', () 
         const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', 'https://rpc.example', m, calls)], pins: m.pins });
         expect(r).toMatchObject({ exitCode: 2, error: expect.stringMatching(/two independent RPCs/) });
         expect(calls).toEqual([]);
+    });
+});
+
+describe('pins schema v2: admin extension, Lens version, Registry impl, certified book (DSR a25d86f4 / 9c8cded5)', () => {
+    const run = (m: Model, pins: any = m.pins, book?: Record<string, unknown>) =>
+        runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins, ...(book ? { book } : {}) });
+    it('SP.EXTENSION() pointing at other code fails exactly that row (the fallback would run it)', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.reads[`${m.p.sp}.EXTENSION`] = A(0xbad);
+        expect(failed(await run(m))).toEqual(['SP.EXTENSION() == pins.spAdminExtension']);
+    });
+    it('the admin extension is held to its codehash (it has no version())', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.code[m.p.admin] = '0x6001';
+        expect(failed(await run(m))).toEqual(['keccak256(code(spAdminExtension)) == pins.codehashes.spAdminExtension']);
+    });
+    it('Lens.version() other than pins.lensVersion fails exactly that row', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.reads[`${m.p.lens}.version`] = 'SuperPaymasterLens-1.2.0';
+        expect(failed(await run(m))).toEqual(['Lens.version() == pins.lensVersion']);
+    });
+    it('the Registry proxy running another implementation fails exactly that row', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.slots[m.pins.addresses.registry!] = pad(A(0xbad), { size: 32 }) as Hex;
+        expect(failed(await run(m))).toEqual(['ERC-1967 impl of addresses.registry == pins.registryImpl']);
+    });
+    it('upgrade: SP wired to another BLS aggregator than the certified one fails', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        m.reads[`${m.p.sp}.BLS_AGGREGATOR`] = A(0xbad);
+        expect(failed(await run(m))).toEqual(['SP.BLS_AGGREGATOR() == addresses.blsAggregator']);
+    });
+    it.each(['registry', 'policyRegistry', 'blsAggregator', 'dvtValidator', 'reputationSystem'])(
+        'upgrade: an SDK book %s that is not the certified address fails', async (k) => {
+            const m = deployment(sepolia.id, 'upgrade');
+            expect(failed(await run(m, m.pins, { ...BOOKS.get(m.pins)!, [k]: A(0x996) }))).toEqual([`SDK book ${k} == addresses.${k}`]);
+        });
+    it.each([
+        ['addresses.aPNTs listed', (p: any) => ({ ...p, addresses: { ...p.addresses, aPNTs: p.aPNTsCapped } }), /addresses\.aPNTs: an upgrade derives it from aPNTsCapped/],
+        ['addresses.xPNTsFactory listed', (p: any) => ({ ...p, addresses: { ...p.addresses, xPNTsFactory: p.xPNTsFactoryV2 } }), /addresses\.xPNTsFactory: an upgrade derives it from xPNTsFactoryV2/],
+        ['an external key', (p: any) => ({ ...p, addresses: { ...p.addresses, entryPoint: A(0x77) } }), /addresses\.entryPoint: external/],
+        ['a certified key missing', (p: any) => { const { dvtValidator: _d, ...rest } = p.addresses; return { ...p, addresses: rest }; }, /addresses\.dvtValidator: unpinned/],
+        ['no hash for a certified entry', (p: any) => { const { 'addresses.registry': _d, ...rest } = p.codehashes; return { ...p, codehashes: rest }; }, /codehashes\.addresses\.registry: unpinned/],
+        ['no hash for the admin extension', (p: any) => { const { spAdminExtension: _d, ...rest } = p.codehashes; return { ...p, codehashes: rest }; }, /codehashes\.spAdminExtension: unpinned/],
+        ['a malformed lensVersion', (p: any) => ({ ...p, lensVersion: 'Lens-1.2.2' }), /lensVersion: "Lens-1\.2\.2" is not a SuperPaymasterLens-x\.y\.z/],
+        ['no disclosureRegistry', (p: any) => { const { disclosureRegistry: _d, ...rest } = p; return rest; }, /disclosureRegistry: unpinned/],
+        ['the admin extension aliasing the impl', (p: any) => ({ ...p, spAdminExtension: p.spImpl, codehashes: { ...p.codehashes, spAdminExtension: p.codehashes.spImpl } }), /spImpl and spAdminExtension are the same address/],
+    ])('upgrade pins: %s is refused', async (_n, patch, msg) => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = patch(m.pins);
+        BOOKS.set(pins, BOOKS.get(m.pins)!);
+        const r = await run(m, pins);
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(msg);
     });
 });
