@@ -87,7 +87,8 @@
       ],
       "N": 3,
       "thresholds": {
-        "MINOR": 2,
+        "WARNING": 2,
+        "MINOR": 3,
         "MAJOR": 3
       },
       "MAX_VALIDATORS": 64,
@@ -356,7 +357,8 @@
     "dvtValidator.categoryCount": 0,
     "superPaymaster.fraudProofVerifier": "0x0000000000000000000000000000000000000000",
     "blsAggregator.owner == dvtValidator.owner": true,
-    "evaluationCommunityToken.creditPolicy == evaluationCommunityToken.POLICY_OFF": true
+    "evaluationCommunityToken.creditPolicy == evaluationCommunityToken.POLICY_OFF": true,
+    "blsAggregator.thresholds == {WARNING:2, MINOR:3, MAJOR:3}": true
   },
   "amsterdamProbe": {
     "initcode": "0x60206000f3",
