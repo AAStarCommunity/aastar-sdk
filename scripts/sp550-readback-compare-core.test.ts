@@ -113,8 +113,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('62099b25d49165825199fff6f4def15c86d9b2de4661024687192a5fe60ec8ca');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('3498c29bec7f665e8e0f7a9f7858cf988384de1c68f6577f450b73c0ce6b9507');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('a5effd05cf469c01d05090b0e56704f4ccc9b55021c294f57c4d2d1e498706c2');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('8558aa7d74460c9c8bb74e5dab4bbfe98436ea76777a460aa79ba998cc18116f');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
