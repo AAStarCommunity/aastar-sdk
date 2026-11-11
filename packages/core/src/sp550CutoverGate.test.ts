@@ -3,6 +3,7 @@ import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS } from './sp550Deployments.js';
+import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
@@ -24,12 +25,14 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         sp: book.superPaymaster, impl: A(1), lens: A(3), factory: A(4), tokenImpl: A(5), ext: A(6), aoa: A(7), tier: A(8), apnts: book.aPNTs,
     };
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId];
-    const pins = {
+    const base = {
         tag: 'v5.5.0', spVersion: SP_VERSION, superPaymaster: p.sp, spImpl: p.impl, spImplCodehash: keccak256(codeOf(p.impl)), superPaymasterLens: p.lens,
         xPNTsFactoryV2: p.factory, xPNTsTokenV2Impl: p.tokenImpl, xPNTsTokenV2Ext: p.ext, aoaProtocolRegistry: p.aoa,
         globalTierSource: p.tier, aPNTsCapped: p.apnts, readbackBlock: HEAD - 10n,
         ...(mode === 'fresh' ? { addresses: book, absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS] } : {}),
     };
+    // The read-back runtime codehash of every pinned address (the model serves codeOf(address)).
+    const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
     const reads: Record<string, unknown> = {
         [`${p.sp}.version`]: SP_VERSION, [`${p.sp}.APNTS_TOKEN`]: p.apnts, [`${p.sp}.xpntsFactory`]: p.factory,
         [`${p.sp}.REGISTRY`]: book.registry, [`${p.sp}.BLS_AGGREGATOR`]: book.blsAggregator,
@@ -224,13 +227,13 @@ describe('SP 5.5.0 cutover gate: every pinned address is real, identical code', 
     it.each(['aoaProtocolRegistry', 'globalTierSource'])('a top-level pin with no code on either RPC (%s), though getters return it', async (k) => {
         const m = deployment(optimismSepolia.id, 'fresh');
         m.code[(m.pins as any)[k]] = '0x';
-        expect(await failed(m, structuredClone(m))).toEqual({ exitCode: 1, failed: [`${k} has the same non-empty code on every RPC`] });
+        expect(await failed(m, structuredClone(m))).toEqual({ exitCode: 1, failed: [`${k} has the same non-empty code on every RPC`, `keccak256(code(${k})) == pins.codehashes.${k}`] });
     });
     it('the Lens has different code on RPC2 while EXPECTED_SP_VERSION agrees', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
         const m2 = structuredClone(m);
         m2.code[m.p.lens] = '0x6080dead';
-        expect(await failed(m, m2)).toEqual({ exitCode: 1, failed: ['superPaymasterLens has the same non-empty code on every RPC'] });
+        expect(await failed(m, m2)).toEqual({ exitCode: 1, failed: ['superPaymasterLens has the same non-empty code on every RPC', 'keccak256(code(superPaymasterLens)) == pins.codehashes.superPaymasterLens'] });
     });
     it('each RPC self-consistent but different (code A + hash A vs code B + hash B): two DIVERGE results never compare equal', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
@@ -255,7 +258,40 @@ describe('SP 5.5.0 cutover gate: every pinned address is real, identical code', 
         const m = deployment(sepolia.id, 'upgrade');
         m.code[m.p.aoa] = '0x';
         const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins: m.pins });
-        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['aoaProtocolRegistry has the same non-empty code on every RPC']);
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['aoaProtocolRegistry has the same non-empty code on every RPC', 'keccak256(code(aoaProtocolRegistry)) == pins.codehashes.aoaProtocolRegistry']);
+    });
+});
+
+describe('every pinned contract is held to its read-back runtime codehash (DSR 13dbedac)', () => {
+    // version() does not identify a build: SP-a at a8b57e17 and the escrow build both answer
+    // "SuperPaymaster-5.5.1". A different build at a pinned address must fail on its codehash alone.
+    it.each([['sepolia', 'upgrade'], ['op-sepolia', 'fresh']] as const)('%s: same version(), same getters, different code at the Lens -> only the codehash check fails', async (network, mode) => {
+        const m = deployment(network === 'sepolia' ? sepolia.id : optimismSepolia.id, mode);
+        m.code[m.p.lens] = '0x6080a8b57e17';
+        const rpcs = mode === 'fresh' ? twin(m) : [rpc('--rpc', LOOP, m, [])];
+        const r = await runSp550CutoverGate({ network, rpcs, pins: m.pins });
+        expect(r.exitCode).toBe(1);
+        expect(failed(r)).toEqual(['keccak256(code(superPaymasterLens)) == pins.codehashes.superPaymasterLens']);
+    });
+    it('fresh: an SP-owned book entry with different code fails on its codehash', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        m.code[(m.pins as any).addresses.registry] = '0x6080beef';
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m), pins: m.pins });
+        expect(failed(r)).toEqual(['keccak256(code(addresses.registry)) == pins.codehashes.addresses.registry']);
+    });
+    it('a pin set without codehashes is not usable', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const { codehashes: _drop, ...pins } = m.pins as any; BOOKS.set(pins, BOOKS.get(m.pins)!);
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(/codehashes: unpinned/);
+    });
+    it('one pinned address missing from codehashes is not usable', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = { ...m.pins, codehashes: { ...m.pins.codehashes } }; delete pins.codehashes.globalTierSource; BOOKS.set(pins, BOOKS.get(m.pins)!);
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(/codehashes\.globalTierSource: unpinned/);
+        expect(failed(r)).toContain('keccak256(code(globalTierSource)) == pins.codehashes.globalTierSource');
     });
 });
 

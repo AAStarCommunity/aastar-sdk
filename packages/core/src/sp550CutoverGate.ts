@@ -20,7 +20,7 @@
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import { APNTsCappedABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
-import { SP550_CUTOVER_PINS, sp550PinProblems } from './sp550Cutover.js';
+import { SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
     SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550PinAliasProblems,
     type Sp550FreshDeployPins,
@@ -215,16 +215,13 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     }
 
     // 5f. Every pinned address, top-level and address book, is real code and the same code on every RPC.
-    const pinnedAddresses: Record<string, unknown> = {
-        superPaymaster: pins.superPaymaster, spImpl: pins.spImpl, superPaymasterLens: pins.superPaymasterLens,
-        xPNTsFactoryV2: pins.xPNTsFactoryV2, xPNTsTokenV2Impl: pins.xPNTsTokenV2Impl, xPNTsTokenV2Ext: pins.xPNTsTokenV2Ext,
-        aoaProtocolRegistry: pins.aoaProtocolRegistry, globalTierSource: pins.globalTierSource, aPNTsCapped: pins.aPNTsCapped,
-        ...Object.fromEntries(Object.entries(pins.addresses ?? {}).map(([k, a]) => [`addresses.${k}`, a])),
-    };
-    for (const [k, a] of Object.entries(pinnedAddresses)) {
+    //     And it is the PINNED code: version() does not identify a build (two SP-a builds report the
+    //     same string), so every address is held to its read-back runtime codehash.
+    for (const [k, a] of sp550PinnedAddressEntries(pins)) {
         if (typeof a !== 'string') continue; // unpinned: already a failure in 'pins complete and well-formed'
         const h = await codeHash(a as Address);
         record(`${k} has the same non-empty code on every RPC`, typeof h === 'string' && HASH.test(h), `${a} · ${h === undefined ? 'no code' : str(h)}`);
+        cmp(`keccak256(code(${k})) == pins.codehashes.${k}`, h, pins.codehashes?.[k]);
     }
 
     // 6. The readback the pins came from is not in the future of this snapshot.

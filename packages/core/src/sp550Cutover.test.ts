@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     SP550_CUTOVER_PINS, SP550_REQUIRED_PIN_FIELDS, isSp550ReleaseTag, missingSp550Pins, requireSp550CutoverPins, sp550PinProblems,
+    sp550PinnedAddressEntries,
 } from './sp550Cutover.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
@@ -9,6 +10,10 @@ const FULL = {
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
 } as const;
+/** A distinct hash per pinned address; spImpl's is spImplCodehash. */
+const hashesFor = (pins: any) => Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([, a]) => a !== undefined)
+    .map(([k], i) => [k, k === 'spImpl' ? pins.spImplCodehash : ('0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)) as `0x${string}`]));
+Object.assign(FULL as any, { codehashes: hashesFor(FULL) });
 
 describe('SP 5.5.0 cutover pins fail closed', () => {
     it('Sepolia is unpinned until the post-upgrade readback, so requiring it throws and names every field', () => {
@@ -25,6 +30,16 @@ describe('SP 5.5.0 cutover pins fail closed', () => {
     });
     it('a complete, well-formed set is returned as is', () => {
         expect(requireSp550CutoverPins(1, FULL)).toBe(FULL);
+    });
+    it.each([
+        ['a hash for a name that is not a pin', { codehashes: { ...(FULL as any).codehashes, notAPin: '0x' + '11'.repeat(32) } }, /codehashes\.notAPin: no pinned address of that name/],
+        ['a short hash', { codehashes: { ...(FULL as any).codehashes, superPaymasterLens: '0x12' } }, /codehashes\.superPaymasterLens: not a 32-byte hash/],
+        ['codehashes.spImpl disagreeing with spImplCodehash', { codehashes: { ...(FULL as any).codehashes, spImpl: '0x' + 'cd'.repeat(32) } }, /codehashes\.spImpl 0xcdcd.* != spImplCodehash/],
+        ['a pinned address with no hash', { codehashes: { ...(FULL as any).codehashes, aPNTsCapped: undefined } }, /codehashes\.aPNTsCapped: unpinned/],
+    ])('codehashes are refused when malformed: %s', (_n, patch, msg) => {
+        const pins: any = { ...FULL, ...patch };
+        if (pins.codehashes.aPNTsCapped === undefined) delete pins.codehashes.aPNTsCapped;
+        expect(sp550PinProblems(pins)).toEqual([expect.stringMatching(msg)]);
     });
     it.each([
         ['zero address', { spImpl: '0x0000000000000000000000000000000000000000' }, /spImpl: not a non-zero address/],

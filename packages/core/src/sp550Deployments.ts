@@ -156,6 +156,17 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
     }
+    // Every SP-owned book entry is held to its codehash too; the `addresses.` names are checked here
+    // because only this table knows which keys SP deploys.
+    const spOwned = (k: string) => SP550_ADDRESS_OWNER[k as AddressBookKey] === 'sp' || SP550_ADDRESS_OWNER[k as AddressBookKey] === 'sp-optional';
+    if (pins?.codehashes && typeof pins.codehashes === 'object') {
+        for (const k of Object.keys(book)) {
+            if (spOwned(k) && pins.codehashes[`addresses.${k}`] === undefined) problems.push(`codehashes.addresses.${k}: unpinned (every pinned address needs its runtime codehash)`);
+        }
+        for (const name of Object.keys(pins.codehashes)) {
+            if (name.startsWith('addresses.') && !spOwned(name.slice('addresses.'.length))) problems.push(`codehashes.${name}: not an SP-owned address-book key`);
+        }
+    }
     problems.push(...sp550PinAliasProblems(pins));
     return problems;
 }

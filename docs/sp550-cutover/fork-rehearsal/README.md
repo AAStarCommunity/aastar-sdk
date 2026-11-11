@@ -43,6 +43,8 @@
 
 注意：`pins.fork.json` 里的 `spImplCodehash` 是从同一个 fork 读回的，所以这一项是同源比较。live 上它必须来自独立的链上读回。
 
+2026-11-11 起（DSR 13dbedac）：pin 还要给**每个**已 pin 的地址带上运行时 codehash（`codehashes`，键与 pin 名相同，fresh 部署的地址簿用 `addresses.<key>`），gate 对每一个都核对，任何一个不符就拒绝。原因是 `version()` 区分不了构建：SP-a 的 `a8b57e17` 和托管版都报 `SuperPaymaster-5.5.1`，提现语义却不同。`pins.fork.json` 里的 `codehashes` 是从按同一 fork 块重搭的 rc.4 部署上读回的（`spImpl` 与原 `spImplCodehash` 一致，说明是同一份部署），同时补上了第 5 轮起必填的 `spVersion`。fork 上 codehash 来自部署本身，live 上来自读回。
+
 ### 按网络选择（2026-11-09 起）
 
 `--network` 现在必填，pin 和部署方式只由它决定。脚本在读任何东西之前，先断言每个 RPC 的 chainId 等于该网络的 chainId；不一致就 exit 2。
