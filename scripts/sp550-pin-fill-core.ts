@@ -61,14 +61,13 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
             rest.absent = [...new Set([...((rest.absent ?? []) as string[]), 'timelockController'])];
         } else if (typeof t === 'string' && isAddress(t)) {
             if (h.timelockController === undefined) throw new Error('manifest pins: timelockController is pinned without codehashes.timelockController');
+            if (((rest.absent ?? []) as string[]).includes('timelockController')) throw new Error('manifest pins: timelockController is an address and also declared absent');
             rest.addresses = { ...((rest.addresses ?? {}) as Record<string, unknown>), timelockController: t };
             h['addresses.timelockController'] = h.timelockController;
             delete h.timelockController;
             rest.codehashes = h;
         } else throw new Error(`manifest pins: timelockController ${JSON.stringify(t)} is neither an address nor "n/a:none"`);
         obj = rest;
-    } else if ('timelockController' in ((obj.codehashes ?? {}) as Record<string, unknown>)) {
-        throw new Error('manifest pins: codehashes.timelockController without a top-level timelockController');
     }
     if (mode === 'upgrade' && obj.absent !== undefined && JSON.stringify(obj.absent) !== JSON.stringify(['timelockController'])) {
         throw new Error(`manifest pins: an upgrade declares absence only for the timelock (via timelockController: "n/a:none"), not ${JSON.stringify(obj.absent)}`);
@@ -301,10 +300,11 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
         if (!eqi(e.address, addr)) p.push(`SP read-back: contracts.${key}.address ${JSON.stringify(e.address)} != pins.${name} ${addr}`);
         if (!eqi(e.codehash, h[name])) p.push(`SP read-back: contracts.${key}.codehash ${JSON.stringify(e.codehash)} != pins.codehashes.${name} ${h[name]}`);
     }
-    // A contract the pins declare absent must not appear in the read-back (it would never be compared).
+    // A contract the pins declare absent must not appear DEPLOYED in the read-back (an "n/a:not deployed"
+    // placeholder is fine; a real address is a contradiction that would never be compared).
     for (const k of pins.absent ?? []) {
         const key = (PINS_FILE_ALIASES[k] ?? `contracts.${k}`).replace(/^contracts\./, '');
-        if (c[key] !== undefined && c[key] !== null) p.push(`SP read-back: contracts.${key} is present, but the pins declare ${k} absent`);
+        if (typeof c[key]?.address === 'string' && /^0x[0-9a-fA-F]{40}$/.test(c[key].address)) p.push(`SP read-back: contracts.${key} is deployed at ${c[key].address}, but the pins declare ${k} absent`);
     }
     if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
     if (!eqi(c.superPaymaster?.extensionCodehash, h.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extensionCodehash ${JSON.stringify(c.superPaymaster?.extensionCodehash)} != pins.codehashes.spAdminExtension ${h.spAdminExtension}`);
@@ -315,7 +315,7 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
  * The GitHub contents-API path for SP's live read-back at one commit. A plain repository path only:
  * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
  */
-export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag?: string): string {
+export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag?: string, explicit = true): string {
     if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
@@ -325,6 +325,7 @@ export function spReadbackApiPath(repoPath: string, commit: string, network: str
     // …and the one for this network: another chain's file in the same commit is not this read-back.
     // The rc directory must be the pins' release (tag v5.5.0-rc.8 -> deployments/release/rc8/).
     const rc = typeof tag === 'string' ? /-rc\.(\d+)$/.exec(tag)?.[1] : undefined;
+    if (rc === undefined && tag !== undefined && !explicit) throw new Error(`pins.tag ${tag} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
     if (rc !== undefined && repoPath.split('/')[2] !== `rc${rc}`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not under deployments/release/rc${rc}/ (pins.tag ${tag})`);
     if (repoPath.split('/').pop() !== `${network}.readback.live.json`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not the ${network} live read-back (${network}.readback.live.json)`);
     return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
@@ -345,4 +346,14 @@ export function normalizeIp(a: string): string {
 export function addressesOverlap(a: string[], b: string[]): boolean {
     const sa = new Set(a.map(normalizeIp));
     return b.map(normalizeIp).some((x) => sa.has(x));
+}
+
+/**
+ * A switch that replaces the book's timelock keeps the old value as history (DSR 2026-11-11): it is
+ * written as timelockControllerLegacy, never left as the live entry and never dropped silently.
+ */
+export function withTimelockLegacy(changed: Record<string, string | null>, shipped: Record<string, unknown>): Record<string, string | null> {
+    const old = shipped.timelockController;
+    if (typeof changed.timelockController !== 'string' || typeof old !== 'string' || old.toLowerCase() === changed.timelockController.toLowerCase()) return changed;
+    return { ...changed, timelockControllerLegacy: old };
 }

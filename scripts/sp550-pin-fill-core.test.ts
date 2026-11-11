@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -291,7 +291,10 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
     });
     it('a contract the pins declare absent must not appear in the live read-back (Grok)', () => {
         const rb = live(); rb.contracts.timelockController = { address: A(0x26), codehash: '0x' + '26'.repeat(32) };
-        expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual(['SP read-back: contracts.timelockController is present, but the pins declare timelockController absent']);
+        expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([`SP read-back: contracts.timelockController is deployed at ${A(0x26)}, but the pins declare timelockController absent`]);
+        // an explicit not-deployed placeholder is not a contradiction (Codex r14)
+        rb.contracts.timelockController = { address: 'n/a:not deployed', codehash: 'n/a:not deployed' };
+        expect(spLiveReadbackProblems(rb, { ...pins, absent: ['timelockController'] } as any, 11155111, entries)).toEqual([]);
     });
     it('a staking book entry is looked up under contracts.gTokenStaking', () => {
         const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } }; // as parsed (with _aliases)
@@ -357,7 +360,7 @@ describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
         ['a codehash under addresses.*', { timelockController: A(0x26), codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32), 'addresses.timelockController': '0x' + '26'.repeat(32) } }, /goes under codehashes\.timelockController/],
         ['an address without its codehash', { timelockController: A(0x26) }, /pinned without codehashes\.timelockController/],
         ['"n/a:none" with a codehash', { timelockController: 'n/a:none', codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, /"n\/a:none" but codehashes\.timelockController is given/],
-        ['a codehash without the declaration', { codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, /n\/a:none" but codehashes\.timelockController is given|without a top-level timelockController/],
+        ['an address that is also declared absent (Grok)', { timelockController: A(0x26), codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) }, absent: ['timelockController'] }, /an address and also declared absent/],
         ['neither an address nor n/a', { timelockController: 'none' }, /neither an address nor "n\/a:none"/],
     ])('refused: %s', (_n, patch, msg) => expect(() => parseManifestPins({ ...MANIFEST, ...patch }, 'upgrade')).toThrow(msg));
 });
@@ -384,5 +387,31 @@ describe('every manifest declares the timelock (Codex r13)', () => {
         const { timelockController: _t, ...silent } = MANIFEST;
         expect(() => parseManifestPins(silent, 'upgrade')).toThrow(/timelockController is not declared/);
         expect(() => parseManifestPins({ ...silent, addresses: {}, absent: [] }, 'fresh')).toThrow(/timelockController is not declared/);
+    });
+});
+
+describe('the replaced timelock is kept only as history (DSR 2026-11-11)', () => {
+    const OLD = '0x86C86c789EDc099801cc6a5F48334F1D67dC9564', NEW = '0xCCdF8e0D29Fb2c3061910D79484a2b653757C34B';
+    it('switching timelockController writes the old value as timelockControllerLegacy', () => {
+        expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: OLD })).toEqual({ timelockController: NEW, timelockControllerLegacy: OLD });
+    });
+    it('no switch, the same address, or no old entry: nothing extra', () => {
+        expect(withTimelockLegacy({ aPNTs: A(1) }, { timelockController: OLD })).toEqual({ aPNTs: A(1) });
+        expect(withTimelockLegacy({ timelockController: OLD.toLowerCase() }, { timelockController: OLD })).toEqual({ timelockController: OLD.toLowerCase() });
+        expect(withTimelockLegacy({ timelockController: NEW }, {})).toEqual({ timelockController: NEW });
+    });
+    it('the switched source has both entries and still names the new one live', async () => {
+        const src = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
+        const m = await load('tl', switchBook(src, 11155111, withTimelockLegacy({ timelockController: NEW }, { timelockController: OLD }), 'n'));
+        expect(m.CANONICAL_ADDRESSES[11155111].timelockController).toBe(NEW);
+        expect(m.CANONICAL_ADDRESSES[11155111].timelockControllerLegacy).toBe(OLD);
+    });
+});
+
+describe('a final tag names no rc directory: the path must be explicit (Grok)', () => {
+    const C = 'a'.repeat(40);
+    it('v5.5.0 with the default path is refused; with an explicit path it is accepted', () => {
+        expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', true)).toContain('/rc8/');
     });
 });
