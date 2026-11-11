@@ -198,17 +198,27 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
             return { status: 0, output: out };
         } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
     };
-    it('gate.bookOverrides in a live config is refused, even with --live-go and --fork-setup passed', () => {
-        const r = run({ gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, ['--fork-setup']);
+    it('gate.switchBook in a live config is refused, even with --live-go and --fork-setup passed', () => {
+        const r = run({ gate: { switchBook: true } }, ['--fork-setup']);
         expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: (gate\.bookOverrides is fork-only|--fork-setup impersonates accounts)/);
-        expect(r.output).not.toMatch(/cutover gate|fork-only SDK book override/);
+        expect(r.output).toMatch(/refused: (gate\.switchBook is fork-only|--fork-setup impersonates accounts)/);
+        expect(r.output).not.toMatch(/cutover gate|fork-only SDK book switch/);
     }, 60_000);
-    it('gate.bookOverrides alone in a live config is refused', () => {
-        const r = run({ gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, []);
+    it('gate.switchBook alone in a live config is refused', () => {
+        const r = run({ gate: { switchBook: true } }, []);
         expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: gate\.bookOverrides is fork-only/);
-        expect(r.output).not.toMatch(/fork-only SDK book override/);
+        expect(r.output).toMatch(/refused: gate\.switchBook is fork-only/);
+        expect(r.output).not.toMatch(/fork-only SDK book switch/);
+    }, 60_000);
+    it('gate.pinsFile in a live config is refused (live is held to the shipped pins)', () => {
+        const r = run({ gate: { pinsFile: 'docs/sp550-cutover/fork-rehearsal/pins.fork.json' } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: gate\.pinsFile is fork-only/);
+    }, 60_000);
+    it('the retired gate.bookOverrides is refused in any mode', () => {
+        const r = run({ mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'http://127.0.0.1:9', userKey: { anvilIndex: 3 }, gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: gate\.bookOverrides is gone/);
     }, 60_000);
     it('--fork-setup alone in live mode is refused', () => {
         const r = run({}, ['--fork-setup']);

@@ -78,7 +78,9 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 **postOp 下限。** `gasParams().minPostOpGas` 必须等于 release tuple 里的值（rc.8 是 500,000，`expectMinPostOpGas`，用 `SP550_A7_MIN_POST_OP_GAS` 设置）。SDK 填的 postOp limit 只会往上抬到这个值，不会低于它。
 
-**全新账户的第一笔 op（Amsterdam state gas）。** A7 要求用户账户在这次运行之前不存在（`requireFreshAccount`）。S1 就是这个账户的第一笔赞助 op，xPNTs 的 lock 和 allowance 槽都是第一次写入，在 Amsterdam 下要多付 state gas，这笔 op 必须成功。日志里会单独打一行 `A7 FRESH ACCOUNT`。
+**全新账户的第一笔 op（Amsterdam state gas）。** A7 要求用户账户在这次运行之前不存在（`requireFreshAccount`）。S1 就是这个账户的第一笔赞助 op，xPNTs 的 lock 和 allowance 槽都是第一次写入，在 Amsterdam 下要多付 state gas，这笔 op 必须成功。日志里会单独打一行 `RESULT A7 FRESH ACCOUNT: …`，`run-a7.sh` 没看到这一行就不判 PASS。
+
+**postOp 下限。** 每笔 op 都从打包交易的 handleOps calldata 里取出 `paymasterPostOpGasLimit`，它必须不低于 `expectMinPostOpGas`。只看 getter 不够：getter 是 500,000，SDK 却可能提交一个更低的值。
 
 每个 op 打一行 `RESULT`，内容是：`S_user`（signMessage 次数）、估算次数、发送次数、SDK 选的 flags、allowance 变化、`autoRenewUsed` 变化、`AllowanceRenewed(bySP)`、tx hash。
 
@@ -115,8 +117,9 @@ pnpm exec tsx scripts/sp550-readback-compare.ts --network sepolia --allow-rc --r
 
 ```bash
 pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 manifest pins.json> \
-    --rpc <节点 A> --rpc2 <节点 B> [--allow-rc]            # 先预览
-pnpm exec tsx scripts/sp550-pin-fill.ts ... --write --sp-readback-commit <SP 数据 PR 的 commit>   # 门通过后写进源码
+    --rpc <节点 A> --rpc2 <节点 B> --allow-rc              # 先预览（rc.8 是 release candidate，不带 --allow-rc 会被拒）
+pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 manifest pins.json> \
+    --rpc <节点 A> --rpc2 <节点 B> --allow-rc --write --sp-readback-commit <SP 数据 PR 的 commit>   # 门通过后写进源码
 ```
 
 `--write` 还有两道额外的门槛：

@@ -90,6 +90,7 @@ cleanup() {
   local rc=$?
   [ "$rc" = 0 ] || [ "$FAILED" = 1 ] || log "A7 FAIL at stage $STAGE: exited $rc (see the stage log)"
   for p in ultrarelay anvil; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done
+  exit "$rc"
 }
 trap cleanup EXIT
 SP_COMMIT=$(git -C "$SP_DIR" rev-parse HEAD)
@@ -114,7 +115,7 @@ if [ -n "$DUMP" ]; then
   # The dump carries no funded accounts (SP's anvil runs --accounts 0): fund the bundler executors
   # and the user (mnemonic indexes 0-3, see ultrarelay.fork.json and userKey.anvilIndex).
   for i in 0 1 2 3; do
-    cast rpc anvil_setBalance "$(cast wallet address --mnemonic "test test test test test test test test test test test junk" --mnemonic-index $i)" 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null
+    cast rpc anvil_setBalance "$(cast wallet address --mnemonic "test test test test test test test test test test test junk" --mnemonic-index $i)" 0x56BC75E2D63100000 --rpc-url $RPC >/dev/null 2>>"$LOG"
   done
   log "stage 1 ok: loaded the dump on a fork of 11155111 at $FORK_BLOCK (hardfork $HARDFORK), head $(cast block-number --rpc-url $RPC); 100 ETH to test keys 0-3"
 else
@@ -146,10 +147,10 @@ FACTORY=$(cd "$SDK" && pnpm exec tsx -e "import { CANONICAL_ADDRESSES } from './
 ACCOUNT=$(cast call "$FACTORY" 'getAddress(address,uint256)(address)' "$OWNER3" 0 --rpc-url $RPC)
 # The release tuple's postOp floor (rc.8: 500,000, DSR); deploy-mode rehearsals of older rcs set it to theirs.
 MIN_POST_OP_GAS="${SP550_A7_MIN_POST_OP_GAS:-500000}"
-jq -n --arg mpg "$MIN_POST_OP_GAS" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" \
-      --arg apnts "$(jq -r .aPNTsCapped "$PINS")" --arg xf "$(jq -r .xPNTsFactoryV2 "$PINS")" '{
+# switchBook: the E2E gate derives the book from the pins with pin-fill's bookSwitch, as stage 2a did.
+jq -n --arg mpg "$MIN_POST_OP_GAS" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" '{
     network: "sepolia", mode: "fork", rpcUrls: [$rpc], bundlerUrl: $bundler,
-    gate: { pinsFile: $pins, block: "latest", allowRc: true, bookOverrides: { aPNTs: $apnts, xPNTsFactory: $xf } },
+    gate: { pinsFile: $pins, block: "latest", allowRc: true, switchBook: true },
     operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8,
     forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true, expectMinPostOpGas: $mpg }' > "$OUT/e2e.json"
 set +e
@@ -158,5 +159,6 @@ rc=${PIPESTATUS[0]}
 set -e
 [ "$rc" = 0 ] || fail "E2E exited $rc (e2e.log)"
 grep -q '^PASS' "$OUT/e2e.log" || fail "E2E exited 0 without a PASS line (e2e.log)"
+grep -q '^RESULT A7 FRESH ACCOUNT:' "$OUT/e2e.log" || fail "E2E passed without the A7 FRESH ACCOUNT result (requireFreshAccount; e2e.log)"
 log "stage 4 ok: $(grep -c '^RESULT' "$OUT/e2e.log") RESULT lines (e2e.log)"
 log "A7 PASS"

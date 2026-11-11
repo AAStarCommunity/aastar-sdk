@@ -22,7 +22,7 @@
  *     "rpcUrls": ["<rpc>", "<rpc2>"],     // the read-back gate's RPCs; the first one sends
  *     "bundlerUrl": "<bundler>",
  *     "gate": { "pinsFile"?: "<pins.json>", "block"?: "finalized" | "latest" | <n>, "allowRc"?: bool,
- *               "bookOverrides"?: { "<key>": "0x…" } },   // mode fork only: entries the cutover PR would switch
+ *               "switchBook"?: true },   // mode fork only, with pinsFile: the book the pin-fill PR would write
  *     "operator": "0x…",                    // the community operator whose xPNTs v2 token pays
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
@@ -75,6 +75,7 @@ import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster'
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
+import { applyBookSwitch, bookSwitch, parseManifestPins } from './sp550-pin-fill-core.js';
 import { isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
@@ -107,7 +108,9 @@ async function main() {
     } else refuse('config.mode must be "fork" or "live"');
     // Fork-only switches are refused here, before anything is read from a network.
     if (cfg.mode !== 'fork' && args.includes('--fork-setup')) refuse('--fork-setup impersonates accounts: mode fork only');
-    if (cfg.mode !== 'fork' && cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is fork-only: a live run is held against the SDK book it ships with');
+    if (cfg.mode !== 'fork' && cfg.gate?.pinsFile !== undefined) refuse('gate.pinsFile is fork-only: a live run is held against the pins the SDK ships with');
+    if (cfg.mode !== 'fork' && cfg.gate?.switchBook !== undefined) refuse('gate.switchBook is fork-only: a live run is held against the SDK book it ships with');
+    if (cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is gone: use gate.switchBook, which derives the book from the pins exactly as pin-fill does');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
     const maxOps = Number(cfg.maxOps ?? 8);
@@ -116,26 +119,26 @@ async function main() {
     const gateRpcs: GateRpc[] = rpcUrls.map((url, i) => ({
         label: i === 0 ? '--rpc' : `--rpc${i + 1}`, url, client: createPublicClient({ transport: http(url) }) as unknown as GateRpc['client'],
     }));
+    // A pins file is SP's manifest pins JSON: parsed exactly as pin-fill parses it (the timelock declaration
+    // becomes addresses.timelockController or absent[], `_aliases` is checked), so every stage reads one shape.
     let pins;
     if (cfg.gate?.pinsFile) {
-        const j = JSON.parse(fs.readFileSync(cfg.gate.pinsFile, 'utf8'));
-        pins = { ...j, readbackBlock: j.readbackBlock !== undefined ? BigInt(j.readbackBlock) : undefined };
+        try { pins = parseManifestPins(JSON.parse(fs.readFileSync(cfg.gate.pinsFile, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }
     }
     const block = cfg.gate?.block;
     // The gate holds the pins against the SDK's own address book. Before the pin-fill PR that book
     // still names the pre-cutover aPNTs / xPNTsFactory, so a fork rehearsal of the upgrade has to say
     // which entries that PR will switch. Live mode reads the shipped book and nothing else.
+    // switchBook applies pin-fill's own bookSwitch, so the fork run and the gate preview hold the same book.
     let book: Record<string, unknown> | undefined;
-    if (cfg.gate?.bookOverrides !== undefined) {
-        const o = cfg.gate.bookOverrides;
-        if (typeof o !== 'object' || o === null || Array.isArray(o)) refuse('gate.bookOverrides must be an object of address entries');
-        const overridden: Record<string, unknown> = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
-        for (const [k, v] of Object.entries(o)) {
-            if (typeof v !== 'string' || !isAddress(v, { strict: false })) refuse(`gate.bookOverrides.${k} is not an address`);
-            console.log(`fork-only SDK book override: ${k} ${String(overridden[k] ?? '(absent)')} -> ${getAddress(v as string)}`);
-            overridden[k] = getAddress(v as string);
-        }
-        book = overridden;
+    if (cfg.gate?.switchBook !== undefined) {
+        if (cfg.gate.switchBook !== true) refuse('gate.switchBook must be true when given');
+        const fromPins = pins ?? refuse('gate.switchBook needs gate.pinsFile (the book is derived from the pins)');
+        const shipped: Record<string, unknown> = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
+        let switched: Record<string, string | null>;
+        try { switched = bookSwitch(net.mode, fromPins); } catch (e) { return refuse((e as Error).message); }
+        for (const [k, a] of Object.entries(switched)) console.log(`fork-only SDK book switch: ${k} ${String(shipped[k] ?? '(absent)')} -> ${a ?? '(removed)'}`);
+        book = applyBookSwitch(shipped, switched);
     }
     const gate = await runSp550CutoverGate({
         network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc, book,
@@ -169,19 +172,28 @@ async function main() {
     // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
     // (rc.8: 500,000 — DSR). expectMinPostOpGas holds the chain to that value; it is required, since an
     // optional expectation is a check a config can silently drop.
-    if (typeof cfg.expectMinPostOpGas !== 'string' || !/^[0-9]+$/.test(cfg.expectMinPostOpGas)) {
-        refuse('expectMinPostOpGas must be set to the release tuple\'s minPostOpGas as a decimal string (rc.8: "500000")');
+    if (typeof cfg.expectMinPostOpGas !== 'string' || !/^[1-9][0-9]*$/.test(cfg.expectMinPostOpGas)) {
+        refuse('expectMinPostOpGas must be set to the release tuple\'s minPostOpGas as a positive decimal string (rc.8: "500000")');
     }
+    const expectMinPostOpGas = BigInt(cfg.expectMinPostOpGas);
     const gp = await getSuperPaymasterGasParams(pub as any, sp);
     console.log(`SP gasParams: minPostOpGas ${gp.minPostOpGas} (${gp.source}) · settleGasBound ${gp.settleGasBound ?? '-'} · cPostop ${gp.cPostop ?? '-'}`);
-    if (gp.minPostOpGas !== BigInt(cfg.expectMinPostOpGas)) {
+    if (gp.minPostOpGas !== expectMinPostOpGas) {
         fail(`gasParams().minPostOpGas ${gp.minPostOpGas} != expected ${cfg.expectMinPostOpGas} (the release tuple)`);
     }
     // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its
     // own node — never from a local forge simulation. Recorded as the host and the client it reports
     // (the full URL usually embeds a key and is never printed).
-    const bundlerClient = await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }) })
-        .then((r) => r.json()).then((j: any) => (typeof j?.result === 'string' ? j.result : 'not reported: no web3_clientVersion')).catch((e: Error) => `not reported: ${e.name}`);
+    // An unreachable bundler, or one that does not answer JSON-RPC, fails here; a bundler without
+    // web3_clientVersion is still the gas source and is recorded as such (the method is optional).
+    let bundlerReply: any;
+    try {
+        bundlerReply = await (await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }) })).json();
+    } catch (e: any) { return fail(`GAS SOURCE: bundler ${new URL(cfg.bundlerUrl).host} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
+    if (bundlerReply?.jsonrpc !== '2.0' || (bundlerReply.result === undefined && bundlerReply.error === undefined)) {
+        fail(`GAS SOURCE: bundler ${new URL(cfg.bundlerUrl).host} replied with something other than JSON-RPC`);
+    }
+    const bundlerClient = typeof bundlerReply.result === 'string' ? bundlerReply.result : 'not reported: no web3_clientVersion';
     console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${new URL(cfg.bundlerUrl).host} (client ${bundlerClient}); the SDK estimates nothing locally`);
 
     // ---- the user's signer, counted ----
@@ -245,16 +257,20 @@ async function main() {
         }
         return fail(`no receipt for ${opHash}`);
     };
-    /** The flags byte of THIS op, read from the bundle transaction's handleOps calldata. */
-    const flagsOnChain = async (txHash: Hex, nonce: bigint): Promise<number> => {
+    /** The flags byte and paymasterPostOpGasLimit of THIS op, read from the bundle transaction's handleOps calldata. */
+    const onChainOp = async (txHash: Hex, nonce: bigint): Promise<{ flags: number; postOpGasLimit: bigint }> => {
         const tx = await pub.getTransaction({ hash: txHash });
         const { functionName, args: a } = decodeFunctionData({ abi: EntryPointABI, data: tx.input });
         if (functionName !== 'handleOps') return fail(`bundle tx ${txHash} is ${functionName}, not handleOps; cannot read the op's paymasterAndData`);
         const ops = (a![0] as any[]).filter((o) => getAddress(o.sender) === account && BigInt(o.nonce) === nonce);
         if (ops.length !== 1) return fail(`bundle tx ${txHash} carries ${ops.length} ops for ${account} nonce ${nonce}`);
         const pmd = ops[0].paymasterAndData as Hex;
-        if ((pmd.length - 2) / 2 <= SUPER_PAYMASTER_PMD_OFFSETS.FLAGS) return 0; // 124-byte layout: flags omitted = 0
-        return parseInt(pmd.slice(2 + SUPER_PAYMASTER_PMD_OFFSETS.FLAGS * 2, 4 + SUPER_PAYMASTER_PMD_OFFSETS.FLAGS * 2), 16);
+        const O = SUPER_PAYMASTER_PMD_OFFSETS;
+        if ((pmd.length - 2) / 2 < O.OPERATOR) return fail(`bundle tx ${txHash}: paymasterAndData is ${(pmd.length - 2) / 2} bytes, shorter than the v0.7 header`);
+        const postOpGasLimit = BigInt(`0x${pmd.slice(2 + O.POSTOP_GAS * 2, 2 + O.OPERATOR * 2)}`);
+        // 124-byte layout: flags omitted = 0
+        const flags = (pmd.length - 2) / 2 <= O.FLAGS ? 0 : parseInt(pmd.slice(2 + O.FLAGS * 2, 4 + O.FLAGS * 2), 16);
+        return { flags, postOpGasLimit };
     };
     const bundlerCalls: BundlerCall[] = [];
     tapBundler(cfg.bundlerUrl, () => signs, bundlerCalls);
@@ -277,7 +293,7 @@ async function main() {
         const signsForOp = signs;
         const rc = await receipt(opHash);
         const txHash = rc.receipt?.transactionHash as Hex;
-        const flags = await flagsOnChain(txHash, BigInt(rc.nonce));
+        const { flags, postOpGasLimit } = await onChainOp(txHash, BigInt(rc.nonce));
         const logs = (rc.receipt?.logs ?? []) as any[];
         const renewedInline = logs.some((l) => isSpRelayedRenewal(l, xPNTsTokenV2ABI as Abi, { token, user: account, sp }));
         const after = await state();
@@ -286,8 +302,10 @@ async function main() {
         result(`${label}: success=${rc.success} S_user signMessage=${signsForOp} estimates=${estimates} (placeholder sig) sends=${sends.length} ` +
             `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
-            `AllowanceRenewed(bySP)=${renewedInline} · tx ${txHash}`);
+            `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} · tx ${txHash}`);
         if (rc.success !== true) fail(`${label}: UserOperationEvent.success=${rc.success}`);
+        // The floor the SDK applies, held on what was actually bundled (not on the getter alone).
+        if (postOpGasLimit < expectMinPostOpGas) fail(`${label}: bundled paymasterPostOpGasLimit ${postOpGasLimit} < minPostOpGas ${expectMinPostOpGas}`);
         const problems = [
             ...opSigningProblems(submitted, signsForOp, DUMMY_SIGNATURE),
             ...renewalConsistencyProblems({
