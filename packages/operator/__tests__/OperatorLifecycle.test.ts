@@ -308,6 +308,18 @@ describe('OperatorLifecycle', () => {
           expect(mocks.mockWithdrawal.requestWithdraw).toHaveBeenCalledWith(expect.objectContaining({ amount: 50n }));
       });
 
+      it('5.5.1, the cancel fails at submission, then a new request appears before the re-read: no "undefined is mined" message', async () => {
+          asVersion('SuperPaymaster-5.5.1');
+          mocks.mockWithdrawal.cancelWithdraw.mockRejectedValueOnce(new Error('execution reverted: NoPendingWithdrawal()'));
+          mocks.mockWithdrawal.withdrawalStatus
+              .mockResolvedValueOnce(statusOf({ amount: 50n, readyAt: 0n, now: 86_401n, balance: 0n }))
+              .mockResolvedValueOnce(statusOf({ amount: 0n, now: 86_402n, balance: 50n }))
+              .mockResolvedValueOnce(statusOf({ amount: 50n, readyAt: 300_000n, now: 86_403n, balance: 0n }));
+          mocks.mockSuperPaymaster.operators.mockResolvedValue({ isConfigured: true, aPNTsBalance: 0n });
+          await expect(lifecycle.withdrawAllFunds()).rejects.toThrow(/the cancel failed at submission and a request is pending again/);
+          expect(mocks.mockWithdrawal.requestWithdraw).not.toHaveBeenCalled();
+      });
+
       it('5.5.1, the cancel fails at submission for another reason (request still pending): the error propagates', async () => {
           asVersion('SuperPaymaster-5.5.1');
           mocks.mockWithdrawal.cancelWithdraw.mockRejectedValueOnce(new Error('insufficient funds for gas'));

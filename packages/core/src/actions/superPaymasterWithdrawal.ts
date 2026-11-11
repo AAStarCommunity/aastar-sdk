@@ -145,7 +145,10 @@ export async function resolveSuperPaymasterWithdrawalMode(
     } catch {
         pins = undefined; // not cut over (or held): only a pre-cutover 5.4.x is acceptable below
     }
-    const version = (await pub.readContract({ address: superPaymaster, abi: SuperPaymasterABI, functionName: 'version' })) as string;
+    // version(), the ERC-1967 slot and the implementation's code are read at ONE block: a read torn
+    // across an upgrade could pair the new implementation with the old pinned code.
+    const blockNumber = await pub.getBlockNumber();
+    const version = (await pub.readContract({ address: superPaymaster, abi: SuperPaymasterABI, functionName: 'version', blockNumber })) as string;
     if (pins) {
         if (pins.superPaymaster!.toLowerCase() !== superPaymaster.toLowerCase()) {
             throw new AAStarError(ErrorCode.INVALID_CONFIGURATION,
@@ -157,9 +160,9 @@ export async function resolveSuperPaymasterWithdrawalMode(
         }
         // version() does not identify a build (two SP-a builds both answer 5.5.1 with different
         // withdrawal semantics): the implementation behind the proxy must be the pinned code too.
-        const slot = await pub.getStorageAt({ address: superPaymaster, slot: ERC1967_IMPL_SLOT });
+        const slot = await pub.getStorageAt({ address: superPaymaster, slot: ERC1967_IMPL_SLOT, blockNumber });
         const impl = slot && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress(('0x' + slot.slice(-40)) as Address) : undefined;
-        const code = impl ? await pub.getCode({ address: impl }) : undefined;
+        const code = impl ? await pub.getCode({ address: impl, blockNumber }) : undefined;
         const implHash = code && code !== '0x' ? keccak256(code) : undefined;
         if (!impl || impl.toLowerCase() !== pins.spImpl!.toLowerCase() || !implHash || implHash.toLowerCase() !== pins.spImplCodehash!.toLowerCase()) {
             throw new AAStarError(ErrorCode.ABI_SHAPE_MISMATCH,

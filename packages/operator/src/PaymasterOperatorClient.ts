@@ -391,11 +391,11 @@ export class PaymasterOperatorClient extends BaseClient {
      * owner-only EntryPoint ETH-deposit withdrawal, not the operator's aPNTs — so it never did what
      * its name said for an operator.
      */
-    async executeCollateralWithdrawal(amount?: bigint, options?: TransactionOptions): Promise<Hash> {
+    async executeCollateralWithdrawal(amount?: bigint, options?: TransactionOptions & { minRemainingSeconds?: bigint }): Promise<Hash> {
         const { mode, version } = await this.collateralWithdrawalMode();
         if (mode === 'two-step') {
             return superPaymasterWithdrawalActions(this.superPaymasterAddress)(this.client, this.getStartPublicClient())
-                .executeWithdraw({ operator: this.getAddress(), amount, account: options?.account });
+                .executeWithdraw({ operator: this.getAddress(), amount, account: options?.account, minRemainingSeconds: options?.minRemainingSeconds });
         }
         if (amount === undefined) throw new Error(`${version}: executeCollateralWithdrawal needs an amount`);
         return superPaymasterActions(this.superPaymasterAddress)(this.client).withdraw({ amount, account: options?.account });

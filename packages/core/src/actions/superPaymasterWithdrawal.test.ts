@@ -191,11 +191,14 @@ describe('resolveSuperPaymasterWithdrawalMode: the read-back-verified pin decide
     PINS.codehashes = Object.fromEntries(sp550PinnedAddressEntries(PINS as any).filter(([, a]) => a !== undefined)
         .map(([k], i) => [k, k === 'spImpl' ? PINS.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
     /** The live SP: version(), the ERC-1967 slot (default: the pinned impl) and the code behind it. */
+    /** Every read must name block 77 (one snapshot); a read without it throws. */
+    const at = (p: any) => { if (p.blockNumber !== 77n) throw new Error(`read not pinned to the snapshot block (${p.blockNumber})`); };
     const live = (version: string, chainId = 11155111, o: { impl?: `0x${string}`; code?: `0x${string}` } = {}) => ({
         getChainId: async () => chainId,
-        readContract: async (p: any) => { if (p.functionName !== 'version') throw new Error(p.functionName); return version; },
-        getStorageAt: async () => pad(o.impl ?? A(1), { size: 32 }),
-        getCode: async ({ address }: any) => (address.toLowerCase() === (o.impl ?? A(1)).toLowerCase() ? o.code ?? IMPL_CODE : '0x'),
+        getBlockNumber: async () => 77n,
+        readContract: async (p: any) => { at(p); if (p.functionName !== 'version') throw new Error(p.functionName); return version; },
+        getStorageAt: async (p: any) => { at(p); return pad(o.impl ?? A(1), { size: 32 }); },
+        getCode: async (p: any) => { at(p); return p.address.toLowerCase() === (o.impl ?? A(1)).toLowerCase() ? o.code ?? IMPL_CODE : '0x'; },
     }) as any;
     it('the same version() on other code is refused: the pinned implementation and codehash decide too', async () => {
         await expect(resolveSuperPaymasterWithdrawalMode(live('SuperPaymaster-5.5.1', 11155111, { code: '0x6001' }), SP, { pins: PINS }))

@@ -168,7 +168,9 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
                 }
                 const after = await this.collateralWithdrawalStatus();
                 if (!mined && after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} reverted and the request is still pending; nothing else was sent`);
-                if (after.amount !== 0n) throw new Error(`withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as pending (RPC lag?); call again`);
+                if (after.amount !== 0n) throw new Error(cancel
+                    ? `withdrawAllFunds: cancelWithdraw ${cancel} is mined but the request still reads as pending (RPC lag?); call again`
+                    : 'withdrawAllFunds: the cancel failed at submission and a request is pending again (a new one was made meanwhile?); nothing was sent, call again');
                 if (after.balance > 0n) {
                     hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
                     return hashes; // the window closed at w.expiresAt; the delay restarts
