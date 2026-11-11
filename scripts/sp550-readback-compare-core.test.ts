@@ -152,7 +152,6 @@ describe('readbackProblems refuses', () => {
         ['a null tag', (rb: any) => { rb.header.tag = null; }, /header\.tag null != pins\.tag/],
         ['another readback block', (rb: any) => { rb.header.readbackBlock = 499; }, /header\.readbackBlock 499 != pins\.readbackBlock 500/],
         ['another block hash at the read-back block', (rb: any) => { rb.header.readbackBlockHash = H(0xcc); }, /header\.readbackBlockHash .* != block 500 on chain/],
-        ['a provider URL', (rb: any) => { rb.header.providers = ['alchemy', 'tenderly', 'https://x.example/key']; }, /not a provider NAME/],
         ['another Amsterdam activation', (rb: any) => { rb.header.ethConfig.activationTime = 1; }, /activationTime 1 != Amsterdam 1791294816/],
         ['another fork id', (rb: any) => { rb.header.ethConfig.forkId = '0x00000000'; }, /forkId "0x00000000" != Amsterdam 0x6c1d9423/],
         ['no Amsterdam-only header fields on the second provider', (rb: any) => { rb.header.ethConfig.corroboration.slotNumber = false; }, /corroboration: Amsterdam-only header fields not both present/],
@@ -194,6 +193,10 @@ describe('readbackProblems refuses', () => {
         const rb = good(); rb.header.source = 'live';
         expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } }))
             .toEqual(['anvilVersion', 'anvilCommit', 'dumpSha256'].map((k) => expect.stringMatching(new RegExp(`header\\.${k} .*expected "n/a:…"`))));
+    });
+    it('a provider URL', async () => {
+        const rb = good(); rb.header.providers = ['alchemy', 'tenderly', 'https://x.example/key'];
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(/not a provider NAME/)]));
     });
     it('no provider at all', async () => {
         const rb = good(); rb.header.providers = [];
@@ -270,12 +273,20 @@ describe('amsterdamProbe (revision 3: simulateV1 judged, estimates recorded only
         expect(recordedProbeProblems(pr)).toEqual([]);
     });
     it.each([
+        ['callAtGasUsed for an unrelated provider', (pr: any) => { pr.callAtGasUsed = { unrelated: true }; }, /callAtGasUsed covers providers \[unrelated\], not header\.providers \[alchemy,tenderly\]/],
+        ['estimateSimulate for an unrelated provider', (pr: any) => { pr.estimateSimulate = { unrelated: 256645 }; }, /estimateSimulate covers providers \[unrelated\]/],
+        ['a provider missing from callAtGasUsed', (pr: any) => { delete pr.callAtGasUsed.tenderly; }, /callAtGasUsed covers providers \[alchemy\]/],
+    ])('provider coverage (Codex r4): %s', async (_n, mutate, msg) => {
+        const rb = good(); mutate(rb.amsterdamProbe);
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it.each([
         ['another predicate', (pr: any) => { pr.predicate = 'true'; }, /predicate "true" is not the agreed rule/],
         ['a simulateV1 gasUsed off the fork receipt', (pr: any) => { pr.estimateSimulate.alchemy = 256646; }, /estimateSimulate\.alchemy 256646 != gasUsedFork 256645/],
         ['no provider with simulateV1', (pr: any) => { pr.estimateSimulate = { alchemy: 'n/a:no eth_simulateV1' }; }, /no provider supplied eth_simulateV1/],
         ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 256646; pr.estimateSimulate.alchemy = 256646; }, /gasUsedFork 256646 != expected\.gasUsed 256645/],
         ['eth_call at gasUsed failing on a provider', (pr: any) => { pr.callAtGasUsed.tenderly = false; }, /callAtGasUsed\.tenderly is false/],
-        ['no callAtGasUsed provider', (pr: any) => { pr.callAtGasUsed = {}; }, /callAtGasUsed: no provider/],
+        ['no callAtGasUsed provider', (pr: any) => { pr.callAtGasUsed = {}; }, /callAtGasUsed(: no provider| covers providers \[\])/],
         ['a non-positive gas amount', (pr: any) => { pr.gasUsedFork = 0; pr.expected.gasUsed = 0; pr.estimateSimulate.alchemy = 0; }, /gasUsedFork 0 is not a positive gas amount/],
     ])('the recorded probe fails, with or without --probe: %s', async (_n, mutate, msg) => {
         const pr = good().amsterdamProbe; mutate(pr);
@@ -320,7 +331,7 @@ describe('Codex r3: version by interface, alias hashes, independent corroboratio
     });
     it('an unnamed eth_config provider cannot vouch for independent corroboration', async () => {
         const rb = good(); delete rb.header.ethConfig.provider; rb.header.providers = ['alchemy']; rb.header.ethConfig.corroboration.provider = 'alchemy';
-        expect(await run(rb)).toEqual(['header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)']);
+        expect(await run(rb)).toEqual(expect.arrayContaining(['header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)']));
     });
     it('a corroborating provider outside header.providers is refused', async () => {
         const rb = good(); rb.header.ethConfig.corroboration.provider = 'infura';

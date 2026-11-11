@@ -282,7 +282,7 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         }
     }
     // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
-    p.push(...recordedProbeProblems(f.amsterdamProbe));
+    p.push(...recordedProbeProblems(f.amsterdamProbe, providers));
 
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
     const bh2 = await read('', 'blockHash');
@@ -299,8 +299,17 @@ export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateSimulate[p] == gasUsedFork
  * every provider. RECORDED ONLY — estimateLive, estimateFork (an upstream estimate may add headroom),
  * callAtGasUsedMinusOne.
  */
-export function recordedProbeProblems(probe: Record<string, any>): string[] {
+export function recordedProbeProblems(probe: Record<string, any>, providers?: readonly unknown[]): string[] {
     const p: string[] = [];
+    // Every per-provider map covers exactly header.providers: a missing or unrelated provider name
+    // would otherwise let "every provider" pass on a subset.
+    if (providers) {
+        const want = [...new Set(providers.map(String))].sort().join(',');
+        for (const m of ['estimateLive', 'estimateSimulate', 'callAtGasUsed', 'callAtGasUsedMinusOne'] as const) {
+            const got = Object.keys((probe[m] ?? {}) as object).sort().join(',');
+            if (got !== want) p.push(`amsterdamProbe.${m} covers providers [${got}], not header.providers [${want}]`);
+        }
+    }
     const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
     if (norm(probe.predicate) !== AMSTERDAM_PROBE_PREDICATE) p.push(`amsterdamProbe.predicate ${show(probe.predicate)} is not the agreed rule "${AMSTERDAM_PROBE_PREDICATE}"`);
     for (const [k, v] of [['gasUsedFork', probe.gasUsedFork], ['expected.gasUsed', probe.expected.gasUsed]] as const) {
