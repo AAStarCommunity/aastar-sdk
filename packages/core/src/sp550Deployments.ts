@@ -77,7 +77,7 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 
     agentValidationRegistry: 'sp',
     policyRegistry: 'sp',
     x402Facilitator: 'sp',
-    timelockController: 'sp',
+    timelockController: 'sp-optional', // SP schema 543f3498: a deployment may have none (pins declare it)
     paymasterV4: 'sp-optional',
     aPNTsPaymasterV4: 'sp-optional',
     PNTsPaymasterV4: 'sp-optional',

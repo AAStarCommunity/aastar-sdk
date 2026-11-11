@@ -54,6 +54,8 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         const h = { ...((rest.codehashes ?? {}) as Record<string, unknown>) };
         if (t === 'n/a:none') {
             if (h.timelockController !== undefined) throw new Error('manifest pins: timelockController is "n/a:none" but codehashes.timelockController is given');
+            // A fresh deploy records the absence (timelockController is sp-optional: pinned or declared absent).
+            if (mode === 'fresh') rest.absent = [...new Set([...((rest.absent ?? []) as string[]), 'timelockController'])];
         } else if (typeof t === 'string' && isAddress(t)) {
             if (h.timelockController === undefined) throw new Error('manifest pins: timelockController is pinned without codehashes.timelockController');
             rest.addresses = { ...((rest.addresses ?? {}) as Record<string, unknown>), timelockController: t };

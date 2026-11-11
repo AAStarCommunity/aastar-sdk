@@ -349,3 +349,20 @@ describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
         ['neither an address nor n/a', { timelockController: 'none' }, /neither an address nor "n\/a:none"/],
     ])('refused: %s', (_n, patch, msg) => expect(() => parseManifestPins({ ...MANIFEST, ...patch }, 'upgrade')).toThrow(msg));
 });
+
+describe('"n/a:none" survives into validation: a fresh deploy without a timelock passes (Codex r12)', async () => {
+    const { sp550FreshPinProblems, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS } = await import('../packages/core/src/sp550Deployments.js');
+    it('parser -> validator: no timelock declared absent, no "unpinned" problem', () => {
+        expect(SP550_FRESH_OPTIONAL_ADDRESS_KEYS).toContain('timelockController');
+        expect(SP550_FRESH_REQUIRED_ADDRESS_KEYS).not.toContain('timelockController');
+        const book = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => [k, A(0x400 + i)]));
+        const absent = SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'timelockController');
+        const raw: any = { ...MANIFEST, superPaymaster: book.superPaymaster, aPNTsCapped: book.aPNTs, addresses: book, absent, timelockController: 'n/a:none', _aliases: { staking: 'contracts.gTokenStaking' } };
+        raw.codehashes = { ...MANIFEST.codehashes, ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x80 + i).toString(16).padStart(2, '0').repeat(32)])) };
+        raw.codehashes['addresses.superPaymaster'] = raw.codehashes.superPaymaster;
+        raw.codehashes['addresses.aPNTs'] = raw.codehashes.aPNTsCapped;
+        const pins = parseManifestPins(raw, 'fresh');
+        expect(pins.absent).toContain('timelockController');
+        expect(sp550FreshPinProblems(pins, { allowRc: true }).filter((x) => /timelockController/.test(x))).toEqual([]);
+    });
+});

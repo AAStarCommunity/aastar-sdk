@@ -70,10 +70,11 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
         expect([...SP550_FRESH_REQUIRED_ADDRESS_KEYS].sort()).toEqual([
             'aPNTs', 'agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry', 'blsAggregator', 'dvtValidator',
             'gToken', 'paymasterFactory', 'paymasterV4Impl', 'policyRegistry', 'registry', 'reputationSystem', 'sbt', 'staking',
-            'superPaymaster', 'timelockController', 'x402Facilitator',
+            'superPaymaster', 'x402Facilitator',
         ]);
+        // timelockController moved to optional with SP schema 543f3498 (a deployment may have none).
         expect([...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].sort()).toEqual([
-            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'xPNTsFactory',
+            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'timelockController', 'xPNTsFactory',
         ]);
         expect(SP550_ADDRESS_OWNER.agentRegistry).toBe('external');
     });
