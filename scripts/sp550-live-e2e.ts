@@ -48,7 +48,8 @@
  *     in the bundled handleOps calldata, UserOperationEvent.success, AllowanceRenewed(user, SP,
  *     bySP=true) in the same receipt, and autoRenewUsed 0 -> 1.
  *
- * Every op prints one RESULT line: S_user (signMessage calls), the flags byte, success, tx hash.
+ * Every op prints one RESULT line: success, S_user (signMessage calls), estimates / sends, the flags
+ * byte, allowance and autoRenewUsed changes, AllowanceRenewed(bySP), the bundled postOpGasLimit, tx hash.
  * Every op is also held to three checks (scripts/sp550-e2e-checks.ts), read from what the SDK sent
  * to the bundler and what the chain did, and the run fails on any of them:
  *   - placeholder-signature estimation: each eth_estimateUserOperationGas carries

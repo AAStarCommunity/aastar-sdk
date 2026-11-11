@@ -49,7 +49,8 @@ export function flagsFromPaymasterData(paymasterData: unknown): number | undefin
  */
 export function gasSourceClient(reply: any): string | undefined {
     if (reply?.jsonrpc !== '2.0') return undefined;
-    if (reply.error !== undefined) return reply.error?.code === -32601 ? 'not reported: no web3_clientVersion' : undefined;
+    // "error": null beside a result is off-spec but seen; it is no error.
+    if (reply.error !== undefined && reply.error !== null) return reply.error?.code === -32601 ? 'not reported: no web3_clientVersion' : undefined;
     return typeof reply.result === 'string' && reply.result !== '' ? reply.result : undefined;
 }
 
