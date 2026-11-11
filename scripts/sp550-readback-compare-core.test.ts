@@ -6,7 +6,7 @@ import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import {
-    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
+    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
     classifyCallError, contractKeyOf, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
@@ -161,7 +161,7 @@ describe('readbackProblems refuses', () => {
     });
     it('an upstream answer that is not JSON is a problem, not a crash', async () => {
         AMSTERDAM = { kind: 'value', value: 'not json' };
-        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not JSON/)]));
+        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not a JSON object/)]));
     });
     it('an upstream without eth_config is fine when the header fields are there', async () => {
         AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [] }) };
@@ -391,5 +391,27 @@ describe('book keys renamed in the read-back (SP: staking -> gTokenStaking)', ()
         expect(contractKeyOf('addresses.staking')).toBe('gTokenStaking');
         expect(contractKeyOf('addresses.registry')).toBe('registry');
         expect(contractKeyOf('superPaymaster')).toBe('superPaymaster');
+    });
+});
+
+describe('aggregateAmsterdam: header VALUES agree across upstreams (Grok)', () => {
+    const H = '0x' + 'ab'.repeat(32);
+    it('agreeing well-formed values pass, every served eth_config is handed on', () => {
+        const o = aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10', ethConfig: { activationTime: 1, forkId: '0x1' } }, { blockAccessListHash: H, slotNumber: '0x10', ethConfig: null }]);
+        expect(o).toEqual({ kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1, forkId: '0x1' }] }) });
+    });
+    it('two well-formed but different hashes are a disagreement, not a pass', () => {
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: '0x' + 'cd'.repeat(32), slotNumber: '0x10' }]).kind).toBe('error');
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: H, slotNumber: '0x11' }]).kind).toBe('error');
+    });
+    it('an all-zero hash or a missing field is not Amsterdam', () => {
+        expect(JSON.parse((aggregateAmsterdam([{ blockAccessListHash: '0x' + '00'.repeat(32), slotNumber: '0x1' }]) as any).value).blockAccessListHash).toBe(false);
+        expect(JSON.parse((aggregateAmsterdam([{ slotNumber: '0x1' }]) as any).value).blockAccessListHash).toBe(false);
+    });
+    it('a failed upstream is an error', () => expect(aggregateAmsterdam(['ERR HttpRequestError']).kind).toBe('error'));
+    it('a JSON null answer is a problem, not a crash', async () => {
+        AMSTERDAM = { kind: 'value', value: 'null' };
+        try { expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/not a JSON object/)])); }
+        finally { AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) }; }
     });
 });

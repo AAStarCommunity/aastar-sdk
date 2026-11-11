@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -261,9 +261,9 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
             if (k === 'spImpl' || k === 'registryImpl') continue;
             contracts[k.startsWith('addresses.') ? k.slice(10) : k] = { address: a, codehash: pins.codehashes![k] };
         }
-        Object.assign(contracts.superPaymaster, { erc1967Impl: pins.spImpl, implCodehash: pins.codehashes!.spImpl, extension: pins.spAdminExtension });
+        Object.assign(contracts.superPaymaster, { erc1967Impl: pins.spImpl, implCodehash: pins.codehashes!.spImpl, extension: pins.spAdminExtension, extensionCodehash: pins.codehashes!.spAdminExtension });
         Object.assign(contracts.registry, { erc1967Impl: pins.registryImpl, implCodehash: pins.codehashes!.registryImpl });
-        return { header: { source: 'live', chainId: 11155111, tag: pins.tag }, contracts };
+        return { header: { source: 'live', chainId: 11155111, tag: pins.tag, readbackBlock: Number(pins.readbackBlock) }, contracts };
     };
     it('agreement passes', () => expect(spLiveReadbackProblems(live(), pins, 11155111, entries)).toEqual([]));
     it.each([
@@ -276,6 +276,8 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         ['another Registry implementation hash', (rb: any) => { rb.contracts.registry.implCodehash = '0x' + '99'.repeat(32); }, /contracts\.registry\.implCodehash .* != pins\.codehashes\.registryImpl/],
         ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /superPaymaster\.extension .* != pins\.spAdminExtension/],
         ['a pinned contract missing', (rb: any) => { delete rb.contracts.policyRegistry; }, /contracts\.policyRegistry missing/],
+        ['another read-back block (Grok)', (rb: any) => { rb.header.readbackBlock = 1; }, /header\.readbackBlock 1 != pins\.readbackBlock/],
+        ['another extension codehash (Grok)', (rb: any) => { rb.contracts.superPaymaster.extensionCodehash = '0x' + '99'.repeat(32); }, /extensionCodehash .* != pins\.codehashes\.spAdminExtension/],
     ])('a disagreement stops --write: %s', (_n, mutate, msg) => {
         const rb = live(); mutate(rb);
         expect(spLiveReadbackProblems(rb, pins, 11155111, entries)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
@@ -288,7 +290,7 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
         expect(spLiveReadbackProblems(live(), split, 11155111, sp550PinnedAddressEntries(split))).toEqual([expect.stringMatching(/pins: addresses\.aPNTs .* != aPNTsCapped .*declared alias/)]);
     });
     it('a staking book entry is looked up under contracts.gTokenStaking', () => {
-        const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } };
+        const withStaking: any = { ...pins, addresses: { ...pins.addresses, staking: A(0x2a) }, codehashes: { ...pins.codehashes, 'addresses.staking': '0x' + '2a'.repeat(32) } }; // as parsed (with _aliases)
         const rb = live(); rb.contracts.gTokenStaking = { address: A(0x2a), codehash: '0x' + '2a'.repeat(32) };
         expect(spLiveReadbackProblems(rb, withStaking, 11155111, sp550PinnedAddressEntries(withStaking))).toEqual([]);
     });
@@ -302,5 +304,23 @@ describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)
     it.each(['x.json?ref=main#', 'x.json#frag', '../x.json', 'a/./x.json', 'a/x.txt', '/abs.json', 'a//x.json', 'x%3Fref=main.json', 'x .json'])('%s is refused', (p) => {
         expect(() => spReadbackApiPath(p, C)).toThrow(/not a plain repository path/);
     });
-    it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('x.json', 'main')).toThrow(/not a 40-hex sha/));
+    it.each(['test/fixtures/live.json', 'deployments/release/rc8/sepolia.readback.a7.json', 'deployments/release/rc8/sepolia.pins.json', 'docs/release/a7/aoa-a7-readback-1.live.example.json'])(
+        'any other JSON in the commit is refused (Grok): %s', (p) => expect(() => spReadbackApiPath(p, C)).toThrow(/not an SP release live read-back/));
+    it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', 'main')).toThrow(/not a 40-hex sha/));
+});
+
+describe('two RPCs on one machine are one provider: IPs compared normalized (Grok)', () => {
+    it.each([['1.2.3.4', '::ffff:1.2.3.4'], ['1.2.3.4', '[::ffff:102:304]'], ['2001:db8::1', '2001:0DB8:0:0:0:0:0:1']])('%s and %s overlap', (a, b) => {
+        expect(normalizeIp(a)).toBe(normalizeIp(b));
+        expect(addressesOverlap([a], [b])).toBe(true);
+    });
+    it('different machines do not overlap', () => expect(addressesOverlap(['1.2.3.4'], ['1.2.3.5', '2001:db8::2'])).toBe(false));
+});
+
+describe('_aliases is required when a renamed key is pinned (Grok)', () => {
+    it('addresses.staking without _aliases is refused; with it, accepted', () => {
+        const m = { ...MANIFEST, addresses: { ...MANIFEST.addresses, staking: A(0x2a) } };
+        expect(() => parseManifestPins(m, 'upgrade')).toThrow(/addresses\.staking pinned without _aliases/);
+        expect(parseManifestPins({ ...m, _aliases: { staking: 'contracts.gTokenStaking' } }, 'upgrade').addresses?.staking).toBe(A(0x2a));
+    });
 });

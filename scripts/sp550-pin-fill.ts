@@ -30,13 +30,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -89,9 +90,10 @@ async function main() {
     const hosts = urls.map(([, u]) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } });
     if (new Set(hosts).size < 2) refuse('--write needs --rpc and --rpc2 on two different hosts (two paths on one host are one provider)');
     // Two names for one machine are one provider too: the resolved addresses must not overlap.
-    const resolvedSets = await Promise.all(hosts.map((h) => lookup(h.replace(/^\[|\]$/g, ''), { all: true }).then((r) => r.map((x) => x.address)).catch(() => [] as string[])));
+    // An IP literal is its own address; names are resolved (every family).
+    const resolvedSets = await Promise.all(hosts.map((h) => { const bare = h.replace(/^\[|\]$/g, ''); return isIP(bare) ? Promise.resolve([bare]) : lookup(bare, { all: true }).then((r) => r.map((x) => x.address)).catch(() => [] as string[]); }));
     if (resolvedSets.some((r) => !r.length)) refuse('--write: an RPC host does not resolve');
-    if (resolvedSets[0].some((a) => resolvedSets[1].includes(a))) refuse('--write: --rpc and --rpc2 resolve to the same address (one provider behind two names)');
+    if (addressesOverlap(resolvedSets[0], resolvedSets[1])) refuse('--write: --rpc and --rpc2 resolve to the same address (one provider behind two names)');
     if (b !== undefined && b !== 'finalized') refuse('--write reads at the finalized block only (no --block override)');
 
     // Independent cross-check (DSR): SP's own LIVE read-back, committed in its manifest PR and fetched

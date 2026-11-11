@@ -200,8 +200,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
     if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
     else {
-        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } = {};
-        try { seen = JSON.parse(am.value); } catch { p.push(`header.ethConfig: the upstream answer is not JSON (${am.value.slice(0, 60)})`); }
+        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } | null = null;
+        try { const v = JSON.parse(am.value); seen = v && typeof v === 'object' ? v : null; } catch { /* reported below */ }
+        if (!seen) { p.push(`header.ethConfig: the upstream answer is not a JSON object (${am.value.slice(0, 60)})`); seen = { blockAccessListHash: true, slotNumber: true, ethConfigs: [] }; }
         if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
         for (const cfg of seen.ethConfigs ?? []) {
             if (ref && (cfg.activationTime !== ref.activationTime || !eq(cfg.forkId, ref.forkId))) p.push(`header.ethConfig: the upstream eth_config reports ${show(cfg)}, not Amsterdam ${show(ref)}`);
@@ -378,4 +379,23 @@ export function probeProblems(probe: Record<string, any>, mine: { gasUsedFork: M
         else if (m.kind === 'n/a') p.push(`amsterdamProbe: ${what} is required (${m.detail})`);
     }
     return p;
+}
+
+/**
+ * Fold the upstreams' raw answers at forkBlock into the `amsterdamAtForkBlock` observation: the
+ * Amsterdam-only header VALUES (not just their shape) must agree across providers; every eth_config a
+ * provider serves is handed on to be checked on its own.
+ */
+export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; slotNumber?: unknown; ethConfig?: unknown } | string)[]): Observed {
+    if (!answers.length) return { kind: 'error', detail: 'no upstream' };
+    const bad = answers.find((x) => typeof x === 'string');
+    if (bad !== undefined) return { kind: 'error', detail: bad as string };
+    const rows = answers as { blockAccessListHash?: unknown; slotNumber?: unknown; ethConfig?: unknown }[];
+    const HASH = /^0x[0-9a-fA-F]{64}$/;
+    const vals = rows.map((r) => `${String(r.blockAccessListHash).toLowerCase()}/${String(r.slotNumber).toLowerCase()}`);
+    if (!vals.every((v) => v === vals[0])) return { kind: 'error', detail: `upstreams disagree on the Amsterdam header at forkBlock: ${vals.join(' vs ')}` };
+    const r0 = rows[0];
+    const hashOk = typeof r0.blockAccessListHash === 'string' && HASH.test(r0.blockAccessListHash) && !/^0x0{64}$/.test(r0.blockAccessListHash);
+    const slotOk = typeof r0.slotNumber === 'string' && /^0x[0-9a-fA-F]+$/.test(r0.slotNumber);
+    return { kind: 'value', value: JSON.stringify({ blockAccessListHash: hashOk, slotNumber: slotOk, ethConfigs: rows.map((r) => r.ethConfig).filter(Boolean) }) };
 }

@@ -8,6 +8,8 @@ import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { BOOK_KEY_CONTRACT_ALIASES } from './sp550-readback-compare-core.js';
+import { isIP } from 'net';
 
 export type PinFillMode = 'upgrade' | 'fresh';
 
@@ -18,8 +20,8 @@ const UPGRADE_KEYS = [
     'registryImpl', 'disclosureRegistry', 'addresses', 'readbackBlock', 'codehashes',
 ] as const;
 const FRESH_KEYS = [...UPGRADE_KEYS, 'absent'] as const;
-/** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (mirrors the comparator's table). */
-export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = { staking: 'contracts.gTokenStaking' };
+/** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (derived from the comparator's table: one source). */
+export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(BOOK_KEY_CONTRACT_ALIASES).map(([k, v]) => [k, `contracts.${v}`]));
 
 /** The manifest's pins JSON -> pins, the way check-sp550-cutover.ts --pins reads it, but strict about keys. */
 export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshDeployPins {
@@ -32,6 +34,10 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         if (JSON.stringify(a) !== JSON.stringify(PINS_FILE_ALIASES)) throw new Error(`manifest pins: _aliases ${JSON.stringify(a)} != the SDK's ${JSON.stringify(PINS_FILE_ALIASES)} (a renamed key would be compared under the wrong name)`);
         const { _aliases: _drop, ...rest } = obj;
         obj = rest;
+    } else {
+        // A file pinning a renamed book key must say how it is named in the read-back.
+        const renamed = Object.keys((obj.addresses ?? {}) as object).filter((k) => k in PINS_FILE_ALIASES);
+        if (renamed.length) throw new Error(`manifest pins: addresses.${renamed.join(', addresses.')} pinned without _aliases (SP's pins files declare ${JSON.stringify(PINS_FILE_ALIASES)})`);
     }
     const unknown = Object.keys(obj).filter((k) => !allowed.includes(k));
     if (unknown.length) throw new Error(`manifest pins: unknown key(s) for a ${mode} deploy: ${unknown.join(', ')} (refusing rather than dropping them)`);
@@ -229,6 +235,8 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     if (rb?.header?.source !== 'live') p.push(`SP read-back: header.source ${JSON.stringify(rb?.header?.source)} is not "live"`);
     if (rb?.header?.chainId !== chainId) p.push(`SP read-back: header.chainId ${rb?.header?.chainId} != ${chainId}`);
     if (rb?.header?.tag !== pins.tag) p.push(`SP read-back: header.tag ${JSON.stringify(rb?.header?.tag)} != pins.tag ${JSON.stringify(pins.tag)}`);
+    // The same snapshot the manifest pins were taken at.
+    if (pins.readbackBlock === undefined || BigInt(rb?.header?.readbackBlock ?? -1) !== pins.readbackBlock) p.push(`SP read-back: header.readbackBlock ${JSON.stringify(rb?.header?.readbackBlock)} != pins.readbackBlock ${String(pins.readbackBlock)}`);
     const c = rb?.contracts ?? {};
     const h = pins.codehashes ?? {};
     // spImpl / registryImpl are the proxies' erc1967Impl fields in the read-back.
@@ -238,7 +246,8 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     const byName = Object.fromEntries(pinnedEntries);
     const aliasBook = new Map(SP550_PIN_ALIASES.map(([top, book]) => [book, top] as const));
     for (const [name, addr] of pinnedEntries) {
-        if (typeof addr !== 'string') continue;
+        if (addr === undefined) continue; // unpinned: the gate's pin check already refused it
+        if (typeof addr !== 'string') { p.push(`pins.${name}: ${JSON.stringify(addr)} is not an address`); continue; }
         const top = aliasBook.get(name);
         if (top !== undefined) {
             if (!eqi(addr, byName[top])) p.push(`pins: ${name} ${addr} != ${top} ${String(byName[top])} (declared alias)`);
@@ -259,6 +268,7 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
         if (!eqi(e.codehash, h[name])) p.push(`SP read-back: contracts.${key}.codehash ${JSON.stringify(e.codehash)} != pins.codehashes.${name} ${h[name]}`);
     }
     if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
+    if (!eqi(c.superPaymaster?.extensionCodehash, h.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extensionCodehash ${JSON.stringify(c.superPaymaster?.extensionCodehash)} != pins.codehashes.spAdminExtension ${h.spAdminExtension}`);
     return p;
 }
 
@@ -271,5 +281,24 @@ export function spReadbackApiPath(repoPath: string, commit: string): string {
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
     }
+    // Only SP's release live read-backs (deployments/release/rc<N>/<network>.readback.live.json), not any JSON in the repo.
+    if (!/^deployments\/release\/rc\d+\/[a-z0-9-]+\.readback\.live\.json$/.test(repoPath)) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not an SP release live read-back (deployments/release/rc<N>/<network>.readback.live.json)`);
     return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
+}
+
+/** One canonical spelling per IP: IPv4-mapped IPv6 becomes IPv4; IPv6 is lower-cased and compressed. */
+export function normalizeIp(a: string): string {
+    const bare = a.replace(/^\[|\]$/g, '').toLowerCase();
+    if (isIP(bare) === 4) return bare;
+    if (isIP(bare) !== 6) return bare;
+    const canon = new URL(`http://[${bare}]`).hostname.replace(/^\[|\]$/g, ''); // WHATWG compresses / lower-cases
+    const m = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(canon);
+    if (m) { const hi = parseInt(m[1], 16), lo = parseInt(m[2], 16); return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`; }
+    return canon;
+}
+
+/** Whether two resolved address lists share a machine (after normalizing every spelling). */
+export function addressesOverlap(a: string[], b: string[]): boolean {
+    const sa = new Set(a.map(normalizeIp));
+    return b.map(normalizeIp).some((x) => sa.has(x));
 }

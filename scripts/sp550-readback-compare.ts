@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import { createPublicClient, getAddress, http, keccak256, type Abi, type Address } from 'viem';
 import { SuperPaymasterLensABI, SuperPaymasterV550ABI } from '../packages/core/src/abis/index.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
-import { OWNERSHIP_2STEP_SLOT, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
+import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
 import { isLoopbackUrl } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
@@ -82,24 +82,15 @@ async function main() {
         const ups = upstreamFor();
         if (!ups.length) return { kind: 'error', detail: 'a fork read-back needs SP550_FORK_URL (the upstream) to check Amsterdam' };
         if (block === undefined) return { kind: 'error', detail: 'no forkBlock' };
-        const seen = await Promise.all(ups.map(async (u) => {
+        const answers = await Promise.all(ups.map(async (u) => {
             try {
                 const blk = await u.request({ method: 'eth_getBlockByNumber', params: [`0x${block.toString(16)}`, false] } as never) as Record<string, unknown> | null;
                 if (!blk) return 'no block';
                 const cfg = await u.request({ method: 'eth_config', params: [] } as never).then((c: any) => c?.current, () => undefined) as any;
-                // Amsterdam-only header fields, well-formed: a 32-byte hash and a hex quantity (not merely present).
-                return JSON.stringify({ blockAccessListHash: typeof blk.blockAccessListHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(blk.blockAccessListHash),
-                    slotNumber: typeof blk.slotNumber === 'string' && /^0x[0-9a-fA-F]+$/.test(blk.slotNumber),
-                    ethConfig: cfg ? { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } : null });
+                return { blockAccessListHash: blk.blockAccessListHash, slotNumber: blk.slotNumber, ethConfig: cfg ? { activationTime: Number(cfg.activationTime), forkId: cfg.forkId } : null };
             } catch (e) { return `ERR ${(e as Error).name}`; } // an upstream URL embeds a key: no message text
         }));
-        if (seen.some((x) => !x.startsWith('{'))) return { kind: 'error', detail: seen.find((x) => !x.startsWith('{'))! };
-        // Header facts must agree across providers; eth_config is per provider (some do not serve it),
-        // so every config that IS served is handed on and checked on its own.
-        const parsed = seen.map((x) => JSON.parse(x));
-        const facts = parsed.map((x) => `${x.blockAccessListHash}/${x.slotNumber}`);
-        if (!facts.every((f) => f === facts[0])) return { kind: 'error', detail: `upstreams disagree on the block header: ${facts.join(' vs ')}` };
-        return { kind: 'value', value: JSON.stringify({ blockAccessListHash: parsed[0].blockAccessListHash, slotNumber: parsed[0].slotNumber, ethConfigs: parsed.map((x) => x.ethConfig).filter(Boolean) }) };
+        return aggregateAmsterdam(answers);
     };
     const read = async (address: string, what: ReadKind, at?: { block?: bigint }): Promise<Observed> => {
         if (what === 'amsterdamAtForkBlock') return amsterdam(at?.block);
