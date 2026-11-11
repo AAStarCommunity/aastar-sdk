@@ -12,10 +12,10 @@
  * every RPC, and the RPCs must agree. With --dump-sha256 the read-back is a fork one (source
  * "fork"): --fork-block and --anvil-commit are then required. Otherwise it is a live one.
  *
- * --probe (fork only, loopback RPC): runs SP's amsterdamProbe AFTER every read — eth_estimateGas
- * of the initcode from the sender at forkBlock on the fork and on the SDK's own upstream
- * (SP550_FORK_URL, never printed), then sends it on the fork (anvil impersonation) and reads the
- * whole-tx receipt gasUsed. This changes the fork's state (one contract, the sender's nonce).
+ * --probe (fork only, loopback RPC): runs SP's amsterdamProbe AFTER every read — eth_simulateV1 of
+ * the initcode at forkBlock on the SDK's own upstream (SP550_FORK_URL, never printed), eth_call with
+ * gas = expected.gasUsed there and on the fork, then the tx sent on the fork (anvil impersonation)
+ * and its whole-tx receipt gasUsed. This changes the fork's state (one contract, the sender's nonce).
  * Exit 0 = no problem; 1 = problems (each printed); 2 = usage.
  */
 import * as fs from 'fs';
@@ -109,19 +109,40 @@ async function main() {
     process.exit(problems.length ? 1 : 0);
 }
 
-/** estimateGas on the fork and the SDK's own upstream at forkBlock, then send on the fork and read gasUsed. */
-async function runProbe(forkUrl: string, upstreamUrl: string, probe: { initcode: string; sender: string }, forkBlock: bigint) {
+/**
+ * The SDK's own probe measurements (revision 3): eth_simulateV1 of the initcode on its upstream at
+ * forkBlock (n/a when the upstream has no such method), eth_call with gas = expected.gasUsed on the
+ * upstream and on the fork (both must succeed), then the same tx sent on the fork (anvil
+ * impersonation) and its whole-tx receipt gasUsed. No estimate is measured: estimates are recorded only.
+ */
+async function runProbe(forkUrl: string, upstreamUrl: string, probe: { initcode: string; sender: string; expected: { gasUsed: number } }, forkBlock: bigint) {
     const fork = createPublicClient({ transport: http(forkUrl) });
     const upstream = createPublicClient({ transport: http(upstreamUrl) });
     const tx = { from: probe.sender, data: probe.initcode };
     const at = `0x${forkBlock.toString(16)}`;
+    const gas = `0x${BigInt(probe.expected.gasUsed).toString(16)}`;
+    // The upstream URL embeds a provider key: errors report their class / RPC code, never the message text.
+    const why = (e: unknown) => `${(e as Error).name}${(e as { code?: number }).code !== undefined ? ` ${(e as { code?: number }).code}` : ''}`;
     const measure = async (f: () => Promise<unknown>): Promise<Measured> => {
-        try { return { kind: 'value', value: BigInt(await f() as string) }; }
-        // The upstream URL embeds a provider key: report the error class, never the message text.
-        catch (e) { return { kind: 'error', detail: (e as Error).name }; }
+        try { return { kind: 'value', value: BigInt(await f() as string) }; } catch (e) { return { kind: 'error', detail: why(e) }; }
     };
-    const estimateFork = await measure(() => fork.request({ method: 'eth_estimateGas', params: [tx, at] } as never));
-    const estimateLive = await measure(() => upstream.request({ method: 'eth_estimateGas', params: [tx, at] } as never));
+    const call = async (c: typeof fork): Promise<Measured> => {
+        try { await c.request({ method: 'eth_call', params: [{ ...tx, gas }, at] } as never); return { kind: 'value', value: 1n }; }
+        catch (e) { return { kind: 'error', detail: why(e) }; }
+    };
+    let simulateUpstream: Measured;
+    try {
+        const r = await upstream.request({ method: 'eth_simulateV1', params: [{ blockStateCalls: [{ calls: [tx] }], validation: false }, at] } as never) as any[];
+        const used = r?.[0]?.calls?.[0]?.gasUsed;
+        const status = r?.[0]?.calls?.[0]?.status;
+        simulateUpstream = typeof used === 'string' && status !== '0x0' ? { kind: 'value', value: BigInt(used) } : { kind: 'error', detail: `eth_simulateV1 call status ${status}` };
+    } catch (e) {
+        const code = (e as { code?: number }).code;
+        // -32601 (method not found) / -32600: the provider has no eth_simulateV1 — recorded as n/a, not judged.
+        simulateUpstream = code === -32601 || code === -32600 ? { kind: 'n/a', detail: `upstream has no eth_simulateV1 (${code})` } : { kind: 'error', detail: why(e) };
+    }
+    const callUpstream = await call(upstream);
+    const callFork = await call(fork);
     const gasUsedFork = await measure(async () => {
         await fork.request({ method: 'anvil_impersonateAccount', params: [probe.sender] } as never);
         const bal = BigInt(await fork.request({ method: 'eth_getBalance', params: [probe.sender, 'latest'] } as never) as string);
@@ -131,7 +152,7 @@ async function runProbe(forkUrl: string, upstreamUrl: string, probe: { initcode:
         if (r.status !== 'success') throw Object.assign(new Error('probe tx reverted'), { name: 'ProbeReverted' });
         return `0x${r.gasUsed.toString(16)}`;
     });
-    return { estimateFork, gasUsedFork, estimateLive };
+    return { gasUsedFork, simulateUpstream, callUpstream, callFork };
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

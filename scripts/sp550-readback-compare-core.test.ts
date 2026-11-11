@@ -61,7 +61,7 @@ function good(): any {
         };
     }
     Object.assign(contracts.superPaymaster, { erc1967Impl: PINS.spImpl, implCodehash: PINS.spImplCodehash, extension: PINS.spAdminExtension, extensionCodehash: PINS.codehashes.spAdminExtension, owner: A(0xb0), pendingOwner: A(0), OPERATOR_WITHDRAWAL_WINDOW: 86400 });
-    Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: null });
+    Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: A(0) }); // from its ERC-7201 slot
     contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: 'n/a:Safe library, no version()' }; // not a pin: not compared
     return {
         schema: READBACK_SCHEMA,
@@ -74,9 +74,10 @@ function good(): any {
         contracts,
         checks: { 'superPaymaster.OPERATOR_WITHDRAWAL_WINDOW': 86400, 'community.creditPolicy': 'unreadable:example' },
         amsterdamProbe: {
-            initcode: '0x6000600055', sender: A(0xdd), method: 'eth_estimateGas at forkBlock; receipt gasUsed',
-            estimateLive: { alchemy: 53000, tenderly: 53000 }, estimateFork: 53000, gasUsedFork: 52000,
-            expected: { estimate: 53000, gasUsed: 52000, source: 'live estimate; SP gasUsed' }, predicate: AMSTERDAM_PROBE_PREDICATE,
+            initcode: '0x60206000f3', sender: A(0xdd), method: 'eth_simulateV1 / eth_call at forkBlock; receipt gasUsed',
+            estimateLive: { alchemy: 259849, tenderly: 259849 }, estimateFork: 256645, estimateSimulate: { alchemy: 256645, tenderly: 'n/a:no eth_simulateV1' },
+            gasUsedFork: 256645, callAtGasUsed: { alchemy: true, tenderly: true }, callAtGasUsedMinusOne: { alchemy: false, tenderly: false },
+            expected: { gasUsed: 256645, source: 'SP A7 fork receipt; upstream eth_simulateV1' }, predicate: AMSTERDAM_PROBE_PREDICATE,
         },
     };
 }
@@ -95,8 +96,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('c58133b9f8dfe2317af96c6a9a43e7b2521900a69c591843f5c0afb6233b4812');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('61926c93fee774900765f9e9eca5d2dee44921d6191751929b18932d140e2b85');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('148224aa64140cdf287a60ee16fe8d0be7f8512657e6c4677bd55e339b455206');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('49c6492b73078d82aee0b5b454e65b82259107e7e568888a668731a93c602432');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -156,7 +157,7 @@ describe('readbackProblems refuses', () => {
         ['corroboration at another block', (rb: any) => { rb.header.ethConfig.corroboration.blockNumber = 1; }, /corroboration\.blockNumber 1 != header\.forkBlock 400/],
         ['a pinned contract left out', (rb: any) => { delete rb.contracts.dvtValidator; }, /^contracts\.dvtValidator: omitted$/],
         ['another address', (rb: any) => { rb.contracts.superPaymasterLens.address = A(0x99); }, /contracts\.superPaymasterLens\.address .* != pinned/],
-        ['another codehash', (rb: any) => { rb.contracts.spAdminExtension.codehash = H(0x99); }, /contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/],
+        ['another codehash', (rb: any) => { rb.contracts.xPNTsTokenV2Ext.codehash = H(0x99); }, /contracts\.xPNTsTokenV2Ext\.codehash .* != pins\.codehashes\.xPNTsTokenV2Ext/],
         ['a book entry with another codehash', (rb: any) => { rb.contracts.blsAggregator.codehash = H(0x99); }, /contracts\.blsAggregator\.codehash .* != pins\.codehashes\.addresses\.blsAggregator/],
         ['"n/a:…" as the version of a contract that has version()', (rb: any) => { rb.contracts.registry.version = 'n/a:none'; }, /contracts\.registry\.version "n\/a:none" != version\(\) on chain "Registry-5\.10\.0"/],
         ['"unreadable:…" where the SDK reads a version', (rb: any) => { rb.contracts.aPNTsCapped.version = 'unreadable:timeout'; }, /contracts\.aPNTsCapped\.version "unreadable:timeout" != version\(\) on chain/],
@@ -165,12 +166,21 @@ describe('readbackProblems refuses', () => {
         ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /contracts\.superPaymaster\.extension .* != pinned/],
         ['an implementation on a non-proxy', (rb: any) => { rb.contracts.superPaymasterLens.erc1967Impl = A(0x99); }, /superPaymasterLens\.erc1967Impl .* not a proxy here/],
         ['another SP owner', (rb: any) => { rb.contracts.superPaymaster.owner = A(0x99); }, /contracts\.superPaymaster\.owner .* != owner\(\) on chain/],
-        ['a Registry pendingOwner although it has none', (rb: any) => { rb.contracts.registry.pendingOwner = A(0); }, /registry\.pendingOwner .*, but pendingOwner\(\) reverts on chain/],
+        ['a Registry pendingOwner that is not an address (it is read from an ERC-7201 slot)', (rb: any) => { rb.contracts.registry.pendingOwner = 'n/a:no getter'; }, /registry\.pendingOwner "n\/a:no getter": read from the Registry's ERC-7201 slot/],
     ])('%s', async (_n, mutate, msg) => {
         const rb = good(); mutate(rb);
         const p = await run(rb);
         expect(p).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
         expect(p).toHaveLength(1);
+    });
+    it("the SP entry's extensionCodehash must equal the spAdminExtension entry's codehash (x-readMethods)", async () => {
+        const rb = good(); rb.contracts.spAdminExtension.codehash = H(0x99);
+        const p = await run(rb);
+        expect(p).toHaveLength(2);
+        expect(p).toEqual(expect.arrayContaining([
+            expect.stringMatching(/contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/),
+            expect.stringMatching(/contracts\.superPaymaster\.extensionCodehash .* != contracts\.spAdminExtension\.codehash/),
+        ]));
     });
     it('a live read-back that names an anvil or a dump', async () => {
         const rb = good(); rb.header.source = 'live';
@@ -240,20 +250,25 @@ describe('readbackProblems refuses', () => {
     });
 });
 
-describe('amsterdamProbe', () => {
+describe('amsterdamProbe (revision 3: simulateV1 judged, estimates recorded only)', () => {
     const v = (n: number): Measured => ({ kind: 'value', value: BigInt(n) });
-    const OK = { estimateFork: v(53000), gasUsedFork: v(52000), estimateLive: v(53000) };
+    const OK = { gasUsedFork: v(256645), simulateUpstream: v(256645), callUpstream: v(1), callFork: v(1) };
     it("SP's recorded probe passes on its own terms, and the SDK's matching measurements pass", () => {
         expect(recordedProbeProblems(good().amsterdamProbe)).toEqual([]);
         expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]);
     });
+    it('estimates with headroom are recorded, never judged (reth 259849 vs exact 256645)', () => {
+        const pr = good().amsterdamProbe; pr.estimateLive = { alchemy: 259849 }; pr.estimateFork = 1;
+        expect(recordedProbeProblems(pr)).toEqual([]);
+    });
     it.each([
-        ['another predicate', (pr: any) => { pr.predicate = 'false'; }, /predicate "false" is not the agreed rule/],
-        ['a provider disagreeing', (pr: any) => { pr.estimateLive.tenderly = 53001; }, /estimateLive\.tenderly 53001 != estimateFork 53000/],
-        ['no provider', (pr: any) => { pr.estimateLive = {}; }, /estimateLive: no provider/],
-        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 52001; }, /gasUsedFork 52001 != expected\.gasUsed 52000/],
-        ['estimateFork off expected while every provider agrees with it', (pr: any) => { pr.estimateFork = 53001; pr.estimateLive = { alchemy: 53001 }; }, /^amsterdamProbe\.estimateFork 53001 != expected\.estimate 53000$/],
-        ['a non-positive gas amount', (pr: any) => { pr.gasUsedFork = -5; pr.expected.gasUsed = -5; }, /gasUsedFork -5 is not a positive gas amount/],
+        ['another predicate', (pr: any) => { pr.predicate = 'true'; }, /predicate "true" is not the agreed rule/],
+        ['a simulateV1 gasUsed off the fork receipt', (pr: any) => { pr.estimateSimulate.alchemy = 256646; }, /estimateSimulate\.alchemy 256646 != gasUsedFork 256645/],
+        ['no provider with simulateV1', (pr: any) => { pr.estimateSimulate = { alchemy: 'n/a:no eth_simulateV1' }; }, /no provider supplied eth_simulateV1/],
+        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 256646; pr.estimateSimulate.alchemy = 256646; }, /gasUsedFork 256646 != expected\.gasUsed 256645/],
+        ['eth_call at gasUsed failing on a provider', (pr: any) => { pr.callAtGasUsed.tenderly = false; }, /callAtGasUsed\.tenderly is false/],
+        ['no callAtGasUsed provider', (pr: any) => { pr.callAtGasUsed = {}; }, /callAtGasUsed: no provider/],
+        ['a non-positive gas amount', (pr: any) => { pr.gasUsedFork = 0; pr.expected.gasUsed = 0; pr.estimateSimulate.alchemy = 0; }, /gasUsedFork 0 is not a positive gas amount/],
     ])('the recorded probe fails, with or without --probe: %s', async (_n, mutate, msg) => {
         const pr = good().amsterdamProbe; mutate(pr);
         expect(recordedProbeProblems(pr)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
@@ -261,12 +276,16 @@ describe('amsterdamProbe', () => {
         expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
     });
     it.each([
-        ["the SDK's fork estimate differs", { ...OK, estimateFork: v(1) }, /the SDK's estimate on its fork 1 != SP's 53000/],
-        ["the SDK's fork gasUsed differs (CREATE priced like 1.8.6)", { ...OK, gasUsedFork: v(52000 + 183600) }, /the SDK's whole-tx receipt gasUsed on its fork 235600 != SP's 52000/],
-        ["the SDK's own live estimate differs", { ...OK, estimateLive: v(9) }, /the SDK's live estimate from its own upstream 9 != SP's 53000/],
-        ['a measurement the SDK could not make', { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
+        ["the SDK's fork gasUsed differs (CREATE priced like stable 1.8.6)", { ...OK, gasUsedFork: v(256645 - 183600) }, /the SDK's whole-tx receipt gasUsed on its fork 73045 != SP's 256645/],
+        ["the SDK's upstream simulateV1 differs", { ...OK, simulateUpstream: v(256600) }, /eth_simulateV1 gasUsed on its own upstream 256600 != SP's 256645/],
+        ['eth_call at gasUsed failing on the upstream', { ...OK, callUpstream: { kind: 'error', detail: 'CallExecutionError' } as Measured }, /eth_call at gas = expected\.gasUsed on its own upstream failed/],
+        ['eth_call at gasUsed failing on the fork', { ...OK, callFork: { kind: 'error', detail: 'CallExecutionError' } as Measured }, /on its fork failed/],
+        ['a fork measurement the SDK could not make', { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
     ])('the SDK measurement fails: %s', (_n, mine, msg) => {
         expect(probeProblems(good().amsterdamProbe, mine as any)).toEqual([expect.stringMatching(msg)]);
+    });
+    it('an upstream without eth_simulateV1 is n/a, not a failure (SP must still supply one)', () => {
+        expect(probeProblems(good().amsterdamProbe, { ...OK, simulateUpstream: { kind: 'n/a', detail: 'upstream has no eth_simulateV1 (-32601)' } })).toEqual([]);
     });
 });
 

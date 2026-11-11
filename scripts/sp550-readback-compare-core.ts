@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 2228c0b66aadb497966fea2ef0a83c2f41d8ba39 docs/release/a7/ (frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * be4912018365c73091108541ffb54dd7364e8481 docs/release/a7/ (revision 3, frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = 'fb25b34e51c90a53b7058f9f9ca225510e7fb75d7d940a4538b7459ddbeefff0';
+export const READBACK_SCHEMA_SHA256 = 'c1a8dbd321fed1e85ebcf3f6b1ea46719aeb32e981ab1fc6577148f35fb98952';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -41,6 +41,8 @@ export function loadReadbackValidator(file = READBACK_SCHEMA_FILE, sha256 = READ
     const got = createHash('sha256').update(new Uint8Array(raw)).digest('hex');
     if (got !== sha256) throw new Error(`read-back schema ${file}: sha256 ${got} != pinned ${sha256}; refusing to validate against it`);
     const ajv = new (Ajv2020 as any)({ strict: true, allErrors: true });
+    // x-readMethods (revision 3) documents how each field is read; an annotation, not a validation rule.
+    ajv.addKeyword({ keyword: 'x-readMethods', schemaType: 'object' });
     const validate = ajv.compile(JSON.parse(raw.toString('utf8')));
     return (x) => (validate(x) ? [] : ((validate.errors ?? []) as any[]).map((e) => `schema: ${e.instancePath || '(root)'} ${e.message}${e.params && Object.keys(e.params).length ? ` ${JSON.stringify(e.params)}` : ''}`));
 }
@@ -120,10 +122,14 @@ export const VERSION_ABSENT_BY_DESIGN = new Set(['spAdminExtension', 'xPNTsToken
  * tests): a revert there must be reported "n/a:…" (schema 2228c0b6 forbids null outside the set above).
  */
 export const VERSION_NOT_IN_INTERFACE = new Set(['timelockController']);
-/** owner()/pendingOwner() read back for these; `true` = the function must exist (Ownable2Step SP). */
-const OWNED: Record<string, { owner: boolean; pendingOwner: boolean }> = {
-    superPaymaster: { owner: true, pendingOwner: true },
-    registry: { owner: true, pendingOwner: false },
+/**
+ * owner() / pendingOwner() the SDK reads back and compares (both must exist). The Registry's
+ * pendingOwner comes from its ERC-7201 slot per x-readMethods, not a getter: it is required to be an
+ * address but not compared here (no slot pinned in the SDK).
+ */
+const OWNED: Record<string, ReadonlyArray<'owner' | 'pendingOwner'>> = {
+    superPaymaster: ['owner', 'pendingOwner'],
+    registry: ['owner'],
 };
 
 export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader,
@@ -246,6 +252,8 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
             if (!eq(c.extension, px.ext[0])) p.push(`contracts.${k}.extension ${show(c.extension)} != pinned ${show(px.ext[0])}`);
             if (ext !== undefined && !eq(ext, px.ext[0])) p.push(`contracts.${k}: EXTENSION() on chain ${ext} != pinned ${show(px.ext[0])}`);
             if (!eq(c.extensionCodehash, px.ext[1])) p.push(`contracts.${k}.extensionCodehash ${show(c.extensionCodehash)} != pinned ${show(px.ext[1])}`);
+            // x-readMethods: the extension's codehash MUST equal the spAdminExtension entry's own.
+            if (contracts.spAdminExtension && !eq(c.extensionCodehash, contracts.spAdminExtension.codehash)) p.push(`contracts.${k}.extensionCodehash ${show(c.extensionCodehash)} != contracts.spAdminExtension.codehash ${show(contracts.spAdminExtension.codehash)}`);
             if (ext !== undefined) {
                 const eh = value(await read(ext, 'codehash'), 'the extension code hash', k);
                 if (eh !== undefined && !eq(eh, px.ext[1])) p.push(`contracts.${k}: extension code on chain ${eh} != pinned ${show(px.ext[1])}`);
@@ -257,16 +265,14 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         }
 
         // owner / pendingOwner, read back by the SDK for SP and the Registry.
-        const own = OWNED[k];
-        if (own) {
-            for (const fn of ['owner', 'pendingOwner'] as const) {
-                const o = await read(address, fn);
-                if (o.kind === 'error') p.push(`contracts.${k}.${fn}: the SDK could not read ${fn}() (${o.detail})`);
-                else if (o.kind === 'reverted') {
-                    if (own[fn]) p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
-                    else if (c[fn] !== null && c[fn] !== undefined) p.push(`contracts.${k}.${fn} ${show(c[fn])}, but ${fn}() reverts on chain (expected null)`);
-                } else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
-            }
+        for (const fn of OWNED[k] ?? []) {
+            const o = await read(address, fn);
+            if (o.kind === 'error') p.push(`contracts.${k}.${fn}: the SDK could not read ${fn}() (${o.detail})`);
+            else if (o.kind === 'reverted') p.push(`contracts.${k}: ${fn}() reverts on chain, but ${k} must have one`);
+            else if (!eq(c[fn], o.value)) p.push(`contracts.${k}.${fn} ${show(c[fn])} != ${fn}() on chain ${o.value}`);
+        }
+        if (k === 'registry' && !(typeof c.pendingOwner === 'string' && /^0x[0-9a-fA-F]{40}$/.test(c.pendingOwner))) {
+            p.push(`contracts.registry.pendingOwner ${show(c.pendingOwner)}: read from the Registry's ERC-7201 slot per x-readMethods, so an address is expected`);
         }
     }
     // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
@@ -278,42 +284,53 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     return p;
 }
 
-/** The probe's pass rule as SP's generator writes it; any other predicate text is refused, not reinterpreted. */
-export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateLive[p] == estimateFork for p in estimateLive) and estimateFork == expected.estimate and gasUsedFork == expected.gasUsed';
+/** The probe's pass rule as SP's generator writes it (revision 3); any other predicate text is refused, not reinterpreted. */
+export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateSimulate[p] == gasUsedFork == expected.gasUsed for p if int) and all(callAtGasUsed.values())';
 
-/** SP's recorded probe on its own terms: the agreed predicate, and numbers that satisfy it. */
+/**
+ * SP's recorded probe on its own terms (revision 3): JUDGED — every integer estimateSimulate[p] ==
+ * gasUsedFork == expected.gasUsed, at least one provider supplies one, and callAtGasUsed[p] is true for
+ * every provider. RECORDED ONLY — estimateLive, estimateFork (an upstream estimate may add headroom),
+ * callAtGasUsedMinusOne.
+ */
 export function recordedProbeProblems(probe: Record<string, any>): string[] {
     const p: string[] = [];
     const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
     if (norm(probe.predicate) !== AMSTERDAM_PROBE_PREDICATE) p.push(`amsterdamProbe.predicate ${show(probe.predicate)} is not the agreed rule "${AMSTERDAM_PROBE_PREDICATE}"`);
-    for (const [k, v] of [['estimateFork', probe.estimateFork], ['gasUsedFork', probe.gasUsedFork], ['expected.estimate', probe.expected.estimate], ['expected.gasUsed', probe.expected.gasUsed]] as const) {
+    for (const [k, v] of [['gasUsedFork', probe.gasUsedFork], ['expected.gasUsed', probe.expected.gasUsed]] as const) {
         if (!(Number.isSafeInteger(v) && v > 0)) p.push(`amsterdamProbe.${k} ${show(v)} is not a positive gas amount`);
     }
-    const live = Object.entries(probe.estimateLive as Record<string, number>);
-    if (!live.length) p.push('amsterdamProbe.estimateLive: no provider');
-    for (const [prov, v] of live) if (v !== probe.estimateFork) p.push(`amsterdamProbe.estimateLive.${prov} ${v} != estimateFork ${probe.estimateFork}`);
-    if (probe.estimateFork !== probe.expected.estimate) p.push(`amsterdamProbe.estimateFork ${probe.estimateFork} != expected.estimate ${probe.expected.estimate}`);
     if (probe.gasUsedFork !== probe.expected.gasUsed) p.push(`amsterdamProbe.gasUsedFork ${probe.gasUsedFork} != expected.gasUsed ${probe.expected.gasUsed}`);
+    const sims = Object.entries(probe.estimateSimulate as Record<string, unknown>).filter(([, v]) => typeof v === 'number');
+    if (!sims.length) p.push('amsterdamProbe.estimateSimulate: no provider supplied eth_simulateV1');
+    for (const [prov, v] of sims) if (v !== probe.gasUsedFork) p.push(`amsterdamProbe.estimateSimulate.${prov} ${v} != gasUsedFork ${probe.gasUsedFork}`);
+    const calls = Object.entries(probe.callAtGasUsed as Record<string, boolean>);
+    if (!calls.length) p.push('amsterdamProbe.callAtGasUsed: no provider');
+    for (const [prov, ok] of calls) if (ok !== true) p.push(`amsterdamProbe.callAtGasUsed.${prov} is ${show(ok)}: eth_call with gas = expected.gasUsed must succeed`);
     return p;
 }
 
-/** A number the SDK measured itself, or why it could not. */
-export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detail: string };
+/** A number the SDK measured itself, or why it could not ('n/a' = the provider has no such method). */
+export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detail: string } | { kind: 'n/a'; detail: string };
 
 /**
- * The Amsterdam positive control (EIP-8037 CREATE gas): SP's recorded numbers must satisfy the
- * predicate, AND the SDK's own measurements must equal them, like with like: the SDK's estimate on
- * its fork == SP's estimateFork, the SDK's whole-tx receipt gasUsed on its fork == SP's gasUsedFork,
- * and the SDK's own upstream (live) estimate == expected.estimate.
+ * The SDK's own measurements, judged like SP's (revision 3): its fork's whole-tx receipt gasUsed ==
+ * SP's gasUsedFork; its own upstream's eth_simulateV1 gasUsed (when the upstream has the method) ==
+ * expected.gasUsed; eth_call with gas = expected.gasUsed succeeds on its upstream and on its fork.
+ * Estimates are not measured: they are recorded only.
  */
-export function probeProblems(probe: Record<string, any>, mine: { estimateFork: Measured; gasUsedFork: Measured; estimateLive: Measured }): string[] {
+export function probeProblems(probe: Record<string, any>, mine: { gasUsedFork: Measured; simulateUpstream: Measured; callUpstream: Measured; callFork: Measured }): string[] {
     const p: string[] = [];
-    const cmpMine = (what: string, m: Measured, theirs: unknown) => {
+    const cmp = (what: string, m: Measured, theirs: unknown) => {
         if (m.kind === 'error') p.push(`amsterdamProbe: the SDK could not measure ${what} (${m.detail})`);
-        else if (m.value !== BigInt(theirs as number)) p.push(`amsterdamProbe: the SDK's ${what} ${m.value} != SP's ${theirs}`);
+        else if (m.kind === 'value' && m.value !== BigInt(theirs as number)) p.push(`amsterdamProbe: the SDK's ${what} ${m.value} != SP's ${theirs}`);
     };
-    cmpMine('estimate on its fork', mine.estimateFork, probe.estimateFork);
-    cmpMine('whole-tx receipt gasUsed on its fork', mine.gasUsedFork, probe.gasUsedFork);
-    cmpMine('live estimate from its own upstream', mine.estimateLive, probe.expected.estimate);
+    cmp('whole-tx receipt gasUsed on its fork', mine.gasUsedFork, probe.gasUsedFork);
+    if (mine.gasUsedFork.kind === 'n/a') p.push(`amsterdamProbe: the SDK's fork gasUsed is required (${mine.gasUsedFork.detail})`);
+    cmp('eth_simulateV1 gasUsed on its own upstream', mine.simulateUpstream, probe.expected.gasUsed);
+    for (const [what, m] of [['eth_call at gas = expected.gasUsed on its own upstream', mine.callUpstream], ['eth_call at gas = expected.gasUsed on its fork', mine.callFork]] as const) {
+        if (m.kind === 'error') p.push(`amsterdamProbe: ${what} failed (${m.detail})`);
+        else if (m.kind === 'n/a') p.push(`amsterdamProbe: ${what} is required (${m.detail})`);
+    }
     return p;
 }
