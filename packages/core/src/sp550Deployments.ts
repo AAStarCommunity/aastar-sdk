@@ -60,7 +60,13 @@ export type AddressBookKey = KeysOfUnion<CanonicalAddresses>;
  *  - `external`: not SP's deploy (EntryPoint, Chainlink, AirAccount / YAAA); checked
  *    through SP's own wiring where SP exposes it, never pinned from SP's manifest.
  */
-export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 'external'> = {
+/**
+ * History keys the cutover writes (never live, never pinned): the replaced value of a switched entry.
+ * DSR 2026-11-11: the orphaned v5.4 TimelockController stays only as timelockControllerLegacy.
+ */
+export type Sp550HistoryKey = 'timelockControllerLegacy';
+
+export const SP550_ADDRESS_OWNER: Record<AddressBookKey | Sp550HistoryKey, 'sp' | 'sp-optional' | 'external'> = {
     registry: 'sp',
     gToken: 'sp',
     staking: 'sp',
@@ -77,7 +83,7 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 
     agentValidationRegistry: 'sp',
     policyRegistry: 'sp',
     x402Facilitator: 'sp',
-    timelockController: 'sp',
+    timelockController: 'sp-optional', // SP schema 543f3498: a deployment may have none (pins declare it)
     paymasterV4: 'sp-optional',
     aPNTsPaymasterV4: 'sp-optional',
     PNTsPaymasterV4: 'sp-optional',
@@ -99,18 +105,18 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey, 'sp' | 'sp-optional' | 
     airAccountV7Impl: 'external',
     airAccountExtension: 'external',
     agentRegistry: 'external', // AirAccount's agent registry, not SP's agentIdentityRegistry
+    timelockControllerLegacy: 'external', // history only: the replaced timelock, never a live entry
 };
 
 const keysOwnedAs = (o: 'sp' | 'sp-optional') =>
-    (Object.keys(SP550_ADDRESS_OWNER) as AddressBookKey[]).filter((k) => SP550_ADDRESS_OWNER[k] === o);
+    (Object.keys(SP550_ADDRESS_OWNER) as AddressBookKey[]).filter((k) => SP550_ADDRESS_OWNER[k as keyof typeof SP550_ADDRESS_OWNER] === o);
 export const SP550_FRESH_REQUIRED_ADDRESS_KEYS = keysOwnedAs('sp');
 export const SP550_FRESH_OPTIONAL_ADDRESS_KEYS = keysOwnedAs('sp-optional');
 
 /** A fresh-deploy pin set: the 5.5.0 pieces (as for an upgrade) plus the SP-owned address book. */
 export interface Sp550FreshDeployPins extends Sp550CutoverPins {
     addresses?: Partial<Record<AddressBookKey, Address>>;
-    /** `sp-optional` keys SP's manifest declares NOT deployed on this chain. */
-    absent?: AddressBookKey[];
+    // `absent` (sp-optional keys declared NOT deployed) is inherited from Sp550CutoverPins.
 }
 
 /**

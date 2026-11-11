@@ -60,6 +60,7 @@ export const CANONICAL_ADDRESSES = {
     x402Facilitator: "0x0000000000000000000000000000000000000000",
     // SP v5.4 governance TimelockController — not yet deployed on this chain.
     timelockController: "0x0000000000000000000000000000000000000000",
+    timelockControllerLegacy: "0x0000000000000000000000000000000000000000",  // history only: a replaced timelock (set by scripts/sp550-pin-fill.ts), never a live entry
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     // Kept here so the inferred CanonicalAddresses union has `pnts` on every
     // chain (consumers see Address, not Address|undefined per-chain).
@@ -171,6 +172,7 @@ export const CANONICAL_ADDRESSES = {
     x402Facilitator: "0xfe1DB01e1d6622e722B92ed5993af61325DB92aF",
     // SP v5.4 governance TimelockController (2-day minDelay; gates PolicyRegistry loosen/unfreeze).
     timelockController: "0x86C86c789EDc099801cc6a5F48334F1D67dC9564",
+    timelockControllerLegacy: "0x0000000000000000000000000000000000000000",  // history only: a replaced timelock (set by scripts/sp550-pin-fill.ts), never a live entry
     // Base PNTs token — authoritative value from the SuperPaymaster Sepolia
     // deployment (deployments/config.sepolia.json) and config.sepolia.json here.
     // Was 0x6A230Fa25b9Ec12eeF8eeb8d2FbE32CF29c6edC6 ("Anni's xPNTsToken"), which
@@ -225,6 +227,7 @@ export const CANONICAL_ADDRESSES = {
     x402Facilitator: "0x0000000000000000000000000000000000000000",
     // SP v5.4 governance TimelockController — not yet deployed on this chain.
     timelockController: "0x0000000000000000000000000000000000000000",
+    timelockControllerLegacy: "0x0000000000000000000000000000000000000000",  // history only: a replaced timelock (set by scripts/sp550-pin-fill.ts), never a live entry
     // Mycelium community PNTs token — Sepolia-only testbed; zero on mainnets.
     pnts: "0x0000000000000000000000000000000000000000",
   }

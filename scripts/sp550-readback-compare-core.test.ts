@@ -6,7 +6,7 @@ import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import {
-    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
+    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
     classifyCallError, contractKeyOf, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
@@ -61,7 +61,7 @@ function good(): any {
             address: (a as string).toUpperCase().replace('0X', '0x'), codehash: PINS.codehashes[pinName],
             version: onChain.version?.kind === 'value' ? onChain.version.value : null,
             erc1967Impl: 'n/a:not a proxy', implCodehash: 'n/a:not a proxy', extension: 'n/a:no extension', extensionCodehash: 'n/a:no extension',
-            owner: 'n/a:not compared', pendingOwner: 'n/a:not compared', guardian: null, roles: {},
+            owner: 'n/a:not compared', pendingOwner: 'n/a:not compared', guardian: null, roles: 'n/a:no role system',
         };
     }
     Object.assign(contracts.superPaymaster, { erc1967Impl: PINS.spImpl, implCodehash: PINS.spImplCodehash, extension: PINS.spAdminExtension, extensionCodehash: PINS.codehashes.spAdminExtension, owner: A(0xb0), pendingOwner: A(0), OPERATOR_WITHDRAWAL_WINDOW: 86400 });
@@ -71,7 +71,15 @@ function good(): any {
     contracts.gTokenStaking = { ...contracts.xPNTsTokenV2Ext, address: A(0x9a), version: 'GTokenStaking-3.2.0' };
     contracts.entryPoint = { ...contracts.xPNTsTokenV2Ext, address: A(0x9b), version: 'n/a:EntryPoint v0.7 has no version()', getDepositInfo: { deposit: '0', staked: false } };
     contracts.ownerSafe = { ...contracts.xPNTsTokenV2Ext, address: A(0x9c), version: '1.4.1' };
-    contracts.evaluationCommunityToken = { ...contracts.xPNTsTokenV2Ext, address: A(0x9d), version: 'XPNTs-4.0.3' }; // not a pin: not compared
+    contracts.evaluationCommunityToken = { ...contracts.xPNTsTokenV2Ext, address: A(0x9d), version: 'XPNTs-4.0.3' };
+    contracts.registry.roles = { ROLE_COMMUNITY: [A(0x66)] }; // the registry has a role system
+    // Contract-specific fields the schema requires (BLS, entryPoint, evaluation community, …): taken from
+    // SP's own fork example, so the fixture follows the binding schema instead of a hand-kept copy.
+    const example = JSON.parse(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), 'aoa-a7-readback-1.example.json'), 'utf8'));
+    for (const [k, c] of Object.entries(example.contracts as Record<string, Record<string, unknown>>)) {
+        if (!contracts[k] || c === null) continue;
+        for (const [f, v] of Object.entries(c)) if (!(READBACK_CONTRACT_FIELDS as readonly string[]).includes(f)) contracts[k][f] = v;
+    } // not a pin: not compared
     return {
         schema: READBACK_SCHEMA,
         header: {
@@ -105,8 +113,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('5b18f574d7bbdbba6ec787d62625ddd45217b38ae170d2d8df3779b659177dc2');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('bdbf3085add03c1080e438f60bcc37e91a4e702a58dbb30fa0129058e234f5c8');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('62099b25d49165825199fff6f4def15c86d9b2de4661024687192a5fe60ec8ca');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('3498c29bec7f665e8e0f7a9f7858cf988384de1c68f6577f450b73c0ce6b9507');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -161,7 +169,7 @@ describe('readbackProblems refuses', () => {
     });
     it('an upstream answer that is not JSON is a problem, not a crash', async () => {
         AMSTERDAM = { kind: 'value', value: 'not json' };
-        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not JSON/)]));
+        expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/the upstream answer is not a JSON object/)]));
     });
     it('an upstream without eth_config is fine when the header fields are there', async () => {
         AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [] }) };
@@ -351,7 +359,7 @@ describe('Codex r3: version by interface, alias hashes, independent corroboratio
     it('a book contract whose interface has no version() reports "n/a:…" (null is reserved by the schema)', async () => {
         const pins = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
         const rb = good();
-        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:no version() in the OZ TimelockController interface' };
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:no version() in the OZ TimelockController interface', roles: { PROPOSER_ROLE: [A(0x67)] } };
         const code = { ...CODE, [A(0x26)]: H(0x26) };
         expect(await run(rb, { pins, code })).toEqual([]);
         rb.contracts.timelockController.version = 'unreadable:timeout';
@@ -391,5 +399,59 @@ describe('book keys renamed in the read-back (SP: staking -> gTokenStaking)', ()
         expect(contractKeyOf('addresses.staking')).toBe('gTokenStaking');
         expect(contractKeyOf('addresses.registry')).toBe('registry');
         expect(contractKeyOf('superPaymaster')).toBe('superPaymaster');
+    });
+});
+
+describe('aggregateAmsterdam: header VALUES agree across upstreams (Grok)', () => {
+    const H = '0x' + 'ab'.repeat(32);
+    it('agreeing well-formed values pass, every served eth_config is handed on', () => {
+        const o = aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10', ethConfig: { activationTime: 1, forkId: '0x1' } }, { blockAccessListHash: H, slotNumber: '0x10', ethConfig: null }]);
+        expect(o).toEqual({ kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1, forkId: '0x1' }] }) });
+    });
+    it('two well-formed but different hashes are a disagreement, not a pass', () => {
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: '0x' + 'cd'.repeat(32), slotNumber: '0x10' }]).kind).toBe('error');
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: H, slotNumber: '0x11' }]).kind).toBe('error');
+    });
+    it('an all-zero hash or a missing field is not Amsterdam', () => {
+        expect(JSON.parse((aggregateAmsterdam([{ blockAccessListHash: '0x' + '00'.repeat(32), slotNumber: '0x1' }]) as any).value).blockAccessListHash).toBe(false);
+        expect(JSON.parse((aggregateAmsterdam([{ slotNumber: '0x1' }]) as any).value).blockAccessListHash).toBe(false);
+    });
+    it('a failed upstream is an error', () => expect(aggregateAmsterdam(['ERR HttpRequestError']).kind).toBe('error'));
+    it('slotNumber compares as a quantity: 0x10 == 0x010 (Grok)', () => {
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: H.toUpperCase().replace('0X', '0x'), slotNumber: '0x010' }]).kind).toBe('value');
+    });
+    it('a JSON null answer is a problem, not a crash', async () => {
+        AMSTERDAM = { kind: 'value', value: 'null' };
+        try { expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/not a JSON object/)])); }
+        finally { AMSTERDAM = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) }; }
+    });
+});
+
+describe('a pinned timelock must be in the read-back (schema 543f3498: timelockController optional)', () => {
+    it('pins with addresses.timelockController and a read-back without it fail', async () => {
+        const pins = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
+        expect(await run(good(), { pins, code: { ...CODE, [A(0x26)]: H(0x26) } })).toContain('contracts.timelockController: omitted');
+    });
+    it('pins without a timelock and a read-back without one pass', async () => expect(await run(good())).toEqual([]));
+});
+
+describe('a contract the pins declare absent must not be in the read-back (Grok)', () => {
+    it('pins absent: [timelockController] and a read-back with one fail', async () => {
+        const rb = good(); rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:none', roles: {} };
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([expect.stringMatching(/contracts\.timelockController: not an "n\/a:" not-deployed placeholder/)]);
+    });
+    it('an "n/a:not deployed" placeholder is not a contradiction (Codex r14)', async () => {
+        const rb = good();
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: 'n/a:not deployed', codehash: 'n/a:not deployed', version: 'n/a:not deployed', roles: 'unreadable:not deployed' };
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual([]);
+    });
+    it.each([
+        ['an n/a address with a real codehash', { address: 'n/a:x', codehash: H(0x26) }],
+        ['an unreadable address', { address: 'unreadable:timeout', codehash: 'n/a:x' }],
+        ['n/a address/codehash but a real implementation (Codex r16)', { address: 'n/a:x', codehash: 'n/a:x', erc1967Impl: A(0x27), implCodehash: H(0x27) }],
+    ])('a declared-absent contract with %s is a contradiction', async (_n, patch) => {
+        const rb = good();
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, version: 'n/a:none', roles: 'unreadable:x', ...patch };
+        expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual(expect.arrayContaining([expect.stringMatching(/not an "n\/a:" not-deployed placeholder/)]));
     });
 });

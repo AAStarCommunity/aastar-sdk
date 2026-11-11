@@ -545,3 +545,17 @@ describe('a single loopback RPC: every loopback spelling (Grok Low)', () => {
         expect(r.exitCode).toBe(2);
     });
 });
+
+describe('an upgrade declaring no timelock: the SDK book must not still name one live (Grok r15)', () => {
+    it('absent timelockController + a live book entry fails; without the entry it passes', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = { ...m.pins, absent: ['timelockController'] };
+        BOOKS.set(pins, { ...BOOKS.get(m.pins)!, timelockController: A(0x86) });
+        const bad = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(failed(bad)).toEqual(['SDK book has no live timelockController (declared absent)']);
+        // the book's "not deployed" is the zero address (every chain keeps every key)
+        BOOKS.set(pins, { ...BOOKS.get(m.pins)!, timelockController: '0x0000000000000000000000000000000000000000' });
+        const ok = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(failed(ok)).toEqual([]);
+    });
+});

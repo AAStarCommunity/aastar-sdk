@@ -8,6 +8,9 @@ import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
+export { isNotDeployedPlaceholder };
+import { isIP } from 'net';
 
 export type PinFillMode = 'upgrade' | 'fresh';
 
@@ -18,8 +21,8 @@ const UPGRADE_KEYS = [
     'registryImpl', 'disclosureRegistry', 'addresses', 'readbackBlock', 'codehashes',
 ] as const;
 const FRESH_KEYS = [...UPGRADE_KEYS, 'absent'] as const;
-/** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (mirrors the comparator's table). */
-export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = { staking: 'contracts.gTokenStaking' };
+/** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (derived from the comparator's table: one source). */
+export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(BOOK_KEY_CONTRACT_ALIASES).map(([k, v]) => [k, `contracts.${v}`]));
 
 /** The manifest's pins JSON -> pins, the way check-sp550-cutover.ts --pins reads it, but strict about keys. */
 export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshDeployPins {
@@ -32,8 +35,45 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         if (JSON.stringify(a) !== JSON.stringify(PINS_FILE_ALIASES)) throw new Error(`manifest pins: _aliases ${JSON.stringify(a)} != the SDK's ${JSON.stringify(PINS_FILE_ALIASES)} (a renamed key would be compared under the wrong name)`);
         const { _aliases: _drop, ...rest } = obj;
         obj = rest;
+    } else {
+        // A file pinning a renamed book key must say how it is named in the read-back.
+        const renamed = Object.keys((obj.addresses ?? {}) as object).filter((k) => k in PINS_FILE_ALIASES);
+        if (renamed.length) throw new Error(`manifest pins: addresses.${renamed.join(', addresses.')} pinned without _aliases (SP's pins files declare ${JSON.stringify(PINS_FILE_ALIASES)})`);
     }
-    const unknown = Object.keys(obj).filter((k) => !allowed.includes(k));
+    // The pins file declares the timelock (DSR ruling, SP emits exactly this): top-level "timelockController"
+    // is the only source — an address, its codehash under codehashes.timelockController; or "n/a:none", with
+    // no codehash. The SDK files it as the certified book entry addresses.timelockController.
+    {
+        const book0 = (obj.addresses ?? {}) as Record<string, unknown>;
+        const h0 = (obj.codehashes ?? {}) as Record<string, unknown>;
+        if ('timelockController' in book0) throw new Error('manifest pins: addresses.timelockController — the timelock is declared only by the top-level "timelockController"');
+        if ('addresses.timelockController' in h0) throw new Error('manifest pins: codehashes["addresses.timelockController"] — the timelock\'s codehash goes under codehashes.timelockController');
+    }
+    // Required in every manifest (Codex r13): silence would let a deployed timelock escape certification.
+    if (!('timelockController' in obj)) throw new Error('manifest pins: timelockController is not declared (an address with codehashes.timelockController, or "n/a:none")');
+    if ('timelockController' in obj) {
+        const t = obj.timelockController;
+        const { timelockController: _t, ...rest } = obj;
+        const h = { ...((rest.codehashes ?? {}) as Record<string, unknown>) };
+        if (t === 'n/a:none') {
+            if (h.timelockController !== undefined) throw new Error('manifest pins: timelockController is "n/a:none" but codehashes.timelockController is given');
+            // The absence is recorded in both modes: fresh validation needs it (sp-optional: pinned or declared
+            // absent), and an upgrade must not silently keep the shipped book's timelock entry.
+            rest.absent = [...new Set([...((rest.absent ?? []) as string[]), 'timelockController'])];
+        } else if (typeof t === 'string' && isAddress(t)) {
+            if (h.timelockController === undefined) throw new Error('manifest pins: timelockController is pinned without codehashes.timelockController');
+            if (((rest.absent ?? []) as string[]).includes('timelockController')) throw new Error('manifest pins: timelockController is an address and also declared absent');
+            rest.addresses = { ...((rest.addresses ?? {}) as Record<string, unknown>), timelockController: t };
+            h['addresses.timelockController'] = h.timelockController;
+            delete h.timelockController;
+            rest.codehashes = h;
+        } else throw new Error(`manifest pins: timelockController ${JSON.stringify(t)} is neither an address nor "n/a:none"`);
+        obj = rest;
+    }
+    if (mode === 'upgrade' && obj.absent !== undefined && JSON.stringify(obj.absent) !== JSON.stringify(['timelockController'])) {
+        throw new Error(`manifest pins: an upgrade declares absence only for the timelock (via timelockController: "n/a:none"), not ${JSON.stringify(obj.absent)}`);
+    }
+    const unknown = Object.keys(obj).filter((k) => !allowed.includes(k) && !(mode === 'upgrade' && k === 'absent'));
     if (unknown.length) throw new Error(`manifest pins: unknown key(s) for a ${mode} deploy: ${unknown.join(', ')} (refusing rather than dropping them)`);
     const j = obj as Record<string, any>;
     const rb = j.readbackBlock;
@@ -53,6 +93,14 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
     const out: Record<string, string> = mode === 'upgrade'
         ? { ...(pins.addresses ?? {}), aPNTs: pins.aPNTsCapped as string, xPNTsFactory: pins.xPNTsFactoryV2 as string }
         : { ...(pins.addresses ?? {}) } as Record<string, string>;
+    // An upgrade declaring no timelock removes the live entry too (withTimelockLegacy keeps it as history).
+    // The book's "not deployed" is the zero address (every chain carries every key), so the entry is zeroed,
+    // not deleted; withTimelockLegacy keeps the replaced value as history.
+    if (mode === 'upgrade' && (pins.absent ?? []).includes('timelockController')) {
+        if ('timelockController' in out) throw new Error('book switch timelockController: both pinned and declared absent');
+        for (const [k, a] of Object.entries(out)) if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
+        return { ...out, timelockController: '0x0000000000000000000000000000000000000000' };
+    }
     for (const [k, a] of Object.entries(out)) {
         if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
     }
@@ -229,6 +277,8 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     if (rb?.header?.source !== 'live') p.push(`SP read-back: header.source ${JSON.stringify(rb?.header?.source)} is not "live"`);
     if (rb?.header?.chainId !== chainId) p.push(`SP read-back: header.chainId ${rb?.header?.chainId} != ${chainId}`);
     if (rb?.header?.tag !== pins.tag) p.push(`SP read-back: header.tag ${JSON.stringify(rb?.header?.tag)} != pins.tag ${JSON.stringify(pins.tag)}`);
+    // The same snapshot the manifest pins were taken at.
+    if (pins.readbackBlock === undefined || BigInt(rb?.header?.readbackBlock ?? -1) !== pins.readbackBlock) p.push(`SP read-back: header.readbackBlock ${JSON.stringify(rb?.header?.readbackBlock)} != pins.readbackBlock ${String(pins.readbackBlock)}`);
     const c = rb?.contracts ?? {};
     const h = pins.codehashes ?? {};
     // spImpl / registryImpl are the proxies' erc1967Impl fields in the read-back.
@@ -238,7 +288,8 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
     const byName = Object.fromEntries(pinnedEntries);
     const aliasBook = new Map(SP550_PIN_ALIASES.map(([top, book]) => [book, top] as const));
     for (const [name, addr] of pinnedEntries) {
-        if (typeof addr !== 'string') continue;
+        if (addr === undefined) continue; // unpinned: the gate's pin check already refused it
+        if (typeof addr !== 'string') { p.push(`pins.${name}: ${JSON.stringify(addr)} is not an address`); continue; }
         const top = aliasBook.get(name);
         if (top !== undefined) {
             if (!eqi(addr, byName[top])) p.push(`pins: ${name} ${addr} != ${top} ${String(byName[top])} (declared alias)`);
@@ -258,7 +309,14 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
         if (!eqi(e.address, addr)) p.push(`SP read-back: contracts.${key}.address ${JSON.stringify(e.address)} != pins.${name} ${addr}`);
         if (!eqi(e.codehash, h[name])) p.push(`SP read-back: contracts.${key}.codehash ${JSON.stringify(e.codehash)} != pins.codehashes.${name} ${h[name]}`);
     }
+    // A contract the pins declare absent must not appear DEPLOYED in the read-back (an "n/a:not deployed"
+    // placeholder is fine; a real address is a contradiction that would never be compared).
+    for (const k of pins.absent ?? []) {
+        const key = (PINS_FILE_ALIASES[k] ?? `contracts.${k}`).replace(/^contracts\./, '');
+        if (!isNotDeployedPlaceholder(c[key])) p.push(`SP read-back: contracts.${key} is not an "n/a:" not-deployed placeholder (address ${JSON.stringify(c[key]?.address)}, codehash ${JSON.stringify(c[key]?.codehash)}), but the pins declare ${k} absent`);
+    }
     if (!eqi(c.superPaymaster?.extension, pins.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extension ${JSON.stringify(c.superPaymaster?.extension)} != pins.spAdminExtension ${pins.spAdminExtension}`);
+    if (!eqi(c.superPaymaster?.extensionCodehash, h.spAdminExtension)) p.push(`SP read-back: contracts.superPaymaster.extensionCodehash ${JSON.stringify(c.superPaymaster?.extensionCodehash)} != pins.codehashes.spAdminExtension ${h.spAdminExtension}`);
     return p;
 }
 
@@ -266,10 +324,56 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
  * The GitHub contents-API path for SP's live read-back at one commit. A plain repository path only:
  * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
  */
-export function spReadbackApiPath(repoPath: string, commit: string): string {
+export function spReadbackApiPath(repoPath: string, commit: string, network: string, tag: string | undefined, explicit: boolean): string {
+    if (!repoPath) throw new Error(explicit ? '--sp-readback-path is empty' : `pins.tag ${String(tag)} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
     if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
     }
+    // Only SP's release live read-backs (deployments/release/rc<N>/<network>.readback.live.json), not any JSON in the repo.
+    if (!/^deployments\/release\/rc\d+\/[a-z0-9-]+\.readback\.live\.json$/.test(repoPath)) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not an SP release live read-back (deployments/release/rc<N>/<network>.readback.live.json)`);
+    // …and the one for this network: another chain's file in the same commit is not this read-back.
+    // The rc directory must be the pins' release (tag v5.5.0-rc.8 -> deployments/release/rc8/).
+    const rc = typeof tag === 'string' ? /-rc\.(\d+)$/.exec(tag)?.[1] : undefined;
+    if (rc === undefined && tag !== undefined && !explicit) throw new Error(`pins.tag ${tag} names no rc: pass --sp-readback-path explicitly (the release directory is not implied)`);
+    if (rc !== undefined && repoPath.split('/')[2] !== `rc${rc}`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not under deployments/release/rc${rc}/ (pins.tag ${tag})`);
+    if (repoPath.split('/').pop() !== `${network}.readback.live.json`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not the ${network} live read-back (${network}.readback.live.json)`);
     return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
 }
+
+/** One canonical spelling per IP: IPv4-mapped IPv6 becomes IPv4; IPv6 is lower-cased and compressed. */
+export function normalizeIp(a: string): string {
+    const bare = a.replace(/^\[|\]$/g, '').toLowerCase();
+    if (isIP(bare) === 4) return bare;
+    if (isIP(bare) !== 6) return bare;
+    const canon = new URL(`http://[${bare}]`).hostname.replace(/^\[|\]$/g, ''); // WHATWG compresses / lower-cases
+    const m = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(canon);
+    if (m) { const hi = parseInt(m[1], 16), lo = parseInt(m[2], 16); return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`; }
+    return canon;
+}
+
+/** Whether two resolved address lists share a machine (after normalizing every spelling). */
+export function addressesOverlap(a: string[], b: string[]): boolean {
+    const sa = new Set(a.map(normalizeIp));
+    return b.map(normalizeIp).some((x) => sa.has(x));
+}
+
+/**
+ * A switch that replaces the book's timelock keeps the old value as history (DSR 2026-11-11): it is
+ * written as timelockControllerLegacy, never left as the live entry and never dropped silently.
+ */
+export function withTimelockLegacy(changed: Record<string, string | null>, shipped: Record<string, unknown>): Record<string, string | null> {
+    const old = shipped.timelockController;
+    if (!('timelockController' in changed)) return changed;
+    // A zero entry means "not deployed" in the book: there is nothing to keep.
+    if (typeof old !== 'string' || /^0x0{40}$/i.test(old)) return changed;
+    const next = changed.timelockController;
+    if (typeof next === 'string' && old.toLowerCase() === next.toLowerCase()) return changed;
+    // One history slot: an earlier replaced timelock is never overwritten silently.
+    const prev = shipped.timelockControllerLegacy;
+    if (typeof prev === 'string' && !/^0x0{40}$/i.test(prev) && prev.toLowerCase() !== old.toLowerCase()) {
+        throw new Error(`timelockControllerLegacy already holds ${prev}; replacing ${old} would overwrite that history — decide in a reviewed change`);
+    }
+    return { ...changed, timelockControllerLegacy: old }; // replaced or zeroed: the old value is history either way
+}
+

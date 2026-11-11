@@ -5,7 +5,7 @@
  *
  *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> \
  *       --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] \
- *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]
+ *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]   (path default: deployments/release/rc<N>/<network>.readback.live.json from pins.tag)
  *
  * Order, each step refusing before the next:
  *  1. the manifest parses as a pins JSON for the network's deploy mode (unknown keys are refused);
@@ -30,13 +30,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -77,8 +78,9 @@ async function main() {
     const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
     const note = `SP ${pins.tag} cutover, read back at block ${pins.readbackBlock} (scripts/sp550-pin-fill.ts)`;
     console.log(`\nPASS. ${table}[${net.chainId}] = ${renderPinsLiteral(pins, '')}`);
-    const changed = changedEntries(switched, shipped);
+    const changed = withTimelockLegacy(changedEntries(switched, shipped), shipped);
     console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
+    if (changed.timelockControllerLegacy !== undefined) console.log(`\nNOTE: timelockController ${String(shipped.timelockController)} -> ${changed.timelockController === null ? '(removed: the manifest declares none)' : changed.timelockController}; the old value is kept as timelockControllerLegacy (history, never live)`);
     if (!args.includes('--write')) { console.log('\n(preview only: pass --write to fill the source)'); return; }
 
     // A fork can sit behind a public host and report any client version, and two hostnames can front ONE
@@ -89,19 +91,21 @@ async function main() {
     const hosts = urls.map(([, u]) => { try { return new URL(u).hostname.toLowerCase(); } catch { return ''; } });
     if (new Set(hosts).size < 2) refuse('--write needs --rpc and --rpc2 on two different hosts (two paths on one host are one provider)');
     // Two names for one machine are one provider too: the resolved addresses must not overlap.
-    const resolvedSets = await Promise.all(hosts.map((h) => lookup(h.replace(/^\[|\]$/g, ''), { all: true }).then((r) => r.map((x) => x.address)).catch(() => [] as string[])));
+    // An IP literal is its own address; names are resolved (every family).
+    const resolvedSets = await Promise.all(hosts.map((h) => { const bare = h.replace(/^\[|\]$/g, ''); return isIP(bare) ? Promise.resolve([bare]) : lookup(bare, { all: true }).then((r) => r.map((x) => x.address)).catch(() => [] as string[]); }));
     if (resolvedSets.some((r) => !r.length)) refuse('--write: an RPC host does not resolve');
-    if (resolvedSets[0].some((a) => resolvedSets[1].includes(a))) refuse('--write: --rpc and --rpc2 resolve to the same address (one provider behind two names)');
+    if (addressesOverlap(resolvedSets[0], resolvedSets[1])) refuse('--write: --rpc and --rpc2 resolve to the same address (one provider behind two names)');
     if (b !== undefined && b !== 'finalized') refuse('--write reads at the finalized block only (no --block override)');
 
     // Independent cross-check (DSR): SP's own LIVE read-back, committed in its manifest PR and fetched
     // from GitHub at that exact commit, must name every pinned address and codehash. On any mismatch: stop.
     const spCommit = arg('--sp-readback-commit');
     // SP commits it as deployments/release/rc8/<network>.readback.live.json in the data PR after SEND.
-    const spPath = arg('--sp-readback-path') ?? `deployments/release/rc8/${net.network}.readback.live.json`;
+    const rcOfTag = /-rc\.(\d+)$/.exec(String(pins.tag))?.[1];
+    const spPath = arg('--sp-readback-path') ?? (rcOfTag ? `deployments/release/rc${rcOfTag}/${net.network}.readback.live.json` : '');
     if (!spCommit || !/^[0-9a-f]{40}$/.test(spCommit)) refuse('--write needs --sp-readback-commit <40-hex SP commit of the data PR with the live read-back>');
     let apiPath = '';
-    try { apiPath = spReadbackApiPath(spPath, spCommit!); } catch (e) { refuse((e as Error).message); }
+    try { apiPath = spReadbackApiPath(spPath, spCommit!, net.network, pins.tag, arg('--sp-readback-path') !== undefined); } catch (e) { refuse((e as Error).message); }
     const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', apiPath], { encoding: 'utf8' });
     if (fetched.status !== 0) refuse(`--write: could not fetch SP's live read-back ${spPath}@${spCommit} (${(fetched.stderr || '').trim().split('\n')[0]})`);
     let spRb: unknown;
@@ -172,10 +176,14 @@ async function main() {
         }
         const recheck = ['exec', 'tsx', 'scripts/check-sp550-cutover.ts', '--network', net.network, ...urls.flat(),
             ...(b !== undefined ? ['--block', b] : []), ...(args.includes('--allow-rc') ? ['--allow-rc'] : [])];
-        const rc = spawnSync('pnpm', recheck, { cwd: ROOT, stdio: 'inherit' });
+        const gateRc = spawnSync('pnpm', recheck, { cwd: ROOT, stdio: 'inherit' });
+        // The written source must also COMPILE (tsx does not type-check): a generated literal the types reject
+        // would otherwise pass the gate and break the build.
+        const tscRc = gateRc.status === 0 ? spawnSync('pnpm', ['--filter', '@aastar/core', 'exec', 'tsc', '--noEmit', '-p', 'tsconfig.json'], { cwd: ROOT, stdio: 'inherit' }) : gateRc;
+        const rc = { status: gateRc.status === 0 ? tscRc.status : gateRc.status };
         if (rc.status !== 0) {
             const left = restore();
-            console.error(`\nthe gate did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'both files restored'}.`);
+            console.error(`\nthe gate or the type check did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'both files restored'}.`);
             if (left.length) keepLock = true; // unrestored files: the journal and before-images stay
             break write;
         }

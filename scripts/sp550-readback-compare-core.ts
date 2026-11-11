@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 3bf4bba28506a23f7c741f281846340afe2f86a9 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
+ * 769e17d2edbe86cdeeec44e06b5116e11a9050d5 docs/release/a7/ (re-frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = '0ac860742f997120cec3a7f185323e090f30371f6e67c27fda200b3a18a6e131';
+export const READBACK_SCHEMA_SHA256 = 'b58405f1d0a70375f9bd67bd5a26d92d64f6434aa4fbafd81d529fa917b93e6e';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -40,9 +40,10 @@ export function loadReadbackValidator(file = READBACK_SCHEMA_FILE, sha256 = READ
     const raw = fs.readFileSync(file);
     const got = createHash('sha256').update(new Uint8Array(raw)).digest('hex');
     if (got !== sha256) throw new Error(`read-back schema ${file}: sha256 ${got} != pinned ${sha256}; refusing to validate against it`);
-    // strictRequired off: schema 3bf4bba2 requires the 20 contract keys under additionalProperties (valid
-    // Draft 2020-12; ajv's strict mode only lints it). Every other strict check stays on.
-    const ajv = new (Ajv2020 as any)({ strict: true, strictRequired: false, allErrors: true });
+    // ajv's strict LINTS (strictRequired: keys required under additionalProperties; strictTypes: `required`
+    // without a sibling `type`) are off: both are valid Draft 2020-12 and SP's validator accepts them.
+    // strictSchema stays on, so an unknown keyword in the schema still fails to compile.
+    const ajv = new (Ajv2020 as any)({ strict: true, strictRequired: false, strictTypes: false, allErrors: true });
     // x-readMethods (revision 3) documents how each field is read; an annotation, not a validation rule.
     ajv.addKeyword({ keyword: 'x-readMethods', schemaType: 'object' });
     const validate = ajv.compile(JSON.parse(raw.toString('utf8')));
@@ -200,8 +201,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const am = await read('', 'amsterdamAtForkBlock', { block: asBig(hd.forkBlock) });
     if (am.kind !== 'value') p.push(`header.ethConfig: the SDK could not read the upstream at forkBlock ${show(hd.forkBlock)} (${am.kind === 'error' ? am.detail : 'reverted'})`);
     else {
-        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } = {};
-        try { seen = JSON.parse(am.value); } catch { p.push(`header.ethConfig: the upstream answer is not JSON (${am.value.slice(0, 60)})`); }
+        let seen: { blockAccessListHash?: boolean; slotNumber?: boolean; ethConfigs?: { activationTime?: number; forkId?: string }[] } | null = null;
+        try { const v = JSON.parse(am.value); seen = v && typeof v === 'object' ? v : null; } catch { /* reported below */ }
+        if (!seen) { p.push(`header.ethConfig: the upstream answer is not a JSON object (${am.value.slice(0, 60)})`); seen = { blockAccessListHash: true, slotNumber: true, ethConfigs: [] }; }
         if (seen.blockAccessListHash !== true || seen.slotNumber !== true) p.push(`header.ethConfig: the upstream block ${show(hd.forkBlock)} lacks Amsterdam header fields (blockAccessListHash ${seen.blockAccessListHash}, slotNumber ${seen.slotNumber})`);
         for (const cfg of seen.ethConfigs ?? []) {
             if (ref && (cfg.activationTime !== ref.activationTime || !eq(cfg.forkId, ref.forkId))) p.push(`header.ethConfig: the upstream eth_config reports ${show(cfg)}, not Amsterdam ${show(ref)}`);
@@ -313,6 +315,14 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
     p.push(...recordedProbeProblems(f.amsterdamProbe, providers));
 
+    // A contract the pins declare absent (e.g. timelockController: "n/a:none") must not appear DEPLOYED in
+    // the file; an "n/a:not deployed" placeholder is fine.
+    for (const k of pins.absent ?? []) {
+        const key = BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
+        const e = contracts[key];
+        if (!isNotDeployedPlaceholder(e)) p.push(`contracts.${key}: not an "n/a:" not-deployed placeholder (address ${show(e?.address)}, codehash ${show(e?.codehash)}), but the pins declare ${k} absent`);
+    }
+
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
     const bh2 = await read('', 'blockHash');
     if (bh.kind === 'value' && (bh2.kind !== 'value' || !eq(bh2.value, bh.value))) p.push(`snapshot: block ${pins.readbackBlock} changed during the reads (${bh.value} -> ${bh2.kind === 'value' ? bh2.value : bh2.kind})`);
@@ -378,4 +388,37 @@ export function probeProblems(probe: Record<string, any>, mine: { gasUsedFork: M
         else if (m.kind === 'n/a') p.push(`amsterdamProbe: ${what} is required (${m.detail})`);
     }
     return p;
+}
+
+/**
+ * Fold the upstreams' raw answers at forkBlock into the `amsterdamAtForkBlock` observation: the
+ * Amsterdam-only header VALUES (not just their shape) must agree across providers; every eth_config a
+ * provider serves is handed on to be checked on its own.
+ */
+export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; slotNumber?: unknown; ethConfig?: unknown } | string)[]): Observed {
+    if (!answers.length) return { kind: 'error', detail: 'no upstream' };
+    const bad = answers.find((x) => typeof x === 'string');
+    if (bad !== undefined) return { kind: 'error', detail: bad as string };
+    const rows = answers as { blockAccessListHash?: unknown; slotNumber?: unknown; ethConfig?: unknown }[];
+    const HASH = /^0x[0-9a-fA-F]{64}$/;
+    // slotNumber is a JSON-RPC quantity: compared as a number (0x10 == 0x010), the hash case-insensitively.
+    const qty = (v: unknown) => (typeof v === 'string' && /^0x[0-9a-fA-F]+$/.test(v) ? BigInt(v).toString() : `raw:${String(v)}`);
+    const vals = rows.map((r) => `${String(r.blockAccessListHash).toLowerCase()}/${qty(r.slotNumber)}`);
+    if (!vals.every((v) => v === vals[0])) return { kind: 'error', detail: `upstreams disagree on the Amsterdam header at forkBlock: ${vals.join(' vs ')}` };
+    const r0 = rows[0];
+    const hashOk = typeof r0.blockAccessListHash === 'string' && HASH.test(r0.blockAccessListHash) && !/^0x0{64}$/.test(r0.blockAccessListHash);
+    const slotOk = typeof r0.slotNumber === 'string' && /^0x[0-9a-fA-F]+$/.test(r0.slotNumber);
+    return { kind: 'value', value: JSON.stringify({ blockAccessListHash: hashOk, slotNumber: slotOk, ethConfigs: rows.map((r) => r.ethConfig).filter(Boolean) }) };
+}
+
+/**
+ * A read-back entry that explicitly says "not deployed": every identity field (address, codehash, and
+ * any implementation / extension identity) is an "n/a:" placeholder or null. Anything carrying a real
+ * address or hash — or an unreadable one — is NOT that. Shared by the comparator and pin-fill's live check.
+ */
+export function isNotDeployedPlaceholder(c: any): boolean {
+    if (c === undefined || c === null) return true;
+    const na = (v: unknown) => v === null || (typeof v === 'string' && v.startsWith('n/a:'));
+    return ['address', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash'].every((f) => c[f] === undefined || na(c[f]))
+        && na(c.address) && na(c.codehash);
 }

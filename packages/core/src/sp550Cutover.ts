@@ -55,6 +55,11 @@ export interface Sp550CutoverPins {
      * deploy pins the whole SP-owned book (sp550Deployments.ts).
      */
     addresses?: Partial<Record<string, Address>>;
+    /**
+     * Keys declared NOT deployed. A fresh deploy lists sp-optional book keys; an upgrade only ever
+     * lists timelockController (a manifest's timelockController: "n/a:none").
+     */
+    absent?: string[];
     /** Block the readback was taken at. */
     readbackBlock?: bigint;
     /**
