@@ -29,8 +29,10 @@
 #   2 read-back, immediately after loading:
 #     a. scripts/sp550-pin-fill.ts (preview): the gate on the manifest pins with the cutover book
 #        switch — version(), every codehash, EXTENSION and ERC-1967 slots, SP wiring, aliases;  gate.log
-#     b. --load-state: scripts/sp550-readback-compare.ts, SP's read-back file field by field
-#        against the pins and the SDK's own reads, header against the dump / fork block / hardfork / SP commit;  readback.log
+#     b. --load-state: scripts/sp550-readback-compare.ts, SP's read-back file validated against the
+#        frozen schema, then field by field against the pins and the SDK's own reads; header against the
+#        dump / fork block / hardfork / anvil commit / SP commit; Amsterdam from the upstream; then the
+#        amsterdamProbe (simulateV1 / eth_call on the upstream, receipt gasUsed on the fork);  readback.log
 #   3 oracle timestamp refresh + bundler with the fork's clock          oracle.log, ultrarelay.log
 #   4 SDK E2E (scripts/sp550-live-e2e.ts --fork-setup): the gate again, then account / ENDUSER /
 #     xPNTs / renewalMode SP_K by impersonation, S1, then S3b until the SDK selects SP_RENEW;
@@ -112,8 +114,9 @@ STAGE=2
   || fail "read-back gate on the manifest pins: $(grep -E '^❌' "$OUT/gate.log" | head -3 | tr '\n' ' ') (gate.log)"
 log "stage 2a ok: $(grep -c '^✅' "$OUT/gate.log") gate checks on the manifest pins (gate.log)"
 if [ -n "$DUMP" ]; then
-  (cd "$SDK" && pnpm exec tsx scripts/sp550-readback-compare.ts --readback "$READBACK" --pins "$PINS" --chain-id 11155111 --rpc $RPC \
-      --fork-block "$FORK_BLOCK" --dump-sha256 "$GOT" --hardfork "$HARDFORK" --sp-commit "$SP_COMMIT") > "$OUT/readback.log" 2>&1 \
+  # SP550_FORK_URL (exported) is the upstream for the Amsterdam checks and the probe's live side; never logged.
+  (cd "$SDK" && SP550_FORK_URL="$FORK_URL" pnpm exec tsx scripts/sp550-readback-compare.ts --network sepolia --readback "$READBACK" --pins "$PINS" --rpc $RPC --allow-rc \
+      --fork-block "$FORK_BLOCK" --dump-sha256 "$GOT" --anvil-commit "$A7_ANVIL_COMMIT" --hardfork "$HARDFORK" --sp-commit "$SP_COMMIT" --probe) > "$OUT/readback.log" 2>&1 \
     || fail "SP's read-back does not match: $(grep -E '^❌' "$OUT/readback.log" | head -3 | tr '\n' ' ') (readback.log)"
   log "stage 2b ok: SP's read-back $(shasum -a 256 "$READBACK" | cut -c1-64) matches the pins and the SDK's reads (readback.log)"
 fi
