@@ -38,6 +38,14 @@ export interface Sp550CutoverPins {
     aPNTsCapped?: Address;
     /** Block the readback was taken at. */
     readbackBlock?: bigint;
+    /**
+     * keccak256 of the runtime code of EVERY pinned address, as read back, keyed by pin name
+     * (`superPaymaster`, `spImpl`, …, and `addresses.<key>` for a fresh deploy's book). version()
+     * alone does not identify a build: two SP-a builds both answer "SuperPaymaster-5.5.1" with
+     * different withdrawal semantics. On a fork they come from the deploy; live, from the read-back.
+     * `codehashes.spImpl` must equal `spImplCodehash`.
+     */
+    codehashes?: Partial<Record<string, Hex>>;
 }
 
 /** Fields that MUST be filled before the cutover can ship. */
@@ -55,6 +63,7 @@ export const SP550_REQUIRED_PIN_FIELDS = [
     'globalTierSource',
     'aPNTsCapped',
     'readbackBlock',
+    'codehashes',
 ] as const satisfies readonly (keyof Sp550CutoverPins)[];
 
 /**
@@ -70,6 +79,41 @@ const ADDRESS_FIELDS = [
     'superPaymaster', 'spImpl', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl',
     'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped',
 ] as const;
+
+const HASH = /^0x[0-9a-fA-F]{64}$/;
+
+/**
+ * Every pinned address with its pin name: the top-level 5.5.0 contracts, then `addresses.<key>` for
+ * a fresh deploy's book. The gate checks the code of exactly these, so `codehashes` is keyed the same.
+ */
+export function sp550PinnedAddressEntries(pins: Sp550CutoverPins | undefined): [string, unknown][] {
+    if (!pins) return [];
+    const book = (pins as { addresses?: Record<string, unknown> }).addresses ?? {};
+    return [
+        ...ADDRESS_FIELDS.map((k) => [k, pins[k]] as [string, unknown]),
+        ...Object.entries(book).map(([k, a]) => [`addresses.${k}`, a] as [string, unknown]),
+    ];
+}
+
+/**
+ * `codehashes` problems: every name in `required` (a pinned address) has a 32-byte hash, and no
+ * entry names something that can never be pinned. `addresses.<key>` names are left to the fresh
+ * deploy check, which knows the address book (sp550FreshPinProblems).
+ */
+export function sp550CodehashProblems(pins: Sp550CutoverPins | undefined, required: string[], isPinnable: (name: string) => boolean): string[] {
+    if (!pins || pins.codehashes === undefined || pins.codehashes === null) return [];
+    const hashes = pins.codehashes;
+    if (typeof hashes !== 'object' || Array.isArray(hashes)) return ['codehashes: not an object of pin name -> 32-byte hash'];
+    const problems: string[] = [];
+    for (const k of required) {
+        if (hashes[k] === undefined) problems.push(`codehashes.${k}: unpinned (every pinned address needs its runtime codehash)`);
+    }
+    for (const [k, h] of Object.entries(hashes)) {
+        if (!isPinnable(k)) problems.push(`codehashes.${k}: no pinned address of that name`);
+        else if (!HASH.test(String(h))) problems.push(`codehashes.${k}: not a 32-byte hash (${String(h)})`);
+    }
+    return problems;
+}
 
 /** Release tags the 5.5.0 cutover accepts: exactly v5.5.0, or v5.5.0-rc.N only when allowed. */
 export function isSp550ReleaseTag(tag: unknown, opts: { allowRc?: boolean } = {}): boolean {
@@ -95,7 +139,7 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
         if (v === undefined) continue;
         if (typeof v !== 'string' || !isAddress(v, { strict: false }) || v.toLowerCase() === ZERO) problems.push(`${k}: not a non-zero address (${String(v)})`);
     }
-    if (pins.spImplCodehash !== undefined && !/^0x[0-9a-fA-F]{64}$/.test(String(pins.spImplCodehash))) {
+    if (pins.spImplCodehash !== undefined && !HASH.test(String(pins.spImplCodehash))) {
         problems.push(`spImplCodehash: not a 32-byte hash (${String(pins.spImplCodehash)})`);
     }
     if (pins.tag !== undefined && !isSp550ReleaseTag(pins.tag, opts)) {
@@ -106,6 +150,15 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
     }
     if (pins.readbackBlock !== undefined && !(typeof pins.readbackBlock === 'bigint' && pins.readbackBlock > 0n)) {
         problems.push(`readbackBlock: not a positive block number (${String(pins.readbackBlock)})`);
+    }
+    problems.push(...sp550CodehashProblems(
+        pins,
+        ADDRESS_FIELDS.filter((k) => pins[k] !== undefined),
+        (name) => (ADDRESS_FIELDS as readonly string[]).includes(name) || name.startsWith('addresses.'),
+    ));
+    const implHash = pins.codehashes?.spImpl;
+    if (implHash !== undefined && HASH.test(String(pins.spImplCodehash)) && String(implHash).toLowerCase() !== String(pins.spImplCodehash).toLowerCase()) {
+        problems.push(`codehashes.spImpl ${implHash} != spImplCodehash ${pins.spImplCodehash}`);
     }
     return problems;
 }

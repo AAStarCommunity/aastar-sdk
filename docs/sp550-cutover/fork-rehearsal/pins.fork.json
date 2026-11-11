@@ -10,5 +10,17 @@
   "tag": "v5.5.0-rc.4",
   "spImplCodehash": "0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd",
   "aPNTsCapped": "0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7",
-  "readbackBlock": 12090086
+  "readbackBlock": 12090086,
+  "spVersion": "SuperPaymaster-5.5.0",
+  "codehashes": {
+    "superPaymaster": "0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0",
+    "spImpl": "0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd",
+    "superPaymasterLens": "0x4435e4a51e3293245ec1856bc9aa8d5606b9dc45b9a3dbd9742cf625e3cad3c1",
+    "xPNTsFactoryV2": "0xc7a770d14ffeef5e6cc8cea37da1c670d3c1fa1a3d538045c91fa3f9309574e8",
+    "xPNTsTokenV2Impl": "0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51",
+    "xPNTsTokenV2Ext": "0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4",
+    "aoaProtocolRegistry": "0x14b95e6c2b6630b835f4253ac5d667980288de98461dcda9580e25df78fb5551",
+    "globalTierSource": "0x730436c0dcf31db7b35233abbf2c673302fb29ac02e6f09705c0e996e8e541f0",
+    "aPNTsCapped": "0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4"
+  }
 }
