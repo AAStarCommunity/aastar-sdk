@@ -289,7 +289,7 @@ describe('Codex r3: version by interface, alias hashes, independent corroboratio
     });
     it('an alias book entry with its own, different codehash pin is refused (it would never be compared)', async () => {
         const pins = { ...PINS, addresses: { ...PINS.addresses, superPaymaster: PINS.superPaymaster }, codehashes: { ...PINS.codehashes, 'addresses.superPaymaster': H(0x77) } };
-        expect(await run(good(), { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/pins: codehashes\.addresses\.superPaymaster .* != codehashes\.superPaymaster/)]));
+        expect(await run(good(), { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/^pins: codehashes\.(addresses\.)?superPaymaster .* != codehashes\.(addresses\.)?superPaymaster/)]));
     });
     it('an unnamed eth_config provider cannot vouch for independent corroboration', async () => {
         const rb = good(); delete rb.header.ethConfig.provider; rb.header.providers = ['alchemy']; rb.header.ethConfig.corroboration.provider = 'alchemy';

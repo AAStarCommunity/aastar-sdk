@@ -23,6 +23,8 @@ Object.assign(FULL as any, { codehashes: Object.fromEntries([
     ...sp550PinnedAddressEntries({ ...FULL, addresses: {} } as any).map(([k]) => k),
     ...[...SP550_FRESH_REQUIRED_ADDRESS_KEYS, ...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].map((k) => `addresses.${k}`),
 ].map((k, i) => [k, k === 'spImpl' ? FULL.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)])) });
+// A declared alias is one contract with one code: its book entry shares the top-level hash.
+(FULL as any).codehashes['addresses.superPaymaster'] = (FULL as any).codehashes.superPaymaster;
 
 describe('SP 5.5.0 network selection', () => {
     it('maps each network name to its viem chainId and deploy mode', () => {
@@ -114,5 +116,13 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
     });
     it('the top-level proxy and the book must name the same SuperPaymaster', () => {
         expect(sp550FreshPinProblems({ ...FULL, superPaymaster: A(77) })).toEqual([expect.stringMatching(/!= addresses\.superPaymaster/)]);
+    });
+});
+
+describe('declared aliases are one contract: one codehash (Grok on #433)', () => {
+    it('superPaymaster / addresses.superPaymaster with two different codehash pins are refused', () => {
+        expect(sp550FreshPinProblems(FULL)).toEqual([]);
+        const pins: any = { ...FULL, codehashes: { ...(FULL as any).codehashes, 'addresses.superPaymaster': '0x' + '77'.repeat(32) } };
+        expect(sp550FreshPinProblems(pins)).toEqual([expect.stringMatching(/codehashes\.superPaymaster .* != codehashes\.addresses\.superPaymaster .*one contract/)]);
     });
 });

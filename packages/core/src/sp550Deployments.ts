@@ -224,8 +224,15 @@ export function sp550PinAliasProblems(pins: Sp550FreshDeployPins | undefined): s
     const problems: string[] = [];
     for (let i = 0; i < entries.length; i++) {
         for (let j = i + 1; j < entries.length; j++) {
-            if (entries[i][1] === entries[j][1] && !allowed(entries[i][0], entries[j][0])) {
+            if (entries[i][1] !== entries[j][1]) continue;
+            if (!allowed(entries[i][0], entries[j][0])) {
                 problems.push(`${entries[i][0]} and ${entries[j][0]} are the same address (${entries[i][1]}); only ${SP550_PIN_ALIASES.map((p) => p.join(' = ')).join(', ')} may alias`);
+                continue;
+            }
+            // One contract, one runtime code: a declared alias carrying two different codehash pins cannot both be true.
+            const [hi, hj] = [pins.codehashes?.[entries[i][0]], pins.codehashes?.[entries[j][0]]];
+            if (hi !== undefined && hj !== undefined && String(hi).toLowerCase() !== String(hj).toLowerCase()) {
+                problems.push(`codehashes.${entries[i][0]} ${hi} != codehashes.${entries[j][0]} ${hj}, but they are one contract (declared alias)`);
             }
         }
     }
