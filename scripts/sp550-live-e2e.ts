@@ -28,7 +28,7 @@
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
  *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
- *     "expectMinPostOpGas"?: "500000",      // gasParams().minPostOpGas must equal the release tuple's value
+ *     "expectMinPostOpGas": "500000",       // gasParams().minPostOpGas must equal the release tuple's value
  *     "requireFreshAccount"?: true          // mode fork (A7): the account must not exist before the run, and S1
  *                                            // (its first sponsored op: fresh lock / allowance slots) must succeed
  *   }
@@ -129,12 +129,13 @@ async function main() {
     if (cfg.gate?.bookOverrides !== undefined) {
         const o = cfg.gate.bookOverrides;
         if (typeof o !== 'object' || o === null || Array.isArray(o)) refuse('gate.bookOverrides must be an object of address entries');
-        book = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
+        const overridden: Record<string, unknown> = { ...((CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {}) };
         for (const [k, v] of Object.entries(o)) {
             if (typeof v !== 'string' || !isAddress(v, { strict: false })) refuse(`gate.bookOverrides.${k} is not an address`);
-            console.log(`fork-only SDK book override: ${k} ${String((book as any)[k] ?? '(absent)')} -> ${getAddress(v as string)}`);
-            book[k] = getAddress(v as string);
+            console.log(`fork-only SDK book override: ${k} ${String(overridden[k] ?? '(absent)')} -> ${getAddress(v as string)}`);
+            overridden[k] = getAddress(v as string);
         }
+        book = overridden;
     }
     const gate = await runSp550CutoverGate({
         network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc, book,
@@ -166,10 +167,14 @@ async function main() {
     const minTxInterval = BigInt(opCfg[5]);
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
     // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
-    // (rc.8: 500,000 — DSR). expectMinPostOpGas makes the run hold the chain to that value.
+    // (rc.8: 500,000 — DSR). expectMinPostOpGas holds the chain to that value; it is required, since an
+    // optional expectation is a check a config can silently drop.
+    if (typeof cfg.expectMinPostOpGas !== 'string' || !/^[0-9]+$/.test(cfg.expectMinPostOpGas)) {
+        refuse('expectMinPostOpGas must be set to the release tuple\'s minPostOpGas as a decimal string (rc.8: "500000")');
+    }
     const gp = await getSuperPaymasterGasParams(pub as any, sp);
     console.log(`SP gasParams: minPostOpGas ${gp.minPostOpGas} (${gp.source}) · settleGasBound ${gp.settleGasBound ?? '-'} · cPostop ${gp.cPostop ?? '-'}`);
-    if (cfg.expectMinPostOpGas !== undefined && gp.minPostOpGas !== BigInt(cfg.expectMinPostOpGas)) {
+    if (gp.minPostOpGas !== BigInt(cfg.expectMinPostOpGas)) {
         fail(`gasParams().minPostOpGas ${gp.minPostOpGas} != expected ${cfg.expectMinPostOpGas} (the release tuple)`);
     }
     // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its

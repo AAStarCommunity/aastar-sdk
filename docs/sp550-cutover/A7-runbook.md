@@ -33,8 +33,10 @@ SP 的 anvil 以 `--hardfork amsterdam --accounts 0` 启动，交易发送方都
 ```bash
 SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
   scripts/sp550-fork/run-a7.sh --load-state <dump> --expect-sha256 <hex> --readback <a7-readback.json> \
-      <SP rc.8 checkout> <manifest pins.json> <operator> <fork block> <out>
+      --anvil <FOUNDRY_DIR>/bin/anvil <SP rc.8 checkout> <manifest pins.json> <operator> <fork block> <out>
 ```
+
+`--anvil` 指向 A7 锁定的 anvil（1.8.7-nightly，commit `4e8874b2bdc840929585ca73e170993c50a4a531`）。它要装在单独的 `FOUNDRY_DIR` 里：从 foundry 的 nightly release 下载 tarball，核对 sha256 和 attestation 后解压过去，不要动共用的 `~/.foundry`。commit 不对，脚本会在启动 anvil 之前拒绝。
 
 退出码为 0，并且 `<out>/run.log` 最后一行是 `A7 PASS`，才算通过；其他任何结果都是 `A7 FAIL at stage <n>: …`。退出时 anvil 和 bundler 都会被关掉。
 
@@ -134,9 +136,12 @@ pnpm exec tsx scripts/sp550-pin-fill.ts ... --write --sp-readback-commit <SP 数
   "gate": { "allowRc": true },
   "operator": "<operator>", "account": "<用户 AA 账户>",
   "userKey": { "keystore": "<加密 keystore 路径>" },
-  "maxOps": 8
+  "maxOps": 8,
+  "expectMinPostOpGas": "500000"
 }
 ```
+
+`expectMinPostOpGas` 必须写上 rc.8 发布元组的值（500,000）。E2E 会把链上 `gasParams().minPostOpGas` 和它比对，不相等就 FAIL；配置里没有这一项时，E2E 直接拒绝运行。
 
 ```bash
 # 在 pin 填充分支上执行（门读的是已经写进源码的 pins，实链不允许 bookOverrides）

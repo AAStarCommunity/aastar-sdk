@@ -52,10 +52,13 @@ while [ $# -gt 0 ]; do case "$1" in
   --*) echo "unknown option $1" >&2; exit 2;;
   *) break;;
 esac; done
-SP_DIR="$(cd "${1:?sp checkout}" && pwd)"; PINS="$(cd "$(dirname "${2:?manifest pins.json}")" && pwd)/$(basename "$2")"
+abspath() { echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"; }
+SP_DIR="$(cd "${1:?sp checkout}" && pwd)"; PINS="$(abspath "${2:?manifest pins.json}")"
 OPERATOR="${3:?operator address}"; FORK_BLOCK="${4:?fork block}"; OUT="${5:?out dir}"
 : "${ULTRARELAY_DIR:?set ULTRARELAY_DIR to an UltraRelay-AAStar / Alto checkout}"
 HARDFORK="${SP550_A7_HARDFORK:-amsterdam}"
+# Caller-relative, like the pins: stage 2 runs from the SDK checkout.
+[ -z "$DUMP" ] || DUMP="$(abspath "$DUMP")"; [ -z "$READBACK" ] || READBACK="$(abspath "$READBACK")"
 if [ -n "$DUMP" ]; then
   [ -n "$EXPECT" ] || { echo "--load-state needs --expect-sha256 <hex>" >&2; exit 2; }
   [ -n "$READBACK" ] || { echo "--load-state needs --readback <a7-readback.json> (SP's read-back of the same state)" >&2; exit 2; }
@@ -73,12 +76,21 @@ SDK="$(cd "$(dirname "$0")/../.." && pwd)"; RPC=http://127.0.0.1:28546; BUNDLER=
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; LOG="$OUT/run.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
 STAGE=0
-fail() { log "A7 FAIL at stage $STAGE: $*"; exit 1; }
-cleanup() { for p in ultrarelay anvil; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done; }
-trap cleanup EXIT
+FAILED=0
+fail() { FAILED=1; log "A7 FAIL at stage $STAGE: $*"; exit 1; }
 [[ "$OPERATOR" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "operator must be an address" >&2; exit 2; }
 [[ "$FORK_BLOCK" =~ ^[0-9]+$ ]] || { echo "fork block must be a number" >&2; exit 2; }
 for port in 28546 3046; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
+# pid files left in a reused <out> name processes this run did not start (possibly reused pids):
+# drop them before the trap, so cleanup only ever kills what this invocation wrote.
+rm -f "$OUT/anvil.pid" "$OUT/ultrarelay.pid"
+# Any exit under set -e (not only fail) still ends run.log with the stage it stopped at.
+cleanup() {
+  local rc=$?
+  [ "$rc" = 0 ] || [ "$FAILED" = 1 ] || log "A7 FAIL at stage $STAGE: exited $rc (see the stage log)"
+  for p in ultrarelay anvil; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done
+}
+trap cleanup EXIT
 SP_COMMIT=$(git -C "$SP_DIR" rev-parse HEAD)
 log "A7 run ($([ -n "$DUMP" ] && echo "load-state, dump sha256 $GOT" || echo deploy)): SP $(git -C "$SP_DIR" describe --tags --always 2>/dev/null) @ $SP_COMMIT · SDK $(git -C "$SDK" rev-parse HEAD) · fork block $FORK_BLOCK · pins sha256 $(shasum -a 256 "$PINS" | cut -c1-64)"
 log "anvil: $("$ANVIL" --version | tr '\n' ' ')"
