@@ -131,12 +131,14 @@ STAGE=4
 OWNER3=$(cast wallet address --mnemonic "test test test test test test test test test test test junk" --mnemonic-index 3)
 FACTORY=$(cd "$SDK" && pnpm exec tsx -e "import { CANONICAL_ADDRESSES } from './packages/core/src/addresses.ts'; console.log(CANONICAL_ADDRESSES[11155111].simpleAccountFactory)")
 ACCOUNT=$(cast call "$FACTORY" 'getAddress(address,uint256)(address)' "$OWNER3" 0 --rpc-url $RPC)
-jq -n --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" \
+# The release tuple's postOp floor (rc.8: 500,000, DSR); deploy-mode rehearsals of older rcs set it to theirs.
+MIN_POST_OP_GAS="${SP550_A7_MIN_POST_OP_GAS:-500000}"
+jq -n --arg mpg "$MIN_POST_OP_GAS" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" \
       --arg apnts "$(jq -r .aPNTsCapped "$PINS")" --arg xf "$(jq -r .xPNTsFactoryV2 "$PINS")" '{
     network: "sepolia", mode: "fork", rpcUrls: [$rpc], bundlerUrl: $bundler,
     gate: { pinsFile: $pins, block: "latest", allowRc: true, bookOverrides: { aPNTs: $apnts, xPNTsFactory: $xf } },
     operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8,
-    forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true }' > "$OUT/e2e.json"
+    forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true, expectMinPostOpGas: $mpg }' > "$OUT/e2e.json"
 set +e
 (cd "$SDK" && pnpm exec tsx scripts/sp550-live-e2e.ts --config "$OUT/e2e.json" --fork-setup) 2>&1 | tee "$OUT/e2e.log"
 rc=${PIPESTATUS[0]}

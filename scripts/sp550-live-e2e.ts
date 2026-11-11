@@ -28,6 +28,7 @@
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
  *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
+ *     "expectMinPostOpGas"?: "500000",      // gasParams().minPostOpGas must equal the release tuple's value
  *     "requireFreshAccount"?: true          // mode fork (A7): the account must not exist before the run, and S1
  *                                            // (its first sponsored op: fresh lock / allowance slots) must succeed
  *   }
@@ -68,7 +69,7 @@ import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import {
     CANONICAL_ADDRESSES, EntryPointABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
-    SP550_CUTOVER_PINS, SP550_FRESH_DEPLOY_PINS, SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS,
+    SP550_CUTOVER_PINS, SP550_FRESH_DEPLOY_PINS, SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, getSuperPaymasterGasParams,
 } from '@aastar/core';
 import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
@@ -164,6 +165,13 @@ async function main() {
     const token = getAddress(opCfg[3]) as Address;
     const minTxInterval = BigInt(opCfg[5]);
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
+    // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
+    // (rc.8: 500,000 — DSR). expectMinPostOpGas makes the run hold the chain to that value.
+    const gp = await getSuperPaymasterGasParams(pub as any, sp);
+    console.log(`SP gasParams: minPostOpGas ${gp.minPostOpGas} (${gp.source}) · settleGasBound ${gp.settleGasBound ?? '-'} · cPostop ${gp.cPostop ?? '-'}`);
+    if (cfg.expectMinPostOpGas !== undefined && gp.minPostOpGas !== BigInt(cfg.expectMinPostOpGas)) {
+        fail(`gasParams().minPostOpGas ${gp.minPostOpGas} != expected ${cfg.expectMinPostOpGas} (the release tuple)`);
+    }
     // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its
     // own node — never from a local forge simulation. Recorded as the host and the client it reports
     // (the full URL usually embeds a key and is never printed).

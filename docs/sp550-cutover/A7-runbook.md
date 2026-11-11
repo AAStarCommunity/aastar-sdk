@@ -74,6 +74,8 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 另外，S3b 里带 SP_RENEW 的那个 op 还要求 `UserOperationEvent.success = true`。
 
+**postOp 下限。** `gasParams().minPostOpGas` 必须等于 release tuple 里的值（rc.8 是 500,000，`expectMinPostOpGas`，用 `SP550_A7_MIN_POST_OP_GAS` 设置）。SDK 填的 postOp limit 只会往上抬到这个值，不会低于它。
+
 **全新账户的第一笔 op（Amsterdam state gas）。** A7 要求用户账户在这次运行之前不存在（`requireFreshAccount`）。S1 就是这个账户的第一笔赞助 op，xPNTs 的 lock 和 allowance 槽都是第一次写入，在 Amsterdam 下要多付 state gas，这笔 op 必须成功。日志里会单独打一行 `A7 FRESH ACCOUNT`。
 
 每个 op 打一行 `RESULT`，内容是：`S_user`（signMessage 次数）、估算次数、发送次数、SDK 选的 flags、allowance 变化、`autoRenewUsed` 变化、`AllowanceRenewed(bySP)`、tx hash。
