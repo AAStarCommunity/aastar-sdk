@@ -24,11 +24,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { lookup } from 'dns/promises';
 import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackHost, isLoopbackUrl, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -40,26 +41,6 @@ const FILES = {
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 const refuse = (m: string): never => { console.error(`${m}\n${USAGE}`); process.exit(2); };
-/**
- * Write every file or none: each goes to a temp file first, then all are renamed into place. If a
- * step fails, the files already renamed are restored. Returns a restore() that puts the originals
- * back only where the file still holds what this run wrote (another writer's edit is never clobbered).
- */
-function writeAll(files: { path: string; before: string; after: string }[]): () => string[] {
-    for (const f of files) fs.writeFileSync(`${f.path}.pin-fill.tmp`, f.after);
-    const done: typeof files = [];
-    try { for (const f of files) { fs.renameSync(`${f.path}.pin-fill.tmp`, f.path); done.push(f); } }
-    catch (e) {
-        for (const f of done) fs.writeFileSync(f.path, f.before);
-        for (const f of files) fs.rmSync(`${f.path}.pin-fill.tmp`, { force: true });
-        throw e;
-    }
-    return () => files.flatMap((f) => {
-        if (fs.readFileSync(f.path, 'utf8') !== f.after) return [`${path.relative(ROOT, f.path)} changed since this run wrote it; left as is, restore it by hand`];
-        fs.writeFileSync(f.path, f.before);
-        return [];
-    });
-}
 
 async function main() {
     const net = (() => { try { return resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); } })();
@@ -95,6 +76,11 @@ async function main() {
 
     // ---- 4. write, then let the gate read the written source ----
     for (const [label, url] of urls) {
+        // By spelling, then by what the name resolves to (a hosts-file alias of 127.0.0.1 is a fork too).
+        const host = (() => { try { return new URL(url).hostname.replace(/^\[|\]$/g, ''); } catch { return ''; } })();
+        const resolved = await lookup(host, { all: true }).catch(() => [] as { address: string }[]);
+        if (!resolved.length) refuse(`--write refused: ${label}'s host does not resolve; cannot rule out a local fork`);
+        if (resolved.some((r) => isLoopbackHost(r.address))) refuse(`--write refused: ${label} resolves to a loopback address (a local fork); fork addresses never go into the source`);
         if (isLoopbackUrl(url)) refuse(`--write refused: ${label} is a loopback URL (a local fork); fork addresses never go into the source`);
         // Not knowing the node is not "not anvil": a failed or empty answer refuses the write too.
         let client: unknown;
@@ -114,7 +100,9 @@ async function main() {
         let after;
         try { after = { table: fillPinsTable(before.table, table, net.chainId, pins), book: switchBook(before.book, net.chainId, changed, note) }; }
         catch (e) { console.error(`nothing written: ${(e as Error).message}`); break write; }
-        const restore = writeAll([{ path: tableFile, before: before.table, after: after.table }, { path: FILES.book, before: before.book, after: after.book }]);
+        let restore: () => string[];
+        try { restore = writeAll([{ path: tableFile, before: before.table, after: after.table }, { path: FILES.book, before: before.book, after: after.book }], ROOT); }
+        catch (e) { console.error((e as Error).message); break write; }
         const recheck = ['exec', 'tsx', 'scripts/check-sp550-cutover.ts', '--network', net.network, ...urls.flat(),
             ...(b !== undefined ? ['--block', b] : []), ...(args.includes('--allow-rc') ? ['--allow-rc'] : [])];
         const rc = spawnSync('pnpm', recheck, { cwd: ROOT, stdio: 'inherit' });

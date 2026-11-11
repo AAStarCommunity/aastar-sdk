@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -87,7 +87,7 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
     });
     it('a chain with no entry, or a missing table, is refused', () => {
         expect(() => fillPinsTable(source, 'SP550_CUTOVER_PINS', 1, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/no entry for this chain/);
-        expect(() => fillPinsTable(source, 'NOPE', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/NOPE: not found/);
+        expect(() => fillPinsTable(source, 'NOPE', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/NOPE: 0 declarations at line start/);
     });
     it('fresh: the [optimismSepolia.id] spelling is filled in sp550Deployments.ts', async () => {
         const dep = fs.readFileSync(path.join(SRC, 'sp550Deployments.ts'), 'utf8');
@@ -152,7 +152,59 @@ describe('fresh absent keys and loopback detection', () => {
         expect(changedEntries(sw, { registry: A(0x21) })).toEqual({});
         expect(() => bookSwitch('fresh', parseManifestPins({ ...MANIFEST, addresses: { pnts: A(1) }, absent: ['pnts'] }, 'fresh'))).toThrow(/both pinned and declared absent/);
     });
-    it.each(['http://127.0.0.1:8545', 'http://127.1:8545', 'http://user:pass@127.0.0.1:8545', 'http://LOCALHOST:8545', 'http://[::1]:8545', 'http://0.0.0.0:8545', 'http://a.localhost/', 'not a url'])(
+    it.each(['http://127.0.0.1:8545', 'http://127.1:8545', 'http://user:pass@127.0.0.1:8545', 'http://LOCALHOST:8545', 'http://[::1]:8545', 'http://0.0.0.0:8545', 'http://a.localhost/', 'not a url',
+        'http://localhost.:8545', 'http://[::ffff:127.0.0.1]:8545', 'http://[0:0:0:0:0:0:0:1]:8545', 'http://[::]:8545', 'http://[::ffff:0.0.0.0]:8545'])(
         '%s is loopback (or unparsable)', (u) => expect(isLoopbackUrl(u)).toBe(true));
     it.each(['https://sepolia.example.org/v2/key', 'https://127.0.0.1.example.org/'])('%s is not loopback', (u) => expect(isLoopbackUrl(u)).toBe(false));
+});
+
+describe('round-2 rewrite guards (Codex r2 on 7cefda78)', () => {
+    const book = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
+    const table = fs.readFileSync(path.join(SRC, 'sp550Cutover.ts'), 'utf8');
+    it('a declaration sharing its line with another property is refused, never rewritten whole', () => {
+        const two = book.replace(/\n    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89",[^\n]*/, '\n    aPNTs: "0x696A73701b104c6cCBbAadDD2216788ea08EaB89", pnts: "0x0000000000000000000000000000000000000001",');
+        expect(two).not.toBe(book);
+        expect(() => switchBook(two, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/not a plain address literal on its own line/);
+    });
+    it('a second block for the same chain is refused (the last one would win)', () => {
+        const dup = book.replace('\n  11155420: {\n', '\n  11155111: {\n    aPNTs: "0x0000000000000000000000000000000000000001",\n  },\n  11155420: {\n');
+        expect(() => switchBook(dup, 11155111, { aPNTs: A(1) }, 'n')).toThrow(/2 blocks for this chain/);
+    });
+    it('a commented-out table declaration is not the table (and two real ones are refused)', () => {
+        const commented = table.replace('\nexport const SP550_CUTOVER_PINS', '\n// export const SP550_CUTOVER_PINS: Record<number, Sp550CutoverPins> = {\n//     11155111: {},\n// };\nexport const SP550_CUTOVER_PINS');
+        const out = fillPinsTable(commented, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'));
+        expect(out).toContain('//     11155111: {},');
+        expect(out.split('\n    11155111: {\n').length - 1).toBe(1);
+        const twice = table.replace('\nexport const SP550_CUTOVER_PINS', '\nexport const SP550_CUTOVER_PINS_OLD = {};\nexport const SP550_CUTOVER_PINS');
+        expect(() => fillPinsTable(twice, 'SP550_CUTOVER_PINS', 11155111, parseManifestPins(MANIFEST, 'upgrade'))).toThrow(/2 declarations at line start/);
+    });
+});
+
+describe('writeAll: all or nothing, never clobbering another writer', () => {
+    const memIo = (files: Record<string, string>, fail: Partial<Record<'rename' | 'read' | 'write', (p: string) => boolean>> = {}): WriteIo & { files: Record<string, string> } => ({
+        files,
+        read: (p) => { if (fail.read?.(p)) throw new Error(`ENOENT ${p}`); if (!(p in files)) throw new Error(`ENOENT ${p}`); return files[p]; },
+        write: (p, v) => { if (fail.write?.(p)) throw new Error(`EACCES ${p}`); files[p] = v; },
+        rename: (a, b) => { if (fail.rename?.(b)) throw new Error(`EACCES ${b}`); files[b] = files[a]; delete files[a]; },
+        remove: (p) => { delete files[p]; },
+    });
+    const F = [{ path: '/r/table.ts', before: 'old-table', after: 'new-table' }, { path: '/r/book.ts', before: 'old-book', after: 'new-book' }];
+    it('the second rename failing restores the first; no temp file is left', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => p === '/r/book.ts' });
+        expect(() => writeAll(F, '/r', io)).toThrow(/write failed .*nothing left changed/);
+        expect(io.files).toEqual({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
+    });
+    it('…but a file another writer changed in between is left alone and reported', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => { if (p === '/r/book.ts') { io.files['/r/table.ts'] = 'their-edit'; return true; } return false; } });
+        expect(() => writeAll(F, '/r', io)).toThrow(/table\.ts changed since this run wrote it/);
+        expect(io.files['/r/table.ts']).toBe('their-edit');
+    });
+    it('restore() attempts every file and reports each failure', () => {
+        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
+        const restore = writeAll(F, '/r', io);
+        expect(io.files).toEqual({ '/r/table.ts': 'new-table', '/r/book.ts': 'new-book' });
+        delete io.files['/r/table.ts'];
+        expect(restore()).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
+        expect(io.files['/r/book.ts']).toBe('old-book');
+    });
 });

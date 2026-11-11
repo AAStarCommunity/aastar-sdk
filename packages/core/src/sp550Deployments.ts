@@ -209,7 +209,7 @@ export function requireSp550FreshDeployPins(
  * two entries sharing an address is a mis-pin (e.g. addresses.xPNTsFactory = the SP proxy would
  * otherwise only be checked for non-empty code, and pass).
  */
-const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
+export const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
     ['superPaymaster', 'addresses.superPaymaster'],
     ['aPNTsCapped', 'addresses.aPNTs'],
     ['xPNTsFactoryV2', 'addresses.xPNTsFactory'],

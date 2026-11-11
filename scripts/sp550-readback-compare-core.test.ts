@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -31,6 +32,10 @@ const CHAIN: Record<string, Partial<Record<'version' | 'owner' | 'pendingOwner',
     [A(0x19)]: { version: { kind: 'value', value: 'APNTsCapped-1.0.0' } },
     [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'reverted' } },
 };
+// Every other pinned contract has a version() except the two that have none by design (spAdminExtension, xPNTsTokenV2Ext).
+for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
+    if (!CHAIN[a as string] && k !== 'spAdminExtension' && k !== 'xPNTsTokenV2Ext') CHAIN[a as string] = { version: { kind: 'value', value: `${k}-1.0.0` } };
+}
 /** Code on chain: each pinned address holds the code its pin names. */
 const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
@@ -83,6 +88,16 @@ describe('the binding schema (sha256-pinned)', () => {
         const example = JSON.parse(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), 'aoa-a7-readback-1.example.json'), 'utf8'));
         expect(loadReadbackValidator()(example)).toEqual([]);
     });
+    it("SP's live example instance validates", () => {
+        const example = JSON.parse(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), 'aoa-a7-readback-1.live.example.json'), 'utf8'));
+        expect(example.header.source).toBe('live');
+        expect(loadReadbackValidator()(example)).toEqual([]);
+    });
+    it('the vendored examples are the ones SP published', () => {
+        const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('319e767788ab7efd2e64183ad52612a3585fd67f6ae3d133e588e7f21e8b06b0');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('d44a9e220231d986e6d641e78ef55b1f30b86f845efbe33b59d102bc215adfbb');
+    });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
         const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rb-')), 's.json');
@@ -106,14 +121,10 @@ describe('the binding schema (sha256-pinned)', () => {
 
 describe('readbackProblems: a read-back that agrees with the pins and the chain passes', () => {
     it('A7 fork: every fact checked', async () => expect(await run(good())).toEqual([]));
-    it('live: no anvil, no dump — but schema d893b790 rejects anvilVersion "n/a:…" (reported to SP)', async () => {
-        // header.anvilVersion is oneOf [any string, notApplicable]: "n/a:live" matches BOTH branches, so
-        // oneOf fails and no live read-back can validate. This test pins today's behaviour; when SP fixes
-        // the schema (string branch excluding n/a:, as stringOrState does) it must flip to toEqual([]).
+    it('live: no anvil, no dump (schema 61d30b82 accepts anvilVersion "n/a:…"; d893b790 did not)', async () => {
         const rb = good();
         Object.assign(rb.header, { source: 'live', anvilVersion: 'n/a:live', anvilCommit: 'n/a:live', dumpSha256: 'n/a:live' });
-        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } }))
-            .toEqual([expect.stringMatching(/^schema: \/header\/anvilVersion must match exactly one schema in oneOf/)]);
+        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } })).toEqual([]);
     });
     it('the header / contract field lists match the schema', () => {
         const schema = JSON.parse(fs.readFileSync(READBACK_SCHEMA_FILE, 'utf8'));
@@ -192,6 +203,20 @@ describe('readbackProblems refuses', () => {
         const a = PINS[k];
         const rb = good(); rb.contracts[k].version = null;
         expect(await run(rb, { chain: { ...CHAIN, [a]: { ...CHAIN[a], version: { kind: 'reverted' } } } })).toContain(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
+    });
+    it('a reverting version() on the Registry is a failure too: absence comes from the interface, not a revert (Codex r2 H3)', async () => {
+        const rb = good(); rb.contracts.registry.version = null;
+        expect(await run(rb, { chain: { ...CHAIN, [A(0x21)]: { ...CHAIN[A(0x21)], version: { kind: 'reverted' } } } })).toEqual(['contracts.registry: version() reverts on chain, but registry must have one']);
+    });
+    it('a contract without version() by design answering one is a failure (other code at that address?)', async () => {
+        const rb = good(); rb.contracts.spAdminExtension.version = 'X-1';
+        expect(await run(rb, { chain: { ...CHAIN, [A(0x12)]: { version: { kind: 'value', value: 'X-1' } } } })).toEqual(['contracts.spAdminExtension: version() answers "X-1", but spAdminExtension has none by design (is this the pinned code?)']);
+    });
+    it('the snapshot block changing during the reads fails', async () => {
+        let n = 0;
+        const r = reader();
+        const moving: ChainReader = async (a, w) => (w === 'blockHash' ? { kind: 'value', value: n++ === 0 ? BLOCK_HASH : H(0xcc) } : r(a, w));
+        expect(await readbackProblems(good(), PINS, CTX, moving)).toEqual([expect.stringMatching(/^snapshot: block 500 changed during the reads/)]);
     });
     it('SP without pendingOwner() is a failure (it is Ownable2Step)', async () => {
         const rb = good(); rb.contracts.superPaymaster.pendingOwner = null;

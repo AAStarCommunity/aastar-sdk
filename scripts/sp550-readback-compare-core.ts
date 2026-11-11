@@ -20,16 +20,16 @@ import {
     BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError,
 } from 'viem';
 import { sp550PinnedAddressEntries, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
-import { sp550FreshPinProblems, sp550UpgradePinProblems, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
 
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 685ff69dde6e5d2434a74c55f48a72f5a8b66115 docs/release/a7/ (docs/sp550-cutover/a7/README.md).
+ * 61d30b82ed824bd8eecc9e4e7e5ff32579fdae99 docs/release/a7/ (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = 'd893b790e6f4ba217c7d07966d2bbba30624410adcf19fe74f7c62ab3fdc8e32';
+export const READBACK_SCHEMA_SHA256 = '584fd69707e3bd4df4a68e946a50691c029462ecdc66fee400ab6020e05c42a5';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -110,7 +110,11 @@ function proxyPins(pins: Sp550CutoverPins): Record<string, { impl?: [unknown, un
 }
 /** Contracts whose version() is itself a pin, or must exist; a revert there is a failure, never `null`. */
 const versionPin = (pins: Sp550CutoverPins): Record<string, unknown> => ({ superPaymaster: pins.spVersion, superPaymasterLens: pins.lensVersion });
-const VERSION_REQUIRED = new Set(['superPaymaster', 'superPaymasterLens', 'aPNTsCapped']);
+/**
+ * Contracts that have NO version() by design (their interface has none): only these may answer a
+ * revert with `null`. A revert anywhere else is a failure — absence is never inferred from a revert.
+ */
+export const VERSION_ABSENT_BY_DESIGN = new Set(['spAdminExtension', 'xPNTsTokenV2Ext']);
 /** owner()/pendingOwner() read back for these; `true` = the function must exist (Ownable2Step SP). */
 const OWNED: Record<string, { owner: boolean; pendingOwner: boolean }> = {
     superPaymaster: { owner: true, pendingOwner: true },
@@ -167,8 +171,20 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
 
     // Contracts: every pinned name (book entries without their prefix), every compared field also read by the SDK.
     const contracts = f.contracts as Record<string, any>;
-    const pinned = (sp550PinnedAddressEntries(pins).filter(([, a]) => typeof a === 'string') as [string, string][])
-        .map(([k, a]) => [contractKeyOf(k), a, k] as const);
+    // A declared alias (addresses.superPaymaster = superPaymaster, …) is one contract: it is compared
+    // under its top-level name, and must name the same address.
+    const entries = sp550PinnedAddressEntries(pins).filter(([, a]) => typeof a === 'string') as [string, string][];
+    const byName = Object.fromEntries(entries);
+    for (const [top, book] of SP550_PIN_ALIASES) {
+        if (byName[book] !== undefined && !eq(byName[book], byName[top])) p.push(`pins: ${book} ${byName[book]} != ${top} ${byName[top]} (declared alias)`);
+    }
+    const aliasBook = new Set(SP550_PIN_ALIASES.map(([, b]) => b));
+    const pinned = entries.filter(([k]) => !aliasBook.has(k)).map(([k, a]) => [contractKeyOf(k), a, k] as const);
+    const seenKeys = new Set<string>();
+    for (const [k, , pinName] of pinned) {
+        if (seenKeys.has(k)) p.push(`pins: ${pinName} maps to contracts.${k}, which another pin already names`);
+        seenKeys.add(k);
+    }
     const proxies = proxyPins(pins);
     const versions = versionPin(pins);
     const value = (o: Observed, what: string, k: string): string | undefined => {
@@ -191,9 +207,10 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         const v = await read(address, 'version');
         if (v.kind === 'error') p.push(`contracts.${k}.version: the SDK could not read version() (${v.detail})`);
         else if (v.kind === 'reverted') {
-            if (VERSION_REQUIRED.has(k)) p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
-            else if (c.version !== null && c.version !== undefined) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`);
+            if (!VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
+            else if (c.version !== null) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`);
         } else {
+            if (VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() answers ${show(v.value)}, but ${k} has none by design (is this the pinned code?)`);
             if (c.version !== v.value) p.push(`contracts.${k}.version ${show(c.version)} != version() on chain ${show(v.value)}`);
             if (k in versions && v.value !== versions[k]) p.push(`contracts.${k}: version() ${show(v.value)} != its pin ${show(versions[k])}`);
         }
@@ -238,6 +255,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
             }
         }
     }
+    // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
+    const bh2 = await read('', 'blockHash');
+    if (bh.kind === 'value' && (bh2.kind !== 'value' || !eq(bh2.value, bh.value))) p.push(`snapshot: block ${pins.readbackBlock} changed during the reads (${bh.value} -> ${bh2.kind === 'value' ? bh2.value : bh2.kind})`);
     return p;
 }
 

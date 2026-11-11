@@ -3,6 +3,8 @@
  * switch it implies, and render both as source edits. No I/O; the CLI runs the read-back gate on the
  * same pins and book BEFORE any of this is written, so nothing reaches the source without a PASS.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import type { Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import type { Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
@@ -94,8 +96,11 @@ const TABLE_KEY: Record<number, string[]> = { 10: ['10', '[optimism.id]'], 11155
  * is never overwritten by this tool (a re-pin is a reviewed edit, not a regeneration).
  */
 export function fillPinsTable(source: string, table: string, chainId: number, pins: Sp550CutoverPins | Sp550FreshDeployPins): string {
-    const start = source.indexOf(`export const ${table}`);
-    if (start < 0) throw new Error(`${table}: not found in source`);
+    // The declaration at the start of a line: a commented-out copy (`// export const …`) is not it.
+    const decl = `\nexport const ${table}`;
+    const count = source.split(decl).length - 1;
+    if (count !== 1) throw new Error(`${table}: ${count} declarations at line start, refusing to guess which one ships`);
+    const start = source.indexOf(decl) + 1;
     const end = source.indexOf('\n};', start);
     if (end < 0) throw new Error(`${table}: table end not found`);
     const block = source.slice(start, end);
@@ -118,9 +123,13 @@ export function fillPinsTable(source: string, table: string, chainId: number, pi
  * start `    //`); a block with a `/*` comment is refused rather than parsed around.
  */
 export function switchBook(source: string, chainId: number, entries: Record<string, string | null>, note: string): string {
-    const start = source.indexOf('export const CANONICAL_ADDRESSES');
-    if (start < 0) throw new Error('CANONICAL_ADDRESSES: not found in source');
+    const decl = '\nexport const CANONICAL_ADDRESSES';
+    const declCount = source.split(decl).length - 1;
+    if (declCount !== 1) throw new Error(`CANONICAL_ADDRESSES: ${declCount} declarations at line start, refusing to guess which one ships`);
+    const start = source.indexOf(decl) + 1;
     const end = source.indexOf('\n} as const;', start);
+    const chainBlocks = source.slice(start, end).split(`\n  ${chainId}: {\n`).length - 1;
+    if (chainBlocks > 1) throw new Error(`CANONICAL_ADDRESSES[${chainId}]: ${chainBlocks} blocks for this chain (the last would win), refusing to guess`);
     const open = source.indexOf(`\n  ${chainId}: {\n`, start);
     if (open < 0 || open > end) throw new Error(`CANONICAL_ADDRESSES[${chainId}]: no block for this chain`);
     // The chain's block ends at the first two-space `}` after it (`},` mid-table, `}` for the last one).
@@ -132,8 +141,10 @@ export function switchBook(source: string, chainId: number, entries: Record<stri
     for (const [k, a] of Object.entries(entries)) {
         const decls = block.split(`\n    ${k}:`).length - 1;
         if (decls > 1) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: ${decls} declarations, refusing to guess which`);
-        const re = new RegExp(`\\n    ${k}: "0x[0-9a-fA-F]{40}",[^\\n]*`);
-        if (decls === 1 && !re.test(block)) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: not a plain address literal, refusing to rewrite it`);
+        // Exactly an address literal, then at most a `//` comment: anything else on the line (another
+        // property, code) would be destroyed by a whole-line rewrite.
+        const re = new RegExp(`\\n    ${k}: "0x[0-9a-fA-F]{40}",(?:[ \\t]*//[^\\n]*)?(?=\\n)`);
+        if (decls === 1 && !re.test(block)) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: not a plain address literal on its own line, refusing to rewrite it`);
         if (a === null) { if (decls) block = block.replace(re, () => ''); continue; }
         const line = `\n    ${k}: ${q(getAddress(a))},  // ${note}`;
         block = decls ? block.replace(re, () => line) : block + line;
@@ -144,6 +155,50 @@ export function switchBook(source: string, chainId: number, entries: Record<stri
 /** Loopback by the PARSED host (WHATWG URL normalises 127.1, userinfo, case); an unparsable URL counts as loopback. */
 export function isLoopbackUrl(url: string): boolean {
     let host: string;
-    try { host = new URL(url).hostname.toLowerCase(); } catch { return true; }
-    return host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || host === '0.0.0.0' || /^127\.\d+\.\d+\.\d+$/.test(host);
+    try { host = new URL(url).hostname.toLowerCase().replace(/\.$/, ''); } catch { return true; }
+    return isLoopbackHost(host);
+}
+
+/** A loopback / unspecified host: localhost names, 127/8, 0.0.0.0, ::1, ::, and IPv4-mapped forms of those. */
+export function isLoopbackHost(host: string): boolean {
+    const h = host.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+    if (h === 'localhost' || h.endsWith('.localhost')) return true;
+    if (/^127\.\d+\.\d+\.\d+$/.test(h) || h === '0.0.0.0') return true;
+    if (h === '::1' || h === '::') return true;
+    // IPv4-mapped IPv6 (WHATWG writes ::ffff:127.0.0.1 as ::ffff:7f00:1): 127/8 is 7f00:0000/8, 0.0.0.0 is 0:0.
+    const mapped = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(h);
+    if (mapped) { const hi = parseInt(mapped[1], 16); return hi >> 8 === 0x7f || (hi === 0 && parseInt(mapped[2], 16) === 0); }
+    return /^::ffff:(127\.\d+\.\d+\.\d+|0\.0\.0\.0)$/.test(h);
+}
+
+/** The file operations writeAll needs (tests inject failures). */
+export interface WriteIo { read(p: string): string; write(p: string, s: string): void; rename(a: string, b: string): void; remove(p: string): void }
+const nodeIo: WriteIo = {
+    read: (p) => fs.readFileSync(p, 'utf8'), write: (p, s) => fs.writeFileSync(p, s),
+    rename: (a, b) => fs.renameSync(a, b), remove: (p) => fs.rmSync(p, { force: true }),
+};
+
+/**
+ * Write every file or none: each goes to a temp file first, then all are renamed into place. A
+ * restore (after a failed rename, or the returned restore()) puts a file back only while it still
+ * holds what this run wrote — another writer's edit is never clobbered — and attempts EVERY file,
+ * reporting each one it could not restore instead of stopping at the first.
+ */
+export function writeAll(files: { path: string; before: string; after: string }[], root: string, io: WriteIo = nodeIo): () => string[] {
+    const restoreEach = (done: typeof files) => done.flatMap((f) => {
+        try {
+            if (io.read(f.path) !== f.after) return [`${path.relative(root, f.path)} changed since this run wrote it; left as is, restore it by hand`];
+            io.write(f.path, f.before);
+            return [];
+        } catch (e) { return [`${path.relative(root, f.path)} could not be restored (${(e as Error).message}); restore it by hand`]; }
+    });
+    for (const f of files) io.write(`${f.path}.pin-fill.tmp`, f.after);
+    const done: typeof files = [];
+    try { for (const f of files) { io.rename(`${f.path}.pin-fill.tmp`, f.path); done.push(f); } }
+    catch (e) {
+        const left = restoreEach(done);
+        for (const f of files) io.remove(`${f.path}.pin-fill.tmp`);
+        throw new Error(`write failed (${(e as Error).message})${left.length ? `; ${left.join('; ')}` : '; nothing left changed'}`);
+    }
+    return () => restoreEach(files);
 }
