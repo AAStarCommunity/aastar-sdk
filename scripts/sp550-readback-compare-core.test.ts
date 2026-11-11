@@ -417,6 +417,9 @@ describe('aggregateAmsterdam: header VALUES agree across upstreams (Grok)', () =
         expect(JSON.parse((aggregateAmsterdam([{ slotNumber: '0x1' }]) as any).value).blockAccessListHash).toBe(false);
     });
     it('a failed upstream is an error', () => expect(aggregateAmsterdam(['ERR HttpRequestError']).kind).toBe('error'));
+    it('slotNumber compares as a quantity: 0x10 == 0x010 (Grok)', () => {
+        expect(aggregateAmsterdam([{ blockAccessListHash: H, slotNumber: '0x10' }, { blockAccessListHash: H.toUpperCase().replace('0X', '0x'), slotNumber: '0x010' }]).kind).toBe('value');
+    });
     it('a JSON null answer is a problem, not a crash', async () => {
         AMSTERDAM = { kind: 'value', value: 'null' };
         try { expect(await run(good())).toEqual(expect.arrayContaining([expect.stringMatching(/not a JSON object/)])); }

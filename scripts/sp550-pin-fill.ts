@@ -103,7 +103,7 @@ async function main() {
     const spPath = arg('--sp-readback-path') ?? `deployments/release/rc8/${net.network}.readback.live.json`;
     if (!spCommit || !/^[0-9a-f]{40}$/.test(spCommit)) refuse('--write needs --sp-readback-commit <40-hex SP commit of the data PR with the live read-back>');
     let apiPath = '';
-    try { apiPath = spReadbackApiPath(spPath, spCommit!); } catch (e) { refuse((e as Error).message); }
+    try { apiPath = spReadbackApiPath(spPath, spCommit!, net.network); } catch (e) { refuse((e as Error).message); }
     const fetched = spawnSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', apiPath], { encoding: 'utf8' });
     if (fetched.status !== 0) refuse(`--write: could not fetch SP's live read-back ${spPath}@${spCommit} (${(fetched.stderr || '').trim().split('\n')[0]})`);
     let spRb: unknown;

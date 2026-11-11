@@ -307,6 +307,10 @@ describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)
     it.each(['test/fixtures/live.json', 'deployments/release/rc8/sepolia.readback.a7.json', 'deployments/release/rc8/sepolia.pins.json', 'docs/release/a7/aoa-a7-readback-1.live.example.json'])(
         'any other JSON in the commit is refused (Grok): %s', (p) => expect(() => spReadbackApiPath(p, C)).toThrow(/not an SP release live read-back/));
     it('a non-sha commit is refused', () => expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', 'main')).toThrow(/not a 40-hex sha/));
+    it("another network's live read-back is refused (Grok)", () => {
+        expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia')).toContain('sepolia.readback.live.json');
+        expect(() => spReadbackApiPath('deployments/release/rc8/op-sepolia.readback.live.json', C, 'sepolia')).toThrow(/is not the sepolia live read-back/);
+    });
 });
 
 describe('two RPCs on one machine are one provider: IPs compared normalized (Grok)', () => {

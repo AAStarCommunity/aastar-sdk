@@ -393,7 +393,9 @@ export function aggregateAmsterdam(answers: ({ blockAccessListHash?: unknown; sl
     if (bad !== undefined) return { kind: 'error', detail: bad as string };
     const rows = answers as { blockAccessListHash?: unknown; slotNumber?: unknown; ethConfig?: unknown }[];
     const HASH = /^0x[0-9a-fA-F]{64}$/;
-    const vals = rows.map((r) => `${String(r.blockAccessListHash).toLowerCase()}/${String(r.slotNumber).toLowerCase()}`);
+    // slotNumber is a JSON-RPC quantity: compared as a number (0x10 == 0x010), the hash case-insensitively.
+    const qty = (v: unknown) => (typeof v === 'string' && /^0x[0-9a-fA-F]+$/.test(v) ? BigInt(v).toString() : `raw:${String(v)}`);
+    const vals = rows.map((r) => `${String(r.blockAccessListHash).toLowerCase()}/${qty(r.slotNumber)}`);
     if (!vals.every((v) => v === vals[0])) return { kind: 'error', detail: `upstreams disagree on the Amsterdam header at forkBlock: ${vals.join(' vs ')}` };
     const r0 = rows[0];
     const hashOk = typeof r0.blockAccessListHash === 'string' && HASH.test(r0.blockAccessListHash) && !/^0x0{64}$/.test(r0.blockAccessListHash);

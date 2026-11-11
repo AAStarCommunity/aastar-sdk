@@ -302,13 +302,15 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
  * The GitHub contents-API path for SP's live read-back at one commit. A plain repository path only:
  * no query, fragment, traversal or encoding trick can redirect the fetch away from the pinned commit.
  */
-export function spReadbackApiPath(repoPath: string, commit: string): string {
+export function spReadbackApiPath(repoPath: string, commit: string, network?: string): string {
     if (!/^[0-9a-f]{40}$/.test(commit)) throw new Error(`SP commit ${JSON.stringify(commit)} is not a 40-hex sha`);
     if (!/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*\.json$/.test(repoPath) || repoPath.split('/').some((seg) => seg === '..' || seg === '.')) {
         throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not a plain repository path to a .json file`);
     }
     // Only SP's release live read-backs (deployments/release/rc<N>/<network>.readback.live.json), not any JSON in the repo.
     if (!/^deployments\/release\/rc\d+\/[a-z0-9-]+\.readback\.live\.json$/.test(repoPath)) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not an SP release live read-back (deployments/release/rc<N>/<network>.readback.live.json)`);
+    // …and the one for this network: another chain's file in the same commit is not this read-back.
+    if (network !== undefined && repoPath.split('/').pop() !== `${network}.readback.live.json`) throw new Error(`--sp-readback-path ${JSON.stringify(repoPath)} is not the ${network} live read-back (${network}.readback.live.json)`);
     return `repos/AAStarCommunity/SuperPaymaster/contents/${repoPath.split('/').map(encodeURIComponent).join('/')}?ref=${commit}`;
 }
 
