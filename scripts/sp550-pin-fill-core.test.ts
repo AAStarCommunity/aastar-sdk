@@ -208,3 +208,16 @@ describe('writeAll: all or nothing, never clobbering another writer', () => {
         expect(io.files['/r/book.ts']).toBe('old-book');
     });
 });
+
+describe('Codex r3: the last property of a chain block', () => {
+    it('the final entry of a block can be rewritten and removed', async () => {
+        const src = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
+        const opSep = src.slice(src.indexOf('\n  11155420: {'));
+        const last = /\n    (\w+): "0x[0-9a-fA-F]{40}",[^\n]*\n  \}/.exec(opSep)!;
+        const key = last[1];
+        const removed = await load('last-rm', switchBook(src, 11155420, { [key]: null }, 'n'));
+        expect(key in removed.CANONICAL_ADDRESSES[11155420]).toBe(false);
+        const moved = await load('last-mv', switchBook(src, 11155420, { [key]: A(0x41) }, 'n'));
+        expect(moved.CANONICAL_ADDRESSES[11155420][key]).toBe(getAddress(A(0x41)));
+    });
+});

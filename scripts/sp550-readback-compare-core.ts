@@ -25,11 +25,11 @@ import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
  * The binding JSON Schema (Draft 2020-12), vendored byte-for-byte from SuperPaymaster
- * 61d30b82ed824bd8eecc9e4e7e5ff32579fdae99 docs/release/a7/ (docs/sp550-cutover/a7/README.md).
+ * 2228c0b66aadb497966fea2ef0a83c2f41d8ba39 docs/release/a7/ (frozen: a change needs DSR acceptance) (docs/sp550-cutover/a7/README.md).
  * The file is refused unless it hashes to READBACK_SCHEMA_SHA256.
  */
 export const READBACK_SCHEMA_FILE = path.resolve(import.meta.dirname, '../docs/sp550-cutover/a7/aoa-a7-readback-1.schema.json');
-export const READBACK_SCHEMA_SHA256 = '584fd69707e3bd4df4a68e946a50691c029462ecdc66fee400ab6020e05c42a5';
+export const READBACK_SCHEMA_SHA256 = 'fb25b34e51c90a53b7058f9f9ca225510e7fb75d7d940a4538b7459ddbeefff0';
 export const READBACK_HEADER_FIELDS = [
     'source', 'spCommit', 'tag', 'chainId', 'hardfork', 'forkBlock', 'readbackBlock', 'readbackBlockHash',
     'anvilVersion', 'anvilCommit', 'dumpSha256', 'providers', 'ethConfig',
@@ -115,6 +115,11 @@ const versionPin = (pins: Sp550CutoverPins): Record<string, unknown> => ({ super
  * revert with `null`. A revert anywhere else is a failure — absence is never inferred from a revert.
  */
 export const VERSION_ABSENT_BY_DESIGN = new Set(['spAdminExtension', 'xPNTsTokenV2Ext']);
+/**
+ * Book contracts whose standard interface has no version() (the core ABI has none — asserted in the
+ * tests): a revert there must be reported "n/a:…" (schema 2228c0b6 forbids null outside the set above).
+ */
+export const VERSION_NOT_IN_INTERFACE = new Set(['timelockController']);
 /** owner()/pendingOwner() read back for these; `true` = the function must exist (Ownable2Step SP). */
 const OWNED: Record<string, { owner: boolean; pendingOwner: boolean }> = {
     superPaymaster: { owner: true, pendingOwner: true },
@@ -166,7 +171,12 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     }
     const co = ec.corroboration as Record<string, any>;
     if (co.blockAccessListHash !== true || co.slotNumber !== true) p.push(`header.ethConfig.corroboration: Amsterdam-only header fields not both present (blockAccessListHash ${show(co.blockAccessListHash)}, slotNumber ${show(co.slotNumber)})`);
-    if (ec.provider !== undefined && co.provider === ec.provider) p.push(`header.ethConfig.corroboration.provider ${show(co.provider)} is the eth_config provider; it must be a second one`);
+    // eth_config's provider is optional in the schema but required here: corroboration means a second, different provider.
+    if (typeof ec.provider !== 'string') p.push('header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)');
+    else if (co.provider === ec.provider) p.push(`header.ethConfig.corroboration.provider ${show(co.provider)} is the eth_config provider; it must be a second one`);
+    for (const [what, prov] of [['ethConfig.provider', ec.provider], ['ethConfig.corroboration.provider', co.provider]] as const) {
+        if (typeof prov === 'string' && !providers.includes(prov)) p.push(`header.${what} ${show(prov)} is not in header.providers`);
+    }
     if (co.blockNumber !== hd.forkBlock) p.push(`header.ethConfig.corroboration.blockNumber ${show(co.blockNumber)} != header.forkBlock ${show(hd.forkBlock)}`);
 
     // Contracts: every pinned name (book entries without their prefix), every compared field also read by the SDK.
@@ -176,7 +186,10 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
     const entries = sp550PinnedAddressEntries(pins).filter(([, a]) => typeof a === 'string') as [string, string][];
     const byName = Object.fromEntries(entries);
     for (const [top, book] of SP550_PIN_ALIASES) {
-        if (byName[book] !== undefined && !eq(byName[book], byName[top])) p.push(`pins: ${book} ${byName[book]} != ${top} ${byName[top]} (declared alias)`);
+        if (byName[book] === undefined) continue;
+        if (!eq(byName[book], byName[top])) p.push(`pins: ${book} ${byName[book]} != ${top} ${byName[top]} (declared alias)`);
+        // Deduplicated below, so the alias's own codehash pin must be the same one that is compared.
+        if (!eq(pins.codehashes?.[book], pins.codehashes?.[top])) p.push(`pins: codehashes.${book} ${show(pins.codehashes?.[book])} != codehashes.${top} ${show(pins.codehashes?.[top])} (declared alias)`);
     }
     const aliasBook = new Set(SP550_PIN_ALIASES.map(([, b]) => b));
     const pinned = entries.filter(([k]) => !aliasBook.has(k)).map(([k, a]) => [contractKeyOf(k), a, k] as const);
@@ -207,8 +220,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         const v = await read(address, 'version');
         if (v.kind === 'error') p.push(`contracts.${k}.version: the SDK could not read version() (${v.detail})`);
         else if (v.kind === 'reverted') {
-            if (!VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
-            else if (c.version !== null) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`);
+            if (VERSION_ABSENT_BY_DESIGN.has(k)) { if (c.version !== null) p.push(`contracts.${k}.version ${show(c.version)}, but version() reverts on chain (expected null)`); }
+            else if (VERSION_NOT_IN_INTERFACE.has(k)) { if (!notApplicable(c.version) || c.version === null) p.push(`contracts.${k}.version ${show(c.version)}: ${k}'s interface has no version() (expected "n/a:…")`); }
+            else p.push(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
         } else {
             if (VERSION_ABSENT_BY_DESIGN.has(k)) p.push(`contracts.${k}: version() answers ${show(v.value)}, but ${k} has none by design (is this the pinned code?)`);
             if (c.version !== v.value) p.push(`contracts.${k}.version ${show(c.version)} != version() on chain ${show(v.value)}`);
@@ -255,6 +269,9 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
             }
         }
     }
+    // The recorded probe is checked on every comparison; only the SDK's own measurements need --probe.
+    p.push(...recordedProbeProblems(f.amsterdamProbe));
+
     // The snapshot must not have moved while the reads ran (a reorg could mix states across reads).
     const bh2 = await read('', 'blockHash');
     if (bh.kind === 'value' && (bh2.kind !== 'value' || !eq(bh2.value, bh.value))) p.push(`snapshot: block ${pins.readbackBlock} changed during the reads (${bh.value} -> ${bh2.kind === 'value' ? bh2.value : bh2.kind})`);
@@ -263,6 +280,22 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
 
 /** The probe's pass rule as SP's generator writes it; any other predicate text is refused, not reinterpreted. */
 export const AMSTERDAM_PROBE_PREDICATE = 'all(estimateLive[p] == estimateFork for p in estimateLive) and estimateFork == expected.estimate and gasUsedFork == expected.gasUsed';
+
+/** SP's recorded probe on its own terms: the agreed predicate, and numbers that satisfy it. */
+export function recordedProbeProblems(probe: Record<string, any>): string[] {
+    const p: string[] = [];
+    const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
+    if (norm(probe.predicate) !== AMSTERDAM_PROBE_PREDICATE) p.push(`amsterdamProbe.predicate ${show(probe.predicate)} is not the agreed rule "${AMSTERDAM_PROBE_PREDICATE}"`);
+    for (const [k, v] of [['estimateFork', probe.estimateFork], ['gasUsedFork', probe.gasUsedFork], ['expected.estimate', probe.expected.estimate], ['expected.gasUsed', probe.expected.gasUsed]] as const) {
+        if (!(Number.isSafeInteger(v) && v > 0)) p.push(`amsterdamProbe.${k} ${show(v)} is not a positive gas amount`);
+    }
+    const live = Object.entries(probe.estimateLive as Record<string, number>);
+    if (!live.length) p.push('amsterdamProbe.estimateLive: no provider');
+    for (const [prov, v] of live) if (v !== probe.estimateFork) p.push(`amsterdamProbe.estimateLive.${prov} ${v} != estimateFork ${probe.estimateFork}`);
+    if (probe.estimateFork !== probe.expected.estimate) p.push(`amsterdamProbe.estimateFork ${probe.estimateFork} != expected.estimate ${probe.expected.estimate}`);
+    if (probe.gasUsedFork !== probe.expected.gasUsed) p.push(`amsterdamProbe.gasUsedFork ${probe.gasUsedFork} != expected.gasUsed ${probe.expected.gasUsed}`);
+    return p;
+}
 
 /** A number the SDK measured itself, or why it could not. */
 export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detail: string };
@@ -275,13 +308,6 @@ export type Measured = { kind: 'value'; value: bigint } | { kind: 'error'; detai
  */
 export function probeProblems(probe: Record<string, any>, mine: { estimateFork: Measured; gasUsedFork: Measured; estimateLive: Measured }): string[] {
     const p: string[] = [];
-    const norm = (x: unknown) => String(x).replace(/\s+/g, ' ').trim();
-    if (norm(probe.predicate) !== AMSTERDAM_PROBE_PREDICATE) p.push(`amsterdamProbe.predicate ${show(probe.predicate)} is not the agreed rule "${AMSTERDAM_PROBE_PREDICATE}"`);
-    const live = Object.entries(probe.estimateLive as Record<string, number>);
-    if (!live.length) p.push('amsterdamProbe.estimateLive: no provider');
-    for (const [prov, v] of live) if (v !== probe.estimateFork) p.push(`amsterdamProbe.estimateLive.${prov} ${v} != estimateFork ${probe.estimateFork}`);
-    if (probe.estimateFork !== probe.expected.estimate) p.push(`amsterdamProbe.estimateFork ${probe.estimateFork} != expected.estimate ${probe.expected.estimate}`);
-    if (probe.gasUsedFork !== probe.expected.gasUsed) p.push(`amsterdamProbe.gasUsedFork ${probe.gasUsedFork} != expected.gasUsed ${probe.expected.gasUsed}`);
     const cmpMine = (what: string, m: Measured, theirs: unknown) => {
         if (m.kind === 'error') p.push(`amsterdamProbe: the SDK could not measure ${what} (${m.detail})`);
         else if (m.value !== BigInt(theirs as number)) p.push(`amsterdamProbe: the SDK's ${what} ${m.value} != SP's ${theirs}`);

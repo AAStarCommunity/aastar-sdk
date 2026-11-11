@@ -143,7 +143,7 @@ export function switchBook(source: string, chainId: number, entries: Record<stri
         if (decls > 1) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: ${decls} declarations, refusing to guess which`);
         // Exactly an address literal, then at most a `//` comment: anything else on the line (another
         // property, code) would be destroyed by a whole-line rewrite.
-        const re = new RegExp(`\\n    ${k}: "0x[0-9a-fA-F]{40}",(?:[ \\t]*//[^\\n]*)?(?=\\n)`);
+        const re = new RegExp(`\\n    ${k}: "0x[0-9a-fA-F]{40}",(?:[ \\t]*//[^\\n]*)?(?=\\n|$)`);
         if (decls === 1 && !re.test(block)) throw new Error(`CANONICAL_ADDRESSES[${chainId}].${k}: not a plain address literal on its own line, refusing to rewrite it`);
         if (a === null) { if (decls) block = block.replace(re, () => ''); continue; }
         const line = `\n    ${k}: ${q(getAddress(a))},  // ${note}`;

@@ -6,7 +6,7 @@ import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import {
-    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
+    AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
     classifyCallError, contractKeyOf, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
@@ -62,7 +62,7 @@ function good(): any {
     }
     Object.assign(contracts.superPaymaster, { erc1967Impl: PINS.spImpl, implCodehash: PINS.spImplCodehash, extension: PINS.spAdminExtension, extensionCodehash: PINS.codehashes.spAdminExtension, owner: A(0xb0), pendingOwner: A(0), OPERATOR_WITHDRAWAL_WINDOW: 86400 });
     Object.assign(contracts.registry, { erc1967Impl: PINS.registryImpl, implCodehash: PINS.codehashes.registryImpl, owner: A(0xb0), pendingOwner: null });
-    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: null }; // not a pin: not compared
+    contracts.multiSendCallOnly = { ...contracts.xPNTsTokenV2Ext, address: A(0x99), version: 'n/a:Safe library, no version()' }; // not a pin: not compared
     return {
         schema: READBACK_SCHEMA,
         header: {
@@ -95,8 +95,8 @@ describe('the binding schema (sha256-pinned)', () => {
     });
     it('the vendored examples are the ones SP published', () => {
         const sha = (f: string) => createHash('sha256').update(new Uint8Array(fs.readFileSync(path.join(path.dirname(READBACK_SCHEMA_FILE), f)))).digest('hex');
-        expect(sha('aoa-a7-readback-1.example.json')).toBe('319e767788ab7efd2e64183ad52612a3585fd67f6ae3d133e588e7f21e8b06b0');
-        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('d44a9e220231d986e6d641e78ef55b1f30b86f845efbe33b59d102bc215adfbb');
+        expect(sha('aoa-a7-readback-1.example.json')).toBe('c58133b9f8dfe2317af96c6a9a43e7b2521900a69c591843f5c0afb6233b4812');
+        expect(sha('aoa-a7-readback-1.live.example.json')).toBe('61926c93fee774900765f9e9eca5d2dee44921d6191751929b18932d140e2b85');
     });
     it('the fixture validates', () => expect(loadReadbackValidator()(good())).toEqual([]));
     it('a schema file with another hash is refused before use', () => {
@@ -111,6 +111,8 @@ describe('the binding schema (sha256-pinned)', () => {
         ['a top-level key outside the schema', (rb: any) => { rb.extra = 1; }],
         ['no amsterdamProbe', (rb: any) => { delete rb.amsterdamProbe; }],
         ['a malformed forkId', (rb: any) => { rb.header.ethConfig.forkId = '0x6c1d94'; }],
+        ['a version on a contract without version() by design (schema 2228c0b6)', (rb: any) => { rb.contracts.spAdminExtension.version = 'Admin-1'; }],
+        ['a null version on any other contract (schema 2228c0b6)', (rb: any) => { rb.contracts.registry.version = null; }],
     ])('an invalid file is refused before anything is compared: %s', async (_n, mutate) => {
         const rb = good(); mutate(rb);
         const p = await run(rb);
@@ -121,7 +123,7 @@ describe('the binding schema (sha256-pinned)', () => {
 
 describe('readbackProblems: a read-back that agrees with the pins and the chain passes', () => {
     it('A7 fork: every fact checked', async () => expect(await run(good())).toEqual([]));
-    it('live: no anvil, no dump (schema 61d30b82 accepts anvilVersion "n/a:…"; d893b790 did not)', async () => {
+    it('live: no anvil, no dump (anvilVersion "n/a:…" valid since schema 61d30b82)', async () => {
         const rb = good();
         Object.assign(rb.header, { source: 'live', anvilVersion: 'n/a:live', anvilCommit: 'n/a:live', dumpSha256: 'n/a:live' });
         expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } })).toEqual([]);
@@ -146,8 +148,7 @@ describe('readbackProblems refuses', () => {
         ['a null tag', (rb: any) => { rb.header.tag = null; }, /header\.tag null != pins\.tag/],
         ['another readback block', (rb: any) => { rb.header.readbackBlock = 499; }, /header\.readbackBlock 499 != pins\.readbackBlock 500/],
         ['another block hash at the read-back block', (rb: any) => { rb.header.readbackBlockHash = H(0xcc); }, /header\.readbackBlockHash .* != block 500 on chain/],
-        ['a provider URL', (rb: any) => { rb.header.providers = ['https://x.example/key']; }, /not a provider NAME/],
-        ['no provider', (rb: any) => { rb.header.providers = []; }, /header\.providers: empty/],
+        ['a provider URL', (rb: any) => { rb.header.providers = ['alchemy', 'tenderly', 'https://x.example/key']; }, /not a provider NAME/],
         ['another Amsterdam activation', (rb: any) => { rb.header.ethConfig.activationTime = 1; }, /activationTime 1 != Amsterdam 1791294816/],
         ['another fork id', (rb: any) => { rb.header.ethConfig.forkId = '0x00000000'; }, /forkId "0x00000000" != Amsterdam 0x6c1d9423/],
         ['no Amsterdam-only header fields on the second provider', (rb: any) => { rb.header.ethConfig.corroboration.slotNumber = false; }, /corroboration: Amsterdam-only header fields not both present/],
@@ -157,9 +158,8 @@ describe('readbackProblems refuses', () => {
         ['another address', (rb: any) => { rb.contracts.superPaymasterLens.address = A(0x99); }, /contracts\.superPaymasterLens\.address .* != pinned/],
         ['another codehash', (rb: any) => { rb.contracts.spAdminExtension.codehash = H(0x99); }, /contracts\.spAdminExtension\.codehash .* != pins\.codehashes\.spAdminExtension/],
         ['a book entry with another codehash', (rb: any) => { rb.contracts.blsAggregator.codehash = H(0x99); }, /contracts\.blsAggregator\.codehash .* != pins\.codehashes\.addresses\.blsAggregator/],
-        ['a null version on a contract that has version()', (rb: any) => { rb.contracts.registry.version = null; }, /contracts\.registry\.version null != version\(\) on chain "Registry-5\.10\.0"/],
+        ['"n/a:…" as the version of a contract that has version()', (rb: any) => { rb.contracts.registry.version = 'n/a:none'; }, /contracts\.registry\.version "n\/a:none" != version\(\) on chain "Registry-5\.10\.0"/],
         ['"unreadable:…" where the SDK reads a version', (rb: any) => { rb.contracts.aPNTsCapped.version = 'unreadable:timeout'; }, /contracts\.aPNTsCapped\.version "unreadable:timeout" != version\(\) on chain/],
-        ['a version on a contract without version()', (rb: any) => { rb.contracts.spAdminExtension.version = 'Admin-1'; }, /contracts\.spAdminExtension\.version "Admin-1", but version\(\) reverts on chain/],
         ['another SP implementation', (rb: any) => { rb.contracts.superPaymaster.erc1967Impl = A(0x99); }, /contracts\.superPaymaster\.erc1967Impl .* != pinned/],
         ['another Registry implementation hash', (rb: any) => { rb.contracts.registry.implCodehash = H(0x99); }, /contracts\.registry\.implCodehash .* != pinned/],
         ['another extension', (rb: any) => { rb.contracts.superPaymaster.extension = A(0x99); }, /contracts\.superPaymaster\.extension .* != pinned/],
@@ -176,6 +176,10 @@ describe('readbackProblems refuses', () => {
         const rb = good(); rb.header.source = 'live';
         expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } }))
             .toEqual(['anvilVersion', 'anvilCommit', 'dumpSha256'].map((k) => expect.stringMatching(new RegExp(`header\\.${k} .*expected "n/a:…"`))));
+    });
+    it('no provider at all', async () => {
+        const rb = good(); rb.header.providers = [];
+        expect(await run(rb)).toEqual(expect.arrayContaining(['header.providers: empty']));
     });
     it('a fork comparison without the loaded dump facts is refused', async () => {
         expect(await run(good(), { ctx: { ...CTX, anvilCommit: undefined } })).toEqual([expect.stringMatching(/^context: a fork read-back/)]);
@@ -201,16 +205,19 @@ describe('readbackProblems refuses', () => {
     });
     it.each(['superPaymaster', 'superPaymasterLens', 'aPNTsCapped'])('a reverting version() on %s is a failure, never "absent by design"', async (k) => {
         const a = PINS[k];
-        const rb = good(); rb.contracts[k].version = null;
+        const rb = good(); rb.contracts[k].version = 'unreadable:execution reverted';
         expect(await run(rb, { chain: { ...CHAIN, [a]: { ...CHAIN[a], version: { kind: 'reverted' } } } })).toContain(`contracts.${k}: version() reverts on chain, but ${k} must have one`);
     });
     it('a reverting version() on the Registry is a failure too: absence comes from the interface, not a revert (Codex r2 H3)', async () => {
-        const rb = good(); rb.contracts.registry.version = null;
+        const rb = good(); rb.contracts.registry.version = 'unreadable:execution reverted';
         expect(await run(rb, { chain: { ...CHAIN, [A(0x21)]: { ...CHAIN[A(0x21)], version: { kind: 'reverted' } } } })).toEqual(['contracts.registry: version() reverts on chain, but registry must have one']);
     });
     it('a contract without version() by design answering one is a failure (other code at that address?)', async () => {
-        const rb = good(); rb.contracts.spAdminExtension.version = 'X-1';
-        expect(await run(rb, { chain: { ...CHAIN, [A(0x12)]: { version: { kind: 'value', value: 'X-1' } } } })).toEqual(['contracts.spAdminExtension: version() answers "X-1", but spAdminExtension has none by design (is this the pinned code?)']);
+        const rb = good(); // the file says null (as the schema requires); the chain answers a version
+        expect(await run(rb, { chain: { ...CHAIN, [A(0x12)]: { version: { kind: 'value', value: 'X-1' } } } })).toEqual([
+            'contracts.spAdminExtension: version() answers "X-1", but spAdminExtension has none by design (is this the pinned code?)',
+            'contracts.spAdminExtension.version null != version() on chain "X-1"',
+        ]);
     });
     it('the snapshot block changing during the reads fails', async () => {
         let n = 0;
@@ -236,23 +243,61 @@ describe('readbackProblems refuses', () => {
 describe('amsterdamProbe', () => {
     const v = (n: number): Measured => ({ kind: 'value', value: BigInt(n) });
     const OK = { estimateFork: v(53000), gasUsedFork: v(52000), estimateLive: v(53000) };
-    it("passes when SP's numbers satisfy the predicate and the SDK measured the same", () => expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]));
-    it.each([
-        ['another predicate', (pr: any) => { pr.predicate = 'gasUsedFork > 0'; }, OK, /predicate .* is not the agreed rule/],
-        ['a provider disagreeing', (pr: any) => { pr.estimateLive.tenderly = 53001; }, OK, /estimateLive\.tenderly 53001 != estimateFork 53000/],
-        ['no provider', (pr: any) => { pr.estimateLive = {}; }, OK, /estimateLive: no provider/],
-        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 52001; }, { ...OK, gasUsedFork: v(52001) }, /gasUsedFork 52001 != expected\.gasUsed 52000/],
-        ["the SDK's fork estimate differs", () => {}, { ...OK, estimateFork: v(1) }, /the SDK's estimate on its fork 1 != SP's 53000/],
-        ["the SDK's fork gasUsed differs (CREATE priced like 1.8.6)", () => {}, { ...OK, gasUsedFork: v(52000 - 183600 + 300000) }, /the SDK's whole-tx receipt gasUsed on its fork .* != SP's 52000/],
-        ["the SDK's own live estimate differs", () => {}, { ...OK, estimateLive: v(9) }, /the SDK's live estimate from its own upstream 9 != SP's 53000/],
-        ['a measurement the SDK could not make', () => {}, { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
-    ])('fails: %s', (_n, mutate, mine, msg) => {
-        const pr = good().amsterdamProbe; mutate(pr);
-        expect(probeProblems(pr, mine as any)).toEqual([expect.stringMatching(msg)]);
+    it("SP's recorded probe passes on its own terms, and the SDK's matching measurements pass", () => {
+        expect(recordedProbeProblems(good().amsterdamProbe)).toEqual([]);
+        expect(probeProblems(good().amsterdamProbe, OK)).toEqual([]);
     });
-    it('estimateFork off expected is caught even when every live provider agrees with it', () => {
-        const pr = good().amsterdamProbe; pr.estimateFork = 53001; pr.estimateLive = { alchemy: 53001 };
-        expect(probeProblems(pr, { ...OK, estimateFork: v(53001) })).toEqual(['amsterdamProbe.estimateFork 53001 != expected.estimate 53000']);
+    it.each([
+        ['another predicate', (pr: any) => { pr.predicate = 'false'; }, /predicate "false" is not the agreed rule/],
+        ['a provider disagreeing', (pr: any) => { pr.estimateLive.tenderly = 53001; }, /estimateLive\.tenderly 53001 != estimateFork 53000/],
+        ['no provider', (pr: any) => { pr.estimateLive = {}; }, /estimateLive: no provider/],
+        ['gasUsedFork off expected', (pr: any) => { pr.gasUsedFork = 52001; }, /gasUsedFork 52001 != expected\.gasUsed 52000/],
+        ['estimateFork off expected while every provider agrees with it', (pr: any) => { pr.estimateFork = 53001; pr.estimateLive = { alchemy: 53001 }; }, /^amsterdamProbe\.estimateFork 53001 != expected\.estimate 53000$/],
+        ['a non-positive gas amount', (pr: any) => { pr.gasUsedFork = -5; pr.expected.gasUsed = -5; }, /gasUsedFork -5 is not a positive gas amount/],
+    ])('the recorded probe fails, with or without --probe: %s', async (_n, mutate, msg) => {
+        const pr = good().amsterdamProbe; mutate(pr);
+        expect(recordedProbeProblems(pr)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+        const rb = good(); mutate(rb.amsterdamProbe);
+        expect(await run(rb)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it.each([
+        ["the SDK's fork estimate differs", { ...OK, estimateFork: v(1) }, /the SDK's estimate on its fork 1 != SP's 53000/],
+        ["the SDK's fork gasUsed differs (CREATE priced like 1.8.6)", { ...OK, gasUsedFork: v(52000 + 183600) }, /the SDK's whole-tx receipt gasUsed on its fork 235600 != SP's 52000/],
+        ["the SDK's own live estimate differs", { ...OK, estimateLive: v(9) }, /the SDK's live estimate from its own upstream 9 != SP's 53000/],
+        ['a measurement the SDK could not make', { ...OK, gasUsedFork: { kind: 'error', detail: 'ProbeReverted' } as Measured }, /could not measure whole-tx receipt gasUsed .*ProbeReverted/],
+    ])('the SDK measurement fails: %s', (_n, mine, msg) => {
+        expect(probeProblems(good().amsterdamProbe, mine as any)).toEqual([expect.stringMatching(msg)]);
+    });
+});
+
+describe('Codex r3: version by interface, alias hashes, independent corroboration', () => {
+    it('the no-version() interface table matches the core ABI (it cannot drift silently)', async () => {
+        const { TimelockControllerABI, SuperPaymasterV550ABI } = await import('../packages/core/src/abis/index.js');
+        const hasVersion = (abi: any[]) => abi.some((e) => e.type === 'function' && e.name === 'version' && !e.inputs?.length);
+        expect(VERSION_NOT_IN_INTERFACE).toEqual(new Set(['timelockController']));
+        expect(hasVersion(TimelockControllerABI as any[])).toBe(false);
+        expect(hasVersion(SuperPaymasterV550ABI as any[])).toBe(true);
+    });
+    it('a book contract whose interface has no version() reports "n/a:…" (null is reserved by the schema)', async () => {
+        const pins = { ...PINS, addresses: { ...PINS.addresses, timelockController: A(0x26) }, codehashes: { ...PINS.codehashes, 'addresses.timelockController': H(0x26) } };
+        const rb = good();
+        rb.contracts.timelockController = { ...rb.contracts.xPNTsTokenV2Ext, address: A(0x26), codehash: H(0x26), version: 'n/a:no version() in the OZ TimelockController interface' };
+        const code = { ...CODE, [A(0x26)]: H(0x26) };
+        expect(await run(rb, { pins, code })).toEqual([]);
+        rb.contracts.timelockController.version = 'unreadable:timeout';
+        expect(await run(rb, { pins, code })).toEqual([expect.stringMatching(/timelockController\.version "unreadable:timeout": timelockController's interface has no version\(\)/)]);
+    });
+    it('an alias book entry with its own, different codehash pin is refused (it would never be compared)', async () => {
+        const pins = { ...PINS, addresses: { ...PINS.addresses, superPaymaster: PINS.superPaymaster }, codehashes: { ...PINS.codehashes, 'addresses.superPaymaster': H(0x77) } };
+        expect(await run(good(), { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/pins: codehashes\.addresses\.superPaymaster .* != codehashes\.superPaymaster/)]));
+    });
+    it('an unnamed eth_config provider cannot vouch for independent corroboration', async () => {
+        const rb = good(); delete rb.header.ethConfig.provider; rb.header.providers = ['alchemy']; rb.header.ethConfig.corroboration.provider = 'alchemy';
+        expect(await run(rb)).toEqual(['header.ethConfig.provider: omitted (the eth_config provider must be named to prove corroboration is independent)']);
+    });
+    it('a corroborating provider outside header.providers is refused', async () => {
+        const rb = good(); rb.header.ethConfig.corroboration.provider = 'infura';
+        expect(await run(rb)).toEqual(['header.ethConfig.corroboration.provider "infura" is not in header.providers']);
     });
 });
 

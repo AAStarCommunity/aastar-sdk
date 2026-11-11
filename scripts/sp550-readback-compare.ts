@@ -80,6 +80,20 @@ async function main() {
     const probe = args.includes('--probe');
     if (probe && (source !== 'fork' || urls.length !== 1 || !isLoopbackUrl(urls[0]))) refuse('--probe sends a transaction: fork read-backs only, on one loopback RPC');
     if (probe && !process.env.SP550_FORK_URL) refuse('--probe needs SP550_FORK_URL (the upstream the fork was started from) for the live estimate');
+    if (probe) {
+        // The live estimate must come from the real chain, never from the fork itself (or another local node).
+        const up = process.env.SP550_FORK_URL!;
+        if (isLoopbackUrl(up)) refuse('--probe: SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node');
+        let same = false;
+        try { same = new URL(up).host.toLowerCase() === new URL(urls[0]).host.toLowerCase(); } catch { refuse('--probe: SP550_FORK_URL is not a URL'); }
+        if (same) refuse('--probe: SP550_FORK_URL is the --rpc endpoint; the live estimate must be independent of the fork');
+        const upstream = createPublicClient({ transport: http(up) });
+        // Errors here never print the URL (it embeds a provider key).
+        const upId = await upstream.getChainId().catch(() => undefined);
+        if (upId !== net.chainId) refuse(`--probe: the upstream reports chainId ${upId ?? '(no answer)'}, not ${net.chainId}`);
+        const cv = await upstream.request({ method: 'web3_clientVersion' } as never).catch(() => '') as string;
+        if (/^anvil\//i.test(cv)) refuse('--probe: the upstream is an anvil node, not the live chain');
+    }
     const rbJson = JSON.parse(fs.readFileSync(rbFile, 'utf8'));
     const problems = await readbackProblems(rbJson, pins, {
         chainId: net.chainId, mode: net.mode, source, allowRc: args.includes('--allow-rc'),
