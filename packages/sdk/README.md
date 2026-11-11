@@ -205,7 +205,8 @@ await communityClient.configureSBTRules({
 const status = await operatorClient.checkResources(myAddress);
 
 if (status.hasRole) {
-    // SuperPaymaster 5.5.1+: request now, withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h)
+    // SuperPaymaster 5.5.1+: request now (the amount moves into escrow and stops backing sponsorship),
+    // withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h) and within the following 24 h window
     await operatorClient.requestCollateralWithdrawal(parseEther("50"));
     // ...48 h later:
     await operatorClient.executeCollateralWithdrawal();

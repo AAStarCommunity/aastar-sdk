@@ -108,11 +108,15 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
 
     /**
      * Finalize exit: withdraw the aPNTs collateral, then exit the Registry role. Staged on
-     * SuperPaymaster 5.5.1+ (request -> 48 h -> withdraw); call it again until the role exit is in
-     * the returned hashes:
-     *  - balance > 0, no request: sends requestWithdraw(balance) and returns — call again after it matures;
-     *  - request open but not matured: throws, naming when it matures (nothing sent);
-     *  - request matured: withdraws it; exits the role only once no collateral is left.
+     * SuperPaymaster 5.5.1+ (request -> 48 h -> withdraw within 24 h); call it again until the role
+     * exit is in the returned hashes. The collateral is aPNTsBalance PLUS the withdrawal escrow: a
+     * request moves its amount out of aPNTsBalance, so a zero balance with an open request still
+     * has collateral to withdraw and must not exit the role yet.
+     *  - no request, balance > 0: sends requestWithdraw(balance) and returns — call again after it matures;
+     *  - request not matured: throws, naming when it matures and when its window closes (nothing sent);
+     *  - request inside its window: withdraws the escrow; exits the role only once no collateral is left;
+     *  - window closed (withdraw would revert WithdrawalExpired): sends cancelWithdraw (the escrow
+     *    returns to the balance) and requestWithdraw(balance) again, and returns — the delay restarts.
      * On 5.4.2 the collateral is withdrawn in one call. Funds always go to the operator itself;
      * `to` is accepted only when it IS the operator (SuperPaymaster has no recipient parameter).
      */
@@ -125,20 +129,29 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
 
         // 1. Collateral (aPNTs) held by SuperPaymaster.
         const stats = await this.checkReadiness();
-        if (stats.balance > 0n) {
-            // Mode from the read-back-verified pin; a pin / live version() disagreement throws here.
-            const { mode } = await this.collateralWithdrawalMode();
-            if (mode === 'one-call') {
-                hashes.push(await this.executeCollateralWithdrawal(stats.balance, options));
-            } else {
-                const w = await this.collateralWithdrawalStatus();
-                if (w.amount === 0n) {
-                    hashes.push(await this.requestCollateralWithdrawal(w.balance, options));
-                    return hashes; // the delay has started; the role exit waits for the collateral
-                }
-                if (!w.matured) throw new Error(`withdrawAllFunds: the collateral withdrawal matures at ${w.readyAt} (now ${w.now}); call again then`);
+        // Mode from the read-back-verified pin; a pin / live version() disagreement throws here.
+        const { mode } = await this.collateralWithdrawalMode();
+        if (mode === 'one-call') {
+            if (stats.balance > 0n) hashes.push(await this.executeCollateralWithdrawal(stats.balance, options));
+        } else {
+            const w = await this.collateralWithdrawalStatus();
+            if (w.phase === 'none' && w.balance > 0n) {
+                hashes.push(await this.requestCollateralWithdrawal(w.balance, options));
+                return hashes; // the delay has started; the role exit waits for the collateral
+            }
+            if (w.phase === 'waiting') {
+                throw new Error(`withdrawAllFunds: the collateral withdrawal matures at ${w.readyAt} and stays open until ${w.expiresAt} (now ${w.now}); call again then`);
+            }
+            if (w.phase === 'expired') {
+                hashes.push(await this.cancelCollateralWithdrawal(options));
+                // Re-read after the cancel: the escrow is back in the balance (less any slash meanwhile).
+                const after = await this.collateralWithdrawalStatus();
+                if (after.balance > 0n) hashes.push(await this.requestCollateralWithdrawal(after.balance, options));
+                return hashes; // the window closed at w.expiresAt; the delay restarts
+            }
+            if (w.phase === 'open') {
                 hashes.push(await this.executeCollateralWithdrawal(undefined, options));
-                if (w.amount < w.balance) return hashes; // collateral left over: request the rest next call
+                if (w.balance > 0n) return hashes; // collateral left in the balance: request it next call
             }
         }
 

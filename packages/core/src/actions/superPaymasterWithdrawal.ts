@@ -10,14 +10,36 @@ import { superPaymasterGenerationFromVersion } from '../superPaymasterData.js';
 /** `pendingWithdrawals(operator)` (SuperPaymaster-5.5.1). amount 0 = no request. */
 export type PendingOperatorWithdrawal = { amount: bigint; readyAt: bigint };
 
+/**
+ * How long a matured request stays withdrawable: `withdraw` succeeds in [readyAt, readyAt + 24 h]
+ * and reverts WithdrawalExpired after it (SP rc.8 SP-a, #619, as announced 2026-11-11). Kept here
+ * until #619's final head lands; replace with the contract's constant if it exposes one.
+ */
+export const OPERATOR_WITHDRAWAL_WINDOW = 24n * 60n * 60n;
+
+/** none: no request · waiting: before readyAt · open: withdrawable now · expired: cancel and request again. */
+export type OperatorWithdrawalPhase = 'none' | 'waiting' | 'open' | 'expired';
+
 /** Where an operator's aPNTs withdrawal stands, read at one block. */
 export type OperatorWithdrawalStatus = PendingOperatorWithdrawal & {
-    /** `operators(operator).aPNTsBalance`. */
+    /**
+     * `operators(operator).aPNTsBalance`: what can back sponsorship. From #619 a request moves its
+     * amount OUT of this balance into escrow, so this already excludes `escrowed`.
+     */
     balance: bigint;
+    /** Same as `balance`: the operator's aPNTs available for sponsorship (escrow excluded). */
+    available: bigint;
+    /** aPNTs held in the withdrawal escrow (= `amount`). Not available for sponsorship; still slashable. */
+    escrowed: bigint;
+    /** `readyAt + OPERATOR_WITHDRAWAL_WINDOW`, the last second `withdraw` succeeds; 0 when there is no request. */
+    expiresAt: bigint;
     /** Block timestamp the status was read at. */
     now: bigint;
-    /** A request exists and `now >= readyAt`. */
+    phase: OperatorWithdrawalPhase;
+    /** phase === 'open': a request exists and readyAt <= now <= expiresAt. */
     matured: boolean;
+    /** phase === 'expired': `withdraw` reverts WithdrawalExpired; cancelWithdraw returns the escrow, then request again. */
+    expired: boolean;
     /** A slash is queued for this operator: request and withdraw both revert SlashPending. */
     slashQueued: boolean;
 };
@@ -36,19 +58,21 @@ export type SuperPaymasterWithdrawalActions = {
     slashQueue: (args: { operator: Address }) => Promise<OperatorSlashQueue>;
     withdrawalStatus: (args: { operator: Address }) => Promise<OperatorWithdrawalStatus>;
     /**
-     * Step 1: `requestWithdraw(amount)`. Starts the OPERATOR_WITHDRAWAL_DELAY; the funds stay
-     * available for sponsorship and slashing meanwhile (a slash may shrink the request —
-     * `WithdrawalRequestAdjusted`). Reverts WithdrawalPending if one is open, SlashPending if a slash
-     * is queued. msg.sender is the operator.
+     * Step 1: `requestWithdraw(amount)`. Moves `amount` out of aPNTsBalance into escrow and starts
+     * the OPERATOR_WITHDRAWAL_DELAY: escrowed funds no longer back sponsorship but can still be
+     * slashed. Reverts WithdrawalPending if one is open, SlashPending if a slash is queued.
+     * msg.sender is the operator.
      */
     requestWithdraw: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
-    /** Cancel the open request (`cancelWithdraw()`). */
+    /** Cancel the open request (`cancelWithdraw()`): the escrow goes back to aPNTsBalance. */
     cancelWithdraw: (args: { account?: Account | Address }) => Promise<Hash>;
     /**
-     * Step 2: `withdraw(amount)` once the request has matured. The aPNTs go to the OPERATOR
-     * (msg.sender) — there is no recipient parameter. Checked before sending: a request exists, it
-     * has matured at the latest block, `amount` does not exceed it, and no slash is queued; otherwise
-     * this throws INVALID_PARAMETER and sends nothing (the contract would revert).
+     * Step 2: `withdraw(amount)` inside the window [readyAt, readyAt + 24 h]. The aPNTs come out of
+     * the escrow and go to the OPERATOR (msg.sender) — there is no recipient parameter. Checked
+     * before sending: a request exists, the latest block is inside its window (not before, not
+     * after: WithdrawalExpired), `amount` does not exceed the escrow, and no slash is queued;
+     * otherwise this throws INVALID_PARAMETER and sends nothing (the contract would revert). A
+     * request sent close to `expiresAt` can still mine after it; leave margin.
      */
     executeWithdraw: (args: { operator: Address, amount?: bigint, account?: Account | Address }) => Promise<Hash>;
     /**
@@ -177,8 +201,14 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
                     read('pendingWithdrawals', [operator], bn), read('operators', [operator], bn), read('isSlashPending', [operator], bn),
                 ]);
                 const amount = BigInt(pending[0]), readyAt = BigInt(pending[1]), now = BigInt(block.timestamp);
+                const expiresAt = amount > 0n ? readyAt + OPERATOR_WITHDRAWAL_WINDOW : 0n;
+                const phase: OperatorWithdrawalPhase = amount === 0n ? 'none' : now < readyAt ? 'waiting' : now <= expiresAt ? 'open' : 'expired';
                 // operators(): (aPNTsBalance, isConfigured, isPaused, xPNTsToken, …)
-                return { amount, readyAt, balance: BigInt(op[0]), now, matured: amount > 0n && now >= readyAt, slashQueued: Boolean(slashPending) };
+                const balance = BigInt(op[0]);
+                return {
+                    amount, readyAt, balance, available: balance, escrowed: amount, expiresAt, now, phase,
+                    matured: phase === 'open', expired: phase === 'expired', slashQueued: Boolean(slashPending),
+                };
             } catch (e) { throw AAStarError.fromViemError(e as Error, 'withdrawalStatus'); }
         },
         async requestWithdraw({ amount, account }) {
@@ -193,10 +223,11 @@ export const superPaymasterWithdrawalActions = (address: Address) => (client: Pu
             const refuse = (m: string): never => { throw new AAStarError(ErrorCode.INVALID_PARAMETER, `executeWithdraw: ${m}; nothing was sent`); };
             if (s.slashQueued) refuse(`a slash is queued for ${operator} (withdraw reverts SlashPending)`);
             if (s.amount === 0n) refuse(`no withdrawal request for ${operator}: call requestWithdraw first, then wait the withdrawal delay`);
-            if (!s.matured) refuse(`the request matures at ${s.readyAt} (latest block time ${s.now})`);
+            if (s.phase === 'waiting') refuse(`the request matures at ${s.readyAt} (latest block time ${s.now})`);
+            if (s.phase === 'expired') refuse(`the withdrawal window closed at ${s.expiresAt} (latest block time ${s.now}; withdraw reverts WithdrawalExpired): cancelWithdraw returns the escrow, then requestWithdraw again`);
             const value = amount ?? s.amount;
-            if (value <= 0n || value > s.amount) refuse(`amount ${value} is outside 1..${s.amount} (the matured request)`);
-            if (value > s.balance) refuse(`amount ${value} exceeds the operator balance ${s.balance}`);
+            // Paid from the escrow, not from aPNTsBalance (which no longer includes it).
+            if (value <= 0n || value > s.amount) refuse(`amount ${value} is outside 1..${s.amount} (the escrowed request)`);
             try { return await write('withdraw', [value], account); } catch (e) { throw AAStarError.fromViemError(e as Error, 'executeWithdraw'); }
         },
         async pauseUnderstakedOperator({ operator, account }) {

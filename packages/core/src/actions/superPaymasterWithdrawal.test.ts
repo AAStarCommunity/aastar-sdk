@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
+import { OPERATOR_WITHDRAWAL_WINDOW, resolveSuperPaymasterWithdrawalMode, superPaymasterHasTwoStepWithdrawal, superPaymasterWithdrawalActions } from './superPaymasterWithdrawal.js';
 import { ErrorCode } from '../errors/index.js';
 
 const SP = '0x' + '5a'.repeat(20) as `0x${string}`;
@@ -46,7 +46,7 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
         ['not matured', { amount: 300n, readyAt: NOW + 1n }, /matures at/],
         ['a slash is queued', { amount: 300n, readyAt: NOW - 1n, slash: true }, /slash is queued/],
         ['more than the request', { amount: 300n, readyAt: NOW - 1n, ask: 301n }, /outside 1\.\.300/],
-        ['more than the balance', { amount: 300n, readyAt: NOW - 1n, balance: 200n }, /exceeds the operator balance 200/],
+        ['the window has closed (WithdrawalExpired)', { amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW - 1n }, /window closed at 1799999999 .*cancelWithdraw returns the escrow, then requestWithdraw again/],
     ])('executeWithdraw refuses before sending: %s', async (_n, o: any, msg) => {
         const { a, writes } = chain(o);
         const err = await a.executeWithdraw({ operator: OP, amount: o.ask }).catch((e) => e);
@@ -56,8 +56,31 @@ describe('SuperPaymaster-5.5.1 operator withdrawal: request -> delay -> withdraw
     });
     it('withdrawalStatus reads every field at one block and reports maturity from block time', async () => {
         const { a, reads } = chain({ amount: 5n, readyAt: NOW, balance: 9n });
-        expect(await a.withdrawalStatus({ operator: OP })).toEqual({ amount: 5n, readyAt: NOW, balance: 9n, now: NOW, matured: true, slashQueued: false });
+        expect(await a.withdrawalStatus({ operator: OP })).toEqual({
+            amount: 5n, readyAt: NOW, balance: 9n, available: 9n, escrowed: 5n, expiresAt: NOW + OPERATOR_WITHDRAWAL_WINDOW,
+            now: NOW, phase: 'open', matured: true, expired: false, slashQueued: false,
+        });
         expect(reads.every((r) => r.blockNumber === 9n)).toBe(true);
+    });
+    it('the window is [readyAt, readyAt + 24 h], both ends inclusive', async () => {
+        const phase = async (readyAt: bigint) => (await chain({ amount: 5n, readyAt }).a.withdrawalStatus({ operator: OP })).phase;
+        expect(OPERATOR_WITHDRAWAL_WINDOW).toBe(86_400n);
+        expect(await phase(NOW + 1n)).toBe('waiting');
+        expect(await phase(NOW)).toBe('open');
+        expect(await phase(NOW - OPERATOR_WITHDRAWAL_WINDOW)).toBe('open');
+        expect(await phase(NOW - OPERATOR_WITHDRAWAL_WINDOW - 1n)).toBe('expired');
+        expect((await chain({ amount: 0n }).a.withdrawalStatus({ operator: OP }))).toMatchObject({ phase: 'none', expiresAt: 0n, escrowed: 0n });
+    });
+    it('the escrow pays the withdrawal: an aPNTsBalance below the request does not block it', async () => {
+        // From #619 the request has already left aPNTsBalance; checking it against the balance would refuse a valid withdraw.
+        const { a, writes } = chain({ amount: 300n, readyAt: NOW - 1n, balance: 0n });
+        await a.executeWithdraw({ operator: OP });
+        expect(writes[0]).toMatchObject({ functionName: 'withdraw', args: [300n] });
+    });
+    it('the last second of the window still sends', async () => {
+        const { a, writes } = chain({ amount: 300n, readyAt: NOW - OPERATOR_WITHDRAWAL_WINDOW });
+        await a.executeWithdraw({ operator: OP });
+        expect(writes).toHaveLength(1);
     });
     it('getters decode their tuples', async () => {
         const { a } = chain({ amount: 7n, readyAt: 8n });
