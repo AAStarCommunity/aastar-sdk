@@ -111,7 +111,7 @@ async function main() {
 
     // ─────────────────────────────── ROW 1 + 1n ───────────────────────────────
     log('## Row 1 / 1n — social recovery (ECDSA guardians)');
-    const ar1 = await rpc((c) => c.readContract({ address: ACC1, abi: AAStarAirAccountV7ABI, functionName: 'activeRecovery' })) as any;
+    const ar1 = await rpc((c) => c.readContract({ address: ACC1, abi: AAStarAirAccountV7ABI, functionName: 'activeRecovery' }));
     const [newOwner1, proposedAt1, approvalBitmap1, cancelBitmap1] = ar1 as [Address, bigint, bigint, bigint];
     const gc1 = await rpc((c) => c.readContract({ address: ACC1, abi: AAStarAirAccountV7ABI, functionName: 'guardianCount' })) as number;
     const guardians1: Address[] = [];
@@ -125,7 +125,7 @@ async function main() {
     log(`- executeAfter = proposedAt + 172800 = ${execAfter1}; block.timestamp ${now} < executeAfter ⇒ ${now < execAfter1}`);
     const execRecoveryData = encodeFunctionData({ abi: AirAccountExtensionABI, functionName: 'executeRecovery' });
     const rev1 = await decodeRevert(ACC1, execRecoveryData, guardians1[0] || ACC1);
-    const expSel1 = selectorOf('RecoveryTimelockNotExpired', AAStarAirAccountV7ABI as any[]);
+    const expSel1 = selectorOf('RecoveryTimelockNotExpired', AAStarAirAccountV7ABI);
     log(`- **1n executeRecovery() revert**: selector ${rev1.selector} → ${rev1.name} (expected RecoveryTimelockNotExpired sel ${expSel1}) ⇒ MATCH=${rev1.selector === expSel1}`);
     log('');
 
@@ -144,8 +144,8 @@ async function main() {
     let rp2 = '';
     for (const lg of rcpt2.logs) {
         try {
-            const d = decodeEventLog({ abi: AirAccountExtensionABI, data: lg.data, topics: lg.topics as any });
-            if (d.eventName === 'RecoveryProposed') rp2 = `newOwner=${(d.args as any).newOwner} proposedBy=${(d.args as any).proposedBy} guardianIdx=${(d.args as any).guardianIdx}`;
+            const d = decodeEventLog({ abi: AirAccountExtensionABI, data: lg.data, topics: lg.topics });
+            if (d.eventName === 'RecoveryProposed') rp2 = `newOwner=${(d.args).newOwner} proposedBy=${(d.args).proposedBy} guardianIdx=${(d.args).guardianIdx}`;
         } catch { /* not this event */ }
     }
     log(`- RecoveryProposed event in ${ROW2_PROPOSE.slice(0, 12)}…: ${rp2 || '(not found)'}`);
@@ -158,10 +158,10 @@ async function main() {
     for (const lg of rcpt5.logs) {
         if (getAddress(lg.address) === ENTRY_POINT) {
             try {
-                const d = decodeEventLog({ abi: EntryPointABI, data: lg.data, topics: lg.topics as any });
-                if (d.eventName === 'UserOperationEvent' && getAddress((d.args as any).sender) === ACC5_SENDER) {
-                    payAddr = getAddress((d.args as any).paymaster);
-                    uoe = `success=${(d.args as any).success} actualGasCost=${(d.args as any).actualGasCost} actualGasUsed=${(d.args as any).actualGasUsed} paymaster=${payAddr}`;
+                const d = decodeEventLog({ abi: EntryPointABI, data: lg.data, topics: lg.topics });
+                if (d.eventName === 'UserOperationEvent' && getAddress((d.args).sender) === ACC5_SENDER) {
+                    payAddr = getAddress((d.args).paymaster);
+                    uoe = `success=${(d.args).success} actualGasCost=${(d.args).actualGasCost} actualGasUsed=${(d.args).actualGasUsed} paymaster=${payAddr}`;
                 }
             } catch { /* */ }
         }
@@ -170,8 +170,8 @@ async function main() {
     for (const lg of rcpt5.logs) {
         if (payAddr && getAddress(lg.address) === payAddr) {
             try {
-                const d = decodeEventLog({ abi: PaymasterABI, data: lg.data, topics: lg.topics as any });
-                const ar = d.args as any;
+                const d = decodeEventLog({ abi: PaymasterABI, data: lg.data, topics: lg.topics });
+                const ar = d.args;
                 if (d.eventName === 'PostOpProcessed')
                     payEvt = `PostOpProcessed user=${ar.user} token=${ar.token} actualGasCostWei=${ar.actualGasCostWei} tokenCost(debit)=${ar.tokenCost} protocolRevenue=${ar.protocolRevenue}`;
             } catch { /* */ }
@@ -190,8 +190,8 @@ async function main() {
     for (const lg of regRcpt.logs) {
         if (getAddress(lg.address) === AGENT_REGISTRY) {
             try {
-                const d = decodeEventLog({ abi: AgentRegistryABI, data: lg.data, topics: lg.topics as any });
-                if (d.eventName === 'AgentRegistered') { regOwner = getAddress((d.args as any).humanOwner); agentAddr = getAddress((d.args as any).agentWallet); }
+                const d = decodeEventLog({ abi: AgentRegistryABI, data: lg.data, topics: lg.topics });
+                if (d.eventName === 'AgentRegistered') { regOwner = getAddress((d.args).humanOwner); agentAddr = getAddress((d.args).agentWallet); }
             } catch { /* */ }
         }
     }
@@ -200,7 +200,7 @@ async function main() {
     let revEvt = '';
     for (const lg of revRcpt.logs) {
         if (getAddress(lg.address) === AGENT_REGISTRY) {
-            try { const d = decodeEventLog({ abi: AgentRegistryABI, data: lg.data, topics: lg.topics as any }); revEvt = `${d.eventName} humanOwner=${(d.args as any).humanOwner} agentWallet=${(d.args as any).agentWallet}`; } catch { /* */ }
+            try { const d = decodeEventLog({ abi: AgentRegistryABI, data: lg.data, topics: lg.topics }); revEvt = `${d.eventName} humanOwner=${(d.args).humanOwner} agentWallet=${(d.args).agentWallet}`; } catch { /* */ }
         }
     }
     log(`- revokeAgent tx ${ROW6_REVOKE.slice(0, 12)}…: ${revEvt || '(no AgentRegistry event)'}`);
@@ -218,7 +218,7 @@ async function main() {
     log('## Row 9 / 9n — weighted-sig governance (2-of-3 weight change)');
     const pwc = await rpc((c) => c.readContract({ address: ACC9, abi: AAStarAirAccountV7ABI, functionName: 'pendingWeightChange' })) as any;
     const proposed = pwc[0], proposedAt9 = pwc[1] as bigint, approvalBitmap9 = pwc[2] as bigint;
-    const wc = await rpc((c) => c.readContract({ address: ACC9, abi: AAStarAirAccountV7ABI, functionName: 'weightConfig' })) as any;
+    const wc = await rpc((c) => c.readContract({ address: ACC9, abi: AAStarAirAccountV7ABI, functionName: 'weightConfig' }));
     const gc9 = await rpc((c) => c.readContract({ address: ACC9, abi: AAStarAirAccountV7ABI, functionName: 'guardianCount' })) as number;
     const guardians9: Address[] = [];
     for (let i = 0; i < Number(gc9); i++) guardians9.push(await rpc((c) => c.readContract({ address: ACC9, abi: AAStarAirAccountV7ABI, functionName: 'guardians', args: [BigInt(i)] })) as Address);
@@ -239,7 +239,7 @@ async function main() {
         const r = await rpc((c) => c.getTransactionReceipt({ hash: h }));
         for (const lg of r.logs) {
             if (getAddress(lg.address) === ACC9) {
-                try { const d = decodeEventLog({ abi: AAStarAirAccountV7ABI, data: lg.data, topics: lg.topics as any }); if (d.eventName === 'WeightChangeApproved') approvers.push(getAddress((d.args as any).approvedBy)); } catch { /* */ }
+                try { const d = decodeEventLog({ abi: AAStarAirAccountV7ABI, data: lg.data, topics: lg.topics }); if (d.eventName === 'WeightChangeApproved') approvers.push(getAddress((d.args).approvedBy)); } catch { /* */ }
             }
         }
     }
@@ -248,7 +248,7 @@ async function main() {
     log(`- approvers (WeightChangeApproved.approvedBy) = ${JSON.stringify(approvers)} → ${distinct.size} DISTINCT; all are registered guardians = ${allGuardians}`);
     const execWcData = encodeFunctionData({ abi: AirAccountExtensionABI, functionName: 'executeWeightChange' });
     const rev9 = await decodeRevert(ACC9, execWcData, approvers[0] || ACC9);
-    const expSel9 = selectorOf('WeightChangeTimelockNotExpired', AAStarAirAccountV7ABI as any[]);
+    const expSel9 = selectorOf('WeightChangeTimelockNotExpired', AAStarAirAccountV7ABI);
     log(`- **9n executeWeightChange() revert**: selector ${rev9.selector} → ${rev9.name} (expected WeightChangeTimelockNotExpired sel ${expSel9}) ⇒ MATCH=${rev9.selector === expSel9}`);
     log('');
 

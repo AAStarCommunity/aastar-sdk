@@ -390,7 +390,7 @@ async function main() {
             node = node.cause;
         }
         if (!decoded && rawHex) {
-            try { decoded = (decodeErrorResult({ abi: AA_SETUP_ABI, data: rawHex }) as any).errorName; } catch {}
+            try { decoded = (decodeErrorResult({ abi: AA_SETUP_ABI, data: rawHex })).errorName; } catch {}
         }
         const reason = decoded || e?.cause?.shortMessage || e?.shortMessage || e?.message || '';
         if (decoded === 'WeightChangeTimelockNotExpired' || /WeightChangeTimelockNotExpired|timelock/i.test(reason)) {

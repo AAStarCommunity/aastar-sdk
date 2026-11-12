@@ -141,7 +141,7 @@ async function main() {
   if (!b.registered || !b.staked) throw new Error('FAIL: expected registered && staked');
 
   // independent re-read
-  const dvt = dvtOperatorActions(validator)(publicClient as any);
+  const dvt = dvtOperatorActions(validator)(publicClient);
   const isReg = await dvt.isRegistered({ nodeId: b.nodeId });
   const owner = await dvt.nodeOperator({ nodeId: b.nodeId });
   log(`\nre-read: isRegistered=${isReg} nodeOperator=${owner}`);

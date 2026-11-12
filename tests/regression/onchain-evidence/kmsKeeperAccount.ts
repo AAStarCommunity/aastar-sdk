@@ -131,7 +131,7 @@ export function kmsKeeperAccount(opts: KmsKeeperAccountOpts): LocalAccount {
       return `0x${sig.r.slice(2)}${sig.s.slice(2)}${(sig.yParity + 27).toString(16).padStart(2, '0')}` as Hex;
     },
     async signTypedData(typedData) {
-      const sig = await signHashViaKms(hashTypedData(typedData as any));
+      const sig = await signHashViaKms(hashTypedData(typedData));
       return `0x${sig.r.slice(2)}${sig.s.slice(2)}${(sig.yParity + 27).toString(16).padStart(2, '0')}` as Hex;
     },
   });

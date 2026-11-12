@@ -146,7 +146,7 @@ async function main() {
                 body: JSON.stringify({ userOp: userOpRpc, ownerAuth }),
             });
             const raw = await r.text();
-            const b = (() => { try { return JSON.parse(raw); } catch { return {} as any; } })();
+            const b = (() => { try { return JSON.parse(raw); } catch { return {}; } })();
             if (!r.ok || !b.nodeId || !b.signature) { console.warn(`     ! ${url} -> ${r.status} ${raw.slice(0, 120)}`); continue; }
             const id = norm(b.nodeId), sig = norm(b.signature);
             if (id !== norm(pinned)) { console.warn(`     ! ${url} reported ${id}, config pins ${norm(pinned)}`); continue; }
