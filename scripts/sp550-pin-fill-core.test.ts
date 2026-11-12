@@ -529,7 +529,7 @@ describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0
 });
 
 describe('absent must be an array of key names (PR-Daemon #443 N1)', () => {
-    it.each([[{}], ['pnts'], [[1]]])('absent %j is a manifest error, not a TypeError', (absent) => {
+    it.each([[{}], ['pnts'], [[1]], [null]])('absent %j is a manifest error, not a TypeError', (absent) => {
         expect(() => parseManifestPins({ ...MANIFEST, absent }, 'fresh')).toThrow(/manifest pins: absent must be an array of key names/);
     });
 });
