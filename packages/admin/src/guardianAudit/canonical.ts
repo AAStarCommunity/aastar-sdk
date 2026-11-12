@@ -40,30 +40,97 @@ export interface SnapshotBudget {
     bytes: number;
 }
 
+/**
+ * Armed by our own throws, then read by a catch that never inspects the caught value.
+ * A foreign throw leaves this unset, so the catch builds a fresh `input rejected`.
+ * `instanceof` is not used: a proxy's getPrototypeOf trap must not run.
+ */
+const ARM_NONE = 0;
+const ARM_INPUT = 1;
+const ARM_OUTPUT = 2;
+const ARM_NOTE = 3;
+let arm: typeof ARM_NONE | typeof ARM_INPUT | typeof ARM_OUTPUT | typeof ARM_NOTE = ARM_NONE;
+let armNote = '';
+
+function clearArm(): void {
+    arm = ARM_NONE;
+    armNote = '';
+}
+
 function rejectInput(): never {
+    arm = ARM_INPUT;
+    armNote = '';
     throw new GuardianAuditInputError();
 }
 
-function chargeNodes(budget: SnapshotBudget, n: number): void {
+function rejectCanonical(message: string): never {
+    arm = message === 'canonical: output too large' ? ARM_OUTPUT : ARM_NOTE;
+    armNote = message;
+    throw new Error(message);
+}
+
+/** Fresh error for whatever this module armed. Does not read a caught object. */
+function rethrowArmed(): never {
+    if (arm === ARM_OUTPUT) throw new Error('canonical: output too large');
+    if (arm === ARM_NOTE) throw new Error(armNote);
+    throw new GuardianAuditInputError();
+}
+
+/**
+ * Message armed by the last canonical failure, or `input rejected` when the failure was foreign.
+ * Clears the arm. The caught object is not an argument.
+ */
+export function consumeCanonicalFailure(): string {
+    const kind = arm;
+    const note = armNote;
+    clearArm();
+    if (kind === ARM_OUTPUT) return 'canonical: output too large';
+    if (kind === ARM_NOTE) return note;
+    return 'input rejected';
+}
+
+interface Counters {
+    nodes: number;
+    bytes: number;
+}
+
+function isBudgetCount(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** One read of each counter. Later walks use the returned locals. */
+function copyBudget(budget: SnapshotBudget): Counters {
+    let nodes: unknown;
+    let bytes: unknown;
     try {
-        budget.nodes += n;
-        if (budget.nodes > MAX_NODES) rejectInput();
-    } catch (e) {
-        if (e instanceof GuardianAuditInputError) throw e;
-        rejectInput();
+        nodes = budget.nodes;
+        bytes = budget.bytes;
+    } catch {
+        rethrowArmed();
+    }
+    if (!isBudgetCount(nodes) || !isBudgetCount(bytes)) rejectInput();
+    return { nodes, bytes };
+}
+
+function commitBudget(budget: SnapshotBudget, counters: Counters): void {
+    try {
+        budget.nodes = counters.nodes;
+        budget.bytes = counters.bytes;
+    } catch {
+        rethrowArmed();
     }
 }
 
-/** Count UTF-8 bytes into `budget`. A string past {@link MAX_STRING} or the file cap is rejected. */
-function chargeString(budget: SnapshotBudget, text: string): void {
+function chargeNodes(counters: Counters, n: number): void {
+    counters.nodes += n;
+    if (counters.nodes > MAX_NODES) rejectInput();
+}
+
+/** Count UTF-8 bytes into `counters`. A string past {@link MAX_STRING} or the file cap is rejected. */
+function chargeString(counters: Counters, text: string): void {
     if (text.length > MAX_STRING) rejectInput();
-    let room = 0;
-    try {
-        room = MAX_EVIDENCE_FILE_BYTES - budget.bytes;
-    } catch {
-        rejectInput();
-    }
-    if (text.length > room) rejectInput();
+    const room = MAX_EVIDENCE_FILE_BYTES - counters.bytes;
+    if (room < 0 || text.length > room) rejectInput();
     let bytes = 0;
     for (let i = 0; i < text.length; i++) {
         const c = text.charCodeAt(i);
@@ -80,11 +147,7 @@ function chargeString(budget: SnapshotBudget, text: string): void {
         bytes += n;
         if (bytes > room) rejectInput();
     }
-    try {
-        budget.bytes += bytes;
-    } catch {
-        rejectInput();
-    }
+    counters.bytes += bytes;
 }
 
 function ownData(value: object, key: string): unknown {
@@ -92,7 +155,7 @@ function ownData(value: object, key: string): unknown {
     try {
         desc = Object.getOwnPropertyDescriptor(value, key);
     } catch {
-        rejectInput();
+        rethrowArmed();
     }
     if (desc === undefined) return undefined;
     if ('value' in desc) return desc.value;
@@ -100,7 +163,7 @@ function ownData(value: object, key: string): unknown {
     try {
         return desc.get.call(value);
     } catch {
-        rejectInput();
+        rethrowArmed();
     }
 }
 
@@ -109,25 +172,24 @@ function arrayLength(value: unknown[]): number {
     try {
         length = value.length;
     } catch {
-        rejectInput();
+        rethrowArmed();
     }
     if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) rejectInput();
     return length;
 }
 
-function enumerableKeys(budget: SnapshotBudget, value: object): string[] {
+function enumerableKeys(counters: Counters, value: object): string[] {
     try {
         const keys: string[] = [];
         for (const key in value) {
             if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-            chargeString(budget, key);
+            chargeString(counters, key);
             keys.push(key);
             if (keys.length > MAX_NODES) rejectInput();
         }
         return keys;
-    } catch (e) {
-        if (e instanceof GuardianAuditInputError) throw e;
-        rejectInput();
+    } catch {
+        rethrowArmed();
     }
 }
 
@@ -168,6 +230,12 @@ type SnapshotTask = ValueTask | ArrayTask | ObjectTask;
  * The seen set is the path: a DAG is copied on each visit and a cycle is rejected.
  */
 export function snapshotPlain(value: unknown, budget: SnapshotBudget): unknown {
+    clearArm();
+    return snapshotWalk(value, budget);
+}
+
+function snapshotWalk(value: unknown, budget: SnapshotBudget): unknown {
+    const counters = copyBudget(budget);
     const seen = new Set<object>();
     const holder: { current: unknown } = { current: undefined };
     const stack: SnapshotTask[] = [{
@@ -233,26 +301,26 @@ export function snapshotPlain(value: unknown, budget: SnapshotBudget): unknown {
             continue;
         }
         if (task.value === null || typeof task.value === 'boolean' || typeof task.value === 'number' || typeof task.value === 'bigint') {
-            chargeNodes(budget, 1);
+            chargeNodes(counters, 1);
             task.apply(task.value);
             continue;
         }
         if (typeof task.value === 'string') {
-            chargeNodes(budget, 1);
-            chargeString(budget, task.value);
+            chargeNodes(counters, 1);
+            chargeString(counters, task.value);
             task.apply(task.value);
             continue;
         }
         if (typeof task.value === 'function') {
-            chargeNodes(budget, 1);
+            chargeNodes(counters, 1);
             task.apply(task.value);
             continue;
         }
         if (typeof task.value !== 'object') rejectInput();
-        chargeNodes(budget, 1);
+        chargeNodes(counters, 1);
         if (Array.isArray(task.value)) {
             const length = arrayLength(task.value);
-            if (budget.nodes + length > MAX_NODES) rejectInput();
+            if (counters.nodes + length > MAX_NODES) rejectInput();
             if (seen.has(task.value)) rejectInput();
             seen.add(task.value);
             const out = new Array<unknown>(length);
@@ -264,17 +332,18 @@ export function snapshotPlain(value: unknown, budget: SnapshotBudget): unknown {
         try {
             proto = Object.getPrototypeOf(task.value);
         } catch {
-            rejectInput();
+            rethrowArmed();
         }
         if (proto !== Object.prototype && proto !== null) rejectInput();
-        const keys = enumerableKeys(budget, task.value);
-        if (budget.nodes + keys.length > MAX_NODES) rejectInput();
+        const keys = enumerableKeys(counters, task.value);
+        if (counters.nodes + keys.length > MAX_NODES) rejectInput();
         if (seen.has(task.value)) rejectInput();
         seen.add(task.value);
         const out = Object.create(null) as Record<string, unknown>;
         task.apply(out);
         stack.push({ op: 'object', source: task.value, out, keys, index: 0, depth: task.depth });
     }
+    commitBudget(budget, counters);
     return holder.current;
 }
 
@@ -286,7 +355,12 @@ type Frame =
     | { op: 'object'; keys: string[]; index: number; depth: number; ref: object; comma: boolean };
 
 function plainObject(value: object): boolean {
-    const proto = Object.getPrototypeOf(value);
+    let proto: object | null;
+    try {
+        proto = Object.getPrototypeOf(value);
+    } catch {
+        rethrowArmed();
+    }
     return proto === Object.prototype || proto === null;
 }
 
@@ -304,9 +378,8 @@ function readOwn(value: object, key: string): unknown {
         if ('value' in desc) return desc.value;
         if (typeof desc.get === 'function') return desc.get.call(value);
         return undefined;
-    } catch (e) {
-        if (e instanceof GuardianAuditInputError) throw e;
-        rejectInput();
+    } catch {
+        rethrowArmed();
     }
 }
 
@@ -316,7 +389,8 @@ function readOwn(value: object, key: string): unknown {
  * A real surrogate pair is 4 bytes.
  */
 export function exceedsUtf8Bytes(text: string, max: number): boolean {
-    if (typeof text !== 'string' || typeof max !== 'number') rejectInput();
+    if (typeof text !== 'string' || typeof max !== 'number' || !Number.isSafeInteger(max) || max < 0) rejectInput();
+    const limit = max;
     let bytes = 0;
     for (let i = 0; i < text.length; i++) {
         const c = text.charCodeAt(i);
@@ -331,12 +405,13 @@ export function exceedsUtf8Bytes(text: string, max: number): boolean {
             } else n = 3;
         } else n = 3;
         bytes += n;
-        if (bytes > max) return true;
+        if (bytes > limit) return true;
     }
     return false;
 }
 
 export function canonicalJson(value: unknown): string {
+    clearArm();
     return encodeCanonical(snapshotPlain(value, { nodes: 0, bytes: 0 }));
 }
 
@@ -349,11 +424,11 @@ function encodeCanonical(value: unknown): string {
 
     const charge = (n: number): void => {
         nodes += n;
-        if (nodes > MAX_NODES) throw new Error('canonical: node budget exceeded');
+        if (nodes > MAX_NODES) rejectCanonical('canonical: node budget exceeded');
     };
 
     const push = (part: string): void => {
-        if (exceedsUtf8Bytes(part, MAX_EVIDENCE_FILE_BYTES - bytes)) throw new Error('canonical: output too large');
+        if (exceedsUtf8Bytes(part, MAX_EVIDENCE_FILE_BYTES - bytes)) rejectCanonical('canonical: output too large');
         bytes += utf8Count(part);
         parts.push(part);
     };
@@ -363,7 +438,7 @@ function encodeCanonical(value: unknown): string {
         for (const key in obj) {
             if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
             charge(1);
-            if (key.length > MAX_STRING) throw new Error('canonical: string too long');
+            if (key.length > MAX_STRING) rejectCanonical('canonical: string too long');
             keys.push(key);
         }
         keys.sort(cmpKey);
@@ -371,39 +446,39 @@ function encodeCanonical(value: unknown): string {
     };
 
     const write = (v: unknown, depth: number): void => {
-        if (depth > MAX_NODES) throw new Error('canonical: depth budget exceeded');
-        if (v === undefined) throw new Error('canonical: undefined value');
+        if (depth > MAX_NODES) rejectCanonical('canonical: depth budget exceeded');
+        if (v === undefined) rejectCanonical('canonical: undefined value');
         if (v === null) {
             push('null');
             return;
         }
         switch (typeof v) {
             case 'string':
-                if (v.length > MAX_STRING) throw new Error('canonical: string too long');
+                if (v.length > MAX_STRING) rejectCanonical('canonical: string too long');
                 push(JSON.stringify(HEX_RE.test(v) ? v.toLowerCase() : v));
                 return;
             case 'boolean':
                 push(v ? 'true' : 'false');
                 return;
             case 'number':
-                if (!Number.isSafeInteger(v)) throw new Error('canonical: number must be a safe integer');
+                if (!Number.isSafeInteger(v)) rejectCanonical('canonical: number must be a safe integer');
                 push(Object.is(v, -0) ? '0' : String(v));
                 return;
             case 'bigint': {
                 const mag = v < 0n ? -v : v;
-                if ((mag >> BigInt(MAX_BIGINT_BITS)) !== 0n) throw new Error('canonical: bigint too long');
+                if ((mag >> BigInt(MAX_BIGINT_BITS)) !== 0n) rejectCanonical('canonical: bigint too long');
                 push(JSON.stringify(v.toString(10)));
                 return;
             }
             case 'function':
             case 'symbol':
-                throw new Error('canonical: unsupported value');
+                rejectCanonical('canonical: unsupported value');
             case 'object':
                 break;
             default:
-                throw new Error('canonical: unsupported value');
+                rejectCanonical('canonical: unsupported value');
         }
-        if (seen.has(v)) throw new Error('canonical: cycle');
+        if (seen.has(v)) rejectCanonical('canonical: cycle');
         if (Array.isArray(v)) {
             const length = v.length;
             charge(length);
@@ -412,7 +487,7 @@ function encodeCanonical(value: unknown): string {
             stack.push({ op: 'array', source: v, length, index: 0, depth, ref: v, comma: false });
             return;
         }
-        if (!plainObject(v)) throw new Error('canonical: unsupported value');
+        if (!plainObject(v)) rejectCanonical('canonical: unsupported value');
         const keys = ownKeys(v);
         seen.add(v);
         push('{');
@@ -431,7 +506,7 @@ function encodeCanonical(value: unknown): string {
             }
             const el = readOwn(frame.source, String(frame.index));
             frame.index += 1;
-            if (el === undefined) throw new Error('canonical: undefined array element');
+            if (el === undefined) rejectCanonical('canonical: undefined array element');
             if (frame.comma) push(',');
             frame.comma = true;
             stack.push(frame);

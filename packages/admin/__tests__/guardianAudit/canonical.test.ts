@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalJson } from '../../src/guardianAudit/canonical';
+import { GuardianAuditInputError, canonicalJson, exceedsUtf8Bytes, snapshotPlain } from '../../src/guardianAudit/canonical';
+import { validateRuleset } from '../../src/guardianAudit/rules';
 
 describe('guardian-audit canonical json (unit, not acceptance)', () => {
     it('sorts object keys by UTF-16 code unit and omits undefined properties', () => {
@@ -130,4 +131,70 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
         for (let i = 0; i < 12; i++) obj[`n${i}`] = blob;
         expect(() => canonicalJson(obj)).toThrow(/^canonical: output too large$/);
     }, 120_000);
+
+    it('rejects a non-integer byte limit and a NaN node budget', () => {
+        expect(() => exceedsUtf8Bytes('abc', Number.NaN)).toThrow(/^input rejected$/);
+        expect(() => exceedsUtf8Bytes('abc', Number.POSITIVE_INFINITY)).toThrow(/^input rejected$/);
+        expect(() => exceedsUtf8Bytes('abc', -1)).toThrow(/^input rejected$/);
+        expect(exceedsUtf8Bytes('abc', 2)).toBe(true);
+        expect(exceedsUtf8Bytes('abc', 3)).toBe(false);
+        const huge = Array<number>(1_000_001).fill(0);
+        expect(() => snapshotPlain(huge, { nodes: Number.NaN, bytes: Number.NaN })).toThrow(/^input rejected$/);
+        expect(() => snapshotPlain(huge, { nodes: 0, bytes: 0 })).toThrow(/^input rejected$/);
+        let reads = 0;
+        const budget = {} as { nodes: number; bytes: number };
+        Object.defineProperty(budget, 'nodes', {
+            configurable: true,
+            get() { reads += 1; return 0; },
+            set() { /* write-back must not read */ },
+        });
+        Object.defineProperty(budget, 'bytes', {
+            configurable: true,
+            get() { reads += 1; return 0; },
+            set() { /* write-back must not read */ },
+        });
+        expect(snapshotPlain({ a: 1 }, budget)).toEqual({ a: 1 });
+        expect(reads).toBe(2);
+        const shared = { nodes: 0, bytes: 0 };
+        snapshotPlain({ a: 1 }, shared);
+        expect(shared.nodes).toBeGreaterThan(0);
+        expect(shared.bytes).toBeGreaterThan(0);
+    });
+
+    it('replaces a foreign GuardianAuditInputError and a prototype-trap proxy with a fresh input error', () => {
+        const secret = 'https://secret/token';
+        const planted = new GuardianAuditInputError();
+        planted.message = secret;
+        (planted as { cause?: unknown }).cause = new Error(secret);
+        const trap = new Error(secret);
+        (trap as { cause?: unknown }).cause = new Error(secret);
+        const proxy = new Proxy(trap, { getPrototypeOf() { throw trap; } });
+        const assertFresh = (run: () => unknown): void => {
+            try {
+                run();
+                throw new Error('expected rejection');
+            } catch (e) {
+                const err = e as Error & { cause?: unknown };
+                const causeText = err.cause instanceof Error ? `${err.cause.message} ${err.cause.stack ?? ''}` : String(err.cause ?? '');
+                expect(`${err.name} ${err.message} ${err.stack ?? ''} ${causeText}`).not.toContain('secret');
+                expect(err.message).toBe('input rejected');
+                expect(err.cause).toBeUndefined();
+            }
+        };
+        const viaKeys = (thrown: unknown): object => new Proxy({ a: 1 }, { ownKeys() { throw thrown; } });
+        assertFresh(() => canonicalJson(viaKeys(planted)));
+        assertFresh(() => validateRuleset(viaKeys(planted)));
+        assertFresh(() => canonicalJson(viaKeys(proxy)));
+        assertFresh(() => validateRuleset(viaKeys(proxy)));
+        const box: Record<string, unknown> = {};
+        Object.defineProperty(box, 'a', { enumerable: true, get() { throw planted; } });
+        assertFresh(() => canonicalJson(box));
+        const hostile = {} as { nodes: number; bytes: number };
+        Object.defineProperty(hostile, 'nodes', { get() { throw planted; } });
+        Object.defineProperty(hostile, 'bytes', { get() { return 0; } });
+        assertFresh(() => snapshotPlain({ a: 1 }, hostile));
+        const setter = { nodes: 0, bytes: 0 };
+        Object.defineProperty(setter, 'bytes', { configurable: true, get() { return 0; }, set() { throw proxy; } });
+        assertFresh(() => snapshotPlain({ a: 1 }, setter));
+    });
 });

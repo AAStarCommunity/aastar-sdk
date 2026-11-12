@@ -109,6 +109,8 @@ const PUBLIC_FN_KEYS = ['events', 'flag', 'reason', 'flagIfCallAlsoEmits', 'also
 const MAX_RULE_KEYS = 64;
 const MAX_REASON = 1024;
 const MAX_SOURCE = 256;
+/** Symbolic role names. Hex-shaped names would collapse under canonical lower-casing and still compare case-sensitively. */
+const ROLE_NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
 
 /** Stop listing keys once the ruleset is past the cap. A million allowed keys never gets walked. */
 function ownKeys(obj: object): string[] {
@@ -220,6 +222,7 @@ export function validateRuleset(input: unknown): Ruleset {
         }
         only(e, EXPECTED_KEYS, 'bls.GENERIC.expected');
         shortText(e.target, 'bls.GENERIC.expected.target', 64);
+        if (!ROLE_NAME_RE.test(e.target)) throw new Error('ruleset: bls.GENERIC.expected.target invalid');
         shortText(e.signature, 'bls.GENERIC.expected.signature', 256);
         if (selectorOf(e.signature) === null) throw new Error('ruleset: bad signature');
         assertFlag(e, 'bls.GENERIC.expected', true);
@@ -290,6 +293,7 @@ function assertRoleMap(roles: unknown): Record<string, string> {
     if (!isRecord(roles)) throw new Error('roles missing');
     for (const key in roles) {
         if (!Object.hasOwn(roles, key)) continue;
+        if (!ROLE_NAME_RE.test(key)) throw new Error('role name is invalid');
         const value = ownValue(roles, key);
         if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/i.test(value)) throw new Error('role address is invalid');
         try {

@@ -310,7 +310,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
     });
 
     it('treats prototype names as unlisted or unknown', () => {
-        for (const name of ['constructor', 'toString', '__proto__']) {
+        for (const name of ['constructor', 'toString']) {
             const owner = evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: name });
             expect(owner.flagged).toBe(true);
             expect(owner.rule).toBe('ownerRoute.unlisted');
@@ -322,6 +322,15 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             expect(matchGeneric(custom, roles, SP, priceCall)).toBeNull();
             expect(evaluate(custom, roles, bls('GENERIC', { target: SP, callData: priceCall })).rule).toBe('bls.GENERIC.unexpected');
         }
+        const ownerProto = evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: '__proto__' });
+        expect(ownerProto.flagged).toBe(true);
+        expect(ownerProto.rule).toBe('ownerRoute.unlisted');
+        const kindProto = evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: '__proto__' });
+        expect(kindProto.flagged).toBe(true);
+        expect(kindProto.rule).toBe('bls.unknown');
+        const proto = structuredClone(DEFAULT_RULESET);
+        proto.bls.GENERIC.expected[0]!.target = '__proto__';
+        expect(() => validateRuleset(proto)).toThrow(/^ruleset: bls\.GENERIC\.expected\.target invalid$/);
     });
 
     it('requires an event on the unattributed route and rejects a duplicate selector', () => {
@@ -406,5 +415,20 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             route: 'public',
             selector: update,
         })).toThrow(/^role address is invalid$/);
+    });
+
+    it('rejects hex-shaped role names so one digest cannot name two verdicts', () => {
+        const withTarget = (name: string) => {
+            const rs = structuredClone(DEFAULT_RULESET);
+            rs.bls.GENERIC.expected[0]!.target = name;
+            return rs;
+        };
+        expect(() => validateRuleset(withTarget('0xAB'))).toThrow(/^ruleset: bls\.GENERIC\.expected\.target invalid$/);
+        expect(() => validateRuleset(withTarget('0xab'))).toThrow(/^ruleset: bls\.GENERIC\.expected\.target invalid$/);
+        expect(() => rulesetId(withTarget('0xAB'))).toThrow(/^ruleset: bls\.GENERIC\.expected\.target invalid$/);
+        expect(() => evaluate(DEFAULT_RULESET, { '0xAB': SP, '0xab': OTHER }, bls('GENERIC', {
+            target: SP, callData: priceCall,
+        }))).toThrow(/^role name is invalid$/);
+        expect(rulesetId(DEFAULT_RULESET).digest).toBe('0x955722cbb9d0467aef9bdebc2880dd3d97af87c824978cff4a9498367eb429a4');
     });
 });
