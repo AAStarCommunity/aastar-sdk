@@ -1041,7 +1041,7 @@ export class PaymasterClient {
         const opts: WaitForUserOperationResultOptions = typeof options === 'number' ? { timeout: options } : options;
         const timeout = opts.timeout ?? 180000;
         const receipt = await bundlerClient.waitForUserOperationReceipt({ hash, timeout });
-        const result = readUserOperationResult(receipt, hash);
+        const result = readUserOperationResult(receipt, hash, opts.entryPoint);
         if (opts.throwOnFailure && result.success === false) throw new UserOperationFailedError(result);
         return result;
     }

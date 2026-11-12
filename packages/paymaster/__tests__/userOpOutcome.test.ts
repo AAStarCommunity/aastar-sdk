@@ -70,7 +70,7 @@ function revertedBundle() {
 
 describe('readUserOperationResult', () => {
     it('decodes the UserOperationEvent for this hash, not the first log and not the tx status', () => {
-        const result = readUserOperationResult(revertedBundle(), HASH);
+        const result = readUserOperationResult(revertedBundle(), HASH, EP);
         expect(result.success).toBe(false);
         expect(result.userOpHash).toBe(HASH);
         expect(result.transactionHash).toBe(TX);
@@ -140,9 +140,75 @@ describe('readUserOperationResult', () => {
     });
 
     it('throws when nothing identifies this op, even if the transaction status is success', () => {
-        const receipt = { status: 'success', transactionHash: TX, logs: [userOpEvent(OTHER_HASH, true, 1n, 1n)] };
+        const receipt = {
+            entryPoint: EP,
+            status: 'success',
+            transactionHash: TX,
+            logs: [userOpEvent(OTHER_HASH, true, 1n, 1n)],
+        };
         expect(() => readUserOperationResult(receipt, HASH)).toThrow(UserOperationReceiptError);
         expect(() => readUserOperationResult(receipt, HASH)).toThrow(/no boolean success and no matching UserOperationEvent/);
+    });
+
+    it('rejects a receipt whose userOpHash is a different operation', () => {
+        const other = {
+            userOpHash: OTHER_HASH,
+            success: true,
+            actualGasCost: 1n,
+            actualGasUsed: 2n,
+            receipt: { transactionHash: TX },
+        };
+        expect(() => readUserOperationResult(other, HASH)).toThrow(UserOperationReceiptError);
+        expect(() => readUserOperationResult(other, HASH)).toThrow(new RegExp(OTHER_HASH));
+
+        const mixed = ('0x' + 'ab'.repeat(32)) as Hex;
+        const same = {
+            userOpHash: ('0x' + 'AB'.repeat(32)) as Hex,
+            success: true,
+            actualGasCost: 1n,
+            actualGasUsed: 2n,
+            receipt: { transactionHash: TX },
+        };
+        expect(readUserOperationResult(same, mixed).success).toBe(true);
+        expect(readUserOperationResult(same, mixed).userOpHash).toBe(mixed);
+    });
+
+    it('does not accept a UserOperationEvent from an arbitrary contract on a raw receipt', () => {
+        const spoofed = {
+            status: 'success' as const,
+            transactionHash: TX,
+            logs: [
+                userOpEvent(HASH, true, 9n, 9n, OTHER),
+                revertEvent(HASH, '0xdead' as Hex, OTHER),
+            ],
+        };
+        expect(() => readUserOperationResult(spoofed, HASH)).toThrow(/no EntryPoint address/);
+        expect(() => readUserOperationResult(spoofed, HASH, EP)).toThrow(/no matching UserOperationEvent/);
+
+        const result = readUserOperationResult({
+            transactionHash: TX,
+            logs: [
+                userOpEvent(HASH, true, 9n, 9n, OTHER),
+                revertEvent(HASH, '0xdead' as Hex, OTHER),
+                userOpEvent(HASH, false, 3n, 4n, EP),
+                revertEvent(HASH, REVERT_DATA, EP),
+            ],
+        }, HASH, EP);
+        expect(result.success).toBe(false);
+        expect(result.actualGasCost).toBe(3n);
+        expect(result.actualGasUsed).toBe(4n);
+        expect(result.revertReason).toBe(REVERT_DATA);
+    });
+
+    it('rejects an entryPoint argument that disagrees with the receipt', () => {
+        const receipt = {
+            entryPoint: EP,
+            success: true,
+            actualGasCost: 1n,
+            actualGasUsed: 2n,
+            receipt: { transactionHash: TX },
+        };
+        expect(() => readUserOperationResult(receipt, HASH, OTHER)).toThrow(/does not match the entryPoint argument/);
     });
 });
 
@@ -152,14 +218,14 @@ describe('PaymasterClient.waitForUserOperationResult', () => {
         const client = {
             waitForUserOperationReceipt: async () => raw,
         };
-        const result = await PaymasterClient.waitForUserOperationResult(client, HASH);
+        const result = await PaymasterClient.waitForUserOperationResult(client, HASH, { entryPoint: EP });
         expect(result.success).toBe(false);
         expect(result.actualGasCost).toBe(7298n);
 
-        await expect(PaymasterClient.waitForUserOperationResult(client, HASH, { throwOnFailure: true }))
+        await expect(PaymasterClient.waitForUserOperationResult(client, HASH, { throwOnFailure: true, entryPoint: EP }))
             .rejects.toBeInstanceOf(UserOperationFailedError);
         try {
-            await PaymasterClient.waitForUserOperationResult(client, HASH, { throwOnFailure: true });
+            await PaymasterClient.waitForUserOperationResult(client, HASH, { throwOnFailure: true, entryPoint: EP });
         } catch (error) {
             const failed = error as UserOperationFailedError;
             expect(failed.success).toBe(false);

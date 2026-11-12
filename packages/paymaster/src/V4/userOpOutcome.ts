@@ -29,6 +29,11 @@ export type WaitForUserOperationResultOptions = {
      * the result. Default false: the caller inspects `success`.
      */
     throwOnFailure?: boolean;
+    /**
+     * EntryPoint that emitted the logs. Required for a raw transaction receipt, which has no
+     * `entryPoint` field. Ignored when the receipt already carries the same address.
+     */
+    entryPoint?: Address;
 };
 
 /** Included UserOperation whose inner call reverted. Gas was still charged. */
@@ -262,15 +267,38 @@ function decodeLog(log: any): { eventName: string; args: any } | undefined {
 }
 
 /**
- * Every `UserOperationEvent` in the receipt whose `userOpHash` is this op. A log for a different
- * hash is ignored — a bundle receipt's first event belongs to someone else. Logs from a contract
- * other than `receipt.entryPoint` are ignored when that field is set.
+ * EntryPoint the logs must come from: the receipt's own field, or the address the caller passed
+ * for a raw transaction receipt. The two may not disagree. A missing address is not a licence to
+ * read logs from whatever contract emitted them.
  */
-function matchingUserOpEvents(receipt: any, userOpHash: Hex): DecodedUserOpEvent[] {
-    const entryPoint = isHex(receipt?.entryPoint, 20) ? receipt.entryPoint.toLowerCase() : undefined;
+function trustedEntryPoint(receipt: any, explicit: Address | undefined): string | undefined {
+    const fromReceipt = isHex(receipt?.entryPoint, 20) ? receipt.entryPoint.toLowerCase() : undefined;
+    if (explicit === undefined) return fromReceipt;
+    if (!isHex(explicit, 20)) {
+        throw new UserOperationReceiptError(`entryPoint argument is not an address: ${String(explicit)}`);
+    }
+    const fromArg = explicit.toLowerCase();
+    if (fromReceipt && fromReceipt !== fromArg) {
+        throw new UserOperationReceiptError(
+            `receipt.entryPoint ${receipt.entryPoint} does not match the entryPoint argument ${explicit}`
+        );
+    }
+    return fromReceipt ?? fromArg;
+}
+
+function emittedByEntryPoint(log: any, entryPoint: string): boolean {
+    return isHex(log?.address, 20) && log.address.toLowerCase() === entryPoint;
+}
+
+/**
+ * Every `UserOperationEvent` in the receipt whose `userOpHash` is this op and whose emitter is
+ * the trusted EntryPoint. A log for a different hash, or from any other contract, is ignored.
+ */
+function matchingUserOpEvents(receipt: any, userOpHash: Hex, entryPoint: string | undefined): DecodedUserOpEvent[] {
+    if (!entryPoint) return [];
     const found: DecodedUserOpEvent[] = [];
     for (const log of collectLogs(receipt)) {
-        if (entryPoint && isHex(log?.address, 20) && log.address.toLowerCase() !== entryPoint) continue;
+        if (!emittedByEntryPoint(log, entryPoint)) continue;
         const decoded = decodeLog(log);
         if (!decoded || decoded.eventName !== 'UserOperationEvent') continue;
         const args = decoded.args as DecodedUserOpEvent;
@@ -293,11 +321,11 @@ function sameEvent(a: DecodedUserOpEvent, b: DecodedUserOpEvent): boolean {
         && eqHex(a.paymaster, b.paymaster);
 }
 
-function matchingRevertReason(receipt: any, userOpHash: Hex): Hex | undefined {
-    const entryPoint = isHex(receipt?.entryPoint, 20) ? receipt.entryPoint.toLowerCase() : undefined;
+function matchingRevertReason(receipt: any, userOpHash: Hex, entryPoint: string | undefined): Hex | undefined {
+    if (!entryPoint) return undefined;
     let found: Hex | undefined;
     for (const log of collectLogs(receipt)) {
-        if (entryPoint && isHex(log?.address, 20) && log.address.toLowerCase() !== entryPoint) continue;
+        if (!emittedByEntryPoint(log, entryPoint)) continue;
         const decoded = decodeLog(log);
         if (!decoded || decoded.eventName !== 'UserOperationRevertReason') continue;
         const args = decoded.args as { userOpHash?: Hex; revertReason?: Hex };
@@ -322,16 +350,37 @@ function exposedSuccess(receipt: any): boolean | undefined {
 
 /**
  * Read one UserOperation out of a bundler userOp receipt or a raw transaction receipt.
- * Prefers a boolean `success` already on the receipt; otherwise decodes `UserOperationEvent`
- * from {@link EntryPointABI}, matched by `userOpHash`. A log that disagrees with the receipt's
- * own `success` or gas figures is an error, not a silent pick.
+ * A boolean `success` on the receipt is used only when the receipt does not name a different
+ * `userOpHash`. Otherwise `UserOperationEvent` is decoded from {@link EntryPointABI}, and only
+ * logs from the trusted EntryPoint (`receipt.entryPoint`, or `entryPoint` for a raw receipt)
+ * count. A log that disagrees with the receipt's own `success` or gas figures is an error.
  */
-export function readUserOperationResult(receipt: unknown, userOpHash: Hex): UserOperationExecutionResult {
+export function readUserOperationResult(
+    receipt: unknown,
+    userOpHash: Hex,
+    entryPoint?: Address,
+): UserOperationExecutionResult {
     if (!isHex(userOpHash, 32)) {
         throw new UserOperationReceiptError(`userOpHash is not a bytes32: ${String(userOpHash)}`);
     }
     const body = receipt as any;
-    const events = matchingUserOpEvents(body, userOpHash);
+    // A bundler receipt is for one op. Trusting its `success` while labelling the result with a
+    // different hash reports the wrong operation.
+    if (body?.userOpHash != null) {
+        const claimed = body.userOpHash;
+        if (typeof claimed !== 'string' || !/^0x[0-9a-fA-F]{64}$/i.test(claimed) || !eqHex(claimed, userOpHash)) {
+            throw new UserOperationReceiptError(
+                `Receipt is for userOpHash ${String(claimed)}, not ${userOpHash}`
+            );
+        }
+    }
+    const trusted = trustedEntryPoint(body, entryPoint);
+    if (collectLogs(body).length > 0 && !trusted) {
+        throw new UserOperationReceiptError(
+            `UserOperation ${userOpHash} receipt has logs but no EntryPoint address; pass entryPoint to decode a raw transaction receipt`
+        );
+    }
+    const events = matchingUserOpEvents(body, userOpHash, trusted);
     const unique = events.filter((event, index) => events.findIndex((other) => sameEvent(event, other)) === index);
     if (unique.length > 1) {
         throw new UserOperationReceiptError(
@@ -392,7 +441,7 @@ export function readUserOperationResult(receipt: unknown, userOpHash: Hex): User
         paymaster,
         nonce,
         reason,
-        revertReason: matchingRevertReason(body, userOpHash),
+        revertReason: matchingRevertReason(body, userOpHash, trusted),
         receipt,
     };
 }

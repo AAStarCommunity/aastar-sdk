@@ -340,14 +340,17 @@ describe('PaymasterClient × SP 5.5.0: bundler -32503 is a typed not-yet-valid e
         expect((err.cause as Error).message).toContain('expires too soon');
     });
 
-    it('estimate path: -32503 is thrown before Anvil defaults and before send', async () => {
+    it('estimate path: -32503 is thrown before Anvil defaults and before send, and releases the slot', async () => {
+        let rejectEstimate = true;
         const { submit, calls } = harness(async (method) => {
-            if (method === 'eth_estimateUserOperationGas') return { error: NOT_YET };
+            if (method === 'eth_estimateUserOperationGas') return rejectEstimate ? { error: NOT_YET } : ESTIMATE;
             return { result: OP_HASH };
         });
         const err = await capture(submit);
         expect(err.secondsToWait).toBe(59n);
         expect(calls.map((c) => c.method)).toEqual(['eth_estimateUserOperationGas']);
+        rejectEstimate = false;
+        await expect(submit()).resolves.toBe(OP_HASH);
     });
 
     it('a different bundler code stays a Bundler Error', async () => {
