@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, type Address, type Hex } from 'viem';
-import { attributeTx, type CallHop, type LogAttribution } from '../../src/guardianAudit/attribute';
+import { attributeTx, MEASURE_BYTES, MEASURE_NODES, measure, type CallHop, type LogAttribution } from '../../src/guardianAudit/attribute';
 
 const EOA = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SAFE = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -508,5 +508,48 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         );
         expect(Date.now() - started).toBeLessThan(2_000);
         expect(res).toEqual({ aligned: false, why: 'trace too large' });
+    });
+
+    it('rejects a 300000-property object after O(budget) property reads', () => {
+        let reads = 0;
+        const obj: Record<string, unknown> = {};
+        for (let i = 0; i < 300_000; i++) {
+            Object.defineProperty(obj, `k${i}`, {
+                enumerable: true,
+                configurable: true,
+                get() {
+                    reads += 1;
+                    return null;
+                },
+            });
+        }
+        const keys = Object.keys;
+        const entries = Object.entries;
+        const ownKeys = Reflect.ownKeys;
+        const trap = () => {
+            throw new Error('ownKeys');
+        };
+        Object.keys = trap as typeof Object.keys;
+        Object.entries = trap as typeof Object.entries;
+        Reflect.ownKeys = trap as typeof Reflect.ownKeys;
+        try {
+            const started = Date.now();
+            const ok = measure(obj, { nodes: 1, bytes: MEASURE_BYTES });
+            expect(Date.now() - started).toBeLessThan(1_000);
+            expect(ok).toBe(false);
+            expect(reads).toBeLessThanOrEqual(8);
+        } finally {
+            Object.keys = keys;
+            Object.entries = entries;
+            Reflect.ownKeys = ownKeys;
+        }
+    });
+
+    it('charges a 10 MB property name against the byte budget', () => {
+        const key = 'k'.repeat(10 * 1024 * 1024);
+        const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+        expect(measure({ [key]: null }, budget)).toBe(false);
+        expect(budget.bytes).toBe(MEASURE_BYTES - key.length);
+        expect(budget.bytes).toBeLessThan(0);
     });
 });

@@ -4,25 +4,44 @@ import type { Attributor, FoundAction } from './scan.js';
 
 const TRACE_OPTS = { tracer: 'callTracer', tracerConfig: { withLog: true } } as const;
 
+/** Messages longer than this are ignored. They are never sliced, joined, or passed to a regex. */
+const CLASSIFY_MESSAGE_MAX = 512;
+const UNSUPPORTED_RE = /(method|namespace)\b.{0,60}\b(not found|does not exist|not available|not supported|unsupported|disabled|not allowed)|unknown tracer|tracer\b.{0,30}\bnot (found|supported)/i;
+
 /**
  * The node has no `debug_traceTransaction` / callTracer (not a transient failure).
  * -32601 method not found, -32600 invalid request (tracer config rejected).
+ * Reads only a numeric `code` (`code`, `error.code`, `info.error.code`, `cause.code` up to 3
+ * levels) and a `message` / `shortMessage` whose length is at most {@link CLASSIFY_MESSAGE_MAX}.
  * The message is only classified here — it never becomes part of a reason.
  */
 function traceUnsupported(e: unknown): boolean {
-    const o = (e ?? {}) as {
-        error?: { code?: unknown; message?: unknown };
-        info?: { error?: { code?: unknown; message?: unknown } };
-        code?: unknown;
-        shortMessage?: unknown;
-        message?: unknown;
-    };
-    const codes = [o.error?.code, o.info?.error?.code, o.code];
-    if (codes.includes(-32601) || codes.includes(-32600)) return true;
-    const msg = [o.error?.message, o.info?.error?.message, o.shortMessage, o.message]
-        .filter((x): x is string => typeof x === 'string')
-        .join(' ');
-    return /(method|namespace)\b.{0,60}\b(not found|does not exist|not available|not supported|unsupported|disabled|not allowed)|unknown tracer|tracer\b.{0,30}\bnot (found|supported)/i.test(msg);
+    if (!e || typeof e !== 'object') return false;
+    const root = e as Record<string, unknown>;
+    const objs: Record<string, unknown>[] = [root];
+    if (root.error && typeof root.error === 'object') objs.push(root.error as Record<string, unknown>);
+    const info = root.info;
+    if (info && typeof info === 'object') {
+        const infoError = (info as Record<string, unknown>).error;
+        if (infoError && typeof infoError === 'object') objs.push(infoError as Record<string, unknown>);
+    }
+    let cause: unknown = root.cause;
+    for (let depth = 0; depth < 3 && cause && typeof cause === 'object'; depth++) {
+        const node = cause as Record<string, unknown>;
+        objs.push(node);
+        cause = node.cause;
+    }
+    for (const o of objs) {
+        if (o.code === -32601 || o.code === -32600) return true;
+    }
+    for (const o of objs) {
+        if (shortEnough(o.message) || shortEnough(o.shortMessage)) return true;
+    }
+    return false;
+}
+
+function shortEnough(v: unknown): boolean {
+    return typeof v === 'string' && v.length <= CLASSIFY_MESSAGE_MAX && UNSUPPORTED_RE.test(v);
 }
 
 /** A JSON-RPC error envelope. A reverted call frame carries `error` as a string, not `{ code }`. */
@@ -108,7 +127,12 @@ async function readProvider(rpc: RawRpc, action: FoundAction): Promise<Read> {
     return { ok: true, trace: traceR.v, logs: checked.logs };
 }
 
-/** Attribute a found action from both providers' receipts and callTracer traces. */
+/**
+ * Attribute a found action from both providers' receipts and callTracer traces.
+ *
+ * The decoded JSON is already allocated by the transport, so callers must use a transport with a
+ * response-size cap. This module bounds its own work after decoding.
+ */
 export function traceAttributor(opts: { providers: readonly [RawRpc, RawRpc] }): Attributor {
     const [a, b] = opts.providers;
     return {

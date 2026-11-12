@@ -118,9 +118,10 @@ function missingPos(l: unknown): boolean {
 
 /**
  * One iterative walk of a raw JSON value. Charges 1 node for the value itself, for each array
- * element, and for each object property; charges string length to bytes. `array.length` and the
- * object key count are compared to the remaining node budget before anything is pushed, so a wide
- * array cannot be enqueued while earlier siblings are still pending. Returns false at the first exceed.
+ * element, and for each own property; charges string length and own-property name length to bytes.
+ * `array.length` is compared to the remaining node budget before any element is pushed. Object
+ * properties are visited with `for...in` and an own-property check; a running counter stops at the
+ * remaining node budget, so the key list is never allocated. Returns false at the first exceed.
  * Depth cannot outrun the node budget: every stacked value already spent a node.
  */
 export function measure(value: unknown, budget: { nodes: number; bytes: number }): boolean {
@@ -150,9 +151,18 @@ export function measure(value: unknown, budget: { nodes: number; bytes: number }
             for (let i = 0; i < v.length; i++) st.push(v[i]);
             continue;
         }
-        const keys = Object.keys(v);
-        if (!reserve(keys.length)) return false;
-        for (let i = keys.length - 1; i >= 0; i--) st.push((v as Record<string, unknown>)[keys[i]!]);
+        // Count own properties as they appear. Stop at the remaining node budget instead of
+        // snapshotting every key with Object.keys / Object.entries.
+        let seen = 0;
+        for (const key in v) {
+            if (!Object.prototype.hasOwnProperty.call(v, key)) continue;
+            if (seen === budget.nodes) return false;
+            seen++;
+            budget.bytes -= key.length;
+            if (budget.bytes < 0) return false;
+            budget.nodes -= 1;
+            st.push((v as Record<string, unknown>)[key]);
+        }
     }
     return true;
 }

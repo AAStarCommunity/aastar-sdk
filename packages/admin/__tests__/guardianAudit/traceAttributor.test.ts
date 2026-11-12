@@ -299,4 +299,46 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         expect(reads()).toBeLessThanOrEqual(MEASURE_NODES + 64);
         expect(reads()).toBeLessThan(100_001);
     });
+
+    it('classifies a 10 MB rejection message without matching it', async () => {
+        const huge = `method not found ${'x'.repeat(10 * 1024 * 1024)}`;
+        const { providers } = pair((name, method) => {
+            if (method === 'eth_getTransactionReceipt') return receiptOf();
+            if (name === 'alpha') throw { message: huge, shortMessage: huge, error: { message: huge } };
+            return traceOf();
+        });
+        const exec = RegExp.prototype.exec;
+        let sawLong = false;
+        RegExp.prototype.exec = function (this: RegExp, s: string) {
+            if (typeof s === 'string' && s.length > 512) sawLong = true;
+            return exec.call(this, s);
+        };
+        try {
+            const started = performance.now();
+            const result = await traceAttributor({ providers }).attribute(action());
+            expect(performance.now() - started).toBeLessThan(50);
+            expect(result).toEqual({ ok: false, reason: 'trace read failed on alpha' });
+            expect(sawLong).toBe(false);
+        } finally {
+            RegExp.prototype.exec = exec;
+        }
+    });
+
+    it('reads a numeric cause.code only up to 3 levels', async () => {
+        const nest = (levels: number): unknown => {
+            let node: unknown = { code: -32601 };
+            for (let i = 0; i < levels; i++) node = { cause: node };
+            return node;
+        };
+        const run = async (levels: number) => {
+            const { providers } = pair((name, method) => {
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (name === 'alpha') throw nest(levels);
+                return traceOf();
+            });
+            return traceAttributor({ providers }).attribute(action());
+        };
+        expect(await run(3)).toEqual({ ok: false, reason: 'trace unsupported on alpha' });
+        expect(await run(4)).toEqual({ ok: false, reason: 'trace read failed on alpha' });
+    });
 });

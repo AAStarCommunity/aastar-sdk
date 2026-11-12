@@ -4,6 +4,9 @@ import { numberToHex, type Address, type Hex } from 'viem';
  * EIP-1193 transport. `name` is a provider name for run metadata, never a URL.
  * viem: `{ name, request: client.request }`
  * ethers v6 (not imported): `{ name, request: ({ method, params }) => provider.send(method, params ?? []) }`
+ *
+ * The decoded JSON is already allocated by the transport, so callers must use a transport with a
+ * response-size cap. guardian-audit bounds its own work after decoding.
  */
 export interface RawRpc {
     name: string;
