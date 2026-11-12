@@ -107,19 +107,23 @@ export function traceAttributor(opts: { providers: readonly [RawRpc, RawRpc] }):
     const [a, b] = opts.providers;
     return {
         async attribute(action) {
-            const [ra, rb] = await Promise.all([readProvider(a, action), readProvider(b, action)]);
-            if (!ra.ok) return ra;
-            if (!rb.ok) return rb;
-            const aa = attributeTx(ra.trace, ra.logs);
-            const bb = attributeTx(rb.trace, rb.logs);
-            if (!aa.aligned) return { ok: false, reason: aa.why };
-            if (!bb.aligned) return { ok: false, reason: bb.why };
-            const la = aa.byLogIndex.get(action.logIndex);
-            const lb = bb.byLogIndex.get(action.logIndex);
-            if (!la) return { ok: false, reason: `attribution missing on ${a.name}` };
-            if (!lb) return { ok: false, reason: `attribution missing on ${b.name}` };
-            if (!sameAttribution(la, lb)) return { ok: false, reason: 'providers disagree on attribution' };
-            return { ok: true, attribution: la };
+            try {
+                const [ra, rb] = await Promise.all([readProvider(a, action), readProvider(b, action)]);
+                if (!ra.ok) return ra;
+                if (!rb.ok) return rb;
+                const aa = attributeTx(ra.trace, ra.logs);
+                const bb = attributeTx(rb.trace, rb.logs);
+                if (!aa.aligned) return { ok: false, reason: aa.why };
+                if (!bb.aligned) return { ok: false, reason: bb.why };
+                const la = aa.byLogIndex.get(action.logIndex);
+                const lb = bb.byLogIndex.get(action.logIndex);
+                if (!la) return { ok: false, reason: `attribution missing on ${a.name}` };
+                if (!lb) return { ok: false, reason: `attribution missing on ${b.name}` };
+                if (!sameAttribution(la, lb)) return { ok: false, reason: 'providers disagree on attribution' };
+                return { ok: true, attribution: la };
+            } catch {
+                return { ok: false, reason: 'attribution failed' };
+            }
         },
     };
 }

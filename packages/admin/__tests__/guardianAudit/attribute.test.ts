@@ -444,4 +444,68 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         for (let i = 0; i < receipt.length; i++) receipt[i] = rlog(TARGET, i);
         expect(attributeTx(chatty, receipt)).toEqual({ aligned: false, why: 'trace too large' });
     });
+
+    it('rejects 100001 null children before iterating the calls array', () => {
+        let reads = 0;
+        const calls = new Proxy(Array.from({ length: 100_001 }, () => null), {
+            get(target, prop, recv) {
+                if (typeof prop === 'string' && /^\d+$/.test(prop)) reads += 1;
+                return Reflect.get(target, prop, recv);
+            },
+        });
+        const started = Date.now();
+        const res = attributeTx({ type: 'CALL', from: EOA, to: TARGET, calls }, []);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(res).toEqual({ aligned: false, why: 'trace too large' });
+        expect(reads).toBe(0);
+    });
+
+    it('rejects more than 10000 receipt logs before reading them', () => {
+        let reads = 0;
+        const receipt = new Proxy(new Array(10_001), {
+            get(target, prop, recv) {
+                if (prop === 'length') return 10_001;
+                if (typeof prop === 'string' && /^\d+$/.test(prop)) reads += 1;
+                return Reflect.get(target, prop, recv);
+            },
+        });
+        const res = attributeTx(frame('CALL', EOA, TARGET), receipt as unknown[]);
+        expect(res).toEqual({ aligned: false, why: 'trace too large' });
+        expect(reads).toBe(0);
+    });
+
+    it('rejects a 5000000-byte log data field without throwing', () => {
+        const data = `0x${'ab'.repeat(5_000_000)}`;
+        const started = Date.now();
+        const onTrace = attributeTx(
+            frame('CALL', EOA, TARGET, { logs: [tlog(TARGET, TOPIC, data)] }),
+            [rlog(TARGET, 0)],
+        );
+        const onReceipt = attributeTx(frame('CALL', EOA, TARGET), [rlog(TARGET, 0, TOPIC, data)]);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(onTrace).toEqual({ aligned: false, why: 'trace too large' });
+        expect(onReceipt).toEqual({ aligned: false, why: 'trace too large' });
+    });
+
+    it('rejects odd-length hex data', () => {
+        const trace = frame('CALL', EOA, TARGET, { logs: [tlog(TARGET, TOPIC, '0xabc')] });
+        expect(attributeTx(trace, [rlog(TARGET, 0, TOPIC, '0xabc')])).toEqual({
+            aligned: false,
+            why: 'log 0 differs between trace and receipt',
+        });
+    });
+
+    it('validates megabyte hex data that still fits the byte budget', () => {
+        // Just under 8 MiB, and large enough that the old repeated-capture regex overflows.
+        const data = `0x${'ab'.repeat(4_194_296)}`;
+        expect(data.length).toBe(8_388_594);
+        const log = { address: TARGET, topics: [] as string[], data };
+        const started = Date.now();
+        const res = attributeTx(
+            frame('CALL', EOA, TARGET, { logs: [log] }),
+            [{ address: TARGET, topics: [], data: '0x', logIndex: 0 }],
+        );
+        expect(Date.now() - started).toBeLessThan(2_000);
+        expect(res).toEqual({ aligned: false, why: 'log 0 differs between trace and receipt' });
+    });
 });

@@ -216,4 +216,19 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         const result = await traceAttributor({ providers }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'receipt read failed on alpha' });
     });
+
+    it('turns an exception from attribution into a controlled failure', async () => {
+        const { providers } = pair((_name, method) => {
+            if (method === 'eth_getTransactionReceipt') return receiptOf();
+            const trace = traceOf();
+            Object.defineProperty(trace.logs[0], 'data', {
+                get() {
+                    throw new Error(`boom ${LEAK}`);
+                },
+            });
+            return trace;
+        });
+        const result = await traceAttributor({ providers }).attribute(action());
+        expect(result).toEqual({ ok: false, reason: 'attribution failed' });
+    });
 });

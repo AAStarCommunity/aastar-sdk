@@ -39,12 +39,15 @@ type FrameType = typeof FRAME_TYPES[number];
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const TOPIC_RE = /^0x[0-9a-fA-F]{64}$/;
-const DATA_RE = /^0x([0-9a-fA-F]{2})*$/;
+/** Flat scan. A repeated `{2}` capture overflows the regex stack on megabyte data. */
+const DATA_RE = /^0x[0-9a-fA-F]*$/;
 /** One deeper than the EVM's 1024 call frames. A real trace cannot exceed this. */
 const MAX_TRACE_DEPTH = 1025;
 /** Stop a wide or chatty trace before path materialization can blow up. */
 const MAX_FRAMES = 100_000;
 const MAX_LOGS = 10_000;
+/** Cumulative `data` + `topics` bytes across the trace and the receipt, before any normalization. */
+const MAX_LOG_BYTES = 8 * 1024 * 1024;
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 
 function lc(v: unknown): string {
@@ -94,7 +97,7 @@ function validLog(l: unknown): l is { address: string; topics: string[]; data: s
     return typeof o.address === 'string' && ADDR_RE.test(o.address)
         && Array.isArray(o.topics) && o.topics.length <= 4
         && o.topics.every((t) => typeof t === 'string' && TOPIC_RE.test(t))
-        && typeof o.data === 'string' && DATA_RE.test(o.data);
+        && typeof o.data === 'string' && o.data.length % 2 === 0 && DATA_RE.test(o.data);
 }
 
 export function sameLog(t: unknown, r: unknown): boolean {
@@ -112,7 +115,8 @@ function missingPos(l: unknown): boolean {
 
 /**
  * Iterative. `calls` / `logs`, when present, must be arrays — an object with `length` is not a trace.
- * Reverted subtrees still count toward the depth and size caps: they are part of the payload.
+ * Every child counts as a frame, including null and other non-objects. A `calls` array longer than
+ * the remaining frame budget is rejected before any child is visited. Reverted subtrees still count.
  */
 function traceShape(trace: unknown): string | null {
     let frames = 0;
@@ -120,9 +124,9 @@ function traceShape(trace: unknown): string | null {
     const st: [unknown, number][] = [[trace, 1]];
     while (st.length) {
         const [f, d] = st.pop()!;
-        if (!f || typeof f !== 'object') continue;
         frames++;
         if (frames > MAX_FRAMES) return 'trace too large';
+        if (!f || typeof f !== 'object') return 'trace frame malformed';
         if (d > MAX_TRACE_DEPTH) return 'trace deeper than 1025';
         const o = f as Record<string, unknown>;
         if (o.calls !== undefined && o.calls !== null && !Array.isArray(o.calls)) return 'trace calls are not an array';
@@ -131,9 +135,47 @@ function traceShape(trace: unknown): string | null {
             logs += o.logs.length;
             if (logs > MAX_LOGS) return 'trace too large';
         }
-        if (Array.isArray(o.calls)) for (const c of o.calls) st.push([c, d + 1]);
+        if (Array.isArray(o.calls)) {
+            if (o.calls.length > MAX_FRAMES - frames) return 'trace too large';
+            for (const c of o.calls) st.push([c, d + 1]);
+        }
     }
     return null;
+}
+
+/** Lengths only. Does not lowercase or run the data regex. */
+function exceedsLogBytes(trace: unknown, receiptLogs: unknown[]): boolean {
+    let used = 0;
+    const take = (logs: unknown): boolean => {
+        if (!Array.isArray(logs)) return false;
+        for (const l of logs) {
+            if (l === null || typeof l !== 'object') continue;
+            const o = l as Record<string, unknown>;
+            if (typeof o.data === 'string') {
+                used += o.data.length;
+                if (used > MAX_LOG_BYTES) return true;
+            }
+            if (Array.isArray(o.topics)) {
+                for (const t of o.topics) {
+                    if (typeof t !== 'string') continue;
+                    used += t.length;
+                    if (used > MAX_LOG_BYTES) return true;
+                }
+            }
+        }
+        return false;
+    };
+    const st: unknown[] = [trace];
+    while (st.length) {
+        const f = st.pop();
+        if (!f || typeof f !== 'object') continue;
+        const o = f as Record<string, unknown>;
+        if (take(o.logs)) return true;
+        if (Array.isArray(o.calls)) {
+            for (let i = 0; i < o.calls.length; i++) st.push(o.calls[i]);
+        }
+    }
+    return take(receiptLogs);
 }
 
 /** Shared ancestry. The array is built only for a log that is actually emitted. */
@@ -182,11 +224,13 @@ function pathOf(tail: PathLink | null): CallHop[] {
 
 function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
     let why: string | null = null;
+    let frames = 0;
     const note = (w: string) => {
         why ??= w;
     };
 
     const enter = (f: unknown, parent: Info | null): FrameNode => {
+        frames++;
         if (!f || typeof f !== 'object') {
             note('trace frame malformed');
             return doneFrame();
@@ -290,7 +334,13 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
     while (st.length) {
         const top = st[st.length - 1]!;
         if (top.node.emit === null && top.i < top.node.calls.length) {
-            const child = enter(top.node.calls[top.i++]!, top.node.info);
+            // Same budget as traceShape. Checked once, before any child is read: entering
+            // children increases `frames`, which would make a later check a false positive.
+            if (top.i === 0 && top.node.calls.length > MAX_FRAMES - frames) return { why: 'trace too large' };
+            const raw = top.node.calls[top.i]!;
+            if (!raw || typeof raw !== 'object') return { why: 'trace frame malformed' };
+            top.i++;
+            const child = enter(raw, top.node.info);
             top.kids.push(child);
             if (child.emit === null) st.push({ node: child, kids: [], i: 0 });
             continue;
@@ -334,6 +384,8 @@ export function attributeTx(trace: unknown, receiptLogs: unknown[]): AttributeTx
     const shape = traceShape(trace);
     if (shape) return { aligned: false, why: shape };
     if (!Array.isArray(receiptLogs)) return { aligned: false, why: 'receipt logs are not an array' };
+    if (receiptLogs.length > MAX_LOGS) return { aligned: false, why: 'trace too large' };
+    if (exceedsLogBytes(trace, receiptLogs)) return { aligned: false, why: 'trace too large' };
 
     const pos = receiptLogs.map(receiptPos);
     const valid = pos.every((p) => p !== null) && new Set(pos).size === pos.length;
