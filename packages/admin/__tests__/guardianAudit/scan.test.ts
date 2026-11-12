@@ -347,6 +347,52 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(twin.calls).toHaveLength(0);
     });
 
+    it('is INCOMPLETE when a caught-up finalized hash disagrees with the checkpoint', async () => {
+        const { a, b } = pair(1);
+        const store = memoryStore();
+        await save(store, { block: 1, hash: bhash(1) });
+        const revision = (await store.snapshot()).revision;
+        a.finalizedHash = bhash(1, 'other');
+        const result = await run(a, b, store);
+        expectIncomplete(result, /finalized hash disagrees with header at block 1 on primary/);
+        expect(await store.getCheckpoint()).toEqual({ block: 1, hash: bhash(1) });
+        expect((await store.snapshot()).revision).toBe(revision);
+        expect(await store.listAttributed()).toEqual([]);
+    });
+
+    it('is INCOMPLETE when caught-up finalized height is behind the checkpoint', async () => {
+        const a = new Fake('primary', 3);
+        const b = new Fake('secondary', 3);
+        a.fill(4);
+        b.fill(4);
+        const store = memoryStore();
+        await save(store, { block: 4, hash: bhash(4) });
+        const revision = (await store.snapshot()).revision;
+        expectIncomplete(await run(a, b, store), /finalized height fell behind block 4 on primary/);
+        expect(await store.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+        expect((await store.snapshot()).revision).toBe(revision);
+    });
+
+    it('is INCOMPLETE when caught-up ancestry from finalized back to the checkpoint breaks', async () => {
+        const { a, b } = pair(4, 2);
+        const store = memoryStore();
+        await save(store, { block: 2, hash: bhash(2) });
+        const revision = (await store.snapshot()).revision;
+        a.blocks.get(3)!.parent = bhash(9);
+        expectIncomplete(await run(a, b, store), /finalized ancestry breaks at block 3 on primary/);
+        expect(await store.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
+        expect((await store.snapshot()).revision).toBe(revision);
+    });
+
+    it('a caught-up scan accepts an intact chain above the checkpoint', async () => {
+        const { a, b } = pair(4, 2);
+        const store = memoryStore();
+        await save(store, { block: 2, hash: bhash(2) });
+        const result = await run(a, b, store);
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 0, from: 3, to: 2 });
+        expect(await store.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
+    });
+
     it('returns COMPLETE(0) with no log reads when the cursor is already at finalized', async () => {
         const { a, b } = pair(5);
         const store = memoryStore();
@@ -462,7 +508,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
 
         const mismatched = pair();
         addBoth(mismatched.a, mismatched.b, 2, TOPIC, 0, false, { blockHash: bhash(50) });
-        expectIncomplete(await run(mismatched.a, mismatched.b), /receipt log metadata disagrees at block 2/);
+        expectIncomplete(await run(mismatched.a, mismatched.b), /receipt log blockHash disagrees at block 2/);
 
         const broken = pair();
         broken.a.garbage = true;
@@ -1074,22 +1120,58 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect((await store.listUnresolved())[0]?.log.topics).toEqual([TOPIC]);
     });
 
-    it('is INCOMPLETE when fixture receipt logs change blockNumber but keep receiptsRoot', async () => {
+    it('is INCOMPLETE when only the secondary receipt marks a log removed', async () => {
         const { a, b } = pair(3);
-        const receipts = structuredClone(fixture.receipts);
-        for (const receipt of receipts) {
-            for (const log of receipt.logs) log.blockNumber = '0x1';
-        }
+        addBoth(a, b, 2, TOPIC);
+        const receipts = structuredClone(b.blocks.get(2)!.receipts) as { logs: { removed?: boolean }[] }[];
+        receipts[0]!.logs[0]!.removed = true;
+        b.receiptsOverride = receipts;
+        const store = memoryStore();
+        expectIncomplete(await run(a, b, store, { attributor: ok }), /removed log from .* at block 2/);
+        expect(await store.getCheckpoint()).toBeNull();
+        expect(await store.listAttributed()).toEqual([]);
+    });
+
+    it('accepts fixture receipt metadata that matches the header, then rejects each identity field', async () => {
+        const block = Number.parseInt(fixture.header.number, 16);
+        const hash = fixture.header.hash as Hex;
         const root = fixture.header.receiptsRoot as Hex;
         const hot = bloomOf([{ address: ADDR, topics: [TOPIC] }]);
-        for (const node of [a, b]) {
-            node.setReceiptsRoot(2, root);
-            node.receiptsOverride = receipts;
-            node.setBloom(2, hot);
-        }
+        const mount = (receipts: unknown[], override = false) => {
+            const a = new Fake('primary', block);
+            const b = new Fake('secondary', block);
+            for (const node of [a, b]) {
+                node.blocks.set(block, {
+                    hash, parent: bhash(0), logs: [], bloom: hot, hide: new Set(),
+                    receipts, receiptsRoot: root,
+                });
+                if (override) node.receiptsOverride = receipts;
+            }
+            return { a, b };
+        };
+        const baseline = mount(fixture.receipts);
         const store = memoryStore();
-        expectIncomplete(await run(a, b, store), /receipt log metadata disagrees at block 2/);
-        expect(await store.getCheckpoint()).toBeNull();
+        const okScan = await run(baseline.a, baseline.b, store, { startBlock: block });
+        expect(okScan).toMatchObject({ state: 'COMPLETE', count: 0, bloomFalsePositives: 1, to: block });
+        expect(baseline.a.calls.some((call) => call.method === 'eth_getBlockReceipts')).toBe(true);
+        expect(await store.getCheckpoint()).toEqual({ block, hash });
+
+        const tweak = (edit: (log: { blockNumber: string; blockHash: string; logIndex: string }) => void) => {
+            const receipts = structuredClone(fixture.receipts) as { logs: { blockNumber: string; blockHash: string; logIndex: string }[] }[];
+            for (const receipt of receipts) for (const log of receipt.logs) edit(log);
+            return mount(receipts, true);
+        };
+        const cases: [RegExp, (log: { blockNumber: string; blockHash: string; logIndex: string }) => void][] = [
+            [/receipt log blockNumber disagrees at block/, (log) => { log.blockNumber = '0x1'; }],
+            [/receipt log blockHash disagrees at block/, (log) => { log.blockHash = bhash(2); }],
+            [/receipt logIndex disagrees with receipt order at block/, (log) => { log.logIndex = '0x0'; }],
+        ];
+        for (const [reason, edit] of cases) {
+            const nodes = tweak(edit);
+            const fresh = memoryStore();
+            expectIncomplete(await run(nodes.a, nodes.b, fresh, { startBlock: block }), reason);
+            expect(await fresh.getCheckpoint()).toBeNull();
+        }
     });
 
     it('is INCOMPLETE when receipt logs reuse a logIndex', async () => {

@@ -4,6 +4,7 @@ import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type 
 import {
     unresolvedId,
     type AttributedAction,
+    type Checkpoint,
     type GuardianAuditStore,
     type StoreSnapshot,
     type UnresolvedAction,
@@ -94,7 +95,10 @@ function safeInt(n: number, min: number): boolean {
 }
 
 function keyOf(log: Norm): string {
-    return [log.blockHash, log.logIndex, log.txHash, log.address, log.topics.join(','), log.data].join('|').toLowerCase();
+    return [
+        log.blockHash, log.logIndex, log.txHash, log.address, log.topics.join(','), log.data,
+        log.removed ? '1' : '0',
+    ].join('|').toLowerCase();
 }
 
 function parseLog(raw: unknown): Norm | null {
@@ -275,12 +279,11 @@ function asNorm(
  * blockNumber and blockHash are taken from the header the receipts were checked against.
  * logIndex is the log's position in receipt order: transactions must already be 0..n-1,
  * and logs are counted in that order. A provided blockNumber, blockHash, or logIndex that
- * disagrees is an error — it is not dropped.
+ * disagrees is its own error — it is not dropped.
  * transactionHash is the receipt's transactionHash. It must be a 32-byte word and match
  * the other provider. receiptsRoot does not prove it.
  */
 function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; txs: string[] } | { error: string } {
-    const badMeta = `receipt log metadata disagrees at block ${block}`;
     const badIndex = `receipt logIndex disagrees with receipt order at block ${block}`;
     const cannot = `cannot verify receipts at block ${block}`;
     let cursor = 0;
@@ -307,7 +310,8 @@ function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; t
             const derived = cursor++;
             if (quantity(row.logIndex) !== derived) return { error: badIndex };
             const blockHash = isWord(row.blockHash) ? row.blockHash.toLowerCase() : null;
-            if (quantity(row.blockNumber) !== block || blockHash !== hash.toLowerCase()) return { error: badMeta };
+            if (quantity(row.blockNumber) !== block) return { error: `receipt log blockNumber disagrees at block ${block}` };
+            if (blockHash !== hash.toLowerCase()) return { error: `receipt log blockHash disagrees at block ${block}` };
             logs.push(asNorm(
                 getAddress(row.address),
                 (row.topics as string[]).map((t) => t.toLowerCase() as Hex),
@@ -339,7 +343,13 @@ async function prove(
     if ('error' in logsA) return logsA;
     if ('error' in logsB) return logsB;
     if (logsA.txs.join() !== logsB.txs.join()) return { error: `providers disagree on transactionHash at block ${block}` };
-    if (!sameLogs(logsA.logs, logsB.logs)) return { error: `providers disagree on receipts at block ${block}` };
+    if (!sameLogs(logsA.logs, logsB.logs)) {
+        const removed = logsA.logs.find((log) => log.removed) ?? logsB.logs.find((log) => log.removed);
+        if (removed) return { error: `removed log from ${removed.address} at block ${block}` };
+        return { error: `providers disagree on receipts at block ${block}` };
+    }
+    const agreed = logsA.logs.find((log) => log.removed);
+    if (agreed) return { error: `removed log from ${agreed.address} at block ${block}` };
     return { logs: logsA.logs };
 }
 
@@ -361,6 +371,28 @@ async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number): Prom
     }
     if (prev.toLowerCase() !== fin.hash.toLowerCase()) {
         return `finalized ancestry breaks at block ${fin.number} on ${rpc.name}`;
+    }
+    return null;
+}
+
+/**
+ * Caught-up window: finalized must still reach the checkpoint.
+ * An equal height carries the checkpoint hash. A greater height walks parentHash
+ * from finalized down to the checkpoint block. Nothing here commits.
+ */
+async function bindFinalized(
+    pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader, saved: Checkpoint,
+): Promise<string | null> {
+    const want = saved.hash.toLowerCase();
+    for (const { rpc, fin } of [{ rpc: pa, fin: finA }, { rpc: pb, fin: finB }]) {
+        if (fin.number < saved.block) return `finalized height fell behind block ${saved.block} on ${rpc.name}`;
+        if (fin.number === saved.block && fin.hash.toLowerCase() !== want) {
+            return `finalized hash disagrees with header at block ${saved.block} on ${rpc.name}`;
+        }
+        if (fin.number > saved.block) {
+            const broken = await anchor(rpc, fin, saved.hash, saved.block);
+            if (broken) return broken;
+        }
     }
     return null;
 }
@@ -388,6 +420,9 @@ function attributedOf(action: FoundAction): AttributedAction {
  * whether or not `next` moves the checkpoint. Two scans may run together. The one
  * that commits second fails, including a caught-up scan whose checkpoint does not change.
  * INCOMPLETE does not commit. The checkpoint value itself is not the concurrency token.
+ * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
+ * height must reach the checkpoint block, an equal height must carry its hash, and a
+ * greater height must walk parentHash back to that block. A break commits nothing.
  */
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const [pa, pb] = opts.providers;
@@ -413,7 +448,13 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
     const from = saved ? saved.block + 1 : opts.startBlock;
     const to = Math.min(finA.number, finB.number, from + opts.maxBlocks - 1);
-    if (from > to) return finish(opts, [], from, to, 0, 0, null, snap);
+    if (from > to) {
+        if (saved) {
+            const why = await bindFinalized(pa, pb, finA, finB, saved);
+            if (why) return bad(from, to, why);
+        }
+        return finish(opts, [], from, to, 0, 0, null, snap);
+    }
 
     const buckets: Bucket[] = [];
     for (const contract of opts.watched) {
@@ -483,7 +524,6 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
                 proved = got;
             }
             const want = proved.logs.filter((log) => log.address === bucket.address);
-            if (want.some((log) => log.removed)) return bad(from, to, `removed log from ${bucket.address} at block ${n}`);
             if (!sameLogs(have, want)) {
                 const seen = new Set(have.map(keyOf));
                 const reason = want.some((log) => !seen.has(keyOf(log)))
