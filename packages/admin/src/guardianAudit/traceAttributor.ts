@@ -1,3 +1,4 @@
+import { getAddress, getContractAddress, type Address } from 'viem';
 import { attributeTx, MEASURE_BYTES, MEASURE_NODES, measure, receiptPos, sameLog, type LogAttribution } from './attribute.js';
 import { quantity, type RawRpc } from './rpc.js';
 import type { Attributor, FoundAction } from './scan.js';
@@ -120,30 +121,69 @@ function sameText(a: unknown, b: unknown): boolean {
     return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 }
 
-/** Quantity equality. A missing value matches only another missing value. */
-function sameValue(a: unknown, b: unknown): boolean {
-    if (a == null && b == null) return true;
-    const qa = quantity(a);
-    const qb = quantity(b);
-    return qa !== null && qa === qb;
+const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+/** Strict 0x quantity. Leading zeros are allowed; comparison is numeric. */
+const QTY_RE = /^0x[0-9a-fA-F]+$/;
+
+function addressOf(v: unknown): Address | null {
+    if (typeof v !== 'string' || !ADDR_RE.test(v)) return null;
+    try {
+        return getAddress(v);
+    } catch {
+        return null;
+    }
+}
+
+/** `0x0` and `0x00` are equal. Values above `2^53−1` stay exact. Decimal and bare numbers are rejected. */
+function hexQuantity(v: unknown): bigint | null {
+    if (typeof v !== 'string' || !QTY_RE.test(v)) return null;
+    return BigInt(v);
 }
 
 /**
- * Contract creation is `tx.to === null` and a top-level CREATE/CREATE2 trace.
- * A call trace must carry the same `to` as the transaction. Anything else mismatches.
+ * geth and erigon callTracer always report `value` on CALL and CREATE roots.
+ * An absent trace value is a mismatch. `tx.value` must already be a valid quantity.
  */
-function toMatches(trace: Record<string, unknown>, tx: Record<string, unknown>): boolean {
+function sameValue(traceValue: unknown, txValue: unknown): boolean {
+    const tx = hexQuantity(txValue);
+    const traced = hexQuantity(traceValue);
+    return tx !== null && traced !== null && tx === traced;
+}
+
+/**
+ * Creation (`tx.to === null`) is a top-level CREATE whose `to` equals the dual-verified
+ * `receipt.contractAddress` and the address derived from `tx.from` + `tx.nonce`.
+ * A top-level CREATE2 is not a creation transaction. A call must carry the same `to`.
+ */
+function toMatches(trace: Record<string, unknown>, tx: Record<string, unknown>, receipt: unknown): boolean {
     const type = typeof trace.type === 'string' ? trace.type.toUpperCase() : '';
-    if (tx.to === null) return type === 'CREATE' || type === 'CREATE2';
+    if (tx.to === null) {
+        if (type !== 'CREATE') return false;
+        const bound = boundCreateAddress(tx, receipt);
+        return bound !== null && sameText(trace.to, bound);
+    }
     if (type === 'CREATE' || type === 'CREATE2') return false;
     return sameText(trace.to, tx.to);
 }
 
-function traceMatchesTx(trace: unknown, tx: Record<string, unknown>, name: string): string | null {
+/** Address claimed by the receipt and reproduced from sender + nonce. */
+function boundCreateAddress(tx: Record<string, unknown>, receipt: unknown): Address | null {
+    if (!receipt || typeof receipt !== 'object') return null;
+    const claimed = addressOf((receipt as Record<string, unknown>).contractAddress);
+    const from = addressOf(tx.from);
+    const nonce = hexQuantity(tx.nonce);
+    if (!claimed || !from || nonce === null) return null;
+    const derived = getContractAddress({ from, nonce, opcode: 'CREATE' });
+    return claimed.toLowerCase() === derived.toLowerCase() ? derived : null;
+}
+
+function traceMatchesTx(
+    trace: unknown, tx: Record<string, unknown>, receipt: unknown, name: string,
+): string | null {
     if (!trace || typeof trace !== 'object') return 'no trace';
     const frame = trace as Record<string, unknown>;
     if (!sameText(frame.from, tx.from)) return `trace from mismatch on ${name}`;
-    if (!toMatches(frame, tx)) return `trace to mismatch on ${name}`;
+    if (!toMatches(frame, tx, receipt)) return `trace to mismatch on ${name}`;
     if (!sameText(frame.input, tx.input)) return `trace input mismatch on ${name}`;
     if (!sameValue(frame.value, tx.value)) return `trace value mismatch on ${name}`;
     return null;
@@ -185,6 +225,20 @@ async function readSide(rpc: RawRpc, action: FoundAction): Promise<Side> {
     if (txR.v === null || typeof txR.v !== 'object') return { ok: false, reason: `no transaction on ${rpc.name}` };
     const tx = txR.v as Record<string, unknown>;
     if (!sameBlock(tx, receiptR.v)) return { ok: false, reason: 'providers disagree on the transaction' };
+    // Each provider is checked on its own. Agreement between them is not enough.
+    if (!sameText(tx.hash, action.txHash)) return { ok: false, reason: `transaction hash mismatch on ${rpc.name}` };
+    if (hexQuantity(tx.value) === null) return { ok: false, reason: `transaction value invalid on ${rpc.name}` };
+    const receiptIndex = receiptR.v && typeof receiptR.v === 'object'
+        ? (receiptR.v as Record<string, unknown>).transactionIndex
+        : undefined;
+    const txIndex = hexQuantity(tx.transactionIndex);
+    const receiptTxIndex = hexQuantity(receiptIndex);
+    if (txIndex === null || receiptTxIndex === null || txIndex !== receiptTxIndex) {
+        return { ok: false, reason: `transaction index mismatch on ${rpc.name}` };
+    }
+    if (tx.to === null && boundCreateAddress(tx, receiptR.v) === null) {
+        return { ok: false, reason: `contract address mismatch on ${rpc.name}` };
+    }
     return { ok: true, receipt: receiptR.v, tx, logs: checked.logs };
 }
 
@@ -192,7 +246,9 @@ type Traced =
     | { ok: true; attribution: LogAttribution }
     | { ok: false; reason: string };
 
-async function readTrace(rpc: RawRpc, action: FoundAction, tx: Record<string, unknown>, logs: unknown[]): Promise<Traced> {
+async function readTrace(
+    rpc: RawRpc, action: FoundAction, tx: Record<string, unknown>, receipt: unknown, logs: unknown[],
+): Promise<Traced> {
     const got = await rpc.request({
         method: 'debug_traceTransaction', params: [action.txHash, TRACE_OPTS],
     }).then(
@@ -210,7 +266,7 @@ async function readTrace(rpc: RawRpc, action: FoundAction, tx: Record<string, un
         const reason = traceUnsupported(failure) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
     }
-    const mismatch = traceMatchesTx(got.v, tx, rpc.name);
+    const mismatch = traceMatchesTx(got.v, tx, receipt, rpc.name);
     if (mismatch) return { ok: false, reason: mismatch };
     const aligned = attributeTx(got.v, logs);
     if (!aligned.aligned) return { ok: false, reason: aligned.why };
@@ -258,7 +314,9 @@ export function traceAttributor(opts: TraceAttributorOptions): Attributor {
                 if (!sameJson(sa.receipt, sb.receipt) || !sameJson(sa.tx, sb.tx)) {
                     return { ok: false, reason: 'providers disagree on the transaction' };
                 }
-                const traced = await Promise.all(traces.map((rpc) => readTrace(rpc, action, sa.tx, sa.logs)));
+                const traced = await Promise.all(
+                    traces.map((rpc) => readTrace(rpc, action, sa.tx, sa.receipt, sa.logs)),
+                );
                 const first = traced[0]!;
                 if (!first.ok) return first;
                 if (!tb) {

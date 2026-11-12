@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAddress, type Hex } from 'viem';
+import { getAddress, getContractAddress, type Hex } from 'viem';
 import type { FoundAction } from '../../src/guardianAudit/scan';
 import type { RawRpc } from '../../src/guardianAudit/rpc';
 import { MEASURE_NODES } from '../../src/guardianAudit/attribute';
@@ -59,6 +59,8 @@ function txOf(over: Record<string, unknown> = {}) {
         to: TARGET as string | null,
         input: '0x12345678',
         value: '0x0',
+        nonce: '0x01',
+        transactionIndex: '0x3',
         blockHash: BLOCK,
         blockNumber: '0x10',
         ...over,
@@ -71,6 +73,7 @@ function receiptOf(over: Record<string, unknown> = {}, logOver: Record<string, u
         blockHash: BLOCK.toUpperCase(),
         status: '0x1',
         blockNumber: '0x10',
+        transactionIndex: '0x03',
         logs: [{
             address: getAddress(TARGET),
             topics: [`0x${'AB'.repeat(32)}`],
@@ -489,22 +492,53 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         expect(result).toEqual({ ok: false, reason: 'providers disagree on the transaction' });
     });
 
-    it('attributes a contract-creation transaction only for CREATE or CREATE2', async () => {
-        const created = {
-            type: 'CREATE',
-            from: FROM,
+    it('binds a creation trace to the receipt contract and the sender nonce', async () => {
+        const created = getContractAddress({ from: getAddress(FROM), nonce: 1n, opcode: 'CREATE' });
+        const tx = txOf({ to: null, nonce: '0x01' });
+        const receipt = receiptOf({ contractAddress: created });
+        const guardian = {
+            type: 'CALL',
+            from: created,
             to: TARGET,
             input: '0x12345678',
-            value: '0x00',
             logs: [{ address: TARGET, topics: [TOPIC], data: '0x' }],
         };
-        const tx = txOf({ to: null });
-        const accepted = await withTrace(created, receiptOf(), tx);
+        const accepted = await withTrace({
+            type: 'CREATE',
+            from: FROM,
+            to: created,
+            input: '0x12345678',
+            value: '0x00',
+            calls: [guardian],
+        }, receipt, tx);
         expect(accepted).toMatchObject({
             ok: true,
-            attribution: { attributionSource: 'single:alpha', emitter: getAddress(TARGET) },
+            attribution: {
+                attributionSource: 'single:alpha',
+                immediateCaller: getAddress(created),
+                emitter: getAddress(TARGET),
+            },
         });
-        expect(await withTrace(traceOf(), receiptOf(), tx)).toEqual({
+        const impostor = {
+            type: 'CREATE',
+            from: FROM,
+            to: OTHER,
+            input: '0x12345678',
+            value: '0x00',
+            calls: [{ ...guardian, from: OTHER }],
+        };
+        expect(await withTrace(impostor, receipt, tx)).toEqual({
+            ok: false, reason: 'trace to mismatch on alpha',
+        });
+        expect(await withTrace(
+            { ...impostor, to: OTHER, calls: [{ ...guardian, from: OTHER }] },
+            receiptOf({ contractAddress: OTHER }),
+            tx,
+        )).toEqual({ ok: false, reason: 'contract address mismatch on alpha' });
+        expect(await withTrace({ ...impostor, type: 'CREATE2', to: created, calls: [guardian] }, receipt, tx)).toEqual({
+            ok: false, reason: 'trace to mismatch on alpha',
+        });
+        expect(await withTrace(traceOf(), receipt, tx)).toEqual({
             ok: false, reason: 'trace to mismatch on alpha',
         });
     });
@@ -543,6 +577,44 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         expect(calls).toContain('alchemy:debug_traceTransaction');
         expect(calls).toContain('tenderly:debug_traceTransaction');
         expect(calls).not.toContain('infura:debug_traceTransaction');
+    });
+
+    it('rejects completeness providers that agree on the wrong transaction', async () => {
+        const wrong = `0x${'ab'.repeat(32)}` as Hex;
+        expect(await withTrace(traceOf(), receiptOf(), txOf({ hash: wrong }))).toEqual({
+            ok: false, reason: 'transaction hash mismatch on alpha',
+        });
+        expect(await withTrace(
+            traceOf(),
+            receiptOf({ transactionIndex: '0x5' }),
+            txOf({ transactionIndex: '0x1' }),
+        )).toEqual({ ok: false, reason: 'transaction index mismatch on alpha' });
+    });
+
+    it('accepts 1 ETH and a value above the safe-integer boundary', async () => {
+        const oneEth = `0x${(10n ** 18n).toString(16)}`;
+        const above = `0x${(1n << 200n).toString(16)}`;
+        expect(await withTrace(
+            { ...traceOf(), value: `0x0${oneEth.slice(2)}` },
+            receiptOf(),
+            txOf({ value: oneEth }),
+        )).toMatchObject({ ok: true, attribution: { attributionSource: 'single:alpha' } });
+        expect(await withTrace(
+            { ...traceOf(), value: `0x${above.slice(2).toUpperCase()}` },
+            receiptOf(),
+            txOf({ value: `0x0${above.slice(2)}` }),
+        )).toMatchObject({ ok: true, attribution: { attributionSource: 'single:alpha' } });
+    });
+
+    it('rejects a missing transaction value and a missing trace value', async () => {
+        const tx = txOf();
+        delete tx.value;
+        expect(await withTrace({ ...traceOf(), value: undefined }, receiptOf(), tx)).toEqual({
+            ok: false, reason: 'transaction value invalid on alpha',
+        });
+        const trace = traceOf();
+        delete trace.value;
+        expect(await withTrace(trace)).toEqual({ ok: false, reason: 'trace value mismatch on alpha' });
     });
 
     it('rejects completeness or trace providers that are not distinct', () => {
