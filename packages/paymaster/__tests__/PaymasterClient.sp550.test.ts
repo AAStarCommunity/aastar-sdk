@@ -3,6 +3,7 @@ import { createWalletClient, custom, defineChain, fallback, HttpRequestError, ty
 import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient } from '../src/V4/PaymasterClient';
+import { UserOperationNotYetValidError } from '../src/V4/userOpOutcome';
 import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
 import { SuperPaymasterInflightGuard } from '../src/SuperPaymaster/v550';
 
@@ -208,6 +209,159 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
         SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
         await expect(submit()).resolves.toBe(OP_HASH);
+    });
+});
+
+describe('PaymasterClient × SP 5.5.0: bundler -32503 is a typed not-yet-valid error', () => {
+    const NOT_YET = {
+        code: -32503,
+        message: 'User operation is not valid yet, validAfter=1794226833, now=1794226774',
+    };
+
+    async function capture(submit: () => Promise<unknown>): Promise<UserOperationNotYetValidError> {
+        try {
+            await submit();
+        } catch (error) {
+            expect(error).toBeInstanceOf(UserOperationNotYetValidError);
+            return error as UserOperationNotYetValidError;
+        }
+        throw new Error('submit resolved');
+    }
+
+    it('send path: fork message carries validAfter, now and seconds to wait, and does not retry', async () => {
+        const { submit, calls } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return { error: NOT_YET };
+        });
+        const err = await capture(submit);
+        expect(err.code).toBe(-32503);
+        expect(err.validAfter).toBe(1794226833n);
+        expect(err.now).toBe(1794226774n);
+        expect(err.secondsToWait).toBe(59n);
+        expect(err.rpcError).toEqual(NOT_YET);
+        expect(err.cause).toBeInstanceOf(Error);
+        expect((err.cause as Error).message).toBe(NOT_YET.message);
+        expect((err.cause as { code?: number }).code).toBe(-32503);
+        expect(calls.filter((c) => c.method === 'eth_sendUserOperation')).toHaveLength(1);
+    });
+
+    it('send path: releases the in-flight slot so the next op can be submitted', async () => {
+        let limited = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return limited ? { error: NOT_YET } : { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toBeInstanceOf(UserOperationNotYetValidError);
+        limited = false;
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
+
+    it('send path: hex validAfter/now in the message, and data fields when the message has none', async () => {
+        const validAfter = 1794226833n;
+        const now = 1794226774n;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return {
+                error: {
+                    code: -32503,
+                    message: `User operation is not valid yet, validAfter=0x${validAfter.toString(16)}, now=0x${now.toString(16)}`,
+                },
+            };
+        });
+        const hex = await capture(submit);
+        expect(hex.validAfter).toBe(validAfter);
+        expect(hex.now).toBe(now);
+        expect(hex.secondsToWait).toBe(59n);
+
+        const { submit: submitData } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return {
+                error: {
+                    code: '-32503',
+                    message: 'User operation is not valid yet',
+                    data: { validAfter: '1794226900', now: 1794226800 },
+                },
+            };
+        });
+        const fromData = await capture(submitData);
+        expect(fromData.validAfter).toBe(1794226900n);
+        expect(fromData.now).toBe(1794226800n);
+        expect(fromData.secondsToWait).toBe(100n);
+        expect((fromData.cause as { data?: unknown }).data).toEqual({ validAfter: '1794226900', now: 1794226800 });
+    });
+
+    it('send path: unknown -32503 shape still throws, with the original body as cause', async () => {
+        const rpc = { code: -32503, data: { unexpected: true } };
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return { error: rpc };
+        });
+        const err = await capture(submit);
+        expect(err.validAfter).toBeUndefined();
+        expect(err.now).toBeUndefined();
+        expect(err.secondsToWait).toBeUndefined();
+        expect(err.rpcError).toEqual(rpc);
+        expect(err.cause).toBeInstanceOf(Error);
+        expect((err.cause as { code?: number; data?: unknown }).code).toBe(-32503);
+        expect((err.cause as { data?: unknown }).data).toEqual({ unexpected: true });
+        expect((err.cause as Error).message).toContain('-32503');
+    });
+
+    it('send path: disagreeing validAfter values are not turned into a wait', async () => {
+        const rpc = {
+            code: -32503,
+            message: 'User operation is not valid yet, validAfter=100, now=40',
+            data: { validAfter: '200', now: '40' },
+        };
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return { error: rpc };
+        });
+        const err = await capture(submit);
+        expect(err.validAfter).toBeUndefined();
+        expect(err.secondsToWait).toBeUndefined();
+        expect(err.message).toMatch(/disagree/);
+        expect(err.rpcError).toEqual(rpc);
+    });
+
+    it('send path: expires-too-soon (-32503) is the same error and does not invent a wait from validUntil', async () => {
+        const rpc = {
+            code: -32503,
+            message: 'UserOperation expires too soon, validUntil=1794230945, now=1794231164',
+        };
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return { error: rpc };
+        });
+        const err = await capture(submit);
+        expect(err.validAfter).toBeUndefined();
+        expect(err.secondsToWait).toBeUndefined();
+        expect(err.now).toBe(1794231164n);
+        expect((err.cause as Error).message).toContain('expires too soon');
+    });
+
+    it('estimate path: -32503 is thrown before Anvil defaults and before send', async () => {
+        const { submit, calls } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return { error: NOT_YET };
+            return { result: OP_HASH };
+        });
+        const err = await capture(submit);
+        expect(err.secondsToWait).toBe(59n);
+        expect(calls.map((c) => c.method)).toEqual(['eth_estimateUserOperationGas']);
+    });
+
+    it('a different bundler code stays a Bundler Error', async () => {
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return { error: { code: -32500, message: 'AA33 reverted' } };
+        });
+        try {
+            await submit();
+            throw new Error('submit resolved');
+        } catch (error) {
+            expect(error).not.toBeInstanceOf(UserOperationNotYetValidError);
+            expect((error as Error).message).toMatch(/Bundler Error/);
+        }
     });
 });
 
