@@ -18,6 +18,18 @@ export class StoreConflictError extends Error {
 /** Old name. Same class as StoreConflictError. */
 export const CheckpointConflictError = StoreConflictError;
 
+/**
+ * Thrown when a scan's watched scope does not match the scope recorded by the first commit.
+ * A changed watch set needs a new store (a backfill), never a silent resume.
+ * Nothing is written.
+ */
+export class ScopeChangedError extends Error {
+    constructor(message = 'a changed watch set needs a new store (a backfill), never a silent resume') {
+        super(message);
+        this.name = 'ScopeChangedError';
+    }
+}
+
 /** id is `${blockHash}:${logIndex}` in lower case. */
 export interface UnresolvedAction {
     id: string;
@@ -48,20 +60,23 @@ export interface AttributedAction {
 /**
  * One all-or-nothing write. `next: null` leaves the cursor where it is (a caught-up scan)
  * but still checks `expectedRevision`, applies the action changes, and advances the revision.
- * On StoreConflictError the store applies nothing.
+ * On StoreConflictError or ScopeChangedError the store applies nothing.
+ * `scope` is recorded by the first commit and must be echoed after that.
  */
 export interface Commit {
     expectedRevision: number;
     next: Checkpoint | null;
+    scope: Hex;
     attributed: AttributedAction[];
     unresolved: UnresolvedAction[];
     resolve: string[];
 }
 
-/** One consistent read. `revision` is the token `commit` must echo. */
+/** One consistent read. `revision` is the token `commit` must echo. `scope` is null until the first commit. */
 export interface StoreSnapshot {
     revision: number;
     checkpoint: Checkpoint | null;
+    scope: Hex | null;
     unresolved: UnresolvedAction[];
     attributed: AttributedAction[];
 }
@@ -85,6 +100,7 @@ function copy<T>(value: T): T {
 
 export function memoryStore(): GuardianAuditStore {
     let revision = 0;
+    let scope: Hex | null = null;
     let checkpoint: Checkpoint | null = null;
     let open = new Map<string, UnresolvedAction>();
     let attributed = new Map<string, AttributedAction>();
@@ -93,6 +109,7 @@ export function memoryStore(): GuardianAuditStore {
             return {
                 revision,
                 checkpoint: checkpoint ? copy(checkpoint) : null,
+                scope,
                 unresolved: [...open.values()].map((item) => copy(item)),
                 attributed: [...attributed.values()].map((item) => copy(item)),
             };
@@ -104,6 +121,8 @@ export function memoryStore(): GuardianAuditStore {
         async listAttributed() { return [...attributed.values()].map((item) => copy(item)); },
         async commit(change) {
             if (change.expectedRevision !== revision) throw new StoreConflictError();
+            const nextScope = change.scope.toLowerCase() as Hex;
+            if (scope !== null && nextScope !== scope) throw new ScopeChangedError();
             const nextOpen = new Map(open);
             const nextAttributed = new Map(attributed);
             for (const item of change.attributed) {
@@ -118,6 +137,7 @@ export function memoryStore(): GuardianAuditStore {
             open = nextOpen;
             attributed = nextAttributed;
             if (change.next) checkpoint = { block: change.next.block, hash: change.next.hash };
+            scope = nextScope;
             revision++;
         },
     };

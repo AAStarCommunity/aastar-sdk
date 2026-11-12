@@ -1,7 +1,8 @@
-import { getAddress, isAddress, numberToHex, type Address, type Hex } from 'viem';
+import { getAddress, isAddress, keccak256, numberToHex, stringToHex, type Address, type Hex } from 'viem';
 import { mayContainAddress } from './bloom.js';
 import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
 import {
+    ScopeChangedError,
     unresolvedId,
     type AttributedAction,
     type Checkpoint,
@@ -16,6 +17,8 @@ export interface WatchedContract {
     address: Address;
     fromBlock: number;
     toBlock?: number;
+    /** Decoder/ABI generation, for example `BLSAggregator-4.12.0`. Part of the stored scope. */
+    generation: string;
     /** `null` = unknown topic0 for this generation. `'ignore'` = known, not a guardian action. */
     decode(log: RawLog): DecodedAction | 'ignore' | null;
 }
@@ -187,12 +190,47 @@ function revive(
     };
 }
 
+const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** Labels that appear in reasons. A URL or credential must not get through. The error does not echo `name`. */
+function assertName(name: string): void {
+    if (typeof name !== 'string' || !PROVIDER_NAME.test(name)) throw new Error('provider name is not a safe label');
+}
+
+/**
+ * Hash of `startBlock` and the watched set. Address is lower case, `toBlock` is null when open.
+ * The list is sorted so input order does not change the scope.
+ */
+export function watchScope(watched: readonly WatchedContract[], startBlock: number): Hex {
+    const rows = watched.map((contract) => ({
+        address: getAddress(contract.address).toLowerCase(),
+        fromBlock: contract.fromBlock,
+        generation: contract.generation,
+        toBlock: contract.toBlock ?? null,
+    }));
+    rows.sort((a, b) => {
+        if (a.address !== b.address) return a.address < b.address ? -1 : 1;
+        if (a.fromBlock !== b.fromBlock) return a.fromBlock - b.fromBlock;
+        if (a.toBlock !== b.toBlock) {
+            if (a.toBlock === null) return 1;
+            if (b.toBlock === null) return -1;
+            return a.toBlock - b.toBlock;
+        }
+        if (a.generation !== b.generation) return a.generation < b.generation ? -1 : 1;
+        return 0;
+    });
+    return keccak256(stringToHex(JSON.stringify({ startBlock, watched: rows })));
+}
+
 function assertConfig(opts: ScanRangeOptions): void {
     if (!safeInt(opts.startBlock, 0)) throw new Error('startBlock must be >= 0');
     if (!safeInt(opts.maxBlocks, 1)) throw new Error('maxBlocks must be >= 1');
     if (opts.page !== undefined && !safeInt(opts.page, 1)) throw new Error('page must be >= 1');
     const spans: { address: Address; from: number; to: number }[] = [];
     for (const contract of opts.watched) {
+        if (typeof contract.generation !== 'string' || contract.generation.length === 0) {
+            throw new Error('generation is required');
+        }
         const address = getAddress(contract.address);
         if (!safeInt(contract.fromBlock, 0)) throw new Error(`invalid fromBlock for ${address}`);
         if (contract.toBlock !== undefined && !safeInt(contract.toBlock, 0)) throw new Error(`invalid toBlock for ${address}`);
@@ -423,18 +461,25 @@ function attributedOf(action: FoundAction): AttributedAction {
  * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
  * height must reach the checkpoint block, an equal height must carry its hash, and a
  * greater height must walk parentHash back to that block. A break commits nothing.
+ * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
+ * The first commit records it. A later scan whose scope differs throws ScopeChangedError
+ * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
  */
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const [pa, pb] = opts.providers;
     if (opts.providers.length !== 2 || pa === pb || pa.name === pb.name) {
         throw new Error('guardian audit requires two distinct providers');
     }
+    assertName(pa.name);
+    assertName(pb.name);
     assertConfig(opts);
+    const scope = watchScope(opts.watched, opts.startBlock);
+    const snap = await opts.store.snapshot();
+    if (snap.scope !== null && snap.scope.toLowerCase() !== scope.toLowerCase()) throw new ScopeChangedError();
     const finA = await readHeader(pa, 'finalized');
     if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: opts.startBlock };
     const finB = await readHeader(pb, 'finalized');
     if (typeof finB === 'string') return { state: 'INCOMPLETE', reasons: [finB], from: opts.startBlock };
-    const snap = await opts.store.snapshot();
     const saved = snap.checkpoint;
     if (saved) {
         const ha = await readHeader(pa, saved.block);
@@ -453,7 +498,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             const why = await bindFinalized(pa, pb, finA, finB, saved);
             if (why) return bad(from, to, why);
         }
-        return finish(opts, [], from, to, 0, 0, null, snap);
+        return finish(opts, [], from, to, 0, 0, null, snap, scope);
     }
 
     const buckets: Bucket[] = [];
@@ -584,13 +629,13 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             });
         }
     }
-    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, snap);
+    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, snap, scope);
 }
 
 async function finish(
     opts: ScanRangeOptions, actions: FoundAction[], from: number, to: number,
     bloomFalsePositives: number, ignored: number, tip: Hex | null,
-    snap: StoreSnapshot,
+    snap: StoreSnapshot, scope: Hex,
 ): Promise<ScanResult> {
     actions.sort((x, y) => x.blockNumber - y.blockNumber || x.logIndex - y.logIndex);
     const resolvedPrior: FoundAction[] = [];
@@ -628,6 +673,7 @@ async function finish(
     await opts.store.commit({
         expectedRevision: snap.revision,
         next: tip ? { block: to, hash: tip } : null,
+        scope,
         attributed: accepted,
         unresolved: [...stale, ...fresh],
         resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),

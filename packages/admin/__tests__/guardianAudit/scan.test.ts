@@ -6,10 +6,12 @@ import fixture from './fixtures/sepolia-block-receipts.json';
 import {
     CheckpointConflictError,
     FinalityConflictError,
+    ScopeChangedError,
     StoreConflictError,
     memoryStore,
     scanRange,
     unresolvedId,
+    watchScope,
     type Attributor,
     type Checkpoint,
     type Commit,
@@ -243,6 +245,7 @@ function watched(over: Partial<WatchedContract> = {}): WatchedContract {
     return {
         address: ADDR,
         fromBlock: 1,
+        generation: 'test-1',
         decode(log) {
             const topic = log.topics[0]?.toLowerCase();
             if (topic === TOPIC) return { kind: 'guardian-added' };
@@ -286,6 +289,7 @@ async function save(
     await store.commit({
         expectedRevision: snap.revision,
         next,
+        scope: extra.scope ?? snap.scope ?? watchScope([watched()], 1),
         attributed: extra.attributed ?? [],
         unresolved,
         resolve: extra.resolve ?? [],
@@ -434,17 +438,79 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(tags(lower.b)).not.toContain('0x7');
     });
 
-    it('resumes at checkpoint + 1 and clips a generation window', async () => {
+    it('resumes at checkpoint + 1 when the scope is unchanged, and clips a generation window', async () => {
         const { a, b } = pair(8);
         const store = memoryStore();
-        await run(a, b, store, { maxBlocks: 2 });
-        a.calls.length = 0;
         const contract = watched({ fromBlock: 4, toBlock: 5 });
-        const result = await scanRange({
+        await scanRange({
+            providers: [a, b], watched: [contract], store, startBlock: 1, maxBlocks: 2,
+        });
+        a.calls.length = 0;
+        const reversed = await scanRange({
             providers: [a, b], watched: [contract], store, startBlock: 1, maxBlocks: 10,
         });
-        expect(result).toMatchObject({ state: 'COMPLETE', from: 3, to: 8 });
+        expect(reversed).toMatchObject({ state: 'COMPLETE', from: 3, to: 8 });
         expect(logRanges(a)).toEqual([expect.objectContaining({ fromBlock: '0x4', toBlock: '0x5' })]);
+    });
+
+    it('throws ScopeChangedError when a watched address is added after the checkpoint', async () => {
+        const { a, b } = pair(4);
+        addBoth(a, b, 2, TOPIC, 0);
+        const other = makeLog(2, a.blocks.get(2)!.hash, 1, TOPIC, { address: OTHER });
+        a.addLog(2, other);
+        b.addLog(2, { ...other, topics: [...other.topics] });
+        const store = memoryStore();
+        const first = watched({ generation: 'BLSAggregator-4.12.0' });
+        const second = watched({ address: OTHER, generation: 'BLSAggregator-4.12.0' });
+        const scanned = await run(a, b, store, { watched: [first], attributor: ok });
+        expect(scanned).toMatchObject({ state: 'COMPLETE', count: 1 });
+        expect(await store.listAttributed()).toHaveLength(1);
+        a.calls.length = 0;
+        b.calls.length = 0;
+        await expect(run(a, b, store, { watched: [first, second], attributor: ok })).rejects.toBeInstanceOf(ScopeChangedError);
+        expect(a.calls).toHaveLength(0);
+        expect(b.calls).toHaveLength(0);
+        expect(await store.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+        expect(await store.listAttributed()).toHaveLength(1);
+
+        const fresh = memoryStore();
+        const again = await run(a, b, fresh, { watched: [second, first], attributor: ok });
+        expect(again).toMatchObject({ state: 'COMPLETE', count: 2 });
+        expect(await fresh.listAttributed()).toHaveLength(2);
+        const ordered = await run(a, b, fresh, { watched: [first, second], attributor: ok });
+        expect(ordered).toMatchObject({ state: 'COMPLETE', count: 0 });
+    });
+
+    it('throws ScopeChangedError when the generation string changes', async () => {
+        const { a, b } = pair(3);
+        const store = memoryStore();
+        await run(a, b, store, { watched: [watched({ generation: 'BLSAggregator-4.12.0' })] });
+        a.calls.length = 0;
+        b.calls.length = 0;
+        await expect(run(a, b, store, {
+            watched: [watched({ generation: 'BLSAggregator-4.13.0' })],
+        })).rejects.toThrow(/new store/);
+        expect(a.calls).toHaveLength(0);
+        expect(b.calls).toHaveLength(0);
+        expect(await store.getCheckpoint()).toEqual({ block: 3, hash: bhash(3) });
+    });
+
+    it('throws ScopeChangedError when startBlock changes', async () => {
+        const { a, b } = pair(3);
+        const store = memoryStore();
+        await run(a, b, store);
+        a.calls.length = 0;
+        await expect(run(a, b, store, { startBlock: 2 })).rejects.toBeInstanceOf(ScopeChangedError);
+        expect(a.calls).toHaveLength(0);
+    });
+
+    it('rejects an unsafe provider name before any read and does not echo it', async () => {
+        const { a, b } = pair();
+        a.name = 'https://alice:s3cret@rpc.example/v1';
+        const store = memoryStore();
+        await expect(run(a, b, store)).rejects.toThrow(/^provider name is not a safe label$/);
+        expect(a.calls).toHaveLength(0);
+        expect(b.calls).toHaveLength(0);
     });
 
     it('halts with FinalityConflictError when either provider disagrees with the checkpoint hash', async () => {
@@ -758,7 +824,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         const { a, b } = pair(4);
         const { store, events, inner } = trace();
         await prior(inner, bhash(1));
-        const result = await run(a, b, store, { watched: [watched({ fromBlock: 3 })] });
+        const result = await run(a, b, store, { watched: [watched({ decode() { return null; } })] });
         expect(result).toMatchObject({ state: 'UNATTRIBUTED', unattributed: 1 });
         expect(events).not.toContain('resolve');
         expect((await inner.listUnresolved())[0]?.reason).toBe('stored action no longer decodable');
@@ -1224,20 +1290,23 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         const store = memoryStore();
         expect(unresolvedId('0xABCD', 10)).toBe('0xabcd:10');
         const seeded = row(1, 0);
-        await store.commit({ expectedRevision: 0, next: null, attributed: [], unresolved: [seeded], resolve: [] });
+        const scope = `0x${'11'.repeat(32)}` as Hex;
+        await store.commit({ expectedRevision: 0, scope, next: null, attributed: [], unresolved: [seeded], resolve: [] });
         await store.commit({
-            expectedRevision: 1, next: null, attributed: [], unresolved: [{ ...seeded, reason: 'second' }], resolve: [],
+            expectedRevision: 1, scope, next: null, attributed: [], unresolved: [{ ...seeded, reason: 'second' }], resolve: [],
         });
         expect(await store.listUnresolved()).toEqual([expect.objectContaining({ reason: 'second' })]);
-        await store.commit({ expectedRevision: 2, next: null, attributed: [], unresolved: [], resolve: [seeded.id.toUpperCase()] });
+        expect((await store.snapshot()).scope).toBe(scope);
+        await store.commit({ expectedRevision: 2, scope, next: null, attributed: [], unresolved: [], resolve: [seeded.id.toUpperCase()] });
         expect(await store.listUnresolved()).toEqual([]);
-        await store.commit({ expectedRevision: 3, next: { block: 1, hash: bhash(1) }, attributed: [], unresolved: [], resolve: [] });
+        await store.commit({ expectedRevision: 3, scope, next: { block: 1, hash: bhash(1) }, attributed: [], unresolved: [], resolve: [] });
         const cp = await store.getCheckpoint();
         cp!.block = 9;
         expect(await store.getCheckpoint()).toEqual({ block: 1, hash: bhash(1) });
         expect((await store.snapshot()).revision).toBe(4);
         await store.commit({
             expectedRevision: 4,
+            scope,
             next: { block: 2, hash: bhash(2) },
             attributed: [], unresolved: [], resolve: [],
         });
@@ -1245,11 +1314,21 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         const intruder = row(4, 1);
         await expect(store.commit({
             expectedRevision: 0,
+            scope,
             next: { block: 1, hash: bhash(1) },
             attributed: [],
             unresolved: [intruder],
             resolve: [],
         })).rejects.toBeInstanceOf(CheckpointConflictError);
+        await expect(store.commit({
+            expectedRevision: 5,
+            scope: `0x${'22'.repeat(32)}` as Hex,
+            next: { block: 9, hash: bhash(9) },
+            attributed: [],
+            unresolved: [row(5, 0)],
+            resolve: [],
+        })).rejects.toBeInstanceOf(ScopeChangedError);
+        expect(await store.listUnresolved()).toEqual([]);
         expect((await store.getCheckpoint())?.block).toBe(2);
         expect((await store.snapshot()).revision).toBe(5);
         expect(await store.listUnresolved()).toEqual([]);
@@ -1259,9 +1338,9 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             address: ADDR, kind: 'guardian-added', decoded: { kind: 'guardian-added' },
             log: makeLog(1, bhash(1), 0, TOPIC), attribution: { who: 'guardian' },
         };
-        await store.commit({ expectedRevision: 5, next: null, attributed: [attributed], unresolved: [], resolve: [] });
+        await store.commit({ expectedRevision: 5, scope, next: null, attributed: [attributed], unresolved: [], resolve: [] });
         await store.commit({
-            expectedRevision: 6, next: null, attributed: [{ ...attributed, attribution: { who: 'again' } }], unresolved: [], resolve: [],
+            expectedRevision: 6, scope, next: null, attributed: [{ ...attributed, attribution: { who: 'again' } }], unresolved: [], resolve: [],
         });
         expect(await store.listAttributed()).toEqual([expect.objectContaining({ attribution: { who: 'again' } })]);
     });
