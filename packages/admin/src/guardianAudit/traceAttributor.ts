@@ -3,7 +3,10 @@ import { attributeTx, MEASURE_BYTES, MEASURE_NODES, measure, receiptPos, sameLog
 import { quantity, type RawRpc } from './rpc.js';
 import type { Attributor, FoundAction } from './scan.js';
 
-const TRACE_OPTS = { tracer: 'callTracer', tracerConfig: { withLog: true } } as const;
+/** A new object on every call. A shared tracer config is mutable across requests. */
+function traceParams(hash: string): [string, { tracer: string; tracerConfig: { withLog: boolean } }] {
+    return [hash, { tracer: 'callTracer', tracerConfig: { withLog: true } }];
+}
 /** Same label rule as the core. A URL is not a provider name, and the name is never put in an error. */
 const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 
@@ -70,7 +73,7 @@ function statusOk(v: unknown): boolean {
 }
 
 function checkReceipt(
-    receipt: unknown, action: FoundAction, name: string,
+    receipt: unknown, action: ActionView, name: string,
 ): { logs: unknown[] } | { reason: string } {
     if (jsonRpcFailure(receipt)) return { reason: `receipt read failed on ${name}` };
     if (receipt === null || typeof receipt !== 'object') return { reason: `no receipt on ${name}` };
@@ -183,6 +186,9 @@ function sameText(a: unknown, b: unknown): boolean {
 }
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
+const WORD_RE = /^0x[0-9a-fA-F]{64}$/;
+/** Even-length hex. Calldata is bytes, so a single nibble is not an input. */
+const CALLDATA_RE = /^0x(?:[0-9a-fA-F]{2})*$/;
 /** Strict 0x quantity. Leading zeros are allowed; comparison is numeric. */
 const QTY_RE = /^0x[0-9a-fA-F]+$/;
 
@@ -259,11 +265,140 @@ function sameBlock(tx: Record<string, unknown>, receipt: unknown): boolean {
     return txBlock !== null && txBlock === receiptBlock;
 }
 
+interface ActionView {
+    txHash: string;
+    blockHash: string;
+    blockNumber: number;
+    logIndex: number;
+    log: { address: string; topics: readonly string[]; data: string };
+}
+
+interface BoundRpc {
+    readonly name: string;
+    readonly request: RawRpc['request'];
+}
+
+/**
+ * Name and request are read once, here. Later writes to the caller's object are not observed.
+ * `request` is bound so a replaced method is not the function this module calls.
+ */
+function bindRpc(rpc: unknown): BoundRpc {
+    if (!rpc || typeof rpc !== 'object') throw new Error('guardian audit provider is invalid');
+    const live = rpc as RawRpc;
+    assertProviderName(live.name);
+    if (typeof live.request !== 'function') throw new Error('guardian audit provider is invalid');
+    const name = live.name;
+    const request = live.request.bind(live);
+    return Object.freeze({ name, request });
+}
+
+function snapAction(action: FoundAction): ActionView | null {
+    if (!action || typeof action !== 'object') return null;
+    const txHash = action.txHash;
+    const blockHash = action.blockHash;
+    if (typeof txHash !== 'string' || !WORD_RE.test(txHash)) return null;
+    if (typeof blockHash !== 'string' || !WORD_RE.test(blockHash)) return null;
+    if (typeof action.blockNumber !== 'number' || !Number.isSafeInteger(action.blockNumber) || action.blockNumber < 0) {
+        return null;
+    }
+    if (typeof action.logIndex !== 'number' || !Number.isSafeInteger(action.logIndex) || action.logIndex < 0) {
+        return null;
+    }
+    const address = addressOf(action.address);
+    const log = action.log;
+    if (!address || !log || typeof log !== 'object') return null;
+    const logAddress = addressOf(log.address);
+    if (!logAddress || !Array.isArray(log.topics) || log.topics.length > 4) return null;
+    const topics: string[] = [];
+    for (const topic of log.topics) {
+        if (typeof topic !== 'string' || !WORD_RE.test(topic)) return null;
+        topics.push(topic);
+    }
+    if (typeof log.data !== 'string' || !CALLDATA_RE.test(log.data)) return null;
+    return Object.freeze({
+        txHash,
+        blockHash,
+        blockNumber: action.blockNumber,
+        logIndex: action.logIndex,
+        log: Object.freeze({ address: logAddress, topics: Object.freeze(topics), data: log.data }),
+    });
+}
+
+function copyQty(v: unknown): string | number | undefined {
+    if (typeof v === 'string' || typeof v === 'number') return v;
+    return undefined;
+}
+
+/** Provider-owned objects stay on the provider. Only copied primitives are returned. */
+function detachLog(raw: unknown): Record<string, unknown> {
+    const o = asRecord(raw);
+    const topicsIn = o && Array.isArray(o.topics) ? o.topics : [];
+    const topics: string[] = [];
+    for (const topic of topicsIn) {
+        if (typeof topic !== 'string') return Object.freeze({ address: undefined, topics: Object.freeze([]), data: undefined });
+        topics.push(topic);
+    }
+    const log: Record<string, unknown> = {
+        address: o && typeof o.address === 'string' ? o.address : undefined,
+        topics: Object.freeze(topics),
+        data: o && typeof o.data === 'string' ? o.data : undefined,
+    };
+    if (o && Object.prototype.hasOwnProperty.call(o, 'logIndex')) log.logIndex = copyQty(o.logIndex);
+    if (o && Object.prototype.hasOwnProperty.call(o, 'index')) log.index = copyQty(o.index);
+    return Object.freeze(log);
+}
+
+function detachReceipt(raw: unknown): Record<string, unknown> | null {
+    const o = asRecord(raw);
+    if (!o) return null;
+    const logs = Array.isArray(o.logs) ? Object.freeze(o.logs.map((item) => detachLog(item))) : undefined;
+    const receipt: Record<string, unknown> = {
+        transactionHash: typeof o.transactionHash === 'string' ? o.transactionHash : undefined,
+        blockHash: typeof o.blockHash === 'string' ? o.blockHash : undefined,
+        blockNumber: copyQty(o.blockNumber),
+        transactionIndex: typeof o.transactionIndex === 'string' ? o.transactionIndex : undefined,
+        status: copyQty(o.status),
+        logs,
+    };
+    if (Object.prototype.hasOwnProperty.call(o, 'contractAddress')) {
+        const claimed = o.contractAddress;
+        receipt.contractAddress = claimed === null ? null : (typeof claimed === 'string' ? claimed : undefined);
+    }
+    return Object.freeze(receipt);
+}
+
+function detachTx(raw: unknown): Record<string, unknown> | null {
+    const o = asRecord(raw);
+    if (!o) return null;
+    const tx: Record<string, unknown> = {
+        hash: typeof o.hash === 'string' ? o.hash : undefined,
+        blockHash: typeof o.blockHash === 'string' ? o.blockHash : undefined,
+        blockNumber: copyQty(o.blockNumber),
+        transactionIndex: typeof o.transactionIndex === 'string' ? o.transactionIndex : undefined,
+        from: typeof o.from === 'string' ? o.from : undefined,
+        input: typeof o.input === 'string' ? o.input : undefined,
+        value: typeof o.value === 'string' ? o.value : undefined,
+        nonce: typeof o.nonce === 'string' ? o.nonce : undefined,
+    };
+    if (Object.prototype.hasOwnProperty.call(o, 'to')) {
+        tx.to = o.to === null ? null : (typeof o.to === 'string' ? o.to : undefined);
+    }
+    return Object.freeze(tx);
+}
+
+function logShapeOk(log: unknown): boolean {
+    const o = asRecord(log);
+    if (!o || !addressOf(o.address) || typeof o.data !== 'string' || !CALLDATA_RE.test(o.data)) return false;
+    const topics = o.topics;
+    if (!Array.isArray(topics) || topics.length > 4) return false;
+    return topics.every((topic) => typeof topic === 'string' && WORD_RE.test(topic));
+}
+
 type Side =
-    | { ok: true; receipt: unknown; tx: Record<string, unknown>; logs: unknown[] }
+    | { ok: true; receipt: Record<string, unknown>; tx: Record<string, unknown>; logs: unknown[] }
     | { ok: false; reason: string };
 
-async function readSide(rpc: RawRpc, action: FoundAction): Promise<Side> {
+async function readSide(rpc: BoundRpc, action: ActionView): Promise<Side> {
     const hash = action.txHash;
     const [receiptR, txR] = await Promise.all([
         rpc.request({ method: 'eth_getTransactionReceipt', params: [hash] }).then(
@@ -280,31 +415,48 @@ async function readSide(rpc: RawRpc, action: FoundAction): Promise<Side> {
     // Before checkReceipt, sameLog, or any other walk of the payloads.
     const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
     if (!measure(receiptR.v, budget) || !measure(txR.v, budget)) return { ok: false, reason: 'trace too large' };
-    const checked = checkReceipt(receiptR.v, action, rpc.name);
+    // Copy the fields we keep before any later await can mutate the provider's objects.
+    const receipt = detachReceipt(receiptR.v);
+    const tx = detachTx(txR.v);
+    if (jsonRpcFailure(receiptR.v)) return { ok: false, reason: `receipt read failed on ${rpc.name}` };
+    if (!receipt) return { ok: false, reason: `no receipt on ${rpc.name}` };
+    const checked = checkReceipt(receipt, action, rpc.name);
     if ('reason' in checked) return { ok: false, reason: checked.reason };
+    if (checked.logs.some((log) => !logShapeOk(log))) return { ok: false, reason: `receipt log missing on ${rpc.name}` };
     if (jsonRpcFailure(txR.v)) return { ok: false, reason: `transaction read failed on ${rpc.name}` };
-    if (txR.v === null || typeof txR.v !== 'object') return { ok: false, reason: `no transaction on ${rpc.name}` };
-    const tx = txR.v as Record<string, unknown>;
-    if (!sameBlock(tx, receiptR.v)) return { ok: false, reason: 'providers disagree on the transaction' };
-    const receiptHeight = quantity((receiptR.v as Record<string, unknown>).blockNumber);
+    if (!tx) return { ok: false, reason: `no transaction on ${rpc.name}` };
+    if (!sameBlock(tx, receipt)) return { ok: false, reason: 'providers disagree on the transaction' };
+    const receiptHeight = quantity(receipt.blockNumber);
     if (receiptHeight === null || receiptHeight !== action.blockNumber || quantity(tx.blockNumber) !== action.blockNumber) {
         return { ok: false, reason: `block number mismatch on ${rpc.name}` };
     }
     // Each provider is checked on its own. Agreement between them is not enough.
-    if (!sameText(tx.hash, action.txHash)) return { ok: false, reason: `transaction hash mismatch on ${rpc.name}` };
+    if (typeof tx.hash !== 'string' || !WORD_RE.test(tx.hash) || !sameText(tx.hash, action.txHash)) {
+        return { ok: false, reason: `transaction hash mismatch on ${rpc.name}` };
+    }
+    if (addressOf(tx.from) === null) return { ok: false, reason: `transaction from invalid on ${rpc.name}` };
+    if (Object.prototype.hasOwnProperty.call(tx, 'to') && tx.to !== null && addressOf(tx.to) === null) {
+        return { ok: false, reason: `transaction to invalid on ${rpc.name}` };
+    }
+    if (Object.prototype.hasOwnProperty.call(receipt, 'contractAddress')
+        && receipt.contractAddress !== null
+        && addressOf(receipt.contractAddress) === null) {
+        return { ok: false, reason: `contract address mismatch on ${rpc.name}` };
+    }
     if (hexQuantity(tx.value) === null) return { ok: false, reason: `transaction value invalid on ${rpc.name}` };
-    const receiptIndex = receiptR.v && typeof receiptR.v === 'object'
-        ? (receiptR.v as Record<string, unknown>).transactionIndex
-        : undefined;
+    if (typeof tx.input !== 'string' || !CALLDATA_RE.test(tx.input)) {
+        return { ok: false, reason: `transaction input invalid on ${rpc.name}` };
+    }
+    if (hexQuantity(tx.nonce) === null) return { ok: false, reason: `transaction nonce invalid on ${rpc.name}` };
     const txIndex = hexQuantity(tx.transactionIndex);
-    const receiptTxIndex = hexQuantity(receiptIndex);
+    const receiptTxIndex = hexQuantity(receipt.transactionIndex);
     if (txIndex === null || receiptTxIndex === null || txIndex !== receiptTxIndex) {
         return { ok: false, reason: `transaction index mismatch on ${rpc.name}` };
     }
-    if (tx.to === null && boundCreateAddress(tx, receiptR.v) === null) {
+    if (tx.to === null && boundCreateAddress(tx, receipt) === null) {
         return { ok: false, reason: `contract address mismatch on ${rpc.name}` };
     }
-    return { ok: true, receipt: receiptR.v, tx, logs: checked.logs };
+    return { ok: true, receipt, tx, logs: checked.logs };
 }
 
 type Traced =
@@ -313,9 +465,10 @@ type Traced =
 
 /**
  * The trace RPC is keyed only by tx hash. Re-read the receipt afterwards and pin it to the
- * block the completeness providers already agreed on.
+ * transaction the completeness providers already agreed on: hash, block hash, block number,
+ * transaction index, and status. A non-object or a JSON-RPC error is a failed read.
  */
-async function traceReceiptBinds(rpc: RawRpc, action: FoundAction, verified: unknown): Promise<string | null> {
+async function traceReceiptBinds(rpc: BoundRpc, action: ActionView, verified: Record<string, unknown>): Promise<string | null> {
     const got = await rpc.request({ method: 'eth_getTransactionReceipt', params: [action.txHash] }).then(
         (v) => ({ ok: true as const, v }),
         () => ({ ok: false as const }),
@@ -323,16 +476,32 @@ async function traceReceiptBinds(rpc: RawRpc, action: FoundAction, verified: unk
     if (!got.ok) return `trace receipt read failed on ${rpc.name}`;
     const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
     if (!measure(got.v, budget)) return 'trace too large';
-    if (!got.v || typeof got.v !== 'object') return `trace receipt read failed on ${rpc.name}`;
-    const claimed = got.v as Record<string, unknown>;
-    const bound = verified && typeof verified === 'object' ? verified as Record<string, unknown> : {};
-    if (lc(claimed.blockHash) === '' || lc(claimed.blockHash) !== lc(bound.blockHash)) {
+    if (jsonRpcFailure(got.v)) return `trace receipt read failed on ${rpc.name}`;
+    const claimed = asRecord(got.v);
+    if (!claimed
+        || typeof claimed.transactionHash !== 'string'
+        || typeof claimed.blockHash !== 'string'
+        || typeof claimed.blockNumber !== 'string'
+        || typeof claimed.transactionIndex !== 'string'
+        || typeof claimed.status !== 'string') {
+        return `trace receipt read failed on ${rpc.name}`;
+    }
+    if (!sameHexText(claimed.transactionHash, verified.transactionHash)) {
+        return `trace receipt transaction mismatch on ${rpc.name}`;
+    }
+    if (lc(claimed.blockHash) === '' || lc(claimed.blockHash) !== lc(verified.blockHash)) {
         return `trace receipt block mismatch on ${rpc.name}`;
     }
+    if (!sameQty(claimed.blockNumber, verified.blockNumber)) {
+        return `trace receipt block number mismatch on ${rpc.name}`;
+    }
     const claimedIndex = hexQuantity(claimed.transactionIndex);
-    const boundIndex = hexQuantity(bound.transactionIndex);
+    const boundIndex = hexQuantity(verified.transactionIndex);
     if (claimedIndex === null || boundIndex === null || claimedIndex !== boundIndex) {
         return `trace receipt index mismatch on ${rpc.name}`;
+    }
+    if (!sameQty(claimed.status, verified.status)) {
+        return `trace receipt status mismatch on ${rpc.name}`;
     }
     return null;
 }
@@ -353,10 +522,10 @@ function seal(attribution: LogAttribution, attributionSource: string) {
 }
 
 async function readTrace(
-    rpc: RawRpc, action: FoundAction, tx: Record<string, unknown>, receipt: unknown, logs: unknown[],
+    rpc: BoundRpc, action: ActionView, tx: Record<string, unknown>, receipt: Record<string, unknown>, logs: unknown[],
 ): Promise<Traced> {
     const got = await rpc.request({
-        method: 'debug_traceTransaction', params: [action.txHash, TRACE_OPTS],
+        method: 'debug_traceTransaction', params: traceParams(action.txHash),
     }).then(
         (v) => ({ ok: true as const, v }),
         (e: unknown) => ({ ok: false as const, e }),
@@ -365,24 +534,39 @@ async function readTrace(
         const reason = traceUnsupported(got.e) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
     }
-    // After the trace, not before. A receipt from another block rejects the trace.
+    // Finish with the trace value before the next await. The receipt re-read must not be a window
+    // in which the provider can still change this object.
+    // MEASURE_NODES is fail-closed: a larger trace is rejected even when it would have been legitimate.
+    let traced: Traced;
+    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+    if (!measure(got.v, budget)) {
+        traced = { ok: false, reason: 'trace too large' };
+    } else {
+        const failure = jsonRpcFailure(got.v);
+        if (failure) {
+            const reason = traceUnsupported(failure) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
+            traced = { ok: false, reason };
+        } else {
+            const mismatch = traceMatchesTx(got.v, tx, receipt, rpc.name);
+            if (mismatch) {
+                traced = { ok: false, reason: mismatch };
+            } else {
+                const aligned = attributeTx(got.v, logs, { only: [action.logIndex] });
+                if (!aligned.aligned) {
+                    traced = { ok: false, reason: aligned.why };
+                } else {
+                    const attribution = aligned.byLogIndex.get(action.logIndex);
+                    traced = attribution
+                        ? { ok: true, attribution }
+                        : { ok: false, reason: `attribution missing on ${rpc.name}` };
+                }
+            }
+        }
+    }
+    // After the trace, not before. A receipt for another transaction rejects the trace.
     const unbound = await traceReceiptBinds(rpc, action, receipt);
     if (unbound) return { ok: false, reason: unbound };
-    // MEASURE_NODES is fail-closed: a larger trace is rejected even when it would have been legitimate.
-    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
-    if (!measure(got.v, budget)) return { ok: false, reason: 'trace too large' };
-    const failure = jsonRpcFailure(got.v);
-    if (failure) {
-        const reason = traceUnsupported(failure) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
-        return { ok: false, reason };
-    }
-    const mismatch = traceMatchesTx(got.v, tx, receipt, rpc.name);
-    if (mismatch) return { ok: false, reason: mismatch };
-    const aligned = attributeTx(got.v, logs, action.logIndex);
-    if (!aligned.aligned) return { ok: false, reason: aligned.why };
-    const attribution = aligned.byLogIndex.get(action.logIndex);
-    if (!attribution) return { ok: false, reason: `attribution missing on ${rpc.name}` };
-    return { ok: true, attribution };
+    return traced;
 }
 
 export interface TraceAttributorOptions {
@@ -400,12 +584,14 @@ export interface TraceAttributorOptions {
  * the other completeness provider has no trace API.
  *
  * `debug_traceTransaction` selects by transaction hash, not by block. After that call returns,
- * each trace provider's receipt is read again and its `blockHash` and `transactionIndex` must
- * equal the dual-verified receipt. This does not switch to `debug_traceBlockByHash` (availability
- * on our providers is unverified). Residual trust, stated here: `scanRange` only emits actions
- * from a finalized block, and a transaction hash belongs to exactly one canonical block, so a
- * trace of that hash executes in that block. A trace provider that traces a non-canonical copy
- * of the hash is outside this model. A second trace provider is how that case is checked.
+ * the trace value is read synchronously, then each trace provider's receipt is read again.
+ * That re-read must match the dual-verified receipt on `transactionHash`, `blockHash`,
+ * `blockNumber`, `transactionIndex`, and `status`. This does not switch to
+ * `debug_traceBlockByHash` (availability on our providers is unverified). Residual trust, stated
+ * here: `scanRange` only emits actions from a finalized block, and a transaction hash belongs to
+ * exactly one canonical block, so a trace of that hash executes in that block. A trace provider
+ * that returns the canonical receipt together with a forged trace of a non-canonical copy is
+ * outside this model. A second trace provider is how that case is checked.
  *
  * The decoded JSON is already allocated by the transport, so callers must use a transport with a
  * response-size cap. This module bounds its own work after decoding. A trace above
@@ -413,42 +599,38 @@ export interface TraceAttributorOptions {
  */
 export function traceAttributor(opts: TraceAttributorOptions): Attributor {
     const listed = opts.providers;
-    const providers = Object.freeze([listed[0], listed[1]]);
-    const pa = providers[0];
-    const pb = providers[1];
-    if (listed.length !== 2 || !pa || !pb) {
+    if (!listed || listed.length !== 2 || !listed[0] || !listed[1] || listed[0] === listed[1]) {
         throw new Error('guardian audit requires two distinct providers');
     }
-    assertProviderName(pa.name);
-    assertProviderName(pb.name);
-    if (pa === pb || pa.name === pb.name) {
-        throw new Error('guardian audit requires two distinct providers');
-    }
+    const pa = bindRpc(listed[0]);
+    const pb = bindRpc(listed[1]);
+    if (pa.name === pb.name) throw new Error('guardian audit requires two distinct providers');
+    // Copies of the bound endpoints, not the caller's array. Later writes to that array are not observed.
+    const providers = Object.freeze([pa, pb]);
     const traceListed = opts.traceProviders;
-    if (traceListed.length !== 1 && traceListed.length !== 2) {
+    if (!traceListed || (traceListed.length !== 1 && traceListed.length !== 2)) {
         throw new Error('guardian audit requires one or two trace providers');
     }
-    const ta = traceListed[0];
-    const tb = traceListed.length === 2 ? traceListed[1] : undefined;
-    if (!ta) throw new Error('guardian audit requires one or two trace providers');
-    assertProviderName(ta.name);
-    if (tb) assertProviderName(tb.name);
-    if (tb && (ta === tb || ta.name === tb.name)) {
+    if (traceListed.length === 2 && traceListed[0] === traceListed[1]) {
         throw new Error('guardian audit requires two distinct providers');
     }
-    // Copies, not the caller's arrays. Later writes to those arrays are not observed.
+    const ta = bindRpc(traceListed[0]);
+    const tb = traceListed.length === 2 ? bindRpc(traceListed[1]) : undefined;
+    if (tb && ta.name === tb.name) throw new Error('guardian audit requires two distinct providers');
     const traces = Object.freeze(tb ? [ta, tb] : [ta]);
     return {
         async attribute(action) {
+            const snap = snapAction(action);
+            if (!snap) return { ok: false, reason: 'action invalid' };
             try {
-                const [sa, sb] = await Promise.all([readSide(pa, action), readSide(pb, action)]);
+                const [sa, sb] = await Promise.all([readSide(providers[0], snap), readSide(providers[1], snap)]);
                 if (!sa.ok) return sa;
                 if (!sb.ok) return sb;
                 if (!sameReceipt(sa.receipt, sb.receipt) || !sameTx(sa.tx, sb.tx)) {
                     return { ok: false, reason: 'providers disagree on the transaction' };
                 }
                 const traced = await Promise.all(
-                    traces.map((rpc) => readTrace(rpc, action, sa.tx, sa.receipt, sa.logs)),
+                    traces.map((rpc) => readTrace(rpc, snap, sa.tx, sa.receipt, sa.logs)),
                 );
                 const first = traced[0]!;
                 if (!first.ok) return first;

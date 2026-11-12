@@ -801,4 +801,220 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         expect(() => traceAttributor({ providers: [alpha, beta], traceProviders: [alpha, again] }))
             .toThrow('guardian audit requires two distinct providers');
     });
+
+    it('keeps the verified sender when the provider mutates its transaction during the trace', async () => {
+        let live: Record<string, unknown> | null = null;
+        const act = action();
+        const alpha: RawRpc = {
+            name: 'alpha',
+            async request({ method, params }) {
+                if (method === 'eth_getTransactionReceipt') {
+                    act.txHash = `0x${'33'.repeat(32)}` as Hex;
+                    act.blockNumber = 99;
+                    return receiptOf();
+                }
+                if (method === 'eth_getTransactionByHash') {
+                    live = txOf();
+                    return live;
+                }
+                live!.from = OTHER;
+                expect(params?.[0]).toBe(TX);
+                return traceOf(OTHER);
+            },
+        };
+        const beta: RawRpc = {
+            name: 'beta',
+            async request({ method }) {
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                return traceOf();
+            },
+        };
+        const result = await traceAttributor({
+            providers: [alpha, beta],
+            traceProviders: [alpha],
+        }).attribute(act);
+        expect(result).toEqual({ ok: false, reason: 'trace from mismatch on alpha' });
+        if (result.ok) expect(result.attribution.transactionSender).not.toBe(getAddress(OTHER));
+    });
+
+    it('uses the name and request captured at construction', async () => {
+        let fail = false;
+        const alpha: RawRpc = {
+            name: 'alpha',
+            async request({ method }) {
+                if (fail) throw new Error(LEAK);
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                return traceOf();
+            },
+        };
+        const beta: RawRpc = {
+            name: 'beta',
+            async request({ method }) {
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                return traceOf();
+            },
+        };
+        const built = traceAttributor({ providers: [alpha, beta], traceProviders: [alpha] });
+        alpha.name = LEAK;
+        fail = true;
+        const failed = await built.attribute(action());
+        expect(failed).toEqual({ ok: false, reason: 'receipt read failed on alpha' });
+        if (!failed.ok) {
+            expect(failed.reason).not.toContain('LEAKED');
+            expect(failed.reason).not.toContain('https');
+        }
+
+        let replaced = 0;
+        const alpha2: RawRpc = {
+            name: 'alpha',
+            async request({ method }) {
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                return traceOf();
+            },
+        };
+        const built2 = traceAttributor({ providers: [alpha2, beta], traceProviders: [alpha2] });
+        alpha2.request = async () => {
+            replaced += 1;
+            throw new Error(LEAK);
+        };
+        const kept = await built2.attribute(action());
+        expect(replaced).toBe(0);
+        expect(kept).toMatchObject({ ok: true, attribution: { attributionSource: 'single:alpha' } });
+    });
+
+    it('gives every trace request its own tracer config', async () => {
+        const seen: boolean[] = [];
+        const make = (name: string): RawRpc => ({
+            name,
+            async request({ method, params }) {
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                const opts = params?.[1] as { tracerConfig: { withLog: boolean } };
+                seen.push(opts.tracerConfig.withLog);
+                opts.tracerConfig.withLog = false;
+                await Promise.resolve();
+                return traceOf();
+            },
+        });
+        const alpha = make('alpha');
+        const beta = make('beta');
+        const built = traceAttributor({ providers: [alpha, beta], traceProviders: [alpha, beta] });
+        expect(await built.attribute(action())).toMatchObject({
+            ok: true,
+            attribution: { attributionSource: 'dual:alpha+beta' },
+        });
+        expect(await built.attribute(action())).toMatchObject({ ok: true });
+        expect(seen).toEqual([true, true, true, true]);
+    });
+
+    it('rejects a trace receipt for a different transaction, height, or status', async () => {
+        const otherTx = `0x${'44'.repeat(32)}` as Hex;
+        const run = async (second: Record<string, unknown>) => {
+            let alphaReceipts = 0;
+            const alpha: RawRpc = {
+                name: 'alpha',
+                async request({ method }) {
+                    if (method === 'eth_getTransactionReceipt') {
+                        alphaReceipts += 1;
+                        return alphaReceipts > 1 ? receiptOf(second) : receiptOf();
+                    }
+                    if (method === 'eth_getTransactionByHash') return txOf();
+                    return traceOf();
+                },
+            };
+            const beta: RawRpc = {
+                name: 'beta',
+                async request({ method }) {
+                    if (method === 'eth_getTransactionReceipt') return receiptOf();
+                    if (method === 'eth_getTransactionByHash') return txOf();
+                    return traceOf();
+                },
+            };
+            return traceAttributor({ providers: [alpha, beta], traceProviders: [alpha] }).attribute(action());
+        };
+        expect(await run({ transactionHash: otherTx })).toEqual({
+            ok: false, reason: 'trace receipt transaction mismatch on alpha',
+        });
+        expect(await run({ blockNumber: '0x11' })).toEqual({
+            ok: false, reason: 'trace receipt block number mismatch on alpha',
+        });
+        expect(await run({ status: '0x0' })).toEqual({
+            ok: false, reason: 'trace receipt status mismatch on alpha',
+        });
+        expect(await run({ error: { code: -32000, message: LEAK } })).toEqual({
+            ok: false, reason: 'trace receipt read failed on alpha',
+        });
+        const malformed = await run({ transactionHash: undefined, blockNumber: 16 });
+        expect(malformed).toEqual({ ok: false, reason: 'trace receipt read failed on alpha' });
+        if (!malformed.ok) expect(malformed.reason).not.toContain('LEAKED');
+    });
+
+    it('rejects a two-element trace list that does not contain two providers', () => {
+        const make = (name: string): RawRpc => ({ name, async request() { return null; } });
+        const alpha = make('alpha');
+        const beta = make('beta');
+        const t = make('t');
+        const blow = (run: () => unknown) => {
+            let thrown = '';
+            try {
+                run();
+            } catch (e) {
+                thrown = e instanceof Error ? e.message : String(e);
+            }
+            expect(thrown).toBe('guardian audit provider is invalid');
+            expect(thrown).not.toContain('secret');
+            expect(thrown).not.toContain('https');
+        };
+        blow(() => traceAttributor({
+            providers: [alpha, beta],
+            traceProviders: [t, null] as unknown as readonly [RawRpc, RawRpc],
+        }));
+        blow(() => traceAttributor({
+            providers: [alpha, beta],
+            traceProviders: [t, undefined] as unknown as readonly [RawRpc, RawRpc],
+        }));
+        blow(() => traceAttributor({
+            providers: [alpha, beta],
+            traceProviders: [{ name: 't', request: 'nope' } as unknown as RawRpc],
+        }));
+        blow(() => traceAttributor({
+            providers: [alpha, { name: 'beta', request: 1 } as unknown as RawRpc],
+            traceProviders: [t],
+        }));
+    });
+
+    it('rejects a malformed action before any RPC and rejects agreeing garbage calldata', async () => {
+        let calls = 0;
+        const make = (name: string): RawRpc => ({
+            name,
+            async request() {
+                calls += 1;
+                return null;
+            },
+        });
+        const built = traceAttributor({
+            providers: [make('alpha'), make('beta')],
+            traceProviders: [make('gamma')],
+        });
+        const bad = action();
+        bad.txHash = 'not-a-hash' as Hex;
+        bad.blockHash = 'not-a-block' as Hex;
+        bad.log = { ...bad.log, data: 'garbage' as Hex };
+        const rejected = await built.attribute(bad);
+        expect(rejected).toEqual({ ok: false, reason: 'action invalid' });
+        expect(calls).toBe(0);
+        if (!rejected.ok) {
+            expect(rejected.reason).not.toContain('not-a-hash');
+            expect(rejected.reason).not.toContain('garbage');
+        }
+        expect(await withTrace(
+            { ...traceOf(), input: 'garbage' },
+            receiptOf(),
+            txOf({ input: 'garbage' }),
+        )).toEqual({ ok: false, reason: 'transaction input invalid on alpha' });
+    });
 });

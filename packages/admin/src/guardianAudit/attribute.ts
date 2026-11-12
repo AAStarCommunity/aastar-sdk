@@ -47,6 +47,14 @@ const MAX_TRACE_DEPTH = 1025;
 /** Stop a wide or chatty trace before path materialization can blow up. */
 const MAX_FRAMES = 100_000;
 const MAX_LOGS = 10_000;
+/** `only` may name at most this many receipt indexes. */
+const MAX_ONLY = 16;
+/**
+ * Copied hops across every materialized path. Checked before `pathOf` allocates.
+ * 16 indexes times the 1025-frame depth cap is 16_400, so a trace this module
+ * already accepted cannot reach the cap. It still runs first.
+ */
+const MAX_MATERIALIZED_HOPS = 100_000;
 /** Cumulative string bytes across one raw receipt + trace, before any normalization. */
 const MAX_LOG_BYTES = 8 * 1024 * 1024;
 /**
@@ -126,8 +134,14 @@ function missingPos(l: unknown): boolean {
  * One iterative walk of a raw JSON value. Charges 1 node for the value itself, for each array
  * element, and for each own property; charges string length and own-property name length to bytes.
  * `array.length` is compared to the remaining node budget before any element is pushed. Object
- * properties are visited with `for...in` and an own-property check; a running counter stops at the
- * remaining node budget, so the key list is never allocated. Returns false at the first exceed.
+ * properties are visited with `for...in` and an own-property check. A running counter stops the
+ * walk at the remaining node budget, so this function does not allocate its own key list.
+ * That bound starts only after the engine has collected the object's keys: `for...in` can request
+ * every key before the loop body runs the budget check. A proxy over hundreds of thousands of
+ * properties still receives that full collection. Replacing `Object.keys`, `Object.entries`, or
+ * `Reflect.ownKeys` does not intercept it. This is why the transport must cap response size —
+ * see `RawRpc` in `rpc.ts`: the decoded JSON is already allocated at decode, and guardian-audit
+ * bounds its own work after that. Returns false at the first exceed.
  * Depth cannot outrun the node budget: every stacked value already spent a node.
  */
 export function measure(value: unknown, budget: { nodes: number; bytes: number }): boolean {
@@ -292,14 +306,28 @@ function pathOf(tail: PathLink | null): readonly CallHop[] {
     return Object.freeze(hops);
 }
 
-function publish(log: FlatLog, index: number, focusLogIndex: number | undefined): LogAttribution {
-    const build = focusLogIndex === undefined || index === focusLogIndex;
+/** Shared by every log whose path is not materialized. One array, no per-log copies. */
+const NO_PATH: readonly CallHop[] = Object.freeze([]);
+
+function publish(log: FlatLog, materialize: boolean): LogAttribution {
     return Object.freeze({
         transactionSender: log.transactionSender,
         immediateCaller: log.immediateCaller,
         emitter: log.emitter,
-        forwardingPath: build ? pathOf(log.path) : Object.freeze([] as CallHop[]),
+        forwardingPath: materialize ? pathOf(log.path) : NO_PATH,
     });
+}
+
+/** `undefined` means "materialize nothing". `'reject'` is over the index cap or not a safe index. */
+function onlySet(only: number[] | undefined): Set<number> | null | 'reject' {
+    if (only === undefined) return null;
+    if (!Array.isArray(only) || only.length > MAX_ONLY) return 'reject';
+    const set = new Set<number>();
+    for (const index of only) {
+        if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0) return 'reject';
+        set.add(index);
+    }
+    return set;
 }
 
 function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
@@ -461,12 +489,16 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
 /**
  * Receipt positions (`index` or `logIndex`) must be strict, unique and contiguous.
  * Flattened trace logs, in emission order, must then equal those receipt logs 1:1.
- * `focusLogIndex`, when passed, materializes `forwardingPath` only for that receipt index.
- * Omit it and every log's path is built. Each published path is its own frozen hop list.
+ * `opts.only` names at most 16 receipt indexes whose `forwardingPath` is copied.
+ * Omit it and every log shares one frozen empty path — hops are not copied per log.
+ * Copied hops are counted first and rejected above 100_000 before `pathOf` runs.
+ * Each materialized path is its own frozen hop list.
  */
 export function attributeTx(
-    trace: unknown, receiptLogs: unknown[], focusLogIndex?: number,
+    trace: unknown, receiptLogs: unknown[], opts?: { only?: number[] },
 ): AttributeTxResult {
+    const wanted = onlySet(opts?.only);
+    if (wanted === 'reject') return { aligned: false, why: 'trace too large' };
     if (Array.isArray(receiptLogs) && receiptLogs.length > MAX_LOGS) {
         return { aligned: false, why: 'trace too large' };
     }
@@ -503,13 +535,26 @@ export function attributeTx(
         return { aligned: false, why: `trace has ${flat.logs.length} logs, receipt ${rl.length}` };
     }
 
-    const byLogIndex = new Map<number, LogAttribution>();
     for (let i = 0; i < rl.length; i++) {
         if (!sameLog(flat.logs[i]!.raw, rl[i])) {
             return { aligned: false, why: `log ${i} differs between trace and receipt` };
         }
+    }
+    if (wanted) {
+        let hops = 0;
+        for (let i = 0; i < rl.length; i++) {
+            const index = receiptPos(rl[i])!;
+            if (!wanted.has(index)) continue;
+            for (let link = flat.logs[i]!.path; link; link = link.parent) {
+                hops += 1;
+                if (hops > MAX_MATERIALIZED_HOPS) return { aligned: false, why: 'trace too large' };
+            }
+        }
+    }
+    const byLogIndex = new Map<number, LogAttribution>();
+    for (let i = 0; i < rl.length; i++) {
         const index = receiptPos(rl[i])!;
-        byLogIndex.set(index, publish(flat.logs[i]!, index, focusLogIndex));
+        byLogIndex.set(index, publish(flat.logs[i]!, wanted !== null && wanted.has(index)));
     }
     return { aligned: true, byLogIndex };
 }

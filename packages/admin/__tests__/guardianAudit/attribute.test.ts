@@ -45,7 +45,7 @@ function hop(type: CallHop['type'], from: string, to: string, selector: string |
 }
 
 function one(trace: unknown, receipt: unknown[], logIndex: number): LogAttribution {
-    const res = attributeTx(trace, receipt);
+    const res = attributeTx(trace, receipt, { only: [logIndex] });
     expect(res.aligned, res.aligned ? '' : res.why).toBe(true);
     if (!res.aligned) throw new Error(res.why);
     const got = res.byLogIndex.get(logIndex);
@@ -217,7 +217,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             ],
             logs: [{ ...tlog(ENTRY, TOPIC_B), position: 2 }],
         });
-        const res = attributeTx(trace, [rlog(GUARD, 0), rlog(ENTRY, 1, TOPIC_B)]);
+        const res = attributeTx(trace, [rlog(GUARD, 0), rlog(ENTRY, 1, TOPIC_B)], { only: [0, 1] });
         expect(res.aligned).toBe(true);
         if (!res.aligned) return;
         expect(res.byLogIndex.get(0)?.immediateCaller).toBe(addr(ENTRY));
@@ -308,7 +308,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
                 frame('CALL', ENTRY, GUARD, { input: '0x22222222', logs: [tlog(GUARD, TOPIC_B)] }),
             ],
         });
-        const res = attributeTx(trace, [rlog(GUARD, 11, TOPIC_B), rlog(GUARD, 10, TOPIC)]);
+        const res = attributeTx(trace, [rlog(GUARD, 11, TOPIC_B), rlog(GUARD, 10, TOPIC)], { only: [10, 11] });
         expect(res.aligned).toBe(true);
         if (!res.aligned) return;
         expect(res.byLogIndex.size).toBe(2);
@@ -332,7 +332,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             ],
         });
         const receipt = [rlog(GUARD, 10, TOPIC), rlog(GUARD, 11, TOPIC_B)];
-        const res = attributeTx(trace, receipt);
+        const res = attributeTx(trace, receipt, { only: [10, 11] });
         expect(res.aligned).toBe(true);
         if (!res.aligned) return;
         const first = res.byLogIndex.get(10)!;
@@ -353,7 +353,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         expect(hop.from).toBe(kept);
         expect(second.forwardingPath[0]!.from).toBe(kept);
 
-        const focused = attributeTx(trace, receipt, 10);
+        const focused = attributeTx(trace, receipt, { only: [10] });
         expect(focused.aligned).toBe(true);
         if (!focused.aligned) return;
         expect(focused.byLogIndex.get(10)!.forwardingPath).toHaveLength(2);
@@ -457,7 +457,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             { address: GUARD, topics: [TOPIC_B], data: '0x', index: '0x1' },
             { address: GUARD, topics: [TOPIC], data: '0x', logIndex: '0' },
         ];
-        const res = attributeTx(trace, receipt);
+        const res = attributeTx(trace, receipt, { only: [0, 1] });
         expect(res.aligned).toBe(true);
         if (!res.aligned) return;
         expect([...res.byLogIndex.keys()]).toEqual([0, 1]);
@@ -624,6 +624,40 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             Object.entries = entries;
             Reflect.ownKeys = ownKeys;
         }
+    });
+
+    it('does not copy a hop per log unless only names at most 16 indexes', () => {
+        // 512 frames and 500 leaf logs. Copying every hop for every log is 256_000 objects.
+        const logs = Array.from({ length: 500 }, () => tlog(TARGET));
+        let node: Record<string, unknown> = frame('CALL', TARGET, TARGET, { logs });
+        for (let i = 0; i < 510; i++) node = frame('CALL', TARGET, TARGET, { calls: [node] });
+        const trace = frame('CALL', EOA, TARGET, { calls: [node] });
+        const receipt = Array.from({ length: 500 }, (_, i) => rlog(TARGET, i));
+        const bare = attributeTx(trace, receipt);
+        expect(bare.aligned).toBe(true);
+        if (!bare.aligned) return;
+        const attributions = [...bare.byLogIndex.values()];
+        expect(attributions).toHaveLength(500);
+        const shared = attributions[0]!.forwardingPath;
+        expect(shared).toEqual([]);
+        expect(Object.isFrozen(shared)).toBe(true);
+        for (const item of attributions) expect(item.forwardingPath).toBe(shared);
+
+        const oneLog = attributeTx(trace, receipt, { only: [250] });
+        expect(oneLog.aligned).toBe(true);
+        if (!oneLog.aligned) return;
+        expect(oneLog.byLogIndex.get(250)!.forwardingPath).toHaveLength(512);
+        const rest = oneLog.byLogIndex.get(0)!.forwardingPath;
+        expect(rest).toEqual([]);
+        expect(oneLog.byLogIndex.get(1)!.forwardingPath).toBe(rest);
+        expect(oneLog.byLogIndex.get(249)!.forwardingPath).toBe(rest);
+
+        const sixteen = Array.from({ length: 16 }, (_, i) => i);
+        expect(attributeTx(trace, receipt, { only: sixteen }).aligned).toBe(true);
+        expect(attributeTx(trace, receipt, { only: [...sixteen, 16] })).toEqual({
+            aligned: false,
+            why: 'trace too large',
+        });
     });
 
     it('charges a 10 MB property name against the byte budget', () => {
