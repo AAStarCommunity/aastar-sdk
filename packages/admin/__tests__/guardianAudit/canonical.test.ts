@@ -53,6 +53,13 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
         expect(() => canonicalJson(a)).toThrow(/cycle/);
     });
 
+    it('bounds a string before the hex regex and a bigint before toString', () => {
+        expect(() => canonicalJson(`a${'b'.repeat(1_048_576)}`)).toThrow(/string too long/);
+        expect(() => canonicalJson({ ['k'.repeat(1_048_577)]: 1 })).toThrow(/string too long/);
+        expect(() => canonicalJson(1n << 2000n)).toThrow(/bigint too long/);
+        expect(canonicalJson(1n << 1023n).length).toBeGreaterThan(2);
+    });
+
     it('throws when the node count exceeds 1_000_000', () => {
         const wide = new Array<number>(1_000_000).fill(1);
         expect(() => canonicalJson(wide)).toThrow(/node budget/);

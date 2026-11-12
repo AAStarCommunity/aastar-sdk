@@ -162,7 +162,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(() => validateRuleset(noPublic)).toThrow(/publicRoute missing/);
         const badFn = JSON.parse(JSON.stringify(DEFAULT_RULESET));
         delete badFn.publicRoute.functions['updatePrice()'].reason;
-        expect(() => validateRuleset(badFn)).toThrow(/publicRoute\.functions\.updatePrice\(\) needs events and reason/);
+        expect(() => validateRuleset(badFn)).toThrow(/publicRoute\.functions\.updatePrice\(\)\.reason invalid/);
         const noAlso = JSON.parse(JSON.stringify(DEFAULT_RULESET));
         delete noAlso.publicRoute.functions['updatePrice()'].alsoReason;
         expect(() => validateRuleset(noAlso)).toThrow(/alsoReason missing/);
@@ -225,5 +225,58 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(id.schema).toBe('aastar.guardian-audit.ruleset.v1');
         // Changing any rule text, comment, or source field changes this digest.
         expect(id.digest).toBe('0x955722cbb9d0467aef9bdebc2880dd3d97af87c824978cff4a9498367eb429a4');
+    });
+
+    it('rejects a non-boolean flag, an oversized section, a bad signature, and a leaked address', () => {
+        const flagged = structuredClone(DEFAULT_RULESET);
+        (flagged.publicRoute.functions['updatePrice()'] as { flag: unknown }).flag = 'false';
+        expect(() => validateRuleset(flagged)).toThrow(/flag must be boolean/);
+
+        const noReason = structuredClone(DEFAULT_RULESET);
+        delete (noReason.bls.SLASH as { reason?: string }).reason;
+        expect(() => validateRuleset(noReason)).toThrow(/bls\.SLASH\.reason invalid/);
+
+        const wide = structuredClone(DEFAULT_RULESET);
+        for (let i = 0; i < 50; i++) wide.ownerRoute.events[`E${i}`] = { flag: true };
+        expect(() => validateRuleset(wide)).toThrow(/too large/);
+        const many = structuredClone(DEFAULT_RULESET);
+        const one = many.bls.GENERIC.expected[0]!;
+        many.bls.GENERIC.expected = Array.from({ length: 65 }, () => ({ ...one }));
+        expect(() => validateRuleset(many)).toThrow(/too large/);
+
+        const badSig = structuredClone(DEFAULT_RULESET);
+        badSig.bls.GENERIC.expected[0]!.signature = 'not a signature';
+        expect(() => validateRuleset(badSig)).toThrow(/^ruleset: bad signature$/);
+
+        const leaked = structuredClone(DEFAULT_RULESET) as unknown as Record<string, unknown>;
+        leaked['https://evil.example/key'] = true;
+        expect(() => validateRuleset(leaked)).toThrow(/^ruleset: invalid key$/);
+        const sourced = structuredClone(DEFAULT_RULESET);
+        sourced.source.repo = 'https://evil.example/repo';
+        expect(() => validateRuleset(sourced)).toThrow(/source\.repo invalid/);
+
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'PUBLIC' as 'bls' })).toThrow(/unknown route/);
+        expect(() => evaluate(DEFAULT_RULESET, { superPaymaster: 'https://rpc.example/v3/secret' }, bls('GENERIC', {
+            target: SP, callData: priceCall,
+        }))).toThrow(/^role address is invalid$/);
+        const badRole = `0x${'z'.repeat(40)}`;
+        try {
+            evaluate(DEFAULT_RULESET, { superPaymaster: badRole }, bls('GENERIC', { target: SP, callData: priceCall }));
+            throw new Error('accepted a bad role address');
+        } catch (e) {
+            expect((e as Error).message).toBe('role address is invalid');
+            expect((e as Error).message).not.toContain(badRole);
+        }
+        expect(evaluate(DEFAULT_RULESET, roles, bls('GENERIC', {
+            target: 'https://rpc.example/v3/secret', callData: priceCall,
+        })).rule).toBe('bls.GENERIC.unexpected');
+        expect(() => evaluate(DEFAULT_RULESET, roles, {
+            route: 'owner', event: `https://evil.example/${'a'.repeat(40)}`,
+        })).toThrow(/^record: event is not a short string$/);
+        expect(() => evaluate(DEFAULT_RULESET, roles, {
+            route: 'public',
+            selector: toFunctionSelector('updatePrice()'),
+            callEvents: Array.from({ length: 65 }, () => 'PriceUpdated'),
+        })).toThrow(/callEvents too large/);
     });
 });

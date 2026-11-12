@@ -12,6 +12,10 @@ import { keccak256, stringToBytes, type Hex } from 'viem';
  * Depth shares that cap. A cycle throws; a shared acyclic reference is written twice.
  */
 const MAX_NODES = 1_000_000;
+/** One string or object key. Checked before the hex regex and before `JSON.stringify`. */
+const MAX_STRING = 1_048_576;
+/** Decimal form of a larger bigint is not produced. uint256 fits. */
+const MAX_BIGINT_BITS = 1024;
 const HEX_RE = /^0x[0-9a-fA-F]*$/;
 
 type Frame =
@@ -45,6 +49,7 @@ export function canonicalJson(value: unknown): string {
         for (const key in value) {
             if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
             charge(1);
+            if (key.length > MAX_STRING) throw new Error('canonical: string too long');
             keys.push(key);
         }
         keys.sort(cmpKey);
@@ -60,6 +65,7 @@ export function canonicalJson(value: unknown): string {
         }
         switch (typeof v) {
             case 'string':
+                if (v.length > MAX_STRING) throw new Error('canonical: string too long');
                 parts.push(JSON.stringify(HEX_RE.test(v) ? v.toLowerCase() : v));
                 return;
             case 'boolean':
@@ -69,9 +75,12 @@ export function canonicalJson(value: unknown): string {
                 if (!Number.isSafeInteger(v)) throw new Error('canonical: number must be a safe integer');
                 parts.push(Object.is(v, -0) ? '0' : String(v));
                 return;
-            case 'bigint':
+            case 'bigint': {
+                const mag = v < 0n ? -v : v;
+                if ((mag >> BigInt(MAX_BIGINT_BITS)) !== 0n) throw new Error('canonical: bigint too long');
                 parts.push(JSON.stringify(v.toString(10)));
                 return;
+            }
             case 'function':
             case 'symbol':
                 throw new Error('canonical: unsupported value');

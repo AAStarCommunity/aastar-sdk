@@ -104,22 +104,73 @@ const OWNER_EVENT_KEYS = ['flag', 'readPrice'] as const;
 const PUBLIC_KEYS = ['comment', 'label', 'functions', 'unattributed'] as const;
 const PUBLIC_FN_KEYS = ['events', 'flag', 'reason', 'flagIfCallAlsoEmits', 'alsoReason', 'readPrice'] as const;
 
+const MAX_RULE_KEYS = 64;
+const MAX_REASON = 1024;
+const MAX_SOURCE = 256;
+
+/** Stop listing keys once the ruleset is past the cap. A million allowed keys never gets walked. */
+function ownKeys(obj: object): string[] {
+    const keys: string[] = [];
+    for (const key in obj) {
+        if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+        keys.push(key);
+        if (keys.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
+    }
+    return keys;
+}
+
+function unknownKey(label: string): never {
+    if (label.length > 160 || label.includes('://') || /[\r\n]/.test(label)) throw new Error('ruleset: invalid key');
+    throw new Error(`ruleset: unknown key ${label}`);
+}
+
+function shortText(value: unknown, where: string, max: number): void {
+    if (typeof value !== 'string' || value.length === 0 || value.length > max || value.includes('://') || /[\r\n]/.test(value)) {
+        throw new Error(`ruleset: ${where} invalid`);
+    }
+}
+
+function assertFlag(obj: Record<string, any>, where: string, withReason: boolean): void {
+    if (typeof obj.flag !== 'boolean') throw new Error(`ruleset: ${where}.flag must be boolean`);
+    if (withReason) shortText(obj.reason, `${where}.reason`, MAX_REASON);
+    if ('readPrice' in obj && typeof obj.readPrice !== 'boolean') throw new Error(`ruleset: ${where}.readPrice must be boolean`);
+}
+
+function selectorOf(signature: string): Hex | null {
+    try {
+        return toFunctionSelector(signature);
+    } catch {
+        return null;
+    }
+}
+
+function sameAddress(left: unknown, right: unknown): boolean {
+    if (typeof left !== 'string' || typeof right !== 'string' || left.length !== 42 || right.length !== 42) return false;
+    try {
+        return getAddress(left as `0x${string}`) === getAddress(right as `0x${string}`);
+    } catch {
+        return false;
+    }
+}
+
 function only(obj: Record<string, any>, allowed: readonly string[], where: string): void {
-    for (const key of Object.keys(obj)) {
-        if (!allowed.includes(key)) throw new Error(`ruleset: unknown key ${where}.${key}`);
+    for (const key of ownKeys(obj)) {
+        if (!allowed.includes(key)) unknownKey(`${where}.${key}`);
     }
 }
 
 /** Validate a parsed ruleset; throws on a shape the evaluator would silently misread. Unknown keys throw at every level. */
 export function validateRuleset(rs: unknown): Ruleset {
     if (!isRecord(rs) || rs.schema !== RULESET_SCHEMA) throw new Error('ruleset: unknown schema');
-    for (const key of Object.keys(rs)) {
-        if (!TOP_LEVEL.has(key)) throw new Error(`ruleset: unknown key ${key}`);
+    for (const key of ownKeys(rs)) {
+        if (!TOP_LEVEL.has(key)) unknownKey(key);
     }
+    if (rs.comment !== undefined) shortText(rs.comment, 'comment', MAX_REASON);
     if (!isRecord(rs.source)) throw new Error('ruleset: source missing');
     only(rs.source, SOURCE_KEYS, 'source');
     for (const key of SOURCE_KEYS) {
         if (typeof rs.source[key] !== 'string') throw new Error(`ruleset: source.${key} missing`);
+        shortText(rs.source[key], `source.${key}`, MAX_SOURCE);
     }
     if (!isRecord(rs.bls)) throw new Error('ruleset: bls.SLASH missing');
     only(rs.bls, BLS_KEYS, 'bls');
@@ -128,40 +179,76 @@ export function validateRuleset(rs: unknown): Ruleset {
     }
     for (const kind of ['SLASH', 'REPUTATION', 'QUEUE', 'UNRECOVERED'] as const) {
         only(rs.bls[kind], FLAG_KEYS, `bls.${kind}`);
+        assertFlag(rs.bls[kind], `bls.${kind}`, true);
     }
     only(rs.bls.GENERIC, GENERIC_KEYS, 'bls.GENERIC');
     if (!Array.isArray(rs.bls.GENERIC.expected) || !isRecord(rs.bls.GENERIC.unexpected)) {
         throw new Error('ruleset: bls.GENERIC.expected / unexpected missing');
     }
+    if (rs.bls.GENERIC.expected.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
     only(rs.bls.GENERIC.unexpected, FLAG_KEYS, 'bls.GENERIC.unexpected');
+    assertFlag(rs.bls.GENERIC.unexpected, 'bls.GENERIC.unexpected', true);
     for (const e of rs.bls.GENERIC.expected) {
         if (!isRecord(e) || typeof e.target !== 'string' || typeof e.signature !== 'string') {
             throw new Error('ruleset: GENERIC.expected entries need target (role) and signature');
         }
         only(e, EXPECTED_KEYS, 'bls.GENERIC.expected');
+        shortText(e.target, 'bls.GENERIC.expected.target', 64);
+        shortText(e.signature, 'bls.GENERIC.expected.signature', 256);
+        if (selectorOf(e.signature) === null) throw new Error('ruleset: bad signature');
+        assertFlag(e, 'bls.GENERIC.expected', true);
     }
     if (!isRecord(rs.ownerRoute) || typeof rs.ownerRoute.label !== 'string' || !isRecord(rs.ownerRoute.events)) {
         throw new Error('ruleset: ownerRoute missing');
     }
     only(rs.ownerRoute, OWNER_KEYS, 'ownerRoute');
-    for (const [name, event] of Object.entries(rs.ownerRoute.events)) {
-        if (!isRecord(event)) throw new Error(`ruleset: ownerRoute.events.${name} invalid`);
+    shortText(rs.ownerRoute.label, 'ownerRoute.label', MAX_SOURCE);
+    if (rs.ownerRoute.comment !== undefined) shortText(rs.ownerRoute.comment, 'ownerRoute.comment', MAX_REASON);
+    for (const name of ownKeys(rs.ownerRoute.events)) {
+        const event = rs.ownerRoute.events[name];
+        if (!isRecord(event)) throw new Error('ruleset: ownerRoute.events invalid');
+        if (name.length > 128 || name.includes('://') || /[\r\n]/.test(name)) throw new Error('ruleset: invalid key');
         only(event, OWNER_EVENT_KEYS, `ownerRoute.events.${name}`);
+        assertFlag(event, `ownerRoute.events.${name}`, false);
     }
     const pr = rs.publicRoute;
     if (!isRecord(pr) || typeof pr.label !== 'string' || !isRecord(pr.functions) || !isRecord(pr.unattributed)) {
         throw new Error('ruleset: publicRoute missing');
     }
     only(pr, PUBLIC_KEYS, 'publicRoute');
+    shortText(pr.label, 'publicRoute.label', MAX_SOURCE);
+    if (pr.comment !== undefined) shortText(pr.comment, 'publicRoute.comment', MAX_REASON);
     only(pr.unattributed, FLAG_KEYS, 'publicRoute.unattributed');
-    for (const [sig, f] of Object.entries(pr.functions)) {
-        if (!isRecord(f) || !Array.isArray(f.events) || typeof f.reason !== 'string') {
+    assertFlag(pr.unattributed, 'publicRoute.unattributed', true);
+    for (const sig of ownKeys(pr.functions)) {
+        const f = pr.functions[sig];
+        if (sig.length > 160 || sig.includes('://') || /[\r\n]/.test(sig)) throw new Error('ruleset: invalid key');
+        if (!isRecord(f) || !Array.isArray(f.events)) {
             throw new Error(`ruleset: publicRoute.functions.${sig} needs events and reason`);
         }
+        if (f.events.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
         only(f, PUBLIC_FN_KEYS, `publicRoute.functions.${sig}`);
+        assertFlag(f, `publicRoute.functions.${sig}`, true);
+        if (selectorOf(sig) === null) throw new Error('ruleset: bad signature');
+        for (const ev of f.events) {
+            if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://') || /[\r\n]/.test(ev)) {
+                throw new Error(`ruleset: publicRoute.functions.${sig}.events invalid`);
+            }
+        }
+        if (f.flagIfCallAlsoEmits !== undefined) {
+            if (!Array.isArray(f.flagIfCallAlsoEmits) || f.flagIfCallAlsoEmits.length > MAX_RULE_KEYS) {
+                throw new Error('ruleset: too large');
+            }
+            for (const ev of f.flagIfCallAlsoEmits) {
+                if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://')) {
+                    throw new Error(`ruleset: publicRoute.functions.${sig}.flagIfCallAlsoEmits invalid`);
+                }
+            }
+        }
         if (f.flagIfCallAlsoEmits && typeof f.alsoReason !== 'string') {
             throw new Error(`ruleset: publicRoute.functions.${sig}.alsoReason missing`);
         }
+        if (typeof f.alsoReason === 'string') shortText(f.alsoReason, `publicRoute.functions.${sig}.alsoReason`, MAX_REASON);
     }
     return rs as Ruleset;
 }
@@ -176,29 +263,51 @@ export function rulesetId(rs: Ruleset): { schema: typeof RULESET_SCHEMA; digest:
 export function matchGeneric(
     rs: Ruleset, roles: Record<string, string>, target: unknown, callData: unknown,
 ): GenericExpected | null {
+    validateRuleset(rs);
+    if (typeof callData === 'string' && callData.length > 1_048_576) throw new Error('record: callData too long');
     const sel = typeof callData === 'string' && callData.length >= 10 ? callData.slice(0, 10).toLowerCase() : null;
+    if (!Array.isArray(rs.bls.GENERIC.expected) || rs.bls.GENERIC.expected.length > MAX_RULE_KEYS) {
+        throw new Error('ruleset: too large');
+    }
     for (const e of rs.bls.GENERIC.expected) {
         const addr = roles[e.target];
         if (!addr || !target) continue;
-        if (getAddress(addr) !== getAddress(target as `0x${string}`)) continue;
-        if (sel !== null && toFunctionSelector(e.signature) === sel) return e;
+        if (typeof addr !== 'string' || addr.length !== 42) throw new Error('role address is invalid');
+        let roleAddr: string;
+        try {
+            roleAddr = getAddress(addr as `0x${string}`);
+        } catch {
+            throw new Error('role address is invalid');
+        }
+        if (!sameAddress(roleAddr, target)) continue;
+        const want = selectorOf(e.signature);
+        if (want !== null && sel !== null && want === sel) return e;
     }
     return null;
 }
 
 /** The publicRoute entry whose selector is `selector`, as [signature, entry], or null. */
 export function publicFunction(rs: Ruleset, selector: unknown): [string, PublicFunctionRule] | null {
-    if (typeof selector !== 'string') return null;
+    validateRuleset(rs);
+    if (typeof selector !== 'string' || selector.length !== 10) return null;
     const want = selector.toLowerCase();
-    for (const [sig, f] of Object.entries(rs.publicRoute.functions)) {
-        if (toFunctionSelector(sig) === want) return [sig, f];
+    for (const sig of ownKeys(rs.publicRoute.functions)) {
+        const got = selectorOf(sig);
+        if (got !== null && got === want) return [sig, rs.publicRoute.functions[sig]!];
     }
     return null;
 }
 
 /** Events that some permissionless function can emit: their caller decides the route. */
 export function ambiguousEvents(rs: Ruleset): Set<string> {
-    return new Set(Object.values(rs.publicRoute.functions).flatMap((f) => f.events));
+    validateRuleset(rs);
+    const names: string[] = [];
+    for (const sig of ownKeys(rs.publicRoute.functions)) {
+        const events = rs.publicRoute.functions[sig]!.events;
+        if (!Array.isArray(events) || events.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
+        names.push(...events);
+    }
+    return new Set(names);
 }
 
 /**
@@ -206,6 +315,20 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
  */
 export function evaluate(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): Verdict {
+    validateRuleset(rs);
+    if (!isRecord(roles)) throw new Error('roles missing');
+    if (!isRecord(record)
+        || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
+        throw new Error('record: unknown route');
+    }
+    if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128
+        || record.event.includes('://') || /[\r\n]/.test(record.event))) {
+        throw new Error('record: event is not a short string');
+    }
+    if (record.kind !== undefined && (typeof record.kind !== 'string' || record.kind.length > 64
+        || record.kind.includes('://') || /[\r\n]/.test(record.kind))) {
+        throw new Error('record: kind is not a short string');
+    }
     if (record.route === 'public') {
         const pf = publicFunction(rs, record.selector);
         if (!pf) {
@@ -216,7 +339,9 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
             };
         }
         const [sig, f] = pf;
-        const also = (f.flagIfCallAlsoEmits ?? []).filter((e) => (record.callEvents ?? []).includes(e));
+        const callEvents = record.callEvents ?? [];
+        if (!Array.isArray(callEvents) || callEvents.length > MAX_RULE_KEYS) throw new Error('record: callEvents too large');
+        const also = (f.flagIfCallAlsoEmits ?? []).filter((e) => callEvents.includes(e));
         if (also.length) {
             return {
                 flagged: true,
@@ -280,6 +405,8 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
 
 /** Whether this record wants prices read before/after (price-update rules). */
 export function wantsPrice(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): boolean {
+    validateRuleset(rs);
+    if (!isRecord(record)) throw new Error('record: unknown route');
     if (record.route === 'public') return !!publicFunction(rs, record.selector)?.[1].readPrice;
     if (record.route === 'owner' || record.route === 'unattributed') {
         return !!rs.ownerRoute.events[record.event ?? '']?.readPrice;
