@@ -7,6 +7,7 @@ import {
     custom,
     encodeAbiParameters,
     encodeEventTopics,
+    encodeFunctionData,
     encodeFunctionResult,
     getAddress,
     toFunctionSelector,
@@ -16,19 +17,24 @@ import {
     type Hex,
     type PublicClient,
 } from 'viem';
-import { sepolia } from 'viem/chains';
-import { SuperPaymasterABI, xPNTsTokenABI } from '@aastar/core';
+import { mainnet, sepolia } from 'viem/chains';
+import { getCanonicalAddresses, SuperPaymasterABI, xPNTsTokenABI } from '@aastar/core';
 import { DataCollector } from '../src/core/DataCollector';
+import { CostCalculator } from '../src/core/CostCalculator';
+import { readAnalyzeOverrides, TransactionAnalyzer } from '../src/analyzers/TransactionAnalyzer';
 
 const BLOCK = 123456n;
 const BLOCK_TAG = toHex(BLOCK);
 const TX = `0x${'ab'.repeat(32)}` as Hex;
 const BLOCK_HASH = `0x${'22'.repeat(32)}` as Hex;
 const OPERATOR = getAddress('0x1111111111111111111111111111111111111111');
+const IMPOSTOR_OPERATOR = getAddress('0x5555555555555555555555555555555555555555');
 const USER = getAddress('0x2222222222222222222222222222222222222222');
-const SP = getAddress('0x3333333333333333333333333333333333333333');
+// Lowercase on purpose. viem checksums the log address, so a case-sensitive compare misses it.
+const CONFIGURED_SP = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
+const SP = getAddress(CONFIGURED_SP);
+const FOREIGN = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TOKEN = getAddress('0x4444444444444444444444444444444444444444');
-const CONFIGURED_SP = getAddress('0x9999999999999999999999999999999999999999');
 const PRICE = 2_000_000n;
 const RATE = 350n;
 
@@ -57,18 +63,18 @@ const SPONSORED_ABI = [{
 
 type EthCall = { selector: string; data: Hex; block: string; to: string };
 
-function sponsoredLog() {
+function sponsoredLog(address: Address = SP, operator: Address = OPERATOR, apnts = 1n, xpnts = 2n) {
     const topics = encodeEventTopics({
         abi: SPONSORED_ABI,
         eventName: 'TransactionSponsored',
-        args: { operator: OPERATOR, user: USER },
+        args: { operator, user: USER },
     });
     const data = encodeAbiParameters(
         [{ type: 'uint256' }, { type: 'uint256' }],
-        [1n, 2n],
+        [apnts, xpnts],
     );
     return {
-        address: SP,
+        address,
         topics,
         data,
         blockNumber: BLOCK_TAG,
@@ -149,6 +155,9 @@ type Answers = {
     operatorsError?: Error;
     rate?: bigint;
     rateError?: Error;
+    logAddress?: Address;
+    logs?: unknown[];
+    onEthCall?: (selector: string) => void;
 };
 
 function harness(answers: Answers = {}) {
@@ -156,7 +165,9 @@ function harness(answers: Answers = {}) {
     const sponsored = answers.sponsored !== false;
     const request = async ({ method, params }: { method: string; params?: unknown[] }) => {
         if (method === 'eth_chainId') return '0xaa36a7';
-        if (method === 'eth_getTransactionReceipt') return receipt(sponsored ? [sponsoredLog()] : [unrelatedLog()]);
+        if (method === 'eth_getTransactionReceipt') {
+            return receipt(answers.logs ?? (sponsored ? [sponsoredLog(answers.logAddress)] : [unrelatedLog()]));
+        }
         if (method === 'eth_getBlockByNumber') return block();
         if (method === 'eth_call') {
             const tx = (params?.[0] ?? {}) as { data?: Hex; input?: Hex };
@@ -164,6 +175,7 @@ function harness(answers: Answers = {}) {
             const blockTag = String(params?.[1] ?? '');
             const selector = data.slice(0, 10);
             calls.push({ selector, data, block: blockTag, to: String((tx as { to?: string }).to ?? '') });
+            answers.onEthCall?.(selector);
             if (selector === VERSION_SELECTOR) {
                 if (answers.versionError) throw answers.versionError;
                 return encoded('version', answers.version ?? 'SuperPaymaster-5.4.2');
@@ -191,8 +203,22 @@ function harness(answers: Answers = {}) {
     return { client, calls };
 }
 
-function collectorFor(client: PublicClient, cacheDir?: string, enableCache = false) {
-    return new DataCollector('http://127.0.0.1:1', sepolia, CONFIGURED_SP, cacheDir, enableCache, client);
+function collectorFor(
+    client: PublicClient,
+    cacheDir?: string,
+    enableCache = false,
+    allowlist?: readonly string[],
+    superPaymaster: string = CONFIGURED_SP,
+) {
+    return new DataCollector('http://127.0.0.1:1', sepolia, superPaymaster, cacheDir, enableCache, client, allowlist);
+}
+
+function operatorsCalldata(operator: Address): string {
+    return encodeFunctionData({
+        abi: SuperPaymasterABI,
+        functionName: 'operators',
+        args: [operator],
+    }).toLowerCase();
 }
 
 describe('DataCollector historical SuperPaymaster reads', () => {
@@ -232,7 +258,83 @@ describe('DataCollector historical SuperPaymaster reads', () => {
         expect(operatorCall?.data.toLowerCase()).toContain(OPERATOR.slice(2).toLowerCase());
         const rateCall = calls.find((call) => call.selector === RATE_SELECTOR);
         expect(rateCall?.to.toLowerCase()).toBe(TOKEN.toLowerCase());
-        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === SP.toLowerCase())).toBe(true);
+        expect(SP).not.toBe(CONFIGURED_SP);
+        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === CONFIGURED_SP)).toBe(true);
+    });
+
+    it('matches the configured SuperPaymaster address case-insensitively', async () => {
+        expect(SP.toLowerCase()).toBe(CONFIGURED_SP);
+        expect(SP).not.toBe(CONFIGURED_SP);
+        const { client, calls } = harness({});
+
+        const data = await collectorFor(client).enrichFromChain(TX);
+
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.exchangeRate).toBe(RATE);
+        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === CONFIGURED_SP)).toBe(true);
+    });
+
+    it('reads price and rate when the log address is on the constructor allowlist', async () => {
+        const foreignLog = getAddress(FOREIGN);
+        expect(foreignLog).not.toBe(FOREIGN);
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { client, calls } = harness({ logAddress: foreignLog });
+
+        const data = await collectorFor(client, undefined, false, [FOREIGN]).enrichFromChain(TX);
+
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.exchangeRate).toBe(RATE);
+        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === FOREIGN)).toBe(true);
+        expect(calls.some((call) => call.to.toLowerCase() === CONFIGURED_SP)).toBe(false);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('reads the configured SuperPaymaster when an untrusted TransactionSponsored log precedes it', async () => {
+        const impostorApnts = 9_000000000000000000n;
+        const trustedApnts = 1_000000000000000000n;
+        const impostor = sponsoredLog(getAddress(FOREIGN), IMPOSTOR_OPERATOR, impostorApnts);
+        const trusted = { ...sponsoredLog(SP, OPERATOR, trustedApnts), logIndex: '0x1' };
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { client, calls } = harness({ logs: [impostor, trusted] });
+
+        const data = await collectorFor(client).enrichFromChain(TX);
+
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.exchangeRate).toBe(RATE);
+        expect(data?.paymasterEvents.filter((event) => event.type === 'TransactionSponsored').map((event) => event.operator.toLowerCase())).toEqual([
+            IMPOSTOR_OPERATOR.toLowerCase(),
+            OPERATOR.toLowerCase(),
+        ]);
+        expect(data?.pricedSponsored).toEqual({ logIndex: 1, operator: OPERATOR });
+        const cost = new CostCalculator(3000, 0.02).calculate(data!);
+        expect(cost.meta.mode).toBe('super');
+        expect(cost.economic.protocolUsdRevenue).toBeCloseTo(0.02);
+        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === CONFIGURED_SP)).toBe(true);
+        expect(calls.some((call) => call.to.toLowerCase() === FOREIGN)).toBe(false);
+        const operatorCall = calls.find((call) => call.selector === OPERATORS_SELECTOR);
+        expect(operatorCall?.data.toLowerCase()).toBe(operatorsCalldata(OPERATOR));
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not read price or rate when the TransactionSponsored log address is not the configured SuperPaymaster', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const dir = cacheDir();
+        const { client, calls } = harness({ logAddress: getAddress(FOREIGN) });
+        const collector = collectorFor(client, dir, true);
+
+        const first = await collector.enrichFromChain(TX);
+        const second = await collector.enrichFromChain(TX);
+
+        expect(first).not.toBeNull();
+        expect(first?.paymasterEvents).toHaveLength(1);
+        expect(first?.aPNTsPriceUSD).toBeUndefined();
+        expect(first?.exchangeRate).toBeUndefined();
+        expect(second?.aPNTsPriceUSD).toBeUndefined();
+        expect(second?.exchangeRate).toBeUndefined();
+        expect(calls).toEqual([]);
+        expect(fs.readdirSync(dir)).toEqual([]);
+        const lines = warn.mock.calls.map((call) => String(call[0]));
+        expect(lines.filter((line) => line.includes('transaction-sponsored:untrusted-address'))).toHaveLength(1);
     });
 
     it('does not call exchangeRate when the named xPNTsToken is the zero address', async () => {
@@ -336,7 +438,8 @@ describe('DataCollector historical SuperPaymaster reads', () => {
         expect(data?.exchangeRate).toBe(RATE);
         expect(calls.length).toBeGreaterThan(0);
         const stored = JSON.parse(fs.readFileSync(path.join(dir, `${TX}.json`), 'utf8'));
-        expect(stored.schemaVersion).toBe(1);
+        expect(stored.schemaVersion).toBe(3);
+        expect(stored.trust).toEqual({ superPaymaster: CONFIGURED_SP, allowlist: [] });
     });
 
     it('round-trips bigints from a schemaVersion cache entry without another eth_call', async () => {
@@ -449,6 +552,215 @@ describe('DataCollector historical SuperPaymaster reads', () => {
         expect(again?.exchangeRate).toBeUndefined();
         expect(again?.aPNTsPriceUSD).toBeUndefined();
         const stored = JSON.parse(fs.readFileSync(path.join(dir, `${TX}.json`), 'utf8'));
-        expect(stored.schemaVersion).toBe(1);
+        expect(stored.schemaVersion).toBe(3);
+        expect(stored.trust).toEqual({ superPaymaster: CONFIGURED_SP, allowlist: [] });
+    });
+
+    it('re-enriches a schemaVersion 1 entry even when its trust object matches', async () => {
+        const dir = cacheDir();
+        const legacy = {
+            schemaVersion: 1,
+            trust: { superPaymaster: CONFIGURED_SP, allowlist: [] },
+            data: {
+                txHash: TX,
+                blockNumber: '1n',
+                blockTimestamp: '1n',
+                gasUsed: '1n',
+                effectiveGasPrice: '1n',
+                status: 'success',
+                paymasterEvents: [],
+                aPNTsPriceUSD: '1n',
+                exchangeRate: '1n',
+                receipt: {},
+            },
+        };
+        fs.writeFileSync(path.join(dir, `${TX}.json`), JSON.stringify(legacy));
+        const { client, calls } = harness({});
+
+        const data = await collectorFor(client, dir, true).enrichFromChain(TX);
+
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.exchangeRate).toBe(RATE);
+        expect(calls.length).toBeGreaterThan(0);
+        const stored = JSON.parse(fs.readFileSync(path.join(dir, `${TX}.json`), 'utf8'));
+        expect(stored.schemaVersion).toBe(3);
+    });
+
+    it('re-enriches a schemaVersion 2 entry that has no pricedSponsored', async () => {
+        const dir = cacheDir();
+        const legacy = {
+            schemaVersion: 2,
+            trust: { superPaymaster: CONFIGURED_SP, allowlist: [] },
+            data: {
+                txHash: TX,
+                blockNumber: '1n',
+                blockTimestamp: '1n',
+                gasUsed: '1n',
+                effectiveGasPrice: '1n',
+                status: 'success',
+                paymasterEvents: [],
+                aPNTsPriceUSD: '1n',
+                exchangeRate: '1n',
+                receipt: {},
+            },
+        };
+        fs.writeFileSync(path.join(dir, `${TX}.json`), JSON.stringify(legacy));
+        const { client, calls } = harness({});
+
+        const data = await collectorFor(client, dir, true).enrichFromChain(TX);
+
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.pricedSponsored).toEqual({ logIndex: 0, operator: OPERATOR });
+        expect(calls.length).toBeGreaterThan(0);
+        const stored = JSON.parse(fs.readFileSync(path.join(dir, `${TX}.json`), 'utf8'));
+        expect(stored.schemaVersion).toBe(3);
+        expect(stored.data.pricedSponsored).toEqual({ logIndex: 0, operator: OPERATOR });
+    });
+
+    it('does not reuse a cached price after the allowlist that trusted the emitter is removed', async () => {
+        const dir = cacheDir();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { client, calls } = harness({ logAddress: getAddress(FOREIGN) });
+
+        const priced = await collectorFor(client, dir, true, [FOREIGN]).enrichFromChain(TX);
+        expect(priced?.aPNTsPriceUSD).toBe(PRICE);
+        expect(priced?.exchangeRate).toBe(RATE);
+        const callsAfter = calls.length;
+
+        const stripped = await collectorFor(client, dir, true).enrichFromChain(TX);
+
+        expect(stripped?.aPNTsPriceUSD).toBeUndefined();
+        expect(stripped?.exchangeRate).toBeUndefined();
+        expect(calls.length).toBe(callsAfter);
+        expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('transaction-sponsored:untrusted-address'))).toHaveLength(1);
+    });
+
+    it('keeps the construction-time allowlist when the caller clears it during version()', async () => {
+        const dir = cacheDir();
+        const allowlist = [FOREIGN];
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { client, calls } = harness({
+            logAddress: getAddress(FOREIGN),
+            onEthCall: (selector) => {
+                if (selector === VERSION_SELECTOR) allowlist.splice(0, allowlist.length);
+            },
+        });
+
+        const priced = await collectorFor(client, dir, true, allowlist).enrichFromChain(TX);
+
+        expect(allowlist).toEqual([]);
+        expect(priced?.aPNTsPriceUSD).toBe(PRICE);
+        expect(priced?.exchangeRate).toBe(RATE);
+        const stored = JSON.parse(fs.readFileSync(path.join(dir, `${TX}.json`), 'utf8'));
+        expect(stored.trust).toEqual({ superPaymaster: CONFIGURED_SP, allowlist: [FOREIGN] });
+
+        const callsAfter = calls.length;
+        const stripped = await collectorFor(client, dir, true).enrichFromChain(TX);
+        expect(stripped?.aPNTsPriceUSD).toBeUndefined();
+        expect(stripped?.exchangeRate).toBeUndefined();
+        expect(calls.length).toBe(callsAfter);
+    });
+
+    it('reuses the cache when the configured address and allowlist differ only by case or order', async () => {
+        const other = '0xcccccccccccccccccccccccccccccccccccccccc';
+        const dir = cacheDir();
+        const { client, calls } = harness({ logAddress: getAddress(FOREIGN) });
+
+        const first = await collectorFor(client, dir, true, [FOREIGN, other, FOREIGN]).enrichFromChain(TX);
+        expect(first?.aPNTsPriceUSD).toBe(PRICE);
+        const callsAfter = calls.length;
+
+        const again = await collectorFor(
+            client,
+            dir,
+            true,
+            [getAddress(other), FOREIGN.toUpperCase()],
+            getAddress(CONFIGURED_SP),
+        ).enrichFromChain(TX);
+
+        expect(calls.length).toBe(callsAfter);
+        expect(again?.aPNTsPriceUSD).toBe(PRICE);
+        expect(again?.exchangeRate).toBe(RATE);
+    });
+
+    it('defaults to the canonical Sepolia SuperPaymaster and prices a 0x09DF receipt', async () => {
+        const canonical = getCanonicalAddresses(sepolia.id)!.superPaymaster;
+        expect(canonical.toLowerCase()).toBe('0x09df0d2e3722ec0e401fe3819e64278a42ae4de9');
+        const { client, calls } = harness({ logAddress: getAddress(canonical) });
+
+        const data = await new DataCollector('http://127.0.0.1:1', sepolia, undefined, undefined, false, client).enrichFromChain(TX);
+
+        expect(data?.pricedSponsored).toEqual({ logIndex: 0, operator: OPERATOR });
+        expect(data?.aPNTsPriceUSD).toBe(PRICE);
+        expect(data?.exchangeRate).toBe(RATE);
+        expect(calls.filter((call) => call.selector !== RATE_SELECTOR).every((call) => call.to.toLowerCase() === canonical.toLowerCase())).toBe(true);
+    });
+
+    it('throws when the chain has no canonical SuperPaymaster and no address is passed', () => {
+        expect(() => new DataCollector('http://127.0.0.1:1', mainnet)).toThrow(/No canonical SuperPaymaster for chain 1/);
+    });
+});
+
+const prices = { getEthPrice: async () => 3000, getAPNTsPrice: async () => 0.02 };
+const benchmarks = { loadAll: async () => ({ l2: [], paymasters: [] }) };
+
+describe('TransactionAnalyzer deployment address', () => {
+    beforeEach(() => {
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('analyzes a canonical Sepolia SuperPaymaster receipt as super', async () => {
+        const canonical = getCanonicalAddresses(sepolia.id)!.superPaymaster;
+        const { client } = harness({
+            logs: [sponsoredLog(getAddress(canonical), OPERATOR, 1_000000000000000000n)],
+        });
+
+        const report = await new TransactionAnalyzer('http://127.0.0.1:1', {
+            client,
+            enableCache: false,
+            priceOracle: prices,
+            benchmarkLoader: benchmarks,
+        }).analyze(TX);
+
+        expect(report).toContain('**模式**: SuperPaymaster');
+        expect(report).toContain('**协议收入 (Revenue)** | $0.0200');
+    });
+
+    it('forwards an explicit SuperPaymaster address and allowlist', async () => {
+        const canonical = getCanonicalAddresses(sepolia.id)!.superPaymaster;
+        const { client } = harness({
+            logs: [sponsoredLog(getAddress(FOREIGN), OPERATOR, 1_000000000000000000n)],
+        });
+
+        const report = await new TransactionAnalyzer('http://127.0.0.1:1', {
+            chain: mainnet,
+            superPaymasterAddress: canonical,
+            paymasterAllowlist: [FOREIGN],
+            client,
+            enableCache: false,
+            priceOracle: prices,
+            benchmarkLoader: benchmarks,
+        }).analyze(TX);
+
+        expect(report).toContain('**模式**: SuperPaymaster');
+        expect(report).toContain('**协议收入 (Revenue)** | $0.0200');
+    });
+
+    it('reads --super-paymaster and --allowlist for the CLIs', () => {
+        expect(readAnalyzeOverrides([
+            'analyze',
+            TX,
+            '--super-paymaster',
+            '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9',
+            '--allowlist',
+            `${FOREIGN}, 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9`,
+        ])).toEqual({
+            superPaymasterAddress: '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9',
+            paymasterAllowlist: [FOREIGN, '0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9'],
+        });
     });
 });

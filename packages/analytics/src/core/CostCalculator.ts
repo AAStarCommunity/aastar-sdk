@@ -9,6 +9,7 @@
 
 import { formatEther, formatUnits } from 'viem';
 import type { OnChainData } from './DataCollector.js';
+import type { TransactionSponsoredEvent } from '../utils/EventDecoder.js';
 
 export interface CostBreakdown {
   // Layer 1: Intrinsic (Pure Gas Units) - 学术关注层
@@ -37,6 +38,46 @@ export interface CostBreakdown {
   };
 }
 
+export interface CostCalculateOptions {
+  /**
+   * Legacy inputs omit `pricedSponsored`. Set this to price the first
+   * TransactionSponsored event anyway. Otherwise `calculate` throws.
+   */
+  trustUnverifiedSponsoredEvents?: boolean;
+}
+
+/** Thrown when sponsored events have no emitter-verification metadata. */
+export class UnverifiedSponsoredEventsError extends Error {
+  readonly txHash: string;
+
+  constructor(txHash: string) {
+    super(
+      `Transaction ${txHash} has TransactionSponsored events collected without emitter verification. Re-collect with DataCollector, or pass trustUnverifiedSponsoredEvents: true to keep the legacy first-event behaviour.`,
+    );
+    this.name = 'UnverifiedSponsoredEventsError';
+    this.txHash = txHash;
+  }
+}
+
+/** The TransactionSponsored log named by `pricedSponsored`, matched on log index and operator. */
+function pricedSponsoredEvent(data: OnChainData): TransactionSponsoredEvent | undefined {
+  const priced = data.pricedSponsored;
+  if (!priced) return undefined;
+  return data.paymasterEvents.find((event): event is TransactionSponsoredEvent =>
+    event.type === 'TransactionSponsored'
+    && event.logIndex === priced.logIndex
+    && event.operator.toLowerCase() === priced.operator.toLowerCase());
+}
+
+function sponsoredEventForCost(data: OnChainData, options?: CostCalculateOptions): TransactionSponsoredEvent | undefined {
+  const hasSponsored = data.paymasterEvents.some((event) => event.type === 'TransactionSponsored');
+  if (hasSponsored && !data.pricedSponsored) {
+    if (!options?.trustUnverifiedSponsoredEvents) throw new UnverifiedSponsoredEventsError(data.txHash);
+    return data.paymasterEvents.find((event): event is TransactionSponsoredEvent => event.type === 'TransactionSponsored');
+  }
+  return pricedSponsoredEvent(data);
+}
+
 export class CostCalculator {
   private ethPriceUSD: number;
   private aPNTsPriceUSD: number;
@@ -49,14 +90,16 @@ export class CostCalculator {
   /**
    * 计算完整的成本分解
    */
-  calculate(data: OnChainData): CostBreakdown {
+  calculate(data: OnChainData, options?: CostCalculateOptions): CostBreakdown {
     // 1. 基础数据
     const ethCost = data.gasUsed * data.effectiveGasPrice;
     const ethCostNum = Number(formatEther(ethCost));
     const usdCost = ethCostNum * this.ethPriceUSD;
 
     // 2. 识别协议事件逻辑 (从 SuperPaymaster.sol v3 源码推导)
-    const superEvent = data.paymasterEvents.find(e => e.type === 'TransactionSponsored');
+    // Missing pricedSponsored is not V4. sponsoredEventForCost throws unless
+    // the caller opts into the legacy first-event behaviour.
+    const superEvent = sponsoredEventForCost(data, options);
     const paymasterEvent = data.paymasterEvents.find(e => e.type === 'PostOpProcessed');
 
     let aPNTsCostWei = 0n; // 合约中 finalCharge (包含 10% 费用)
@@ -138,8 +181,8 @@ export class CostCalculator {
   /**
    * 批量计算
    */
-  calculateBatch(dataList: OnChainData[]): CostBreakdown[] {
-    return dataList.map(data => this.calculate(data));
+  calculateBatch(dataList: OnChainData[], options?: CostCalculateOptions): CostBreakdown[] {
+    return dataList.map(data => this.calculate(data, options));
   }
 
   /**

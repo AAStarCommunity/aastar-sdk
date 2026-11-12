@@ -6,11 +6,16 @@
  * - 解析 Event Logs
  * - 查询相关合约状态
  * - 实现缓存机制避免重复 RPC 调用
+ *
+ * Historical eth_calls are pinned to the receipt's block number only.
+ * viem's readContract cannot pin a call to a block hash. This collector
+ * targets confirmed history and does not detect a reorg between the receipt
+ * fetch and later pricing reads.
  */
 
 import { createPublicClient, http, zeroAddress, type PublicClient, type Hash, type TransactionReceipt, type Chain, type Address, type Abi } from 'viem';
 import { sepolia } from 'viem/chains';
-import { SuperPaymasterABI, xPNTsTokenABI } from '@aastar/core';
+import { SuperPaymasterABI, getCanonicalAddresses, xPNTsTokenABI } from '@aastar/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,9 +26,13 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Cache entries written before this field existed stored OnChainData at the
- * top level and could freeze a failed historical read. Bump when the shape changes.
+ * top level and could freeze a failed historical read. v2 also stores the
+ * configured SuperPaymaster and the normalized allowlist; a different trust
+ * set, or a v1 entry with no trust context, is a miss. v3 adds
+ * `pricedSponsored` so a cached price cannot be paired with an earlier
+ * impostor event. Bump when the shape changes.
  */
-const CACHE_SCHEMA_VERSION = 1;
+const CACHE_SCHEMA_VERSION = 3;
 
 /**
  * version() strings whose operators() / aPNTsPriceUSD() match the ABI we decode.
@@ -47,6 +56,29 @@ const SUPPORTED_SP_VERSIONS = new Set([
 
 type HistoricalRead = { value: bigint | undefined; retryable: boolean };
 
+/**
+ * Explicit address, or the chain's canonical SuperPaymaster.
+ * Throws when the chain has no canonical entry and no address was passed.
+ */
+export function resolveSuperPaymasterAddress(chain: Chain, explicit?: string): string {
+  if (explicit) return explicit;
+  const canonical = getCanonicalAddresses(chain.id)?.superPaymaster;
+  if (!canonical) {
+    throw new Error(`No canonical SuperPaymaster for chain ${chain.id} (${chain.name}). Pass superPaymasterAddress.`);
+  }
+  return canonical;
+}
+
+/**
+ * TransactionSponsored log that `aPNTsPriceUSD` and `exchangeRate` were read for.
+ * `logIndex` is the index in `receipt.logs`. `paymasterEvents` may still contain
+ * earlier logs from other emitters; do not pair those with these prices.
+ */
+export interface PricedSponsored {
+  logIndex: number;
+  operator: string;
+}
+
 export interface OnChainData {
   txHash: Hash;
   blockNumber: bigint;
@@ -55,8 +87,10 @@ export interface OnChainData {
   effectiveGasPrice: bigint;
   status: 'success' | 'reverted';
   
-  // Paymaster Events
+  // Paymaster Events. May include logs from emitters that were not priced.
   paymasterEvents: DecodedPaymasterEvent[];
+  /** Absent when no trusted TransactionSponsored log was priced. */
+  pricedSponsored?: PricedSponsored;
   
   // 协议相关状态
   /**
@@ -82,16 +116,23 @@ export class DataCollector {
   private cacheDir: string;
   private cacheEnabled: boolean;
   private superPaymasterAddress: string;
+  /**
+   * Extra SuperPaymaster addresses whose TransactionSponsored logs may be priced.
+   * Copied and normalized at construction. A later edit of the caller's array
+   * must not change trust or the cache key while a read is in flight.
+   */
+  private readonly paymasterAllowlist: readonly string[];
   /** Cause keys already warned for a failed historical read. One warning per cause, not per tx. */
   private readonly warnedReadCauses = new Set<string>();
 
-  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860B950A45967E12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true, client?: PublicClient) {
+  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress?: string, cacheDir?: string, enableCache = true, client?: PublicClient, paymasterAllowlist?: readonly string[]) {
     this.client = client ?? createPublicClient({
       chain,
       transport: http(rpcUrl),
     });
     
-    this.superPaymasterAddress = superPaymasterAddress;
+    this.superPaymasterAddress = resolveSuperPaymasterAddress(chain, superPaymasterAddress);
+    this.paymasterAllowlist = normalizeAllowlist(paymasterAllowlist);
     this.cacheDir = cacheDir || path.resolve(__dirname, '../../../../data/transaction_cache');
     this.cacheEnabled = enableCache;
     
@@ -127,11 +168,12 @@ export class DataCollector {
       const block = await this.client.getBlock({ blockNumber: receipt.blockNumber });
 
       // 解析 Event Logs
-      const paymasterEvents = EventDecoder.decodeAll(receipt.logs);
+      const paymasterEvents = decodePaymasterEvents(receipt.logs);
 
       // 查询协议状态（如果是 SuperPaymaster 交易）
       let aPNTsPriceUSD: bigint | undefined;
       let exchangeRate: bigint | undefined;
+      let pricedSponsored: PricedSponsored | undefined;
 
       const superEvent = paymasterEvents.find(e => e.type === 'TransactionSponsored');
       // End-of-block snapshot, not execution-time state. eth_call at
@@ -140,20 +182,22 @@ export class DataCollector {
       // reconstruct tx-time pricing.
       let retryableRead = false;
       if (superEvent && superEvent.type === 'TransactionSponsored') {
-        const sponsoredLog = receipt.logs.find((log) => {
-          const decoded = EventDecoder.decode(log);
-          return decoded?.type === 'TransactionSponsored';
-        });
-        const spAddress = sponsoredLog?.address;
-        if (!spAddress) {
+        // Any contract can emit this event shape. Price only a log whose
+        // address is the configured SuperPaymaster or the constructor allowlist.
+        const trusted = this.findTrustedSponsoredLog(receipt.logs);
+        if (!trusted) {
+          // Trust is local config, not chain state. Don't cache the skip, or a
+          // later allowlist could not price this same receipt.
           this.warnReadOnce(
-            'transaction-sponsored:missing-log',
-            'TransactionSponsored decoded without a log address; leaving aPNTsPriceUSD and exchangeRate undefined',
+            'transaction-sponsored:untrusted-address',
+            `TransactionSponsored log is not ${this.superPaymasterAddress} or the constructor allowlist; leaving aPNTsPriceUSD and exchangeRate undefined`,
           );
+          retryableRead = true;
         } else {
+          pricedSponsored = { logIndex: trusted.logIndex, operator: trusted.operator };
           const pricing = await this.readSponsoredPricing(
-            spAddress,
-            superEvent.operator as Address,
+            trusted.address,
+            trusted.operator,
             receipt.blockNumber,
           );
           aPNTsPriceUSD = pricing.aPNTsPriceUSD;
@@ -170,6 +214,7 @@ export class DataCollector {
         effectiveGasPrice: receipt.effectiveGasPrice,
         status: receipt.status,
         paymasterEvents,
+        pricedSponsored,
         aPNTsPriceUSD,
         exchangeRate,
         receipt,
@@ -186,6 +231,28 @@ export class DataCollector {
       console.error(`❌ 获取链上数据失败 (${txHash}):`, error);
       return null;
     }
+  }
+
+  /**
+   * First TransactionSponsored log emitted by the configured SuperPaymaster or the allowlist.
+   * Comparison is case-insensitive. A leading impostor log is ignored.
+   */
+  private findTrustedSponsoredLog(logs: TransactionReceipt['logs']): { address: Address; operator: Address; logIndex: number } | undefined {
+    for (const log of logs) {
+      if (!this.isTrustedPaymaster(log.address)) continue;
+      const decoded = EventDecoder.decode(log);
+      if (decoded?.type !== 'TransactionSponsored') continue;
+      return { address: log.address, operator: decoded.operator as Address, logIndex: receiptLogIndex(log) };
+    }
+    return undefined;
+  }
+
+  /** Configured SuperPaymaster, or an address passed in the constructor allowlist. */
+  private isTrustedPaymaster(address: string | undefined): boolean {
+    if (!address) return false;
+    const candidate = address.toLowerCase();
+    if (candidate === this.superPaymasterAddress.toLowerCase()) return true;
+    return this.paymasterAllowlist.some((allowed) => allowed.toLowerCase() === candidate);
   }
 
   /**
@@ -405,7 +472,7 @@ export class DataCollector {
           return value;
         });
 
-        if (parsed?.schemaVersion !== CACHE_SCHEMA_VERSION || !parsed?.data) {
+        if (parsed?.schemaVersion !== CACHE_SCHEMA_VERSION || !parsed?.data || !this.cacheTrustMatches(parsed.trust)) {
           return null;
         }
 
@@ -425,7 +492,7 @@ export class DataCollector {
     const cachePath = this.getCachePath(txHash);
     
     try {
-      const content = JSON.stringify({ schemaVersion: CACHE_SCHEMA_VERSION, data }, (key, value) => {
+      const content = JSON.stringify({ schemaVersion: CACHE_SCHEMA_VERSION, trust: this.cacheTrust(), data }, (key, value) => {
         // 序列化 BigInt
         if (typeof value === 'bigint') {
           return value.toString() + 'n';
@@ -437,6 +504,26 @@ export class DataCollector {
     } catch (e) {
       console.warn(`⚠️  缓存保存失败: ${txHash}`);
     }
+  }
+
+  /**
+   * Identity of the emitters this collector will price. The allowlist was
+   * normalized when the collector was constructed.
+   */
+  private cacheTrust(): { superPaymaster: string; allowlist: string[] } {
+    return {
+      superPaymaster: this.superPaymasterAddress.toLowerCase(),
+      allowlist: [...this.paymasterAllowlist],
+    };
+  }
+
+  private cacheTrustMatches(stored: unknown): boolean {
+    if (!stored || typeof stored !== 'object') return false;
+    const current = this.cacheTrust();
+    const trust = stored as { superPaymaster?: unknown; allowlist?: unknown };
+    if (trust.superPaymaster !== current.superPaymaster) return false;
+    if (!Array.isArray(trust.allowlist) || trust.allowlist.length !== current.allowlist.length) return false;
+    return trust.allowlist.every((item, index) => item === current.allowlist[index]);
   }
 
   /**
@@ -458,6 +545,33 @@ export class DataCollector {
       console.log(`🗑️  已清空缓存: ${files.length} 个文件`);
     }
   }
+}
+
+function decodePaymasterEvents(logs: TransactionReceipt['logs']): DecodedPaymasterEvent[] {
+  const events: DecodedPaymasterEvent[] = [];
+  for (const log of logs) {
+    const decoded = EventDecoder.decode(log);
+    if (!decoded) continue;
+    if (decoded.type === 'TransactionSponsored') {
+      events.push({ ...decoded, logIndex: receiptLogIndex(log) });
+    } else {
+      events.push(decoded);
+    }
+  }
+  return events;
+}
+
+function receiptLogIndex(log: { logIndex?: number | bigint | string | null }): number {
+  const index = log.logIndex;
+  if (typeof index === 'number' && Number.isInteger(index)) return index;
+  if (typeof index === 'bigint') return Number(index);
+  if (typeof index === 'string' && index !== '') return Number(index);
+  return -1;
+}
+
+/** Lowercase, dedupe, and sort. The result is a new array the caller cannot mutate. */
+function normalizeAllowlist(allowlist: readonly string[] | undefined): string[] {
+  return [...new Set((allowlist ?? []).map((item) => item.toLowerCase()))].sort();
 }
 
 function xPNTsTokenFromOperator(data: unknown): Address | undefined {
