@@ -19,6 +19,34 @@ import { EventDecoder, type DecodedPaymasterEvent } from '../utils/EventDecoder.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Cache entries written before this field existed stored OnChainData at the
+ * top level and could freeze a failed historical read. Bump when the shape changes.
+ */
+const CACHE_SCHEMA_VERSION = 1;
+
+/**
+ * version() strings whose operators() / aPNTsPriceUSD() match the ABI we decode.
+ * operators() outputs are the same 9 named fields from v5.3.3 (git adb444ad;
+ * docs/release_plan_v0.19.0-beta.md dropped exchangeRate) through SuperPaymaster.json
+ * at 5.4.2 (e257dd6a) and SuperPaymaster-5.5.0.full.json. xPNTsToken is the address
+ * field. aPNTsPriceUSD() is `() returns (uint256)` on both shipped ABIs.
+ * superPaymasterAbiCompat.test.ts: no function shared by 5.4.2 and 5.5.0 changed outputs.
+ * On-chain strings tied to those ABIs in this repo: CHANGELOG SuperPaymaster-5.4.1,
+ * docs readback SuperPaymaster-5.4.2, fork e2e SuperPaymaster-5.5.0, and the 5.5.0
+ * line's version() SuperPaymaster-5.5.1 (docs/sp550-cutover, same vendored ABI).
+ * 5.3.3 / 5.4.0-beta share the tuple but this repo never quotes their version()
+ * string, so they stay outside the set.
+ */
+const SUPPORTED_SP_VERSIONS = new Set([
+  'SuperPaymaster-5.4.1',
+  'SuperPaymaster-5.4.2',
+  'SuperPaymaster-5.5.0',
+  'SuperPaymaster-5.5.1',
+]);
+
+type HistoricalRead = { value: bigint | undefined; retryable: boolean };
+
 export interface OnChainData {
   txHash: Hash;
   blockNumber: bigint;
@@ -31,8 +59,19 @@ export interface OnChainData {
   paymasterEvents: DecodedPaymasterEvent[];
   
   // 协议相关状态
-  aPNTsPriceUSD?: bigint;      // SuperPaymaster 中的 aPNTs 价格
-  exchangeRate?: bigint;        // Operator 的汇率
+  /**
+   * End-of-block snapshot of SuperPaymaster.aPNTsPriceUSD() at `blockNumber`.
+   * An eth_call at that block sees state after every transaction in the block,
+   * so this can differ from the price the UserOp executed against if a later
+   * transaction updated it. Not reconstructed back to execution time.
+   */
+  aPNTsPriceUSD?: bigint;
+  /**
+   * End-of-block snapshot of the operator token's exchangeRate() at `blockNumber`.
+   * Same caveat as `aPNTsPriceUSD`: a later transaction in the block can change
+   * the rate. Not reconstructed back to execution time.
+   */
+  exchangeRate?: bigint;
   
   // 原始数据
   receipt: TransactionReceipt;
@@ -95,9 +134,12 @@ export class DataCollector {
       let exchangeRate: bigint | undefined;
 
       const superEvent = paymasterEvents.find(e => e.type === 'TransactionSponsored');
+      // End-of-block snapshot, not execution-time state. eth_call at
+      // receipt.blockNumber includes later transactions in the same block,
+      // so these fields can differ from the values the UserOp saw. Do not
+      // reconstruct tx-time pricing.
+      let retryableRead = false;
       if (superEvent && superEvent.type === 'TransactionSponsored') {
-        // Historical cost: pin both reads to the tx block. The SuperPaymaster is the
-        // event log's address. Since v5.3.3 exchangeRate lives on operators(operator).xPNTsToken.
         const sponsoredLog = receipt.logs.find((log) => {
           const decoded = EventDecoder.decode(log);
           return decoded?.type === 'TransactionSponsored';
@@ -109,12 +151,14 @@ export class DataCollector {
             'TransactionSponsored decoded without a log address; leaving aPNTsPriceUSD and exchangeRate undefined',
           );
         } else {
-          aPNTsPriceUSD = await this.readAPNTsPriceUSD(spAddress, receipt.blockNumber);
-          exchangeRate = await this.readOperatorExchangeRate(
+          const pricing = await this.readSponsoredPricing(
             spAddress,
             superEvent.operator as Address,
             receipt.blockNumber,
           );
+          aPNTsPriceUSD = pricing.aPNTsPriceUSD;
+          exchangeRate = pricing.exchangeRate;
+          retryableRead = pricing.retryable;
         }
       }
 
@@ -131,8 +175,8 @@ export class DataCollector {
         receipt,
       };
 
-      // 保存到缓存
-      if (this.cacheEnabled) {
+      // A retryable RPC / pruned-history miss must not freeze undefined fields.
+      if (this.cacheEnabled && !retryableRead) {
         this.saveToCache(txHash, data);
       }
 
@@ -145,31 +189,75 @@ export class DataCollector {
   }
 
   /**
+   * version() at `blockNumber`, then aPNTsPriceUSD() and operators().xPNTsToken.exchangeRate()
+   * only when that string is in SUPPORTED_SP_VERSIONS.
+   */
+  private async readSponsoredPricing(spAddress: Address, operator: Address, blockNumber: bigint): Promise<{
+    aPNTsPriceUSD?: bigint;
+    exchangeRate?: bigint;
+    retryable: boolean;
+  }> {
+    let version: string;
+    try {
+      version = await this.readAtBlock({
+        address: spAddress,
+        abi: SuperPaymasterABI as Abi,
+        functionName: 'version',
+        blockNumber,
+      }) as string;
+    } catch (error) {
+      const kind = readFailureKind(error);
+      this.warnReadOnce(
+        'exchangeRate:unsupported-version:unreadable',
+        `version() on ${spAddress} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
+      );
+      return { retryable: isRetryableKind(kind) };
+    }
+
+    if (!SUPPORTED_SP_VERSIONS.has(version)) {
+      this.warnReadOnce(
+        `exchangeRate:unsupported-version:${version}`,
+        `SuperPaymaster ${spAddress} version ${JSON.stringify(version)} is not in the verified operators() set; leaving aPNTsPriceUSD and exchangeRate undefined`,
+      );
+      return { retryable: false };
+    }
+
+    const price = await this.readAPNTsPriceUSD(spAddress, blockNumber);
+    const rate = await this.readOperatorExchangeRate(spAddress, operator, blockNumber);
+    return {
+      aPNTsPriceUSD: price.value,
+      exchangeRate: rate.value,
+      retryable: price.retryable || rate.retryable,
+    };
+  }
+
+  /**
    * aPNTsPriceUSD() at `blockNumber`. Failure leaves the field undefined.
    */
-  private async readAPNTsPriceUSD(spAddress: Address, blockNumber: bigint): Promise<bigint | undefined> {
+  private async readAPNTsPriceUSD(spAddress: Address, blockNumber: bigint): Promise<HistoricalRead> {
     try {
-      return await this.readAtBlock({
+      const value = await this.readAtBlock({
         address: spAddress,
         abi: SuperPaymasterABI as Abi,
         functionName: 'aPNTsPriceUSD',
         blockNumber,
       }) as bigint;
+      return { value, retryable: false };
     } catch (error) {
       const kind = readFailureKind(error);
       this.warnReadOnce(
         `aPNTsPriceUSD:${kind}`,
         `aPNTsPriceUSD() on ${spAddress} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
       );
-      return undefined;
+      return { value: undefined, retryable: isRetryableKind(kind) };
     }
   }
 
   /**
-   * operators(operator).xPNTsToken, then that token's exchangeRate(), both at `blockNumber`.
-   * A zero token is not a failed read: the rate stays undefined and nothing is logged.
+   * operators(operator).xPNTsToken (named output), then that token's exchangeRate(), both at `blockNumber`.
+   * A zero token is permanent: the rate stays undefined and nothing is logged.
    */
-  private async readOperatorExchangeRate(spAddress: Address, operator: Address, blockNumber: bigint): Promise<bigint | undefined> {
+  private async readOperatorExchangeRate(spAddress: Address, operator: Address, blockNumber: bigint): Promise<HistoricalRead> {
     let token: Address | undefined;
     try {
       const operatorData = await this.readAtBlock({
@@ -186,27 +274,36 @@ export class DataCollector {
         `operators:${kind}`,
         `operators(${operator}) on ${spAddress} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
       );
-      return undefined;
+      return { value: undefined, retryable: isRetryableKind(kind) };
     }
 
-    if (!token || token.toLowerCase() === zeroAddress) {
-      return undefined;
+    if (token === undefined) {
+      this.warnReadOnce(
+        'operators:missing-token-field',
+        `operators(${operator}) on ${spAddress} decoded without xPNTsToken; leaving exchangeRate undefined`,
+      );
+      return { value: undefined, retryable: false };
+    }
+
+    if (token.toLowerCase() === zeroAddress) {
+      return { value: undefined, retryable: false };
     }
 
     try {
-      return await this.readAtBlock({
+      const value = await this.readAtBlock({
         address: token,
         abi: xPNTsTokenABI as Abi,
         functionName: 'exchangeRate',
         blockNumber,
       }) as bigint;
+      return { value, retryable: false };
     } catch (error) {
       const kind = readFailureKind(error);
       this.warnReadOnce(
         `exchangeRate:${kind}`,
         `exchangeRate() on ${token} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
       );
-      return undefined;
+      return { value: undefined, retryable: isRetryableKind(kind) };
     }
   }
 
@@ -300,15 +397,19 @@ export class DataCollector {
     if (fs.existsSync(cachePath)) {
       try {
         const content = fs.readFileSync(cachePath, 'utf8');
-        const data = JSON.parse(content, (key, value) => {
+        const parsed = JSON.parse(content, (key, value) => {
           // 恢复 BigInt
           if (typeof value === 'string' && /^\d+n$/.test(value)) {
             return BigInt(value.slice(0, -1));
           }
           return value;
         });
-        
-        return data as OnChainData;
+
+        if (parsed?.schemaVersion !== CACHE_SCHEMA_VERSION || !parsed?.data) {
+          return null;
+        }
+
+        return parsed.data as OnChainData;
       } catch (e) {
         console.warn(`⚠️  缓存读取失败: ${txHash}`);
       }
@@ -324,7 +425,7 @@ export class DataCollector {
     const cachePath = this.getCachePath(txHash);
     
     try {
-      const content = JSON.stringify(data, (key, value) => {
+      const content = JSON.stringify({ schemaVersion: CACHE_SCHEMA_VERSION, data }, (key, value) => {
         // 序列化 BigInt
         if (typeof value === 'bigint') {
           return value.toString() + 'n';
@@ -360,29 +461,65 @@ export class DataCollector {
 }
 
 function xPNTsTokenFromOperator(data: unknown): Address | undefined {
-  if (!data || typeof data !== 'object') return undefined;
-  const record = data as { xPNTsToken?: unknown } & { [index: number]: unknown };
-  const named = record.xPNTsToken;
-  const positional = record[3];
-  const token = typeof named === 'string' ? named : positional;
+  // Prefer a named field when the decoder attached one. viem 2.43's
+  // decodeFunctionResult returns a positional array for multi-output functions,
+  // so the name is resolved on the ABI and then applied to that slot.
+  if (data && typeof data === 'object' && 'xPNTsToken' in data) {
+    const named = (data as { xPNTsToken?: unknown }).xPNTsToken;
+    if (typeof named === 'string') return named as Address;
+  }
+  const index = operatorOutputIndex('xPNTsToken');
+  if (index < 0 || !Array.isArray(data)) return undefined;
+  const token = data[index];
   return typeof token === 'string' ? token as Address : undefined;
 }
 
+function operatorOutputIndex(name: string): number {
+  const fn = (SuperPaymasterABI as readonly { type?: string; name?: string; outputs?: { name?: string }[] }[])
+    .find((item) => item.type === 'function' && item.name === 'operators');
+  return fn?.outputs?.findIndex((output) => output.name === name) ?? -1;
+}
+
+function errorText(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const record = current as { message?: unknown; shortMessage?: unknown; details?: unknown; cause?: unknown };
+    for (const piece of [record.shortMessage, record.details, record.message]) {
+      if (typeof piece === 'string' && piece) parts.push(piece);
+    }
+    current = record.cause;
+  }
+  return parts.length > 0 ? parts.join(' ') : String(error);
+}
+
 function readFailureKind(error: unknown): string {
-  const msg = error instanceof Error ? error.message : String(error);
-  if (/pruned|missing trie node|historical state|state is not available|archive/i.test(msg)) {
-    return 'pruned-history';
-  }
-  if (/not found|could not be found|does not exist|unknown selector|function selector/i.test(msg)) {
-    return 'missing-getter';
-  }
-  if (/reverted|revert/i.test(msg)) {
-    return 'reverted';
-  }
+  const msg = errorText(error);
+  // Checked first: "header/block/state not found" must not match the getter rule.
+  if (isBlockStateOrHeaderMiss(msg)) return 'block-state-header';
+  if (isExplicitMissingGetter(msg)) return 'missing-getter';
+  if (/reverted|revert/i.test(msg)) return 'reverted';
   return 'read-failed';
 }
 
+function isBlockStateOrHeaderMiss(msg: string): boolean {
+  return /pruned|missing trie node|historical state|archive node/i.test(msg)
+    || /\b(header|block|state)\b.{0,40}\b(not found|unavailable|missing|unknown|not available)\b/i.test(msg)
+    || /\b(not found|unavailable|missing|unknown|not available)\b.{0,40}\b(header|block|state)\b/i.test(msg);
+}
+
+function isExplicitMissingGetter(msg: string): boolean {
+  return /function\b[^.\n]{0,120}\b(does not exist|not found|could not be found)|unknown selector|function selector|selector not found|AbiFunctionNotFound/i.test(msg);
+}
+
+/** Only a confirmed missing getter or unknown selector is permanent. */
+function isRetryableKind(kind: string): boolean {
+  return kind !== 'missing-getter';
+}
+
 function errorMessage(error: unknown): string {
-  const msg = error instanceof Error ? error.message : String(error);
+  const msg = errorText(error);
   return msg.length > 200 ? msg.slice(0, 200) : msg;
 }
