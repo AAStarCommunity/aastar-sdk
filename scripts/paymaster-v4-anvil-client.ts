@@ -12,7 +12,51 @@ import { createAdminClient, type AdminClient } from '../packages/sdk/src/clients
 
 export type MinedReceipt = { status: 'success' | 'reverted' };
 
-export type StepCount = { testsPassed: number; testsFailed: number; error?: unknown };
+export type StepCounts = { testsPassed: number; testsFailed: number; testsSkipped: number };
+
+export type StepOutcome = 'passed' | 'failed' | 'skipped';
+
+export type StepMode = 'fail' | 'already-exists' | 'sbt-activity';
+
+/** A skip never increments `testsPassed`. Idempotent `AlreadyExists` is a pass. */
+export function recordStep(counts: StepCounts, outcome: StepOutcome): void {
+    if (outcome === 'passed') counts.testsPassed += 1;
+    else if (outcome === 'skipped') counts.testsSkipped += 1;
+    else counts.testsFailed += 1;
+}
+
+/**
+ * Runs one script step. Success records a pass. A throw records `settleStepError`.
+ * `onCaught` may log; it does not choose the counter.
+ */
+export async function runCountedStep(
+    counts: StepCounts,
+    run: () => Promise<void>,
+    mode: StepMode = 'fail',
+    onCaught?: (error: unknown, outcome: StepOutcome) => void,
+): Promise<void> {
+    try {
+        await run();
+        recordStep(counts, 'passed');
+    } catch (error) {
+        const outcome = settleStepError(error, mode);
+        onCaught?.(error, outcome);
+        recordStep(counts, outcome);
+    }
+}
+
+/** Maps a caught step error onto the counter `recordStep` understands. */
+export function settleStepError(error: unknown, mode: StepMode): StepOutcome {
+    const message = error instanceof Error ? error.message : undefined;
+    if (mode === 'already-exists' && message?.includes('AlreadyExists')) return 'passed';
+    if (mode === 'sbt-activity') {
+        const kind = classifySbtActivityError(message);
+        if (kind === 'idempotent') return 'passed';
+        if (kind === 'skipped') return 'skipped';
+        return 'failed';
+    }
+    return 'failed';
+}
 
 type WaitForReceipt = (hash: Hash) => Promise<MinedReceipt>;
 
@@ -23,8 +67,9 @@ export function requireMinedSuccess(receipt: MinedReceipt, label: string, hash: 
 }
 
 /**
- * Test 5.1 treats a missing SDK method as a skip. `AlreadyExists` stays idempotent.
- * A mined revert, a timeout, a network error, and any other message fail the step.
+ * Test 5.1 treats a missing SDK method as a skip, and a skip is not a pass.
+ * `AlreadyExists` stays idempotent. A mined revert, a timeout, a network error,
+ * and any other message fail the step.
  */
 export function classifySbtActivityError(message: string | undefined): 'idempotent' | 'failed' | 'skipped' {
     if (message?.includes('AlreadyExists')) return 'idempotent';
@@ -67,18 +112,21 @@ export async function registerGasToken(args: {
  * an empty EntryPoint deposit must not be counted as a pass.
  */
 export async function withdrawPaymasterDeposit(args: {
+    counts: StepCounts;
     adminClient: { withdrawTo: (a: { to: Address; amount: bigint }) => Promise<Hash> };
     to: Address;
     waitForReceipt: WaitForReceipt;
-}): Promise<StepCount> {
+}): Promise<{ error?: unknown }> {
     try {
         const hash = await args.adminClient.withdrawTo({
             to: args.to,
             amount: 1n,
         });
         requireMinedSuccess(await args.waitForReceipt(hash), 'withdrawTo', hash);
-        return { testsPassed: 1, testsFailed: 0 };
+        recordStep(args.counts, 'passed');
+        return {};
     } catch (error) {
-        return { testsPassed: 0, testsFailed: 1, error };
+        recordStep(args.counts, 'failed');
+        return { error };
     }
 }

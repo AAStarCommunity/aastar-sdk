@@ -8,12 +8,14 @@
  * it has to parse the SKIP line. Exit 78 is non-zero, so that reader would count it
  * as a failure.
  *
- * The child env is an allowlist. These tests do not read .env* and do not open an RPC:
- * the skip path exits before dotenv, and the present-env path dies on a missing RPC_URL
- * before any client is constructed.
+ * The child env is an allowlist. These tests do not read the repo .env* and do not open an RPC.
+ * dvt3 skips before its own dotenv; the present-env path dies on a missing RPC_URL
+ * before any client is constructed. The KMS runner loads `.env.sepolia` from its cwd,
+ * so those cases use a temp directory and the pnpm-installed tsx binary. `pnpm exec`
+ * would reset cwd to this repo and open the real env file.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -24,6 +26,23 @@ const KMS = 'tests/regression/onchain-evidence/dvt-kms-onboard-e2e.ts';
 function runRunner(script: string, env: NodeJS.ProcessEnv) {
   return spawnSync('pnpm', ['exec', 'tsx', script], {
     cwd: ROOT,
+    env,
+    encoding: 'utf8',
+    timeout: 90_000,
+  });
+}
+
+/**
+ * KMS dotenv path is `cwd/.env.sepolia`. Keep cwd off the repo.
+ * `--tsconfig` is required: tsx only applies `@aastar/*` paths from a config it
+ * can see, and from a temp cwd it would not walk up to this repo.
+ */
+function runKms(env: NodeJS.ProcessEnv, cwd: string) {
+  return spawnSync(join(ROOT, 'node_modules', '.bin', 'tsx'), [
+    '--tsconfig', join(ROOT, 'tsconfig.json'),
+    join(ROOT, KMS),
+  ], {
+    cwd,
     env,
     encoding: 'utf8',
     timeout: 90_000,
@@ -81,16 +100,24 @@ describe('board-side onchain-evidence runners', () => {
     expect(out).not.toContain('⏭️  SKIP');
   }, 120_000);
 
-  it('dvt-kms-onboard-e2e keeps the same SKIP exit 0 (source, no .env read)', () => {
-    const src = readFileSync(new URL(`../${KMS}`, import.meta.url), 'utf8');
-    expect(src).toContain('⏭️  SKIP dvt-kms-onboard-e2e:');
-    expect(src).toMatch(/if \(!KMS_POP_URL\) \{[\s\S]*?\n\s*return;\n\s*\}/);
-    expect(src).not.toContain('process.exit(78)');
-    expect(src).not.toMatch(/78[\s\S]{0,120}counted as a pass/);
-    expect(src).toMatch(/exit == 0/);
-    expect(src).toMatch(/cannot tell this SKIP/);
-    const dvt3 = readFileSync(new URL(`../${DVT3}`, import.meta.url), 'utf8');
-    expect(dvt3).toContain('process.exit(0)');
-    expect(dvt3).not.toContain('process.exit(78)');
-  });
+  it('dvt-kms-onboard-e2e SKIPs with exit 0 when KMS_POP_URL is absent', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kms-skip-'));
+    const child = runKms(bareEnv(), dir);
+    const out = `${child.stdout ?? ''}${child.stderr ?? ''}`;
+    expect(child.status, out.slice(0, 500)).toBe(0);
+    expect(out).toContain('⏭️  SKIP dvt-kms-onboard-e2e:');
+    expect(out).toContain('KMS_POP_URL');
+  }, 120_000);
+
+  it('dvt-kms-onboard-e2e loads KMS_POP_URL from cwd .env.sepolia before the SKIP gate', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kms-dotenv-'));
+    // Fixture only. Not the repo env file, and not a board endpoint that is contacted:
+    // the script throws on the missing node id before it builds a client.
+    writeFileSync(join(dir, '.env.sepolia'), 'KMS_POP_URL=http://127.0.0.1:9\n');
+    const child = runKms(bareEnv(), dir);
+    const out = `${child.stdout ?? ''}${child.stderr ?? ''}`;
+    expect(child.status, out.slice(0, 500)).toBe(1);
+    expect(out).toContain('set KMS_NODE_ID');
+    expect(out).not.toContain('⏭️  SKIP');
+  }, 120_000);
 });

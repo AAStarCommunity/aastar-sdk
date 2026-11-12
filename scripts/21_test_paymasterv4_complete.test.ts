@@ -3,8 +3,11 @@
  * and that a thrown withdraw is counted as a failure.
  * The recording transport also checks pause/unpause destinations: paymasterActions
  * bound to the validated paymaster, and adminClient.pause/unpause bound to MySBT.
- * It also decodes setMaxGasCostCap and setServiceFeeRate. A source check looks for
- * that binding and those argument names in script 21; this file does not execute the script.
+ * It also decodes setMaxGasCostCap and setServiceFeeRate. Step counters are
+ * `recordStep` / `runCountedStep`: a skip increments testsSkipped and a throw or
+ * mined revert increments testsFailed. A source check looks for that binding,
+ * those argument names, and `runCountedStep` in script 21; this file does not
+ * execute the script.
  * A recording transport never opens a socket.
  */
 import { readFileSync } from 'node:fs';
@@ -22,8 +25,11 @@ import {
   adminClientForPaymaster,
   classifySbtActivityError,
   registerGasToken,
+  requireMinedSuccess,
+  runCountedStep,
   withdrawPaymasterDeposit,
   type MinedReceipt,
+  type StepCounts,
 } from './paymaster-v4-anvil-client.js';
 
 const ANVIL_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as const;
@@ -90,6 +96,28 @@ describe('scripts/21_test_paymasterv4_complete', () => {
     expect(classifySbtActivityError(undefined)).toBe('failed');
   });
 
+  it('counts a thrown or reverted step as failed and a skip as skipped', async () => {
+    const fresh = (): StepCounts => ({ testsPassed: 0, testsFailed: 0, testsSkipped: 0 });
+
+    const thrown = fresh();
+    await runCountedStep(thrown, async () => {
+      throw new Error('setMaxGasCostCap reverted: 0xabc');
+    });
+    expect(thrown).toEqual({ testsPassed: 0, testsFailed: 1, testsSkipped: 0 });
+
+    const reverted = fresh();
+    await runCountedStep(reverted, async () => {
+      requireMinedSuccess({ status: 'reverted' }, 'setMaxGasCostCap', `0x${'ab'.repeat(32)}` as Hash);
+    });
+    expect(reverted).toEqual({ testsPassed: 0, testsFailed: 1, testsSkipped: 0 });
+
+    const skipped = fresh();
+    await runCountedStep(skipped, async () => {
+      throw new Error('adminClient.addSBTWithActivity is not a function');
+    }, 'sbt-activity');
+    expect(skipped).toEqual({ testsPassed: 0, testsFailed: 0, testsSkipped: 1 });
+  });
+
   it('script 21 checks mined success before counting each remaining write as passed', () => {
     const src = readFileSync(new URL('./21_test_paymasterv4_complete.ts', import.meta.url), 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
@@ -99,7 +127,11 @@ describe('scripts/21_test_paymasterv4_complete', () => {
     for (const label of WRITE_LABELS) {
       expect(src).toContain(`requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), '${label}', hash)`);
     }
-    expect(src).toContain('classifySbtActivityError(');
+    expect(src).toContain(", 'sbt-activity', logCaught)");
+    expect(src.match(/runCountedStep\(counts/g) ?? []).toHaveLength(13);
+    expect(src).toContain('⏭️ Skipped: ${counts.testsSkipped}');
+    expect(src).not.toMatch(/testsPassed\s*\+\+/);
+    expect(src).not.toMatch(/testsFailed\s*\+\+/);
     expect(src).toContain("import { paymasterActions } from '@aastar/core'");
     expect(src).toContain('paymasterActions(paymasterV4Address)(adminClient as PublicClient)');
     expect(src).toContain('_maxGasCostCap: newCap');
@@ -169,13 +201,16 @@ describe('scripts/21_test_paymasterv4_complete', () => {
     });
 
     await registerGasToken({ adminClient, token: TOKEN, waitForReceipt });
+    const counts: StepCounts = { testsPassed: 0, testsFailed: 0, testsSkipped: 0 };
     const withdrawn = await withdrawPaymasterDeposit({
+      counts,
       adminClient,
       to: account.address,
       waitForReceipt,
     });
 
-    expect(withdrawn).toEqual({ testsPassed: 1, testsFailed: 0 });
+    expect(withdrawn.error).toBeUndefined();
+    expect(counts).toEqual({ testsPassed: 1, testsFailed: 0, testsSkipped: 0 });
     expect(sent).toHaveLength(2);
     const price = decodeSent(sent[0]);
     const withdraw = decodeSent(sent[1]);
@@ -188,15 +223,16 @@ describe('scripts/21_test_paymasterv4_complete', () => {
 
   it('counts a thrown withdrawTo as a failure', async () => {
     const account = privateKeyToAccount(ANVIL_KEY);
+    const counts: StepCounts = { testsPassed: 0, testsFailed: 0, testsSkipped: 0 };
     const withdrawn = await withdrawPaymasterDeposit({
+      counts,
       adminClient: {
         withdrawTo: async () => { throw new Error('empty EntryPoint deposit'); },
       },
       to: account.address,
       waitForReceipt: async () => ({ status: 'success' }),
     });
-    expect(withdrawn.testsPassed).toBe(0);
-    expect(withdrawn.testsFailed).toBe(1);
+    expect(counts).toEqual({ testsPassed: 0, testsFailed: 1, testsSkipped: 0 });
     expect(withdrawn.error).toBeInstanceOf(Error);
   });
 
@@ -208,14 +244,15 @@ describe('scripts/21_test_paymasterv4_complete', () => {
       account,
       paymasterV4Address: PAYMASTER,
     });
+    const counts: StepCounts = { testsPassed: 0, testsFailed: 0, testsSkipped: 0 };
     const withdrawn = await withdrawPaymasterDeposit({
+      counts,
       adminClient,
       to: account.address,
       waitForReceipt,
     });
     expect(sent).toHaveLength(1);
-    expect(withdrawn.testsPassed).toBe(0);
-    expect(withdrawn.testsFailed).toBe(1);
+    expect(counts).toEqual({ testsPassed: 0, testsFailed: 1, testsSkipped: 0 });
     expect((withdrawn.error as Error).message).toContain('reverted');
   });
 
