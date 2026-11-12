@@ -175,7 +175,7 @@ async function main() {
 
   // independent on-chain re-read
   const { dvtOperatorActions } = await import('@aastar/core');
-  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient as any);
+  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient);
   const isReg = await dvt.isRegistered({ nodeId: b.nodeId });
   const owner = await dvt.nodeOperator({ nodeId: b.nodeId });
   log(`\nre-read: isRegistered=${isReg}  nodeOperator=${owner}`);

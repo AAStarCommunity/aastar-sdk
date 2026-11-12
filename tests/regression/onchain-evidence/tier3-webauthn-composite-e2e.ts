@@ -101,7 +101,7 @@ type PackedUserOp = {
 function p256SignDerLowS(hash: Uint8Array, priv: string): Uint8Array {
     const res = p256.sign(hash, priv, { lowS: true }) as unknown as { toDERRawBytes?: () => Uint8Array };
     if (typeof res.toDERRawBytes === 'function') return res.toDERRawBytes(); // v1.x
-    return (p256.Signature as any).fromBytes(res as unknown as Uint8Array, 'compact').toBytes('der'); // v2.x
+    return (p256.Signature).fromBytes(res as unknown as Uint8Array, 'compact').toBytes('der'); // v2.x
 }
 
 function base64Url(bytes: Uint8Array): string {

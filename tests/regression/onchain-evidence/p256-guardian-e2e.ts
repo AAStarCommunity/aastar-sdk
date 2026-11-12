@@ -85,7 +85,7 @@ async function main() {
     const fees = await bumpedFees(publicClient);
 
     const sendVerified = async (to: Address, data: Hex, label: string): Promise<Hex> => {
-        const hash = await ownerWallet.sendTransaction({ to, data, ...fees } as any);
+        const hash = await ownerWallet.sendTransaction({ to, data, ...fees });
         const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
         if (receipt.status !== 'success') throw new Error(`${label} tx reverted: ${hash}`);
         console.log(`   ✅ ${label}: ${hash}  (status=0x1)`);
@@ -184,7 +184,7 @@ async function main() {
     steps.push({ step: 'proposeRecoveryWithSig(newOwner, gIdx=0, WebAuthn assertion)', actor: `relayer JASON ${owner.address}`, tx: proposeTx });
 
     // ── 6. Verify the RecoveryProposed event + activeRecovery() read ──
-    const events = parseEventLogs({ abi: AirAccountExtensionABI as any, logs: proposeRcpt.logs, eventName: 'RecoveryProposed' });
+    const events = parseEventLogs({ abi: AirAccountExtensionABI, logs: proposeRcpt.logs, eventName: 'RecoveryProposed' });
     const proposed = events.find((e: any) => getAddress(e.args.newOwner) === getAddress(newOwner));
     if (!proposed) throw new Error('RecoveryProposed event for newOwner not found in receipt');
     if (Number((proposed as any).args.guardianIdx) !== 0) throw new Error('RecoveryProposed.guardianIdx != 0');

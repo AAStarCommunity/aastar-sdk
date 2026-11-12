@@ -308,7 +308,7 @@ async function main() {
     let uoe = '';
     for (const lg of rcpt.logs) {
         if (getAddress(lg.address) === ENTRY_POINT) {
-            try { const d = decodeEventLog({ abi: EntryPointABI, data: lg.data, topics: lg.topics as any }); if (d.eventName === 'UserOperationEvent') uoe = `success=${(d.args as any).success} actualGasCost=${(d.args as any).actualGasCost} actualGasUsed=${(d.args as any).actualGasUsed} nonce=${(d.args as any).nonce}`; } catch { /* */ }
+            try { const d = decodeEventLog({ abi: EntryPointABI, data: lg.data, topics: lg.topics }); if (d.eventName === 'UserOperationEvent') uoe = `success=${(d.args).success} actualGasCost=${(d.args).actualGasCost} actualGasUsed=${(d.args).actualGasUsed} nonce=${(d.args).nonce}`; } catch { /* */ }
         }
     }
     console.log(`\n┌── Row 10 handleOps EVIDENCE`);
