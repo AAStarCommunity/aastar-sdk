@@ -397,7 +397,13 @@ describe('reviewed-revision authority', () => {
   });
 });
 
-describe('YAAA guard contract pin', () => {
+// committedGuardSource() git-shows the pinned guard, and one live-node case below runs `ps`
+// through execFileSync. Both block the verdict timer. 30s is the spawn-verdict budget; a per-test
+// timeout (the live cases pass 20_000) overrides it. The beforeAll that boots anvil and node
+// passes its own 90_000 — a describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('YAAA guard contract pin', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('states the upstream revision it is pinned against', () => {
     const where = pin.rev ? `${pin.rev} (${pin.dirty ? `DIRTY: ${pin.dirtyPaths.length} change(s)` : 'clean'})` : 'absent';
     // Print the DECLARED revision next to the checked-out one: "green" only means something if the
@@ -543,7 +549,7 @@ async function waitFor(check: () => Promise<boolean>, attempts: number, delayMs:
   return false;
 }
 
-describe('real YAAA /repcredit HTTP guard', () => {
+describe('real YAAA /repcredit HTTP guard', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const secret = randomBytes(32).toString('hex');
   const base = `http://127.0.0.1:${httpPort}`;
   const endpoint = `${base}/repcredit/sign`;

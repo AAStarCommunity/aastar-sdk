@@ -680,7 +680,11 @@ describe('the CI workflow checks out exactly the reviewed revisions', () => {
   });
 });
 
-describe('check-abi-drift provenance chain (synthetic upstream)', () => {
+// Each case builds a git repo and spawns tsx via execFileSync, which blocks the verdict timer.
+// The cases already pass 120_000 (one passes 30_000, and a per-test timeout overrides this).
+const SPAWN_VERDICT_TIMEOUT_MS = 120_000;
+
+describe('check-abi-drift provenance chain (synthetic upstream)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('BASELINE: a clean, committed, pinned upstream with real source hashes passes strict', () => {
     withFixture('none', (lenient, strict) => {
       expect(strict.status, strict.output).toBe(0);

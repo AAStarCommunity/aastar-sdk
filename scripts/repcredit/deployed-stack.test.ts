@@ -40,7 +40,11 @@ function scratchRoot(mutate?: (doc: Record<string, unknown>) => void): string {
   return root;
 }
 
-describe('offline pin checks — each one has a mutation that reddens it', () => {
+// checkDeployedAbiPin reaches readBlobAtRevision, which git-shows the pinned blob. execFileSync
+// blocks the verdict timer. 30s is the spawn-verdict budget the other git-show suites use.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('offline pin checks — each one has a mutation that reddens it', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('passes unmutated against the real vendored artifact', () => {
     const checks = checkDeployedAbiPin(PIN, SDK_ROOT, null);
     expect(summarise(checks).failed).toEqual([]);

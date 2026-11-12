@@ -37,7 +37,11 @@ function run(args: string[], key = 'dummy-not-a-key') {
 /** Every value passed for `flag`, in order. */
 const valuesOf = (argv: string[], flag: string) => argv.flatMap((a, i) => (a === flag ? [argv[i + 1]] : []));
 
-describe('run-keeper.sh argument assembly', () => {
+// run() is spawnSync. That blocks the verdict timer the same way execFileSync does. The script
+// itself is a short bash run; 30s is the spawn-verdict budget, not a measurement of this file.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('--paymaster-missing-alert does not suppress the baked V4', () => {
         const r = run(['sepolia', '--paymaster-missing-alert', '600']);
         expect(r.status).toBe(0);

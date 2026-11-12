@@ -132,7 +132,11 @@ async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) =
     return out;
 }
 
-describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refreshed', () => {
+// runKeeper spawns keeper.ts and kills it at 40s. The cases already budget 60s for the process
+// to exit and for the pipes to drain; a per-test timeout overrides this default.
+const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
+
+describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refreshed', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('getCode(V4) fails at INIT and tick 1, succeeds at tick 2 → tick 2 sends V4 updatePrice (dry-run)', async () => {
         const fake = await fakeRpc();
         cleanups.push(() => closeServer(fake.server));
