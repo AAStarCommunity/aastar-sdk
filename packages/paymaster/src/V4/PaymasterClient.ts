@@ -133,7 +133,8 @@ function receiptSucceeded(status: unknown): boolean {
  * (and reports the reason via onReplaced). `repriced` is the same calldata.
  * `replaced` only means the calldata changed — a different beneficiary can still
  * execute this UserOp, so the caller checks the mined receipt's UserOperationEvent.
- * `cancelled` did not execute it.
+ * `cancelled` is viem's name for any zero-value self-send, whatever its calldata: an
+ * EIP-7702 wallet can wrap handleOps in one, so it gets the same event check.
  */
 function directHandleOpsOutcome(
     submitted: `0x${string}`,
@@ -1032,7 +1033,8 @@ export class PaymasterClient {
                  // does not move the nonce, so recording the hash would pin the sender on an
                  // op that can never be included. viem follows a replacement (speed-up, cancel,
                  // or a different tx on the same nonce) and resolves that receipt. `replaced`
-                 // still counts when the mined receipt's UserOperationEvent is this op.
+                 // or `cancelled` (viem's label for any zero-value self-send) still counts when
+                 // the mined receipt's UserOperationEvent is this op.
                  let replacement: { reason?: string; transaction?: { hash?: `0x${string}` } } | undefined;
                  const receipt: { status?: unknown; transactionHash?: `0x${string}`; logs?: readonly { address?: string; topics?: readonly Hex[]; data?: Hex }[] } = await client.waitForTransactionReceipt({
                      hash: txHash,
@@ -1041,7 +1043,7 @@ export class PaymasterClient {
                      },
                  });
                  let outcome = directHandleOpsOutcome(txHash, receipt, replacement);
-                 if (!outcome.accept && outcome.reason === 'replaced') {
+                 if (!outcome.accept && (outcome.reason === 'replaced' || outcome.reason === 'cancelled')) {
                      const executed = userOperationEvent(receipt, entryPoint, getUserOpHashV07(userOp, entryPoint, BigInt(chainId)));
                      if (executed?.success) {
                          outcome = { accept: true, hash: outcome.hash };

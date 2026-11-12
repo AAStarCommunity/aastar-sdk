@@ -122,8 +122,9 @@ describe('SuperPaymasterInflightGuard (spec §3.2 F1: one in-flight op per sende
     });
     it('a nonce from another key does not consume the live hold', () => {
         SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 7n);
-        // Key 2 sequence 1 packs far above key-0 nonce 7. It is not evidence key 0 was consumed.
-        const otherKey = (2n << 64n) | 1n;
+        // Key 2 sequence 9: both the packed value and the sequence exceed key-0 nonce 7, so only
+        // the key comparison keeps this from counting as consumption.
+        const otherKey = (2n << 64n) | 9n;
         expect(() => SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, otherKey)).toThrow(/one in-flight/);
         expect(SuperPaymasterInflightGuard.heldNonce(31337, EP, SENDER)).toBe(7n);
     });

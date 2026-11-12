@@ -646,6 +646,24 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
         await expect(submit()).rejects.toThrow(new RegExp(MINED));
     });
 
+    it('handleOps cancelled (zero-value self-send) still records the mined hash when UserOperationEvent succeeds', async () => {
+        let packed: any;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async (req) => {
+                packed = req.args[0][0];
+                return TX;
+            },
+            receipt: (_hash, wait) => {
+                const userOpHash = getUserOpHashV07(packed, EP, 11155111n);
+                // An EIP-7702 wallet's zero-value self-call wrapping handleOps: viem says `cancelled`.
+                wait?.onReplaced?.({ reason: 'cancelled', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED, logs: [userOpEventLog(userOpHash, true)] };
+            },
+        });
+        await expect(submit()).resolves.toBe(MINED);
+        await expect(submit()).rejects.toThrow(new RegExp(MINED));
+    });
+
     it('handleOps replaced whose UserOperationEvent failed was included and keeps the slot', async () => {
         let packed: any;
         const { submit } = harness(noSendBundler, {
