@@ -4,8 +4,8 @@ export { header, pagedLogs, rawGetLogs } from './rpc.js';
 export type { BloomLog } from './bloom.js';
 export { bloomOf, mayContain, mayContainAddress, mayHaveLog } from './bloom.js';
 
-export type { AttributedAction, Checkpoint, Commit, GuardianAuditStore, UnresolvedAction } from './store.js';
-export { CheckpointConflictError, memoryStore, unresolvedId } from './store.js';
+export type { AttributedAction, Checkpoint, Commit, GuardianAuditStore, StoreSnapshot, UnresolvedAction } from './store.js';
+export { CheckpointConflictError, StoreConflictError, memoryStore, unresolvedId } from './store.js';
 
 export { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc, trieRoot } from './trie.js';
 export type { ConsensusReceipt } from './trie.js';

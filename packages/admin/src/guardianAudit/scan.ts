@@ -4,8 +4,8 @@ import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type 
 import {
     unresolvedId,
     type AttributedAction,
-    type Checkpoint,
     type GuardianAuditStore,
+    type StoreSnapshot,
     type UnresolvedAction,
 } from './store.js';
 import { receiptsRootFromRpc } from './trie.js';
@@ -152,13 +152,16 @@ function covers(contract: WatchedContract, address: Address, block: number): boo
     return contract.toBlock === undefined || block <= contract.toBlock;
 }
 
-/** `log` is a copy. A decoder must not be able to edit a stored or provider object. */
+/**
+ * The decoder and the stored log are different copies of `input`.
+ * A decoder that mutates its argument cannot change the log we keep.
+ */
 function callDecode(
     contract: WatchedContract, input: RawLog, address: Address, block: number,
 ): { ok: true; value: DecodedAction | 'ignore' | null; log: RawLog } | { ok: false; reason: string } {
     const log = structuredClone(input);
     try {
-        return { ok: true, value: contract.decode(log), log };
+        return { ok: true, value: contract.decode(structuredClone(log)), log };
     } catch {
         return { ok: false, reason: `decoder threw for ${address} at block ${block}` };
     }
@@ -254,19 +257,66 @@ async function readReceipts(rpc: RawRpc, hash: Hex): Promise<unknown[] | string>
     }
 }
 
-function everyLog(raw: unknown[]): { logs: Norm[] } | { error: string } {
+function asNorm(
+    address: Address, topics: Hex[], data: Hex, blockNumber: number, blockHash: Hex, txHash: Hex,
+    logIndex: number, removed: boolean,
+): Norm {
+    return {
+        address, topics, data, blockNumber, blockHash, txHash, logIndex, removed,
+        raw: {
+            address, topics, data, blockHash, transactionHash: txHash, removed,
+            blockNumber: numberToHex(blockNumber), logIndex: numberToHex(logIndex),
+        },
+    };
+}
+
+/**
+ * receiptsRoot authenticates only (address, topics, data).
+ * blockNumber and blockHash are taken from the header the receipts were checked against.
+ * logIndex is the log's position in receipt order: transactions must already be 0..n-1,
+ * and logs are counted in that order. A provided blockNumber, blockHash, or logIndex that
+ * disagrees is an error — it is not dropped.
+ * transactionHash is the receipt's transactionHash. It must be a 32-byte word and match
+ * the other provider. receiptsRoot does not prove it.
+ */
+function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; txs: string[] } | { error: string } {
+    const badMeta = `receipt log metadata disagrees at block ${block}`;
+    const badIndex = `receipt logIndex disagrees with receipt order at block ${block}`;
+    const cannot = `cannot verify receipts at block ${block}`;
+    let cursor = 0;
     const logs: Norm[] = [];
-    for (const item of raw) {
-        if (typeof item !== 'object' || item === null) return { error: 'bad' };
-        const rows = (item as { logs?: unknown }).logs;
-        if (!Array.isArray(rows)) return { error: 'bad' };
-        for (const entry of rows) {
-            const log = parseLog(entry);
-            if (!log) return { error: 'bad' };
-            logs.push(log);
+    const txs: string[] = [];
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
+        if (typeof item !== 'object' || item === null) return { error: cannot };
+        const rec = item as Record<string, unknown>;
+        if (quantity(rec.transactionIndex) !== i) {
+            return { error: `receipts are not ordered by transactionIndex at block ${block}` };
+        }
+        if (!isWord(rec.transactionHash)) return { error: cannot };
+        const txHash = rec.transactionHash.toLowerCase() as Hex;
+        txs.push(txHash);
+        if (!Array.isArray(rec.logs)) return { error: cannot };
+        for (const entry of rec.logs) {
+            if (typeof entry !== 'object' || entry === null) return { error: cannot };
+            const row = entry as Record<string, unknown>;
+            if (typeof row.address !== 'string' || !isAddress(row.address)) return { error: cannot };
+            if (!isHexData(row.data) || !Array.isArray(row.topics) || row.topics.some((t) => !isWord(t))) {
+                return { error: cannot };
+            }
+            const derived = cursor++;
+            if (quantity(row.logIndex) !== derived) return { error: badIndex };
+            const blockHash = isWord(row.blockHash) ? row.blockHash.toLowerCase() : null;
+            if (quantity(row.blockNumber) !== block || blockHash !== hash.toLowerCase()) return { error: badMeta };
+            logs.push(asNorm(
+                getAddress(row.address),
+                (row.topics as string[]).map((t) => t.toLowerCase() as Hex),
+                row.data.toLowerCase() as Hex,
+                block, hash.toLowerCase() as Hex, txHash, derived, row.removed === true,
+            ));
         }
     }
-    return { logs };
+    return { logs, txs };
 }
 
 /** Both providers' receipts must encode to the agreed header receiptsRoot. */
@@ -284,9 +334,11 @@ async function prove(
     if (rootA.toLowerCase() !== want || rootB.toLowerCase() !== want) {
         return { error: `receipts do not match receiptsRoot at block ${block}` };
     }
-    const logsA = everyLog(rawA);
-    const logsB = everyLog(rawB);
-    if ('error' in logsA || 'error' in logsB) return { error: `cannot verify receipts at block ${block}` };
+    const logsA = deriveLogs(rawA, block, hash);
+    const logsB = deriveLogs(rawB, block, hash);
+    if ('error' in logsA) return logsA;
+    if ('error' in logsB) return logsB;
+    if (logsA.txs.join() !== logsB.txs.join()) return { error: `providers disagree on transactionHash at block ${block}` };
     if (!sameLogs(logsA.logs, logsB.logs)) return { error: `providers disagree on receipts at block ${block}` };
     return { logs: logsA.logs };
 }
@@ -331,8 +383,11 @@ function attributedOf(action: FoundAction): AttributedAction {
  * itself is not recomputed: several header fields are fork-dependent.
  * A clipped range (`to` below finalized) reads every header from `to + 1` through
  * that provider's finalized height, so the cost grows with (finalized - to), per provider.
- * `commit` is all-or-nothing against the checkpoint read at the start. An overlapping
- * scan throws CheckpointConflictError and applies none of its action writes.
+ * Each scan takes one snapshot and commits against that revision. The commit is
+ * all-or-nothing: a stale revision throws StoreConflictError and writes nothing,
+ * whether or not `next` moves the checkpoint. Two scans may run together. The one
+ * that commits second fails, including a caught-up scan whose checkpoint does not change.
+ * INCOMPLETE does not commit. The checkpoint value itself is not the concurrency token.
  */
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const [pa, pb] = opts.providers;
@@ -344,7 +399,8 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: opts.startBlock };
     const finB = await readHeader(pb, 'finalized');
     if (typeof finB === 'string') return { state: 'INCOMPLETE', reasons: [finB], from: opts.startBlock };
-    const saved = await opts.store.getCheckpoint();
+    const snap = await opts.store.snapshot();
+    const saved = snap.checkpoint;
     if (saved) {
         const ha = await readHeader(pa, saved.block);
         if (typeof ha === 'string') return { state: 'INCOMPLETE', reasons: [ha], from: saved.block };
@@ -357,7 +413,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
     const from = saved ? saved.block + 1 : opts.startBlock;
     const to = Math.min(finA.number, finB.number, from + opts.maxBlocks - 1);
-    if (from > to) return finish(opts, [], from, to, 0, 0, null, saved);
+    if (from > to) return finish(opts, [], from, to, 0, 0, null, snap);
 
     const buckets: Bucket[] = [];
     for (const contract of opts.watched) {
@@ -426,7 +482,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
                 if ('error' in got) return bad(from, to, got.error);
                 proved = got;
             }
-            const want = proved.logs.filter((log) => log.address === bucket.address && log.blockNumber === n);
+            const want = proved.logs.filter((log) => log.address === bucket.address);
             if (want.some((log) => log.removed)) return bad(from, to, `removed log from ${bucket.address} at block ${n}`);
             if (!sameLogs(have, want)) {
                 const seen = new Set(have.map(keyOf));
@@ -488,19 +544,19 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             });
         }
     }
-    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, saved);
+    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, snap);
 }
 
 async function finish(
     opts: ScanRangeOptions, actions: FoundAction[], from: number, to: number,
     bloomFalsePositives: number, ignored: number, tip: Hex | null,
-    expected: Checkpoint | null,
+    snap: StoreSnapshot,
 ): Promise<ScanResult> {
     actions.sort((x, y) => x.blockNumber - y.blockNumber || x.logIndex - y.logIndex);
     const resolvedPrior: FoundAction[] = [];
     const stale: UnresolvedAction[] = [];
     let stillPrior = 0;
-    for (const item of await opts.store.listUnresolved()) {
+    for (const item of snap.unresolved) {
         const again = revive(opts.watched, item);
         if (again && 'incomplete' in again) return bad(from, to, again.incomplete);
         if (!again) {
@@ -530,7 +586,7 @@ async function finish(
         });
     }
     await opts.store.commit({
-        expected,
+        expectedRevision: snap.revision,
         next: tip ? { block: to, hash: tip } : null,
         attributed: accepted,
         unresolved: [...stale, ...fresh],
