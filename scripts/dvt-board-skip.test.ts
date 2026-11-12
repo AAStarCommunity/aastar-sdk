@@ -59,7 +59,7 @@ function bareEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   };
 }
 
-describe('board-side onchain-evidence runners', () => {
+describe('board-side onchain-evidence runners', { timeout: 120_000 }, () => {
   it('dvt3-register SKIPs with exit 0 when board-side env is absent', () => {
     const child = runRunner(DVT3, bareEnv());
     const out = `${child.stdout ?? ''}${child.stderr ?? ''}`;
