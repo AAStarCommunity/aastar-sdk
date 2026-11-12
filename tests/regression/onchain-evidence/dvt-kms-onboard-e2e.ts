@@ -15,6 +15,9 @@
  *
  * GATED: the KMS /pop endpoint is on the A-board loopback :3100 (Tailscale). Without KMS_POP_URL this
  * script SKIPS (exit 0) — it is ready to run the moment board access + the operator EOA are provided.
+ * Exit 0 matches dvt3-register.ts. Nothing under tests/regression or scripts tallies these runs, so
+ * sysexits 78 (EX_CONFIG) would be counted as a pass by any `exit == 0` reader. The SKIP line is
+ * the only marker a future summarizer can count.
  * Requires .env.sepolia: SEPOLIA_RPC_URL, PRIVATE_KEY_JASON (funder), and an operator key (see below).
  */
 import * as dotenv from 'dotenv';

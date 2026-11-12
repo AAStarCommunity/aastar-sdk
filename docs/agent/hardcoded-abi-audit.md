@@ -149,9 +149,12 @@ ReputationOracle or similar」。
 > **拿这张表去删「叫这个名字的代码」是错的用法。**
 
 （#382 评审发现，已记 FU-77。同一条 FU 还记了作用域外的一个同族实例：
-`scripts/21_test_paymasterv4_complete.ts` 调用 `adminClient.addGasToken` / `.withdrawPNT`，
-两者实测都是 `undefined` —— **会以 TypeError 失败，连合约调用都到不了**，比本表修的那一类还早一步死。
-正对照：同一个 client 上 `setTokenPrice` / `tokenPrices` / `withdrawTo` 均为 `function`。）
+`scripts/21_test_paymasterv4_complete.ts` 曾调用 `adminClient.addGasToken` / `.withdrawPNT`，
+两者实测都是 `undefined`，会以 TypeError 失败，连合约调用都到不了。
+正对照：同一个 client 上 `setTokenPrice` / `tokenPrices` / `withdrawTo` 均为 `function`。
+脚本现已改为调用后两个写方法：`setTokenPrice({ token, price })` 与 `withdrawTo({ to, amount })`。
+这不改变上一节的限制 —— `PaymasterOperatorClient.addGasToken(token, price)` 仍是健康封装，
+名字与表里那条虚构 ABI 相同，转发的是 `setTokenPrice`。拿这张表按名字去删它是错的。）
 
 ## 遗留
 

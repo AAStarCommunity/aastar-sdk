@@ -13,6 +13,12 @@
  *   DVT3_OPERATOR_PK        fresh operator EOA private key (already persisted board 600)
  *   PRIVATE_KEY_JASON       funder (from .env.sepolia)
  *   SEPOLIA_RPC_URL / RPC_URL
+ *
+ * GATED: SDK_DIR + the board-B keystore/operator key are not in this repo. When any of them is
+ * absent the script SKIPS (exit 0, same as dvt-kms-onboard-e2e.ts on a missing KMS_POP_URL).
+ * There is no §4 summarizer that classifies exit codes, so a distinct skip code (sysexits 78)
+ * would be invisible — both runners stay on exit 0 and print a line starting with `⏭️  SKIP`.
+ * A missing RPC / funder key after the board env is present is still a hard failure.
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -32,6 +38,20 @@ function requireEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`missing required env ${name} — see the header of this file for the full list`);
   return v;
+}
+
+/** Board-side inputs. A machine without board B is missing these; that is not an SDK failure. */
+const BOARD_SIDE_ENV = ['SDK_DIR', 'DVT3_KEYSTORE_JSON', 'DVT3_SECRET', 'DVT3_OPERATOR_PK'] as const;
+
+function missingBoardSideEnv(env: NodeJS.ProcessEnv = process.env): string[] {
+  return BOARD_SIDE_ENV.filter((name) => !env[name]);
+}
+
+const missingBoard = missingBoardSideEnv();
+if (missingBoard.length > 0) {
+  console.log(`⏭️  SKIP dvt3-register: ${missingBoard.join(', ')} unset (board B EIP-2335 keystore is not on this`);
+  console.log('    machine; SDK_DIR is only the checkout that holds .env.sepolia). Set SDK_DIR + DVT3_KEYSTORE_JSON + DVT3_SECRET + DVT3_OPERATOR_PK to run.');
+  process.exit(0);
 }
 
 const SDK_DIR = requireEnv('SDK_DIR');

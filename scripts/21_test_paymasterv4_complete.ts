@@ -107,15 +107,20 @@ async function main() {
         testsFailed++;
     }
 
-    // Test 2: addGasToken (use APNTS as it implements IxPNTsToken with exchangeRate)
+    // Test 2: register APNTS as a gas token.
+    // `addGasToken(address)` is not a method on the admin client and not a PaymasterV4
+    // function. The real entry is `setTokenPrice(token, price)` — the same forwarding
+    // `PaymasterOperatorClient.addGasToken(token, price)` does. Price scale matches
+    // scripts/l4-setup.ts ($1.00, 8 decimals). The client binds the paymaster address
+    // at construction; the `address:` field sibling calls pass is not part of this API.
     try {
-        console.log('📝 Test 2: addGasToken (using APNTS)');
-        const hash = await adminClient.addGasToken({
-            address: paymasterV4Address,
-            token: apntsAddress
+        console.log('📝 Test 2: setTokenPrice (using APNTS)');
+        const hash = await adminClient.setTokenPrice({
+            token: apntsAddress,
+            price: 100_000_000n,
         });
         await publicClient.waitForTransactionReceipt({ hash });
-        console.log('   ✅ PASSED: Gas token (APNTS) added\n');
+        console.log('   ✅ PASSED: Gas token price set (APNTS)\n');
         testsPassed++;
     } catch (error: any) {
         if (error.message.includes('AlreadyExists')) {
@@ -306,17 +311,18 @@ async function main() {
         testsFailed++;
     }
     
-    // Test 13: withdrawPNT
+    // Test 13: withdraw EntryPoint deposit.
+    // `withdrawPNT(address,address,uint256)` is not on the admin client. The real entry
+    // is `withdrawTo(to, amount)` and it takes no token. 1 wei is the smallest amount
+    // the client will forward — `validatePositive` rejects 0 before any transaction.
     try {
-        console.log('📝 Test 13: withdrawPNT');
-        const hash = await adminClient.withdrawPNT({
-            address: paymasterV4Address,
+        console.log('📝 Test 13: withdrawTo');
+        const hash = await adminClient.withdrawTo({
             to: account.address,
-            token: gTokenAddress, 
-            amount: BigInt(0)
+            amount: 1n,
         });
         await publicClient.waitForTransactionReceipt({ hash });
-        console.log('   ✅ PASSED: withdrawPNT called\n');
+        console.log('   ✅ PASSED: withdrawTo called\n');
         testsPassed++;
     } catch (error: any) {
         console.log(`   ❌ FAILED: ${error.message}\n`);
