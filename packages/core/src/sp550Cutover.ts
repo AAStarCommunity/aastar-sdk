@@ -28,7 +28,15 @@ export interface Sp550CutoverPins {
     spImpl?: Address;
     /** keccak256 of spImpl's runtime code, as read back from the chain. */
     spImplCodehash?: Hex;
+    /**
+     * SuperPaymasterAdmin, the extension SP's fallback DELEGATECALLs for every selector the core does
+     * not define (most admin functions, all permissionless ones such as expireWithdraw). It has no
+     * version(): its codehash is its only identity. The gate holds SP.EXTENSION() to this pin.
+     */
+    spAdminExtension?: Address;
     superPaymasterLens?: Address;
+    /** The exact `SuperPaymasterLens.version()` string (e.g. "SuperPaymasterLens-1.2.2"). */
+    lensVersion?: string;
     xPNTsFactoryV2?: Address;
     xPNTsTokenV2Impl?: Address;
     xPNTsTokenV2Ext?: Address;
@@ -36,6 +44,22 @@ export interface Sp550CutoverPins {
     globalTierSource?: Address;
     /** The aPNTs token SP points at after the manifest's APNTS switch (SP.APNTS_TOKEN()). */
     aPNTsCapped?: Address;
+    /** ERC-1967 implementation behind the Registry proxy (`addresses.registry`). */
+    registryImpl?: Address;
+    /** The DisclosureRegistry 5.5.0 deploys; not in the SDK book, pinned by codehash. */
+    disclosureRegistry?: Address;
+    /**
+     * SP-owned SDK address-book entries the read-back certifies, keyed by book key. An upgrade
+     * pins at least SP550_CERTIFIED_ADDRESS_KEYS and every key whose address the deploy changes;
+     * aPNTs / xPNTsFactory are NOT listed here (they follow aPNTsCapped / xPNTsFactoryV2). A fresh
+     * deploy pins the whole SP-owned book (sp550Deployments.ts).
+     */
+    addresses?: Partial<Record<string, Address>>;
+    /**
+     * Keys declared NOT deployed. A fresh deploy lists sp-optional book keys; an upgrade only ever
+     * lists timelockController (a manifest's timelockController: "n/a:none").
+     */
+    absent?: string[];
     /** Block the readback was taken at. */
     readbackBlock?: bigint;
     /**
@@ -55,13 +79,17 @@ export const SP550_REQUIRED_PIN_FIELDS = [
     'superPaymaster',
     'spImpl',
     'spImplCodehash',
+    'spAdminExtension',
     'superPaymasterLens',
+    'lensVersion',
     'xPNTsFactoryV2',
     'xPNTsTokenV2Impl',
     'xPNTsTokenV2Ext',
     'aoaProtocolRegistry',
     'globalTierSource',
     'aPNTsCapped',
+    'registryImpl',
+    'disclosureRegistry',
     'readbackBlock',
     'codehashes',
 ] as const satisfies readonly (keyof Sp550CutoverPins)[];
@@ -76,19 +104,22 @@ export const SP550_CUTOVER_PINS: Record<number, Sp550CutoverPins> = {
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 const ADDRESS_FIELDS = [
-    'superPaymaster', 'spImpl', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl',
-    'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped',
+    'superPaymaster', 'spImpl', 'spAdminExtension', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl',
+    'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped', 'registryImpl', 'disclosureRegistry',
 ] as const;
+
+/** Book entries every 5.5.0 read-back certifies by address and codehash, in either deploy mode. */
+export const SP550_CERTIFIED_ADDRESS_KEYS = ['registry', 'policyRegistry', 'blsAggregator', 'dvtValidator', 'reputationSystem'] as const;
 
 const HASH = /^0x[0-9a-fA-F]{64}$/;
 
 /**
  * Every pinned address with its pin name: the top-level 5.5.0 contracts, then `addresses.<key>` for
- * a fresh deploy's book. The gate checks the code of exactly these, so `codehashes` is keyed the same.
+ * the certified book entries. The gate checks the code of exactly these, so `codehashes` is keyed the same.
  */
 export function sp550PinnedAddressEntries(pins: Sp550CutoverPins | undefined): [string, unknown][] {
     if (!pins) return [];
-    const book = (pins as { addresses?: Record<string, unknown> }).addresses ?? {};
+    const book = pins.addresses ?? {};
     return [
         ...ADDRESS_FIELDS.map((k) => [k, pins[k]] as [string, unknown]),
         ...Object.entries(book).map(([k, a]) => [`addresses.${k}`, a] as [string, unknown]),
@@ -148,11 +179,23 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
     if (pins.spVersion !== undefined && !(typeof pins.spVersion === 'string' && /^SuperPaymaster-5\.5\.\d+$/.test(pins.spVersion))) {
         problems.push(`spVersion: ${JSON.stringify(pins.spVersion)} is not a SuperPaymaster-5.5.x version() string`);
     }
+    if (pins.lensVersion !== undefined && !(typeof pins.lensVersion === 'string' && /^SuperPaymasterLens-\d+\.\d+\.\d+$/.test(pins.lensVersion))) {
+        problems.push(`lensVersion: ${JSON.stringify(pins.lensVersion)} is not a SuperPaymasterLens-x.y.z version() string`);
+    }
+    const book = pins.addresses;
+    if (book !== undefined && (typeof book !== 'object' || book === null || Array.isArray(book))) problems.push('addresses: not an object of book key -> address');
+    else {
+        for (const k of SP550_CERTIFIED_ADDRESS_KEYS) if (book?.[k] === undefined) problems.push(`addresses.${k}: unpinned`);
+        for (const [k, v] of Object.entries(book ?? {})) {
+            if (typeof v !== 'string' || !isAddress(v, { strict: false }) || v.toLowerCase() === ZERO) problems.push(`addresses.${k}: not a non-zero address (${String(v)})`);
+        }
+    }
     if (pins.readbackBlock !== undefined && !(typeof pins.readbackBlock === 'bigint' && pins.readbackBlock > 0n)) {
         problems.push(`readbackBlock: not a positive block number (${String(pins.readbackBlock)})`);
     }
     problems.push(...sp550CodehashProblems(
         pins,
+        // `addresses.<key>` hashes are required where the book owner table is known (sp550BookOwnershipProblems).
         ADDRESS_FIELDS.filter((k) => pins[k] !== undefined),
         (name) => (ADDRESS_FIELDS as readonly string[]).includes(name) || name.startsWith('addresses.'),
     ));
@@ -163,18 +206,18 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
     return problems;
 }
 
-/** Pins for a chain, or throw naming every missing or malformed field. */
-export function requireSp550CutoverPins(
-    chainId: number,
-    pins = SP550_CUTOVER_PINS[chainId],
-    opts: { allowRc?: boolean } = {},
-): Required<Sp550CutoverPins> {
-    const problems = sp550PinProblems(pins, opts);
-    if (problems.length) {
-        throw new Error(
-            `SuperPaymaster 5.5.0 cutover pins for chain ${chainId} are not usable (${problems.join('; ')}). ` +
-                `They are read back from the chain after the upgrade; until then the SDK must not use 5.5.0 addresses.`,
-        );
-    }
-    return pins as Required<Sp550CutoverPins>;
+/**
+ * Upgrade-only: the book entries the cutover derives from top-level pins are not ALSO listed in
+ * `addresses` (one value, one source), and the proxy is not listed at all: an upgrade keeps the SP
+ * proxy's address, so `addresses.superPaymaster` would only let a manifest move the book's proxy while
+ * the gate's "pins.superPaymaster == SDK book" check compared the book with itself (PR-Daemon B1).
+ */
+export function sp550UpgradeAddressProblems(pins: Sp550CutoverPins | undefined): string[] {
+    const derived: Record<string, string> = { aPNTs: 'aPNTsCapped', xPNTsFactory: 'xPNTsFactoryV2' };
+    return Object.keys(pins?.addresses ?? {}).flatMap((k) => k === 'superPaymaster'
+        ? ['addresses.superPaymaster: an upgrade keeps the proxy address (pins.superPaymaster is checked against the shipped book); do not list it']
+        : derived[k] ? [`addresses.${k}: an upgrade derives it from ${derived[k]}; do not list it`] : []);
 }
+
+// requireSp550CutoverPins lives in sp550Deployments.ts: it needs the address-book owner table to apply
+// the full upgrade rule set (ownership, aliases, holds), and a field-level variant here was a bypass.

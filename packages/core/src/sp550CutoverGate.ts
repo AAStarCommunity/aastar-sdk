@@ -18,11 +18,13 @@
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
-import { APNTsCappedABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
-import { CANONICAL_ADDRESSES } from './addresses.js';
-import { SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550PinAliasProblems,
+    APNTsCappedABI, BLSAggregatorABI, DVTValidatorABI, RegistryABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+} from './abis/index.js';
+import { CANONICAL_ADDRESSES } from './addresses.js';
+import { SP550_CUTOVER_PINS, sp550PinnedAddressEntries } from './sp550Cutover.js';
+import {
+    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -59,7 +61,14 @@ class Diverge {
 const str = (v: unknown): string => (v instanceof Diverge ? v.detail : typeof v === 'bigint' ? v.toString() : typeof v === 'string' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)));
 const eq = (a?: unknown, b?: unknown) => typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
 const HASH = /^0x[0-9a-fA-F]{64}$/;
-const isLoopback = (url: string) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(url).hostname); } catch { return false; } };
+/** A loopback / unspecified host by its parsed name: localhost, 127/8, 0.0.0.0, ::1, ::, IPv4-mapped forms. */
+const isLoopback = (url: string) => {
+    let h: string;
+    try { h = new URL(url).hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, ''); } catch { return false; }
+    if (h === 'localhost' || h.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(h) || h === '0.0.0.0' || h === '::1' || h === '::') return true;
+    const m = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(h);
+    return !!m && (parseInt(m[1], 16) >> 8 === 0x7f || (parseInt(m[1], 16) === 0 && parseInt(m[2], 16) === 0));
+};
 
 export async function runSp550CutoverGate(input: GateInput): Promise<GateResult> {
     const results: GateCheck[] = [];
@@ -122,7 +131,7 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${table}[${chainId}]`} ===`;
     const problems = net.mode === 'fresh'
         ? sp550FreshPinProblems(pins, { allowRc: input.allowRc })
-        : [...sp550PinProblems(pins, { allowRc: input.allowRc }), ...sp550PinAliasProblems(pins)];
+        : sp550UpgradePinProblems(pins, { allowRc: input.allowRc });
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) record('no release hold on this chain', false, hold);
@@ -160,10 +169,16 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const version = await read(sp, SuperPaymasterV550ABI, 'version');
     record('SP.version() == pins.spVersion', typeof pins.spVersion === 'string' && pins.spVersion !== '' && version === pins.spVersion,
         `observed ${str(version)} · pinned ${pins.spVersion === undefined || pins.spVersion === '' ? '(unpinned)' : JSON.stringify(pins.spVersion)}`);
-    const slot = agree(await Promise.all(rpcs.map((r) => r.client.getStorageAt({ address: sp, slot: ERC1967_IMPL_SLOT, blockNumber }))));
-    const impl = typeof slot === 'string' && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress(('0x' + slot.slice(-40)) as Address) : undefined;
-    cmp('ERC-1967 impl == pins.spImpl', impl ?? `malformed slot ${str(slot)}`, pins.spImpl);
+    const implOf = async (proxy: Address): Promise<{ impl?: Address; shown: string }> => {
+        const slot = agree(await Promise.all(rpcs.map((r) => r.client.getStorageAt({ address: proxy, slot: ERC1967_IMPL_SLOT, blockNumber }))));
+        const impl = typeof slot === 'string' && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress(('0x' + slot.slice(-40)) as Address) : undefined;
+        return { impl, shown: impl ?? `malformed slot ${str(slot)}` };
+    };
+    const { impl, shown } = await implOf(sp);
+    cmp('ERC-1967 impl == pins.spImpl', shown, pins.spImpl);
     cmp('keccak256(code(impl)) == pins.spImplCodehash', await codeHash(impl), pins.spImplCodehash);
+    // The fallback DELEGATECALLs EXTENSION for every selector the core lacks: it must be the pinned admin code.
+    cmp('SP.EXTENSION() == pins.spAdminExtension', await read(sp, SuperPaymasterV550ABI, 'EXTENSION'), pins.spAdminExtension);
 
     // 5b. SP's own 5.5.0 wiring.
     const apntsToken = await read(sp, SuperPaymasterV550ABI, 'APNTS_TOKEN');
@@ -197,20 +212,47 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const lensVersion = await read(pins.superPaymasterLens, SuperPaymasterLensABI, 'EXPECTED_SP_VERSION');
     const expectedLens = typeof pins.spVersion === 'string' && pins.spVersion !== '' ? keccak256(toHex(pins.spVersion)) : undefined;
     cmp('Lens.EXPECTED_SP_VERSION() == keccak256(pins.spVersion)', lensVersion, expectedLens);
+    const lensOwnVersion = await read(pins.superPaymasterLens, SuperPaymasterLensABI, 'version');
+    record('Lens.version() == pins.lensVersion', typeof pins.lensVersion === 'string' && pins.lensVersion !== '' && lensOwnVersion === pins.lensVersion,
+        `observed ${str(lensOwnVersion)} · pinned ${pins.lensVersion === undefined || pins.lensVersion === '' ? '(unpinned)' : JSON.stringify(pins.lensVersion)}`);
 
-    // 5e. Fresh deploy: the SP-owned address book is the one SP is wired to, and every pinned address is code.
+    // 5e. The certified book entries, in either mode: SP is wired to them, the Registry proxy runs the
+    //     pinned implementation, and the SDK book (after the cutover switch) names exactly them.
+    const certified = pins.addresses ?? {};
+    cmp('SP.REGISTRY() == addresses.registry', await read(sp, SuperPaymasterV550ABI, 'REGISTRY'), certified.registry);
+    cmp('SP.BLS_AGGREGATOR() == addresses.blsAggregator', await read(sp, SuperPaymasterV550ABI, 'BLS_AGGREGATOR'), certified.blsAggregator);
+    if (typeof certified.registry === 'string') {
+        const r = await implOf(certified.registry as Address);
+        cmp('ERC-1967 impl of addresses.registry == pins.registryImpl', r.shown, pins.registryImpl);
+    } else record('ERC-1967 impl of addresses.registry == pins.registryImpl', false, 'addresses.registry (unpinned)');
+    // Every leg of the BLS / DVT / Registry wiring names the certified contracts: SP alone is not enough
+    // (2026-08-26..09-01 the Registry pointed at a new aggregator while SP and DVT kept the old one).
+    const reg = certified.registry as Address | undefined, bls = certified.blsAggregator as Address | undefined, dvt = certified.dvtValidator as Address | undefined;
+    cmp('Registry.blsAggregator() == addresses.blsAggregator', await read(reg, RegistryABI, 'blsAggregator'), bls);
+    cmp('Registry.SUPER_PAYMASTER() == pins.superPaymaster', await read(reg, RegistryABI, 'SUPER_PAYMASTER'), pins.superPaymaster);
+    cmp('DVTValidator.BLS_AGGREGATOR() == addresses.blsAggregator', await read(dvt, DVTValidatorABI, 'BLS_AGGREGATOR'), bls);
+    cmp('DVTValidator.REGISTRY() == addresses.registry', await read(dvt, DVTValidatorABI, 'REGISTRY'), reg);
+    cmp('BLSAggregator.DVT_VALIDATOR() == addresses.dvtValidator', await read(bls, BLSAggregatorABI, 'DVT_VALIDATOR'), dvt);
+    cmp('BLSAggregator.REGISTRY() == addresses.registry', await read(bls, BLSAggregatorABI, 'REGISTRY'), reg);
+    cmp('BLSAggregator.SUPERPAYMASTER() == pins.superPaymaster', await read(bls, BLSAggregatorABI, 'SUPERPAYMASTER'), pins.superPaymaster);
+    cmp('ReputationSystem.REGISTRY() == addresses.registry', await read(certified.reputationSystem as Address | undefined, ReputationSystemABI, 'REGISTRY'), reg);
+    for (const [k, a] of Object.entries(certified)) cmp(`SDK book ${k} == addresses.${k}`, canonical[k], a, 'pinned');
+    // A key the pins declare absent is not a live book entry, in either mode (an upgrade declares only the timelock).
+    // ("not deployed" in the book is the zero address — every chain carries every key — or no entry at all.)
+    if (net.mode === 'upgrade') for (const k of pins.absent ?? []) {
+        const v = canonical[k];
+        record(`SDK book has no live ${k} (declared absent)`, v === undefined || (typeof v === 'string' && /^0x0{40}$/i.test(v)), `SDK book ${str(v ?? '(none)')}`);
+    }
+
+    // 5e'. Fresh deploy: the rest of the SP-owned book is the one SP is wired to.
     if (net.mode === 'fresh') {
-        const book = pins.addresses ?? {};
-        cmp('SP.REGISTRY() == addresses.registry', await read(sp, SuperPaymasterV550ABI, 'REGISTRY'), book.registry);
-        cmp('SP.BLS_AGGREGATOR() == addresses.blsAggregator', await read(sp, SuperPaymasterV550ABI, 'BLS_AGGREGATOR'), book.blsAggregator);
+        const book = certified;
         cmp('SP.agentIdentityRegistry() == addresses.agentIdentityRegistry', await read(sp, SuperPaymasterV550ABI, 'agentIdentityRegistry'), book.agentIdentityRegistry);
         cmp('SP.agentReputationRegistry() == addresses.agentReputationRegistry', await read(sp, SuperPaymasterV550ABI, 'agentReputationRegistry'), book.agentReputationRegistry);
         cmp('addresses.aPNTs == pins.aPNTsCapped', book.aPNTs, pins.aPNTsCapped);
         // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
         cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint, 'SDK book');
         cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed, 'SDK book');
-        // A fresh stack replaces every SP-owned entry: the SDK book ships them, so it must BE them.
-        for (const [k, a] of Object.entries(book)) cmp(`SDK book ${k} == addresses.${k}`, canonical[k], a, 'pinned');
         for (const k of pins.absent ?? []) record(`SDK book has no ${k} (declared absent)`, canonical[k] === undefined, `SDK book ${str(canonical[k] ?? '(none)')}`);
     }
 

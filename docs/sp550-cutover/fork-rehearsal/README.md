@@ -134,3 +134,16 @@ E2E 脚本只接受本机回环地址上的 RPC 和 bundler，否则直接拒绝
 - 只跑了 AAStar 这一个 operator，ANNI / Mycelium 没有配置 v2，也没有恢复。
 - S3b（cap 续期）没有跑：默认 cap 是 5000 aPNTs，几笔操作用不完。之前 anvil 上的实测见 `docs/aoa/cc128/m49_appendix.md`。
 - 计数只描述 SDK 和协议层的任务结构，**不是用户体验证据**。
+
+## pins schema v2（2026-11-11，DSR a25d86f4 / 9c8cded5）
+
+`pins.fork.json` 新增了几个字段，都是从 rc.4 分叉上读回来的：
+- `spAdminExtension` = `SP.EXTENSION()`；
+- `lensVersion` = `Lens.version()`；
+- `registryImpl` = Registry 代理 ERC-1967 槽里的地址；
+- `addresses{}`：registry、policyRegistry、blsAggregator、dvtValidator、reputationSystem，取自 SDK 地址簿；
+- 上面每个地址对应的 `codehashes`。
+
+**rc.4 没有部署 DisclosureRegistry**，所以这份 pins 用 `scripts/sp550-pin-fill.ts` 跑出来恰好有一项 ❌：`pins complete and well-formed — disclosureRegistry: unpinned`，其余 62 项都通过。这一项要等 rc.8 的 manifest。
+
+`scripts/sp550-readback-compare.ts` 负责逐字段比对 SP 的 `aoa-a7-readback/1` 读回文件、pins，以及 SDK 自己在链上读到的值。在这个分叉上用 cast 生成了一份读回文件做冒烟测试，结果 PASS。另外故意改坏了三处：Registry 的 version 写成 null、extension 写了一个 version、SP 的 owner 写错，三处都被拒绝了。

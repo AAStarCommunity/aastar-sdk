@@ -21,6 +21,24 @@
     "xPNTsTokenV2Ext": "0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4",
     "aoaProtocolRegistry": "0x14b95e6c2b6630b835f4253ac5d667980288de98461dcda9580e25df78fb5551",
     "globalTierSource": "0x730436c0dcf31db7b35233abbf2c673302fb29ac02e6f09705c0e996e8e541f0",
-    "aPNTsCapped": "0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4"
-  }
+    "aPNTsCapped": "0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4",
+    "spAdminExtension": "0xce1dc81bbd49d465990cae9369aa44fa1672c189a52e54a3827e59dbba8bb724",
+    "registryImpl": "0xa43e76a74928389398d096f3a877828b84b21cd7b0294c1cfd56a888431ad5a8",
+    "addresses.registry": "0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0",
+    "addresses.policyRegistry": "0x044e21f50a0c3228528c7241cf96cefaedb4adde0ac6e25ed160e9a755cec386",
+    "addresses.blsAggregator": "0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c",
+    "addresses.dvtValidator": "0x945bf1df04a0894f57b0da0d62661f123a8ccec7e1c9e748610d0663e71b863c",
+    "addresses.reputationSystem": "0x6d712dae9628ea0788b9ace4c3c1f4d981c2add68f3e9d0ac28eb189c01deaa3"
+  },
+  "spAdminExtension": "0xDE8cA238d17FF91E70c515bac90efB9ff952f7b6",
+  "lensVersion": "SuperPaymasterLens-1.2.0",
+  "registryImpl": "0x9bed0f58d6001b0006923eb8c4b1cc548d42ccee",
+  "addresses": {
+    "registry": "0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71",
+    "policyRegistry": "0x29253bF61310B63866dfb9E9f464B6d95E09f2C1",
+    "blsAggregator": "0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D",
+    "dvtValidator": "0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e",
+    "reputationSystem": "0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A"
+  },
+  "timelockController": "n/a:none"
 }

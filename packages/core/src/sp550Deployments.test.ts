@@ -13,6 +13,7 @@ const FULL = {
     tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: BOOK.superPaymaster, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
+    spAdminExtension: A(0xa), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0xb), disclosureRegistry: A(0xc),
     addresses: BOOK,
     absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS],
 };
@@ -22,6 +23,8 @@ Object.assign(FULL as any, { codehashes: Object.fromEntries([
     ...sp550PinnedAddressEntries({ ...FULL, addresses: {} } as any).map(([k]) => k),
     ...[...SP550_FRESH_REQUIRED_ADDRESS_KEYS, ...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].map((k) => `addresses.${k}`),
 ].map((k, i) => [k, k === 'spImpl' ? FULL.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)])) });
+// A declared alias is one contract with one code: its book entry shares the top-level hash.
+(FULL as any).codehashes['addresses.superPaymaster'] = (FULL as any).codehashes.superPaymaster;
 
 describe('SP 5.5.0 network selection', () => {
     it('maps each network name to its viem chainId and deploy mode', () => {
@@ -67,10 +70,11 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
         expect([...SP550_FRESH_REQUIRED_ADDRESS_KEYS].sort()).toEqual([
             'aPNTs', 'agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry', 'blsAggregator', 'dvtValidator',
             'gToken', 'paymasterFactory', 'paymasterV4Impl', 'policyRegistry', 'registry', 'reputationSystem', 'sbt', 'staking',
-            'superPaymaster', 'timelockController', 'x402Facilitator',
+            'superPaymaster', 'x402Facilitator',
         ]);
+        // timelockController moved to optional with SP schema 543f3498 (a deployment may have none).
         expect([...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].sort()).toEqual([
-            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'xPNTsFactory',
+            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'timelockController', 'xPNTsFactory',
         ]);
         expect(SP550_ADDRESS_OWNER.agentRegistry).toBe('external');
     });
@@ -113,5 +117,42 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
     });
     it('the top-level proxy and the book must name the same SuperPaymaster', () => {
         expect(sp550FreshPinProblems({ ...FULL, superPaymaster: A(77) })).toEqual([expect.stringMatching(/!= addresses\.superPaymaster/)]);
+    });
+});
+
+describe('declared aliases are one contract: one codehash (Grok on #433)', () => {
+    it('superPaymaster / addresses.superPaymaster with two different codehash pins are refused', () => {
+        expect(sp550FreshPinProblems(FULL)).toEqual([]);
+        const pins: any = { ...FULL, codehashes: { ...(FULL as any).codehashes, 'addresses.superPaymaster': '0x' + '77'.repeat(32) } };
+        expect(sp550FreshPinProblems(pins)).toEqual([expect.stringMatching(/codehashes\.superPaymaster .* != codehashes\.addresses\.superPaymaster .*one contract/)]);
+    });
+});
+
+describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok High)', async () => {
+    const { requireSp550UpgradePins } = await import('./sp550Deployments.js');
+    const { SP550_CERTIFIED_ADDRESS_KEYS } = await import('./sp550Cutover.js');
+    const { requireSp550CutoverPins } = await import('./sp550Deployments.js');
+    const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
+    const UP: any = { ...FULL, superPaymaster: A(0x2ff), addresses: book, absent: undefined };
+    delete UP.absent;
+    UP.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.'))),
+        ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x70 + i).toString(16).repeat(32)])) };
+    it('a complete upgrade set passes both', () => {
+        expect(requireSp550UpgradePins(11155111, UP, { allowRc: true })).toBe(UP);
+        expect(requireSp550CutoverPins(11155111, UP, { allowRc: true })).toBe(UP);
+    });
+    it('a certified book entry without its codehash is refused by both', () => {
+        const pins = { ...UP, codehashes: { ...UP.codehashes, 'addresses.registry': undefined } };
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
+        expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/codehashes\.addresses\.registry: unpinned/);
+    });
+    it('an external key in addresses is refused — by the public requireSp550CutoverPins too (Codex r7)', () => {
+        const pins = { ...UP, addresses: { ...UP.addresses, entryPoint: A(0x77) }, codehashes: { ...UP.codehashes, 'addresses.entryPoint': '0x' + '77'.repeat(32) } };
+        expect(() => requireSp550UpgradePins(11155111, pins)).toThrow(/addresses\.entryPoint: external/);
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/addresses\.entryPoint: external/);
+    });
+    it('an undeclared alias is refused by the public requireSp550CutoverPins', () => {
+        const pins = { ...UP, globalTierSource: UP.aoaProtocolRegistry, codehashes: { ...UP.codehashes, globalTierSource: UP.codehashes.aoaProtocolRegistry } };
+        expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/aoaProtocolRegistry and globalTierSource are the same address/);
     });
 });
