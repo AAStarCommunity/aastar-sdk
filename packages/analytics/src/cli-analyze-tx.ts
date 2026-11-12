@@ -4,7 +4,7 @@
  * 用法: npx tsx packages/analytics/src/cli-analyze-tx.ts 0x...
  */
 
-import { TransactionAnalyzer } from './analyzers/TransactionAnalyzer.js';
+import { readAnalyzeOverrides, TransactionAnalyzer } from './analyzers/TransactionAnalyzer.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -16,7 +16,7 @@ async function main() {
   
   if (args.length === 0) {
     console.error('❌ 请提供交易哈希');
-    console.log('\n用法: npx tsx packages/analytics/src/cli-analyze-tx.ts 0x...\n');
+    console.log('\n用法: npx tsx packages/analytics/src/cli-analyze-tx.ts 0x... [--super-paymaster 0x...] [--allowlist 0x...,0x...]\n');
     process.exit(1);
   }
 
@@ -27,7 +27,7 @@ async function main() {
     throw new Error('缺少 RPC URL，请设置 SEPOLIA_RPC_URL 或 RPC_URL_SEPOLIA');
   }
 
-  const analyzer = new TransactionAnalyzer(rpcUrl);
+  const analyzer = new TransactionAnalyzer(rpcUrl, readAnalyzeOverrides(args));
   const report = await analyzer.analyze(txHash);
 
   console.log('\n' + report);
