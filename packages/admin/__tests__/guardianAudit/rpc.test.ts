@@ -67,7 +67,15 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         expect(logs).toHaveLength(4);
         expect(seen).toContain('1-1');
         expect(seen[0]).toBe('1-4');
-        await expect(pagedLogs(rpc(() => { throw new Error('down'); }), ADDR, 3, 3, 4)).rejects.toThrow(/down/);
+        const secret = new Error('https://user:pw@disk.example/down');
+        secret.cause = new Error('cause-secret');
+        await expect(pagedLogs(rpc(() => { throw secret; }), ADDR, 3, 3, 4)).rejects.toSatisfy((error: Error) => {
+            expect(error).not.toBe(secret);
+            expect(error.message).toBe('stub: request failed');
+            expect(error.cause).toBeUndefined();
+            expect(String(error)).not.toMatch(/down|user:pw|disk\.example/);
+            return true;
+        });
     });
 
     it('rejects a zero page and inverted bounds before any request', async () => {
@@ -77,5 +85,21 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         await expect(pagedLogs(node, ADDR, -1, 1, 2)).rejects.toThrow(/from must be >= 0/);
         await expect(pagedLogs(node, ADDR, 1, Number.NaN, 2)).rejects.toThrow(/to must be >= 0/);
         expect(node.calls).toHaveLength(0);
+    });
+
+    it('rejects an inverted raw range and a provider error without forwarding it', async () => {
+        const node = rpc(() => []);
+        await expect(rawGetLogs(node, { address: ADDR, fromBlock: 4, toBlock: 1 })).rejects.toThrow(/from must be <= to/);
+        await expect(rawGetLogs(node, { address: 'https://user:pw@disk.example' as Address, fromBlock: 1, toBlock: 1 })).rejects.toThrow(/^invalid address$/);
+        expect(node.calls).toHaveLength(0);
+        const secret = new Error('https://user:pw@disk.example/down');
+        secret.cause = new Error('cause-secret');
+        await expect(header({ name: 'stub', request: async () => { throw secret; } }, 1)).rejects.toSatisfy((error: Error) => {
+            expect(error.message).toBe('stub: request failed');
+            expect(error.cause).toBeUndefined();
+            expect(String(error)).not.toMatch(/down|user:pw|disk\.example/);
+            return true;
+        });
+        await expect(header({ name: 'https://user:pw@disk.example', request: async () => ({}) }, 1)).rejects.toThrow(/^provider name is not a safe label$/);
     });
 });

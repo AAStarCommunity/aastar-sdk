@@ -23,9 +23,13 @@ function fails(results: ConformanceResult[], name: string, detail: string): void
     expect(byName(results, name)).toMatchObject({ status: 'fail', detail });
 }
 
-function onlyFails(results: ConformanceResult[], name: string, detail: string): void {
-    fails(results, name, detail);
-    expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([name]);
+const ISOLATION = [
+    'isolation/moving', 'isolation/replacement/moving', 'isolation/caught-up', 'isolation/replacement/caught-up',
+];
+
+function failsEach(results: ConformanceResult[], names: string[], detail: string): void {
+    expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual(names);
+    for (const name of names) fails(results, name, detail);
 }
 
 /** Accepts any expectedRevision by rewriting it to the live one. No fault hook. */
@@ -327,29 +331,21 @@ function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
     const inner = memoryStore();
     let crash = false;
     let cached: StoreSnapshot | null = null;
-    const refresh = async () => { cached = await inner.snapshot(); };
-    const live = async () => {
-        if (!cached) await refresh();
-        return cached!;
-    };
     const store: GuardianAuditStore = {
         async snapshot() {
-            if (defect === 'shallow-share snapshot') {
-                if (!cached) await refresh();
-                return cached!;
-            }
+            if (defect === 'shallow-share snapshot' && cached) return cached;
             return inner.snapshot();
         },
         async getCheckpoint() {
-            if (defect === 'shallow-share getter') return (await live()).checkpoint;
+            if (defect === 'shallow-share getter' && cached) return cached.checkpoint;
             return inner.getCheckpoint();
         },
         async listUnresolved() {
-            if (defect === 'shallow-share getter') return (await live()).unresolved;
+            if (defect === 'shallow-share getter' && cached) return cached.unresolved;
             return inner.listUnresolved();
         },
         async listAttributed() {
-            if (defect === 'shallow-share getter') return (await live()).attributed;
+            if (defect === 'shallow-share getter' && cached) return cached.attributed;
             return inner.listAttributed();
         },
         commit: async (change) => {
@@ -385,7 +381,9 @@ function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
                 return;
             }
             await inner.commit(change);
-            if (defect === 'shallow-share snapshot' || defect === 'shallow-share getter') await refresh();
+            if (defect === 'shallow-share snapshot' || defect === 'shallow-share getter') {
+                cached = hit ? await inner.snapshot() : null;
+            }
         },
     };
     const under: StoreUnderTest = { store };
@@ -403,8 +401,9 @@ describe('guardian audit store conformance', () => {
         expect(results.map((item) => item.name)).toEqual([
             'empty snapshot',
             'commit/moving', 'stale/moving', 'concurrent/moving', 'crash/moving', 'scope/moving', 'replacement/moving', 'idempotence/moving',
+            'isolation/moving', 'isolation/replacement/moving',
             'commit/caught-up', 'stale/caught-up', 'concurrent/caught-up', 'crash/caught-up', 'scope/caught-up', 'replacement/caught-up', 'idempotence/caught-up',
-            'isolation',
+            'isolation/caught-up', 'isolation/replacement/caught-up',
         ]);
         expect(results.every((item) => item.detail === undefined)).toBe(true);
     });
@@ -475,12 +474,12 @@ describe('guardian audit store conformance', () => {
 
     it('emptyGetters fails isolation', async () => {
         const results = await runStoreConformance(emptyGetters);
-        onlyFails(results, 'isolation', 'public reads disagree with the snapshot');
+        failsEach(results, ISOLATION, 'public reads disagree with the snapshot');
     });
 
     it('liveAttributed fails isolation', async () => {
         const results = await runStoreConformance(liveAttributed);
-        onlyFails(results, 'isolation', 'stored rows changed after mutation');
+        failsEach(results, ISOLATION, 'stored rows changed after mutation');
     });
 
     it('crashMovingPersistsCheckpoint fails crash/moving', async () => {
@@ -492,7 +491,7 @@ describe('guardian audit store conformance', () => {
 
     it('liveSnapshot fails isolation', async () => {
         const results = await runStoreConformance(liveSnapshot);
-        onlyFails(results, 'isolation', 'stored rows changed after mutation');
+        failsEach(results, ISOLATION, 'stored rows changed after mutation');
     });
 
     it('shallowReplace fails replacement/moving and replacement/caught-up', async () => {
@@ -520,5 +519,74 @@ describe('guardian audit store conformance', () => {
                 expect(failed.length, `${defect}/${form}`).toBeGreaterThan(0);
             }
         }
+    });
+
+    it('detects snapshot sharing activated only by caught-up commits', async () => {
+        const results = await runStoreConformance(() => {
+            const inner = memoryStore({ faultHook: true });
+            let live: StoreSnapshot | null = null;
+            return {
+                crashNextCommit: inner.crashNextCommit,
+                store: {
+                    ...inner,
+                    snapshot: async () => live ?? inner.snapshot(),
+                    async commit(change: Commit) {
+                        await inner.commit(change);
+                        live = change.next === null ? await inner.snapshot() : null;
+                    },
+                },
+            };
+        });
+        expect(results.some((result) => result.status === 'fail')).toBe(true);
+        fails(results, 'isolation/caught-up', 'stored rows changed after mutation');
+        expect(byName(results, 'isolation/moving').status).toBe('pass');
+    });
+
+    it('accepts a store that rejects invalid addresses', async () => {
+        const word = (value: unknown) => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
+        const addr = (value: unknown) => typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value);
+        const data = (value: unknown) => typeof value === 'string' && /^0x[0-9a-fA-F]*$/.test(value) && value.length % 2 === 0;
+        const check = (row: { address: string; blockHash: string; txHash: string; log: { address: string; data: string; blockHash: string; transactionHash: string; topics: string[] } }) => {
+            if (!addr(row.address) || !word(row.blockHash) || !word(row.txHash)) throw new Error('invalid address');
+            if (!addr(row.log.address) || !data(row.log.data) || !word(row.log.blockHash) || !word(row.log.transactionHash)) throw new Error('invalid address');
+            if (row.log.topics.some((topic) => !word(topic))) throw new Error('invalid address');
+        };
+        const results = await runStoreConformance(() => {
+            const inner = memoryStore({ faultHook: true });
+            return {
+                crashNextCommit: inner.crashNextCommit,
+                store: {
+                    ...inner,
+                    commit: async (change) => {
+                        change.unresolved.forEach(check);
+                        change.attributed.forEach(check);
+                        await inner.commit(change);
+                    },
+                },
+            };
+        });
+        expect(results.every((item) => item.status === 'pass')).toBe(true);
+    });
+
+    it('accepts a store that returns rows in reverse id order', async () => {
+        const results = await runStoreConformance(() => {
+            const inner = memoryStore({ faultHook: true });
+            const flip = async () => {
+                const snap = await inner.snapshot();
+                snap.unresolved.reverse();
+                snap.attributed.reverse();
+                return snap;
+            };
+            return {
+                crashNextCommit: inner.crashNextCommit,
+                store: {
+                    ...inner,
+                    snapshot: flip,
+                    listUnresolved: async () => (await inner.listUnresolved()).reverse(),
+                    listAttributed: async () => (await inner.listAttributed()).reverse(),
+                },
+            };
+        });
+        expect(results.every((item) => item.status === 'pass')).toBe(true);
     });
 });

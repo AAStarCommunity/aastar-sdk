@@ -1,4 +1,5 @@
 import { bytesToHex, concat, hexToBytes, keccak256, toRlp, type Hex } from 'viem';
+import { responseLimits } from './rpc.js';
 
 /** keccak256(rlp('')). Header receiptsRoot of a block with no receipts. */
 export const EMPTY_RECEIPTS_ROOT: Hex = keccak256(hexToBytes('0x80'));
@@ -153,44 +154,60 @@ export function encodeReceipt(receipt: ConsensusReceipt, index: number): { key: 
     return { key: rlpUint(BigInt(index)), value };
 }
 
+function hexChars(v: string): boolean {
+    if (v.charCodeAt(0) !== 48 || v.charCodeAt(1) !== 120) return false;
+    for (let i = 2; i < v.length; i++) {
+        const c = v.charCodeAt(i);
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 70) || (c >= 97 && c <= 102)) continue;
+        return false;
+    }
+    return true;
+}
+
 function hexQty(v: unknown): bigint | null {
-    if (typeof v === 'bigint' && v >= 0n) return v;
-    if (typeof v !== 'string' || !/^0x[0-9a-fA-F]*$/.test(v)) return null;
+    if (typeof v === 'bigint') return v >= 0n && v <= (1n << 256n) - 1n ? v : null;
+    if (typeof v !== 'string' || v.length < 2 || v.length > 66 || !hexChars(v)) return null;
     if (v === '0x') return 0n;
     return BigInt(v);
 }
 
-function asHex(v: unknown): Hex | null {
-    return typeof v === 'string' && /^0x[0-9a-fA-F]*$/.test(v) ? v as Hex : null;
+function asHex(v: unknown, max: number = responseLimits.hex): Hex | null {
+    if (typeof v !== 'string' || v.length < 2 || v.length > max || ((v.length - 2) & 1) !== 0 || !hexChars(v)) return null;
+    return v as Hex;
 }
 
-/** Build the receipts trie from an `eth_getBlockReceipts` answer. `null` = cannot encode. */
+/** Build the receipts trie from an `eth_getBlockReceipts` answer. `null` = cannot encode. Length is checked before any element is read. */
 export function receiptsRootFromRpc(raw: unknown): Hex | null {
-    if (!Array.isArray(raw)) return null;
+    if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
     const pairs: { key: Uint8Array; value: Uint8Array }[] = [];
     const seen = new Set<number>();
-    for (const item of raw) {
+    let logCount = 0;
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
         if (typeof item !== 'object' || item === null) return null;
         const r = item as Record<string, unknown>;
         const index = hexQty(r.transactionIndex);
         const type = r.type === undefined ? 0 : hexQty(r.type);
         const status = hexQty(r.status);
         const gas = hexQty(r.cumulativeGasUsed);
-        const bloom = asHex(r.logsBloom);
+        const bloom = asHex(r.logsBloom, 514);
         if (index === null || type === null || status === null || gas === null || !bloom) return null;
         if (status !== 0n && status !== 1n) return null;
         if (!Number.isSafeInteger(Number(index)) || seen.has(Number(index))) return null;
-        if (!Array.isArray(r.logs)) return null;
+        if (!Array.isArray(r.logs) || r.logs.length > responseLimits.logsPerReceipt) return null;
+        logCount += r.logs.length;
+        if (logCount > responseLimits.logs) return null;
         const logs: ConsensusLog[] = [];
-        for (const log of r.logs) {
+        for (let j = 0; j < r.logs.length; j++) {
+            const log = r.logs[j];
             if (typeof log !== 'object' || log === null) return null;
             const row = log as Record<string, unknown>;
-            const address = asHex(row.address);
+            const address = asHex(row.address, 66);
             const data = asHex(row.data);
-            if (!address || !data || !Array.isArray(row.topics)) return null;
+            if (!address || !data || !Array.isArray(row.topics) || row.topics.length > responseLimits.topics) return null;
             const topics: Hex[] = [];
-            for (const topic of row.topics) {
-                const word = asHex(topic);
+            for (let k = 0; k < row.topics.length; k++) {
+                const word = asHex(row.topics[k], 66);
                 if (!word) return null;
                 topics.push(word);
             }

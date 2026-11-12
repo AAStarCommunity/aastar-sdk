@@ -5,6 +5,8 @@
  * Every state-changing rule runs twice from a seeded store: `moving` (next set)
  * and `caught-up` (next null). The seed is a checkpoint, two unresolved rows,
  * two attributed rows, and a scope. Each of those commits also resolves an id.
+ * Row lists are equal by id. Insertion order is not part of the store contract.
+ * Replacement rows are valid actions. `deepMutate` is only for alias probes.
  */
 import type { Address, Hex } from 'viem';
 import {
@@ -37,6 +39,9 @@ const WORD2 = `0x${'cd'.repeat(32)}` as Hex;
 const SCOPE = `0x${'11'.repeat(32)}` as Hex;
 const OTHER_SCOPE = `0x${'22'.repeat(32)}` as Hex;
 const ADDR = '0x1111111111111111111111111111111111111111' as Address;
+const ALT = '0x2222222222222222222222222222222222222222' as Address;
+const ALT_WORD = `0x${'ef'.repeat(32)}` as Hex;
+const ALT_TOPIC = `0x${'12'.repeat(32)}` as Hex;
 const TIP: Checkpoint = { block: 4, hash: WORD };
 const MOVED: Checkpoint = { block: 9, hash: WORD2 };
 
@@ -92,7 +97,7 @@ function nextOf(form: Form): Checkpoint | null {
     return form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : null;
 }
 
-/** Key order does not matter. Array order does. */
+/** Key order does not matter. Array order does, except row lists compared by id. */
 function same(a: unknown, b: unknown): boolean {
     if (Object.is(a, b)) return true;
     if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
@@ -106,6 +111,29 @@ function same(a: unknown, b: unknown): boolean {
     const left = a as Record<string, unknown>;
     const right = b as Record<string, unknown>;
     return aKeys.every((key) => same(left[key], right[key]));
+}
+
+function rowKey(row: unknown): string {
+    if (typeof row !== 'object' || row === null || !('id' in row)) return '';
+    const id = (row as { id: unknown }).id;
+    return typeof id === 'string' ? id.toLowerCase() : '';
+}
+
+/** Row collections match by id. Any stable order is acceptable. */
+function sameRows(a: readonly unknown[], b: readonly unknown[]): boolean {
+    if (a.length !== b.length) return false;
+    const order = (left: unknown, right: unknown) => rowKey(left) < rowKey(right) ? -1 : rowKey(left) > rowKey(right) ? 1 : 0;
+    const left = [...a].sort(order);
+    const right = [...b].sort(order);
+    return left.every((item, i) => same(item, right[i]));
+}
+
+function sameSnapshot(a: StoreSnapshot, b: StoreSnapshot): boolean {
+    return a.revision === b.revision
+        && same(a.checkpoint, b.checkpoint)
+        && same(a.scope, b.scope)
+        && sameRows(a.unresolved, b.unresolved)
+        && sameRows(a.attributed, b.attributed);
 }
 
 function frozen<T>(value: T): T {
@@ -130,11 +158,24 @@ function deepMutate(value: unknown): void {
     }
 }
 
-function mutatedRow<T extends { id: string }>(row: T): T {
-    const copy = frozen(row);
-    deepMutate(copy);
-    copy.id = row.id;
-    return copy;
+/** A valid replacement of an existing id. Identity stays `blockHash:logIndex`. Every other field changes. */
+function replacedUnresolved(): UnresolvedAction {
+    const row = unresolved(11, 'corrected reason');
+    row.address = ALT;
+    row.kind = 'guardian-removed';
+    row.txHash = ALT_WORD;
+    row.log = { ...log(11), address: ALT, topics: [ALT_TOPIC], data: '0xabcd', transactionHash: ALT_WORD };
+    return row;
+}
+
+function replacedAttributed(): AttributedAction {
+    const row = attributed(12, { who: 'replacement', trace: { id: 'u', hop: 2 } });
+    row.address = ALT;
+    row.kind = 'guardian-removed';
+    row.txHash = ALT_WORD;
+    row.decoded = { kind: 'guardian-removed', detail: { slot: 19, note: 'corrected' } };
+    row.log = { ...log(12), address: ALT, topics: [ALT_TOPIC], data: '0xabcd', transactionHash: ALT_WORD };
+    return row;
 }
 
 function seedRows() {
@@ -166,10 +207,10 @@ async function seed(store: GuardianAuditStore): Promise<StoreSnapshot> {
     }));
     const snap = frozen(await store.snapshot());
     const expected = seedSnapshot(first.revision + 1);
-    if (!same(snap.unresolved, expected.unresolved) || !same(snap.attributed, expected.attributed)) {
+    if (!sameRows(snap.unresolved, expected.unresolved) || !sameRows(snap.attributed, expected.attributed)) {
         throw new Fault('persisted rows differ');
     }
-    if (!same(snap, expected)) throw new Fault('seed did not persist');
+    if (!sameSnapshot(snap, expected)) throw new Fault('seed did not persist');
     return snap;
 }
 
@@ -177,7 +218,7 @@ async function readsMatch(store: GuardianAuditStore, snap: StoreSnapshot): Promi
     const [checkpoint, unresolvedRows, attributedRows] = await Promise.all([
         store.getCheckpoint(), store.listUnresolved(), store.listAttributed(),
     ]);
-    return same(checkpoint, snap.checkpoint) && same(unresolvedRows, snap.unresolved) && same(attributedRows, snap.attributed);
+    return same(checkpoint, snap.checkpoint) && sameRows(unresolvedRows, snap.unresolved) && sameRows(attributedRows, snap.attributed);
 }
 
 async function empty(got: StoreUnderTest): Promise<void> {
@@ -206,7 +247,7 @@ async function applyCell(got: StoreUnderTest, form: Form): Promise<void> {
         unresolved: [unresolved(11, 'open-b'), unresolved(20)],
         attributed: [attributed(12), attributed(13), attributed(21)],
     };
-    if (!same(after, expected)) throw new Fault(`${form} persisted rows differ`);
+    if (!sameSnapshot(after, expected)) throw new Fault(`${form} persisted rows differ`);
 }
 
 async function staleCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -226,7 +267,7 @@ async function staleCell(got: StoreUnderTest, form: Form): Promise<void> {
         if (!(error instanceof StoreConflictError)) throw new Fault(`${form} stale revision threw the wrong error`);
     }
     if (!threw) throw new Fault(`${form} stale revision was accepted`);
-    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} stale revision changed the store`);
+    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} stale revision changed the store`);
 }
 
 async function concurrentCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -260,7 +301,7 @@ async function concurrentCell(got: StoreUnderTest, form: Form): Promise<void> {
             ? [attributed(12), attributed(13)]
             : [attributed(12), attributed(13), attributed(added)],
     };
-    if (!same(after, expected)) throw new Fault(`${form} snapshot is not the winner`);
+    if (!sameSnapshot(after, expected)) throw new Fault(`${form} snapshot is not the winner`);
 }
 
 async function crashCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -281,7 +322,7 @@ async function crashCell(got: StoreUnderTest, form: Form): Promise<void> {
         threw = true;
     }
     if (!threw) throw new Fault(`${form} armed crash did not reject the commit`);
-    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial write`);
+    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial write`);
 }
 
 async function scopeCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -302,14 +343,14 @@ async function scopeCell(got: StoreUnderTest, form: Form): Promise<void> {
         if (!(error instanceof ScopeChangedError)) throw new Fault(`${form} different scope threw the wrong error`);
     }
     if (!threw) throw new Fault(`${form} different scope was accepted`);
-    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} different scope changed the store`);
+    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} different scope changed the store`);
 }
 
 async function replacementCell(got: StoreUnderTest, form: Form): Promise<void> {
     const store = got.store;
     const seeded = await seed(store);
-    const open = mutatedRow(unresolved(11, 'open-b'));
-    const done = mutatedRow(attributed(12));
+    const open = replacedUnresolved();
+    const done = replacedAttributed();
     const payload = frozen({ open, done });
     await store.commit(commit({
         expectedRevision: seeded.revision,
@@ -326,7 +367,7 @@ async function replacementCell(got: StoreUnderTest, form: Form): Promise<void> {
         unresolved: [payload.open],
         attributed: [payload.done, attributed(13)],
     };
-    if (!same(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
+    if (!sameSnapshot(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
 }
 
 async function idempotentCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -349,35 +390,38 @@ async function idempotentCell(got: StoreUnderTest, form: Form): Promise<void> {
     };
     if (after.unresolved.length !== 1 || after.attributed.length !== 2) throw new Fault(`${form} ids were duplicated`);
     if (after.revision !== seeded.revision + 1) throw new Fault(`${form} replacement did not advance the revision`);
-    if (!same(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
+    if (!sameSnapshot(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
 }
 
-async function isolation(got: StoreUnderTest): Promise<void> {
+/** Mutate the commit container after the call, then the raw snapshot and getters. One cell per form. */
+async function isolation(got: StoreUnderTest, form: Form, mode: 'apply' | 'replace'): Promise<void> {
     const store = got.store;
-    const openA = unresolved(10, 'open-a');
-    const openB = unresolved(11, 'open-b');
-    const doneA = attributed(12);
-    const doneB = attributed(13);
-    const next = { block: TIP.block, hash: TIP.hash };
-    const first = await store.snapshot();
-    await store.commit(commit({
-        expectedRevision: first.revision,
+    const seeded = await seed(store);
+    const open = mode === 'replace' ? replacedUnresolved() : unresolved(20);
+    const done = mode === 'replace' ? replacedAttributed() : attributed(21);
+    const next = nextOf(form);
+    const change = commit({
+        expectedRevision: seeded.revision,
         next,
-        unresolved: [openA, openB],
-        attributed: [doneA, doneB],
-    }));
-    const canonical = seedSnapshot(first.revision + 1);
-    deepMutate(openA);
-    deepMutate(openB);
-    deepMutate(doneA);
-    deepMutate(doneB);
-    deepMutate(next);
+        resolve: [unresolved(10, 'open-a').id],
+        unresolved: [open],
+        attributed: [done],
+    });
+    const canonical: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: mode === 'replace' ? [replacedUnresolved()] : [unresolved(11, 'open-b'), unresolved(20)],
+        attributed: mode === 'replace' ? [replacedAttributed(), attributed(13)] : [attributed(12), attributed(13), attributed(21)],
+    };
+    await store.commit(change);
+    deepMutate(change);
     const raw = await store.snapshot();
-    if (!same(frozen(raw), canonical)) throw new Fault('committed input changed stored rows');
+    if (!sameSnapshot(frozen(raw), canonical)) throw new Fault('committed input changed stored rows');
     const checkpoint = await store.getCheckpoint();
     const unresolvedRows = await store.listUnresolved();
     const attributedRows = await store.listAttributed();
-    if (!same(frozen(checkpoint), canonical.checkpoint) || !same(frozen(unresolvedRows), canonical.unresolved) || !same(frozen(attributedRows), canonical.attributed)) {
+    if (!same(frozen(checkpoint), canonical.checkpoint) || !sameRows(unresolvedRows, canonical.unresolved) || !sameRows(attributedRows, canonical.attributed)) {
         throw new Fault('public reads disagree with the snapshot');
     }
     deepMutate(raw);
@@ -388,7 +432,7 @@ async function isolation(got: StoreUnderTest): Promise<void> {
     const [checkpointAgain, unresolvedAgain, attributedAgain] = await Promise.all([
         store.getCheckpoint(), store.listUnresolved(), store.listAttributed(),
     ]);
-    if (!same(again, canonical) || !same(frozen(checkpointAgain), canonical.checkpoint) || !same(frozen(unresolvedAgain), canonical.unresolved) || !same(frozen(attributedAgain), canonical.attributed)) {
+    if (!sameSnapshot(again, canonical) || !same(frozen(checkpointAgain), canonical.checkpoint) || !sameRows(unresolvedAgain, canonical.unresolved) || !sameRows(attributedAgain, canonical.attributed)) {
         throw new Fault('stored rows changed after mutation');
     }
 }
@@ -405,8 +449,9 @@ const CHECKS: [string, (got: StoreUnderTest) => Promise<void>][] = [
         [`scope/${form}`, (got) => scopeCell(got, form)],
         [`replacement/${form}`, (got) => replacementCell(got, form)],
         [`idempotence/${form}`, (got) => idempotentCell(got, form)],
+        [`isolation/${form}`, (got) => isolation(got, form, 'apply')],
+        [`isolation/replacement/${form}`, (got) => isolation(got, form, 'replace')],
     ]),
-    ['isolation', isolation],
 ];
 
 /** Run every store rule. One fresh store per check. Never throws. */

@@ -169,6 +169,17 @@ describe('guardian-audit receipts trie (unit, not acceptance)', () => {
         expect(receiptsRootFromRpc(legacy)).not.toBe(receiptsRootFromRpc(failed));
         expect(receiptsRootFromRpc(boundary)).not.toBe(EMPTY_RECEIPTS_ROOT);
     });
+
+    it('rejects oversized receipt arrays before visiting elements', () => {
+        const receipts: unknown[] = [];
+        receipts.length = 4_294_967_295;
+        let visited = false;
+        Object.defineProperty(receipts, 0, {
+            get() { visited = true; throw new Error('visited'); },
+        });
+        expect(receiptsRootFromRpc(receipts)).toBeNull();
+        expect(visited).toBe(false);
+    });
 });
 
 describe('real Sepolia receipt tries (unit, not acceptance)', () => {

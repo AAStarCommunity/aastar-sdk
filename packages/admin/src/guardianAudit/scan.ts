@@ -1,6 +1,9 @@
 import { getAddress, isAddress, keccak256, numberToHex, stringToHex, type Address, type Hex } from 'viem';
 import { mayContainAddress } from './bloom.js';
-import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
+import {
+    assertProviderName, header, isHexData, isWord, pagedLogs, quantity, requireAddress, responseLimits,
+    snapshotReceipts, type BlockHeader, type RawLog, type RawRpc,
+} from './rpc.js';
 import {
     ScopeChangedError,
     StoreConflictError,
@@ -116,9 +119,9 @@ function parseLog(raw: unknown): Norm | null {
     const blockNumber = quantity(o.blockNumber);
     const logIndex = quantity(o.logIndex);
     if (blockNumber === null || logIndex === null) return null;
-    if (typeof o.address !== 'string' || !isAddress(o.address)) return null;
+    if (typeof o.address !== 'string' || o.address.length !== 42 || !isAddress(o.address)) return null;
     if (!isWord(o.blockHash) || !isWord(o.transactionHash) || !isHexData(o.data)) return null;
-    if (!Array.isArray(o.topics) || o.topics.some((t) => !isWord(t))) return null;
+    if (!Array.isArray(o.topics) || o.topics.length > responseLimits.topics || o.topics.some((t) => !isWord(t))) return null;
     const address = getAddress(o.address);
     const blockHash = o.blockHash.toLowerCase() as Hex;
     const txHash = o.transactionHash.toLowerCase() as Hex;
@@ -142,8 +145,10 @@ function problem(log: Norm, queried: Address, lo: number, hi: number): string | 
 }
 
 function parseAll(raws: unknown[], queried: Address, lo: number, hi: number): { logs: Norm[] } | { error: string } {
+    if (raws.length > responseLimits.logs) return { error: `malformed log from ${queried}` };
     const logs: Norm[] = [];
-    for (const raw of raws) {
+    for (let i = 0; i < raws.length; i++) {
+        const raw = raws[i];
         const log = parseLog(raw);
         if (!log) return { error: `malformed log from ${queried}` };
         const why = problem(log, queried, lo, hi);
@@ -173,10 +178,14 @@ function callDecode(
     contract: WatchedContract, input: RawLog, address: Address, block: number,
 ): { ok: true; value: DecodedAction | 'ignore' | null; log: RawLog } | { ok: false; reason: string } {
     const log = structuredClone(input);
+    const failed = { ok: false as const, reason: `decoder threw for ${address} at block ${block}` };
     try {
-        return { ok: true, value: contract.decode(structuredClone(log)), log };
+        const produced = contract.decode(structuredClone(log));
+        if (produced === null || produced === 'ignore') return { ok: true, value: produced, log };
+        if (typeof produced !== 'object') return failed;
+        return { ok: true, value: structuredClone(produced), log };
     } catch {
-        return { ok: false, reason: `decoder threw for ${address} at block ${block}` };
+        return failed;
     }
 }
 
@@ -184,6 +193,7 @@ function callDecode(
 function revive(
     watched: readonly WatchedContract[], item: UnresolvedAction,
 ): FoundAction | { incomplete: string } | null {
+    if (typeof item.address !== 'string' || item.address.length !== 42) return { incomplete: 'stored action is malformed' };
     const address = getAddress(item.address);
     const contract = watched.find((c) => covers(c, address, item.blockNumber));
     if (!contract) return null;
@@ -196,11 +206,9 @@ function revive(
     };
 }
 
-const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
-
 /** Labels that appear in reasons. A URL or credential must not get through. The error does not echo `name`. */
 function assertName(name: string): void {
-    if (typeof name !== 'string' || !PROVIDER_NAME.test(name)) throw new Error('provider name is not a safe label');
+    assertProviderName(name);
 }
 
 /**
@@ -208,8 +216,9 @@ function assertName(name: string): void {
  * The list is sorted so input order does not change the scope.
  */
 export function watchScope(watched: readonly WatchedContract[], startBlock: number): Hex {
+    assertWatched(watched, startBlock);
     const rows = watched.map((contract) => ({
-        address: getAddress(contract.address).toLowerCase(),
+        address: requireAddress(contract.address).toLowerCase(),
         fromBlock: contract.fromBlock,
         generation: contract.generation,
         toBlock: contract.toBlock ?? null,
@@ -228,18 +237,15 @@ export function watchScope(watched: readonly WatchedContract[], startBlock: numb
     return keccak256(stringToHex(JSON.stringify({ startBlock, watched: rows })));
 }
 
-function assertConfig(
-    startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
-): void {
+function assertWatched(watched: readonly WatchedContract[], startBlock: number): void {
     if (!safeInt(startBlock, 0)) throw new Error('startBlock must be >= 0');
-    if (!safeInt(maxBlocks, 1)) throw new Error('maxBlocks must be >= 1');
-    if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
     const spans: { address: Address; from: number; to: number }[] = [];
     for (const contract of watched) {
-        if (typeof contract.generation !== 'string' || contract.generation.length === 0) {
+        if (typeof contract.decode !== 'function') throw new Error('decoder is required');
+        if (typeof contract.generation !== 'string' || contract.generation.length === 0 || contract.generation.length > 128) {
             throw new Error('generation is required');
         }
-        const address = getAddress(contract.address);
+        const address = requireAddress(contract.address);
         if (!safeInt(contract.fromBlock, 0)) throw new Error(`invalid fromBlock for ${address}`);
         if (contract.toBlock !== undefined && !safeInt(contract.toBlock, 0)) throw new Error(`invalid toBlock for ${address}`);
         if (contract.toBlock !== undefined && contract.toBlock < contract.fromBlock) {
@@ -255,9 +261,31 @@ function assertConfig(
     }
 }
 
-/** Drop a URL if an attributor puts one in its reason. Our own reasons never have one. */
-function safeReason(reason: string): string {
-    return reason.includes('://') ? 'attributor rejected' : reason;
+function assertConfig(
+    startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
+): void {
+    assertWatched(watched, startBlock);
+    if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error('maxBlocks must be >= 1');
+    if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
+}
+
+/** Keep a short label. Anything else, including a credential, becomes a fixed reason. */
+function safeReason(reason: unknown): string {
+    if (typeof reason !== 'string' || reason.length < 1 || reason.length > 64) return 'attributor rejected';
+    for (let i = 0; i < reason.length; i++) {
+        const c = reason.charCodeAt(i);
+        const ok = (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 32 || c === 46 || c === 95 || c === 45;
+        if (!ok) return 'attributor rejected';
+    }
+    return reason;
+}
+
+function freezeAttributor(attributor: Attributor | undefined): Attributor | undefined {
+    if (attributor === undefined) return undefined;
+    const attribute = attributor.attribute;
+    if (typeof attribute !== 'function') throw new Error('attributor is required');
+    const bound = attribute.bind(attributor);
+    return { attribute: (action) => bound(action) };
 }
 
 async function judge(
@@ -266,7 +294,12 @@ async function judge(
     if (!attributor) return { ok: false, reason: 'no attributor' };
     try {
         const result = await attributor.attribute(structuredClone(action));
-        return result.ok ? { ok: true, attribution: result.attribution } : { ok: false, reason: safeReason(result.reason) };
+        if (typeof result !== 'object' || result === null) return { ok: false, reason: 'attributor failed' };
+        if (result.ok === true) {
+            const attribution = result.attribution === undefined ? undefined : structuredClone(result.attribution);
+            return { ok: true, attribution };
+        }
+        return { ok: false, reason: safeReason(result.reason) };
     } catch {
         return { ok: false, reason: 'attributor failed' };
     }
@@ -284,6 +317,9 @@ async function readHeader(rpc: RawRpc, tag: number | 'finalized'): Promise<Block
 }
 
 async function loadHeaders(rpc: RawRpc, from: number, to: number): Promise<Map<number, BlockHeader> | string> {
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to < from || to - from > responseLimits.ancestry) {
+        return `finalized ancestry exceeds the bound on ${rpc.name}`;
+    }
     const out = new Map<number, BlockHeader>();
     for (let start = from; start <= to; start += 100) {
         const end = Math.min(to, start + 99);
@@ -300,8 +336,9 @@ async function loadHeaders(rpc: RawRpc, from: number, to: number): Promise<Map<n
 async function readReceipts(rpc: RawRpc, hash: Hex): Promise<unknown[] | string> {
     try {
         const raw = await rpc.request({ method: 'eth_getBlockReceipts', params: [hash] });
-        if (!Array.isArray(raw)) return `receipts read failed for ${rpc.name}`;
-        return raw;
+        const copied = snapshotReceipts(raw);
+        if (!copied) return `receipts read failed for ${rpc.name}`;
+        return copied;
     } catch {
         return `receipts read failed for ${rpc.name}`;
     }
@@ -332,6 +369,7 @@ function asNorm(
 function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; txs: string[] } | { error: string } {
     const badIndex = `receipt logIndex disagrees with receipt order at block ${block}`;
     const cannot = `cannot verify receipts at block ${block}`;
+    if (raw.length > responseLimits.receipts) return { error: cannot };
     let cursor = 0;
     const logs: Norm[] = [];
     const txs: string[] = [];
@@ -344,14 +382,27 @@ function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; t
         }
         if (!isWord(rec.transactionHash)) return { error: cannot };
         const txHash = rec.transactionHash.toLowerCase() as Hex;
+        if (rec.blockNumber !== undefined && quantity(rec.blockNumber) !== block) {
+            return { error: `receipt blockNumber disagrees at block ${block}` };
+        }
+        if (rec.blockHash !== undefined && (!isWord(rec.blockHash) || rec.blockHash.toLowerCase() !== hash.toLowerCase())) {
+            return { error: `receipt blockHash disagrees at block ${block}` };
+        }
         txs.push(txHash);
-        if (!Array.isArray(rec.logs)) return { error: cannot };
-        for (const entry of rec.logs) {
+        if (!Array.isArray(rec.logs) || rec.logs.length > responseLimits.logsPerReceipt) return { error: cannot };
+        for (let j = 0; j < rec.logs.length; j++) {
+            const entry = rec.logs[j];
             if (typeof entry !== 'object' || entry === null) return { error: cannot };
             const row = entry as Record<string, unknown>;
-            if (typeof row.address !== 'string' || !isAddress(row.address)) return { error: cannot };
-            if (!isHexData(row.data) || !Array.isArray(row.topics) || row.topics.some((t) => !isWord(t))) {
+            if (typeof row.address !== 'string' || row.address.length !== 42 || !isAddress(row.address)) return { error: cannot };
+            if (!isHexData(row.data) || !Array.isArray(row.topics) || row.topics.length > responseLimits.topics || row.topics.some((t) => !isWord(t))) {
                 return { error: cannot };
+            }
+            if (row.transactionHash !== undefined && (!isWord(row.transactionHash) || row.transactionHash.toLowerCase() !== txHash)) {
+                return { error: `receipt log transactionHash disagrees at block ${block}` };
+            }
+            if (row.transactionIndex !== undefined && quantity(row.transactionIndex) !== i) {
+                return { error: `receipt log transactionIndex disagrees at block ${block}` };
             }
             const derived = cursor++;
             if (quantity(row.logIndex) !== derived) return { error: badIndex };
@@ -404,6 +455,9 @@ async function prove(
  * Cost is one header per block of (finalized - to), in batches of at most 100.
  */
 async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number): Promise<string | null> {
+    if (fin.number > to && fin.number - to > responseLimits.ancestry) {
+        return `finalized ancestry exceeds the bound on ${rpc.name}`;
+    }
     if (fin.number <= to) return null;
     const headers = await loadHeaders(rpc, to + 1, fin.number);
     if (typeof headers === 'string') return headers;
@@ -459,8 +513,8 @@ function attributedOf(action: FoundAction): AttributedAction {
  * receiptsRoot, logsBloom, and parentHash are trusted because both providers agree
  * on them and parentHash reaches each provider's finalized header. The header hash
  * itself is not recomputed: several header fields are fork-dependent.
- * A clipped range (`to` below finalized) reads every header from `to + 1` through
- * that provider's finalized height, so the cost grows with (finalized - to), per provider.
+ * A clipped range (`to` below finalized) reads headers from `to + 1` toward finalized,
+ * at most `responseLimits.ancestry` blocks. A larger gap is INCOMPLETE and is not fetched.
  * Each scan takes one snapshot and commits against that revision. The commit is
  * all-or-nothing: a stale revision throws StoreConflictError and writes nothing,
  * whether or not `next` moves the checkpoint. Two scans may run together. The one
@@ -472,8 +526,10 @@ function attributedOf(action: FoundAction): AttributedAction {
  * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
  * The first commit records it. A later scan whose scope differs throws ScopeChangedError
  * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
- * Providers, watched entries, and numeric options are copied before the first await.
- * Later reads use that copy, so the caller cannot clear the watch set in flight.
+ * Providers, watched entries, the attributor, and numeric options are copied before the first await.
+ * Later reads use that copy, so the caller cannot clear the watch set or replace the attributor in flight.
+ * Decoder and attributor results are cloned before the next callback. A provider response is copied
+ * before the other provider is awaited.
  * A decoder returning `'ignore'` is a trusted classification. The unknown-topic guarantee
  * covers a null decode, not a decoder that misclassifies a known guardian topic as `'ignore'`.
  */
@@ -517,7 +573,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const maxBlocks = opts.maxBlocks;
     const pageOption = opts.page;
     const store = opts.store;
-    const attributor = opts.attributor;
+    const attributor = freezeAttributor(opts.attributor);
     assertName(pa.name);
     assertName(pb.name);
     assertConfig(startBlock, maxBlocks, pageOption, watched);

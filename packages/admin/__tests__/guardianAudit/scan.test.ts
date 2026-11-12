@@ -1469,6 +1469,154 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         });
         expect(await store.listAttributed()).toEqual([expect.objectContaining({ attribution: { who: 'again' } })]);
     });
+
+    it('detaches decoder and attribution outputs', async () => {
+        const { a, b } = pair(2);
+        addBoth(a, b, 1, TOPIC);
+        addBoth(a, b, 2, TOPIC);
+        const decoded = { kind: 'guardian-added', height: 0 };
+        const attribution = { height: 0 };
+        const store = memoryStore();
+        const result = await run(a, b, store, {
+            watched: [watched({
+                decode(log) {
+                    decoded.height = Number(log.blockNumber);
+                    return decoded;
+                },
+            })],
+            attributor: {
+                async attribute(action: FoundAction) {
+                    attribution.height = action.blockNumber;
+                    return { ok: true as const, attribution };
+                },
+            },
+        });
+        expect((await store.listAttributed()).map((row) => [
+            row.blockNumber,
+            (row.decoded as { height: number }).height,
+            (row.attribution as { height: number }).height,
+        ])).toEqual([[1, 1, 1], [2, 2, 2]]);
+        decoded.height = 9;
+        attribution.height = 9;
+        expect(result).toMatchObject({ state: 'COMPLETE' });
+        if (result.state === 'INCOMPLETE') return;
+        expect((result.actions[0]?.decoded as { height: number }).height).toBe(1);
+        expect((result.actions[1]?.attribution as { height: number }).height).toBe(2);
+    });
+
+    it('preserves each provider response before awaiting another provider', async () => {
+        const { a, b } = pair(2);
+        addBoth(a, b, 1, TOPIC);
+        a.blocks.get(1)!.logs[0]!.data = '0x01';
+        const request = b.request.bind(b);
+        b.request = async (args) => {
+            if (args.method === 'eth_getLogs') a.blocks.get(1)!.logs[0]!.data = '0x';
+            return request(args);
+        };
+        expect(await run(a, b)).toMatchObject({ state: 'INCOMPLETE' });
+    });
+
+    it('copies receipts before the other provider is read', async () => {
+        const { a, b } = pair(2);
+        addBoth(a, b, 1, TOPIC);
+        const receipt = a.blocks.get(1)!.receipts[0] as { logs: { data: string }[] };
+        receipt.logs[0]!.data = '0x01';
+        const request = b.request.bind(b);
+        b.request = async (args) => {
+            if (args.method === 'eth_getBlockReceipts') receipt.logs[0]!.data = '0x';
+            return request(args);
+        };
+        expect(await run(a, b)).toMatchObject({ state: 'INCOMPLETE' });
+    });
+
+    it('rejects contradictory receipt identity even for a zero-result scan', async () => {
+        const { a, b } = pair(1);
+        addBoth(a, b, 1, TOPIC, 0, false, { address: OTHER });
+        for (const node of [a, b]) {
+            node.setBloom(1, bloomOf([{ address: ADDR, topics: [TOPIC] }]));
+            const receipt = node.blocks.get(1)!.receipts[0] as { blockHash?: string; blockNumber?: string };
+            receipt.blockHash = bhash(99);
+            receipt.blockNumber = '0x63';
+        }
+        expect(await run(a, b)).toMatchObject({ state: 'INCOMPLETE' });
+    });
+
+    it('rejects a log transactionIndex that names another transaction', async () => {
+        const { a, b } = pair(2);
+        addBoth(a, b, 1, TOPIC);
+        for (const node of [a, b]) {
+            const receipt = node.blocks.get(1)!.receipts[0] as { logs: { transactionIndex?: string }[] };
+            receipt.logs[0]!.transactionIndex = '0x5';
+        }
+        expectIncomplete(await run(a, b), /receipt log transactionIndex disagrees at block 1/);
+    });
+
+    it('rejects a log transactionHash that names another transaction', async () => {
+        const { a, b } = pair(2);
+        addBoth(a, b, 1, TOPIC);
+        for (const node of [a, b]) {
+            const receipt = node.blocks.get(1)!.receipts[0] as { logs: { transactionHash: string }[] };
+            receipt.logs[0]!.transactionHash = bhash(7);
+        }
+        expectIncomplete(await run(a, b), /receipt log transactionHash disagrees at block 1/);
+    });
+
+    it('captures the attributor before the first await', async () => {
+        const { a, b } = pair(1);
+        addBoth(a, b, 1, TOPIC);
+        const attributor: Attributor = {
+            async attribute() { return { ok: false, reason: 'rejected' }; },
+        };
+        const pending = run(a, b, memoryStore(), { attributor });
+        attributor.attribute = async () => ({ ok: true, attribution: {} });
+        expect(await pending).toMatchObject({ state: 'UNATTRIBUTED' });
+    });
+
+    it('does not persist credential-bearing foreign reasons', async () => {
+        const { a, b } = pair(1);
+        addBoth(a, b, 1, TOPIC);
+        const store = memoryStore();
+        await run(a, b, store, {
+            attributor: {
+                async attribute() {
+                    return { ok: false, reason: 'Authorization: Bearer SECRET' };
+                },
+            },
+        });
+        expect(JSON.stringify(await store.listUnresolved())).not.toContain('SECRET');
+    });
+
+    it('rejects an invalid watched address and a missing decoder before any request', async () => {
+        const { a, b } = pair(1);
+        const store = memoryStore();
+        await expect(run(a, b, store, {
+            watched: [watched({ address: 'https://user:pw@disk.example/key' as Address })],
+        })).rejects.toThrow(/^invalid address$/);
+        expect(a.calls).toHaveLength(0);
+        const missing = watched();
+        delete (missing as { decode?: unknown }).decode;
+        await expect(run(a, b, memoryStore(), { watched: [missing] })).rejects.toThrow(/^decoder is required$/);
+        expect(a.calls).toHaveLength(0);
+        expect(() => watchScope([watched({ fromBlock: Number.NaN })], 1)).toThrow(/fromBlock/);
+        expect(() => watchScope([watched()], Number.NaN)).toThrow(/startBlock/);
+    });
+
+    it('does not walk a finalized gap past the ancestry bound', async () => {
+        const { a, b } = pair(1);
+        a.finalized = 100_000;
+        b.finalized = 100_000;
+        for (const node of [a, b]) {
+            node.blocks.set(100_000, {
+                hash: bhash(100_000), parent: bhash(0), logs: [], bloom: bloomOf([]),
+                hide: new Set(), receipts: [], receiptsRoot: EMPTY_RECEIPTS_ROOT,
+            });
+        }
+        const result = await run(a, b, memoryStore(), { maxBlocks: 1 });
+        expectIncomplete(result, /finalized ancestry exceeds the bound/);
+        const tags = a.calls.filter((call) => call.method === 'eth_getBlockByNumber').map((call) => call.params[0]);
+        expect(tags).not.toContain('0x2');
+        expect(tags).not.toContain(numberToHex(100_000));
+    });
 });
 
 const ok: Attributor = { async attribute() { return { ok: true, attribution: { who: 'guardian' } }; } };

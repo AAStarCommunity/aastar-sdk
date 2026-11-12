@@ -83,6 +83,7 @@ export interface StoreSnapshot {
 
 /**
  * Injected persistence. Reads return copies; callbacks must not be able to mutate stored rows.
+ * Row arrays have no required order. Compare them by id.
  * Implementers run `runStoreConformance` (storeConformance.ts) against a fresh store and pass every check.
  */
 export interface GuardianAuditStore {
