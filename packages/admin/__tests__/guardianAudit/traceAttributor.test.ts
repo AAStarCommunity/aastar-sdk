@@ -47,7 +47,21 @@ function traceOf(from = FROM) {
             error: 'execution reverted',
             logs: [{ address: OTHER, topics: [TOPIC], data: '0x' }],
         }],
+        value: '0x00',
         logs: [{ address: TARGET, topics: [TOPIC], data: '0x' }],
+    };
+}
+
+function txOf(over: Record<string, unknown> = {}) {
+    return {
+        hash: TX,
+        from: FROM,
+        to: TARGET as string | null,
+        input: '0x12345678',
+        value: '0x0',
+        blockHash: BLOCK,
+        blockNumber: '0x10',
+        ...over,
     };
 }
 
@@ -56,6 +70,7 @@ function receiptOf(over: Record<string, unknown> = {}, logOver: Record<string, u
         transactionHash: TX.toUpperCase(),
         blockHash: BLOCK.toUpperCase(),
         status: '0x1',
+        blockNumber: '0x10',
         logs: [{
             address: getAddress(TARGET),
             topics: [`0x${'AB'.repeat(32)}`],
@@ -67,25 +82,38 @@ function receiptOf(over: Record<string, unknown> = {}, logOver: Record<string, u
     };
 }
 
-function pair(answer: (name: string, method: string) => unknown) {
+function pair(
+    answer: (name: string, method: string) => unknown,
+    txFor: (name: string) => unknown = () => txOf(),
+    names: readonly [string, string] = ['alpha', 'beta'],
+) {
     const calls: { name: string; method: string; params: unknown[] }[] = [];
     const make = (name: string): RawRpc => ({
         name,
         async request({ method, params = [] }) {
             calls.push({ name, method, params: params as unknown[] });
+            if (method === 'eth_getTransactionByHash') return txFor(name);
             return answer(name, method);
         },
     });
-    return { calls, providers: [make('alpha'), make('beta')] as const };
+    const providers = [make(names[0]), make(names[1])] as const;
+    return { calls, providers, traceProviders: providers };
+}
+
+function attr(bound: { providers: readonly [RawRpc, RawRpc]; traceProviders: readonly [RawRpc, ...RawRpc[]] }) {
+    const traces = bound.traceProviders;
+    const traceProviders = (traces.length === 1 ? [traces[0]!] : [traces[0]!, traces[1]!]) as
+        readonly [RawRpc] | readonly [RawRpc, RawRpc];
+    return traceAttributor({ providers: bound.providers, traceProviders });
 }
 
 describe('guardian-audit trace attributor (unit, not acceptance)', () => {
     it('returns the attribution when both providers agree, ignoring address case', async () => {
-        const { calls, providers } = pair((name, method) => {
+        const { calls, providers, traceProviders } = pair((name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
             return traceOf(name === 'alpha' ? `0x${FROM.slice(2).toUpperCase()}` : FROM);
         });
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(result).toEqual({
             ok: true,
             attribution: {
@@ -98,11 +126,14 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
                     to: getAddress(TARGET),
                     selector: '0x12345678',
                 }],
+                attributionSource: 'dual:alpha+beta',
             },
         });
         expect(calls.map((c) => `${c.name}:${c.method}`)).toEqual(expect.arrayContaining([
             'alpha:eth_getTransactionReceipt',
             'beta:eth_getTransactionReceipt',
+            'alpha:eth_getTransactionByHash',
+            'beta:eth_getTransactionByHash',
             'alpha:debug_traceTransaction',
             'beta:debug_traceTransaction',
         ]));
@@ -143,50 +174,64 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
             },
         ];
         for (const item of cases) {
-            const { providers } = pair((name, method) => {
+            const { providers, traceProviders } = pair((name, method) => {
                 if (method === 'eth_getTransactionReceipt') return receiptOf();
                 return item.fail(name);
             });
-            const result = await traceAttributor({ providers }).attribute(action());
+            const result = await attr({ providers, traceProviders }).attribute(action());
             expect(result).toEqual({ ok: false, reason: `trace unsupported on ${item.who}` });
             if (!result.ok) expect(result.reason).not.toContain('LEAKED');
         }
     });
 
     it('reports a trace read failure without the RPC message', async () => {
-        const { providers, calls } = pair((name, method) => {
+        const { providers, calls, traceProviders } = pair((name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
             if (name === 'alpha') throw new Error(`socket hang up ${LEAK}`);
             return traceOf();
         });
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'trace read failed on alpha' });
         expect(calls.some((c) => c.name === 'beta' && c.method === 'debug_traceTransaction')).toBe(true);
     });
 
     it('does not treat a reverted call frame as an RPC error', async () => {
         const rootReverted = { ...traceOf(), error: 'execution reverted', logs: [] };
-        const { providers } = pair((name, method) => {
+        const { providers, traceProviders } = pair((name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
             return name === 'alpha' ? rootReverted : traceOf();
         });
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'trace has 0 logs, receipt 1' });
     });
 
     it('rejects providers that disagree on the caller', async () => {
-        const { providers } = pair((name, method) => {
+        const viaChild = {
+            type: 'CALL',
+            from: FROM,
+            to: TARGET,
+            input: '0x12345678',
+            value: '0x00',
+            calls: [{
+                type: 'CALL',
+                from: TARGET,
+                to: TARGET,
+                input: '0xabcdef01',
+                logs: [{ address: TARGET, topics: [TOPIC], data: '0x' }],
+            }],
+        };
+        const { providers, traceProviders } = pair((_name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
-            return traceOf(name === 'alpha' ? FROM : OTHER);
+            return _name === 'alpha' ? traceOf() : viaChild;
         });
-        const result = await traceAttributor({ providers }).attribute(action());
-        expect(result).toEqual({ ok: false, reason: 'providers disagree on attribution' });
+        const result = await attr({ providers, traceProviders }).attribute(action());
+        expect(result).toEqual({ ok: false, reason: 'trace providers disagree' });
     });
 
     it('rejects status 0, another block hash, another transaction, and a missing log', async () => {
         const run = async (receipt: unknown) => {
-            const { providers } = pair((_name, method) => (method === 'eth_getTransactionReceipt' ? receipt : traceOf()));
-            return traceAttributor({ providers }).attribute(action());
+            const { providers, traceProviders } = pair((_name, method) => (method === 'eth_getTransactionReceipt' ? receipt : traceOf()));
+            return attr({ providers, traceProviders }).attribute(action());
         };
         expect(await run(receiptOf({ status: '0x0' }))).toEqual({
             ok: false, reason: 'receipt status is not success on alpha',
@@ -210,16 +255,16 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
     });
 
     it('hides a receipt transport error', async () => {
-        const { providers } = pair((_name, method) => {
+        const { providers, traceProviders } = pair((_name, method) => {
             if (method === 'eth_getTransactionReceipt') throw new Error(`down ${LEAK}`);
             return traceOf();
         });
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'receipt read failed on alpha' });
     });
 
     it('turns an exception from attribution into a controlled failure', async () => {
-        const { providers } = pair((_name, method) => {
+        const { providers, traceProviders } = pair((_name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
             const trace = traceOf();
             Object.defineProperty(trace.logs[0], 'data', {
@@ -229,7 +274,7 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
             });
             return trace;
         });
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'attribution failed' });
     });
 
@@ -260,11 +305,11 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
             return { type: 'CALL', from: FROM, to: TARGET, calls };
         };
         const trace = level(1);
-        const { providers } = pair((_name, method) => (
+        const { providers, traceProviders } = pair((_name, method) => (
             method === 'eth_getTransactionReceipt' ? receiptOf() : trace
         ));
         const started = Date.now();
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(Date.now() - started).toBeLessThan(1_000);
         expect(result).toEqual({ ok: false, reason: 'trace too large' });
         expect(reads).toBeLessThanOrEqual(MEASURE_NODES + 64);
@@ -274,11 +319,11 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         const { arr, reads } = countingArray(100_001);
         const receipt = receiptOf();
         receipt.logs = arr as unknown as typeof receipt.logs;
-        const { providers } = pair((_name, method) => (
+        const { providers, traceProviders } = pair((_name, method) => (
             method === 'eth_getTransactionReceipt' ? receipt : traceOf()
         ));
         const started = Date.now();
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(Date.now() - started).toBeLessThan(1_000);
         expect(result).toEqual({ ok: false, reason: 'trace too large' });
         expect(reads()).toBeLessThanOrEqual(MEASURE_NODES + 64);
@@ -289,11 +334,11 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         const { arr, reads } = countingArray(100_001);
         const trace = traceOf();
         trace.logs[0]!.topics = arr as unknown as string[];
-        const { providers } = pair((_name, method) => (
+        const { providers, traceProviders } = pair((_name, method) => (
             method === 'eth_getTransactionReceipt' ? receiptOf() : trace
         ));
         const started = Date.now();
-        const result = await traceAttributor({ providers }).attribute(action());
+        const result = await attr({ providers, traceProviders }).attribute(action());
         expect(Date.now() - started).toBeLessThan(1_000);
         expect(result).toEqual({ ok: false, reason: 'trace too large' });
         expect(reads()).toBeLessThanOrEqual(MEASURE_NODES + 64);
@@ -302,7 +347,7 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
 
     it('classifies a 10 MB rejection message without matching it', async () => {
         const huge = `method not found ${'x'.repeat(10 * 1024 * 1024)}`;
-        const { providers } = pair((name, method) => {
+        const { providers, traceProviders } = pair((name, method) => {
             if (method === 'eth_getTransactionReceipt') return receiptOf();
             if (name === 'alpha') throw { message: huge, shortMessage: huge, error: { message: huge } };
             return traceOf();
@@ -315,7 +360,7 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         };
         try {
             const started = performance.now();
-            const result = await traceAttributor({ providers }).attribute(action());
+            const result = await attr({ providers, traceProviders }).attribute(action());
             expect(performance.now() - started).toBeLessThan(50);
             expect(result).toEqual({ ok: false, reason: 'trace read failed on alpha' });
             expect(sawLong).toBe(false);
@@ -331,14 +376,185 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
             return node;
         };
         const run = async (levels: number) => {
-            const { providers } = pair((name, method) => {
+            const { providers, traceProviders } = pair((name, method) => {
                 if (method === 'eth_getTransactionReceipt') return receiptOf();
                 if (name === 'alpha') throw nest(levels);
                 return traceOf();
             });
-            return traceAttributor({ providers }).attribute(action());
+            return attr({ providers, traceProviders }).attribute(action());
         };
         expect(await run(3)).toEqual({ ok: false, reason: 'trace unsupported on alpha' });
         expect(await run(4)).toEqual({ ok: false, reason: 'trace read failed on alpha' });
+    });
+
+    async function withTrace(trace: unknown, receipt: ReturnType<typeof receiptOf> = receiptOf(), tx: ReturnType<typeof txOf> = txOf()) {
+        const { providers } = pair(
+            (_name, method) => (method === 'eth_getTransactionReceipt' ? receipt : trace),
+            () => tx,
+        );
+        return attr({ providers, traceProviders: [providers[0]] }).attribute(action());
+    }
+
+    it('rejects a trace that drops one receipt log', async () => {
+        const receipt = receiptOf({
+            logs: [
+                { address: getAddress(TARGET), topics: [TOPIC], data: '0x', logIndex: '0x7' },
+                { address: getAddress(TARGET), topics: [TOPIC], data: '0x01', logIndex: '0x8' },
+            ],
+        });
+        const trace = { ...traceOf(), logs: [{ address: TARGET, topics: [TOPIC], data: '0x' }] };
+        expect(await withTrace(trace, receipt)).toEqual({ ok: false, reason: 'trace has 1 logs, receipt 2' });
+    });
+
+    it('rejects a trace that reorders receipt logs', async () => {
+        const receipt = receiptOf({
+            logs: [
+                { address: getAddress(TARGET), topics: [TOPIC], data: '0x', logIndex: '0x7' },
+                { address: getAddress(TARGET), topics: [TOPIC], data: '0x01', logIndex: '0x8' },
+            ],
+        });
+        const trace = {
+            ...traceOf(),
+            logs: [
+                { address: TARGET, topics: [TOPIC], data: '0x01', position: 0 },
+                { address: TARGET, topics: [TOPIC], data: '0x', position: 1 },
+            ],
+        };
+        expect(await withTrace(trace, receipt)).toEqual({
+            ok: false, reason: 'log 0 differs between trace and receipt',
+        });
+    });
+
+    it('rejects a trace log that differs from the receipt', async () => {
+        const trace = { ...traceOf(), logs: [{ address: TARGET, topics: [TOPIC], data: '0xab' }] };
+        expect(await withTrace(trace)).toEqual({ ok: false, reason: 'log 0 differs between trace and receipt' });
+    });
+
+    it('rejects a receipt log emitted only inside a reverted frame', async () => {
+        const trace = {
+            ...traceOf(),
+            calls: [{
+                type: 'CALL',
+                from: TARGET,
+                to: OTHER,
+                error: 'execution reverted',
+                logs: [{ address: OTHER, topics: [TOPIC], data: '0x' }],
+            }],
+        };
+        const receipt = receiptOf({
+            logs: [
+                { address: getAddress(TARGET), topics: [TOPIC], data: '0x', logIndex: '0x7' },
+                { address: getAddress(OTHER), topics: [TOPIC], data: '0x', logIndex: '0x8' },
+            ],
+        });
+        expect(await withTrace(trace, receipt)).toEqual({ ok: false, reason: 'trace has 1 logs, receipt 2' });
+    });
+
+    it('rejects a reverted log that the trace also keeps as a surviving log', async () => {
+        const extra = { address: TARGET, topics: [TOPIC], data: '0xbb' };
+        const trace = {
+            ...traceOf(),
+            logs: [
+                { address: TARGET, topics: [TOPIC], data: '0x', position: 0 },
+                { ...extra, position: 1 },
+            ],
+            calls: [{
+                type: 'CALL',
+                from: TARGET,
+                to: TARGET,
+                error: 'execution reverted',
+                logs: [extra],
+            }],
+        };
+        expect(await withTrace(trace)).toEqual({ ok: false, reason: 'trace has 2 logs, receipt 1' });
+    });
+
+    it('rejects a top-level from, to, input, or value mismatch', async () => {
+        expect(await withTrace(traceOf(OTHER))).toEqual({ ok: false, reason: 'trace from mismatch on alpha' });
+        expect(await withTrace({ ...traceOf(), to: OTHER })).toEqual({ ok: false, reason: 'trace to mismatch on alpha' });
+        expect(await withTrace({ ...traceOf(), input: '0xdeadbeef' })).toEqual({
+            ok: false, reason: 'trace input mismatch on alpha',
+        });
+        expect(await withTrace({ ...traceOf(), value: '0x2' })).toEqual({
+            ok: false, reason: 'trace value mismatch on alpha',
+        });
+    });
+
+    it('rejects completeness providers that disagree on the transaction', async () => {
+        const { providers, traceProviders } = pair(
+            (_name, method) => (method === 'eth_getTransactionReceipt' ? receiptOf() : traceOf()),
+            (name) => txOf(name === 'beta' ? { input: '0xdeadbeef' } : {}),
+        );
+        const result = await attr({ providers, traceProviders }).attribute(action());
+        expect(result).toEqual({ ok: false, reason: 'providers disagree on the transaction' });
+    });
+
+    it('attributes a contract-creation transaction only for CREATE or CREATE2', async () => {
+        const created = {
+            type: 'CREATE',
+            from: FROM,
+            to: TARGET,
+            input: '0x12345678',
+            value: '0x00',
+            logs: [{ address: TARGET, topics: [TOPIC], data: '0x' }],
+        };
+        const tx = txOf({ to: null });
+        const accepted = await withTrace(created, receiptOf(), tx);
+        expect(accepted).toMatchObject({
+            ok: true,
+            attribution: { attributionSource: 'single:alpha', emitter: getAddress(TARGET) },
+        });
+        expect(await withTrace(traceOf(), receiptOf(), tx)).toEqual({
+            ok: false, reason: 'trace to mismatch on alpha',
+        });
+    });
+
+    it('returns single:alchemy from one trace provider and dual from two', async () => {
+        const calls: string[] = [];
+        const make = (name: string): RawRpc => ({
+            name,
+            async request({ method }) {
+                calls.push(`${name}:${method}`);
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') {
+                    return txOf(name === 'infura' ? { from: `0x${FROM.slice(2).toUpperCase()}` } : {});
+                }
+                return traceOf();
+            },
+        });
+        const alchemy = make('alchemy');
+        const infura = make('infura');
+        const tenderly = make('tenderly');
+        const single = await traceAttributor({
+            providers: [alchemy, infura],
+            traceProviders: [alchemy],
+        }).attribute(action());
+        expect(single).toMatchObject({ ok: true, attribution: { attributionSource: 'single:alchemy' } });
+        expect(calls).toContain('alchemy:debug_traceTransaction');
+        expect(calls).toContain('infura:eth_getTransactionByHash');
+        expect(calls).not.toContain('infura:debug_traceTransaction');
+
+        calls.length = 0;
+        const dual = await traceAttributor({
+            providers: [alchemy, infura],
+            traceProviders: [alchemy, tenderly],
+        }).attribute(action());
+        expect(dual).toMatchObject({ ok: true, attribution: { attributionSource: 'dual:alchemy+tenderly' } });
+        expect(calls).toContain('alchemy:debug_traceTransaction');
+        expect(calls).toContain('tenderly:debug_traceTransaction');
+        expect(calls).not.toContain('infura:debug_traceTransaction');
+    });
+
+    it('rejects completeness or trace providers that are not distinct', () => {
+        const make = (name: string): RawRpc => ({ name, async request() { return null; } });
+        const alpha = make('alpha');
+        const beta = make('beta');
+        const again = make('alpha');
+        expect(() => traceAttributor({ providers: [alpha, again], traceProviders: [beta] }))
+            .toThrow('guardian audit requires two distinct providers');
+        expect(() => traceAttributor({ providers: [alpha, alpha], traceProviders: [beta] }))
+            .toThrow('guardian audit requires two distinct providers');
+        expect(() => traceAttributor({ providers: [alpha, beta], traceProviders: [alpha, again] }))
+            .toThrow('guardian audit requires two distinct providers');
     });
 });

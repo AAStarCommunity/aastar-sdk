@@ -91,66 +91,188 @@ function sameAttribution(a: LogAttribution, b: LogAttribution): boolean {
     return a.forwardingPath.every((hop, i) => sameHop(hop, b.forwardingPath[i]!));
 }
 
-type Read =
-    | { ok: true; trace: unknown; logs: unknown[] }
+const HEX = /^0x[0-9a-fA-F]*$/;
+
+/** Deep equality. Hex strings compare case-insensitively; `0x0` and `0x00` stay distinct. */
+function sameJson(a: unknown, b: unknown): boolean {
+    if (typeof a === 'string' && typeof b === 'string') {
+        if (HEX.test(a) && HEX.test(b)) return a.toLowerCase() === b.toLowerCase();
+        return a === b;
+    }
+    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return Object.is(a, b);
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) if (!sameJson(a[i], b[i])) return false;
+        return true;
+    }
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const keys = Object.keys(ao);
+    if (keys.length !== Object.keys(bo).length) return false;
+    for (const key of keys) {
+        if (!Object.prototype.hasOwnProperty.call(bo, key) || !sameJson(ao[key], bo[key])) return false;
+    }
+    return true;
+}
+
+function sameText(a: unknown, b: unknown): boolean {
+    return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/** Quantity equality. A missing value matches only another missing value. */
+function sameValue(a: unknown, b: unknown): boolean {
+    if (a == null && b == null) return true;
+    const qa = quantity(a);
+    const qb = quantity(b);
+    return qa !== null && qa === qb;
+}
+
+/**
+ * Contract creation is `tx.to === null` and a top-level CREATE/CREATE2 trace.
+ * A call trace must carry the same `to` as the transaction. Anything else mismatches.
+ */
+function toMatches(trace: Record<string, unknown>, tx: Record<string, unknown>): boolean {
+    const type = typeof trace.type === 'string' ? trace.type.toUpperCase() : '';
+    if (tx.to === null) return type === 'CREATE' || type === 'CREATE2';
+    if (type === 'CREATE' || type === 'CREATE2') return false;
+    return sameText(trace.to, tx.to);
+}
+
+function traceMatchesTx(trace: unknown, tx: Record<string, unknown>, name: string): string | null {
+    if (!trace || typeof trace !== 'object') return 'no trace';
+    const frame = trace as Record<string, unknown>;
+    if (!sameText(frame.from, tx.from)) return `trace from mismatch on ${name}`;
+    if (!toMatches(frame, tx)) return `trace to mismatch on ${name}`;
+    if (!sameText(frame.input, tx.input)) return `trace input mismatch on ${name}`;
+    if (!sameValue(frame.value, tx.value)) return `trace value mismatch on ${name}`;
+    return null;
+}
+
+function sameBlock(tx: Record<string, unknown>, receipt: unknown): boolean {
+    if (!receipt || typeof receipt !== 'object') return false;
+    const r = receipt as Record<string, unknown>;
+    if (lc(tx.blockHash) === '' || lc(tx.blockHash) !== lc(r.blockHash)) return false;
+    const txBlock = quantity(tx.blockNumber);
+    const receiptBlock = quantity(r.blockNumber);
+    return txBlock !== null && txBlock === receiptBlock;
+}
+
+type Side =
+    | { ok: true; receipt: unknown; tx: Record<string, unknown>; logs: unknown[] }
     | { ok: false; reason: string };
 
-async function readProvider(rpc: RawRpc, action: FoundAction): Promise<Read> {
-    const tx = action.txHash;
-    const [receiptR, traceR] = await Promise.all([
-        rpc.request({ method: 'eth_getTransactionReceipt', params: [tx] }).then(
+async function readSide(rpc: RawRpc, action: FoundAction): Promise<Side> {
+    const hash = action.txHash;
+    const [receiptR, txR] = await Promise.all([
+        rpc.request({ method: 'eth_getTransactionReceipt', params: [hash] }).then(
             (v) => ({ ok: true as const, v }),
             () => ({ ok: false as const }),
         ),
-        rpc.request({ method: 'debug_traceTransaction', params: [tx, TRACE_OPTS] }).then(
+        rpc.request({ method: 'eth_getTransactionByHash', params: [hash] }).then(
             (v) => ({ ok: true as const, v }),
-            (e: unknown) => ({ ok: false as const, e }),
+            () => ({ ok: false as const }),
         ),
     ]);
     if (!receiptR.ok) return { ok: false, reason: `receipt read failed on ${rpc.name}` };
-    if (!traceR.ok) {
-        const reason = traceUnsupported(traceR.e) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
+    if (!txR.ok) return { ok: false, reason: `transaction read failed on ${rpc.name}` };
+    // Before checkReceipt, sameLog, or any other walk of the payloads.
+    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+    if (!measure(receiptR.v, budget) || !measure(txR.v, budget)) return { ok: false, reason: 'trace too large' };
+    const checked = checkReceipt(receiptR.v, action, rpc.name);
+    if ('reason' in checked) return { ok: false, reason: checked.reason };
+    if (jsonRpcFailure(txR.v)) return { ok: false, reason: `transaction read failed on ${rpc.name}` };
+    if (txR.v === null || typeof txR.v !== 'object') return { ok: false, reason: `no transaction on ${rpc.name}` };
+    const tx = txR.v as Record<string, unknown>;
+    if (!sameBlock(tx, receiptR.v)) return { ok: false, reason: 'providers disagree on the transaction' };
+    return { ok: true, receipt: receiptR.v, tx, logs: checked.logs };
+}
+
+type Traced =
+    | { ok: true; attribution: LogAttribution }
+    | { ok: false; reason: string };
+
+async function readTrace(rpc: RawRpc, action: FoundAction, tx: Record<string, unknown>, logs: unknown[]): Promise<Traced> {
+    const got = await rpc.request({
+        method: 'debug_traceTransaction', params: [action.txHash, TRACE_OPTS],
+    }).then(
+        (v) => ({ ok: true as const, v }),
+        (e: unknown) => ({ ok: false as const, e }),
+    );
+    if (!got.ok) {
+        const reason = traceUnsupported(got.e) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
     }
-    // Before checkReceipt, sameLog, attributeTx, or any other walk of the payloads.
     const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
-    if (!measure(receiptR.v, budget) || !measure(traceR.v, budget)) {
-        return { ok: false, reason: 'trace too large' };
-    }
-    const failure = jsonRpcFailure(traceR.v);
+    if (!measure(got.v, budget)) return { ok: false, reason: 'trace too large' };
+    const failure = jsonRpcFailure(got.v);
     if (failure) {
         const reason = traceUnsupported(failure) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
     }
-    const checked = checkReceipt(receiptR.v, action, rpc.name);
-    if ('reason' in checked) return { ok: false, reason: checked.reason };
-    return { ok: true, trace: traceR.v, logs: checked.logs };
+    const mismatch = traceMatchesTx(got.v, tx, rpc.name);
+    if (mismatch) return { ok: false, reason: mismatch };
+    const aligned = attributeTx(got.v, logs);
+    if (!aligned.aligned) return { ok: false, reason: aligned.why };
+    const attribution = aligned.byLogIndex.get(action.logIndex);
+    if (!attribution) return { ok: false, reason: `attribution missing on ${rpc.name}` };
+    return { ok: true, attribution };
+}
+
+export interface TraceAttributorOptions {
+    /** Completeness providers. Receipts and transactions are read on both and must agree. */
+    providers: readonly [RawRpc, RawRpc];
+    /** One or two callTracer sources. Two names must be distinct, same rule as `scanRange`. */
+    traceProviders: readonly [RawRpc] | readonly [RawRpc, RawRpc];
 }
 
 /**
- * Attribute a found action from both providers' receipts and callTracer traces.
+ * Attribute a found action.
+ *
+ * Completeness providers both serve `eth_getTransactionReceipt` and `eth_getTransactionByHash`.
+ * Trace providers serve `debug_traceTransaction` (callTracer, withLog). One source is enough when
+ * the other completeness provider has no trace API.
  *
  * The decoded JSON is already allocated by the transport, so callers must use a transport with a
  * response-size cap. This module bounds its own work after decoding.
  */
-export function traceAttributor(opts: { providers: readonly [RawRpc, RawRpc] }): Attributor {
-    const [a, b] = opts.providers;
+export function traceAttributor(opts: TraceAttributorOptions): Attributor {
+    const [pa, pb] = opts.providers;
+    if (opts.providers.length !== 2 || pa === pb || pa.name === pb.name) {
+        throw new Error('guardian audit requires two distinct providers');
+    }
+    const traces = opts.traceProviders;
+    if (traces.length !== 1 && traces.length !== 2) {
+        throw new Error('guardian audit requires one or two trace providers');
+    }
+    const [ta, tb] = traces;
+    if (tb && (ta === tb || ta.name === tb.name)) {
+        throw new Error('guardian audit requires two distinct providers');
+    }
     return {
         async attribute(action) {
             try {
-                const [ra, rb] = await Promise.all([readProvider(a, action), readProvider(b, action)]);
-                if (!ra.ok) return ra;
-                if (!rb.ok) return rb;
-                const aa = attributeTx(ra.trace, ra.logs);
-                const bb = attributeTx(rb.trace, rb.logs);
-                if (!aa.aligned) return { ok: false, reason: aa.why };
-                if (!bb.aligned) return { ok: false, reason: bb.why };
-                const la = aa.byLogIndex.get(action.logIndex);
-                const lb = bb.byLogIndex.get(action.logIndex);
-                if (!la) return { ok: false, reason: `attribution missing on ${a.name}` };
-                if (!lb) return { ok: false, reason: `attribution missing on ${b.name}` };
-                if (!sameAttribution(la, lb)) return { ok: false, reason: 'providers disagree on attribution' };
-                return { ok: true, attribution: la };
+                const [sa, sb] = await Promise.all([readSide(pa, action), readSide(pb, action)]);
+                if (!sa.ok) return sa;
+                if (!sb.ok) return sb;
+                if (!sameJson(sa.receipt, sb.receipt) || !sameJson(sa.tx, sb.tx)) {
+                    return { ok: false, reason: 'providers disagree on the transaction' };
+                }
+                const traced = await Promise.all(traces.map((rpc) => readTrace(rpc, action, sa.tx, sa.logs)));
+                const first = traced[0]!;
+                if (!first.ok) return first;
+                if (!tb) {
+                    return { ok: true, attribution: { ...first.attribution, attributionSource: `single:${ta.name}` } };
+                }
+                const second = traced[1]!;
+                if (!second.ok) return second;
+                if (!sameAttribution(first.attribution, second.attribution)) {
+                    return { ok: false, reason: 'trace providers disagree' };
+                }
+                return {
+                    ok: true,
+                    attribution: { ...first.attribution, attributionSource: `dual:${ta.name}+${tb.name}` },
+                };
             } catch {
                 return { ok: false, reason: 'attribution failed' };
             }
