@@ -3,6 +3,7 @@ import { mayContainAddress } from './bloom.js';
 import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
 import {
     ScopeChangedError,
+    StoreConflictError,
     unresolvedId,
     type AttributedAction,
     type Checkpoint,
@@ -222,12 +223,14 @@ export function watchScope(watched: readonly WatchedContract[], startBlock: numb
     return keccak256(stringToHex(JSON.stringify({ startBlock, watched: rows })));
 }
 
-function assertConfig(opts: ScanRangeOptions): void {
-    if (!safeInt(opts.startBlock, 0)) throw new Error('startBlock must be >= 0');
-    if (!safeInt(opts.maxBlocks, 1)) throw new Error('maxBlocks must be >= 1');
-    if (opts.page !== undefined && !safeInt(opts.page, 1)) throw new Error('page must be >= 1');
+function assertConfig(
+    startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
+): void {
+    if (!safeInt(startBlock, 0)) throw new Error('startBlock must be >= 0');
+    if (!safeInt(maxBlocks, 1)) throw new Error('maxBlocks must be >= 1');
+    if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
     const spans: { address: Address; from: number; to: number }[] = [];
-    for (const contract of opts.watched) {
+    for (const contract of watched) {
         if (typeof contract.generation !== 'string' || contract.generation.length === 0) {
             throw new Error('generation is required');
         }
@@ -464,22 +467,63 @@ function attributedOf(action: FoundAction): AttributedAction {
  * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
  * The first commit records it. A later scan whose scope differs throws ScopeChangedError
  * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
+ * Providers, watched entries, and numeric options are copied before the first await.
+ * Later reads use that copy, so the caller cannot clear the watch set in flight.
  */
+function freezeProvider(rpc: RawRpc): RawRpc {
+    const name = rpc.name;
+    const request = rpc.request.bind(rpc);
+    return { name, request };
+}
+
+/** Field copy. `decode` is the function reference from the call, not a later replacement. */
+function freezeWatched(watched: readonly WatchedContract[]): WatchedContract[] {
+    return watched.map((contract) => ({
+        address: contract.address,
+        fromBlock: contract.fromBlock,
+        toBlock: contract.toBlock,
+        generation: contract.generation,
+        decode: contract.decode,
+    }));
+}
+
+/** Typed conflicts keep their class. Anything else loses its message, which may hold a URL. */
+function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
+    if (error instanceof StoreConflictError || error instanceof ScopeChangedError || error instanceof FinalityConflictError) {
+        throw error;
+    }
+    throw new Error(`guardian audit store ${stage} failed`);
+}
+
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
-    const [pa, pb] = opts.providers;
-    if (opts.providers.length !== 2 || pa === pb || pa.name === pb.name) {
+    const raw = opts.providers;
+    if (raw.length !== 2 || raw[0] === raw[1] || raw[0].name === raw[1].name) {
         throw new Error('guardian audit requires two distinct providers');
     }
+    const pa = freezeProvider(raw[0]);
+    const pb = freezeProvider(raw[1]);
+    const watched = freezeWatched(opts.watched);
+    const startBlock = opts.startBlock;
+    const maxBlocks = opts.maxBlocks;
+    const pageOption = opts.page;
+    const store = opts.store;
+    const attributor = opts.attributor;
     assertName(pa.name);
     assertName(pb.name);
-    assertConfig(opts);
-    const scope = watchScope(opts.watched, opts.startBlock);
-    const snap = await opts.store.snapshot();
+    assertConfig(startBlock, maxBlocks, pageOption, watched);
+    const page = pageOption ?? 2000;
+    const scope = watchScope(watched, startBlock);
+    let snap: StoreSnapshot;
+    try {
+        snap = await store.snapshot();
+    } catch (error) {
+        storeFailure('snapshot', error);
+    }
     if (snap.scope !== null && snap.scope.toLowerCase() !== scope.toLowerCase()) throw new ScopeChangedError();
     const finA = await readHeader(pa, 'finalized');
-    if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: opts.startBlock };
+    if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: startBlock };
     const finB = await readHeader(pb, 'finalized');
-    if (typeof finB === 'string') return { state: 'INCOMPLETE', reasons: [finB], from: opts.startBlock };
+    if (typeof finB === 'string') return { state: 'INCOMPLETE', reasons: [finB], from: startBlock };
     const saved = snap.checkpoint;
     if (saved) {
         const ha = await readHeader(pa, saved.block);
@@ -491,24 +535,23 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             throw new FinalityConflictError(`checkpoint block ${saved.block} hash conflict on ${pa.name}/${pb.name}`);
         }
     }
-    const from = saved ? saved.block + 1 : opts.startBlock;
-    const to = Math.min(finA.number, finB.number, from + opts.maxBlocks - 1);
+    const from = saved ? saved.block + 1 : startBlock;
+    const to = Math.min(finA.number, finB.number, from + maxBlocks - 1);
     if (from > to) {
         if (saved) {
             const why = await bindFinalized(pa, pb, finA, finB, saved);
             if (why) return bad(from, to, why);
         }
-        return finish(opts, [], from, to, 0, 0, null, snap, scope);
+        return finish(watched, attributor, store, [], from, to, 0, 0, null, snap, scope);
     }
 
     const buckets: Bucket[] = [];
-    for (const contract of opts.watched) {
+    for (const contract of watched) {
         const address = getAddress(contract.address);
         const lo = Math.max(from, contract.fromBlock);
         const hi = Math.min(to, contract.toBlock ?? to);
         if (lo <= hi) buckets.push({ contract, address, lo, hi, logs: [] });
     }
-    const page = opts.page ?? 2000;
     for (const bucket of buckets) {
         let rawA: unknown[];
         let rawB: unknown[];
@@ -629,11 +672,15 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             });
         }
     }
-    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, snap, scope);
+    return finish(
+        watched, attributor, store, actions, from, to, bloomFalsePositives, ignored,
+        tipHeader.hash.toLowerCase() as Hex, snap, scope,
+    );
 }
 
 async function finish(
-    opts: ScanRangeOptions, actions: FoundAction[], from: number, to: number,
+    watched: readonly WatchedContract[], attributor: Attributor | undefined, store: GuardianAuditStore,
+    actions: FoundAction[], from: number, to: number,
     bloomFalsePositives: number, ignored: number, tip: Hex | null,
     snap: StoreSnapshot, scope: Hex,
 ): Promise<ScanResult> {
@@ -642,14 +689,14 @@ async function finish(
     const stale: UnresolvedAction[] = [];
     let stillPrior = 0;
     for (const item of snap.unresolved) {
-        const again = revive(opts.watched, item);
+        const again = revive(watched, item);
         if (again && 'incomplete' in again) return bad(from, to, again.incomplete);
         if (!again) {
             stillPrior++;
             stale.push({ ...item, reason: 'stored action no longer decodable' });
             continue;
         }
-        const outcome = await judge(opts.attributor, again);
+        const outcome = await judge(attributor, again);
         if (!outcome.ok) { stillPrior++; continue; }
         again.attribution = outcome.attribution;
         resolvedPrior.push(again);
@@ -658,7 +705,7 @@ async function finish(
     const accepted: AttributedAction[] = resolvedPrior.map(attributedOf);
     const fresh: UnresolvedAction[] = [];
     for (const action of actions) {
-        const outcome = await judge(opts.attributor, action);
+        const outcome = await judge(attributor, action);
         if (outcome.ok) {
             action.attribution = outcome.attribution;
             accepted.push(attributedOf(action));
@@ -670,14 +717,18 @@ async function finish(
             logIndex: action.logIndex, address: action.address, kind: action.kind, reason: outcome.reason, log: action.log,
         });
     }
-    await opts.store.commit({
-        expectedRevision: snap.revision,
-        next: tip ? { block: to, hash: tip } : null,
-        scope,
-        attributed: accepted,
-        unresolved: [...stale, ...fresh],
-        resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
-    });
+    try {
+        await store.commit({
+            expectedRevision: snap.revision,
+            next: tip ? { block: to, hash: tip } : null,
+            scope,
+            attributed: accepted,
+            unresolved: [...stale, ...fresh],
+            resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
+        });
+    } catch (error) {
+        storeFailure('commit', error);
+    }
     const stats: ScanStats = {
         bloomFalsePositives, ignored, count: actions.length, from, to, actions, resolvedPrior,
     };

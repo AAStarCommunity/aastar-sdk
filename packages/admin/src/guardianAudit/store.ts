@@ -81,7 +81,10 @@ export interface StoreSnapshot {
     attributed: AttributedAction[];
 }
 
-/** Injected persistence. Reads return copies; callbacks must not be able to mutate stored rows. */
+/**
+ * Injected persistence. Reads return copies; callbacks must not be able to mutate stored rows.
+ * Implementers run `runStoreConformance` (storeConformance.ts) against a fresh store and pass every check.
+ */
 export interface GuardianAuditStore {
     snapshot(): Promise<StoreSnapshot>;
     getCheckpoint(): Promise<Checkpoint | null>;
@@ -98,13 +101,15 @@ function copy<T>(value: T): T {
     return structuredClone(value);
 }
 
-export function memoryStore(): GuardianAuditStore {
+/** `faultHook` adds `crashNextCommit`, which aborts the next commit after it has started writing. */
+export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditStore & { crashNextCommit?: () => void } {
     let revision = 0;
     let scope: Hex | null = null;
     let checkpoint: Checkpoint | null = null;
     let open = new Map<string, UnresolvedAction>();
     let attributed = new Map<string, AttributedAction>();
-    return {
+    let crash = false;
+    const store: GuardianAuditStore & { crashNextCommit?: () => void } = {
         async snapshot() {
             return {
                 revision,
@@ -134,6 +139,10 @@ export function memoryStore(): GuardianAuditStore {
                 nextOpen.set(id, copy({ ...item, id }));
             }
             for (const id of change.resolve) nextOpen.delete(id.toLowerCase());
+            if (crash) {
+                crash = false;
+                throw new Error('memory store crash');
+            }
             open = nextOpen;
             attributed = nextAttributed;
             if (change.next) checkpoint = { block: change.next.block, hash: change.next.hash };
@@ -141,4 +150,6 @@ export function memoryStore(): GuardianAuditStore {
             revision++;
         },
     };
+    if (options?.faultHook) store.crashNextCommit = () => { crash = true; };
+    return store;
 }

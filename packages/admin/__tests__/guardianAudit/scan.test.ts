@@ -690,9 +690,9 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             listUnresolved: () => inner.listUnresolved(),
             listAttributed: () => inner.listAttributed(),
             snapshot: () => inner.snapshot(),
-            commit: async () => { events.push('commit'); throw new Error('disk'); },
+            commit: async () => { events.push('commit'); throw new Error('https://disk.example/commit'); },
         };
-        await expect(run(a, b, store)).rejects.toThrow(/disk/);
+        await expect(run(a, b, store)).rejects.toThrow(/^guardian audit store commit failed$/);
         expect(events).toEqual(['commit']);
         expect(await inner.getCheckpoint()).toBeNull();
         expect(await inner.listUnresolved()).toEqual([]);
@@ -1046,7 +1046,15 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
                 return { ok: false, reason: 'later' };
             },
         };
-        await expect(run(a, b, store, { attributor })).rejects.toThrow(/disk/);
+        try {
+            await run(a, b, store, { attributor });
+            expect.fail('commit should throw');
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as Error).message).toBe('guardian audit store commit failed');
+            expect((error as Error).cause).toBeUndefined();
+            expect(String(error)).not.toMatch(/disk\.example|https:/);
+        }
         expect((await inner.listUnresolved()).map((item) => item.blockNumber)).toEqual([1]);
         expect(await inner.listAttributed()).toEqual([]);
         expect(await inner.getCheckpoint()).toBeNull();
@@ -1056,6 +1064,109 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect((await inner.listUnresolved()).map((item) => item.blockNumber)).toEqual([3]);
         expect(await inner.listAttributed()).toEqual([expect.objectContaining({ attribution: { who: 'old' } })]);
         expect(await inner.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+    });
+
+    it('hides a snapshot endpoint and performs no chain read', async () => {
+        const { a, b } = pair(4);
+        addBoth(a, b, 2, TOPIC);
+        const store: GuardianAuditStore = {
+            getCheckpoint: async () => null,
+            listUnresolved: async () => [],
+            listAttributed: async () => [],
+            snapshot: async () => { throw new Error('https://user:pw@disk.example/snap'); },
+            commit: async () => { throw new Error('https://user:pw@disk.example/commit'); },
+        };
+        try {
+            await run(a, b, store);
+            expect.fail('snapshot should throw');
+        } catch (error) {
+            expect(error).toBeInstanceOf(Error);
+            expect((error as Error).message).toBe('guardian audit store snapshot failed');
+            expect((error as Error).cause).toBeUndefined();
+            expect(String(error)).not.toMatch(/disk\.example|user:pw|https:/);
+        }
+        expect(a.calls).toHaveLength(0);
+        expect(b.calls).toHaveLength(0);
+    });
+
+    it('rethrows typed store conflicts from commit', async () => {
+        const conflicts = [new StoreConflictError(), new ScopeChangedError(), new FinalityConflictError('checkpoint block 1 hash conflict on primary/secondary')];
+        for (const conflict of conflicts) {
+            const { a, b } = pair(2);
+            const store: GuardianAuditStore = {
+                getCheckpoint: async () => null,
+                listUnresolved: async () => [],
+                listAttributed: async () => [],
+                snapshot: async () => ({ revision: 0, checkpoint: null, scope: null, unresolved: [], attributed: [] }),
+                commit: async () => { throw conflict; },
+            };
+            await expect(run(a, b, store)).rejects.toBe(conflict);
+        }
+    });
+
+    it('freezes the watch set before the first await', async () => {
+        const { a, b } = pair(4);
+        addBoth(a, b, 2, TOPIC);
+        const entry = watched();
+        const list = [entry];
+        const store = memoryStore();
+        const requestA = a.request.bind(a);
+        const requestB = b.request.bind(b);
+        const opts: {
+            providers: [Fake, Fake];
+            watched: WatchedContract[];
+            store: GuardianAuditStore;
+            startBlock: number;
+            maxBlocks: number;
+            page?: number;
+            attributor: Attributor;
+        } = {
+            providers: [a, b],
+            watched: list,
+            store,
+            startBlock: 1,
+            maxBlocks: 50,
+            attributor: ok,
+        };
+        const pending = scanRange(opts);
+        list.length = 0;
+        entry.fromBlock = 99;
+        entry.toBlock = 99;
+        entry.address = OTHER;
+        entry.generation = 'mutated-generation';
+        entry.decode = () => null;
+        opts.startBlock = 90;
+        opts.maxBlocks = 1;
+        opts.page = 1;
+        opts.watched = [];
+        opts.providers = [a, a];
+        a.name = 'https://user:pw@rpc.example/a';
+        b.name = 'https://user:pw@rpc.example/b';
+        a.request = async () => { throw new Error('https://user:pw@rpc.example/replaced'); };
+        b.request = async () => { throw new Error('https://user:pw@rpc.example/replaced'); };
+        const result = await pending;
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 1 });
+        expect(JSON.stringify(result)).not.toMatch(/user:pw|rpc\.example|mutated-generation/);
+        const filters = a.calls
+            .filter((call) => call.method === 'eth_getLogs')
+            .map((call) => call.params[0] as { address?: string });
+        expect(filters.some((filter) => String(filter.address).toLowerCase() === ADDR.toLowerCase())).toBe(true);
+        expect(filters.some((filter) => String(filter.address).toLowerCase() === OTHER.toLowerCase())).toBe(false);
+        expect(await store.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+        expect(await store.listAttributed()).toEqual([expect.objectContaining({ attribution: { who: 'guardian' } })]);
+        a.name = 'primary';
+        b.name = 'secondary';
+        a.request = requestA;
+        b.request = requestB;
+        const again = await scanRange({
+            providers: [a, b],
+            watched: [watched()],
+            store,
+            startBlock: 1,
+            maxBlocks: 50,
+        });
+        expect(again).toMatchObject({ state: 'COMPLETE', count: 0 });
+        expect(await store.listAttributed()).toHaveLength(1);
     });
 
     it('rejects the later overlapping scan so the checkpoint cannot regress', async () => {
