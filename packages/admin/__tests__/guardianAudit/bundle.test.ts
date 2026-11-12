@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, toFunctionSelector, type Address, type Hex } from 'viem';
 import { canonicalJson } from '../../src/guardianAudit/canonical';
-import { buildEvidenceBundle, verifyEvidenceBundle } from '../../src/guardianAudit/bundle';
+import {
+    buildEvidenceBundle, evidenceFileSha256, parseEvidenceFile, serializeEvidenceFile, verifyEvidenceBundle, verifyEvidenceFile,
+    type EvidenceBundle, type RunMetadata,
+} from '../../src/guardianAudit/bundle';
 import { DEFAULT_RULESET, rulesetId, type RuleRecord, type Ruleset } from '../../src/guardianAudit/rules';
 import type { DecodedAction, FoundAction, ScanResult } from '../../src/guardianAudit/scan';
 import type { RawLog } from '../../src/guardianAudit/rpc';
@@ -166,9 +169,69 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(text).not.toContain('2026-11-12');
     });
 
-    it('rejects a URL-like provider name', () => {
+    it('rejects a URL-like provider name and two equal names', () => {
         expect(() => build({ providers: ['https://rpc.example/v3/secret', 'secondary'] })).toThrow(/provider name is not a label/);
         expect(() => build({ providers: ['primary', 'http://127.0.0.1:8545'] })).toThrow(/provider name is not a label/);
+        expect(() => build({ providers: ['primary', 'primary'] })).toThrow(/provider names must differ/);
+    });
+
+    it('publishes a canonical evidence file whose sha256 moves with run metadata only', () => {
+        expect(evidenceFileSha256('abc\n')).toBe('0xedeaaff3f1774ad2888673770c6d64097e391bc362d7d6fb34982ddf0efd18cb');
+        const early = build({ generatedAt: '2026-11-12T00:00:00.000Z' });
+        const later = build({ generatedAt: '2026-11-13T00:00:00.000Z' });
+        const earlyText = serializeEvidenceFile(early);
+        const laterText = serializeEvidenceFile(later);
+        expect(earlyText.endsWith('\n')).toBe(true);
+        expect(earlyText.slice(0, -1)).not.toContain('\n');
+        expect(early.digest).toBe(later.digest);
+        expect(canonicalJson(early.bundle)).toBe(canonicalJson(later.bundle));
+        expect(evidenceFileSha256(earlyText)).not.toBe(evidenceFileSha256(laterText));
+        expect(verifyEvidenceFile(earlyText, { bundle: later.bundle, digest: later.digest })).toEqual({
+            ok: true, sha256: evidenceFileSha256(earlyText), reasons: [],
+        });
+        expect(verifyEvidenceFile(laterText, { bundle: early.bundle, digest: early.digest })).toEqual({
+            ok: true, sha256: evidenceFileSha256(laterText), reasons: [],
+        });
+        const parsed = parseEvidenceFile(earlyText);
+        expect(parsed.schema).toBe('aastar.guardian-audit.evidence-file.v1');
+        expect(serializeEvidenceFile(parsed)).toBe(earlyText);
+
+        const changed = { ...early.bundle, chainId: early.bundle.chainId + 1 };
+        const mismatch = verifyEvidenceFile(earlyText, { bundle: changed, digest: early.digest });
+        expect(mismatch.ok).toBe(false);
+        expect(mismatch.reasons).toContain('rerun bundle differs from the file bundle');
+        expect(mismatch.sha256).toBe(evidenceFileSha256(earlyText));
+        const other = build({ chainId: 1 });
+        expect(verifyEvidenceFile(earlyText, { bundle: other.bundle, digest: other.digest }).ok).toBe(false);
+    });
+
+    it('refuses a non-canonical file, a missing newline, and an extra runMetadata field', () => {
+        const text = serializeEvidenceFile(build());
+        const parsed = JSON.parse(text) as Record<string, unknown>;
+        const pretty = JSON.stringify(parsed, null, 2) + '\n';
+        expect(() => parseEvidenceFile(pretty)).toThrow(/not canonical/);
+        expect(() => parseEvidenceFile(text.slice(0, -1))).toThrow(/not canonical/);
+        const reordered = JSON.stringify({
+            schema: parsed.schema,
+            bundle: parsed.bundle,
+            digest: parsed.digest,
+            runMetadata: parsed.runMetadata,
+        }) + '\n';
+        expect(reordered).not.toBe(text);
+        expect(() => parseEvidenceFile(reordered)).toThrow(/not canonical/);
+        const extraTop = JSON.parse(text) as Record<string, unknown>;
+        extraTop.note = true;
+        expect(() => parseEvidenceFile(JSON.stringify(extraTop) + '\n')).toThrow(/unknown key note/);
+        const extraMeta = JSON.parse(text) as { runMetadata: Record<string, unknown> };
+        extraMeta.runMetadata.endpoint = 'https://rpc.example';
+        expect(() => parseEvidenceFile(JSON.stringify(extraMeta) + '\n')).toThrow(/runMetadata: unknown key endpoint/);
+        const lying = JSON.parse(text) as { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata };
+        lying.digest = flipByte(lying.digest);
+        const lyingText = serializeEvidenceFile(lying);
+        expect(() => parseEvidenceFile(lyingText)).toThrow(/evidence digest mismatch/);
+        const rejected = verifyEvidenceFile(pretty, { bundle: build().bundle, digest: build().digest });
+        expect(rejected.ok).toBe(false);
+        expect(rejected.sha256).toBe(evidenceFileSha256(pretty));
     });
 
     it('puts the unattributed count in the digested bundle', () => {

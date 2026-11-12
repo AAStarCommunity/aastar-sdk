@@ -1,6 +1,6 @@
 import { getAddress, isAddress, numberToHex, type Address, type Hex } from 'viem';
 import { mayContainAddress } from './bloom.js';
-import { header, isHexData, isWord, pagedLogs, quantity, rawGetLogs, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
+import { header, isHexData, isWord, pagedLogs, PROVIDER_NAME_RE, quantity, rawGetLogs, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
 import { unresolvedId, type GuardianAuditStore, type UnresolvedAction } from './store.js';
 
 /** One generation. `toBlock` is the upgrade boundary; the topic table itself arrives in step 4. */
@@ -244,6 +244,9 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const [pa, pb] = opts.providers;
     if (opts.providers.length !== 2 || pa === pb || pa.name === pb.name) {
         throw new Error('guardian audit requires two distinct providers');
+    }
+    if (typeof pa.name !== 'string' || typeof pb.name !== 'string' || !PROVIDER_NAME_RE.test(pa.name) || !PROVIDER_NAME_RE.test(pb.name)) {
+        throw new Error('provider name is not a label');
     }
     assertConfig(opts);
     const [finA, finB] = await Promise.all([header(pa, 'finalized'), header(pb, 'finalized')]);

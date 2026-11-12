@@ -239,6 +239,15 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(twin.calls).toHaveLength(0);
     });
 
+    it('rejects a provider name that is not a label before any read', async () => {
+        const { a, b } = pair();
+        a.name = 'https://rpc.example/v3/secret';
+        const store = memoryStore();
+        await expect(run(a, b, store)).rejects.toThrow(/provider name is not a label/);
+        expect(a.calls).toHaveLength(0);
+        expect(b.calls).toHaveLength(0);
+    });
+
     it('returns COMPLETE(0) with no log reads when the cursor is already at finalized', async () => {
         const { a, b } = pair(5);
         const store = memoryStore();

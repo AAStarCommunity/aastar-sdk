@@ -1,7 +1,14 @@
 import { numberToHex, type Address, type Hex } from 'viem';
 
 /**
- * EIP-1193 transport. `name` is a provider name for run metadata, never a URL.
+ * Provider `name` and evidence `runMetadata.providers` entries.
+ * A short label: a letter, then letters, digits, `.`, `_`, or `-`. A URL cannot match.
+ * One pattern, shared by the scan and the evidence file.
+ */
+export const PROVIDER_NAME_RE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * EIP-1193 transport. `name` must match {@link PROVIDER_NAME_RE}. It is a label for run metadata, never a URL.
  * viem: `{ name, request: client.request }`
  * ethers v6 (not imported): `{ name, request: ({ method, params }) => provider.send(method, params ?? []) }`
  *

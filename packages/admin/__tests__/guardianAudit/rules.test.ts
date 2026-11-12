@@ -168,13 +168,62 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(() => validateRuleset(noAlso)).toThrow(/alsoReason missing/);
     });
 
+    it('rejects unknown keys in every section and requires the source object', () => {
+        const clone = () => JSON.parse(JSON.stringify(DEFAULT_RULESET));
+        const slash = clone();
+        slash.bls.SLASH.note = true;
+        expect(() => validateRuleset(slash)).toThrow(/bls\.SLASH\.note/);
+        const expected = clone();
+        expected.bls.GENERIC.expected[0].note = true;
+        expect(() => validateRuleset(expected)).toThrow(/bls\.GENERIC\.expected\.note/);
+        const unexpected = clone();
+        unexpected.bls.GENERIC.unexpected.note = true;
+        expect(() => validateRuleset(unexpected)).toThrow(/bls\.GENERIC\.unexpected\.note/);
+        const generic = clone();
+        generic.bls.GENERIC.note = true;
+        expect(() => validateRuleset(generic)).toThrow(/bls\.GENERIC\.note/);
+        const event = clone();
+        event.ownerRoute.events.PriceUpdated.note = true;
+        expect(() => validateRuleset(event)).toThrow(/ownerRoute\.events\.PriceUpdated\.note/);
+        const owner = clone();
+        owner.ownerRoute.note = true;
+        expect(() => validateRuleset(owner)).toThrow(/ownerRoute\.note/);
+        const fn = clone();
+        fn.publicRoute.functions['updatePrice()'].note = true;
+        expect(() => validateRuleset(fn)).toThrow(/publicRoute\.functions\.updatePrice\(\)\.note/);
+        const pub = clone();
+        pub.publicRoute.note = true;
+        expect(() => validateRuleset(pub)).toThrow(/publicRoute\.note/);
+        const unattributed = clone();
+        unattributed.publicRoute.unattributed.note = true;
+        expect(() => validateRuleset(unattributed)).toThrow(/publicRoute\.unattributed\.note/);
+        const noSource = clone();
+        delete noSource.source;
+        expect(() => validateRuleset(noSource)).toThrow(/source missing/);
+        const stringSource = clone();
+        stringSource.source = 'ported from somewhere';
+        expect(() => validateRuleset(stringSource)).toThrow(/source missing/);
+        const shortSource = clone();
+        delete shortSource.source.sha256;
+        expect(() => validateRuleset(shortSource)).toThrow(/source\.sha256 missing/);
+        const extraSource = clone();
+        extraSource.source.extra = 'no';
+        expect(() => validateRuleset(extraSource)).toThrow(/source\.extra/);
+    });
+
     it('pins the default ruleset digest', () => {
         expect(validateRuleset(DEFAULT_RULESET)).toBe(DEFAULT_RULESET);
         expect(DEFAULT_RULESET.schema).toBe('aastar.guardian-audit.ruleset.v1');
-        expect(DEFAULT_RULESET.source).toContain('archive/guardian-watcher-w2-2026-11-12 (8a7cda74)');
+        expect(DEFAULT_RULESET.source).toEqual({
+            repo: 'AAStarCommunity/YetAnotherAA-Validator',
+            tag: 'archive/guardian-watcher-w2-2026-11-12',
+            commit: '8a7cda74d99097b3f5c4337f31bd3225d6cd02e1',
+            path: 'services/guardian-watcher/ruleset.json',
+            sha256: '0x18593eb0b9d6603cbd0f59669cafb49cf5c7359e67025583d34b80cce497227b',
+        });
         const id = rulesetId(DEFAULT_RULESET);
         expect(id.schema).toBe('aastar.guardian-audit.ruleset.v1');
-        // Changing any rule text, comment, or the source line changes this digest.
-        expect(id.digest).toBe('0x9b96808e4db04f56e7333d4d2e38c37eb13fe3a7da7ae2451dffce126260464b');
+        // Changing any rule text, comment, or source field changes this digest.
+        expect(id.digest).toBe('0x955722cbb9d0467aef9bdebc2880dd3d97af87c824978cff4a9498367eb429a4');
     });
 });
