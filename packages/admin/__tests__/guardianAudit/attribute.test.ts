@@ -553,3 +553,18 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         expect(budget.bytes).toBeLessThan(0);
     });
 });
+
+describe('measure: the node budget is one decreasing counter (Codex r5) (unit, not acceptance)', () => {
+    const obj = (n: number) => { const o: Record<string, null> = {}; for (let i = 0; i < n; i++) o[`k${i}`] = null; return o; };
+    // The root costs 1 node and each property 1 more (its null value is not charged separately).
+    it.each([[MEASURE_NODES - 1, true], [MEASURE_NODES, false], [300_000, false]])('%i properties under the production budget -> %s', (n, ok) => {
+        const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+        expect(measure(obj(n), budget)).toBe(ok);
+        expect(budget.nodes).toBeGreaterThanOrEqual(0);
+    });
+    it.each([[10, 9, true], [10, 10, false], [11, 10, true], [11, 11, false]])('budget %i, %i properties (both parities) -> %s', (nodes, n, ok) => {
+        const budget = { nodes, bytes: MEASURE_BYTES };
+        expect(measure(obj(n), budget)).toBe(ok);
+        expect(budget.nodes).toBeGreaterThanOrEqual(0);
+    });
+});

@@ -153,11 +153,9 @@ export function measure(value: unknown, budget: { nodes: number; bytes: number }
         }
         // Count own properties as they appear. Stop at the remaining node budget instead of
         // snapshotting every key with Object.keys / Object.entries.
-        let seen = 0;
         for (const key in v) {
             if (!Object.prototype.hasOwnProperty.call(v, key)) continue;
-            if (seen === budget.nodes) return false;
-            seen++;
+            if (budget.nodes <= 0) return false;
             budget.bytes -= key.length;
             if (budget.bytes < 0) return false;
             budget.nodes -= 1;
