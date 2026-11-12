@@ -46,8 +46,11 @@ const MAX_TRACE_DEPTH = 1025;
 /** Stop a wide or chatty trace before path materialization can blow up. */
 const MAX_FRAMES = 100_000;
 const MAX_LOGS = 10_000;
-/** Cumulative `data` + `topics` bytes across the trace and the receipt, before any normalization. */
+/** Cumulative string bytes across one raw receipt + trace, before any normalization. */
 const MAX_LOG_BYTES = 8 * 1024 * 1024;
+/** Structural cap for one raw JSON value. Pending stack slots are reserved up front. */
+export const MEASURE_NODES = 250_000;
+export const MEASURE_BYTES = MAX_LOG_BYTES;
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 
 function lc(v: unknown): string {
@@ -114,9 +117,51 @@ function missingPos(l: unknown): boolean {
 }
 
 /**
+ * One iterative walk of a raw JSON value. Charges 1 node for the value itself, for each array
+ * element, and for each object property; charges string length to bytes. `array.length` and the
+ * object key count are compared to the remaining node budget before anything is pushed, so a wide
+ * array cannot be enqueued while earlier siblings are still pending. Returns false at the first exceed.
+ * Depth cannot outrun the node budget: every stacked value already spent a node.
+ */
+export function measure(value: unknown, budget: { nodes: number; bytes: number }): boolean {
+    const st: unknown[] = [];
+    const reserve = (n: number): boolean => {
+        if (n > budget.nodes) return false;
+        budget.nodes -= n;
+        return true;
+    };
+    if (!reserve(1)) return false;
+    st.push(value);
+    while (st.length) {
+        const v = st.pop()!;
+        if (typeof v === 'string') {
+            budget.bytes -= v.length;
+            if (budget.bytes < 0) return false;
+            continue;
+        }
+        if (v === null || typeof v !== 'object') continue;
+        if (Array.isArray(v)) {
+            // Pending stack entries were already reserved, so `budget.nodes` is what remains.
+            // The frame cap is the same idea for call arrays: a wide `calls` list must not be
+            // enqueued while earlier siblings are still queued.
+            if (v.length > budget.nodes || v.length > MAX_FRAMES - st.length) return false;
+            budget.nodes -= v.length;
+            // Push low indices first so the last child is visited first, matching traceShape.
+            for (let i = 0; i < v.length; i++) st.push(v[i]);
+            continue;
+        }
+        const keys = Object.keys(v);
+        if (!reserve(keys.length)) return false;
+        for (let i = keys.length - 1; i >= 0; i--) st.push((v as Record<string, unknown>)[keys[i]!]);
+    }
+    return true;
+}
+
+/**
  * Iterative. `calls` / `logs`, when present, must be arrays — an object with `length` is not a trace.
  * Every child counts as a frame, including null and other non-objects. A `calls` array longer than
- * the remaining frame budget is rejected before any child is visited. Reverted subtrees still count.
+ * the remaining frame budget (visited frames and frames already queued) is rejected before any child
+ * is visited. Reverted subtrees still count.
  */
 function traceShape(trace: unknown): string | null {
     let frames = 0;
@@ -136,7 +181,7 @@ function traceShape(trace: unknown): string | null {
             if (logs > MAX_LOGS) return 'trace too large';
         }
         if (Array.isArray(o.calls)) {
-            if (o.calls.length > MAX_FRAMES - frames) return 'trace too large';
+            if (o.calls.length > MAX_FRAMES - frames - st.length) return 'trace too large';
             for (const c of o.calls) st.push([c, d + 1]);
         }
     }
@@ -146,6 +191,7 @@ function traceShape(trace: unknown): string | null {
 /** Lengths only. Does not lowercase or run the data regex. */
 function exceedsLogBytes(trace: unknown, receiptLogs: unknown[]): boolean {
     let used = 0;
+    let frames = 0;
     const take = (logs: unknown): boolean => {
         if (!Array.isArray(logs)) return false;
         for (const l of logs) {
@@ -156,6 +202,7 @@ function exceedsLogBytes(trace: unknown, receiptLogs: unknown[]): boolean {
                 if (used > MAX_LOG_BYTES) return true;
             }
             if (Array.isArray(o.topics)) {
+                if (o.topics.length > 4) return true;
                 for (const t of o.topics) {
                     if (typeof t !== 'string') continue;
                     used += t.length;
@@ -169,9 +216,11 @@ function exceedsLogBytes(trace: unknown, receiptLogs: unknown[]): boolean {
     while (st.length) {
         const f = st.pop();
         if (!f || typeof f !== 'object') continue;
+        frames++;
         const o = f as Record<string, unknown>;
         if (take(o.logs)) return true;
         if (Array.isArray(o.calls)) {
+            if (o.calls.length > MAX_FRAMES - frames - st.length) return true;
             for (let i = 0; i < o.calls.length; i++) st.push(o.calls[i]);
         }
     }
@@ -380,6 +429,13 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
  * Flattened trace logs, in emission order, must then equal those receipt logs 1:1.
  */
 export function attributeTx(trace: unknown, receiptLogs: unknown[]): AttributeTxResult {
+    if (Array.isArray(receiptLogs) && receiptLogs.length > MAX_LOGS) {
+        return { aligned: false, why: 'trace too large' };
+    }
+    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+    if (!measure(trace, budget) || !measure(receiptLogs, budget)) {
+        return { aligned: false, why: 'trace too large' };
+    }
     if (!trace || typeof trace !== 'object') return { aligned: false, why: 'no trace' };
     const shape = traceShape(trace);
     if (shape) return { aligned: false, why: shape };

@@ -495,8 +495,9 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         });
     });
 
-    it('validates megabyte hex data that still fits the byte budget', () => {
-        // Just under 8 MiB, and large enough that the old repeated-capture regex overflows.
+    it('counts frame strings toward the byte budget', () => {
+        // The data field alone is just under 8 MiB. Addresses and selectors on the same
+        // value push the total over the budget, so the regex never runs.
         const data = `0x${'ab'.repeat(4_194_296)}`;
         expect(data.length).toBe(8_388_594);
         const log = { address: TARGET, topics: [] as string[], data };
@@ -506,6 +507,6 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             [{ address: TARGET, topics: [], data: '0x', logIndex: 0 }],
         );
         expect(Date.now() - started).toBeLessThan(2_000);
-        expect(res).toEqual({ aligned: false, why: 'log 0 differs between trace and receipt' });
+        expect(res).toEqual({ aligned: false, why: 'trace too large' });
     });
 });

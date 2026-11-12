@@ -1,4 +1,4 @@
-import { attributeTx, receiptPos, sameLog, type LogAttribution } from './attribute.js';
+import { attributeTx, MEASURE_BYTES, MEASURE_NODES, measure, receiptPos, sameLog, type LogAttribution } from './attribute.js';
 import { quantity, type RawRpc } from './rpc.js';
 import type { Attributor, FoundAction } from './scan.js';
 
@@ -51,6 +51,7 @@ function checkReceipt(
     if (lc(r.blockHash) !== lc(action.blockHash)) return { reason: `receipt block mismatch on ${name}` };
     if (!statusOk(r.status)) return { reason: `receipt status is not success on ${name}` };
     if (!Array.isArray(r.logs)) return { reason: `receipt logs missing on ${name}` };
+    if (r.logs.length > 10_000) return { reason: 'trace too large' };
     const found = r.logs.some((log) => receiptPos(log) === action.logIndex && sameLog(log, action.log));
     if (!found) return { reason: `receipt log missing on ${name}` };
     return { logs: r.logs };
@@ -91,6 +92,11 @@ async function readProvider(rpc: RawRpc, action: FoundAction): Promise<Read> {
     if (!traceR.ok) {
         const reason = traceUnsupported(traceR.e) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
+    }
+    // Before checkReceipt, sameLog, attributeTx, or any other walk of the payloads.
+    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+    if (!measure(receiptR.v, budget) || !measure(traceR.v, budget)) {
+        return { ok: false, reason: 'trace too large' };
     }
     const failure = jsonRpcFailure(traceR.v);
     if (failure) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, type Hex } from 'viem';
 import type { FoundAction } from '../../src/guardianAudit/scan';
 import type { RawRpc } from '../../src/guardianAudit/rpc';
+import { MEASURE_NODES } from '../../src/guardianAudit/attribute';
 import { traceAttributor } from '../../src/guardianAudit/traceAttributor';
 
 const FROM = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd';
@@ -230,5 +231,72 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         });
         const result = await traceAttributor({ providers }).attribute(action());
         expect(result).toEqual({ ok: false, reason: 'attribution failed' });
+    });
+
+    function countingArray(length: number, fill: (i: number) => unknown = () => null) {
+        let reads = 0;
+        const raw = new Array(length);
+        for (let i = 0; i < length; i++) raw[i] = fill(i);
+        const arr = new Proxy(raw, {
+            get(target, prop, recv) {
+                if (typeof prop === 'string' && /^\d+$/.test(prop)) reads += 1;
+                return Reflect.get(target, prop, recv);
+            },
+        });
+        return { arr, reads: () => reads };
+    }
+
+    it('rejects 20 levels of 10000 children before the queued frames exhaust memory', async () => {
+        let reads = 0;
+        const level = (depth: number): unknown => {
+            const raw = new Array(10_000);
+            raw[9_999] = depth === 20 ? null : level(depth + 1);
+            const calls = new Proxy(raw, {
+                get(target, prop, recv) {
+                    if (typeof prop === 'string' && /^\d+$/.test(prop)) reads += 1;
+                    return Reflect.get(target, prop, recv);
+                },
+            });
+            return { type: 'CALL', from: FROM, to: TARGET, calls };
+        };
+        const trace = level(1);
+        const { providers } = pair((_name, method) => (
+            method === 'eth_getTransactionReceipt' ? receiptOf() : trace
+        ));
+        const started = Date.now();
+        const result = await traceAttributor({ providers }).attribute(action());
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(result).toEqual({ ok: false, reason: 'trace too large' });
+        expect(reads).toBeLessThanOrEqual(MEASURE_NODES + 64);
+    });
+
+    it('rejects 100001 null receipt logs before scanning them', async () => {
+        const { arr, reads } = countingArray(100_001);
+        const receipt = receiptOf();
+        receipt.logs = arr as unknown as typeof receipt.logs;
+        const { providers } = pair((_name, method) => (
+            method === 'eth_getTransactionReceipt' ? receipt : traceOf()
+        ));
+        const started = Date.now();
+        const result = await traceAttributor({ providers }).attribute(action());
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(result).toEqual({ ok: false, reason: 'trace too large' });
+        expect(reads()).toBeLessThanOrEqual(MEASURE_NODES + 64);
+        expect(reads()).toBeLessThan(100_001);
+    });
+
+    it('rejects 100001 null topics before scanning them', async () => {
+        const { arr, reads } = countingArray(100_001);
+        const trace = traceOf();
+        trace.logs[0]!.topics = arr as unknown as string[];
+        const { providers } = pair((_name, method) => (
+            method === 'eth_getTransactionReceipt' ? receiptOf() : trace
+        ));
+        const started = Date.now();
+        const result = await traceAttributor({ providers }).attribute(action());
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(result).toEqual({ ok: false, reason: 'trace too large' });
+        expect(reads()).toBeLessThanOrEqual(MEASURE_NODES + 64);
+        expect(reads()).toBeLessThan(100_001);
     });
 });
