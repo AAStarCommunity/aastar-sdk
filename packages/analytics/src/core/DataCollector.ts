@@ -8,8 +8,9 @@
  * - 实现缓存机制避免重复 RPC 调用
  */
 
-import { createPublicClient, http, type PublicClient, type Hash, type TransactionReceipt, type Chain } from 'viem';
+import { createPublicClient, http, zeroAddress, type PublicClient, type Hash, type TransactionReceipt, type Chain, type Address, type Abi } from 'viem';
 import { sepolia } from 'viem/chains';
+import { SuperPaymasterABI, xPNTsTokenABI } from '@aastar/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -42,9 +43,11 @@ export class DataCollector {
   private cacheDir: string;
   private cacheEnabled: boolean;
   private superPaymasterAddress: string;
+  /** Cause keys already warned for a failed historical read. One warning per cause, not per tx. */
+  private readonly warnedReadCauses = new Set<string>();
 
-  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860B950A45967E12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true) {
-    this.client = createPublicClient({
+  constructor(rpcUrl: string, chain: Chain = sepolia, superPaymasterAddress: string = '0xe74304CC5860B950A45967E12321Dff8B5CdcaA0', cacheDir?: string, enableCache = true, client?: PublicClient) {
+    this.client = client ?? createPublicClient({
       chain,
       transport: http(rpcUrl),
     });
@@ -93,9 +96,26 @@ export class DataCollector {
 
       const superEvent = paymasterEvents.find(e => e.type === 'TransactionSponsored');
       if (superEvent && superEvent.type === 'TransactionSponsored') {
-        // TODO: 查询 SuperPaymaster 的 aPNTsPriceUSD
-        // TODO: 查询 Operator 的 exchangeRate
-        // 这部分需要在后续实现
+        // Historical cost: pin both reads to the tx block. The SuperPaymaster is the
+        // event log's address. Since v5.3.3 exchangeRate lives on operators(operator).xPNTsToken.
+        const sponsoredLog = receipt.logs.find((log) => {
+          const decoded = EventDecoder.decode(log);
+          return decoded?.type === 'TransactionSponsored';
+        });
+        const spAddress = sponsoredLog?.address;
+        if (!spAddress) {
+          this.warnReadOnce(
+            'transaction-sponsored:missing-log',
+            'TransactionSponsored decoded without a log address; leaving aPNTsPriceUSD and exchangeRate undefined',
+          );
+        } else {
+          aPNTsPriceUSD = await this.readAPNTsPriceUSD(spAddress, receipt.blockNumber);
+          exchangeRate = await this.readOperatorExchangeRate(
+            spAddress,
+            superEvent.operator as Address,
+            receipt.blockNumber,
+          );
+        }
       }
 
       const data: OnChainData = {
@@ -122,6 +142,94 @@ export class DataCollector {
       console.error(`❌ 获取链上数据失败 (${txHash}):`, error);
       return null;
     }
+  }
+
+  /**
+   * aPNTsPriceUSD() at `blockNumber`. Failure leaves the field undefined.
+   */
+  private async readAPNTsPriceUSD(spAddress: Address, blockNumber: bigint): Promise<bigint | undefined> {
+    try {
+      return await this.readAtBlock({
+        address: spAddress,
+        abi: SuperPaymasterABI as Abi,
+        functionName: 'aPNTsPriceUSD',
+        blockNumber,
+      }) as bigint;
+    } catch (error) {
+      const kind = readFailureKind(error);
+      this.warnReadOnce(
+        `aPNTsPriceUSD:${kind}`,
+        `aPNTsPriceUSD() on ${spAddress} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  /**
+   * operators(operator).xPNTsToken, then that token's exchangeRate(), both at `blockNumber`.
+   * A zero token is not a failed read: the rate stays undefined and nothing is logged.
+   */
+  private async readOperatorExchangeRate(spAddress: Address, operator: Address, blockNumber: bigint): Promise<bigint | undefined> {
+    let token: Address | undefined;
+    try {
+      const operatorData = await this.readAtBlock({
+        address: spAddress,
+        abi: SuperPaymasterABI as Abi,
+        functionName: 'operators',
+        args: [operator],
+        blockNumber,
+      });
+      token = xPNTsTokenFromOperator(operatorData);
+    } catch (error) {
+      const kind = readFailureKind(error);
+      this.warnReadOnce(
+        `operators:${kind}`,
+        `operators(${operator}) on ${spAddress} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
+      );
+      return undefined;
+    }
+
+    if (!token || token.toLowerCase() === zeroAddress) {
+      return undefined;
+    }
+
+    try {
+      return await this.readAtBlock({
+        address: token,
+        abi: xPNTsTokenABI as Abi,
+        functionName: 'exchangeRate',
+        blockNumber,
+      }) as bigint;
+    } catch (error) {
+      const kind = readFailureKind(error);
+      this.warnReadOnce(
+        `exchangeRate:${kind}`,
+        `exchangeRate() on ${token} at block ${blockNumber} failed (${kind}): ${errorMessage(error)}`,
+      );
+      return undefined;
+    }
+  }
+
+  private readAtBlock(call: {
+    address: Address;
+    abi: Abi;
+    functionName: string;
+    args?: readonly unknown[];
+    blockNumber: bigint;
+  }) {
+    return this.client.readContract({
+      address: call.address,
+      abi: call.abi,
+      functionName: call.functionName,
+      args: call.args ?? [],
+      blockNumber: call.blockNumber,
+    } as Parameters<PublicClient['readContract']>[0]);
+  }
+
+  private warnReadOnce(cause: string, detail: string): void {
+    if (this.warnedReadCauses.has(cause)) return;
+    this.warnedReadCauses.add(cause);
+    console.warn(`⚠️  ${cause}: ${detail}`);
   }
 
   /**
@@ -249,4 +357,32 @@ export class DataCollector {
       console.log(`🗑️  已清空缓存: ${files.length} 个文件`);
     }
   }
+}
+
+function xPNTsTokenFromOperator(data: unknown): Address | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const record = data as { xPNTsToken?: unknown } & { [index: number]: unknown };
+  const named = record.xPNTsToken;
+  const positional = record[3];
+  const token = typeof named === 'string' ? named : positional;
+  return typeof token === 'string' ? token as Address : undefined;
+}
+
+function readFailureKind(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (/pruned|missing trie node|historical state|state is not available|archive/i.test(msg)) {
+    return 'pruned-history';
+  }
+  if (/not found|could not be found|does not exist|unknown selector|function selector/i.test(msg)) {
+    return 'missing-getter';
+  }
+  if (/reverted|revert/i.test(msg)) {
+    return 'reverted';
+  }
+  return 'read-failed';
+}
+
+function errorMessage(error: unknown): string {
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.length > 200 ? msg.slice(0, 200) : msg;
 }
