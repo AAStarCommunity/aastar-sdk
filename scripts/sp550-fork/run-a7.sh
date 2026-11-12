@@ -76,10 +76,14 @@ SDK="$(cd "$(dirname "$0")/../.." && pwd)"; RPC=http://127.0.0.1:28546; BUNDLER=
 # Usage errors exit 2 before <out>/run.log is touched, so a refused start never wipes a previous run's log.
 [[ "$OPERATOR" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "operator must be an address" >&2; exit 2; }
 [[ "$FORK_BLOCK" =~ ^[0-9]+$ ]] || { echo "fork block must be a number" >&2; exit 2; }
-# The evidence names the SDK commit (run.log); tracked edits on top of it would make that name
-# wrong. Untracked files (this run's <out>) are fine.
-[ -z "$(git -C "$SDK" status --porcelain --untracked-files=no)" ] \
-  || { echo "the SDK checkout has uncommitted tracked changes; A7 evidence must name the commit it ran: commit or discard them first" >&2; exit 2; }
+# The evidence names the SDK commit (run.log). A tracked edit, or an untracked file that code could
+# import, would make that name wrong. Only this run's <out> is exempt (ignored paths such as
+# node_modules never show up here). An <out> spelled with `..` is not normalised and so is not
+# exempt: that refuses, it never passes.
+case "$OUT" in /*) OUT_ABS="$OUT";; *) OUT_ABS="$PWD/$OUT";; esac; OUT_ABS="${OUT_ABS%/}"
+DIRTY=$(git -C "$SDK" status --porcelain --untracked-files=all | while IFS= read -r line; do
+  path="${line:3}"; case "$SDK/$path" in ("$OUT_ABS"/*|"$OUT_ABS") ;; (*) echo "$line";; esac; done)
+[ -z "$DIRTY" ] || { echo "the SDK checkout is not at a clean commit; A7 evidence must name the commit it ran. Commit, discard or move:" >&2; echo "$DIRTY" | head -20 >&2; exit 2; }
 for port in 28546 3046; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; LOG="$OUT/run.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
