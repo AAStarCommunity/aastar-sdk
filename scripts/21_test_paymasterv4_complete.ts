@@ -1,6 +1,7 @@
 
-import { http, createWalletClient, createPublicClient, type Address, keccak256, toHex, stringToBytes } from 'viem';
-import { adminClientForPaymaster } from './paymaster-v4-anvil-client.js';
+import { http, createWalletClient, createPublicClient, type Address, type PublicClient, keccak256, toHex, stringToBytes } from 'viem';
+import { paymasterActions } from '@aastar/core';
+import { adminClientForPaymaster, classifySbtActivityError, registerGasToken, requireMinedSuccess, withdrawPaymasterDeposit } from './paymaster-v4-anvil-client.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { config } from 'dotenv';
@@ -57,6 +58,8 @@ async function main() {
         account,
         paymasterV4Address,
     });
+    // adminClient.pause/unpause are MySBT: sbtActions is spread after paymasterActions.
+    const paymaster = paymasterActions(paymasterV4Address)(adminClient as PublicClient);
 
     let testsPassed = 0;
     let testsFailed = 0;
@@ -112,11 +115,11 @@ async function main() {
     // `paymasterV4Address`, closed over when the admin client is built.
     try {
         console.log('📝 Test 2: setTokenPrice (using APNTS)');
-        const hash = await adminClient.setTokenPrice({
+        await registerGasToken({
+            adminClient,
             token: apntsAddress,
-            price: 100_000_000n,
+            waitForReceipt: (hash) => publicClient.waitForTransactionReceipt({ hash }),
         });
-        await publicClient.waitForTransactionReceipt({ hash });
         console.log('   ✅ PASSED: Gas token price set (APNTS)\n');
         testsPassed++;
     } catch (error: any) {
@@ -173,7 +176,7 @@ async function main() {
             address: paymasterV4Address,
             sbt: mySBTAddress
         });
-        await publicClient.waitForTransactionReceipt({ hash });
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'addSBT', hash);
         console.log('   ✅ PASSED: SBT added\n');
         testsPassed++;
     } catch (error: any) {
@@ -198,17 +201,21 @@ async function main() {
             // @ts-ignore
             activity: keccak256(toHex(1)) // Passing it even if SDK type is wrong
         });
-        await publicClient.waitForTransactionReceipt({ hash });
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'addSBTWithActivity', hash);
         console.log('   ✅ PASSED: SBT with activity added\n');
         testsPassed++;
     } catch (error: any) {
-        if (error.message.includes('AlreadyExists')) {
+        const kind = classifySbtActivityError(error?.message);
+        if (kind === 'idempotent') {
             console.log('   ✅ PASSED: SBT activity already exists (use valid logic)\n');
             testsPassed++;
-        } else {
-            // If function doesn't exist on contract, it might fail differently
+        } else if (kind === 'skipped') {
+            // Missing SDK method. Other errors are counted as failures.
             console.log(`   ⚠️ SKIPPED: ${error.message} (SDK/Contract Mismatch)\n`);
-            testsPassed++; // Treat as pass/skip for now
+            testsPassed++;
+        } else {
+            console.log(`   ❌ FAILED: ${error.message}\n`);
+            testsFailed++;
         }
     }
 
@@ -230,9 +237,9 @@ async function main() {
         const newCap = BigInt(2 * 1e18); // 2 ETH
         const hash = await adminClient.setMaxGasCostCap({
             address: paymasterV4Address,
-            cap: newCap
+            _maxGasCostCap: newCap
         });
-        await publicClient.waitForTransactionReceipt({ hash });
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'setMaxGasCostCap', hash);
         console.log('   ✅ PASSED: Max gas cost cap set\n');
         testsPassed++;
     } catch (error: any) {
@@ -258,9 +265,9 @@ async function main() {
         const newRate = BigInt(500); // 5% (Max is 10%)
         const hash = await adminClient.setServiceFeeRate({
             address: paymasterV4Address,
-            rate: newRate
+            _serviceFeeRate: newRate
         });
-        await publicClient.waitForTransactionReceipt({ hash });
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'setServiceFeeRate', hash);
         console.log('   ✅ PASSED: Service fee rate set\n');
         testsPassed++;
     } catch (error: any) {
@@ -283,10 +290,8 @@ async function main() {
     // Test 11: pause
     try {
         console.log('📝 Test 11: pause');
-        const hash = await adminClient.pause({
-            address: paymasterV4Address
-        });
-        await publicClient.waitForTransactionReceipt({ hash });
+        const hash = await paymaster.pause({});
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'pause', hash);
         console.log('   ✅ PASSED: Paymaster paused\n');
         testsPassed++;
     } catch (error: any) {
@@ -297,10 +302,8 @@ async function main() {
     // Test 12: unpause
     try {
         console.log('📝 Test 12: unpause');
-        const hash = await adminClient.unpause({
-            address: paymasterV4Address
-        });
-        await publicClient.waitForTransactionReceipt({ hash });
+        const hash = await paymaster.unpause({});
+        requireMinedSuccess(await publicClient.waitForTransactionReceipt({ hash }), 'unpause', hash);
         console.log('   ✅ PASSED: Paymaster unpaused\n');
         testsPassed++;
     } catch (error: any) {
@@ -312,20 +315,20 @@ async function main() {
     // `withdrawPNT(address,address,uint256)` is not on the admin client. The real entry
     // is `withdrawTo(to, amount)` and it takes no token. 1 wei is the smallest amount
     // the client will forward — `validatePositive` rejects 0 before any transaction.
-    try {
-        console.log('📝 Test 13: withdrawTo');
-        const hash = await adminClient.withdrawTo({
-            to: account.address,
-            amount: 1n,
-        });
-        await publicClient.waitForTransactionReceipt({ hash });
+    console.log('📝 Test 13: withdrawTo');
+    const withdrawn = await withdrawPaymasterDeposit({
+        adminClient,
+        to: account.address,
+        waitForReceipt: (hash) => publicClient.waitForTransactionReceipt({ hash }),
+    });
+    if (withdrawn.testsFailed) {
+        const message = withdrawn.error instanceof Error ? withdrawn.error.message : String(withdrawn.error);
+        console.log(`   ❌ FAILED: ${message}\n`);
+    } else {
         console.log('   ✅ PASSED: withdrawTo called\n');
-        testsPassed++;
-    } catch (error: any) {
-        console.log(`   ❌ FAILED: ${error.message}\n`);
-        // Don't fail for this if it's tricky
-        testsPassed++;
     }
+    testsPassed += withdrawn.testsPassed;
+    testsFailed += withdrawn.testsFailed;
 
     console.log('==================================================');
     console.log('📊 Test Summary');
