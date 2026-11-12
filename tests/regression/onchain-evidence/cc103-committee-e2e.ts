@@ -209,8 +209,8 @@ async function main() {
     // reading instead of an assertion — and it runs in CI, which this file does not.
     const nodeIds = [
         ...replaySetEvents([
-            ...logs.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: true, block: l.blockNumber, idx: l.logIndex })),
-            ...cleared.map((l) => ({ nodeId: (l as any).args.nodeId as string, add: false, block: l.blockNumber, idx: l.logIndex })),
+            ...logs.map((l) => ({ nodeId: l.args.nodeId as string, add: true, block: l.blockNumber, idx: l.logIndex })),
+            ...cleared.map((l) => ({ nodeId: l.args.nodeId as string, add: false, block: l.blockNumber, idx: l.logIndex })),
         ]),
     ] as Hex[];
     console.log(

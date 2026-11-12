@@ -59,13 +59,13 @@ async function main() {
   const funderWallet = createWalletClient({ account: funder, chain: sepolia, transport });
   const opWallet = createWalletClient({ account: operator, chain: sepolia, transport });
 
-  const dvtRead = dvtOperatorActions(VALIDATOR)(pub as any);
-  const dvtOp = dvtOperatorActions(VALIDATOR)(opWallet as any);
-  const reg = registryActions(REGISTRY)(pub as any);
-  const regOp = registryActions(REGISTRY)(opWallet as any);
-  const gtRead = tokenActions()(pub as any);
-  const gtFunder = tokenActions()(funderWallet as any);
-  const gtOp = tokenActions()(opWallet as any);
+  const dvtRead = dvtOperatorActions(VALIDATOR)(pub);
+  const dvtOp = dvtOperatorActions(VALIDATOR)(opWallet);
+  const reg = registryActions(REGISTRY)(pub);
+  const regOp = registryActions(REGISTRY)(opWallet);
+  const gtRead = tokenActions()(pub);
+  const gtFunder = tokenActions()(funderWallet);
+  const gtOp = tokenActions()(opWallet);
 
   log(`validator = ${VALIDATOR}`);
   log(`funder(JASON) = ${funder.address}   operator(JACK) = ${operator.address}\n`);
@@ -84,7 +84,7 @@ async function main() {
 
   // --- 1. fund operator (ETH for gas + GToken for stake) ---
   const minStake = await dvtRead.minStake();
-  const cfg = await (reg as any).getRoleConfig({ roleId: ROLE_DVT });
+  const cfg = await reg.getRoleConfig({ roleId: ROLE_DVT });
   const ticket = BigInt(cfg.ticketPrice ?? 0);
   const needGToken = minStake + ticket + parseEther('2'); // small headroom
   log(`ROLE_DVT minStake=${formatEther(minStake)} ticketPrice=${formatEther(ticket)} -> need ~${formatEther(needGToken)} GToken`);
@@ -112,7 +112,7 @@ async function main() {
   const alreadyRole = await reg.hasRole({ roleId: ROLE_DVT, user: operator.address });
   if (!alreadyRole) {
     log('registerRole(ROLE_DVT, operator, 0x) ...');
-    const h = await (regOp as any).registerRole({ roleId: ROLE_DVT, user: operator.address, data: '0x' });
+    const h = await regOp.registerRole({ roleId: ROLE_DVT, user: operator.address, data: '0x' });
     await wait(h); log(`  registerRole tx ${h}`);
   } else {
     log('operator already has ROLE_DVT (skip registerRole)');
@@ -135,7 +135,7 @@ async function main() {
   log('preflight simulate registerWithProof ...');
   await pub.simulateContract({
     address: VALIDATOR,
-    abi: AAStarBLSAlgorithmABI as any,
+    abi: AAStarBLSAlgorithmABI,
     functionName: 'registerWithProof',
     args: [pop.publicKey, pop.popPoint, pop.popSig],
     account: operator,

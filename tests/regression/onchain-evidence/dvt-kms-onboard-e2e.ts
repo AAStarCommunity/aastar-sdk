@@ -107,7 +107,7 @@ async function main() {
   console.log(`hashes          = ${JSON.stringify(result.hashes, null, 2)}`);
 
   // independent on-chain re-read
-  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient as any);
+  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient);
   const isReg = await dvt.isRegistered({ nodeId: result.nodeId });
   const owner = await dvt.nodeOperator({ nodeId: result.nodeId });
   console.log(`\nre-read: isRegistered=${isReg}  nodeOperator=${owner}`);
