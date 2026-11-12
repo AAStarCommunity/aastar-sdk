@@ -24,6 +24,7 @@ SP 的 anvil 以 `--hardfork amsterdam --accounts 0` 启动，交易发送方都
 | manifest pins JSON | SP 第 13 步的 manifest PR，由脚本生成 | 必须是 `--pins` 格式的 v2（带 spAdminExtension、lensVersion、registryImpl、disclosureRegistry、addresses{}、codehashes），和门用的是同一个文件 |
 | operator | 同一个 manifest PR | 支付 xPNTs v2 的社区 operator |
 | SP checkout | rc.8 tag | 用来记录 commit，并和 readback 头里的 spCommit 比对 |
+| SDK checkout | 当时的 SDK main | `run.log` 头部会记下 `SDK <commit>`。tracked 文件有未提交改动时，脚本在启动前拒绝。A7 必须在最新的 main 上跑：#441（in-flight guard）如果在 A7 之前合并，就要在包含 #441 的 main 上跑（DSR b1e75d88） |
 | fork block | DSR 转达 | 跨会话只传 chainId 和块号 |
 | `SP550_FORK_URL` | 作者配进本地环境，或者用 SDK 自己的节点 | 必须是归档节点。**不写日志，也不放进跨会话消息**。我的节点和 SP 的节点在上游状态上如有差别，阶段 2 会查出来 |
 | `ULTRARELAY_DIR` | 本机 UltraRelay-AAStar checkout | 本地 bundler |
