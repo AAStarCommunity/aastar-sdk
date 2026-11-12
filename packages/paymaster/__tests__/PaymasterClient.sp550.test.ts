@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createWalletClient, custom, defineChain, fallback, HttpRequestError, type Address, type Hex } from 'viem';
+import { createWalletClient, custom, defineChain, encodeAbiParameters, fallback, HttpRequestError, keccak256, pad, toBytes, type Address, type Hex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient } from '../src/V4/PaymasterClient';
+import { getUserOpHashV07 } from '../src/V4/PaymasterUtils';
 import { UserOperationNotYetValidError } from '../src/V4/userOpOutcome';
 import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
 import { SuperPaymasterInflightGuard } from '../src/SuperPaymaster/v550';
@@ -38,6 +39,8 @@ function harness(
         transport?: { type?: string };
         /** Answers a readContract first; return undefined to fall through to the defaults. */
         readContract?: (functionName: string, args: readonly any[] | undefined, blockNumber?: bigint) => unknown;
+        /** handleOps receipt. Default: success. A throw leaves the in-flight slot held. */
+        receipt?: (hash: Hex, wait?: { onReplaced?: (response: { reason?: string; transaction?: { hash?: Hex } }) => void }) => unknown;
     } = {},
 ) {
     const signs: Hex[][] = [];
@@ -66,6 +69,10 @@ function harness(
         estimateFeesPerGas: async () => ({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n }),
         getGasPrice: async () => 1_000_000_000n,
         getBlockNumber: async () => 1234n,
+        waitForTransactionReceipt: async (args: { hash: Hex; onReplaced?: (response: { reason?: string; transaction?: { hash?: Hex } }) => void }) => {
+            if (opts.receipt) return opts.receipt(args.hash, args);
+            return { status: 'success', transactionHash: args.hash };
+        },
         readContract: async ({ functionName, args, blockNumber }: { functionName: string; args?: readonly any[]; blockNumber?: bigint }) => {
             const own = opts.readContract?.(functionName, args, blockNumber);
             if (own !== undefined) return own;
@@ -204,10 +211,145 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
             if (drop) throw new TypeError('fetch failed');
             return { result: OP_HASH };
         });
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
         await expect(submit()).rejects.toThrow(/fetch failed/);
+        const warned = warn.mock.calls.map((c) => String(c[0])).join('\n');
+        expect(warned).toMatch(/only with evidence the op can no longer execute/);
+        expect(warned).toMatch(/sender nonce advanced/);
+        expect(warned).toMatch(/validity window passed per chain time/);
+        expect(warned).not.toMatch(/not included|no receipt found|to clear/);
         drop = false;
         await expect(submit()).rejects.toThrow(/one in-flight sponsored op per sender/);
         SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
+
+    it('an unconfirmed hold is released only when EntryPoint.getNonce(sender, key) moves past it', async () => {
+        const now = vi.spyOn(Date, 'now').mockReturnValue(1);
+        let drop = true;
+        let epNonce = 7n;
+        const epReads: (readonly any[])[] = [];
+        const sentNonce: bigint[] = [];
+        const estimatedNonce: bigint[] = [];
+        const { submit } = harness(async (method, op) => {
+            if (method === 'eth_estimateUserOperationGas') estimatedNonce.push(BigInt(op.nonce));
+            if (method === 'eth_sendUserOperation') sentNonce.push(BigInt(op.nonce));
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (drop) throw new TypeError('fetch failed');
+            return { result: OP_HASH };
+        }, {
+            readContract: (functionName, args) => {
+                // Account getNonce() has no args. EntryPoint.getNonce(sender, key) has two.
+                if (functionName === 'getNonce' && args?.length === 2) {
+                    epReads.push(args);
+                    return epNonce;
+                }
+                return undefined;
+            },
+        });
+        await expect(submit()).rejects.toThrow(/fetch failed/);
+        expect(epReads).toHaveLength(0); // nothing held yet, so no EntryPoint read
+        drop = false;
+        now.mockReturnValue(Number.MAX_SAFE_INTEGER);
+        await expect(submit()).rejects.toThrow(/outcome is unknown/);
+        await expect(submit()).rejects.toThrow(/SuperPaymasterInflightGuard\.release\(11155111,/);
+        expect(epReads.at(-1)?.[0]).toBe(SENDER);
+        expect(epReads.at(-1)?.[1]).toBe(0n); // key of nonce 7
+        epNonce = 8n;
+        await expect(submit()).resolves.toBe(OP_HASH);
+        // Account getNonce() in this harness is 7. Both requests must use the EntryPoint nonce.
+        expect(estimatedNonce.at(-1)).toBe(8n);
+        expect(sentNonce.at(-1)).toBe(8n);
+    });
+
+    it('the EntryPoint read uses the held nonce key, not key 0', async () => {
+        const key = 2n;
+        const seq = 4n;
+        const held = (key << 64n) | seq;
+        SuperPaymasterInflightGuard.reserve(11155111, EP, SENDER, held);
+        let seenKey: bigint | undefined;
+        let epNonce = held;
+        const sentNonce: bigint[] = [];
+        const estimatedNonce: bigint[] = [];
+        const { submit } = harness(async (method, op) => {
+            if (method === 'eth_estimateUserOperationGas') estimatedNonce.push(BigInt(op.nonce));
+            if (method === 'eth_sendUserOperation') sentNonce.push(BigInt(op.nonce));
+            return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH };
+        }, {
+            readContract: (functionName, args) => {
+                if (functionName === 'getNonce' && args?.length === 2) {
+                    seenKey = args[1];
+                    return epNonce;
+                }
+                return undefined;
+            },
+        });
+        await expect(submit()).rejects.toThrow(/outcome is unknown/);
+        expect(seenKey).toBe(key);
+        epNonce = (key << 64n) | (seq + 1n);
+        await expect(submit()).resolves.toBe(OP_HASH);
+        expect(estimatedNonce.at(-1)).toBe(epNonce);
+        expect(sentNonce.at(-1)).toBe(epNonce);
+    });
+
+    async function delayEntryPointNonce(
+        answer: bigint,
+        during: () => void,
+    ): Promise<{ submit: () => Promise<Hex> }> {
+        let releaseRead: () => void = () => {};
+        const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+        let markStarted: () => void = () => {};
+        const started = new Promise<void>((resolve) => { markStarted = resolve; });
+        const harnessed = harness(async (method) => (
+            method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }
+        ), {
+            readContract: (functionName, args) => {
+                if (functionName === 'getNonce' && args?.length === 2) {
+                    markStarted();
+                    return gate.then(() => answer);
+                }
+                return undefined;
+            },
+        });
+        const pending = harnessed.submit();
+        await started;
+        during();
+        releaseRead();
+        return { submit: () => pending };
+    }
+
+    it('a delayed key-2 EntryPoint read does not erase a key-0 hold reserved while it waited', async () => {
+        const key = 2n;
+        const seq = 4n;
+        SuperPaymasterInflightGuard.reserve(11155111, EP, SENDER, (key << 64n) | seq);
+        const { submit } = await delayEntryPointNonce((key << 64n) | (seq + 1n), () => {
+            SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
+            SuperPaymasterInflightGuard.reserve(11155111, EP, SENDER, 7n).record('0xbbbb');
+        });
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+        expect(SuperPaymasterInflightGuard.heldNonce(11155111, EP, SENDER)).toBe(7n);
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(11155111, EP, SENDER, 7n)).toThrow(/0xbbbb/);
+    });
+
+    it('a delayed same-key EntryPoint read does not erase a newer reservation', async () => {
+        SuperPaymasterInflightGuard.reserve(11155111, EP, SENDER, 7n);
+        const { submit } = await delayEntryPointNonce(8n, () => {
+            SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
+            SuperPaymasterInflightGuard.reserve(11155111, EP, SENDER, 7n).record('0xbbbb');
+        });
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+        expect(SuperPaymasterInflightGuard.heldNonce(11155111, EP, SENDER)).toBe(7n);
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(11155111, EP, SENDER, 7n)).toThrow(/0xbbbb/);
+    });
+
+    it('a JSON-RPC error from eth_sendUserOperation still releases the hold immediately', async () => {
+        let reject = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return reject ? { error: { code: -32500, message: 'AA33 reverted' } } : { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toThrow(/AA33/);
+        reject = false;
         await expect(submit()).resolves.toBe(OP_HASH);
     });
 });
@@ -410,6 +552,173 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
         await expect(submit()).rejects.toThrow();
         await expect(submit()).resolves.toBe('0x' + 'ee'.repeat(32));
     });
+
+    const TX = ('0x' + 'cd'.repeat(32)) as Hex;
+
+    it.each([
+        ['reverted', 'reverted'],
+        ['0', 0],
+        ['0n', 0n],
+    ])('handleOps receipt status %s releases the hold and throws', async (_name, status) => {
+        let reverted = true;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: () => {
+                if (!reverted) return { status: 'success', transactionHash: TX };
+                reverted = false;
+                return { status };
+            },
+        });
+        await expect(submit()).rejects.toThrow(/direct handleOps reverted/);
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    it('handleOps receipt success records the hold (a second op is rejected with the tx hash)', async () => {
+        const { submit } = harness(noSendBundler, { writeContract: async () => TX });
+        await expect(submit()).resolves.toBe(TX);
+        await expect(submit()).rejects.toThrow(new RegExp(TX));
+    });
+
+    const MINED = ('0x' + 'ab'.repeat(32)) as Hex;
+    const CANCEL = ('0x' + '11'.repeat(32)) as Hex;
+
+    it('handleOps repriced records and returns the mined hash', async () => {
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: (_hash, wait) => {
+                wait?.onReplaced?.({ reason: 'repriced', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED };
+            },
+        });
+        await expect(submit()).resolves.toBe(MINED);
+        await expect(submit()).rejects.toThrow(new RegExp(MINED));
+    });
+
+    it.each([
+        ['cancelled', 'cancelled', CANCEL],
+        ['replaced', 'replaced', MINED],
+    ] as const)('handleOps %s releases the hold and does not record the original hash', async (reason, expected, mined) => {
+        let once = true;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: (hash, wait) => {
+                if (!once) return { status: 'success', transactionHash: hash };
+                once = false;
+                wait?.onReplaced?.({ reason, transaction: { hash: mined } });
+                return { status: 'success', transactionHash: mined };
+            },
+        });
+        await expect(submit()).rejects.toThrow(new RegExp(`direct handleOps ${expected}`));
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    /** EntryPoint UserOperationEvent log. topic1 is the op hash; `success` is the op's own flag. */
+    function userOpEventLog(userOpHash: Hex, success: boolean) {
+        return {
+            address: EP,
+            topics: [
+                keccak256(toBytes('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)')),
+                userOpHash,
+                pad(SENDER, { size: 32 }),
+                pad(SP, { size: 32 }),
+            ] as Hex[],
+            data: encodeAbiParameters(
+                [{ type: 'uint256' }, { type: 'bool' }, { type: 'uint256' }, { type: 'uint256' }],
+                [7n, success, 1n, 1n],
+            ),
+        };
+    }
+
+    it('handleOps replaced with a different beneficiary still records the mined hash when UserOperationEvent succeeds', async () => {
+        let packed: any;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async (req) => {
+                packed = req.args[0][0];
+                return TX;
+            },
+            receipt: (_hash, wait) => {
+                const userOpHash = getUserOpHashV07(packed, EP, 11155111n);
+                wait?.onReplaced?.({ reason: 'replaced', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED, logs: [userOpEventLog(userOpHash, true)] };
+            },
+        });
+        await expect(submit()).resolves.toBe(MINED);
+        await expect(submit()).rejects.toThrow(new RegExp(MINED));
+    });
+
+    it('handleOps cancelled (zero-value self-send) still records the mined hash when UserOperationEvent succeeds', async () => {
+        let packed: any;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async (req) => {
+                packed = req.args[0][0];
+                return TX;
+            },
+            receipt: (_hash, wait) => {
+                const userOpHash = getUserOpHashV07(packed, EP, 11155111n);
+                // An EIP-7702 wallet's zero-value self-call wrapping handleOps: viem says `cancelled`.
+                wait?.onReplaced?.({ reason: 'cancelled', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED, logs: [userOpEventLog(userOpHash, true)] };
+            },
+        });
+        await expect(submit()).resolves.toBe(MINED);
+        await expect(submit()).rejects.toThrow(new RegExp(MINED));
+    });
+
+    it('handleOps replaced whose UserOperationEvent failed was included and keeps the slot', async () => {
+        let packed: any;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async (req) => {
+                packed = req.args[0][0];
+                return TX;
+            },
+            receipt: (_hash, wait) => {
+                const userOpHash = getUserOpHashV07(packed, EP, 11155111n);
+                wait?.onReplaced?.({ reason: 'replaced', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED, logs: [userOpEventLog(userOpHash, false)] };
+            },
+        });
+        await expect(submit()).rejects.toThrow(/userOp failed/);
+        await expect(submit()).rejects.toThrow(new RegExp(MINED));
+    });
+
+    it('handleOps replaced with another op\'s UserOperationEvent releases the hold', async () => {
+        let once = true;
+        const other = ('0x' + '22'.repeat(32)) as Hex;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: (hash, wait) => {
+                if (!once) return { status: 'success', transactionHash: hash };
+                once = false;
+                wait?.onReplaced?.({ reason: 'replaced', transaction: { hash: MINED } });
+                return { status: 'success', transactionHash: MINED, logs: [userOpEventLog(other, true)] };
+            },
+        });
+        await expect(submit()).rejects.toThrow(/direct handleOps replaced/);
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    it('a successful receipt for a different hash without repriced is not this handleOps', async () => {
+        let once = true;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: (hash) => {
+                if (!once) return { status: 'success', transactionHash: hash };
+                once = false;
+                return { status: 'success', transactionHash: CANCEL };
+            },
+        });
+        await expect(submit()).rejects.toThrow(/direct handleOps replaced/);
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    it('handleOps receipt wait throwing is ambiguous: the hold stays', async () => {
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: () => { throw new Error('receipt timeout'); },
+        });
+        await expect(submit()).rejects.toThrow(/receipt timeout/);
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+    });
 });
 
 describe('PaymasterClient: estimation asks the signer nothing', () => {
@@ -442,6 +751,25 @@ describe('PaymasterClient: estimation asks the signer nothing', () => {
         for (let i = 0; i < 4; i++) {
             await expect(recoverAddress({ hash: keccak256(toHex(i)), signature: sig })).resolves.toMatch(/^0x[0-9a-fA-F]{40}$/);
         }
+    });
+
+    it('submit and estimate share one resolveSuperPaymasterSponsorship (a mid-op upgrade cannot disagree)', async () => {
+        // The second version() read would observe 5.4.2. Estimation must keep the first
+        // read's 5.5.0 layout (73-byte paymasterData → flags byte 0), not re-resolve.
+        let versionReads = 0;
+        const { submit, calls } = harness(async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }), {
+            readContract: (functionName) => {
+                if (functionName !== 'version') return undefined;
+                versionReads += 1;
+                return versionReads === 1 ? 'SuperPaymaster-5.5.0' : 'SuperPaymaster-5.4.2';
+            },
+        });
+        await expect(submit()).resolves.toBe(OP_HASH);
+        expect(versionReads).toBe(1);
+        expect(calls.map((c) => [c.method, c.flags])).toEqual([
+            ['eth_estimateUserOperationGas', 0],
+            ['eth_sendUserOperation', 0],
+        ]);
     });
 
     it('transport failure during estimation → slot released (the request held no executable op)', async () => {

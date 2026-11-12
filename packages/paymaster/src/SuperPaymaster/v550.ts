@@ -161,7 +161,22 @@ export function atLeast(value: bigint | undefined, floor: bigint): bigint {
  *
  * It does not (cannot) see ops submitted by another process or wallet for the same sender; the
  * bundler-side `same_sender_mempool_count 1` (spec §3.2, measured on Rundler) covers that.
+ *
+ * Confirmed records (userOpHash set) and unconfirmed holds (the send's answer was lost) use the
+ * same check: the next submit passes EntryPoint.getNonce(sender, key) and the hold is dropped
+ * only when that read is for the same nonce key and its sequence is greater. A packed nonce from
+ * another key is not consumption. Elapsed local time never releases a hold. A caller may
+ * release() only with evidence the op can no longer execute (the sender nonce advanced, or the
+ * op was replaced or its validity window passed per chain time).
  */
+function inflightManualReleaseGuidance(chainId: number | bigint, entryPoint: Address, sender: Address): string {
+    return (
+        `Call SuperPaymasterInflightGuard.release(${chainId}, ${entryPoint}, ${sender}) only with evidence ` +
+        `the op can no longer execute (for example the sender nonce advanced, or the op was replaced ` +
+        `or its validity window passed per chain time).`
+    );
+}
+
 export class SuperPaymasterInflightGuard {
     private static readonly pending = new Map<string, { nonce: bigint; userOpHash?: string; reservation?: symbol }>();
 
@@ -169,46 +184,109 @@ export class SuperPaymasterInflightGuard {
         return `${chainId}:${entryPoint.toLowerCase()}:${sender.toLowerCase()}`;
     }
 
+    /** High 192 bits. EntryPoint.getNonce(sender, key) is per key; keys are not ordered. */
+    private static nonceKey(nonce: bigint): bigint {
+        return nonce >> 64n;
+    }
+
+    /** Low 64 bits. Only comparable with another nonce of the same key. */
+    private static nonceSeq(nonce: bigint): bigint {
+        return nonce & ((1n << 64n) - 1n);
+    }
+
     /**
-     * Throw if this process already has an op from `sender` that the chain has not consumed yet
-     * (recorded nonce >= current on-chain nonce). Clears the record once it has been consumed.
+     * Throw if this process already has an op from `sender` that the chain has not consumed yet.
+     * Clears the record only when `currentNonce` is the same key and a greater sequence.
+     * `observed` is the hold seen before an await: a different reservation now in the map is left
+     * alone (the read was for the hold that used to be here).
      */
-    static assertNoneInFlight(chainId: number | bigint, entryPoint: Address, sender: Address, currentNonce: bigint): void {
+    static assertNoneInFlight(
+        chainId: number | bigint,
+        entryPoint: Address,
+        sender: Address,
+        currentNonce: bigint,
+        observed?: { nonce: bigint; reservation?: symbol },
+    ): void {
         const k = this.key(chainId, entryPoint, sender);
         const rec = this.pending.get(k);
         if (!rec) return;
-        if (currentNonce > rec.nonce) {
+        const sameHold = !observed || (rec.nonce === observed.nonce && rec.reservation === observed.reservation);
+        // Same path for a confirmed record and an unconfirmed hold. Local time is not evidence,
+        // and neither is a larger packed nonce from a different key.
+        if (sameHold && this.nonceKey(currentNonce) === this.nonceKey(rec.nonce) && this.nonceSeq(currentNonce) > this.nonceSeq(rec.nonce)) {
             this.pending.delete(k);
             return;
         }
+        if (rec.userOpHash === undefined) {
+            throw new Error(
+                `SuperPaymaster 5.5.0 allows one in-flight sponsored op per sender (spec §3.2 F1): ` +
+                `${sender} already has nonce ${rec.nonce} pending, but the previous op's outcome is unknown ` +
+                `(the signed op may have reached the bundler). ` +
+                inflightManualReleaseGuidance(chainId, entryPoint, sender),
+            );
+        }
         throw new Error(
             `SuperPaymaster 5.5.0 allows one in-flight sponsored op per sender (spec §3.2 F1): ` +
-            `${sender} already has nonce ${rec.nonce} pending${rec.userOpHash ? ` (${rec.userOpHash})` : ''}. ` +
-            `Wait for its receipt before submitting the next one (if the bundler dropped it, call ` +
-            `SuperPaymasterInflightGuard.release(chainId, entryPoint, sender)).`,
+            `${sender} already has nonce ${rec.nonce} pending (${rec.userOpHash}). ` +
+            `Wait for its receipt before submitting the next one. ` +
+            inflightManualReleaseGuidance(chainId, entryPoint, sender),
         );
+    }
+
+    /** Live hold, if any. `reservation` is the symbol {@link reserve} bound its callbacks to. */
+    static hold(chainId: number | bigint, entryPoint: Address, sender: Address): { nonce: bigint; reservation?: symbol } | undefined {
+        const rec = this.pending.get(this.key(chainId, entryPoint, sender));
+        if (!rec) return undefined;
+        return { nonce: rec.nonce, reservation: rec.reservation };
+    }
+
+    /** Nonce of the current hold, if any. The high 192 bits are the EntryPoint nonce key. */
+    static heldNonce(chainId: number | bigint, entryPoint: Address, sender: Address): bigint | undefined {
+        return this.hold(chainId, entryPoint, sender)?.nonce;
     }
 
     /**
      * Check-and-claim in one synchronous step: throws like assertNoneInFlight, otherwise records
      * `currentNonce` as in flight before returning, so a concurrent caller for the same sender is
-     * rejected even while this one is still signing. Returns a release function that only drops
-     * THIS reservation (a later record() for the same sender is left alone).
+     * rejected even while this one is still signing. The returned release() and record() close
+     * over THIS reservation's symbol and nonce: a callback from an earlier op cannot drop or
+     * confirm a later hold for the same sender.
      */
-    static reserve(chainId: number | bigint, entryPoint: Address, sender: Address, currentNonce: bigint): () => void {
-        this.assertNoneInFlight(chainId, entryPoint, sender, currentNonce);
+    static reserve(
+        chainId: number | bigint,
+        entryPoint: Address,
+        sender: Address,
+        currentNonce: bigint,
+        observed?: { nonce: bigint; reservation?: symbol },
+    ): (() => void) & { record: (userOpHash?: string) => void } {
+        this.assertNoneInFlight(chainId, entryPoint, sender, currentNonce, observed);
         const k = this.key(chainId, entryPoint, sender);
         const reservation = Symbol(k);
-        this.pending.set(k, { nonce: currentNonce, reservation });
-        return () => {
-            if (this.pending.get(k)?.reservation === reservation) this.pending.delete(k);
+        const nonce = currentNonce;
+        this.pending.set(k, { nonce, reservation });
+        const sameHold = () => {
+            const rec = this.pending.get(k);
+            return !!rec && rec.reservation === reservation && rec.nonce === nonce;
         };
+        return Object.assign(
+            () => { if (sameHold()) this.pending.delete(k); },
+            {
+                record: (userOpHash?: string) => {
+                    if (!sameHold()) return;
+                    // Confirmation only adds the hash. The reservation symbol stays, so a caller
+                    // that snapshotted this hold before the await still recognises it.
+                    this.pending.set(k, { nonce, userOpHash, reservation });
+                },
+            },
+        );
     }
 
     /**
      * Record a submitted op. Never lowers the recorded nonce: a send for nonce N whose answer
      * arrives after the chain consumed N and another call reserved N+1 must not overwrite N+1 —
      * that would let a third call clear the stale N and sign N+1 a second time.
+     * Submit uses {@link reserve}'s bound record() instead: this lookup is by sender key, so it
+     * must not be the callback that runs after an await.
      */
     static record(chainId: number | bigint, entryPoint: Address, sender: Address, nonce: bigint, userOpHash?: string): void {
         const k = this.key(chainId, entryPoint, sender);
@@ -217,7 +295,7 @@ export class SuperPaymasterInflightGuard {
         this.pending.set(k, { nonce, userOpHash });
     }
 
-    /** Drop a record (e.g. after the caller observed a receipt or decided the op was dropped). */
+    /** Drop a record only when the caller has evidence the op can no longer execute. */
     static release(chainId: number | bigint, entryPoint: Address, sender: Address): void {
         this.pending.delete(this.key(chainId, entryPoint, sender));
     }
