@@ -90,4 +90,37 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
         expect(canonicalJson(proto)).toBe('{"__proto__":{"p":1}}');
         expect((Object.prototype as { p?: number }).p).toBeUndefined();
     });
+
+    it('snapshots array length before a getter appends elements', () => {
+        const items: number[] = [];
+        Object.defineProperty(items, '0', {
+            enumerable: true,
+            configurable: true,
+            get() {
+                for (let i = 1; i <= 1_000_000; i++) items.push(i);
+                return 1;
+            },
+        });
+        items.length = 1;
+        expect(canonicalJson(items)).toBe('[1]');
+    });
+
+    it('stops encoding once the UTF-8 size passes 64 MiB', () => {
+        let reads = 0;
+        const obj: Record<string, string> = {};
+        const blob = 'a'.repeat(1_000_000);
+        for (let i = 0; i < 80; i++) {
+            const key = `b${String(i).padStart(2, '0')}`;
+            Object.defineProperty(obj, key, {
+                enumerable: true,
+                get() {
+                    reads += 1;
+                    return blob;
+                },
+            });
+        }
+        expect(() => canonicalJson(obj)).toThrow(/^canonical: output too large$/);
+        expect(reads).toBeGreaterThan(10);
+        expect(reads).toBeLessThan(80);
+    });
 });

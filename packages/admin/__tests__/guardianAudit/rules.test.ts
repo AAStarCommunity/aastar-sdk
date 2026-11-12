@@ -132,6 +132,8 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             rule: 'publicRoute.functions.pauseUnderstakedOperator(address)',
         });
         expect(wantsPrice(DEFAULT_RULESET, roles, { route: 'public', selector: update })).toBe(true);
+        expect(() => wantsPrice(DEFAULT_RULESET, null as unknown as Record<string, string>, { route: 'invalid' } as RuleRecord)).toThrow(/^record: unknown route$/);
+        expect(() => evaluate(DEFAULT_RULESET, null as unknown as Record<string, string>, { route: 'invalid' } as RuleRecord)).toThrow(/^record: unknown route$/);
         expect(wantsPrice(DEFAULT_RULESET, roles, { route: 'public', selector: toFunctionSelector('pauseUnderstakedOperator(address)') })).toBe(false);
     });
 

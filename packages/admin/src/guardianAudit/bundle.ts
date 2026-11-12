@@ -1,5 +1,5 @@
 import { getAddress, sha256, stringToBytes, type Address, type Hex } from 'viem';
-import { canonicalDigest, canonicalJson } from './canonical.js';
+import { canonicalDigest, canonicalJson, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES } from './canonical.js';
 import { evaluate, RULESET_SCHEMA, rulesetId, type RuleRecord, type Ruleset, type Verdict } from './rules.js';
 import { PROVIDER_NAME_RE, quantity } from './rpc.js';
 import type { FoundAction, ScanResult } from './scan.js';
@@ -15,6 +15,11 @@ import type { FoundAction, ScanResult } from './scan.js';
  * may legitimately differ between two honest reruns over the same range and scope. Two honest files
  * may therefore have different sha256, but they MUST have the same `digest` and byte-identical
  * `canonicalJson(bundle)`. Any other difference means one of them is wrong.
+ *
+ * The digested bundle is a function of the chain, the scope, the range, the ruleset, the roles, and
+ * the chain data inside this range. Store history is not an input. An action of this range with no
+ * attribution is UNATTRIBUTED. A later attribution of an earlier range is published by re-running
+ * that earlier range, which produces its own bundle.
  *
  * `verifyEvidenceFile` does three steps: (i) parse, which requires canonical bytes and a digest that
  * matches the bundle; (ii) the rerun's digest equals the file's digest and `canonicalJson(rerun.bundle)`
@@ -38,8 +43,8 @@ import type { FoundAction, ScanResult } from './scan.js';
 
 export const EVIDENCE_SCHEMA = 'aastar.guardian-audit.evidence.v1' as const;
 
-/** UTF-8 byte cap for a published evidence file. Shared by serialize, parse, sha256, and verify. */
-export const MAX_EVIDENCE_FILE_BYTES = 64 * 1024 * 1024;
+/** UTF-8 byte cap for a published evidence file. Shared by canonical encoding, serialize, parse, sha256, and verify. */
+export { MAX_EVIDENCE_FILE_BYTES };
 
 /** sha256('') — returned when the file cannot be hashed. Not a published identity. */
 const UNHASHED_FILE_SHA256 = '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' as Hex;
@@ -77,8 +82,7 @@ export interface EvidenceBundle {
     state: 'COMPLETE' | 'UNATTRIBUTED';
     ruleset: { schema: Ruleset['schema']; digest: Hex };
     actions: EvidenceAction[];
-    resolvedPrior: EvidenceAction[];
-    /** Present only when `state` is UNATTRIBUTED. */
+    /** Present only when `state` is UNATTRIBUTED. Count of actions in this range with no attribution. */
     unattributed?: number;
 }
 
@@ -134,7 +138,7 @@ const DATA_RE = /^0x[0-9a-f]*$/;
 const SELECTOR_RE = /^0x[0-9a-f]{8}$/;
 
 const FILE_KEYS = ['schema', 'bundle', 'digest', 'runMetadata'] as const;
-const BUNDLE_KEYS = ['schema', 'chainId', 'scope', 'range', 'state', 'ruleset', 'actions', 'resolvedPrior'] as const;
+const BUNDLE_KEYS = ['schema', 'chainId', 'scope', 'range', 'state', 'ruleset', 'actions'] as const;
 const RANGE_KEYS = ['from', 'to'] as const;
 const RULESET_KEYS = ['schema', 'digest'] as const;
 const ACTION_KEYS = ['blockNumber', 'blockHash', 'txHash', 'logIndex', 'address', 'kind', 'decoded', 'log', 'attribution', 'record', 'verdict'] as const;
@@ -167,6 +171,10 @@ const PUBLIC_REASONS = new Set<string>([
     'evidence value too large',
     'unattributed count missing',
     'complete evidence has an unattributed action',
+    'evidence action is outside the range',
+    'evidence action does not match its log',
+    'evidence log is removed',
+    'evidence action is duplicated',
     'runMetadata missing',
     'runMetadata: unknown key',
     'runMetadata: invalid key',
@@ -187,12 +195,22 @@ function boundedText(value: unknown, max: number): value is string {
     return typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('://') && !/[\r\n]/.test(value);
 }
 
+/** One read of caller-owned data. A throwing getter becomes a fixed error and drops its text. */
 function readOwn(value: object, key: string): unknown {
-    const desc = Object.getOwnPropertyDescriptor(value, key);
+    let desc: PropertyDescriptor | undefined;
+    try {
+        desc = Object.getOwnPropertyDescriptor(value, key);
+    } catch {
+        throw new Error('evidence value unsupported');
+    }
     if (desc === undefined) return undefined;
     if ('value' in desc) return desc.value;
-    if (typeof desc.get === 'function') return desc.get.call(value);
-    return undefined;
+    if (typeof desc.get !== 'function') return undefined;
+    try {
+        return desc.get.call(value);
+    } catch {
+        throw new Error('evidence value unsupported');
+    }
 }
 
 function ownKeyList(obj: object, cap: number, message: string): string[] {
@@ -226,18 +244,7 @@ function allowKeys(obj: object, allowed: readonly string[], required: readonly s
 
 /** True when `text` is more than {@link MAX_EVIDENCE_FILE_BYTES} UTF-8 bytes. Stops early. */
 function exceedsFileBytes(text: string): boolean {
-    let bytes = 0;
-    for (let i = 0; i < text.length; i++) {
-        const c = text.charCodeAt(i);
-        if (c <= 0x7f) bytes += 1;
-        else if (c <= 0x7ff) bytes += 2;
-        else if (c >= 0xd800 && c <= 0xdbff) {
-            bytes += 4;
-            i += 1;
-        } else bytes += 3;
-        if (bytes > MAX_EVIDENCE_FILE_BYTES) return true;
-    }
-    return false;
+    return exceedsUtf8Bytes(text, MAX_EVIDENCE_FILE_BYTES);
 }
 
 function assertEvidenceBytes(text: string): void {
@@ -289,11 +296,19 @@ function copyPlain(value: unknown, seen: Set<object>, depth: number, budget: Cop
     if (seen.has(value)) throw new Error('evidence value cycle');
     if (depth > MAX_COPY_DEPTH) throw new Error('evidence value too deep');
     if (Array.isArray(value)) {
-        if (value.length > MAX_COPY_ARRAY) throw new Error('evidence value too large');
+        let length: number;
+        try {
+            length = value.length;
+        } catch {
+            throw new Error('evidence value unsupported');
+        }
+        if (length > MAX_COPY_ARRAY) throw new Error('evidence value too large');
+        const items = new Array<unknown>(length);
+        for (let i = 0; i < length; i++) items[i] = readOwn(value, String(i));
         seen.add(value);
-        const out = new Array<unknown>(value.length);
-        for (let i = 0; i < value.length; i++) {
-            const item = readOwn(value, String(i));
+        const out = new Array<unknown>(length);
+        for (let i = 0; i < length; i++) {
+            const item = items[i];
             if (item === undefined) throw new Error('evidence value unsupported');
             out[i] = copyPlain(item, seen, depth + 1, budget);
         }
@@ -381,56 +396,143 @@ function byPosition(a: EvidenceAction, b: EvidenceAction): number {
     return 0;
 }
 
-function pack(
-    actions: readonly FoundAction[],
+const COPY_ERRORS = new Set([
+    'evidence value too large',
+    'evidence value cycle',
+    'evidence value too deep',
+    'evidence value unsupported',
+    'evidence number must be a safe integer',
+]);
+
+interface PreparedAction {
+    blockNumber: number;
+    blockHash: Hex;
+    txHash: Hex;
+    logIndex: number;
+    address: Address;
+    kind: string;
+    decoded: FoundAction['decoded'];
+    log: PublishedLog;
+    attribution: unknown;
+    snapshot: unknown;
+}
+
+/** Selector and 20-byte addresses are stored lowercase before the record is checked. */
+function normalizeClassifier(value: unknown, depth: number): void {
+    if (depth > MAX_COPY_DEPTH || value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+        for (const item of value) normalizeClassifier(item, depth + 1);
+        return;
+    }
+    const rec = value as Record<string, unknown>;
+    for (const key in rec) {
+        if (!Object.prototype.hasOwnProperty.call(rec, key)) continue;
+        const child = rec[key];
+        if (key === 'selector' && typeof child === 'string' && /^0x[0-9a-fA-F]{8}$/i.test(child)) {
+            rec[key] = child.toLowerCase();
+            continue;
+        }
+        if (typeof child === 'string' && /^0x[0-9a-fA-F]{40}$/i.test(child)) {
+            rec[key] = child.toLowerCase();
+            continue;
+        }
+        normalizeClassifier(child, depth + 1);
+    }
+}
+
+function assertRoleMap(roles: unknown): Record<string, string> {
+    if (!isRecord(roles)) throw new Error('roles missing');
+    const keys = ownKeyList(roles, MAX_COPY_KEYS, 'evidence value too large');
+    for (const key of keys) {
+        const value = roles[key];
+        if (typeof value !== 'string' || value.length !== 42 || !/^0x[0-9a-fA-F]{40}$/i.test(value)) {
+            throw new Error('role address is invalid');
+        }
+        try {
+            getAddress(`0x${value.slice(2)}` as Address);
+        } catch {
+            throw new Error('role address is invalid');
+        }
+    }
+    return roles as Record<string, string>;
+}
+
+/**
+ * One plain action, checked before any classifier runs.
+ * `removed: true` is rejected here. The published log never carries `removed`.
+ */
+function prepareAction(raw: unknown, range: { from: number; to: number }, identities: Set<string>, budget: CopyBudget): PreparedAction {
+    const snapshot = copyPlain(raw, new Set(), 0, budget);
+    if (!isRecord(snapshot)) throw new Error('evidence action is invalid');
+    if (!isRecord(snapshot.log)) throw new Error('evidence log is invalid');
+    if (Object.prototype.hasOwnProperty.call(snapshot.log, 'removed') && snapshot.log.removed !== false) {
+        throw new Error('evidence log is removed');
+    }
+    const log = normalizeLog(snapshot.log);
+    const blockNumber = quantityNumber(snapshot.blockNumber);
+    const logIndex = quantityNumber(snapshot.logIndex);
+    const blockHash = evidenceWord(snapshot.blockHash);
+    const txHash = evidenceWord(snapshot.txHash);
+    const address = evidenceAddress(snapshot.address);
+    if (blockNumber !== log.blockNumber || logIndex !== log.logIndex || blockHash !== log.blockHash
+        || txHash !== log.transactionHash || address !== log.address) {
+        throw new Error('evidence action does not match its log');
+    }
+    if (blockNumber < range.from || blockNumber > range.to) throw new Error('evidence action is outside the range');
+    const identity = `${blockHash}:${logIndex}`;
+    if (identities.has(identity)) throw new Error('evidence action is duplicated');
+    identities.add(identity);
+    if (typeof snapshot.kind !== 'string' || snapshot.kind.length === 0 || snapshot.kind.length > 64
+        || snapshot.kind.includes('://') || /[\r\n]/.test(snapshot.kind)) {
+        throw new Error('evidence action is invalid');
+    }
+    if (!isRecord(snapshot.decoded)) throw new Error('evidence action is invalid');
+    const attribution = snapshot.attribution === undefined ? null : snapshot.attribution;
+    if (attribution !== null && !isRecord(attribution)) throw new Error('evidence action is invalid');
+    return {
+        blockNumber, blockHash, txHash, logIndex, address,
+        kind: snapshot.kind,
+        decoded: snapshot.decoded as FoundAction['decoded'],
+        log, attribution, snapshot,
+    };
+}
+
+function classifyOne(
+    prepared: PreparedAction,
     classify: (action: FoundAction) => RuleRecord,
     ruleset: Ruleset,
     roles: Record<string, string>,
-    requireAttribution: boolean,
     budget: CopyBudget,
-): EvidenceAction[] {
-    if (actions.length > 100_000) throw new Error('evidence value too large');
-    const out: EvidenceAction[] = [];
-    for (const action of actions.slice()) {
-        if (!isRecord(action)) throw new Error('evidence action is invalid');
-        if (requireAttribution && (action.attribution === undefined || action.attribution === null)) {
-            throw new Error('complete scan has an unattributed action');
-        }
-        const blockNumber = action.blockNumber;
-        const logIndex = action.logIndex;
-        if (typeof blockNumber !== 'number' || !Number.isSafeInteger(blockNumber) || blockNumber < 0
-            || typeof logIndex !== 'number' || !Number.isSafeInteger(logIndex) || logIndex < 0) {
-            throw new Error('evidence action is invalid');
-        }
-        if (typeof action.kind !== 'string' || action.kind.length === 0 || action.kind.length > 64
-            || action.kind.includes('://') || /[\r\n]/.test(action.kind)) {
-            throw new Error('evidence action is invalid');
-        }
-        const log = normalizeLog(action.log);
-        let record: RuleRecord;
-        try {
-            record = classify(action);
-        } catch {
-            throw new Error('classify failed');
-        }
-        const seen = new Set<object>();
-        const recordCopy = copyPlain(record, seen, 0, budget) as RuleRecord;
-        out.push({
-            blockNumber,
-            blockHash: evidenceWord(action.blockHash),
-            txHash: evidenceWord(action.txHash),
-            logIndex,
-            address: evidenceAddress(action.address),
-            kind: action.kind,
-            decoded: copyPlain(action.decoded, seen, 0, budget) as FoundAction['decoded'],
-            log,
-            attribution: action.attribution === undefined ? null : copyPlain(action.attribution, seen, 0, budget),
-            record: recordCopy,
-            verdict: evaluate(ruleset, roles, recordCopy),
-        });
+): EvidenceAction {
+    const arg = copyPlain(prepared.snapshot, new Set(), 0, budget);
+    let raw: unknown;
+    try {
+        raw = classify(arg as FoundAction);
+    } catch {
+        throw new Error('classify failed');
     }
-    out.sort(byPosition);
-    return out;
+    let record: unknown;
+    try {
+        record = copyPlain(raw, new Set(), 0, budget);
+    } catch (e) {
+        if (e instanceof Error && COPY_ERRORS.has(e.message)) throw e;
+        throw new Error('evidence value unsupported');
+    }
+    normalizeClassifier(record, 0);
+    assertRecord(record);
+    return {
+        blockNumber: prepared.blockNumber,
+        blockHash: prepared.blockHash,
+        txHash: prepared.txHash,
+        logIndex: prepared.logIndex,
+        address: prepared.address,
+        kind: prepared.kind,
+        decoded: prepared.decoded,
+        log: prepared.log,
+        attribution: prepared.attribution,
+        record: record as RuleRecord,
+        verdict: evaluate(ruleset, roles, record as RuleRecord),
+    };
 }
 
 function assertHash(value: unknown): void {
@@ -492,7 +594,12 @@ function assertPublishedLog(log: unknown): void {
     if (!assertSafeCount(log.blockNumber) || !assertSafeCount(log.logIndex)) throw new Error('evidence log is invalid');
 }
 
-function assertAction(action: unknown, requireAttribution: boolean): EvidenceAction {
+function assertAction(
+    action: unknown,
+    range: { from: number; to: number },
+    requireAttribution: boolean,
+    identities: Set<string>,
+): EvidenceAction {
     if (!isRecord(action)) throw new Error('evidence action is invalid');
     exactKeys(action, ACTION_KEYS, 'evidence action is invalid');
     if (!assertSafeCount(action.blockNumber) || !assertSafeCount(action.logIndex)) throw new Error('evidence action is invalid');
@@ -504,6 +611,18 @@ function assertAction(action: unknown, requireAttribution: boolean): EvidenceAct
     }
     if (!isRecord(action.decoded)) throw new Error('evidence action is invalid');
     assertPublishedLog(action.log);
+    const log = action.log as PublishedLog;
+    if (action.blockNumber !== log.blockNumber || action.logIndex !== log.logIndex
+        || action.blockHash !== log.blockHash || action.txHash !== log.transactionHash
+        || action.address !== log.address) {
+        throw new Error('evidence action does not match its log');
+    }
+    if (action.blockNumber < range.from || action.blockNumber > range.to) {
+        throw new Error('evidence action is outside the range');
+    }
+    const identity = `${action.blockHash}:${action.logIndex}`;
+    if (identities.has(identity)) throw new Error('evidence action is duplicated');
+    identities.add(identity);
     if (requireAttribution && (action.attribution === null || action.attribution === undefined)) {
         throw new Error('complete evidence has an unattributed action');
     }
@@ -538,75 +657,86 @@ function assertPublished(bundle: EvidenceBundle): void {
     if (bundle.ruleset.schema !== RULESET_SCHEMA || typeof bundle.ruleset.digest !== 'string' || !HASH_RE.test(bundle.ruleset.digest)) {
         throw new Error('evidence bundle is invalid');
     }
-    if (!Array.isArray(bundle.actions) || !Array.isArray(bundle.resolvedPrior)
-        || bundle.actions.length > 100_000 || bundle.resolvedPrior.length > 100_000) {
-        throw new Error('evidence actions missing');
-    }
-    if (bundle.actions.length + bundle.resolvedPrior.length > 100_000) throw new Error('evidence value too large');
+    if (!Array.isArray(bundle.actions) || bundle.actions.length > 100_000) throw new Error('evidence actions missing');
     const requireAttribution = bundle.state === 'COMPLETE';
-    for (const action of bundle.actions) assertAction(action, requireAttribution);
-    for (const action of bundle.resolvedPrior) assertAction(action, requireAttribution);
+    const identities = new Set<string>();
+    for (const action of bundle.actions) assertAction(action, range as { from: number; to: number }, requireAttribution, identities);
     assertSorted(bundle.actions as EvidenceAction[]);
-    assertSorted(bundle.resolvedPrior as EvidenceAction[]);
     if (bundle.state === 'UNATTRIBUTED' && !assertSafeCount(bundle.unattributed)) throw new Error('unattributed count missing');
 }
 
 /**
  * Evidence for a COMPLETE or UNATTRIBUTED scan. An INCOMPLETE scan has no evidence.
  * `digest` is keccak256(canonicalJson(bundle)). `runMetadata` is returned beside it and is not hashed.
+ * State comes from this range's actions: any action here without attribution is UNATTRIBUTED.
+ * `result.resolvedPrior` and `result.unattributed` are not read.
  */
 export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata } {
     if (!isRecord(input)) throw new Error('evidence input is invalid');
-    const { result } = input;
+    const result = readOwn(input, 'result');
     if (!isRecord(result)) throw new Error('evidence state is invalid');
-    if (result.state === 'INCOMPLETE') throw new Error('incomplete scan has no evidence');
-    if (result.state !== 'COMPLETE' && result.state !== 'UNATTRIBUTED') throw new Error('evidence state is invalid');
-    if (typeof input.chainId !== 'number' || !Number.isSafeInteger(input.chainId) || input.chainId <= 0) {
+    const state = readOwn(result, 'state');
+    if (state === 'INCOMPLETE') throw new Error('incomplete scan has no evidence');
+    if (state !== 'COMPLETE' && state !== 'UNATTRIBUTED') throw new Error('evidence state is invalid');
+    const chainId = readOwn(input, 'chainId');
+    if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId) || chainId <= 0) {
         throw new Error('evidence chainId is invalid');
     }
-    if (typeof input.scope !== 'string' || !/^0x[0-9a-fA-F]{64}$/i.test(input.scope)) {
+    const scope = readOwn(input, 'scope');
+    if (typeof scope !== 'string' || !/^0x[0-9a-fA-F]{64}$/i.test(scope)) {
         throw new Error('evidence scope is invalid');
     }
-    if (typeof result.from !== 'number' || typeof result.to !== 'number'
-        || !Number.isSafeInteger(result.from) || !Number.isSafeInteger(result.to) || result.from < 0 || result.to < 0) {
+    const from = readOwn(result, 'from');
+    const to = readOwn(result, 'to');
+    if (typeof from !== 'number' || typeof to !== 'number'
+        || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < 0) {
         throw new Error('evidence range is invalid');
     }
-    if (!Array.isArray(result.actions) || !Array.isArray(result.resolvedPrior)) throw new Error('evidence actions missing');
-    if (typeof result.count !== 'number' || result.count !== result.actions.length) {
-        throw new Error('evidence count does not match actions');
-    }
-    if (result.state === 'UNATTRIBUTED'
-        && (typeof result.unattributed !== 'number' || !Number.isSafeInteger(result.unattributed) || result.unattributed < 0)) {
-        throw new Error('unattributed count missing');
-    }
-    const generatedAt = input.generatedAt ?? new Date().toISOString();
-    const runMetadata = assertRunMetadata({
-        providers: input.providers,
-        sdkVersion: input.sdkVersion,
-        generatedAt,
-    });
-    let ruleset: Ruleset;
-    let roles: Record<string, string>;
+    const actions = readOwn(result, 'actions');
+    if (!Array.isArray(actions)) throw new Error('evidence actions missing');
+    let actionCount: number;
     try {
-        ruleset = structuredClone(input.ruleset);
-        roles = structuredClone(input.roles);
+        actionCount = actions.length;
     } catch {
-        throw new Error('ruleset: unsupported value');
+        throw new Error('evidence value unsupported');
     }
-    if (!isRecord(roles)) throw new Error('roles missing');
-    const id = rulesetId(ruleset);
+    if (actionCount > 100_000) throw new Error('evidence value too large');
+    const count = readOwn(result, 'count');
+    if (typeof count !== 'number' || count !== actionCount) throw new Error('evidence count does not match actions');
+    const classify = readOwn(input, 'classify');
+    if (typeof classify !== 'function') throw new Error('classify is not a function');
+    const generatedAtRaw = readOwn(input, 'generatedAt');
+    const runMetadata = assertRunMetadata({
+        providers: readOwn(input, 'providers'),
+        sdkVersion: readOwn(input, 'sdkVersion'),
+        generatedAt: generatedAtRaw === undefined ? new Date().toISOString() : generatedAtRaw,
+    });
     const budget: CopyBudget = { n: 0 };
+    const roles = assertRoleMap(copyPlain(readOwn(input, 'roles'), new Set(), 0, budget));
+    const ruleset = copyPlain(readOwn(input, 'ruleset'), new Set(), 0, budget) as Ruleset;
+    const id = rulesetId(ruleset);
+    const range = { from, to };
+    const rawActions = new Array<unknown>(actionCount);
+    for (let i = 0; i < actionCount; i++) rawActions[i] = readOwn(actions, String(i));
+    const identities = new Set<string>();
+    const prepared = rawActions.map((raw) => prepareAction(raw, range, identities, budget));
+    let missing = 0;
+    for (const item of prepared) {
+        if (item.attribution === null) missing += 1;
+    }
+    const publishedState = missing > 0 ? 'UNATTRIBUTED' : 'COMPLETE';
+    const packed = prepared.map((item) => classifyOne(item, classify as EvidenceInput['classify'], ruleset, roles, budget));
+    packed.sort(byPosition);
     const bundle: EvidenceBundle = {
         schema: EVIDENCE_SCHEMA,
-        chainId: input.chainId,
-        scope: input.scope.toLowerCase() as Hex,
-        range: { from: result.from, to: result.to },
-        state: result.state,
+        chainId,
+        scope: scope.toLowerCase() as Hex,
+        range,
+        state: publishedState,
         ruleset: id,
-        actions: pack(result.actions, input.classify, ruleset, roles, result.state === 'COMPLETE', budget),
-        resolvedPrior: pack(result.resolvedPrior, input.classify, ruleset, roles, result.state === 'COMPLETE', budget),
+        actions: packed,
     };
-    if (result.state === 'UNATTRIBUTED') bundle.unattributed = result.unattributed;
+    if (publishedState === 'UNATTRIBUTED') bundle.unattributed = missing;
     assertPublished(bundle);
     return { bundle, digest: canonicalDigest(bundle), runMetadata };
 }
@@ -631,12 +761,19 @@ export function serializeEvidenceFile(parts: { bundle: EvidenceBundle; digest: H
     }
     assertPublished(parts.bundle as EvidenceBundle);
     const runMetadata = assertRunMetadata(parts.runMetadata);
-    const text = canonicalJson({
-        schema: EVIDENCE_FILE_SCHEMA,
-        bundle: parts.bundle,
-        digest: parts.digest,
-        runMetadata,
-    }) + '\n';
+    let body: string;
+    try {
+        body = canonicalJson({
+            schema: EVIDENCE_FILE_SCHEMA,
+            bundle: parts.bundle,
+            digest: parts.digest,
+            runMetadata,
+        });
+    } catch (e) {
+        if (e instanceof Error && e.message === 'canonical: output too large') throw new Error('evidence file too large');
+        throw e;
+    }
+    const text = `${body}\n`;
     assertEvidenceBytes(text);
     return text;
 }
@@ -696,30 +833,34 @@ export function parseEvidenceFile(text: string): EvidenceFile {
  * Never throws. Reasons are drawn from a fixed set; anything else is `evidence file rejected`.
  */
 export function verifyEvidenceFile(fileText: string, rerun: { bundle: EvidenceBundle; digest: Hex }): EvidenceFileCheck {
-    let fileSha: Hex;
+    let fileSha: Hex = UNHASHED_FILE_SHA256;
     try {
-        fileSha = evidenceFileSha256(fileText);
-    } catch (e) {
-        return { ok: false, sha256: UNHASHED_FILE_SHA256, reasons: [publicReason(e)] };
-    }
-    const reasons: string[] = [];
-    let parsed: EvidenceFile | null = null;
-    try {
-        parsed = parseEvidenceFile(fileText);
-    } catch (e) {
-        reasons.push(publicReason(e));
-    }
-    if (parsed) {
-        if (!isRecord(rerun) || typeof rerun.digest !== 'string' || !isRecord(rerun.bundle)) {
-            reasons.push('rerun bundle missing');
-        } else {
-            try {
-                if (rerun.digest !== parsed.digest) reasons.push('rerun digest differs from the file digest');
-                if (canonicalJson(rerun.bundle) !== canonicalJson(parsed.bundle)) reasons.push('rerun bundle differs from the file bundle');
-            } catch {
-                reasons.push('rerun bundle differs from the file bundle');
+        try {
+            fileSha = evidenceFileSha256(fileText);
+        } catch (e) {
+            return { ok: false, sha256: UNHASHED_FILE_SHA256, reasons: [publicReason(e)] };
+        }
+        const reasons: string[] = [];
+        let parsed: EvidenceFile | null = null;
+        try {
+            parsed = parseEvidenceFile(fileText);
+        } catch (e) {
+            reasons.push(publicReason(e));
+        }
+        if (parsed) {
+            if (!isRecord(rerun) || typeof rerun.digest !== 'string' || !isRecord(rerun.bundle)) {
+                reasons.push('rerun bundle missing');
+            } else {
+                try {
+                    if (rerun.digest !== parsed.digest) reasons.push('rerun digest differs from the file digest');
+                    if (canonicalJson(rerun.bundle) !== canonicalJson(parsed.bundle)) reasons.push('rerun bundle differs from the file bundle');
+                } catch {
+                    reasons.push('rerun bundle differs from the file bundle');
+                }
             }
         }
+        return { ok: reasons.length === 0, sha256: fileSha, reasons };
+    } catch (e) {
+        return { ok: false, sha256: fileSha, reasons: [publicReason(e)] };
     }
-    return { ok: reasons.length === 0, sha256: fileSha, reasons };
 }

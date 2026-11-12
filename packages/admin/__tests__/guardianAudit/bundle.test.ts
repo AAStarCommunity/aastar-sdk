@@ -17,13 +17,13 @@ function word(ch: string): Hex {
     return `0x${ch.repeat(64 / ch.length)}` as Hex;
 }
 
-function logOf(block: number, txHash: Hex, index: number, address: Address): RawLog {
+function logOf(block: number, txHash: Hex, index: number, address: Address, blockHash: Hex = word('a1')): RawLog {
     return {
         address,
         topics: [word('11')],
         data: '0x',
         blockNumber: `0x${block.toString(16)}` as Hex,
-        blockHash: word('a1'),
+        blockHash,
         transactionHash: txHash,
         logIndex: `0x${index.toString(16)}` as Hex,
     };
@@ -31,16 +31,17 @@ function logOf(block: number, txHash: Hex, index: number, address: Address): Raw
 
 function action(over: Partial<FoundAction> & Pick<FoundAction, 'blockNumber' | 'txHash' | 'logIndex' | 'kind'>): FoundAction {
     const address = over.address ?? SP;
+    const blockHash = over.blockHash ?? word('a1');
     const decoded: DecodedAction = over.decoded ?? { kind: over.kind, callData: priceCall };
     return {
         blockNumber: over.blockNumber,
-        blockHash: over.blockHash ?? word('a1'),
+        blockHash,
         txHash: over.txHash,
         logIndex: over.logIndex,
         address,
         kind: over.kind,
         decoded,
-        log: over.log ?? logOf(over.blockNumber, over.txHash, over.logIndex, address),
+        log: over.log ?? logOf(over.blockNumber, over.txHash, over.logIndex, address, blockHash),
         attribution: 'attribution' in over ? over.attribution : { tag: 'test' },
     };
 }
@@ -87,7 +88,7 @@ function flipByte(hex: string): Hex {
 }
 
 const baseActions = [
-    action({ blockNumber: 5, logIndex: 1, txHash: word('bb'), kind: 'GENERIC', attribution: { who: SP, tag: 'bls' } }),
+    action({ blockNumber: 5, logIndex: 1, txHash: word('bb'), blockHash: word('a2'), kind: 'GENERIC', attribution: { who: SP, tag: 'bls' } }),
     action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), kind: 'owner' }),
     action({ blockNumber: 4, logIndex: 3, txHash: word('cc'), kind: 'owner', address: getAddress(SP) }),
 ];
@@ -141,7 +142,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(first.bundle.actions.map((item) => item.txHash.toLowerCase())).toEqual([
             word('cc'), word('aa'), word('bb'),
         ]);
-        expect(first.bundle.resolvedPrior.map((item) => item.blockNumber)).toEqual([1, 8]);
+        expect('resolvedPrior' in first.bundle).toBe(false);
         expect(first.bundle.actions[0]?.verdict.rule).toBe('ownerRoute.events.GuardianSet');
         expect(first.bundle.actions[2]?.verdict.rule).toBe('bls.GENERIC.expected:superPaymaster.updatePriceDVT(int256,uint256,bytes,uint8)');
         expect(first.bundle.actions[2]?.attribution).toEqual({ who: SP, tag: 'bls' });
@@ -247,24 +248,28 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(rejected.sha256).toBe(evidenceFileSha256(pretty));
     });
 
-    it('puts the unattributed count in the digested bundle', () => {
+    it('counts unattributed actions in this range and ignores a lying scan count', () => {
+        const attributed = baseActions[2]!;
+        const bare = action({ blockNumber: 6, logIndex: 0, txHash: word('ab'), kind: 'owner' });
+        delete bare.attribution;
         const result: ScanResult = {
             state: 'UNATTRIBUTED',
             unattributed: 4,
-            count: 1,
+            count: 2,
             from: 4,
             to: 9,
-            actions: [baseActions[2]!],
+            actions: [attributed, bare],
             resolvedPrior: [],
             bloomRecovered: 0,
             bloomFalsePositives: 0,
             ignored: 0,
         };
         const built = build({ result });
-        expect(built.bundle.unattributed).toBe(4);
         expect(built.bundle.state).toBe('UNATTRIBUTED');
-        const other = build({ result: { ...result, unattributed: 5 } });
-        expect(other.digest).not.toBe(built.digest);
+        expect(built.bundle.unattributed).toBe(1);
+        const other = build({ result: { ...result, unattributed: 5, state: 'COMPLETE' } });
+        expect(other.digest).toBe(built.digest);
+        expect(other.bundle.state).toBe('UNATTRIBUTED');
     });
 
     it('verifyEvidenceBundle detects a one-byte change', () => {
@@ -286,10 +291,15 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
 
         const bare = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         delete bare.attribution;
-        expect(() => build({ result: complete([bare], []) })).toThrow(/complete scan has an unattributed action/);
+        const open = build({ result: complete([bare], []) });
+        expect(open.bundle.state).toBe('UNATTRIBUTED');
+        expect(open.bundle.unattributed).toBe(1);
         const prior = action({ blockNumber: 1, logIndex: 0, txHash: word('bb'), kind: 'owner' });
         delete prior.attribution;
-        expect(() => build({ result: complete([], [prior]) })).toThrow(/complete scan has an unattributed action/);
+        const quiet = build({ result: complete([], []) });
+        const ignoredPrior = build({ result: complete([], [prior]) });
+        expect(ignoredPrior.bundle.state).toBe('COMPLETE');
+        expect(ignoredPrior.digest).toBe(quiet.digest);
 
         const ranged = complete([], []);
         delete (ranged as { from?: number }).from;
@@ -302,7 +312,9 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
 
         const uncounted = complete([], []);
         (uncounted as { state: 'UNATTRIBUTED' }).state = 'UNATTRIBUTED';
-        expect(() => build({ result: uncounted })).toThrow(/unattributed count missing/);
+        const recounted = build({ result: uncounted });
+        expect(recounted.bundle.state).toBe('COMPLETE');
+        expect(recounted.digest).toBe(quiet.digest);
 
         const wide = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         wide.decoded = { kind: 'owner' };
@@ -340,8 +352,8 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
 
     it('does not keep caller aliases or a ruleset mutated during classify', () => {
         const result = complete([
-            action({ blockNumber: 1, logIndex: 0, txHash: word('aa'), kind: 'owner' }),
-            action({ blockNumber: 2, logIndex: 0, txHash: word('bb'), kind: 'owner' }),
+            action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' }),
+            action({ blockNumber: 5, logIndex: 1, txHash: word('bb'), kind: 'owner' }),
         ], []);
         const ruleset = structuredClone(DEFAULT_RULESET);
         let n = 0;
@@ -362,8 +374,8 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const priced = build({
             roles,
             result: complete([
-                action({ blockNumber: 1, logIndex: 0, txHash: word('aa'), kind: 'GENERIC' }),
-                action({ blockNumber: 2, logIndex: 0, txHash: word('bb'), kind: 'GENERIC' }),
+                action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'GENERIC' }),
+                action({ blockNumber: 5, logIndex: 1, txHash: word('bb'), kind: 'GENERIC' }),
             ], []),
             classify: () => {
                 seen += 1;
@@ -445,7 +457,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             (copy.decoded as { blob?: string }).blob = blob;
             actions.push(copy);
         }
-        const bundle = { ...structuredClone(built.bundle), actions, resolvedPrior: [] as typeof actions };
+        const bundle = { ...structuredClone(built.bundle), actions };
         expect(() => serializeEvidenceFile({
             bundle, digest: word('ab'), runMetadata: built.runMetadata,
         })).toThrow(/^evidence file too large$/);
@@ -476,8 +488,14 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             logIndex: '0xa' as Hex,
             removed: false,
         };
-        const a = build({ result: complete([left], []) });
-        const b = build({ result: complete([right], []) });
+        const leftResult = complete([left], []);
+        leftResult.from = 10;
+        leftResult.to = 10;
+        const rightResult = complete([right], []);
+        rightResult.from = 10;
+        rightResult.to = 10;
+        const a = build({ result: leftResult });
+        const b = build({ result: rightResult });
         expect(a.digest).toBe(b.digest);
         expect(Object.keys(a.bundle.actions[0]!.log).sort()).toEqual([
             'address', 'blockHash', 'blockNumber', 'data', 'logIndex', 'topics', 'transactionHash',
@@ -496,8 +514,14 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(byHash.bundle.actions.map((item) => item.blockHash)).toEqual([word('a1'), word('a2')]);
         const aa = action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), blockHash: word('b2'), kind: 'owner' });
         const cc = action({ blockNumber: 5, logIndex: 1, txHash: word('cc'), blockHash: word('b2'), kind: 'owner' });
-        const byTx = build({ result: complete([cc, aa], []) });
-        expect(byTx.bundle.actions.map((item) => item.txHash)).toEqual([word('aa'), word('cc')]);
+        let calls = 0;
+        const counting = () => {
+            calls += 1;
+            return { route: 'owner', event: 'GuardianSet' };
+        };
+        expect(() => build({ result: complete([cc, aa], []), classify: counting })).toThrow(/^evidence action is duplicated$/);
+        expect(() => build({ result: complete([aa, cc], []), classify: counting })).toThrow(/^evidence action is duplicated$/);
+        expect(calls).toBe(0);
     });
 
     it('rejects a forged bundle whose digest was recomputed', () => {
@@ -578,5 +602,200 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         });
         expect(built.bundle.actions[0]!.verdict.rule).toBe('ownerRoute.events.GuardianSet');
         expect(reads).toBe(1);
+    });
+
+    it('ignores store history, so two ranges with different priors share a digest', () => {
+        const unresolved = action({ blockNumber: 1, logIndex: 0, txHash: word('ee'), kind: 'owner' });
+        delete unresolved.attribution;
+        const withPrior = build({ result: complete([], [unresolved]) });
+        const without = build({ result: complete([], []) });
+        expect(withPrior.bundle.state).toBe('COMPLETE');
+        expect(without.bundle.state).toBe('COMPLETE');
+        expect(withPrior.bundle.actions).toEqual([]);
+        expect(canonicalJson(withPrior.bundle)).toBe(canonicalJson(without.bundle));
+        expect(withPrior.digest).toBe(without.digest);
+        expect('resolvedPrior' in withPrior.bundle).toBe(false);
+    });
+
+    it('publishes the snapshotted action when classify mutates its argument or the prior list', () => {
+        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        const result = complete([found], [action({ blockNumber: 1, logIndex: 2, txHash: word('ee'), kind: 'owner' })]);
+        const before = found.txHash;
+        const built = build({
+            result,
+            classify: (item) => {
+                result.resolvedPrior = [];
+                item.txHash = word('ff');
+                item.log.transactionHash = word('ff');
+                return { route: 'owner', event: 'GuardianSet', fields: { who: item.address } };
+            },
+        });
+        expect(found.txHash).toBe(before);
+        expect(found.log.transactionHash).toBe(before);
+        expect(built.bundle.actions[0]!.txHash).toBe(before);
+        expect(built.bundle.actions[0]!.log.transactionHash).toBe(before);
+        const plain = build({ result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []) });
+        expect(built.digest).toBe(plain.digest);
+    });
+
+    it('rejects contradictory action identity, removed logs, and out-of-range actions', () => {
+        const rejectBeforeClassify = (result: ScanResult, message: RegExp) => {
+            let calls = 0;
+            expect(() => build({
+                result,
+                classify: () => {
+                    calls += 1;
+                    return { route: 'owner', event: 'GuardianSet' };
+                },
+            })).toThrow(message);
+            expect(calls).toBe(0);
+        };
+        const outside = action({ blockNumber: 999, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        outside.log = logOf(999, word('aa'), 0, SP);
+        rejectBeforeClassify(complete([outside], []), /^evidence action is outside the range$/);
+        const removed = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        removed.log = { ...removed.log, removed: true };
+        rejectBeforeClassify(complete([removed], []), /^evidence log is removed$/);
+        const mismatched = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        mismatched.log = logOf(4, word('bb'), 0, SP);
+        rejectBeforeClassify(complete([mismatched], []), /^evidence action does not match its log$/);
+        const codex = action({ blockNumber: 999, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        codex.log = { ...logOf(4, word('aa'), 0, SP), removed: true };
+        rejectBeforeClassify(complete([codex], []), /^evidence log is removed$/);
+
+        const published = build();
+        const fileFor = (bundle: EvidenceBundle): string => `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle,
+            digest: canonicalDigest(bundle),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        const shifted = structuredClone(published.bundle);
+        shifted.actions[0]!.blockNumber = 999;
+        expect(() => parseEvidenceFile(fileFor(shifted))).toThrow(/^evidence action does not match its log$/);
+        const check = verifyEvidenceFile(fileFor(shifted), { bundle: published.bundle, digest: published.digest });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('evidence action does not match its log');
+        const far = structuredClone(published.bundle);
+        far.actions[0]!.blockNumber = 999;
+        far.actions[0]!.log.blockNumber = 999;
+        expect(() => parseEvidenceFile(fileFor(far))).toThrow(/^evidence action is outside the range$/);
+        const dup = structuredClone(published.bundle);
+        const twin = structuredClone(dup.actions[0]!);
+        (twin.decoded as { extra?: number }).extra = 1;
+        dup.actions.push(twin);
+        expect(() => parseEvidenceFile(fileFor(dup))).toThrow(/^evidence action is duplicated$/);
+    });
+
+    it('lowercases a classifier selector before the published record is checked', () => {
+        const selector = toFunctionSelector('updatePrice()');
+        const built = build({
+            result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []),
+            classify: () => ({ route: 'public', selector: selector.toUpperCase() }),
+        });
+        expect(built.bundle.actions[0]!.record.selector).toBe(selector);
+        expect(built.bundle.actions[0]!.verdict.rule).toBe('publicRoute.functions.updatePrice()');
+    });
+
+    it('rejects a missing classifier and a bad role before it needs an action', () => {
+        expect(() => build({
+            result: complete([], []),
+            classify: null as unknown as typeof classify,
+        })).toThrow(/^classify is not a function$/);
+        const bad = `0x${'z'.repeat(40)}`;
+        try {
+            build({ result: complete([], []), roles: { superPaymaster: bad } });
+            throw new Error('accepted a bad role');
+        } catch (e) {
+            expect((e as Error).message).toBe('role address is invalid');
+            expect((e as Error).message).not.toContain(bad);
+        }
+    });
+
+    it('does not walk an extra ruleset subtree before rejecting it', () => {
+        let reads = 0;
+        const ruleset = structuredClone(DEFAULT_RULESET) as Ruleset & { extra?: object };
+        const extra: Record<string, unknown> = {};
+        for (let i = 0; i < 100; i++) {
+            Object.defineProperty(extra, `k${i}`, {
+                enumerable: true,
+                get() { reads += 1; return i; },
+            });
+        }
+        ruleset.extra = extra;
+        expect(() => build({ result: complete([], []), ruleset })).toThrow(/too large/);
+        expect(reads).toBe(0);
+    });
+
+    it('hides a secret thrown by a classifier getter or a rerun digest getter', () => {
+        const secret = 'https://secret.example/token';
+        const poisoned = action({ blockNumber: 4, logIndex: 1, txHash: word('bb'), kind: 'owner' });
+        Object.defineProperty(poisoned, 'kind', {
+            enumerable: true,
+            get() { throw new Error(secret); },
+        });
+        try {
+            build({ result: complete([poisoned], []) });
+            throw new Error('action getter escaped');
+        } catch (e) {
+            expect((e as Error).message).toBe('evidence value unsupported');
+            expect(String(e)).not.toContain('secret.example');
+        }
+        try {
+            build({
+                result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []),
+                classify: () => {
+                    const record: Record<string, unknown> = {};
+                    Object.defineProperty(record, 'route', {
+                        enumerable: true,
+                        get() { throw new Error(secret); },
+                    });
+                    return record as RuleRecord;
+                },
+            });
+            throw new Error('classify getter escaped');
+        } catch (e) {
+            expect((e as Error).message).toBe('evidence value unsupported');
+            expect((e as Error).message).not.toContain(secret);
+            expect(String(e)).not.toContain('secret.example');
+        }
+        const published = build({ result: complete([], []) });
+        const file = serializeEvidenceFile(published);
+        const rerun: { bundle: EvidenceBundle; digest: Hex } = { bundle: published.bundle, digest: published.digest };
+        Object.defineProperty(rerun, 'digest', { get() { throw new Error(secret); } });
+        const check = verifyEvidenceFile(file, rerun);
+        expect(check.ok).toBe(false);
+        expect(check.reasons.join(' ')).not.toContain(secret);
+        expect(check.reasons.join(' ')).not.toContain('secret.example');
+    });
+
+    it('does not copy array elements a getter appends', () => {
+        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        const items: number[] = [];
+        let extra = 0;
+        Object.defineProperty(items, '0', {
+            enumerable: true,
+            configurable: true,
+            get() {
+                if (items.length === 1) {
+                    items.length = 2;
+                    Object.defineProperty(items, '1', {
+                        enumerable: true,
+                        configurable: true,
+                        get() { extra += 1; return 2; },
+                    });
+                }
+                return 1;
+            },
+        });
+        items.length = 1;
+        found.decoded = { kind: 'owner', items } as DecodedAction;
+        const built = build({ result: complete([found], []) });
+        expect(extra).toBe(0);
+        expect((built.bundle.actions[0]!.decoded as { items: number[] }).items).toEqual([1]);
+    });
+
+    it('counts an unpaired surrogate as three bytes and does not swallow the next unit', () => {
+        expect(() => evidenceFileSha256('\ud800é'.repeat(13_421_773))).toThrow(/^evidence file too large$/);
     });
 });

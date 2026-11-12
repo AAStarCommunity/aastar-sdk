@@ -370,12 +370,12 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
  */
 export function evaluate(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): Verdict {
-    const rules = validateRuleset(rs);
-    if (!isRecord(roles)) throw new Error('roles missing');
     if (!isRecord(record)
         || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
         throw new Error('record: unknown route');
     }
+    const rules = validateRuleset(rs);
+    if (!isRecord(roles)) throw new Error('roles missing');
     if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128
         || record.event.includes('://') || /[\r\n]/.test(record.event))) {
         throw new Error('record: event is not a short string');
@@ -460,8 +460,11 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
 
 /** Whether this record wants prices read before/after (price-update rules). */
 export function wantsPrice(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): boolean {
+    if (!isRecord(record)
+        || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
+        throw new Error('record: unknown route');
+    }
     const rules = validateRuleset(rs);
-    if (!isRecord(record)) throw new Error('record: unknown route');
     if (record.route === 'public') return !!publicFunction(rules, record.selector)?.[1].readPrice;
     if (record.route === 'owner' || record.route === 'unattributed') {
         const event = ownValue(rules.ownerRoute.events, typeof record.event === 'string' ? record.event : '');
