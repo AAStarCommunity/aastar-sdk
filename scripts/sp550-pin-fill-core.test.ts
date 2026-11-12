@@ -6,6 +6,11 @@ import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, 
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const SRC = path.resolve(import.meta.dirname, '../packages/core/src');
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const MANIFEST = {
@@ -21,7 +26,7 @@ MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as a
 
 /** Write `source` next to the real module so its imports resolve, import it, delete it. */
 const temps: string[] = [];
-afterEach(() => { for (const f of temps.splice(0)) fs.rmSync(f, { force: true }); });
+afterEach(() => { for (const f of temps.splice(0)) fs.rmSync(f, { force: true }); }, SPAWN_VERDICT_TIMEOUT_MS);
 async function load(name: string, source: string) {
     const f = path.join(SRC, `.pinfill-test-${process.pid}-${name}.ts`);
     temps.push(f);
@@ -29,7 +34,7 @@ async function load(name: string, source: string) {
     return import(f);
 }
 
-describe('parseManifestPins: the manifest is read the way the gate reads --pins, strictly', () => {
+describe('parseManifestPins: the manifest is read the way the gate reads --pins, strictly', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('readbackBlock becomes a bigint; the rest passes through', () => {
         const p = parseManifestPins(MANIFEST, 'upgrade');
         expect(p.readbackBlock).toBe(12_345_678n);
@@ -49,7 +54,7 @@ describe('parseManifestPins: the manifest is read the way the gate reads --pins,
     });
 });
 
-describe('bookSwitch', () => {
+describe('bookSwitch', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('upgrade: the book follows SP onto the capped aPNTs and the v2 factory, plus the certified entries', () => {
         // MANIFEST declares timelockController: "n/a:none", so the live entry is removed too.
         expect(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade'))).toEqual({ ...MANIFEST.addresses, aPNTs: A(0x19), xPNTsFactory: A(0x14), timelockController: A(0) });
@@ -67,7 +72,7 @@ describe('bookSwitch', () => {
     });
 });
 
-describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the manifest', () => {
+describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the manifest', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const source = fs.readFileSync(path.join(SRC, 'sp550Cutover.ts'), 'utf8');
     it('the filled table, imported, holds the manifest pins and they pass the pin check', async () => {
         const pins = parseManifestPins(MANIFEST, 'upgrade');
@@ -100,7 +105,7 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
     });
 });
 
-describe('switchBook on the real addresses.ts: only the switched entries change', () => {
+describe('switchBook on the real addresses.ts: only the switched entries change', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const source = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
     it('Sepolia aPNTs / xPNTsFactory point at the new contracts; every other entry and chain is untouched', async () => {
         const m = await load('book', switchBook(source, 11155111, { aPNTs: A(0x19), xPNTsFactory: A(0x14) }, 'note'));
@@ -144,7 +149,7 @@ describe('switchBook on the real addresses.ts: only the switched entries change'
     });
 });
 
-describe('fresh absent keys and loopback detection', () => {
+describe('fresh absent keys and loopback detection', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('absent keys are removed from the switched book; pinned-and-absent is refused', () => {
         const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x21) }, absent: ['pnts'] }, 'fresh');
         const sw = bookSwitch('fresh', pins);
@@ -159,7 +164,7 @@ describe('fresh absent keys and loopback detection', () => {
     it.each(['https://sepolia.example.org/v2/key', 'https://127.0.0.1.example.org/'])('%s is not loopback', (u) => expect(isLoopbackUrl(u)).toBe(false));
 });
 
-describe('round-2 rewrite guards (Codex r2 on 7cefda78)', () => {
+describe('round-2 rewrite guards (Codex r2 on 7cefda78)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const book = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
     const table = fs.readFileSync(path.join(SRC, 'sp550Cutover.ts'), 'utf8');
     it('a declaration sharing its line with another property is refused, never rewritten whole', () => {
@@ -181,7 +186,7 @@ describe('round-2 rewrite guards (Codex r2 on 7cefda78)', () => {
     });
 });
 
-describe('writeAll: all or nothing, never clobbering another writer', () => {
+describe('writeAll: all or nothing, never clobbering another writer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const memIo = (files: Record<string, string>, fail: Partial<Record<'rename' | 'read' | 'write', (p: string) => boolean>> = {}): WriteIo & { files: Record<string, string> } => ({
         files,
         read: (p) => { if (fail.read?.(p)) throw new Error(`ENOENT ${p}`); if (!(p in files)) throw new Error(`ENOENT ${p}`); return files[p]; },
@@ -227,7 +232,7 @@ describe('writeAll: all or nothing, never clobbering another writer', () => {
     });
 });
 
-describe('Codex r3: the last property of a chain block', () => {
+describe('Codex r3: the last property of a chain block', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('the final entry of a block can be rewritten and removed', async () => {
         const src = fs.readFileSync(path.join(SRC, 'addresses.ts'), 'utf8');
         const opSep = src.slice(src.indexOf('\n  11155420: {'));
@@ -240,7 +245,7 @@ describe('Codex r3: the last property of a chain block', () => {
     });
 });
 
-describe("SP pins files: _aliases (SP, 2026-11-11)", () => {
+describe("SP pins files: _aliases (SP, 2026-11-11)", { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('the exact alias map is accepted and dropped', () => {
         const p = parseManifestPins({ ...MANIFEST, _aliases: { staking: 'contracts.gTokenStaking' } }, 'upgrade');
         expect('_aliases' in p).toBe(false);
@@ -252,7 +257,7 @@ describe("SP pins files: _aliases (SP, 2026-11-11)", () => {
     });
 });
 
-describe("--write's cross-check against SP's own live read-back (DSR, H3)", () => {
+describe("--write's cross-check against SP's own live read-back (DSR, H3)", { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const pins = parseManifestPins(MANIFEST, 'upgrade');
     const entries = sp550PinnedAddressEntries(pins);
     /** SP's live read-back naming exactly the manifest pins. */
@@ -318,7 +323,7 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", () =
     });
 });
 
-describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)', () => {
+describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const C = 'a'.repeat(40);
     it('a plain path is fetched at exactly that commit', () => {
         expect(spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', undefined, true)).toBe(`repos/AAStarCommunity/SuperPaymaster/contents/deployments/release/rc8/sepolia.readback.live.json?ref=${C}`);
@@ -339,7 +344,7 @@ describe('spReadbackApiPath: the fetch cannot leave the pinned commit (Codex r9)
     });
 });
 
-describe('two RPCs on one machine are one provider: IPs compared normalized (Grok)', () => {
+describe('two RPCs on one machine are one provider: IPs compared normalized (Grok)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([['1.2.3.4', '::ffff:1.2.3.4'], ['1.2.3.4', '[::ffff:102:304]'], ['2001:db8::1', '2001:0DB8:0:0:0:0:0:1']])('%s and %s overlap', (a, b) => {
         expect(normalizeIp(a)).toBe(normalizeIp(b));
         expect(addressesOverlap([a], [b])).toBe(true);
@@ -347,7 +352,7 @@ describe('two RPCs on one machine are one provider: IPs compared normalized (Gro
     it('different machines do not overlap', () => expect(addressesOverlap(['1.2.3.4'], ['1.2.3.5', '2001:db8::2'])).toBe(false));
 });
 
-describe('_aliases is required when a renamed key is pinned (Grok)', () => {
+describe('_aliases is required when a renamed key is pinned (Grok)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('addresses.staking without _aliases is refused; with it, accepted', () => {
         const m = { ...MANIFEST, addresses: { ...MANIFEST.addresses, staking: A(0x2a) } };
         expect(() => parseManifestPins(m, 'upgrade')).toThrow(/addresses\.staking pinned without _aliases/);
@@ -355,7 +360,7 @@ describe('_aliases is required when a renamed key is pinned (Grok)', () => {
     });
 });
 
-describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
+describe('the pins file declares the timelock (SP, schema 543f3498)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('an address becomes a certified book entry, its codehash re-keyed', () => {
         const p = parseManifestPins({ ...MANIFEST, timelockController: A(0x26), codehashes: { ...MANIFEST.codehashes, timelockController: '0x' + '26'.repeat(32) } }, 'upgrade');
         expect(p.addresses?.timelockController).toBe(A(0x26));
@@ -380,7 +385,7 @@ describe('the pins file declares the timelock (SP, schema 543f3498)', () => {
     ])('refused: %s', (_n, patch, msg) => expect(() => parseManifestPins({ ...MANIFEST, ...patch }, 'upgrade')).toThrow(msg));
 });
 
-describe('"n/a:none" survives into validation: a fresh deploy without a timelock passes (Codex r12)', async () => {
+describe('"n/a:none" survives into validation: a fresh deploy without a timelock passes (Codex r12)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, async () => {
     const { sp550FreshPinProblems, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS } = await import('../packages/core/src/sp550Deployments.js');
     it('parser -> validator: no timelock declared absent, no "unpinned" problem', () => {
         expect(SP550_FRESH_OPTIONAL_ADDRESS_KEYS).toContain('timelockController');
@@ -397,7 +402,7 @@ describe('"n/a:none" survives into validation: a fresh deploy without a timelock
     });
 });
 
-describe('every manifest declares the timelock (Codex r13)', () => {
+describe('every manifest declares the timelock (Codex r13)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('silence is refused in both modes', () => {
         const { timelockController: _t, ...silent } = MANIFEST;
         expect(() => parseManifestPins(silent, 'upgrade')).toThrow(/timelockController is not declared/);
@@ -405,7 +410,7 @@ describe('every manifest declares the timelock (Codex r13)', () => {
     });
 });
 
-describe('the replaced timelock is kept only as history (DSR 2026-11-11)', () => {
+describe('the replaced timelock is kept only as history (DSR 2026-11-11)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const OLD = '0x86C86c789EDc099801cc6a5F48334F1D67dC9564', NEW = '0xCCdF8e0D29Fb2c3061910D79484a2b653757C34B';
     it('switching timelockController writes the old value as timelockControllerLegacy', () => {
         expect(withTimelockLegacy({ timelockController: NEW }, { timelockController: OLD })).toEqual({ timelockController: NEW, timelockControllerLegacy: OLD });
@@ -441,7 +446,7 @@ describe('the replaced timelock is kept only as history (DSR 2026-11-11)', () =>
     });
 });
 
-describe('a final tag names no rc directory: the path must be explicit (Grok)', () => {
+describe('a final tag names no rc directory: the path must be explicit (Grok)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const C = 'a'.repeat(40);
     it('v5.5.0 with the default path is refused; with an explicit path it is accepted', () => {
         expect(() => spReadbackApiPath('deployments/release/rc8/sepolia.readback.live.json', C, 'sepolia', 'v5.5.0', false)).toThrow(/names no rc: pass --sp-readback-path explicitly/);
@@ -451,7 +456,7 @@ describe('a final tag names no rc directory: the path must be explicit (Grok)', 
     });
 });
 
-describe('PR-Daemon B1: an upgrade cannot move the proxy or a non-switchable book entry', () => {
+describe('PR-Daemon B1: an upgrade cannot move the proxy or a non-switchable book entry', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const pins = parseManifestPins(MANIFEST, 'upgrade');
     const shipped = CANONICAL_ADDRESSES[11155111] as unknown as Record<string, unknown>;
     it('the manifest proxy equal to the shipped one, only switchable entries changing: no problem', () => {
@@ -468,7 +473,7 @@ describe('PR-Daemon B1: an upgrade cannot move the proxy or a non-switchable boo
     });
 });
 
-describe('PR-Daemon F2: the SP read-back commit must be on SP main', () => {
+describe('PR-Daemon F2: the SP read-back commit must be on SP main', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([['identical', true], ['behind', true], ['ahead', false], ['diverged', false], ['', false], [undefined, false]])('compare status %s -> %s', (s, ok) => expect(spCommitOnMain(s)).toBe(ok));
     it('the repository is SP', () => expect(SP_REPO).toBe('AAStarCommunity/SuperPaymaster'));
     it('the compare is main...<commit>, so "behind" means the commit is an ancestor of main (Grok r18)', () => {
@@ -478,7 +483,7 @@ describe('PR-Daemon F2: the SP read-back commit must be on SP main', () => {
     });
 });
 
-describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns) is loopback', () => {
+describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns) is loopback', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each(['::ffff:127.0.0.1', '[::ffff:127.0.0.53]', '::ffff:0.0.0.0'])('%s', (h) => expect(isLoopbackHost(h)).toBe(true));
     it.each(['::ffff:128.0.0.1', '::ffff:10.0.0.1'])('%s is not', (h) => expect(isLoopbackHost(h)).toBe(false));
 });

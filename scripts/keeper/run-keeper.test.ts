@@ -22,7 +22,7 @@ mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
 writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\n');
 chmodSync(join(bin, 'pnpm'), 0o755);
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
 function run(args: string[], key = 'dummy-not-a-key') {
     const r = spawnSync('bash', [join(dir, 'run-keeper.sh'), ...args], {
@@ -37,7 +37,11 @@ function run(args: string[], key = 'dummy-not-a-key') {
 /** Every value passed for `flag`, in order. */
 const valuesOf = (argv: string[], flag: string) => argv.flatMap((a, i) => (a === flag ? [argv[i + 1]] : []));
 
-describe('run-keeper.sh argument assembly', () => {
+// run() is spawnSync. That blocks the verdict timer the same way execFileSync does. The script
+// itself is a short bash run; 30s is the spawn-verdict budget, not a measurement of this file.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('--paymaster-missing-alert does not suppress the baked V4', () => {
         const r = run(['sepolia', '--paymaster-missing-alert', '600']);
         expect(r.status).toBe(0);

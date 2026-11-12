@@ -54,6 +54,11 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import { NegativeControlFailure, errorSelector, expectViewRejected, extractRevertData } from './negative-control.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const REQUIRED = process.env.REPCREDIT_ANVIL_TEST === '1';
 const PORT = Number(process.env.REPCREDIT_REVERT_ANVIL_PORT ?? 18_993);
 const RPC = `http://127.0.0.1:${PORT}`;
@@ -143,7 +148,7 @@ async function waitFor(check: () => Promise<boolean>, tries: number, delayMs: nu
   return false;
 }
 
-describe('extractRevertData against a real viem error graph (real anvil)', () => {
+describe('extractRevertData against a real viem error graph (real anvil)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   let anvil: ChildProcess | undefined;
   let booted = false;
   let unavailable = '';
@@ -177,7 +182,7 @@ describe('extractRevertData against a real viem error graph (real anvil)', () =>
 
   afterAll(() => {
     anvil?.kill('SIGTERM');
-  });
+  }, SPAWN_VERDICT_TIMEOUT_MS);
 
   /** Skip loudly, or fail when the gate flag says this suite is required. */
   function requireChain(ctx: { skip: () => void }): boolean {

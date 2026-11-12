@@ -17,10 +17,15 @@ import {
   type Claim,
 } from './check-task-ledger.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const states = (m: Record<number, 'MERGED' | 'OPEN' | 'CLOSED'>) =>
   new Map(Object.entries(m).map(([k, v]) => [Number(k), v] as const));
 
-describe('what counts as a claim', () => {
+describe('what counts as a claim', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('`src=PR#N` is a citation, not a claim about that PR', () => {
     // The false positive that rewrote these rules. The first version flagged 24 lines like this one,
     // every one of them saying only "this follow-up came out of that review".
@@ -48,7 +53,7 @@ describe('what counts as a claim', () => {
   });
 });
 
-describe('reconciliation', () => {
+describe('reconciliation', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const claim = (pr: number, claimsDone: boolean): Claim => ({ where: 'f.md:1', pr, claimsDone });
 
   it('claiming DONE against an unmerged PR is the strongest problem', () => {
@@ -80,7 +85,7 @@ describe('reconciliation', () => {
   });
 });
 
-describe('the real ledgers parse', () => {
+describe('the real ledgers parse', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('both files yield a non-trivial number of claims', () => {
     // The instrument check: "no problems" from a parser that matched nothing looks identical to
     // "no problems" from ledgers that agree. Network reconciliation is not done here — that belongs
@@ -93,7 +98,7 @@ describe('the real ledgers parse', () => {
   });
 });
 
-describe('the self-PR exemption is narrow', () => {
+describe('the self-PR exemption is narrow', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const claim = (pr: number): Claim => ({ where: 'f.md:1', pr, claimsDone: true });
 
   it('an entry closed by THIS PR is not yet reconcilable', () => {
@@ -115,7 +120,7 @@ describe('the self-PR exemption is narrow', () => {
   });
 });
 
-describe('the source-level rule that IS textual', () => {
+describe('the source-level rule that IS textual', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('no gh call may discard stderr', () => {
     // This one carries weight, and the reason is worth stating because a neighbouring assertion did
     // not: the property being pinned IS a spelling. `stdio: ['ignore','pipe','ignore']` throws away
@@ -134,7 +139,7 @@ describe('the source-level rule that IS textual', () => {
 });
 
 
-describe('which PR this run belongs to — decided from the environment', () => {
+describe('which PR this run belongs to — decided from the environment', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // Behavioural, not textual. Commenting out any branch below makes one of these red; commenting it
   // out used to make nothing red.
   it('a push run belongs to no PR, whatever the checkout looks like', () => {
@@ -165,7 +170,7 @@ describe('which PR this run belongs to — decided from the environment', () => 
   });
 });
 
-describe('FU-56 — two model gaps, both hit on the same real entry', () => {
+describe('FU-56 — two model gaps, both hit on the same real entry', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const claims = (line: string) => extractClaims('l.md', line);
 
     describe('gap 1: "closed because we decided NOT to act" had no category', () => {
@@ -251,7 +256,7 @@ describe('FU-56 — two model gaps, both hit on the same real entry', () => {
     });
 });
 
-describe('FU-66 — a status that names no PR was never checked, and the run said ✅', () => {
+describe('FU-66 — a status that names no PR was never checked, and the run said ✅', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // The two rows that prompted this were `T1.1.2` and `T2.1.1`, both reading `PR_OPEN` while their
   // PRs (#368, #362) had merged. `extractClaims` found nothing on either line — a claim with no
   // number produces no claim — so the reconciliation printed "every PR claim agrees with GitHub"
@@ -334,7 +339,7 @@ describe('FU-66 — a status that names no PR was never checked, and the run sai
   });
 });
 
-describe('FU-68 — the OTHER half of the same function was still fail-open', () => {
+describe('FU-68 — the OTHER half of the same function was still fail-open', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // #376 fixed mention-vs-use on the STATUS half (only the trailing code span counts) and left the
   // "does this header name a PR" half matching the whole line. Review found it. Both of the cases
   // below were silent on that version, and silence here means the row goes unchecked — the exact

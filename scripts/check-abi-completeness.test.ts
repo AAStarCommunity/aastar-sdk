@@ -25,7 +25,7 @@ const AA_SENTINELS = ['AAStarAirAccountV7', 'AAStarAirAccountFactoryV7'];
 const roots: string[] = [];
 afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
-});
+}, 30_000);
 
 /** Build <root>/sdk + sibling upstreams; `null` contracts = the src dir exists but is empty. */
 function layout(spContracts: string[] | null, aaContracts: string[] = AA_SENTINELS): string {
@@ -53,7 +53,13 @@ function run(cwd: string): { code: number; out: string } {
   }
 }
 
-describe('check-abi-completeness sentinels', () => {
+// Each case spawns tsx. execFileSync blocks the event loop vitest's timer runs on (measured on
+// vitest 4.0.17), so this bounds the verdict, not a hung child. 30s is the spawn-verdict budget
+// the other spawn suites use: the only CI/local ratio on record is 7.4x, which put a cold tsx
+// start at 93% of the 5s default.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('check-abi-completeness sentinels', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('positive control: every sentinel present and shipped → exit 0', () => {
     const r = run(layout(SP_SENTINELS));
     expect(r.out).toMatch(/PASS/);

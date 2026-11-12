@@ -40,7 +40,11 @@ function scratchRoot(mutate?: (doc: Record<string, unknown>) => void): string {
   return root;
 }
 
-describe('offline pin checks — each one has a mutation that reddens it', () => {
+// checkDeployedAbiPin reaches readBlobAtRevision, which git-shows the pinned blob. execFileSync
+// blocks the verdict timer. 30s is the spawn-verdict budget the other git-show suites use.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
+describe('offline pin checks — each one has a mutation that reddens it', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('passes unmutated against the real vendored artifact', () => {
     const checks = checkDeployedAbiPin(PIN, SDK_ROOT, null);
     expect(summarise(checks).failed).toEqual([]);
@@ -222,7 +226,7 @@ function stubClient(a: Answers) {
 /** The stub cannot reproduce extcodehash, so that check is excluded from the stubbed baseline. */
 const STUB_UNSUPPORTED = new Set(['aggregator:extcodehash']);
 
-describe('on-chain checks — each one has a mutated chain answer that reddens it', () => {
+describe('on-chain checks — each one has a mutated chain answer that reddens it', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('baseline: every supported check is green when the chain agrees with the pin', async () => {
     const checks = await checkDeployedStackOnChain(PIN, stubClient(baseAnswers()));
     const failed = checks.filter((c) => !c.ok && !STUB_UNSUPPORTED.has(c.name));
@@ -333,7 +337,7 @@ describe('on-chain checks — each one has a mutated chain answer that reddens i
   });
 });
 
-describe('the pin file itself', () => {
+describe('the pin file itself', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('names the frozen B3 manifest and a non-empty rejected set', () => {
     expect(PIN.manifest.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(PIN.rejectedAggregators.length).toBeGreaterThan(0);

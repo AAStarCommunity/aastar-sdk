@@ -99,6 +99,13 @@ jobs:
       - name: Run root-level tests (scripts/, excluding repcredit)
         run: pnpm run test:scripts
 
+      # A describe-level timeout covers cases only. Hooks keep hookTimeout (default 10s), and a
+      # file that sets neither sits on the 5s test default. execFileSync blocks the timer, so a
+      # slow spawn and a failed assertion are the same line. test:scripts excludes repcredit only
+      # because repcredit:test runs those files; this gate watches both. See FU-47.
+      - name: Spawning tests declare an explicit timeout
+        run: pnpm run check:spawn-timeouts
+
       # The ledger is the only record of work deferred rather than done, and its ids are referenced
       # from PR bodies and task comments. A duplicate id makes every one of those references
       # ambiguous, and nothing else in the repo has an opinion about it — see FU-26.

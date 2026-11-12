@@ -48,6 +48,11 @@ import {
 import { foundry } from 'viem/chains';
 import { GUARDIAN_SLASH_CASE, readNamedStruct } from './evidence-structs.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const REQUIRED = process.env.REPCREDIT_ANVIL_TEST === '1';
 const PORT = Number(process.env.REPCREDIT_STRUCT_ANVIL_PORT ?? 18_994);
 const RPC = `http://127.0.0.1:${PORT}`;
@@ -157,7 +162,7 @@ async function waitFor(check: () => Promise<boolean>, tries: number, delayMs: nu
   return false;
 }
 
-describe('guardianSlashCases 7 -> 8 against a real chain', () => {
+describe('guardianSlashCases 7 -> 8 against a real chain', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   let anvil: ChildProcess | undefined;
   let booted = false;
   let unavailable = '';
@@ -184,7 +189,7 @@ describe('guardianSlashCases 7 -> 8 against a real chain', () => {
 
   afterAll(() => {
     anvil?.kill('SIGKILL');
-  });
+  }, SPAWN_VERDICT_TIMEOUT_MS);
 
   function guard(): boolean {
     if (booted) return true;
