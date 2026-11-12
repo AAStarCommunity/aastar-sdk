@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, keccak256, numberToHex, stringToHex, type Address, type Hex } from 'viem';
 import { bloomOf } from '../../src/guardianAudit/bloom';
 import {
+    CheckpointConflictError,
     FinalityConflictError,
     memoryStore,
     scanRange,
@@ -45,7 +46,7 @@ function makeLog(n: number, hash: Hex, index: number, topic: Hex, patch?: Partia
     };
 }
 
-interface Block { hash: Hex; logs: RawLog[]; bloom: Hex | null; hide: Set<number> }
+interface Block { hash: Hex; logs: RawLog[]; bloom: Hex | null; hide: Set<number>; parent?: Hex }
 
 class Fake implements RawRpc {
     calls: { method: string; params: unknown[] }[] = [];
@@ -57,7 +58,21 @@ class Fake implements RawRpc {
     includeMismatch = false;
     garbage = false;
     leak: RawLog | null = null;
+    failFinalized = false;
+    failHeader = false;
+    failRange = false;
+    finalizedHash: Hex | null = null;
+    finalizedRereadHash: Hex | null = null;
+    rewindFinalized = false;
+    finalizedReads = 0;
+    gate: Promise<void> | null = null;
     constructor(public name: string, public finalized: number) {}
+
+    parentOf(n: number): Hex {
+        const block = this.blocks.get(n);
+        if (block?.parent) return block.parent;
+        return n > 1 ? this.blocks.get(n - 1)!.hash : bhash(0);
+    }
 
     fill(upTo: number, hashOf: (n: number) => Hex = bhash): void {
         for (let n = 1; n <= upTo; n++) {
@@ -88,16 +103,28 @@ class Fake implements RawRpc {
     async request(args: { method: string; params?: unknown[] }): Promise<unknown> {
         const params = args.params ?? [];
         this.calls.push({ method: args.method, params });
+        if (this.gate && args.method === 'eth_getLogs') await this.gate;
         if (args.method === 'eth_getBlockByNumber') {
             const tag = params[0];
-            const n = tag === 'finalized' ? this.finalized : Number.parseInt(String(tag), 16);
+            const finalized = tag === 'finalized';
+            if (finalized && this.failFinalized) throw new Error('https://rpc.example/finalized');
+            if (!finalized && this.failHeader) throw new Error('https://rpc.example/header');
+            let n = finalized ? this.finalized : Number.parseInt(String(tag), 16);
+            if (finalized) {
+                this.finalizedReads++;
+                if (this.rewindFinalized && this.finalizedReads > 1) n = 1;
+            }
             const block = this.blocks.get(n);
             if (!block) return null;
-            return { number: numberToHex(n), hash: block.hash, logsBloom: block.bloom };
+            let hash = block.hash;
+            if (finalized && this.finalizedReads === 1 && this.finalizedHash) hash = this.finalizedHash;
+            if (finalized && this.finalizedReads > 1 && this.finalizedRereadHash) hash = this.finalizedRereadHash;
+            return { number: numberToHex(n), hash, parentHash: this.parentOf(n), logsBloom: block.bloom };
         }
         if (args.method === 'eth_getLogs') {
             const filter = params[0] as Record<string, unknown>;
             if ('topics' in filter) throw new Error('topics filter is not allowed');
+            if (typeof filter.blockHash !== 'string' && this.failRange) throw new Error('https://rpc.example/logs');
             if (this.garbage) return [null];
             if (typeof filter.blockHash === 'string') {
                 if (this.failByHash) throw new Error('https://rpc.example/secret');
@@ -176,10 +203,12 @@ function trace(inner: GuardianAuditStore = memoryStore()) {
     const events: string[] = [];
     const store: GuardianAuditStore = {
         getCheckpoint: () => inner.getCheckpoint(),
-        setCheckpoint: async (cp) => { events.push('checkpoint'); await inner.setCheckpoint(cp); },
+        setCheckpoint: async (next, expected) => { events.push('checkpoint'); await inner.setCheckpoint(next, expected); },
         putUnresolved: async (items) => { events.push('put'); await inner.putUnresolved(items); },
         listUnresolved: () => inner.listUnresolved(),
         resolveUnresolved: async (id) => { events.push('resolve'); await inner.resolveUnresolved(id); },
+        putAttributed: async (items) => { events.push('attributed'); await inner.putAttributed(items); },
+        listAttributed: () => inner.listAttributed(),
     };
     return { store, events, inner };
 }
@@ -242,7 +271,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
     it('returns COMPLETE(0) with no log reads when the cursor is already at finalized', async () => {
         const { a, b } = pair(5);
         const store = memoryStore();
-        await store.setCheckpoint({ block: 5, hash: bhash(5) });
+        await store.setCheckpoint({ block: 5, hash: bhash(5) }, null);
         const result = await run(a, b, store);
         expect(result).toMatchObject({ state: 'COMPLETE', count: 0, actions: [], from: 6, to: 5 });
         expect(a.calls.every((call) => call.method === 'eth_getBlockByNumber')).toBe(true);
@@ -294,7 +323,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             const { a, b } = pair(5);
             const store = memoryStore();
             const saved: Checkpoint = { block: 2, hash: bhash(2) };
-            await store.setCheckpoint(saved);
+            await store.setCheckpoint(saved, null);
             (side === 'a' ? a : b).setHash(2, bhash(2, 'reorg'));
             await expect(run(a, b, store)).rejects.toBeInstanceOf(FinalityConflictError);
             expect(await store.getCheckpoint()).toEqual(saved);
@@ -350,7 +379,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
 
         const mismatched = pair();
         addBoth(mismatched.a, mismatched.b, 2, TOPIC, 0, false, { blockHash: bhash(50) });
-        expectIncomplete(await run(mismatched.a, mismatched.b), /blockHash disagrees with header at block 2/);
+        expectIncomplete(await run(mismatched.a, mismatched.b), /blockHash disagrees with/);
 
         const broken = pair();
         broken.a.garbage = true;
@@ -401,7 +430,8 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         failing.a.failByHash = true;
         failing.b.failByHash = true;
         const right = await run(failing.a, failing.b);
-        expectIncomplete(right, /by-hash log read failed/);
+        expectIncomplete(right, /by-hash log read failed for primary/);
+        expect(right.state === 'INCOMPLETE' && right.reasons.join('\n')).not.toMatch(/rpc\.example/);
     });
 
     it('sorts actions and does not attribute an ignored event', async () => {
@@ -452,10 +482,12 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         const events: string[] = [];
         const store: GuardianAuditStore = {
             getCheckpoint: () => inner.getCheckpoint(),
-            setCheckpoint: async (cp) => { events.push('checkpoint'); await inner.setCheckpoint(cp); },
+            setCheckpoint: async (next, expected) => { events.push('checkpoint'); await inner.setCheckpoint(next, expected); },
             putUnresolved: async () => { events.push('put'); throw new Error('disk'); },
             listUnresolved: () => inner.listUnresolved(),
             resolveUnresolved: (id) => inner.resolveUnresolved(id),
+            putAttributed: (items) => inner.putAttributed(items),
+            listAttributed: () => inner.listAttributed(),
         };
         await expect(run(a, b, store)).rejects.toThrow(/disk/);
         expect(events).toEqual(['put']);
@@ -481,7 +513,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(JSON.stringify(await store.listUnresolved())).not.toMatch(/:\/\//);
     });
 
-    it('retries stored unresolved actions first and resolves them before a new miss', async () => {
+    it('retries stored unresolved actions first and resolves them after the checkpoint', async () => {
         const { a, b } = pair(6);
         addBoth(a, b, 4, TOPIC, 0);
         const { store, events, inner } = trace();
@@ -496,8 +528,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         };
         const result = await run(a, b, store, { attributor });
         expect(seen[0]).toBe(1);
-        expect(events[0]).toBe('resolve');
-        expect(events).toEqual(['resolve', 'put', 'checkpoint']);
+        expect(events).toEqual(['attributed', 'put', 'checkpoint', 'resolve']);
         expect(result).toMatchObject({ state: 'UNATTRIBUTED', count: 1, unattributed: 1 });
         const rows = await inner.listUnresolved();
         expect(rows.map((row) => row.blockNumber)).toEqual([4]);
@@ -516,7 +547,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
 
         const done = pair(4);
         const caught = memoryStore();
-        await caught.setCheckpoint({ block: 4, hash: bhash(4) });
+        await caught.setCheckpoint({ block: 4, hash: bhash(4) }, null);
         await prior(caught, bhash(1));
         const result = await run(done.a, done.b, caught);
         expect(result).toMatchObject({ state: 'UNATTRIBUTED', count: 0, unattributed: 1 });
@@ -654,6 +685,33 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         await expect(scanRange({
             providers, store, startBlock: -1, maxBlocks: 5, watched: [watched()],
         })).rejects.toThrow(/startBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: Number.NaN, maxBlocks: 5, watched: [watched()],
+        })).rejects.toThrow(/startBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: 1.5, maxBlocks: 5, watched: [watched()],
+        })).rejects.toThrow(/startBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: Number.NaN, watched: [watched()],
+        })).rejects.toThrow(/maxBlocks/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 1.5, watched: [watched()],
+        })).rejects.toThrow(/maxBlocks/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 5, watched: [watched({ fromBlock: Number.NaN })],
+        })).rejects.toThrow(/fromBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 5, watched: [watched({ toBlock: Number.NaN })],
+        })).rejects.toThrow(/toBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 5, watched: [watched({ toBlock: 1.5 })],
+        })).rejects.toThrow(/toBlock/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 5, page: 0, watched: [watched()],
+        })).rejects.toThrow(/page/);
+        await expect(scanRange({
+            providers, store, startBlock: 1, maxBlocks: 5, page: Number.NaN, watched: [watched()],
+        })).rejects.toThrow(/page/);
         expect(a.calls).toHaveLength(0);
         expect(b.calls).toHaveLength(0);
 
@@ -667,24 +725,201 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(result).toMatchObject({ state: 'COMPLETE', count: 1 });
     });
 
-    it('names a throwing decoder and writes nothing', async () => {
+    it('is INCOMPLETE when a decoder throws, and writes nothing', async () => {
         const { a, b } = pair(3);
         addBoth(a, b, 2, TOPIC);
         const { store, events, inner } = trace();
         const failing = watched({
             decode() { throw new Error('https://evil.example/decoder'); },
         });
-        await expect(run(a, b, store, { watched: [failing] })).rejects.toThrow(
-            `decoder for ${getAddress(ADDR)} threw at block 2`,
-        );
+        const result = await run(a, b, store, { watched: [failing] });
+        expectIncomplete(result, new RegExp(`decoder threw for ${getAddress(ADDR)} at block 2`));
+        expect(result.state === 'INCOMPLETE' && result.reasons.join('\n')).not.toMatch(/evil\.example/);
         expect(events).toEqual([]);
         expect(await inner.getCheckpoint()).toBeNull();
         expect(await inner.listUnresolved()).toEqual([]);
-        try {
-            await run(a, b, store, { watched: [failing] });
-        } catch (error) {
-            expect((error as Error).message).not.toMatch(/evil\.example/);
+        expect(await inner.listAttributed()).toEqual([]);
+    });
+
+    it('recovers a guardian log hidden beside an ignored log in the same block', async () => {
+        const { a, b } = pair(3);
+        addBoth(a, b, 2, IGNORE, 0);
+        addBoth(a, b, 2, TOPIC, 1, true);
+        const result = await run(a, b, memoryStore(), { attributor: ok });
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 1, ignored: 1, bloomRecovered: 1 });
+        if (result.state !== 'COMPLETE') return;
+        expect(result.actions[0]).toMatchObject({ blockNumber: 2, logIndex: 1, kind: 'guardian-added' });
+    });
+
+    it('is INCOMPLETE when a range log is missing from the by-hash read', async () => {
+        const { a, b } = pair(3);
+        addBoth(a, b, 2, TOPIC);
+        a.byHashEmpty = true;
+        b.byHashEmpty = true;
+        const store = memoryStore();
+        expectIncomplete(await run(a, b, store), /range and by-hash logs disagree at block 2/);
+        expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('is INCOMPLETE when the bloom says the address is absent but range logs exist', async () => {
+        const { a, b } = pair(3);
+        addBoth(a, b, 2, TOPIC);
+        const empty = bloomOf([]);
+        a.setBloom(2, empty);
+        b.setBloom(2, empty);
+        const store = memoryStore();
+        expectIncomplete(await run(a, b, store), /bloom contradicts logs at block 2/);
+        expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('is INCOMPLETE when parentHash breaks, including against the checkpoint', async () => {
+        for (const side of ['a', 'b'] as const) {
+            const nodes = pair(4);
+            nodes[side].blocks.get(3)!.parent = bhash(9);
+            const store = memoryStore();
+            expectIncomplete(await run(nodes.a, nodes.b, store), /parentHash breaks at block 3/);
+            expect(await store.getCheckpoint()).toBeNull();
         }
+        const { a, b } = pair(5);
+        const store = memoryStore();
+        await store.setCheckpoint({ block: 2, hash: bhash(2) }, null);
+        a.blocks.get(3)!.parent = bhash(8);
+        const result = await run(a, b, store);
+        expect(result.state).toBe('INCOMPLETE');
+        expectIncomplete(result, /parentHash breaks at block 3 on primary/);
+        expect(await store.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
+    });
+
+    it('is INCOMPLETE when a numeric header is not the finalized header that was read', async () => {
+        for (const side of ['a', 'b'] as const) {
+            const nodes = pair(3);
+            nodes[side].finalizedHash = bhash(9);
+            const store = memoryStore();
+            expectIncomplete(await run(nodes.a, nodes.b, store), new RegExp(`finalized hash disagrees with header at block 3 on ${nodes[side].name}`));
+            expect(await store.getCheckpoint()).toBeNull();
+        }
+        const behind = pair(4);
+        behind.a.rewindFinalized = true;
+        const behindStore = memoryStore();
+        expectIncomplete(await run(behind.a, behind.b, behindStore), /finalized height fell behind block 4 on primary/);
+        expect(await behindStore.getCheckpoint()).toBeNull();
+
+        const moved = pair(3);
+        moved.b.finalizedRereadHash = bhash(7);
+        const movedStore = memoryStore();
+        expectIncomplete(await run(moved.a, moved.b, movedStore), /finalized hash moved at block 3 on secondary/);
+        expect(await movedStore.getCheckpoint()).toBeNull();
+    });
+
+    it('is INCOMPLETE for a finalized, header, or range read failure, without the error text', async () => {
+        const fin = pair(3);
+        fin.a.failFinalized = true;
+        const finStore = memoryStore();
+        const finResult = await run(fin.a, fin.b, finStore);
+        expectIncomplete(finResult, /finalized read failed for primary/);
+        expect(await finStore.getCheckpoint()).toBeNull();
+
+        const heads = pair(3);
+        heads.a.failHeader = true;
+        expectIncomplete(await run(heads.a, heads.b), /header read failed for primary at block 1/);
+
+        const logs = pair(3);
+        logs.b.failRange = true;
+        const logStore = memoryStore();
+        const logResult = await run(logs.a, logs.b, logStore);
+        expectIncomplete(logResult, /range log read failed for secondary/);
+        expect(await logStore.getCheckpoint()).toBeNull();
+        expect(await logStore.listUnresolved()).toEqual([]);
+    });
+
+    it('keeps an accepted prior when a later write fails, and retries it', async () => {
+        const accept: Attributor = { async attribute() { return { ok: true, attribution: { who: 'old' } }; } };
+        async function boom(at: 'attributed' | 'unresolved' | 'checkpoint' | 'resolve') {
+            const { a, b } = pair(4);
+            if (at === 'unresolved') addBoth(a, b, 3, TOPIC);
+            const inner = memoryStore();
+            await prior(inner, bhash(1));
+            const events: string[] = [];
+            let fault: string | null = at;
+            const store: GuardianAuditStore = {
+                getCheckpoint: () => inner.getCheckpoint(),
+                setCheckpoint: async (next, expected) => {
+                    events.push('checkpoint');
+                    if (fault === 'checkpoint') throw new Error('https://disk.example/checkpoint');
+                    await inner.setCheckpoint(next, expected);
+                },
+                putUnresolved: async (items) => {
+                    events.push('put');
+                    if (fault === 'unresolved') throw new Error('https://disk.example/put');
+                    await inner.putUnresolved(items);
+                },
+                listUnresolved: () => inner.listUnresolved(),
+                resolveUnresolved: async (id) => {
+                    events.push('resolve');
+                    if (fault === 'resolve') throw new Error('https://disk.example/resolve');
+                    await inner.resolveUnresolved(id);
+                },
+                putAttributed: async (items) => {
+                    events.push('attributed');
+                    if (fault === 'attributed') throw new Error('https://disk.example/attributed');
+                    await inner.putAttributed(items);
+                },
+                listAttributed: () => inner.listAttributed(),
+            };
+            const attributor: Attributor = {
+                async attribute(action) {
+                    if (action.blockNumber === 1) return { ok: true, attribution: { who: 'old' } };
+                    return { ok: false, reason: 'later' };
+                },
+            };
+            await expect(run(a, b, store, { attributor })).rejects.toThrow(/disk/);
+            if (at === 'resolve') expect(events.at(-1)).toBe('resolve');
+            else expect(events).not.toContain('resolve');
+            expect((await inner.listUnresolved()).map((item) => item.blockNumber)).toContain(1);
+            if (at !== 'resolve') expect(await inner.getCheckpoint()).toBeNull();
+            return { a, b, inner, store, events, clear: () => { fault = null; } };
+        }
+        const attributed = await boom('attributed');
+        expect(attributed.events).toEqual(['attributed']);
+        expect(await attributed.inner.listAttributed()).toEqual([]);
+
+        const unresolved = await boom('unresolved');
+        expect(unresolved.events).toEqual(['attributed', 'put']);
+        expect(await unresolved.inner.listAttributed()).toHaveLength(1);
+        expect((await unresolved.inner.listUnresolved()).map((item) => item.blockNumber).sort()).toEqual([1]);
+
+        const checkpoint = await boom('checkpoint');
+        expect(checkpoint.events).toEqual(['attributed', 'checkpoint']);
+        expect(await checkpoint.inner.listAttributed()).toHaveLength(1);
+
+        const resolved = await boom('resolve');
+        expect(resolved.events).toEqual(['attributed', 'checkpoint', 'resolve']);
+        expect(await resolved.inner.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+        expect(await resolved.inner.listAttributed()).toHaveLength(1);
+        resolved.clear();
+        const again = await run(resolved.a, resolved.b, resolved.store, { attributor: accept });
+        expect(again).toMatchObject({ state: 'COMPLETE', count: 0 });
+        expect(await resolved.inner.listUnresolved()).toEqual([]);
+        expect(await resolved.inner.listAttributed()).toHaveLength(1);
+        expect(await resolved.inner.getCheckpoint()).toEqual({ block: 4, hash: bhash(4) });
+    });
+
+    it('rejects the later overlapping scan so the checkpoint cannot regress', async () => {
+        const store = memoryStore();
+        const slow = pair(5);
+        const fast = pair(5);
+        let release: () => void = () => {};
+        slow.a.gate = new Promise<void>((resolve) => { release = resolve; });
+        const first = run(slow.a, slow.b, store, { maxBlocks: 2 });
+        for (let i = 0; i < 50 && !slow.a.calls.some((call) => call.method === 'eth_getLogs'); i++) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(slow.a.calls.some((call) => call.method === 'eth_getLogs')).toBe(true);
+        const second = await run(fast.a, fast.b, store);
+        expect(second).toMatchObject({ state: 'COMPLETE', to: 5 });
+        release();
+        await expect(first).rejects.toBeInstanceOf(CheckpointConflictError);
+        expect(await store.getCheckpoint()).toEqual({ block: 5, hash: bhash(5) });
     });
 
     it('memoryStore is idempotent by id and copies the checkpoint', async () => {
@@ -700,10 +935,23 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(await store.listUnresolved()).toEqual([expect.objectContaining({ reason: 'second' })]);
         await store.resolveUnresolved(row.id.toUpperCase());
         expect(await store.listUnresolved()).toEqual([]);
-        await store.setCheckpoint({ block: 1, hash: bhash(1) });
+        await store.setCheckpoint({ block: 1, hash: bhash(1) }, null);
         const cp = await store.getCheckpoint();
         cp!.block = 9;
         expect(await store.getCheckpoint()).toEqual({ block: 1, hash: bhash(1) });
+        await store.setCheckpoint({ block: 2, hash: bhash(2) }, { block: 1, hash: bhash(1).toUpperCase() as Hex });
+        expect(await store.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
+        await expect(store.setCheckpoint({ block: 1, hash: bhash(1) }, null)).rejects.toBeInstanceOf(CheckpointConflictError);
+        expect((await store.getCheckpoint())?.block).toBe(2);
+        const attributed = {
+            id: unresolvedId(bhash(1), 0),
+            blockNumber: 1, blockHash: bhash(1), txHash: tx(1, 0), logIndex: 0,
+            address: ADDR, kind: 'guardian-added', decoded: { kind: 'guardian-added' },
+            log: makeLog(1, bhash(1), 0, TOPIC), attribution: { who: 'guardian' },
+        };
+        await store.putAttributed([attributed]);
+        await store.putAttributed([{ ...attributed, attribution: { who: 'again' } }]);
+        expect(await store.listAttributed()).toEqual([expect.objectContaining({ attribution: { who: 'again' } })]);
     });
 });
 

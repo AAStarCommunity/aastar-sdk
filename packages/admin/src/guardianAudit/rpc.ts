@@ -25,6 +25,7 @@ export interface RawLog {
 export interface BlockHeader {
     number: number;
     hash: Hex;
+    parentHash: Hex;
     /** 256 bytes, or null when missing or the wrong size. */
     logsBloom: Hex | null;
 }
@@ -43,21 +44,22 @@ export function isWord(v: unknown): v is string {
     return typeof v === 'string' && WORD.test(v);
 }
 
-/** `eth_getBlockByNumber`. Rejects null, a bad hash, a bad height, or a different height. */
+/** `eth_getBlockByNumber`. Rejects null, a bad hash or parentHash, a bad height, or a different height. */
 export async function header(rpc: RawRpc, tag: number | 'finalized'): Promise<BlockHeader> {
     const raw = await rpc.request({
         method: 'eth_getBlockByNumber',
         params: [typeof tag === 'number' ? numberToHex(tag) : tag, false],
     });
     if (raw == null || typeof raw !== 'object') throw new Error(`${rpc.name}: block ${String(tag)} unavailable`);
-    const b = raw as { hash?: unknown; number?: unknown; logsBloom?: unknown };
+    const b = raw as { hash?: unknown; parentHash?: unknown; number?: unknown; logsBloom?: unknown };
     const number = quantity(b.number);
     if (typeof b.hash !== 'string' || !WORD.test(b.hash) || number === null) {
         throw new Error(`${rpc.name}: malformed block header`);
     }
     if (typeof tag === 'number' && number !== tag) throw new Error(`${rpc.name}: block header for another height`);
+    if (typeof b.parentHash !== 'string' || !WORD.test(b.parentHash)) throw new Error(`${rpc.name}: malformed block header`);
     const logsBloom = typeof b.logsBloom === 'string' && BLOOM.test(b.logsBloom) ? b.logsBloom as Hex : null;
-    return { number, hash: b.hash as Hex, logsBloom };
+    return { number, hash: b.hash as Hex, parentHash: b.parentHash as Hex, logsBloom };
 }
 
 export type LogFilter =

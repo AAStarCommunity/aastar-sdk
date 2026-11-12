@@ -19,13 +19,14 @@ function rpc(answer: (method: string, params: unknown[]) => unknown): RawRpc & {
 describe('guardian-audit transport (unit, not acceptance)', () => {
     it('reads a header and nulls a bloom that is not 256 bytes', async () => {
         const good = `0x${'ab'.repeat(32)}`;
+        const parent = `0x${'11'.repeat(32)}`;
         const bloom = `0x${'cd'.repeat(256)}`;
-        const node = rpc(() => ({ number: '0x10', hash: good, logsBloom: bloom }));
+        const node = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, logsBloom: bloom }));
         const h = await header(node, 16);
-        expect(h).toEqual({ number: 16, hash: good, logsBloom: bloom });
+        expect(h).toEqual({ number: 16, hash: good, parentHash: parent, logsBloom: bloom });
         expect(node.calls[0]).toEqual(['eth_getBlockByNumber', ['0x10', false]]);
 
-        const short = rpc(() => ({ number: '0x1', hash: good, logsBloom: '0xabcd' }));
+        const short = rpc(() => ({ number: '0x1', hash: good, parentHash: parent, logsBloom: '0xabcd' }));
         expect((await header(short, 'finalized')).logsBloom).toBeNull();
         expect(short.calls[0][1]).toEqual(['finalized', false]);
     });
@@ -35,6 +36,9 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         await expect(header(rpc(() => ({ number: '0x1', hash: '0xabc' })), 1)).rejects.toThrow(/malformed block header/);
         await expect(header(rpc(() => ({ number: 'nope', hash: `0x${'11'.repeat(32)}` })), 1)).rejects.toThrow(/malformed block header/);
         await expect(header(rpc(() => ({ number: '0x2', hash: `0x${'11'.repeat(32)}` })), 1)).rejects.toThrow(/another height/);
+        const parent = `0x${'11'.repeat(32)}`;
+        await expect(header(rpc(() => ({ number: '0x1', hash: parent })), 1)).rejects.toThrow(/malformed block header/);
+        await expect(header(rpc(() => ({ number: '0x1', hash: parent, parentHash: '0xabc' })), 1)).rejects.toThrow(/malformed block header/);
     });
 
     it('getLogs is address-only and rejects a non-array', async () => {
