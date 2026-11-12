@@ -1,6 +1,6 @@
 import { getAddress, isAddress, numberToHex, type Address, type Hex } from 'viem';
 import { mayContainAddress } from './bloom.js';
-import { header, isHexData, isWord, pagedLogs, quantity, rawGetLogs, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
+import { header, isHexData, isWord, pagedLogs, quantity, type BlockHeader, type RawLog, type RawRpc } from './rpc.js';
 import {
     unresolvedId,
     type AttributedAction,
@@ -8,6 +8,7 @@ import {
     type GuardianAuditStore,
     type UnresolvedAction,
 } from './store.js';
+import { receiptsRootFromRpc } from './trie.js';
 
 /** One generation. `toBlock` is the upgrade boundary; the topic table itself arrives in step 4. */
 export interface WatchedContract {
@@ -53,7 +54,6 @@ interface ScanStats {
     from: number;
     to: number;
     actions: FoundAction[];
-    bloomRecovered: number;
     bloomFalsePositives: number;
     ignored: number;
     /** Priors accepted on this run. Same sort as `actions`: blockNumber, then logIndex. */
@@ -146,25 +146,19 @@ function sameLogs(a: Norm[], b: Norm[]): boolean {
     return ak.length === bk.length && ak.every((k, i) => k === bk[i]);
 }
 
-/** Logs only in by-hash are merged. Logs only in the range answer are a disagreement. */
-function reconcile(range: Norm[], byHash: Norm[]): { merge: Norm[] } | { error: string } {
-    const seen = new Set(byHash.map(keyOf));
-    if (range.some((log) => !seen.has(keyOf(log)))) return { error: 'range and by-hash logs disagree' };
-    const have = new Set(range.map(keyOf));
-    return { merge: byHash.filter((log) => !have.has(keyOf(log))) };
-}
-
 function covers(contract: WatchedContract, address: Address, block: number): boolean {
     if (getAddress(contract.address) !== address) return false;
     if (block < contract.fromBlock) return false;
     return contract.toBlock === undefined || block <= contract.toBlock;
 }
 
+/** `log` is a copy. A decoder must not be able to edit a stored or provider object. */
 function callDecode(
-    contract: WatchedContract, log: RawLog, address: Address, block: number,
-): { ok: true; value: DecodedAction | 'ignore' | null } | { ok: false; reason: string } {
+    contract: WatchedContract, input: RawLog, address: Address, block: number,
+): { ok: true; value: DecodedAction | 'ignore' | null; log: RawLog } | { ok: false; reason: string } {
+    const log = structuredClone(input);
     try {
-        return { ok: true, value: contract.decode(log) };
+        return { ok: true, value: contract.decode(log), log };
     } catch {
         return { ok: false, reason: `decoder threw for ${address} at block ${block}` };
     }
@@ -182,7 +176,7 @@ function revive(
     if (decoded.value === null || decoded.value === 'ignore') return null;
     return {
         blockNumber: item.blockNumber, blockHash: item.blockHash, txHash: item.txHash, logIndex: item.logIndex,
-        address, kind: decoded.value.kind, decoded: decoded.value, log: item.log,
+        address, kind: decoded.value.kind, decoded: decoded.value, log: decoded.log,
     };
 }
 
@@ -218,7 +212,7 @@ async function judge(
 ): Promise<{ ok: true; attribution: unknown } | { ok: false; reason: string }> {
     if (!attributor) return { ok: false, reason: 'no attributor' };
     try {
-        const result = await attributor.attribute(action);
+        const result = await attributor.attribute(structuredClone(action));
         return result.ok ? { ok: true, attribution: result.attribution } : { ok: false, reason: safeReason(result.reason) };
     } catch {
         return { ok: false, reason: 'attributor failed' };
@@ -250,34 +244,73 @@ async function loadHeaders(rpc: RawRpc, from: number, to: number): Promise<Map<n
     return out;
 }
 
-async function reread(pa: RawRpc, pb: RawRpc, bucket: Bucket, block: number, hash: Hex): Promise<{ logs: Norm[] } | { error: string }> {
-    let rawA: unknown[];
-    let rawB: unknown[];
+async function readReceipts(rpc: RawRpc, hash: Hex): Promise<unknown[] | string> {
     try {
-        rawA = await rawGetLogs(pa, { address: bucket.address, blockHash: hash });
+        const raw = await rpc.request({ method: 'eth_getBlockReceipts', params: [hash] });
+        if (!Array.isArray(raw)) return `receipts read failed for ${rpc.name}`;
+        return raw;
     } catch {
-        return { error: `by-hash log read failed for ${pa.name}` };
+        return `receipts read failed for ${rpc.name}`;
     }
-    try {
-        rawB = await rawGetLogs(pb, { address: bucket.address, blockHash: hash });
-    } catch {
-        return { error: `by-hash log read failed for ${pb.name}` };
-    }
-    const a = parseAll(rawA, bucket.address, bucket.lo, bucket.hi);
-    const b = parseAll(rawB, bucket.address, bucket.lo, bucket.hi);
-    if ('error' in a) return a;
-    if ('error' in b) return b;
-    if (!sameLogs(a.logs, b.logs)) return { error: `providers disagree on logs of ${bucket.address}` };
-    const want = hash.toLowerCase();
-    for (const log of a.logs) {
-        if (log.blockNumber !== block) {
-            return { error: `by-hash answer for ${bucket.address} contains block ${log.blockNumber}, not ${block}` };
-        }
-        if (log.blockHash !== want) {
-            return { error: `by-hash log blockHash disagrees with the requested hash at block ${block}` };
+}
+
+function everyLog(raw: unknown[]): { logs: Norm[] } | { error: string } {
+    const logs: Norm[] = [];
+    for (const item of raw) {
+        if (typeof item !== 'object' || item === null) return { error: 'bad' };
+        const rows = (item as { logs?: unknown }).logs;
+        if (!Array.isArray(rows)) return { error: 'bad' };
+        for (const entry of rows) {
+            const log = parseLog(entry);
+            if (!log) return { error: 'bad' };
+            logs.push(log);
         }
     }
-    return { logs: a.logs };
+    return { logs };
+}
+
+/** Both providers' receipts must encode to the agreed header receiptsRoot. */
+async function prove(
+    pa: RawRpc, pb: RawRpc, block: number, hash: Hex, root: Hex,
+): Promise<{ logs: Norm[] } | { error: string }> {
+    const rawA = await readReceipts(pa, hash);
+    if (typeof rawA === 'string') return { error: rawA };
+    const rawB = await readReceipts(pb, hash);
+    if (typeof rawB === 'string') return { error: rawB };
+    const rootA = receiptsRootFromRpc(rawA);
+    const rootB = receiptsRootFromRpc(rawB);
+    if (!rootA || !rootB) return { error: `cannot verify receipts at block ${block}` };
+    const want = root.toLowerCase();
+    if (rootA.toLowerCase() !== want || rootB.toLowerCase() !== want) {
+        return { error: `receipts do not match receiptsRoot at block ${block}` };
+    }
+    const logsA = everyLog(rawA);
+    const logsB = everyLog(rawB);
+    if ('error' in logsA || 'error' in logsB) return { error: `cannot verify receipts at block ${block}` };
+    if (!sameLogs(logsA.logs, logsB.logs)) return { error: `providers disagree on receipts at block ${block}` };
+    return { logs: logsA.logs };
+}
+
+/**
+ * Parent hashes from `to + 1` through this provider's finalized height.
+ * Cost is one header per block of (finalized - to), in batches of at most 100.
+ */
+async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number): Promise<string | null> {
+    if (fin.number <= to) return null;
+    const headers = await loadHeaders(rpc, to + 1, fin.number);
+    if (typeof headers === 'string') return headers;
+    let prev = tip;
+    for (let n = to + 1; n <= fin.number; n++) {
+        const item = headers.get(n);
+        if (!item || item.parentHash.toLowerCase() !== prev.toLowerCase()) {
+            return `finalized ancestry breaks at block ${n} on ${rpc.name}`;
+        }
+        prev = item.hash;
+    }
+    if (prev.toLowerCase() !== fin.hash.toLowerCase()) {
+        return `finalized ancestry breaks at block ${fin.number} on ${rpc.name}`;
+    }
+    return null;
 }
 
 function attributedOf(action: FoundAction): AttributedAction {
@@ -291,14 +324,15 @@ function attributedOf(action: FoundAction): AttributedAction {
 
 /**
  * Scan `(checkpoint, min(finalized A, finalized B)]`, at most `maxBlocks`.
- * COMPLETE / UNATTRIBUTED move the checkpoint. INCOMPLETE writes nothing.
+ * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE writes nothing.
  *
- * A clipped range (`to` below a provider's finalized height) is tied to finality
- * only by parentHash continuity from a checkpoint whose hash matched, and by the
- * post-read check that finalized height is still >= `to`. `setCheckpoint` is
- * compare-and-swap against the checkpoint read at the start; the store must apply
- * it atomically. An overlapping scan throws CheckpointConflictError instead of
- * moving the cursor backwards.
+ * receiptsRoot, logsBloom, and parentHash are trusted because both providers agree
+ * on them and parentHash reaches each provider's finalized header. The header hash
+ * itself is not recomputed: several header fields are fork-dependent.
+ * A clipped range (`to` below finalized) reads every header from `to + 1` through
+ * that provider's finalized height, so the cost grows with (finalized - to), per provider.
+ * `commit` is all-or-nothing against the checkpoint read at the start. An overlapping
+ * scan throws CheckpointConflictError and applies none of its action writes.
  */
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const [pa, pb] = opts.providers;
@@ -323,7 +357,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
     const from = saved ? saved.block + 1 : opts.startBlock;
     const to = Math.min(finA.number, finB.number, from + opts.maxBlocks - 1);
-    if (from > to) return finish(opts, [], from, to, 0, 0, 0, null, saved);
+    if (from > to) return finish(opts, [], from, to, 0, 0, null, saved);
 
     const buckets: Bucket[] = [];
     for (const contract of opts.watched) {
@@ -359,7 +393,6 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     if (typeof headersA === 'string') return bad(from, to, headersA);
     const headersB = await loadHeaders(pb, from, to);
     if (typeof headersB === 'string') return bad(from, to, headersB);
-    let bloomRecovered = 0;
     let bloomFalsePositives = 0;
     for (let n = from; n <= to; n++) {
         const ha = headersA.get(n);
@@ -370,6 +403,9 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         if (ha.logsBloom.toLowerCase() !== hb.logsBloom.toLowerCase()) {
             return bad(from, to, `providers disagree on logsBloom at block ${n}`);
         }
+        if (ha.receiptsRoot.toLowerCase() !== hb.receiptsRoot.toLowerCase()) {
+            return bad(from, to, `providers disagree on receiptsRoot at block ${n}`);
+        }
         const prevA = n === from ? (saved ? saved.hash : null) : headersA.get(n - 1)!.hash;
         const prevB = n === from ? (saved ? saved.hash : null) : headersB.get(n - 1)!.hash;
         if (prevA !== null && ha.parentHash.toLowerCase() !== prevA.toLowerCase()) {
@@ -378,23 +414,28 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         if (prevB !== null && hb.parentHash.toLowerCase() !== prevB.toLowerCase()) {
             return bad(from, to, `parentHash breaks at block ${n} on ${pb.name}`);
         }
+        let proved: { logs: Norm[] } | null = null;
         for (const bucket of buckets) {
             if (n < bucket.lo || n > bucket.hi) continue;
             const have = bucket.logs.filter((log) => log.blockNumber === n);
-            const mayA = mayContainAddress(ha.logsBloom, bucket.address);
-            const mayB = mayContainAddress(hb.logsBloom, bucket.address);
-            if (mayA !== true && mayB !== true) {
-                if (have.length) return bad(from, to, `bloom contradicts logs at block ${n}`);
-                continue;
+            const may = mayContainAddress(ha.logsBloom, bucket.address) === true
+                || mayContainAddress(hb.logsBloom, bucket.address) === true;
+            if (!may && have.length === 0) continue;
+            if (!proved) {
+                const got = await prove(pa, pb, n, ha.hash, ha.receiptsRoot);
+                if ('error' in got) return bad(from, to, got.error);
+                proved = got;
             }
-            const got = await reread(pa, pb, bucket, n, ha.hash);
-            if ('error' in got) return bad(from, to, got.error);
-            const rec = reconcile(have, got.logs);
-            if ('error' in rec) return bad(from, to, `${rec.error} at block ${n}`);
-            if (rec.merge.length) {
-                bucket.logs.push(...rec.merge);
-                bloomRecovered++;
-            } else if (have.length === 0) bloomFalsePositives++;
+            const want = proved.logs.filter((log) => log.address === bucket.address && log.blockNumber === n);
+            if (want.some((log) => log.removed)) return bad(from, to, `removed log from ${bucket.address} at block ${n}`);
+            if (!sameLogs(have, want)) {
+                const seen = new Set(have.map(keyOf));
+                const reason = want.some((log) => !seen.has(keyOf(log)))
+                    ? `range logs omit a log present in the verified receipts at block ${n}`
+                    : `range logs disagree with verified receipts at block ${n}`;
+                return bad(from, to, reason);
+            }
+            if (may && want.length === 0) bloomFalsePositives++;
         }
     }
     for (const bucket of buckets) {
@@ -406,12 +447,12 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         }
     }
     const tipHeader = headersA.get(to);
-    if (!tipHeader) return bad(from, to, `missing header for block ${to}`);
+    const tipB = headersB.get(to);
+    if (!tipHeader || !tipB) return bad(from, to, `missing header for block ${to}`);
     if (to === finA.number && tipHeader.hash.toLowerCase() !== finA.hash.toLowerCase()) {
         return bad(from, to, `finalized hash disagrees with header at block ${to} on ${pa.name}`);
     }
-    const tipB = headersB.get(to);
-    if (to === finB.number && tipB && tipB.hash.toLowerCase() !== finB.hash.toLowerCase()) {
+    if (to === finB.number && tipB.hash.toLowerCase() !== finB.hash.toLowerCase()) {
         return bad(from, to, `finalized hash disagrees with header at block ${to} on ${pb.name}`);
     }
     const againA = await readHeader(pa, 'finalized');
@@ -423,9 +464,13 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     if (againA.number === to && againA.hash.toLowerCase() !== tipHeader.hash.toLowerCase()) {
         return bad(from, to, `finalized hash moved at block ${to} on ${pa.name}`);
     }
-    if (againB.number === to && againB.hash.toLowerCase() !== tipHeader.hash.toLowerCase()) {
+    if (againB.number === to && againB.hash.toLowerCase() !== tipB.hash.toLowerCase()) {
         return bad(from, to, `finalized hash moved at block ${to} on ${pb.name}`);
     }
+    const breakA = await anchor(pa, againA, tipHeader.hash, to);
+    if (breakA) return bad(from, to, breakA);
+    const breakB = await anchor(pb, againB, tipB.hash, to);
+    if (breakB) return bad(from, to, breakB);
 
     const actions: FoundAction[] = [];
     let ignored = 0;
@@ -439,16 +484,16 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             if (decoded.value === 'ignore') { ignored++; continue; }
             actions.push({
                 blockNumber: log.blockNumber, blockHash: log.blockHash, txHash: log.txHash, logIndex: log.logIndex,
-                address: bucket.address, kind: decoded.value.kind, decoded: decoded.value, log: log.raw,
+                address: bucket.address, kind: decoded.value.kind, decoded: decoded.value, log: decoded.log,
             });
         }
     }
-    return finish(opts, actions, from, to, bloomRecovered, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, saved);
+    return finish(opts, actions, from, to, bloomFalsePositives, ignored, tipHeader.hash.toLowerCase() as Hex, saved);
 }
 
 async function finish(
     opts: ScanRangeOptions, actions: FoundAction[], from: number, to: number,
-    bloomRecovered: number, bloomFalsePositives: number, ignored: number, tip: Hex | null,
+    bloomFalsePositives: number, ignored: number, tip: Hex | null,
     expected: Checkpoint | null,
 ): Promise<ScanResult> {
     actions.sort((x, y) => x.blockNumber - y.blockNumber || x.logIndex - y.logIndex);
@@ -484,14 +529,15 @@ async function finish(
             logIndex: action.logIndex, address: action.address, kind: action.kind, reason: outcome.reason, log: action.log,
         });
     }
-    // Attributed rows, then unresolved, then the cursor, then delete. A throw before the delete keeps the prior.
-    const pending = [...stale, ...fresh];
-    if (accepted.length) await opts.store.putAttributed(accepted);
-    if (pending.length) await opts.store.putUnresolved(pending);
-    if (tip) await opts.store.setCheckpoint({ block: to, hash: tip }, expected);
-    for (const action of resolvedPrior) await opts.store.resolveUnresolved(unresolvedId(action.blockHash, action.logIndex));
+    await opts.store.commit({
+        expected,
+        next: tip ? { block: to, hash: tip } : null,
+        attributed: accepted,
+        unresolved: [...stale, ...fresh],
+        resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
+    });
     const stats: ScanStats = {
-        bloomRecovered, bloomFalsePositives, ignored, count: actions.length, from, to, actions, resolvedPrior,
+        bloomFalsePositives, ignored, count: actions.length, from, to, actions, resolvedPrior,
     };
     return stillPrior + fresh.length > 0
         ? { state: 'UNATTRIBUTED', unattributed: stillPrior + fresh.length, ...stats }

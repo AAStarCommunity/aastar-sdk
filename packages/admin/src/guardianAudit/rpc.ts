@@ -26,6 +26,7 @@ export interface BlockHeader {
     number: number;
     hash: Hex;
     parentHash: Hex;
+    receiptsRoot: Hex;
     /** 256 bytes, or null when missing or the wrong size. */
     logsBloom: Hex | null;
 }
@@ -44,22 +45,23 @@ export function isWord(v: unknown): v is string {
     return typeof v === 'string' && WORD.test(v);
 }
 
-/** `eth_getBlockByNumber`. Rejects null, a bad hash or parentHash, a bad height, or a different height. */
+/** `eth_getBlockByNumber`. Rejects null, a bad hash, parentHash, or receiptsRoot, a bad height, or a different height. */
 export async function header(rpc: RawRpc, tag: number | 'finalized'): Promise<BlockHeader> {
     const raw = await rpc.request({
         method: 'eth_getBlockByNumber',
         params: [typeof tag === 'number' ? numberToHex(tag) : tag, false],
     });
     if (raw == null || typeof raw !== 'object') throw new Error(`${rpc.name}: block ${String(tag)} unavailable`);
-    const b = raw as { hash?: unknown; parentHash?: unknown; number?: unknown; logsBloom?: unknown };
+    const b = raw as { hash?: unknown; parentHash?: unknown; receiptsRoot?: unknown; number?: unknown; logsBloom?: unknown };
     const number = quantity(b.number);
     if (typeof b.hash !== 'string' || !WORD.test(b.hash) || number === null) {
         throw new Error(`${rpc.name}: malformed block header`);
     }
     if (typeof tag === 'number' && number !== tag) throw new Error(`${rpc.name}: block header for another height`);
     if (typeof b.parentHash !== 'string' || !WORD.test(b.parentHash)) throw new Error(`${rpc.name}: malformed block header`);
+    if (typeof b.receiptsRoot !== 'string' || !WORD.test(b.receiptsRoot)) throw new Error(`${rpc.name}: malformed block header`);
     const logsBloom = typeof b.logsBloom === 'string' && BLOOM.test(b.logsBloom) ? b.logsBloom as Hex : null;
-    return { number, hash: b.hash as Hex, parentHash: b.parentHash as Hex, logsBloom };
+    return { number, hash: b.hash as Hex, parentHash: b.parentHash as Hex, receiptsRoot: b.receiptsRoot as Hex, logsBloom };
 }
 
 export type LogFilter =
@@ -76,8 +78,16 @@ export async function rawGetLogs(rpc: RawRpc, filter: LogFilter): Promise<unknow
     return r;
 }
 
+function safeBound(n: number, min: number): boolean {
+    return Number.isSafeInteger(n) && n >= min;
+}
+
 /** Page `[from, to]`. A failing page halves down to one block, then the error is rethrown. */
 export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to: number, page = 2000): Promise<unknown[]> {
+    if (!safeBound(from, 0)) throw new Error('from must be >= 0');
+    if (!safeBound(to, 0)) throw new Error('to must be >= 0');
+    if (from > to) throw new Error('from must be <= to');
+    if (!safeBound(page, 1)) throw new Error('page must be >= 1');
     const out: unknown[] = [];
     let a = from;
     let size = page;

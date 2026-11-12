@@ -3,7 +3,7 @@ import type { RawLog } from './rpc.js';
 
 export interface Checkpoint { block: number; hash: Hex }
 
-/** Thrown when `setCheckpoint` sees a cursor other than `expected`. The cursor stays put. */
+/** Thrown when `commit` sees a cursor other than `expected`. Nothing is written. */
 export class CheckpointConflictError extends Error {
     constructor(message = 'checkpoint conflict') {
         super(message);
@@ -24,7 +24,7 @@ export interface UnresolvedAction {
     log: RawLog;
 }
 
-/** An accepted action, durable before its unresolved row is removed. Idempotent by id. */
+/** An accepted action. Idempotent by id. */
 export interface AttributedAction {
     id: string;
     blockNumber: number;
@@ -39,19 +39,24 @@ export interface AttributedAction {
 }
 
 /**
- * Injected persistence. `putUnresolved` and `putAttributed` are idempotent by id.
- * `setCheckpoint` must be atomic: commit `next` only when the stored checkpoint
- * still equals `expected` (block and hash, case-insensitive). Otherwise throw
- * CheckpointConflictError and leave the cursor unchanged.
+ * One all-or-nothing write. `next: null` leaves the cursor put (a caught-up scan)
+ * but still checks `expected` and applies the action changes.
+ * The store must apply the whole value atomically: on CheckpointConflictError, apply nothing.
  */
+export interface Commit {
+    expected: Checkpoint | null;
+    next: Checkpoint | null;
+    attributed: AttributedAction[];
+    unresolved: UnresolvedAction[];
+    resolve: string[];
+}
+
+/** Injected persistence. Reads return copies; callbacks must not be able to mutate stored rows. */
 export interface GuardianAuditStore {
     getCheckpoint(): Promise<Checkpoint | null>;
-    setCheckpoint(next: Checkpoint, expected: Checkpoint | null): Promise<void>;
-    putUnresolved(items: UnresolvedAction[]): Promise<void>;
     listUnresolved(): Promise<UnresolvedAction[]>;
-    resolveUnresolved(id: string): Promise<void>;
-    putAttributed(items: AttributedAction[]): Promise<void>;
     listAttributed(): Promise<AttributedAction[]>;
+    commit(change: Commit): Promise<void>;
 }
 
 export function unresolvedId(blockHash: string, logIndex: number): string {
@@ -63,24 +68,36 @@ function sameCursor(a: Checkpoint | null, b: Checkpoint | null): boolean {
     return a.block === b.block && a.hash.toLowerCase() === b.hash.toLowerCase();
 }
 
+function copy<T>(value: T): T {
+    return structuredClone(value);
+}
+
 export function memoryStore(): GuardianAuditStore {
     let checkpoint: Checkpoint | null = null;
-    const open = new Map<string, UnresolvedAction>();
-    const attributed = new Map<string, AttributedAction>();
+    let open = new Map<string, UnresolvedAction>();
+    let attributed = new Map<string, AttributedAction>();
     return {
         async getCheckpoint() {
-            return checkpoint ? { block: checkpoint.block, hash: checkpoint.hash } : null;
+            return checkpoint ? copy(checkpoint) : null;
         },
-        async setCheckpoint(next, expected) {
-            if (!sameCursor(checkpoint, expected)) throw new CheckpointConflictError();
-            checkpoint = { block: next.block, hash: next.hash };
+        async listUnresolved() { return [...open.values()].map((item) => copy(item)); },
+        async listAttributed() { return [...attributed.values()].map((item) => copy(item)); },
+        async commit(change) {
+            if (!sameCursor(checkpoint, change.expected)) throw new CheckpointConflictError();
+            const nextOpen = new Map(open);
+            const nextAttributed = new Map(attributed);
+            for (const item of change.attributed) {
+                const id = item.id.toLowerCase();
+                nextAttributed.set(id, copy({ ...item, id }));
+            }
+            for (const item of change.unresolved) {
+                const id = item.id.toLowerCase();
+                nextOpen.set(id, copy({ ...item, id }));
+            }
+            for (const id of change.resolve) nextOpen.delete(id.toLowerCase());
+            open = nextOpen;
+            attributed = nextAttributed;
+            if (change.next) checkpoint = { block: change.next.block, hash: change.next.hash };
         },
-        async putUnresolved(items) { for (const item of items) open.set(item.id.toLowerCase(), item); },
-        async listUnresolved() { return [...open.values()]; },
-        async resolveUnresolved(id) { open.delete(id.toLowerCase()); },
-        async putAttributed(items) {
-            for (const item of items) attributed.set(item.id.toLowerCase(), { ...item, id: item.id.toLowerCase() });
-        },
-        async listAttributed() { return [...attributed.values()].map((item) => ({ ...item })); },
     };
 }

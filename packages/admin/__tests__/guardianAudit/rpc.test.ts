@@ -20,13 +20,14 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
     it('reads a header and nulls a bloom that is not 256 bytes', async () => {
         const good = `0x${'ab'.repeat(32)}`;
         const parent = `0x${'11'.repeat(32)}`;
+        const root = `0x${'22'.repeat(32)}`;
         const bloom = `0x${'cd'.repeat(256)}`;
-        const node = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, logsBloom: bloom }));
+        const node = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom }));
         const h = await header(node, 16);
-        expect(h).toEqual({ number: 16, hash: good, parentHash: parent, logsBloom: bloom });
+        expect(h).toEqual({ number: 16, hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom });
         expect(node.calls[0]).toEqual(['eth_getBlockByNumber', ['0x10', false]]);
 
-        const short = rpc(() => ({ number: '0x1', hash: good, parentHash: parent, logsBloom: '0xabcd' }));
+        const short = rpc(() => ({ number: '0x1', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: '0xabcd' }));
         expect((await header(short, 'finalized')).logsBloom).toBeNull();
         expect(short.calls[0][1]).toEqual(['finalized', false]);
     });
@@ -39,6 +40,7 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         const parent = `0x${'11'.repeat(32)}`;
         await expect(header(rpc(() => ({ number: '0x1', hash: parent })), 1)).rejects.toThrow(/malformed block header/);
         await expect(header(rpc(() => ({ number: '0x1', hash: parent, parentHash: '0xabc' })), 1)).rejects.toThrow(/malformed block header/);
+        await expect(header(rpc(() => ({ number: '0x1', hash: parent, parentHash: parent })), 1)).rejects.toThrow(/malformed block header/);
     });
 
     it('getLogs is address-only and rejects a non-array', async () => {
@@ -66,5 +68,14 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         expect(seen).toContain('1-1');
         expect(seen[0]).toBe('1-4');
         await expect(pagedLogs(rpc(() => { throw new Error('down'); }), ADDR, 3, 3, 4)).rejects.toThrow(/down/);
+    });
+
+    it('rejects a zero page and inverted bounds before any request', async () => {
+        const node = rpc(() => []);
+        await expect(pagedLogs(node, ADDR, 1, 4, 0)).rejects.toThrow(/page must be >= 1/);
+        await expect(pagedLogs(node, ADDR, 4, 1, 2)).rejects.toThrow(/from must be <= to/);
+        await expect(pagedLogs(node, ADDR, -1, 1, 2)).rejects.toThrow(/from must be >= 0/);
+        await expect(pagedLogs(node, ADDR, 1, Number.NaN, 2)).rejects.toThrow(/to must be >= 0/);
+        expect(node.calls).toHaveLength(0);
     });
 });
