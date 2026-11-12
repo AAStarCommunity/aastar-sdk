@@ -836,6 +836,26 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const recovered = structuredClone(seeded.bundle);
         recovered.actions[0]!.record = { route: 'bls' };
         expect(parseEvidenceFile(fileForSeed(recovered)).bundle.actions[0]!.record).toEqual({ route: 'bls' });
+
+        const hexEvent = structuredClone(seeded.bundle);
+        hexEvent.actions[0]!.record = { route: 'owner', event: '0xab' };
+        expect(() => parseEvidenceFile(fileForSeed(hexEvent))).toThrow(/^evidence action is invalid$/);
+        const one = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        expect(() => build({
+            result: complete([one], []),
+            classify: () => ({ route: 'public', selector: toFunctionSelector('updatePrice()'), callEvents: ['0xAB'] }),
+        })).toThrow(/^evidence action is invalid$/);
+        expect(() => build({
+            result: complete([one], []),
+            classify: () => ({ route: 'bls', kind: '0xab' }),
+        })).toThrow(/^evidence action is invalid$/);
+        expect(() => build({
+            result: complete([one], []),
+            roles: { '0xAB': SP },
+            classify: () => {
+                throw new Error('classify reached');
+            },
+        })).toThrow(/^role name is invalid$/);
     });
 
     it('hides a secret thrown by a getter on canonical, ruleset, file, and provider inputs', () => {

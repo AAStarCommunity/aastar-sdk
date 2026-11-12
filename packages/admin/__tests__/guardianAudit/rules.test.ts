@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { getAddress, keccak256, sha256, stringToBytes, toFunctionSelector, type Hex } from 'viem';
+import { canonicalJson } from '../../src/guardianAudit/canonical';
 import {
-    DEFAULT_RULESET, RULESET_SCHEMA, ambiguousEvents, evaluate, matchGeneric, rulesetId, validateRuleset, wantsPrice,
+    DEFAULT_RULESET, RULESET_SCHEMA, SYMBOL_RE, ambiguousEvents, evaluate, matchGeneric, rulesetId, validateRuleset, wantsPrice,
     type RuleRecord,
 } from '../../src/guardianAudit/rules';
 
@@ -322,12 +323,8 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             expect(matchGeneric(custom, roles, SP, priceCall)).toBeNull();
             expect(evaluate(custom, roles, bls('GENERIC', { target: SP, callData: priceCall })).rule).toBe('bls.GENERIC.unexpected');
         }
-        const ownerProto = evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: '__proto__' });
-        expect(ownerProto.flagged).toBe(true);
-        expect(ownerProto.rule).toBe('ownerRoute.unlisted');
-        const kindProto = evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: '__proto__' });
-        expect(kindProto.flagged).toBe(true);
-        expect(kindProto.rule).toBe('bls.unknown');
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: '__proto__' })).toThrow(/^record: event is not a short string$/);
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: '__proto__' })).toThrow(/^record: kind is not a short string$/);
         const proto = structuredClone(DEFAULT_RULESET);
         proto.bls.GENERIC.expected[0]!.target = '__proto__';
         expect(() => validateRuleset(proto)).toThrow(/^ruleset: bls\.GENERIC\.expected\.target invalid$/);
@@ -430,5 +427,98 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             target: SP, callData: priceCall,
         }))).toThrow(/^role name is invalid$/);
         expect(rulesetId(DEFAULT_RULESET).digest).toBe('0x955722cbb9d0467aef9bdebc2880dd3d97af87c824978cff4a9498367eb429a4');
+    });
+
+    it('rejects hex-shaped event names that would share a digest and disagree on flagged', () => {
+        const withEvent = (name: string) => {
+            const rs = structuredClone(DEFAULT_RULESET);
+            const fn = rs.publicRoute.functions['updatePrice()']!;
+            fn.events = [name];
+            fn.flag = false;
+            fn.flagIfCallAlsoEmits = [name];
+            fn.alsoReason = 'also';
+            return rs;
+        };
+        expect(() => validateRuleset(withEvent('0xAB'))).toThrow(/^ruleset: publicRoute\.functions\.events invalid$/);
+        expect(() => validateRuleset(withEvent('0xab'))).toThrow(/^ruleset: publicRoute\.functions\.events invalid$/);
+        const owner = structuredClone(DEFAULT_RULESET);
+        owner.ownerRoute.events = { '0xAB': { flag: false } };
+        expect(() => validateRuleset(owner)).toThrow(/^ruleset: ownerRoute\.events invalid$/);
+        expect(() => evaluate(DEFAULT_RULESET, roles, {
+            route: 'public', selector: priceSel, callEvents: ['0xAB'],
+        })).toThrow(/^record: callEvents invalid$/);
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: '0xab' })).toThrow(/^record: event is not a short string$/);
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: '0xAB' })).toThrow(/^record: kind is not a short string$/);
+    });
+
+    it('accepts no equality-compared name that canonical lower-casing would change', () => {
+        const hexValue = /^0x[0-9a-fA-F]*$/;
+        const samples = [
+            '0xAB', '0xab', '0x', '0xA', '0XAB', 'Ab', 'A', 'a', 'a_b', 'A0', '_A', '0A',
+            'constructor', 'toString', 'PriceUpdated', 'SLASH', 'a'.repeat(64), 'a'.repeat(65),
+            '', 'has space', 'a-b', 'updatePrice()', 'foo(0xAB)',
+        ];
+        const priceSelector = toFunctionSelector('updatePrice()');
+        const probes: Array<[string, (sample: string) => void]> = [
+            ['role target', (sample) => {
+                const rs = structuredClone(DEFAULT_RULESET);
+                rs.bls.GENERIC.expected[0]!.target = sample;
+                validateRuleset(rs);
+            }],
+            ['role map key', (sample) => {
+                evaluate(DEFAULT_RULESET, { [sample]: SP }, bls('SLASH'));
+            }],
+            ['owner event', (sample) => {
+                const rs = structuredClone(DEFAULT_RULESET);
+                rs.ownerRoute.events = { [sample]: { flag: false } };
+                validateRuleset(rs);
+            }],
+            ['function event', (sample) => {
+                const rs = structuredClone(DEFAULT_RULESET);
+                const fn = rs.publicRoute.functions['updatePrice()']!;
+                fn.events = [sample];
+                delete fn.flagIfCallAlsoEmits;
+                delete fn.alsoReason;
+                validateRuleset(rs);
+            }],
+            ['flagIfCallAlsoEmits', (sample) => {
+                const rs = structuredClone(DEFAULT_RULESET);
+                const fn = rs.publicRoute.functions['updatePrice()']!;
+                fn.flagIfCallAlsoEmits = [sample];
+                fn.alsoReason = 'also';
+                validateRuleset(rs);
+            }],
+            ['record.event', (sample) => {
+                evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: sample });
+            }],
+            ['record.kind', (sample) => {
+                evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: sample });
+            }],
+            ['record.callEvents', (sample) => {
+                evaluate(DEFAULT_RULESET, roles, { route: 'public', selector: priceSelector, callEvents: [sample] });
+            }],
+        ];
+        for (const [name, probe] of probes) {
+            for (const sample of samples) {
+                let accepted = true;
+                try {
+                    probe(sample);
+                } catch {
+                    accepted = false;
+                }
+                if (!accepted) continue;
+                expect(SYMBOL_RE.test(sample), name).toBe(true);
+                expect(hexValue.test(sample), `${name} ${sample}`).toBe(false);
+                expect(canonicalJson(sample), name).toBe(JSON.stringify(sample));
+            }
+            expect(() => probe('0xAB'), name).toThrow();
+            expect(() => probe('0xab'), name).toThrow();
+        }
+        const signed = structuredClone(DEFAULT_RULESET);
+        signed.publicRoute.functions['0xAB()'] = structuredClone(signed.publicRoute.functions['updatePrice()']!);
+        expect(() => validateRuleset(signed)).toThrow(/^ruleset: bad signature$/);
+        const generic = structuredClone(DEFAULT_RULESET);
+        generic.bls.GENERIC.expected[0]!.signature = '0xAB()';
+        expect(() => validateRuleset(generic)).toThrow(/^ruleset: bad signature$/);
     });
 });

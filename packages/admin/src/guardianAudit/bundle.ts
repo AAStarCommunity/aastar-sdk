@@ -1,6 +1,6 @@
 import { getAddress, sha256, stringToBytes, type Address, type Hex } from 'viem';
 import { canonicalDigest, canonicalJson, consumeCanonicalFailure, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES, snapshotPlain, type SnapshotBudget } from './canonical.js';
-import { evaluate, RULESET_SCHEMA, rulesetId, type RuleRecord, type Ruleset, type Verdict } from './rules.js';
+import { SYMBOL_RE, evaluate, RULESET_SCHEMA, rulesetId, type RuleRecord, type Ruleset, type Verdict } from './rules.js';
 import { PROVIDER_NAME_RE, quantity } from './rpc.js';
 import type { FoundAction, ScanResult } from './scan.js';
 
@@ -356,6 +356,7 @@ function assertRoleMap(roles: unknown): Record<string, string> {
     if (!isRecord(roles)) raise('roles missing');
     for (const key in roles) {
         if (!Object.hasOwn(roles, key)) continue;
+        if (!SYMBOL_RE.test(key)) raise('role name is invalid');
         const value = (roles as Record<string, unknown>)[key];
         if (typeof value !== 'string' || value.length !== 42 || !/^0x[0-9a-fA-F]{40}$/i.test(value)) {
             raise('role address is invalid');
@@ -476,24 +477,20 @@ function assertRecord(record: unknown): void {
     if (record.callEvents !== undefined) {
         if (!Array.isArray(record.callEvents) || record.callEvents.length > MAX_COPY_KEYS) raise('evidence action is invalid');
         for (const name of record.callEvents) {
-            if (typeof name !== 'string' || name.length === 0 || name.length > 128) raise('evidence action is invalid');
+            if (typeof name !== 'string' || !SYMBOL_RE.test(name)) raise('evidence action is invalid');
         }
     }
     if (record.fields !== undefined && !isRecord(record.fields)) raise('evidence action is invalid');
-    if (record.kind !== undefined && (typeof record.kind !== 'string' || record.kind.length > 64)) {
+    if (record.kind !== undefined && (typeof record.kind !== 'string' || !SYMBOL_RE.test(record.kind))) {
         raise('evidence action is invalid');
     }
-    if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128)) {
+    if (record.event !== undefined && (typeof record.event !== 'string' || !SYMBOL_RE.test(record.event))) {
         raise('evidence action is invalid');
     }
     if (record.route === 'unattributed' && (typeof record.event !== 'string' || record.event.length === 0)) {
         raise('evidence action is invalid');
     }
     if (record.route === 'public' && (typeof record.selector !== 'string' || !SELECTOR_RE.test(record.selector))) {
-        raise('evidence action is invalid');
-    }
-    if (record.route === 'bls' && record.kind !== undefined
-        && (typeof record.kind !== 'string' || record.kind.length === 0 || record.kind.length > 64)) {
         raise('evidence action is invalid');
     }
 }

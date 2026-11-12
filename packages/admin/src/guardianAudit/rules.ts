@@ -109,8 +109,14 @@ const PUBLIC_FN_KEYS = ['events', 'flag', 'reason', 'flagIfCallAlsoEmits', 'also
 const MAX_RULE_KEYS = 64;
 const MAX_REASON = 1024;
 const MAX_SOURCE = 256;
-/** Symbolic role names. Hex-shaped names would collapse under canonical lower-casing and still compare case-sensitively. */
-const ROLE_NAME_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
+/**
+ * Every name rules compare with `===`, `includes`, or an own-property lookup.
+ * A hex-shaped name would survive that comparison with its case intact, then fold
+ * under canonical JSON, so one digest could name two verdicts.
+ * Function signatures are not symbols; they use {@link SIGNATURE_RE} and match by selector.
+ */
+export const SYMBOL_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+const SIGNATURE_RE = /^[A-Za-z_][A-Za-z0-9_]*\([^()]*\)$/;
 
 /** Stop listing keys once the ruleset is past the cap. A million allowed keys never gets walked. */
 function ownKeys(obj: object): string[] {
@@ -221,10 +227,9 @@ export function validateRuleset(input: unknown): Ruleset {
             throw new Error('ruleset: GENERIC.expected entries need target (role) and signature');
         }
         only(e, EXPECTED_KEYS, 'bls.GENERIC.expected');
-        shortText(e.target, 'bls.GENERIC.expected.target', 64);
-        if (!ROLE_NAME_RE.test(e.target)) throw new Error('ruleset: bls.GENERIC.expected.target invalid');
+        if (!SYMBOL_RE.test(e.target)) throw new Error('ruleset: bls.GENERIC.expected.target invalid');
         shortText(e.signature, 'bls.GENERIC.expected.signature', 256);
-        if (selectorOf(e.signature) === null) throw new Error('ruleset: bad signature');
+        if (!SIGNATURE_RE.test(e.signature) || selectorOf(e.signature) === null) throw new Error('ruleset: bad signature');
         assertFlag(e, 'bls.GENERIC.expected', true);
     }
     if (!isRecord(rs.ownerRoute) || typeof rs.ownerRoute.label !== 'string' || !isRecord(rs.ownerRoute.events)) {
@@ -235,8 +240,7 @@ export function validateRuleset(input: unknown): Ruleset {
     if (rs.ownerRoute.comment !== undefined) shortText(rs.ownerRoute.comment, 'ownerRoute.comment', MAX_REASON);
     for (const name of ownKeys(rs.ownerRoute.events)) {
         const event = ownValue(rs.ownerRoute.events, name);
-        if (!isRecord(event)) throw new Error('ruleset: ownerRoute.events invalid');
-        if (name.length > 128 || name.includes('://') || /[\r\n]/.test(name)) throw new Error('ruleset: invalid key');
+        if (!isRecord(event) || !SYMBOL_RE.test(name)) throw new Error('ruleset: ownerRoute.events invalid');
         only(event, OWNER_EVENT_KEYS, 'ownerRoute.events');
         assertFlag(event, 'ownerRoute.events', false);
     }
@@ -252,7 +256,7 @@ export function validateRuleset(input: unknown): Ruleset {
     const seenSelectors = new Set<string>();
     for (const sig of ownKeys(pr.functions)) {
         const f = ownValue(pr.functions, sig);
-        if (sig.length > 160 || sig.includes('://') || /[\r\n]/.test(sig)) throw new Error('ruleset: invalid key');
+        if (sig.length > 160 || !SIGNATURE_RE.test(sig)) throw new Error('ruleset: bad signature');
         if (!isRecord(f) || !Array.isArray(f.events)) throw new Error('ruleset: publicRoute.functions invalid');
         if (f.events.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
         only(f, PUBLIC_FN_KEYS, 'publicRoute.functions');
@@ -262,16 +266,14 @@ export function validateRuleset(input: unknown): Ruleset {
         if (seenSelectors.has(sel)) throw new Error('ruleset: duplicate selector');
         seenSelectors.add(sel);
         for (const ev of f.events) {
-            if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://') || /[\r\n]/.test(ev)) {
-                throw new Error('ruleset: publicRoute.functions.events invalid');
-            }
+            if (typeof ev !== 'string' || !SYMBOL_RE.test(ev)) throw new Error('ruleset: publicRoute.functions.events invalid');
         }
         if (f.flagIfCallAlsoEmits !== undefined) {
             if (!Array.isArray(f.flagIfCallAlsoEmits) || f.flagIfCallAlsoEmits.length > MAX_RULE_KEYS) {
                 throw new Error('ruleset: too large');
             }
             for (const ev of f.flagIfCallAlsoEmits) {
-                if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://')) {
+                if (typeof ev !== 'string' || !SYMBOL_RE.test(ev)) {
                     throw new Error('ruleset: publicRoute.functions.flagIfCallAlsoEmits invalid');
                 }
             }
@@ -293,7 +295,7 @@ function assertRoleMap(roles: unknown): Record<string, string> {
     if (!isRecord(roles)) throw new Error('roles missing');
     for (const key in roles) {
         if (!Object.hasOwn(roles, key)) continue;
-        if (!ROLE_NAME_RE.test(key)) throw new Error('role name is invalid');
+        if (!SYMBOL_RE.test(key)) throw new Error('role name is invalid');
         const value = ownValue(roles, key);
         if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/i.test(value)) throw new Error('role address is invalid');
         try {
@@ -307,12 +309,10 @@ function assertRoleMap(roles: unknown): Record<string, string> {
 
 /** Optional record fields have their exact type before any route returns. */
 function assertCallerRecord(record: Record<string, any>): void {
-    if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128
-        || record.event.includes('://') || /[\r\n]/.test(record.event))) {
+    if (record.event !== undefined && (typeof record.event !== 'string' || !SYMBOL_RE.test(record.event))) {
         throw new Error('record: event is not a short string');
     }
-    if (record.kind !== undefined && (typeof record.kind !== 'string' || record.kind.length > 64
-        || record.kind.includes('://') || /[\r\n]/.test(record.kind))) {
+    if (record.kind !== undefined && (typeof record.kind !== 'string' || !SYMBOL_RE.test(record.kind))) {
         throw new Error('record: kind is not a short string');
     }
     if (record.selector !== undefined && typeof record.selector !== 'string') throw new Error('record: selector is invalid');
@@ -322,9 +322,7 @@ function assertCallerRecord(record: Record<string, any>): void {
             throw new Error('record: callEvents too large');
         }
         for (const name of record.callEvents) {
-            if (typeof name !== 'string' || name.length === 0 || name.length > 128 || name.includes('://') || /[\r\n]/.test(name)) {
-                throw new Error('record: callEvents invalid');
-            }
+            if (typeof name !== 'string' || !SYMBOL_RE.test(name)) throw new Error('record: callEvents invalid');
         }
     }
 }
