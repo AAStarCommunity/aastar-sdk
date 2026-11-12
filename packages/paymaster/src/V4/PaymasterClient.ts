@@ -3,6 +3,7 @@ import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
+import { readUserOperationResult, userOperationNotYetValidFromRpc, UserOperationFailedError, type UserOperationExecutionResult, type WaitForUserOperationResultOptions } from './userOpOutcome.js';
 
 /** Options of PaymasterClient.submitGaslessUserOperation. */
 export type SubmitGaslessOptions = {
@@ -461,6 +462,13 @@ export class PaymasterClient {
         // Debug logging for estimation
         console.log('[PaymasterClient] Gas Estimation Result:', JSON.stringify(data, null, 2));
 
+        // -32503 is a definitive rejection (not valid yet / expires shortly). Do not substitute
+        // Anvil defaults and do not retry — the caller decides whether to wait.
+        if (result.error) {
+            const notYet = userOperationNotYetValidFromRpc(result.error);
+            if (notYet) throw notYet;
+        }
+
         // Anvil Fallback for Estimation
         if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
              console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using Anvil defaults.');
@@ -769,7 +777,15 @@ export class PaymasterClient {
             const result = await response.json();
             assertJsonRpcAnswer(result, 'eth_sendUserOperation');
             guard.inSend = false;
-            
+
+            // -32503 (not valid yet / expires shortly) is not a fee or gas problem. Thrown after
+            // inSend is cleared so the 5.5.0 slot is released, and before the retry loop so we
+            // neither bump fees nor fall through to handleOps. No sleep.
+            if (result.error) {
+                const notYet = userOperationNotYetValidFromRpc(result.error);
+                if (notYet) throw notYet;
+            }
+
             // 7. Error Handling & Retry Logic (Fee Bump)
             if (result.error && attempt < 4) {
                 const msg = result.error.message || '';
@@ -989,6 +1005,10 @@ export class PaymasterClient {
     /**
      * More robust version of waitForUserOperationReceipt.
      * Catches timeouts and returns a cleaner result.
+     *
+     * Does not inspect `UserOperationEvent.success`. An included op whose inner call reverted
+     * still comes back as a receipt (`success === false`, gas already charged). Use
+     * {@link waitForUserOperationResult} to tell those apart.
      */
     static async waitForUserOperation(bundlerClient: any, hash: `0x${string}`, timeout = 180000) {
         try {
@@ -1005,5 +1025,24 @@ export class PaymasterClient {
             }
             throw error;
         }
+    }
+
+    /**
+     * Wait for inclusion and read whether THIS userOp succeeded. `success === false` is a result,
+     * not a thrown timeout: the user was charged. Pass `throwOnFailure: true` to throw
+     * {@link UserOperationFailedError} instead. The return shape of {@link waitForUserOperation}
+     * is unchanged.
+     */
+    static async waitForUserOperationResult(
+        bundlerClient: any,
+        hash: `0x${string}`,
+        options: number | WaitForUserOperationResultOptions = {}
+    ): Promise<UserOperationExecutionResult> {
+        const opts: WaitForUserOperationResultOptions = typeof options === 'number' ? { timeout: options } : options;
+        const timeout = opts.timeout ?? 180000;
+        const receipt = await bundlerClient.waitForUserOperationReceipt({ hash, timeout });
+        const result = readUserOperationResult(receipt, hash, opts.entryPoint);
+        if (opts.throwOnFailure && result.success === false) throw new UserOperationFailedError(result);
+        return result;
     }
 }

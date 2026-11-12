@@ -24,7 +24,7 @@ const fn = (name: string, inputs: any[], outputs: any[]) =>
 
 async function rd(label: string, address: Address, name: string, inputs: any[], outputs: any[], args: any[] = []) {
   try {
-    const v = await pc.readContract({ address, abi: fn(name, inputs, outputs) as any, functionName: name, args });
+    const v = await pc.readContract({ address, abi: fn(name, inputs, outputs), functionName: name, args });
     const s = Array.isArray(v) ? JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)) : String(v);
     console.log(`  ${label.padEnd(38)} ${s.length > 90 ? s.slice(0, 90) + '…' : s}`);
     return v;
@@ -105,8 +105,8 @@ async function main() {
     });
     console.log(`  SlotAssigned events: ${logs.length}`);
     for (const l of logs.slice(0, 5)) {
-      const nid = (l as any).args?.nodeId as Hex;
-      console.log(`    nodeId=${nid} slot=${(l as any).args?.slot}`);
+      const nid = l.args?.nodeId as Hex;
+      console.log(`    nodeId=${nid} slot=${l.args?.slot}`);
       await rd(`  getMerkleProof(${nid.slice(0, 10)}…)`, CMT_VAL, 'getMerkleProof', b32, [{ type: 'uint256' }, { type: 'bytes32[]' }], [nid]);
     }
   } catch (e: any) {

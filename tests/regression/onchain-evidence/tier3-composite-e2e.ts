@@ -266,7 +266,7 @@ async function main() {
                 body: JSON.stringify({ userOp: userOpRpc, ownerAuth }),
             });
             const raw = await res.text();
-            const body = (() => { try { return JSON.parse(raw); } catch { return {} as any; } })();
+            const body = (() => { try { return JSON.parse(raw); } catch { return {}; } })();
             if (!res.ok || !body.nodeId || !body.signature) {
                 // Print the node's reason. A bare status code (esp. 403 from the owner-auth gate)
                 // gives the operator nothing to act on and sent us guessing more than once.
