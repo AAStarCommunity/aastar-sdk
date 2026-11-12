@@ -3,6 +3,8 @@ import { getAddress, keccak256, numberToHex, stringToHex, type Address, type Hex
 import { bloomOf } from '../../src/guardianAudit/bloom';
 import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc } from '../../src/guardianAudit/trie';
 import fixture from './fixtures/sepolia-block-receipts.json';
+import opSepolia from './fixtures/op-sepolia-block-receipts.json';
+import opMainnet from './fixtures/op-mainnet-block-receipts.json';
 import {
     CheckpointConflictError,
     FinalityConflictError,
@@ -308,6 +310,69 @@ function logRanges(fake: Fake): { fromBlock: unknown; toBlock: unknown }[] {
     return fake.calls
         .filter((call) => call.method === 'eth_getLogs' && !('blockHash' in (call.params[0] as object)))
         .map((call) => call.params[0] as { fromBlock: unknown; toBlock: unknown });
+}
+
+type OpFixture = {
+    header: { number: string; hash: string; parentHash: string; receiptsRoot: string; logsBloom: string };
+    receipts: { logs?: { address?: string }[] }[];
+};
+
+/** Two providers. Each serves one fixture block as its finalized tip and that block's receipts. */
+function opProviders(block: OpFixture): [RawRpc, RawRpc] {
+    const number = Number.parseInt(block.header.number, 16);
+    const serve = (name: string): RawRpc => ({
+        name,
+        async request({ method, params = [] }) {
+            if (method === 'eth_getBlockByNumber') {
+                const tag = params[0];
+                const height = tag === 'finalized' ? number : Number.parseInt(String(tag), 16);
+                if (height !== number) return null;
+                return {
+                    number: block.header.number,
+                    hash: block.header.hash,
+                    parentHash: block.header.parentHash,
+                    receiptsRoot: block.header.receiptsRoot,
+                    logsBloom: block.header.logsBloom,
+                };
+            }
+            if (method === 'eth_getBlockReceipts') {
+                if (String(params[0]).toLowerCase() !== block.header.hash.toLowerCase()) return null;
+                return block.receipts;
+            }
+            if (method === 'eth_getLogs') {
+                const filter = params[0] as { address?: string };
+                const want = String(filter.address ?? '').toLowerCase();
+                const logs: unknown[] = [];
+                for (const receipt of block.receipts) {
+                    for (const log of receipt.logs ?? []) {
+                        if (String(log.address).toLowerCase() === want) logs.push(log);
+                    }
+                }
+                return logs;
+            }
+            throw new Error(`unexpected ${method}`);
+        },
+    });
+    return [serve('primary'), serve('secondary')];
+}
+
+async function scanOp(block: OpFixture, address: Address) {
+    const number = Number.parseInt(block.header.number, 16);
+    const store = memoryStore();
+    const result = await scanRange({
+        providers: opProviders(block),
+        watched: [watched({
+            address,
+            fromBlock: number,
+            generation: 'op-deposit',
+            decode: () => ({ kind: 'guardian-added' }),
+        })],
+        store,
+        startBlock: number,
+        maxBlocks: 1,
+        attributor: ok,
+    });
+    return { result, store, number };
 }
 
 function row(block: number, index: number): UnresolvedAction {
@@ -1768,6 +1833,41 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(result).toMatchObject({ state: 'COMPLETE', from: 1, to: 2 });
         expect(await inner.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
         expect(await inner.listUnresolved()).toEqual([]);
+    });
+
+    it('completes OP Sepolia 51345053 when deposit receipt fields survive the copy', async () => {
+        const address = '0xe58c88622ec9eaf137089a2df94b53b6521f55a3' as Address;
+        const { result, store, number } = await scanOp(opSepolia, address);
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 1, from: number, to: number });
+        expect(await store.getCheckpoint()).toEqual({ block: number, hash: opSepolia.header.hash });
+    });
+
+    it('completes OP Mainnet 159447313 when deposit receipt fields survive the copy', async () => {
+        const address = '0x702efcef3a71a78996266413a02a1844b1eccec3' as Address;
+        const { result, store, number } = await scanOp(opMainnet, address);
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 3, from: number, to: number });
+        expect(await store.getCheckpoint()).toEqual({ block: number, hash: opMainnet.header.hash });
+    });
+
+    it('keeps returned topics after the store clears the commit payload', async () => {
+        const { a, b } = pair(1);
+        addBoth(a, b, 1, TOPIC, 0, false, { topics: [TOPIC, IGNORE, UNKNOWN] });
+        const inner = memoryStore();
+        const store: GuardianAuditStore = {
+            snapshot: () => inner.snapshot(),
+            getCheckpoint: () => inner.getCheckpoint(),
+            listUnresolved: () => inner.listUnresolved(),
+            listAttributed: () => inner.listAttributed(),
+            async commit(change) {
+                await inner.commit(change);
+                change.attributed[0]!.log.topics.length = 0;
+            },
+        };
+        const result = await run(a, b, store, { attributor: ok });
+        expect(result).toMatchObject({ state: 'COMPLETE', count: 1 });
+        if (result.state !== 'COMPLETE') return;
+        expect(result.actions[0]?.log.topics).toHaveLength(3);
+        expect((await inner.listAttributed())[0]?.log.topics).toHaveLength(3);
     });
 });
 

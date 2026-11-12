@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { header, pagedLogs, rawGetLogs, responseLimits, type RawRpc } from '../../src/guardianAudit/rpc';
+import { header, pagedLogs, rawGetLogs, responseLimits, snapshotReceipts, type RawRpc } from '../../src/guardianAudit/rpc';
 
 const ADDR = '0x1111111111111111111111111111111111111111' as Address;
 
@@ -113,5 +113,43 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
             return true;
         });
         await expect(header({ name: 'https://user:pw@disk.example', request: async () => ({}) }, 1)).rejects.toThrow(/^provider name is not a safe label$/);
+    });
+
+    it('copies deposit quantities and drops the receipt list when one is not a quantity', () => {
+        const kept = snapshotReceipts([{
+            type: '0x7e', status: '0x1', logs: [],
+            depositNonce: '0x10', depositReceiptVersion: 1,
+        }]);
+        expect(kept?.[0]).toMatchObject({ depositNonce: '0x10', depositReceiptVersion: '0x1' });
+        const plain = snapshotReceipts([{ type: '0x2', logs: [] }])?.[0] as Record<string, unknown>;
+        expect(plain).not.toHaveProperty('depositNonce');
+        expect(plain).not.toHaveProperty('depositReceiptVersion');
+        expect(snapshotReceipts([{ logs: [], depositNonce: `0x${'ab'.repeat(20)}` }])).toBeNull();
+    });
+
+    it('reports the provider label captured before the request, after the name changes', async () => {
+        const secret = 'https://user:pw@example.test';
+        const make = (): RawRpc => {
+            const node: RawRpc = {
+                name: 'safe',
+                async request() {
+                    node.name = secret;
+                    throw new Error(secret);
+                },
+            };
+            return node;
+        };
+        const calls = [
+            () => header(make(), 1),
+            () => rawGetLogs(make(), { address: ADDR, fromBlock: 1, toBlock: 1 }),
+            () => pagedLogs(make(), ADDR, 1, 1, 1),
+        ];
+        for (const call of calls) {
+            await expect(call()).rejects.toSatisfy((error: Error) => {
+                expect(error.message).toBe('safe: request failed');
+                expect(String(error)).not.toMatch(/user:pw|example\.test/);
+                return true;
+            });
+        }
     });
 });

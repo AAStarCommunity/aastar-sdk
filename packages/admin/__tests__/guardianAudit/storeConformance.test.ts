@@ -486,8 +486,10 @@ describe('guardian audit store conformance', () => {
         const results = await runStoreConformance(ignoreRevision);
         fails(results, 'stale/moving', 'moving stale revision was accepted');
         fails(results, 'stale/caught-up', 'caught-up stale revision was accepted');
+        for (const name of ISOLATION) fails(results, name, 'committed input changed stored rows');
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
-            'stale/moving', 'stale/caught-up',
+            'stale/moving', 'isolation/moving', 'isolation/replacement/moving',
+            'stale/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
         ]);
     });
 
@@ -505,8 +507,11 @@ describe('guardian audit store conformance', () => {
         const results = await runStoreConformance(ignoreCaughtUpRevision);
         fails(results, 'stale/caught-up', 'caught-up stale revision was accepted');
         fails(results, 'concurrent/caught-up', 'caught-up commits did not split one and one');
+        for (const name of ['isolation/caught-up', 'isolation/replacement/caught-up']) {
+            fails(results, name, 'committed input changed stored rows');
+        }
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
-            'stale/caught-up', 'concurrent/caught-up',
+            'stale/caught-up', 'concurrent/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
         ]);
     });
 
@@ -521,8 +526,10 @@ describe('guardian audit store conformance', () => {
         const results = await runStoreConformance(silentScopeMismatch);
         fails(results, 'scope/moving', 'moving different scope was accepted');
         fails(results, 'scope/caught-up', 'caught-up different scope was accepted');
+        for (const name of ISOLATION) fails(results, name, 'committed input changed stored rows');
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
-            'scope/moving', 'scope/caught-up',
+            'scope/moving', 'isolation/moving', 'isolation/replacement/moving',
+            'scope/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
         ]);
     });
 
@@ -657,5 +664,23 @@ describe('guardian audit store conformance', () => {
             };
         });
         expect(results.every((item) => item.status === 'pass')).toBe(true);
+    });
+
+    it('fails isolation when commit copies the payload only after its first await', async () => {
+        const results = await runStoreConformance(() => {
+            const inner = memoryStore();
+            const store: GuardianAuditStore = {
+                snapshot: () => inner.snapshot(),
+                getCheckpoint: () => inner.getCheckpoint(),
+                listUnresolved: () => inner.listUnresolved(),
+                listAttributed: () => inner.listAttributed(),
+                async commit(change) {
+                    await Promise.resolve();
+                    await inner.commit(change);
+                },
+            };
+            return { store };
+        });
+        failsEach(results, ISOLATION, 'committed input changed stored rows');
     });
 });

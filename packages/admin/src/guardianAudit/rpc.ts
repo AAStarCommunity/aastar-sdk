@@ -123,6 +123,17 @@ export function snapshotLog(item: unknown): unknown {
     };
 }
 
+/**
+ * A deposit quantity, or absent. Present values must be strict quantities.
+ * `null` means the field is present and not a bounded quantity.
+ */
+function snapshotDeposit(v: unknown): { ok: true; value?: string } | { ok: false } {
+    if (v === undefined) return { ok: true };
+    const n = quantity(v);
+    if (n === null) return { ok: false };
+    return { ok: true, value: typeof v === 'string' ? v : numberToHex(n) };
+}
+
 /** Plain copy of a receipt list. `null` when the list is not a bounded array. Does not read elements past the cap. */
 export function snapshotReceipts(raw: unknown): unknown[] | null {
     if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
@@ -144,7 +155,10 @@ export function snapshotReceipts(raw: unknown): unknown[] | null {
             for (let j = 0; j < rec.logs.length; j++) rows.push(snapshotLog(rec.logs[j]));
             copied = rows;
         }
-        out.push({
+        const depositNonce = snapshotDeposit(rec.depositNonce);
+        const depositReceiptVersion = snapshotDeposit(rec.depositReceiptVersion);
+        if (!depositNonce.ok || !depositReceiptVersion.ok) return null;
+        const row: Record<string, unknown> = {
             type: clipStr(rec.type, responseLimits.quantity),
             status: clipStr(rec.status, responseLimits.quantity),
             cumulativeGasUsed: clipStr(rec.cumulativeGasUsed, WORD_LEN),
@@ -154,33 +168,43 @@ export function snapshotReceipts(raw: unknown): unknown[] | null {
             blockHash: clipStr(rec.blockHash, WORD_LEN),
             blockNumber: clipStr(rec.blockNumber, responseLimits.quantity),
             logs: copied,
-        });
+        };
+        if (depositNonce.value !== undefined) row.depositNonce = depositNonce.value;
+        if (depositReceiptVersion.value !== undefined) row.depositReceiptVersion = depositReceiptVersion.value;
+        out.push(row);
     }
     return out;
 }
 
-async function ask(rpc: RawRpc, method: string, params: unknown[]): Promise<unknown> {
-    assertProviderName(rpc.name);
-    if (typeof rpc.request !== 'function') throw new Error('invalid provider');
+/** Name and request captured before any await. Later mutations of `rpc.name` stay out of errors. */
+function openRpc(rpc: RawRpc): { name: string; request: RawRpc['request'] } {
+    const name = rpc.name;
+    assertProviderName(name);
+    const request = rpc.request;
+    if (typeof request !== 'function') throw new Error('invalid provider');
+    return { name, request: request.bind(rpc) };
+}
+
+async function ask(opened: { name: string; request: RawRpc['request'] }, method: string, params: unknown[]): Promise<unknown> {
     try {
-        return await rpc.request({ method, params });
+        return await opened.request({ method, params });
     } catch {
-        throw new Error(`${rpc.name}: request failed`);
+        throw new Error(`${opened.name}: request failed`);
     }
 }
 
 /** `eth_getBlockByNumber`. Rejects null, a bad hash, parentHash, or receiptsRoot, a bad height, or a different height. */
 export async function header(rpc: RawRpc, tag: number | 'finalized'): Promise<BlockHeader> {
-    assertProviderName(rpc.name);
+    const opened = openRpc(rpc);
     if (tag !== 'finalized' && !safeBound(tag, 0)) throw new Error('invalid block tag');
-    const raw = await ask(rpc, 'eth_getBlockByNumber', [typeof tag === 'number' ? numberToHex(tag) : tag, false]);
-    if (raw == null || typeof raw !== 'object') throw new Error(`${rpc.name}: block ${String(tag)} unavailable`);
+    const raw = await ask(opened, 'eth_getBlockByNumber', [typeof tag === 'number' ? numberToHex(tag) : tag, false]);
+    if (raw == null || typeof raw !== 'object') throw new Error(`${opened.name}: block ${String(tag)} unavailable`);
     const b = raw as { hash?: unknown; parentHash?: unknown; receiptsRoot?: unknown; number?: unknown; logsBloom?: unknown };
     const number = quantity(b.number);
     const hash = typeof b.hash === 'string' && b.hash.length === WORD_LEN ? b.hash : '';
-    if (!isWord(hash) || number === null) throw new Error(`${rpc.name}: malformed block header`);
-    if (typeof tag === 'number' && number !== tag) throw new Error(`${rpc.name}: block header for another height`);
-    if (!isWord(b.parentHash) || !isWord(b.receiptsRoot)) throw new Error(`${rpc.name}: malformed block header`);
+    if (!isWord(hash) || number === null) throw new Error(`${opened.name}: malformed block header`);
+    if (typeof tag === 'number' && number !== tag) throw new Error(`${opened.name}: block header for another height`);
+    if (!isWord(b.parentHash) || !isWord(b.receiptsRoot)) throw new Error(`${opened.name}: malformed block header`);
     const bloom = b.logsBloom;
     const logsBloom = typeof bloom === 'string' && bloom.length === BLOOM_LEN && hexOk(bloom) ? bloom as Hex : null;
     return {
@@ -194,7 +218,7 @@ export type LogFilter =
 
 /** Raw `eth_getLogs` (never a formatting helper). The returned logs are copies. A non-array answer throws. */
 export async function rawGetLogs(rpc: RawRpc, filter: LogFilter): Promise<unknown[]> {
-    assertProviderName(rpc.name);
+    const opened = openRpc(rpc);
     requireAddress(filter.address);
     const body = 'blockHash' in filter
         ? { address: filter.address, blockHash: filter.blockHash }
@@ -205,9 +229,9 @@ export async function rawGetLogs(rpc: RawRpc, filter: LogFilter): Promise<unknow
         if (!safeBound(filter.fromBlock, 0) || !safeBound(filter.toBlock, 0)) throw new Error('invalid log range');
         if (filter.fromBlock > filter.toBlock) throw new Error('from must be <= to');
     }
-    const r = await ask(rpc, 'eth_getLogs', [body]);
-    if (!Array.isArray(r)) throw new Error(`${rpc.name}: eth_getLogs answer is not an array`);
-    if (r.length > responseLimits.logs) throw new Error(`${rpc.name}: response too large`);
+    const r = await ask(opened, 'eth_getLogs', [body]);
+    if (!Array.isArray(r)) throw new Error(`${opened.name}: eth_getLogs answer is not an array`);
+    if (r.length > responseLimits.logs) throw new Error(`${opened.name}: response too large`);
     const out: unknown[] = [];
     for (let i = 0; i < r.length; i++) out.push(snapshotLog(r[i]));
     return out;
@@ -215,7 +239,7 @@ export async function rawGetLogs(rpc: RawRpc, filter: LogFilter): Promise<unknow
 
 /** Page `[from, to]`. A failing page halves down to one block, then a fixed error is thrown. */
 export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to: number, page = 2000): Promise<unknown[]> {
-    assertProviderName(rpc.name);
+    const opened = openRpc(rpc);
     requireAddress(address);
     if (!safeBound(from, 0)) throw new Error('from must be >= 0');
     if (!safeBound(to, 0)) throw new Error('to must be >= 0');
@@ -229,17 +253,17 @@ export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to:
         const b = Math.min(to, a + size - 1);
         let pageLogs: unknown[];
         try {
-            pageLogs = await rawGetLogs(rpc, { address, fromBlock: a, toBlock: b });
+            pageLogs = await rawGetLogs(opened, { address, fromBlock: a, toBlock: b });
         } catch (error) {
             if (size === 1) {
-                if (error instanceof Error && error.message === `${rpc.name}: eth_getLogs answer is not an array`) throw error;
-                if (error instanceof Error && error.message === `${rpc.name}: response too large`) throw error;
-                throw new Error(`${rpc.name}: request failed`);
+                if (error instanceof Error && error.message === `${opened.name}: eth_getLogs answer is not an array`) throw error;
+                if (error instanceof Error && error.message === `${opened.name}: response too large`) throw error;
+                throw new Error(`${opened.name}: request failed`);
             }
             size = Math.max(1, Math.floor(size / 2));
             continue;
         }
-        if (out.length + pageLogs.length > responseLimits.logs) throw new Error(`${rpc.name}: response too large`);
+        if (out.length + pageLogs.length > responseLimits.logs) throw new Error(`${opened.name}: response too large`);
         for (const log of pageLogs) out.push(log);
         a = b + 1;
         size = page;

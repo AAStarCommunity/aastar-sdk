@@ -847,15 +847,16 @@ async function finish(
             logIndex: action.logIndex, address: action.address, kind: action.kind, reason: outcome.reason, log: action.log,
         });
     }
+    const payload = {
+        expectedRevision: snap.revision,
+        next: tip ? { block: to, hash: tip } : null,
+        scope,
+        attributed: accepted,
+        unresolved: [...stale, ...fresh],
+        resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
+    };
     try {
-        await store.commit({
-            expectedRevision: snap.revision,
-            next: tip ? { block: to, hash: tip } : null,
-            scope,
-            attributed: accepted,
-            unresolved: [...stale, ...fresh],
-            resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
-        });
+        await store.commit(structuredClone(payload));
     } catch (error) {
         storeFailure('commit', error);
     }

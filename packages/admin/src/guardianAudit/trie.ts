@@ -125,10 +125,30 @@ function encode(node: Node): Uint8Array {
     return rlpList(slots);
 }
 
-/** Merkle Patricia root. The header stores keccak256 of the root node, always. */
-export function trieRoot(pairs: readonly { key: Uint8Array; value: Uint8Array }[]): Hex {
+const MAX_TRIE_PAIRS = 100_000;
+const MAX_TRIE_KEY_BYTES = 64;
+/** One encoded receipt. Checked before any byte of the value is walked. */
+const MAX_RECEIPT_BYTES = 1_048_576;
+
+/**
+ * Merkle Patricia root. The header stores keccak256 of the root node, always.
+ * `null` when the input is not a bounded list of byte keys and values.
+ * The length is checked before any element is read.
+ */
+export function trieRoot(pairs: readonly { key: Uint8Array; value: Uint8Array }[]): Hex | null {
+    if (!Array.isArray(pairs) || pairs.length > MAX_TRIE_PAIRS) return null;
+    const bounded: { key: Uint8Array; value: Uint8Array }[] = [];
+    for (let i = 0; i < pairs.length; i++) {
+        const pair = pairs[i];
+        if (typeof pair !== 'object' || pair === null) return null;
+        const key = pair.key;
+        const value = pair.value;
+        if (!(key instanceof Uint8Array) || !(value instanceof Uint8Array)) return null;
+        if (key.length > MAX_TRIE_KEY_BYTES || value.length > MAX_RECEIPT_BYTES) return null;
+        bounded.push({ key, value });
+    }
     let node: Node | null = null;
-    for (const pair of pairs) node = put(node, nibblesOf(pair.key), pair.value);
+    for (let i = 0; i < bounded.length; i++) node = put(node, nibblesOf(bounded[i]!.key), bounded[i]!.value);
     if (!node) return EMPTY_RECEIPTS_ROOT;
     return keccak256(encode(node));
 }

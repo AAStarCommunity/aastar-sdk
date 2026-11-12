@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hexToBytes, keccak256, type Hex } from 'viem';
-import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc } from '../../src/guardianAudit/trie';
+import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc, trieRoot } from '../../src/guardianAudit/trie';
 import fixture from './fixtures/sepolia-block-receipts.json';
 import fixture135 from './fixtures/sepolia-receipts-135.json';
 import fixtureFailed from './fixtures/sepolia-receipts-failed.json';
@@ -181,6 +181,35 @@ describe('guardian-audit receipts trie (unit, not acceptance)', () => {
         });
         expect(receiptsRootFromRpc(receipts)).toBeNull();
         expect(visited).toBe(false);
+    });
+
+    it('rejects an unbounded pair list before reading an element', () => {
+        const pairs: { key: Uint8Array; value: Uint8Array }[] = [];
+        pairs.length = 4_294_967_295;
+        let visited = false;
+        Object.defineProperty(pairs, 0, {
+            get() { visited = true; throw new Error('visited'); },
+        });
+        expect(trieRoot(pairs)).toBeNull();
+        expect(visited).toBe(false);
+        const overCap: { key: Uint8Array; value: Uint8Array }[] = [];
+        overCap.length = 100_001;
+        Object.defineProperty(overCap, 0, {
+            get() { visited = true; throw new Error('visited'); },
+        });
+        expect(trieRoot(overCap)).toBeNull();
+        expect(visited).toBe(false);
+    });
+
+    it('rejects a key or value past the byte cap, and a non-byte pair', () => {
+        expect(trieRoot([])).toBe(EMPTY_RECEIPTS_ROOT);
+        const key = new Uint8Array(64);
+        const value = new Uint8Array(1);
+        expect(trieRoot([{ key, value }])).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(trieRoot([{ key: new Uint8Array(65), value }])).toBeNull();
+        expect(trieRoot([{ key, value: new Uint8Array(1_048_577) }])).toBeNull();
+        expect(trieRoot([{ key: '0x01' as unknown as Uint8Array, value }])).toBeNull();
+        expect(trieRoot(null as unknown as { key: Uint8Array; value: Uint8Array }[])).toBeNull();
     });
 });
 

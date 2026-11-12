@@ -410,7 +410,10 @@ async function idempotentCell(got: StoreUnderTest, form: Form): Promise<void> {
     if (!sameSnapshot(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
 }
 
-/** Mutate the commit container after the call, then the raw snapshot and getters. One cell per form. */
+/**
+ * Mutate the commit payload as soon as the promise exists, before it is awaited,
+ * then again after it settles. One cell per form.
+ */
 async function isolation(got: StoreUnderTest, form: Form, mode: 'apply' | 'replace'): Promise<void> {
     const store = got.store;
     const seeded = await seed(store);
@@ -431,7 +434,12 @@ async function isolation(got: StoreUnderTest, form: Form, mode: 'apply' | 'repla
         unresolved: mode === 'replace' ? [replacedUnresolved()] : [unresolved(11, 'open-b'), unresolved(20)],
         attributed: mode === 'replace' ? [replacedAttributed(), attributed(13)] : [attributed(12), attributed(13), attributed(21)],
     };
-    await store.commit(change);
+    const pending = store.commit(change);
+    if (change.next) change.next.block = 999;
+    for (const row of change.attributed) row.kind = `${row.kind}-pending`;
+    for (const row of change.unresolved) row.kind = `${row.kind}-pending`;
+    await pending;
+    if (!sameSnapshot(frozen(await store.snapshot()), canonical)) throw new Fault('committed input changed stored rows');
     deepMutate(change);
     const raw = await store.snapshot();
     if (!sameSnapshot(frozen(raw), canonical)) throw new Fault('committed input changed stored rows');
