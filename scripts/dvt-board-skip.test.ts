@@ -4,14 +4,16 @@
  * dvt3-register.ts used to throw `missing required env SDK_DIR` (exit 1).
  *
  * No summarizer under tests/regression or scripts counts runner exit codes, so both
- * stay on exit 0. A future tally has to read the SKIP line; exit 0 alone is PASS.
+ * stay on exit 0. A reader that only checks `exit == 0` cannot tell SKIP from PASS;
+ * it has to parse the SKIP line. Exit 78 is non-zero, so that reader would count it
+ * as a failure.
  *
  * The child env is an allowlist. These tests do not read .env* and do not open an RPC:
  * the skip path exits before dotenv, and the present-env path dies on a missing RPC_URL
  * before any client is constructed.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -49,6 +51,22 @@ describe('board-side onchain-evidence runners', () => {
     expect(out).not.toContain('DVT3-REGISTER FAIL');
   }, 120_000);
 
+  it('dvt3-register loads DVT3_* from SDK_DIR/.env.sepolia before the remaining SKIP gate', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dvt3-dotenv-'));
+    // Fixture only. Not a repo env file, and not a real key.
+    writeFileSync(join(dir, '.env.sepolia'), [
+      `DVT3_KEYSTORE_JSON=${join(dir, 'missing-keystore.json')}`,
+      'DVT3_SECRET=fixture-not-a-password',
+      'DVT3_OPERATOR_PK=0x11',
+      '',
+    ].join('\n'));
+    const child = runRunner(DVT3, bareEnv({ SDK_DIR: dir }));
+    const out = `${child.stdout ?? ''}${child.stderr ?? ''}`;
+    expect(child.status, out.slice(0, 500)).toBe(1);
+    expect(out).toContain('missing required env RPC_URL');
+    expect(out).not.toContain('⏭️  SKIP');
+  }, 120_000);
+
   it('dvt3-register still exits 1 when board-side env is present but RPC_URL is not', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dvt3-skip-'));
     const child = runRunner(DVT3, bareEnv({
@@ -68,6 +86,9 @@ describe('board-side onchain-evidence runners', () => {
     expect(src).toContain('⏭️  SKIP dvt-kms-onboard-e2e:');
     expect(src).toMatch(/if \(!KMS_POP_URL\) \{[\s\S]*?\n\s*return;\n\s*\}/);
     expect(src).not.toContain('process.exit(78)');
+    expect(src).not.toMatch(/78[\s\S]{0,120}counted as a pass/);
+    expect(src).toMatch(/exit == 0/);
+    expect(src).toMatch(/cannot tell this SKIP/);
     const dvt3 = readFileSync(new URL(`../${DVT3}`, import.meta.url), 'utf8');
     expect(dvt3).toContain('process.exit(0)');
     expect(dvt3).not.toContain('process.exit(78)');

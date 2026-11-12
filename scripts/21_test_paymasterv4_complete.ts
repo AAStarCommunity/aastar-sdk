@@ -1,9 +1,8 @@
 
-import { createAdminClient } from '../packages/sdk/src/clients/admin.js';
 import { http, createWalletClient, createPublicClient, type Address, keccak256, toHex, stringToBytes } from 'viem';
+import { adminClientForPaymaster } from './paymaster-v4-anvil-client.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
-import { CORE_ADDRESSES } from '../packages/core/src/contract-addresses.js';
 import { config } from 'dotenv';
 import path from 'path';
 
@@ -36,15 +35,6 @@ async function main() {
         account
     });
 
-    const adminClient = createAdminClient({
-        chain: foundry,
-        transport: http(RPC_URL),
-        account,
-        addresses: {
-            ...CORE_ADDRESSES
-        }
-    });
-
     const paymasterV4Address = process.env.PAYMASTER_V4_ADDRESS as Address;
     const gTokenAddress = process.env.GTOKEN_ADDRESS as Address;
     const apntsAddress = process.env.APNTS_ADDRESS as Address;
@@ -60,6 +50,13 @@ async function main() {
         console.error('❌ PaymasterV4 Address not set in .env.anvil');
         process.exit(1);
     }
+
+    // Bound after validation. See paymaster-v4-anvil-client.ts.
+    const adminClient = adminClientForPaymaster({
+        transport: http(RPC_URL),
+        account,
+        paymasterV4Address,
+    });
 
     let testsPassed = 0;
     let testsFailed = 0;
@@ -111,8 +108,8 @@ async function main() {
     // `addGasToken(address)` is not a method on the admin client and not a PaymasterV4
     // function. The real entry is `setTokenPrice(token, price)` — the same forwarding
     // `PaymasterOperatorClient.addGasToken(token, price)` does. Price scale matches
-    // scripts/l4-setup.ts ($1.00, 8 decimals). The client binds the paymaster address
-    // at construction; the `address:` field sibling calls pass is not part of this API.
+    // scripts/l4-setup.ts ($1.00, 8 decimals). The paymaster address is the validated
+    // `paymasterV4Address`, closed over when the admin client is built.
     try {
         console.log('📝 Test 2: setTokenPrice (using APNTS)');
         const hash = await adminClient.setTokenPrice({
