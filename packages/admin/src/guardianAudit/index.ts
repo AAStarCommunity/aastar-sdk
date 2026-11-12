@@ -13,3 +13,16 @@ export { FinalityConflictError, scanRange } from './scan.js';
 export type { AttributeTxResult, CallHop, LogAttribution } from './attribute.js';
 export { attributeTx } from './attribute.js';
 export { traceAttributor } from './traceAttributor.js';
+
+export { canonicalDigest, canonicalJson } from './canonical.js';
+
+export type {
+    FlagReason, GenericExpected, OwnerEventRule, PublicFunctionRule, RuleRecord, Ruleset, Verdict,
+} from './rules.js';
+export {
+    DEFAULT_RULESET, RULESET_SCHEMA, ambiguousEvents, evaluate, matchGeneric, publicFunction, rulesetId,
+    validateRuleset, wantsPrice,
+} from './rules.js';
+
+export type { EvidenceAction, EvidenceBundle, EvidenceInput, RunMetadata } from './bundle.js';
+export { EVIDENCE_SCHEMA, buildEvidenceBundle, verifyEvidenceBundle } from './bundle.js';
