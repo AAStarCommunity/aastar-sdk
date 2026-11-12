@@ -1,8 +1,8 @@
-import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters } from 'viem';
+import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters, decodeEventLog } from 'viem';
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
-import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, inflightHoldExpiresAtMs, readSuperPaymasterValidUntilSec, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
+import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 
 /** Options of PaymasterClient.submitGaslessUserOperation. */
 export type SubmitGaslessOptions = {
@@ -114,9 +114,9 @@ function isExplicitTxRejection(err: unknown, transportType: unknown): boolean {
 /** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
 type InflightGuardControl = {
     release?: () => void;
+    /** Confirms THIS reservation only (bound to its symbol and nonce). */
+    record?: (userOpHash?: string) => void;
     inSend?: boolean;
-    /** Set on a 5.5.0 reservation. Stamps a clock expiry on that unconfirmed hold. */
-    stampExpiry?: (expiresAtMs: number) => void;
 };
 
 /** viem normalises to 'success' | 'reverted'; a stub or a raw RPC client may still hand back 0 / 1. */
@@ -125,6 +125,59 @@ function receiptReverted(status: unknown): boolean {
 }
 function receiptSucceeded(status: unknown): boolean {
     return status === 'success' || status === 1 || status === 1n || status === '0x1' || status === '0x01';
+}
+
+/**
+ * viem's waitForTransactionReceipt follows a replacement and resolves THAT receipt
+ * (and reports the reason via onReplaced). `repriced` is the same calldata.
+ * `replaced` only means the calldata changed — a different beneficiary can still
+ * execute this UserOp, so the caller checks the mined receipt's UserOperationEvent.
+ * `cancelled` did not execute it.
+ */
+function directHandleOpsOutcome(
+    submitted: `0x${string}`,
+    receipt: { transactionHash?: `0x${string}` },
+    replacement?: { reason?: string; transaction?: { hash?: `0x${string}` } },
+): { accept: true; hash: `0x${string}` } | { accept: false; reason: string; hash: `0x${string}` } {
+    const mined = (replacement?.transaction?.hash ?? receipt.transactionHash ?? submitted) as `0x${string}`;
+    const reason = replacement?.reason;
+    if (reason === 'repriced') return { accept: true, hash: mined };
+    const same = mined.toLowerCase() === submitted.toLowerCase();
+    if (reason === 'cancelled' || reason === 'replaced' || !same) {
+        const why = reason === 'cancelled' || reason === 'replaced' ? reason : 'replaced';
+        return { accept: false, reason: why, hash: mined };
+    }
+    return { accept: true, hash: submitted };
+}
+
+/**
+ * UserOperationEvent for `userOpHash` emitted by `entryPoint` on this receipt.
+ * `success` is the op's own flag (handleOps can mine successfully while the op failed).
+ */
+function userOperationEvent(
+    receipt: { logs?: readonly { address?: string; topics?: readonly Hex[]; data?: Hex }[] },
+    entryPoint: Address,
+    userOpHash: Hex,
+): { success: boolean } | undefined {
+    for (const log of receipt.logs ?? []) {
+        if (log.address?.toLowerCase() !== entryPoint.toLowerCase()) continue;
+        if (!log.topics || log.topics.length < 2) continue;
+        if (log.topics[1]?.toLowerCase() !== userOpHash.toLowerCase()) continue;
+        try {
+            const decoded = decodeEventLog({
+                abi: EntryPointABI,
+                data: log.data ?? '0x',
+                topics: log.topics as [Hex, ...Hex[]],
+            });
+            if (decoded.eventName !== 'UserOperationEvent') continue;
+            const success = (decoded.args as { success?: boolean }).success;
+            if (typeof success !== 'boolean') continue;
+            return { success };
+        } catch {
+            continue;
+        }
+    }
+    return undefined;
 }
 
 /**
@@ -290,6 +343,12 @@ export class PaymasterClient {
              * upgrade between submit's read and this one would otherwise build two generations.
              */
             sponsorship?: SuperPaymasterSponsorshipContext;
+            /**
+             * Nonce already chosen for this op. Submit passes the reconciled value
+             * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
+             * so estimation cannot sign a different one.
+             */
+            nonce?: bigint;
         }
     ) {
         // 0. Check cachedPrice (Critical for Paymaster V4)
@@ -413,15 +472,21 @@ export class PaymasterClient {
             signature: PaymasterClient.makePlaceholderSignature(65)
         };
 
-        // Get actual nonce
-        try {
-            const nonce = await client.readContract({
-                address: aaAddress,
-                abi: parseAbi(['function getNonce() view returns (uint256)']),
-                functionName: 'getNonce'
-            });
-            partialUserOp.nonce = BigInt(nonce);
-        } catch (e) {}
+        // Submit passes the nonce it already reconciled. A second account getNonce()
+        // can disagree with EntryPoint.getNonce(sender, key) and the bundler then
+        // rejects the estimate (AA25) while the signed op uses the other value.
+        if (options?.nonce !== undefined) {
+            partialUserOp.nonce = BigInt(options.nonce);
+        } else {
+            try {
+                const nonce = await client.readContract({
+                    address: aaAddress,
+                    abi: parseAbi(['function getNonce() view returns (uint256)']),
+                    functionName: 'getNonce'
+                });
+                partialUserOp.nonce = BigInt(nonce);
+            } catch (e) {}
+        }
 
         partialUserOp.preVerificationGas = (PaymasterClient.estimatePreVerificationGasV07(partialUserOp) * 120n) / 100n + 5000n;
 
@@ -528,7 +593,9 @@ export class PaymasterClient {
         // releases it. Estimation uses a dummy signature, so a lost estimate is not an in-flight
         // op and releases too. A transport error DURING eth_sendUserOperation (or a handleOps
         // broadcast whose receipt never arrives) is ambiguous — the bundler or node may hold the
-        // op — so the slot stays, but only until the op's validUntil (or the default TTL).
+        // op — so the slot stays until a later submit sees EntryPoint.getNonce(sender, key) move
+        // past it. release() only with evidence the op can no longer execute (the sender nonce
+        // advanced, or the op was replaced or its validity window passed per chain time).
         const guard: InflightGuardControl = {};
         try {
             return await PaymasterClient.submitGaslessUserOperationGuarded(
@@ -536,16 +603,7 @@ export class PaymasterClient {
             );
         } catch (e) {
             if (guard.inSend) {
-                if (guard.stampExpiry) {
-                    // validUntil when the price window is readable; otherwise the bounded default.
-                    // A failed read must not turn into a second thrown error and skip the stamp.
-                    const validUntilSec = await readSuperPaymasterValidUntilSec(client, paymasterAddress);
-                    const expiresAtMs = inflightHoldExpiresAtMs(Date.now(), validUntilSec);
-                    guard.stampExpiry(expiresAtMs);
-                    console.warn(`[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot until ${expiresAtMs} (SuperPaymasterInflightGuard.release to clear sooner)`);
-                } else {
-                    console.warn('[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot (SuperPaymasterInflightGuard.release to clear)');
-                }
+                console.warn('[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot until EntryPoint.getNonce(sender, key) moves past it. SuperPaymasterInflightGuard.release only with evidence the op can no longer execute (the sender nonce advanced, or the op was replaced or its validity window passed per chain time)');
             } else {
                 guard.release?.();
             }
@@ -567,11 +625,11 @@ export class PaymasterClient {
     ): Promise<`0x${string}`> {
         // 0. Nonce, SuperPaymaster context and the 5.5.0 in-flight reservation — all before the
         // first signature (see the reservation comment).
-        const nonce = await client.readContract({
+        let nonce = BigInt(await client.readContract({
             address: aaAddress,
             abi: parseAbi(['function getNonce() view returns (uint256)']),
             functionName: 'getNonce'
-        });
+        }));
         let spCtx: SuperPaymasterSponsorshipContext | undefined;
         const chainIdForGuard = client.chain?.id ?? (await client.getChainId());
         if (options?.operator) {
@@ -590,8 +648,22 @@ export class PaymasterClient {
                 // Spec §3.2 F1: one in-flight sponsored op per sender. Reserved before the signature,
                 // so a caller that loses this race signs nothing. (Estimation below uses a dummy
                 // signature and asks the signer nothing.)
-                guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
-                guard.stampExpiry = (expiresAtMs) => SuperPaymasterInflightGuard.stampExpiry(chainIdForGuard, entryPoint, aaAddress, expiresAtMs);
+                // An existing hold — confirmed or not — is reconciled by the same nonce check.
+                // The key is the high 192 bits of the held nonce (EntryPoint.getNonce(sender, key)).
+                // The read is awaited, so the hold can be released and replaced before it returns.
+                // reserve() may clear only that same reservation, and only for this key's sequence.
+                const observed = SuperPaymasterInflightGuard.hold(chainIdForGuard, entryPoint, aaAddress);
+                if (observed) {
+                    nonce = BigInt(await client.readContract({
+                        address: entryPoint,
+                        abi: EntryPointABI,
+                        functionName: 'getNonce',
+                        args: [aaAddress, observed.nonce >> 64n],
+                    }));
+                }
+                const hold = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, nonce, observed);
+                guard.release = hold;
+                guard.record = hold.record;
             }
         }
 
@@ -616,6 +688,7 @@ export class PaymasterClient {
                     superPaymasterFlags: options?.superPaymasterFlags,
                     superPaymasterAutoRenew: options?.superPaymasterAutoRenew,
                     sponsorship: spCtx, // one op, one resolve — do not re-read across a 5.4.2→5.5.0 upgrade
+                    nonce,
                 }
             );
             const tuned = options?.tuneEstimate?.(est) ?? {};
@@ -941,24 +1014,51 @@ export class PaymasterClient {
                  // writeContract resolves when the tx is accepted, not when it lands. A throw
                  // here leaves inSend set: the tx may still be pending. A reverted handleOps
                  // does not move the nonce, so recording the hash would pin the sender on an
-                 // op that can never be included.
-                 const receipt: { status?: unknown } = await client.waitForTransactionReceipt({ hash: txHash });
+                 // op that can never be included. viem follows a replacement (speed-up, cancel,
+                 // or a different tx on the same nonce) and resolves that receipt. `replaced`
+                 // still counts when the mined receipt's UserOperationEvent is this op.
+                 let replacement: { reason?: string; transaction?: { hash?: `0x${string}` } } | undefined;
+                 const receipt: { status?: unknown; transactionHash?: `0x${string}`; logs?: readonly { address?: string; topics?: readonly Hex[]; data?: Hex }[] } = await client.waitForTransactionReceipt({
+                     hash: txHash,
+                     onReplaced: (response: { reason?: string; transaction?: { hash?: `0x${string}` } }) => {
+                         replacement = response;
+                     },
+                 });
+                 let outcome = directHandleOpsOutcome(txHash, receipt, replacement);
+                 if (!outcome.accept && outcome.reason === 'replaced') {
+                     const executed = userOperationEvent(receipt, entryPoint, getUserOpHashV07(userOp, entryPoint, BigInt(chainId)));
+                     if (executed?.success) {
+                         outcome = { accept: true, hash: outcome.hash };
+                     } else if (executed) {
+                         // Included, but the op itself failed. Nonce was consumed: keep the
+                         // record. The outer catch must not release it.
+                         guard.inSend = false;
+                         if (spCtx?.generation === 'v5.5') guard.record?.(outcome.hash);
+                         guard.release = undefined;
+                         throw new Error(`direct handleOps userOp failed (tx ${outcome.hash}); the op was included`);
+                     }
+                 }
+                 if (!outcome.accept) {
+                     guard.inSend = false;
+                     guard.release?.();
+                     throw new Error(`direct handleOps ${outcome.reason} (submitted ${txHash}, mined ${outcome.hash}); the SuperPaymaster in-flight slot was released`);
+                 }
                  if (receiptReverted(receipt?.status)) {
                      guard.inSend = false;
                      guard.release?.();
-                     throw new Error(`direct handleOps reverted (tx ${txHash}, status ${String(receipt.status)}); the SuperPaymaster in-flight slot was released`);
+                     throw new Error(`direct handleOps reverted (tx ${outcome.hash}, status ${String(receipt.status)}); the SuperPaymaster in-flight slot was released`);
                  }
                  if (!receiptSucceeded(receipt?.status)) {
-                     throw new Error(`direct handleOps receipt status ${String(receipt?.status)} is not success (tx ${txHash}); keeping the SuperPaymaster in-flight slot`);
+                     throw new Error(`direct handleOps receipt status ${String(receipt?.status)} is not success (tx ${outcome.hash}); keeping the SuperPaymaster in-flight slot`);
                  }
                  guard.inSend = false;
-                 if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, txHash);
-                 return txHash;
+                 if (spCtx?.generation === 'v5.5') guard.record?.(outcome.hash);
+                 return outcome.hash;
             }
 
             if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
             console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
-            if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, result.result);
+            if (spCtx?.generation === 'v5.5') guard.record?.(result.result);
             return result.result;
         }
 
