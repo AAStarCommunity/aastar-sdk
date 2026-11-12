@@ -3,8 +3,10 @@ import { getAddress, type Address, type Hex } from 'viem';
 /**
  * Attribute each receipt log to the call that emitted it, from a callTracer trace (`withLog`).
  * Pure: no I/O. A reverted frame is dropped with its subtree (the receipt drops those logs).
- * CALL / STATICCALL / CREATE / CREATE2 enter `to`. DELEGATECALL / CALLCODE keep the caller's
- * storage context and msg.sender, so a module log is still the proxy's. Any doubt returns aligned: false.
+ * CALL / CREATE / CREATE2 enter `to`. DELEGATECALL keeps the caller's storage and msg.sender.
+ * CALLCODE keeps the caller's storage but sets msg.sender to the calling frame's context.
+ * A successful STATICCALL cannot emit. SELFDESTRUCT is a non-emitting position slot.
+ * Any doubt returns aligned: false.
  */
 
 export interface CallHop {
@@ -17,7 +19,7 @@ export interface CallHop {
 export interface LogAttribution {
     /** Root frame `from`. */
     transactionSender: Address;
-    /** `from` of the nearest frame that entered the emitter's context by a non-delegate call. */
+    /** msg.sender of the emitting context. */
     immediateCaller: Address;
     /** Root frame through the emitting frame, delegatecalls included. */
     forwardingPath: CallHop[];
@@ -31,12 +33,18 @@ export type AttributeTxResult =
 
 const CALL_TYPES = ['CALL', 'DELEGATECALL', 'STATICCALL', 'CALLCODE', 'CREATE', 'CREATE2'] as const;
 type CallType = typeof CALL_TYPES[number];
+/** SELFDESTRUCT has no execution context. It is not a hop. */
+const FRAME_TYPES = [...CALL_TYPES, 'SELFDESTRUCT'] as const;
+type FrameType = typeof FRAME_TYPES[number];
 
 const ADDR_RE = /^0x[0-9a-fA-F]{40}$/;
 const TOPIC_RE = /^0x[0-9a-fA-F]{64}$/;
 const DATA_RE = /^0x([0-9a-fA-F]{2})*$/;
 /** One deeper than the EVM's 1024 call frames. A real trace cannot exceed this. */
 const MAX_TRACE_DEPTH = 1025;
+/** Stop a wide or chatty trace before path materialization can blow up. */
+const MAX_FRAMES = 100_000;
+const MAX_LOGS = 10_000;
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 
 function lc(v: unknown): string {
@@ -48,10 +56,10 @@ function asAddress(v: unknown): Address | null {
     return getAddress(v);
 }
 
-function callType(v: unknown): CallType | null {
+function frameType(v: unknown): FrameType | null {
     if (typeof v !== 'string') return null;
     const upper = v.toUpperCase();
-    return (CALL_TYPES as readonly string[]).includes(upper) ? upper as CallType : null;
+    return (FRAME_TYPES as readonly string[]).includes(upper) ? upper as FrameType : null;
 }
 
 function selectorOf(input: unknown): Hex | null {
@@ -104,27 +112,43 @@ function missingPos(l: unknown): boolean {
 
 /**
  * Iterative. `calls` / `logs`, when present, must be arrays — an object with `length` is not a trace.
- * Reverted subtrees still count toward the depth cap: they are part of the payload.
+ * Reverted subtrees still count toward the depth and size caps: they are part of the payload.
  */
 function traceShape(trace: unknown): string | null {
+    let frames = 0;
+    let logs = 0;
     const st: [unknown, number][] = [[trace, 1]];
     while (st.length) {
         const [f, d] = st.pop()!;
         if (!f || typeof f !== 'object') continue;
+        frames++;
+        if (frames > MAX_FRAMES) return 'trace too large';
         if (d > MAX_TRACE_DEPTH) return 'trace deeper than 1025';
         const o = f as Record<string, unknown>;
         if (o.calls !== undefined && o.calls !== null && !Array.isArray(o.calls)) return 'trace calls are not an array';
         if (o.logs !== undefined && o.logs !== null && !Array.isArray(o.logs)) return 'trace logs are not an array';
+        if (Array.isArray(o.logs)) {
+            logs += o.logs.length;
+            if (logs > MAX_LOGS) return 'trace too large';
+        }
         if (Array.isArray(o.calls)) for (const c of o.calls) st.push([c, d + 1]);
     }
     return null;
 }
 
+/** Shared ancestry. The array is built only for a log that is actually emitted. */
+interface PathLink {
+    hop: CallHop;
+    parent: PathLink | null;
+}
+
 interface Info {
     context: Address;
-    enteredBy: Address;
+    /** msg.sender while this frame executes. */
+    msgSender: Address;
     transactionSender: Address;
-    path: CallHop[];
+    path: PathLink | null;
+    kind: CallType | null;
 }
 
 interface FrameNode {
@@ -142,11 +166,18 @@ interface FlatLog {
 }
 
 function emptyInfo(): Info {
-    return { context: ZERO, enteredBy: ZERO, transactionSender: ZERO, path: [] };
+    return { context: ZERO, msgSender: ZERO, transactionSender: ZERO, path: null, kind: null };
 }
 
 function doneFrame(): FrameNode {
     return { emit: [], has: false, logs: [], calls: [], info: emptyInfo() };
+}
+
+function pathOf(tail: PathLink | null): CallHop[] {
+    const hops: CallHop[] = [];
+    for (let link = tail; link; link = link.parent) hops.push(link.hop);
+    hops.reverse();
+    return hops;
 }
 
 function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
@@ -164,52 +195,71 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
         // Receipt omits logs from a reverted frame and from everything it called.
         if (o.error) return doneFrame();
 
-        const type = callType(o.type);
+        const type = frameType(o.type);
         const from = asAddress(o.from);
         const to = asAddress(o.to);
+        const logs = Array.isArray(o.logs) ? o.logs : [];
+        const calls = Array.isArray(o.calls) ? o.calls : [];
+        // Beneficiary is not an execution context. The frame still occupies a position slot.
+        if (type === 'SELFDESTRUCT') {
+            if (!from || !to) note('trace frame address malformed');
+            if (logs.length > 0 || calls.length > 0) note('selfdestruct frame has logs or children');
+            return doneFrame();
+        }
         if (!type) note('trace frame type invalid');
         if (!from || !to) note('trace frame address malformed');
 
         const hop: CallHop | null = type && from && to
             ? { type, from, to, selector: selectorOf(o.input) }
             : null;
-        const delegate = type === 'DELEGATECALL' || type === 'CALLCODE';
+        const link: PathLink | null = hop ? { hop, parent: parent?.path ?? null } : (parent?.path ?? null);
         let info: Info;
-        if (delegate) {
-            if (!parent) note('delegatecall at trace root');
-            // Context and msg.sender stay with the caller. `to` is code, not storage.
+        if (type === 'DELEGATECALL' || type === 'CALLCODE') {
+            if (!parent) note(type === 'CALLCODE' ? 'callcode at trace root' : 'delegatecall at trace root');
+            // Storage stays with the caller. CALLCODE, unlike DELEGATECALL, sets msg.sender
+            // to the calling frame's context. Later delegatecalls inherit that sender.
             info = {
                 context: parent ? parent.context : ZERO,
-                enteredBy: parent ? parent.enteredBy : ZERO,
+                msgSender: type === 'CALLCODE'
+                    ? (parent ? parent.context : ZERO)
+                    : (parent ? parent.msgSender : ZERO),
                 transactionSender: parent ? parent.transactionSender : (from ?? ZERO),
-                path: parent && hop ? [...parent.path, hop] : (parent ? [...parent.path] : []),
+                path: link,
+                kind: type,
             };
         } else if (hop && from && to) {
             info = {
                 context: to,
-                enteredBy: from,
+                msgSender: from,
                 transactionSender: parent ? parent.transactionSender : from,
-                path: [...(parent?.path ?? []), hop],
+                path: link,
+                kind: type,
             };
         } else {
             info = parent
-                ? { ...parent, path: [...parent.path] }
-                : { context: to ?? ZERO, enteredBy: from ?? ZERO, transactionSender: from ?? ZERO, path: [] };
+                ? { ...parent, path: link }
+                : { context: to ?? ZERO, msgSender: from ?? ZERO, transactionSender: from ?? ZERO, path: null, kind: null };
         }
 
-        return {
-            emit: null,
-            has: false,
-            logs: Array.isArray(o.logs) ? o.logs : [],
-            calls: Array.isArray(o.calls) ? o.calls : [],
-            info,
-        };
+        return { emit: null, has: false, logs, calls, info };
     };
 
     const exit = (node: FrameNode, childNodes: FrameNode[]): void => {
         const { logs, calls, info } = node;
-        // A missing position is "after the children", unambiguous only when no child kept a log.
-        if (logs.some(missingPos) && childNodes.some((c) => c.has)) note('trace logs lack positions');
+        let missing = false;
+        let present = false;
+        for (const l of logs) {
+            if (missingPos(l)) missing = true;
+            else present = true;
+        }
+        // One frame may not mix "no position" with an explicit position: the array order and
+        // the buckets would disagree. All-missing logs stay "after the children".
+        if (missing && present) note('trace log positions are mixed');
+        else if (missing && childNodes.some((c) => c.has)) note('trace logs lack positions');
+        // Static context propagates. A surviving log anywhere under the frame is impossible.
+        if (info.kind === 'STATICCALL' && (logs.length > 0 || childNodes.some((c) => c.has))) {
+            note('staticcall emitted a log');
+        }
         const callCount = calls.length;
         const buckets: unknown[][] = Array.from({ length: callCount + 1 }, () => []);
         let prev = 0;
@@ -261,8 +311,8 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
                     raw: l,
                     attribution: {
                         transactionSender: x.info.transactionSender,
-                        immediateCaller: x.info.enteredBy,
-                        forwardingPath: x.info.path,
+                        immediateCaller: x.info.msgSender,
+                        forwardingPath: pathOf(x.info.path),
                         emitter: x.info.context,
                     },
                 });

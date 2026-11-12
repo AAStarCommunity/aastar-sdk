@@ -112,21 +112,100 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         ]);
     });
 
-    it('treats CALLCODE like a delegatecall', () => {
+    it('sets CALLCODE msg.sender to the calling context', () => {
         const trace = frame('CALL', EOA, SP, {
             calls: [frame('CALLCODE', SP, EXT, { logs: [tlog(SP)] })],
         });
         const got = one(trace, [rlog(SP, 0)], 0);
-        expect(got.immediateCaller).toBe(addr(EOA));
+        expect(got.transactionSender).toBe(addr(EOA));
+        expect(got.immediateCaller).toBe(addr(SP));
         expect(got.emitter).toBe(addr(SP));
-        expect(got.forwardingPath[1]).toEqual(hop('CALLCODE', SP, EXT, '0x12345678'));
+        expect(got.forwardingPath).toEqual([
+            hop('CALL', EOA, SP, '0x12345678'),
+            hop('CALLCODE', SP, EXT, '0x12345678'),
+        ]);
     });
 
-    it.each(['STATICCALL', 'CREATE', 'CREATE2'] as const)('uses to as the %s context', (type) => {
+    it('inherits the CALLCODE sender through a later delegatecall, using context not from', () => {
+        // CALLCODE's `from` is the code address EXT. The calling context is still SP.
+        const trace = frame('CALL', EOA, SP, {
+            calls: [frame('CALLCODE', EXT, OTHER2, {
+                calls: [frame('DELEGATECALL', EXT, OTHER, { logs: [tlog(SP)] })],
+            })],
+        });
+        const got = one(trace, [rlog(SP, 0)], 0);
+        expect(got.immediateCaller).toBe(addr(SP));
+        expect(got.emitter).toBe(addr(SP));
+        expect(got.transactionSender).toBe(addr(EOA));
+        expect(got.forwardingPath).toEqual([
+            hop('CALL', EOA, SP, '0x12345678'),
+            hop('CALLCODE', EXT, OTHER2, '0x12345678'),
+            hop('DELEGATECALL', EXT, OTHER, '0x12345678'),
+        ]);
+    });
+
+    it.each(['CREATE', 'CREATE2'] as const)('uses to as the %s context', (type) => {
         const got = one(frame(type, EOA, TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)], 0);
         expect(got.emitter).toBe(addr(TARGET));
         expect(got.immediateCaller).toBe(addr(EOA));
         expect(got.forwardingPath[0]?.type).toBe(type);
+    });
+
+    it('rejects a log emitted anywhere under a staticcall', () => {
+        const direct = frame('STATICCALL', EOA, TARGET, { logs: [tlog(TARGET)] });
+        expect(attributeTx(direct, [rlog(TARGET, 0)])).toEqual({
+            aligned: false,
+            why: 'staticcall emitted a log',
+        });
+        const nested = frame('CALL', EOA, SP, {
+            calls: [frame('STATICCALL', SP, TARGET, {
+                calls: [frame('CALL', TARGET, OTHER, { logs: [tlog(OTHER)] })],
+            })],
+        });
+        expect(attributeTx(nested, [rlog(OTHER, 0)])).toEqual({
+            aligned: false,
+            why: 'staticcall emitted a log',
+        });
+    });
+
+    it('keeps a selfdestruct as a position slot next to a guardian log', () => {
+        const trace = frame('CALL', EOA, ENTRY, {
+            calls: [
+                frame('CALL', ENTRY, GUARD, { logs: [tlog(GUARD)] }),
+                { type: 'SELFDESTRUCT', from: ENTRY, to: EOA },
+            ],
+            logs: [{ ...tlog(ENTRY, TOPIC_B), position: 2 }],
+        });
+        const res = attributeTx(trace, [rlog(GUARD, 0), rlog(ENTRY, 1, TOPIC_B)]);
+        expect(res.aligned).toBe(true);
+        if (!res.aligned) return;
+        expect(res.byLogIndex.get(0)?.immediateCaller).toBe(addr(ENTRY));
+        expect(res.byLogIndex.get(0)?.emitter).toBe(addr(GUARD));
+        expect(res.byLogIndex.get(1)?.emitter).toBe(addr(ENTRY));
+        expect(res.byLogIndex.get(1)?.forwardingPath).toHaveLength(1);
+    });
+
+    it('rejects a selfdestruct that carries logs or children', () => {
+        const withLog = frame('CALL', EOA, TARGET, {
+            calls: [{ type: 'SELFDESTRUCT', from: TARGET, to: EOA, logs: [tlog(EOA)] }],
+            logs: [{ ...tlog(TARGET), position: 1 }],
+        });
+        expect(attributeTx(withLog, [rlog(TARGET, 0)])).toEqual({
+            aligned: false,
+            why: 'selfdestruct frame has logs or children',
+        });
+        const withChild = frame('CALL', EOA, TARGET, {
+            calls: [{
+                type: 'SELFDESTRUCT',
+                from: TARGET,
+                to: EOA,
+                calls: [frame('CALL', TARGET, OTHER, { logs: [tlog(OTHER)] })],
+            }],
+        });
+        expect(attributeTx(withChild, [])).toEqual({
+            aligned: false,
+            why: 'selfdestruct frame has logs or children',
+        });
     });
 
     it('drops a reverted sibling subtree and still aligns', () => {
@@ -221,6 +300,30 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         // The order below is what an unguarded "missing means after children" walk would emit.
         const receipt = [rlog(OTHER, 0, TOPIC_B), rlog(TARGET, 1, TOPIC)];
         expect(attributeTx(trace, receipt)).toEqual({ aligned: false, why: 'trace logs lack positions' });
+    });
+
+    it('rejects mixed present and missing positions in one frame', () => {
+        const trace = frame('CALL', EOA, TARGET, {
+            calls: [frame('CALL', TARGET, OTHER)],
+            logs: [tlog(TARGET, TOPIC), { ...tlog(TARGET, TOPIC_B), position: 0 }],
+        });
+        // That placement emits the positioned log first. The matching receipt must still be refused.
+        const receipt = [rlog(TARGET, 0, TOPIC_B), rlog(TARGET, 1, TOPIC)];
+        expect(attributeTx(trace, receipt)).toEqual({
+            aligned: false,
+            why: 'trace log positions are mixed',
+        });
+    });
+
+    it('keeps array order when every log in the frame lacks a position', () => {
+        const trace = frame('CALL', EOA, TARGET, {
+            calls: [frame('CALL', TARGET, OTHER)],
+            logs: [tlog(TARGET, TOPIC), tlog(TARGET, TOPIC_B)],
+        });
+        const res = attributeTx(trace, [rlog(TARGET, 0, TOPIC), rlog(TARGET, 1, TOPIC_B)]);
+        expect(res.aligned).toBe(true);
+        if (!res.aligned) return;
+        expect(res.byLogIndex.size).toBe(2);
     });
 
     it('allows a missing position when every child frame was reverted', () => {
@@ -326,5 +429,19 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         deep.error = 'reverted';
         const wrapped = frame('CALL', EOA, TARGET, { calls: [deep] });
         expect(attributeTx(wrapped, [])).toEqual({ aligned: false, why: 'trace deeper than 1025' });
+    });
+
+    it('rejects a trace with more than 100000 frames or 10000 logs', () => {
+        const calls: Record<string, unknown>[] = new Array(100_000);
+        for (let i = 0; i < calls.length; i++) calls[i] = { type: 'CALL', from: EOA, to: TARGET };
+        const wide = { type: 'CALL', from: EOA, to: TARGET, calls, logs: [tlog(TARGET)] };
+        expect(attributeTx(wide, [rlog(TARGET, 0)])).toEqual({ aligned: false, why: 'trace too large' });
+
+        const logs: ReturnType<typeof tlog>[] = new Array(10_001);
+        for (let i = 0; i < logs.length; i++) logs[i] = tlog(TARGET);
+        const chatty = { type: 'CALL', from: EOA, to: TARGET, logs };
+        const receipt: ReturnType<typeof rlog>[] = new Array(10_001);
+        for (let i = 0; i < receipt.length; i++) receipt[i] = rlog(TARGET, i);
+        expect(attributeTx(chatty, receipt)).toEqual({ aligned: false, why: 'trace too large' });
     });
 });
