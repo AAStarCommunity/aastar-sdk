@@ -144,6 +144,6 @@ E2E 脚本只接受本机回环地址上的 RPC 和 bundler，否则直接拒绝
 - `addresses{}`：registry、policyRegistry、blsAggregator、dvtValidator、reputationSystem，取自 SDK 地址簿；
 - 上面每个地址对应的 `codehashes`。
 
-**rc.4 没有部署 DisclosureRegistry**，所以这份 pins 用 `scripts/sp550-pin-fill.ts` 跑出来恰好有一项 ❌：`pins complete and well-formed — disclosureRegistry: unpinned`，其余 62 项都通过。这一项要等 rc.8 的 manifest。
+**rc.4 没有部署 DisclosureRegistry**，所以这份 pins 用 `scripts/sp550-pin-fill.ts` 跑出来恰好有一项 ❌：`pins complete and well-formed — disclosureRegistry: unpinned`，其余 62 项都通过。这是 #443 之前的记录：作者 2026-11-12 决定 5.5.0 不部署 DisclosureRegistry，manifest 现在写 `"disclosureRegistry": "n/a:none"`，读回里的条目每个字段都是 `"n/a:not deployed"`（#443），这一项不再是缺 pin。`docs/sp550-cutover/a7/` 下的 schema 和两份示例是 SP 的原样副本（schema sha256 cb49395f…），示例里那个已部署的 registry 只是格式示例，SDK 不改它们。
 
 `scripts/sp550-readback-compare.ts` 负责逐字段比对 SP 的 `aoa-a7-readback/1` 读回文件、pins，以及 SDK 自己在链上读到的值。在这个分叉上用 cast 生成了一份读回文件做冒烟测试，结果 PASS。另外故意改坏了三处：Registry 的 version 写成 null、extension 写了一个 version、SP 的 owner 写错，三处都被拒绝了。
