@@ -156,3 +156,29 @@ describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok
         expect(() => requireSp550CutoverPins(11155111, pins)).toThrow(/aoaProtocolRegistry and globalTierSource are the same address/);
     });
 });
+
+describe('validated getters accept a DisclosureRegistry declared absent (author 2026-11-12: 5.5.0 deploys none)', async () => {
+    const { requireSp550UpgradePins } = await import('./sp550Deployments.js');
+    const { SP550_CERTIFIED_ADDRESS_KEYS } = await import('./sp550Cutover.js');
+    const drop = (p: any) => {
+        const { disclosureRegistry: _d, ...rest } = p;
+        const { disclosureRegistry: _h, ...codehashes } = p.codehashes;
+        return { ...rest, codehashes, absent: [...(p.absent ?? []), 'disclosureRegistry'] };
+    };
+    it('fresh', () => {
+        const pins = drop(FULL);
+        const got = requireSp550FreshDeployPins(optimismSepolia.id, pins);
+        expect(got.disclosureRegistry).toBeUndefined();
+        expect(got.absent).toContain('disclosureRegistry');
+    });
+    it('upgrade', () => {
+        const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
+        const { absent: _a, ...up } = FULL as any;
+        up.superPaymaster = A(0x2ff);
+        up.addresses = book;
+        up.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.'))),
+            ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x70 + i).toString(16).repeat(32)])) };
+        const pins = drop(up);
+        expect(requireSp550UpgradePins(sepolia.id, pins, { allowRc: true }).disclosureRegistry).toBeUndefined();
+    });
+});

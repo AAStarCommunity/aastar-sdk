@@ -565,3 +565,30 @@ describe('an upgrade declaring no timelock: the SDK book must not still name one
         expect(failed(ok)).toEqual([]);
     });
 });
+
+describe('5.5.0 deploys no DisclosureRegistry (author 2026-11-12): absent stands in for its pin', () => {
+    const noDisclosure = (p: any) => {
+        const { disclosureRegistry: _d, ...rest } = p;
+        const { disclosureRegistry: _h, ...codehashes } = p.codehashes;
+        return { ...rest, codehashes, absent: [...(p.absent ?? []), 'disclosureRegistry'] };
+    };
+    it.each([['sepolia', sepolia.id, 'upgrade'], ['op-sepolia', optimismSepolia.id, 'fresh']] as const)('%s passes without a registry address', async (network, chainId, mode) => {
+        const m = deployment(chainId, mode);
+        const pins = noDisclosure(m.pins);
+        BOOKS.set(pins, BOOKS.get(m.pins)!);
+        const r = await runSp550CutoverGate({ network, rpcs: mode === 'fresh' ? twin(m) : [rpc('--rpc', LOOP, m, [])], pins });
+        expect(failed(r)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+    });
+    it.each([
+        ['pinned and declared absent', (p: any) => ({ ...p, absent: [...(p.absent ?? []), 'disclosureRegistry'] }), /disclosureRegistry: pinned and declared absent/],
+        ['a codehash for an absent registry', (p: any) => ({ ...noDisclosure(p), codehashes: { ...p.codehashes } }), /codehashes\.disclosureRegistry: given for a DisclosureRegistry declared absent/],
+    ])('upgrade pins: %s is refused', async (_n, patch, msg) => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = patch(m.pins);
+        BOOKS.set(pins, BOOKS.get(m.pins)!);
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(msg);
+    });
+});

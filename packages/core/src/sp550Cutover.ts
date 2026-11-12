@@ -46,7 +46,10 @@ export interface Sp550CutoverPins {
     aPNTsCapped?: Address;
     /** ERC-1967 implementation behind the Registry proxy (`addresses.registry`). */
     registryImpl?: Address;
-    /** The DisclosureRegistry 5.5.0 deploys; not in the SDK book, pinned by codehash. */
+    /**
+     * A DisclosureRegistry, if the release deploys one; not in the SDK book, pinned by codehash. 5.5.0
+     * deploys none (author 2026-11-12): the manifest says "n/a:none" and `absent` lists disclosureRegistry.
+     */
     disclosureRegistry?: Address;
     /**
      * SP-owned SDK address-book entries the read-back certifies, keyed by book key. An upgrade
@@ -57,7 +60,8 @@ export interface Sp550CutoverPins {
     addresses?: Partial<Record<string, Address>>;
     /**
      * Keys declared NOT deployed. A fresh deploy lists sp-optional book keys; an upgrade only ever
-     * lists timelockController (a manifest's timelockController: "n/a:none").
+     * lists timelockController (a manifest's timelockController: "n/a:none"). Either mode may list
+     * disclosureRegistry (disclosureRegistry: "n/a:none"), which then stands in for its pin.
      */
     absent?: string[];
     /** Block the readback was taken at. */
@@ -154,7 +158,8 @@ export function isSp550ReleaseTag(tag: unknown, opts: { allowRc?: boolean } = {}
 
 /** The missing required fields for a pin set (empty array = complete). */
 export function missingSp550Pins(pins: Sp550CutoverPins | undefined): string[] {
-    return SP550_REQUIRED_PIN_FIELDS.filter((k) => pins?.[k] === undefined || pins?.[k] === null || pins?.[k] === '');
+    const declaredAbsent = (k: string) => k === 'disclosureRegistry' && Array.isArray(pins?.absent) && pins.absent.includes(k);
+    return SP550_REQUIRED_PIN_FIELDS.filter((k) => (pins?.[k] === undefined || pins?.[k] === null || pins?.[k] === '') && !declaredAbsent(k));
 }
 
 /**
@@ -169,6 +174,10 @@ export function sp550PinProblems(pins: Sp550CutoverPins | undefined, opts: { all
         const v = pins[k];
         if (v === undefined) continue;
         if (typeof v !== 'string' || !isAddress(v, { strict: false }) || v.toLowerCase() === ZERO) problems.push(`${k}: not a non-zero address (${String(v)})`);
+    }
+    if (Array.isArray(pins.absent) && pins.absent.includes('disclosureRegistry')) {
+        if (pins.disclosureRegistry !== undefined) problems.push('disclosureRegistry: pinned and declared absent');
+        if (pins.codehashes?.disclosureRegistry !== undefined) problems.push('codehashes.disclosureRegistry: given for a DisclosureRegistry declared absent');
     }
     if (pins.spImplCodehash !== undefined && !HASH.test(String(pins.spImplCodehash))) {
         problems.push(`spImplCodehash: not a 32-byte hash (${String(pins.spImplCodehash)})`);
