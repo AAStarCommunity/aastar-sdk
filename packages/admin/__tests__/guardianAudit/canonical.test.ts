@@ -28,41 +28,41 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
         expect(() => canonicalJson(Number.NaN)).toThrow(/safe integer/);
         expect(() => canonicalJson(Number.POSITIVE_INFINITY)).toThrow(/safe integer/);
         expect(() => canonicalJson(1.5)).toThrow(/safe integer/);
-        expect(() => canonicalJson(new Map())).toThrow(/unsupported/);
-        expect(() => canonicalJson(new Set())).toThrow(/unsupported/);
-        expect(() => canonicalJson(new Date())).toThrow(/unsupported/);
+        expect(() => canonicalJson(new Map())).toThrow(/^input rejected$/);
+        expect(() => canonicalJson(new Set())).toThrow(/^input rejected$/);
+        expect(() => canonicalJson(new Date())).toThrow(/^input rejected$/);
         expect(() => canonicalJson(() => 1)).toThrow(/unsupported/);
         class Box { x = 1; }
-        expect(() => canonicalJson(new Box())).toThrow(/unsupported/);
-        expect(() => canonicalJson([1, undefined])).toThrow(/undefined array element/);
+        expect(() => canonicalJson(new Box())).toThrow(/^input rejected$/);
+        expect(() => canonicalJson([1, undefined])).toThrow(/^input rejected$/);
         const hole: unknown[] = [];
         hole.length = 1;
-        expect(() => canonicalJson(hole)).toThrow(/undefined array element/);
+        expect(() => canonicalJson(hole)).toThrow(/^input rejected$/);
     });
 
     it('throws on a cycle instead of hanging', () => {
         const arr: unknown[] = [];
         arr.push(arr);
-        expect(() => canonicalJson(arr)).toThrow(/cycle/);
+        expect(() => canonicalJson(arr)).toThrow(/^input rejected$/);
         const obj: Record<string, unknown> = {};
         obj.self = obj;
-        expect(() => canonicalJson(obj)).toThrow(/cycle/);
+        expect(() => canonicalJson(obj)).toThrow(/^input rejected$/);
         const a: Record<string, unknown> = {};
         const b: Record<string, unknown> = { a };
         a.b = b;
-        expect(() => canonicalJson(a)).toThrow(/cycle/);
+        expect(() => canonicalJson(a)).toThrow(/^input rejected$/);
     });
 
     it('bounds a string before the hex regex and a bigint before toString', () => {
-        expect(() => canonicalJson(`a${'b'.repeat(1_048_576)}`)).toThrow(/string too long/);
-        expect(() => canonicalJson({ ['k'.repeat(1_048_577)]: 1 })).toThrow(/string too long/);
+        expect(() => canonicalJson(`a${'b'.repeat(1_048_576)}`)).toThrow(/^input rejected$/);
+        expect(() => canonicalJson({ ['k'.repeat(1_048_577)]: 1 })).toThrow(/^input rejected$/);
         expect(() => canonicalJson(1n << 2000n)).toThrow(/bigint too long/);
         expect(canonicalJson(1n << 1023n).length).toBeGreaterThan(2);
     });
 
     it('throws when the node count exceeds 1_000_000', () => {
         const wide = new Array<number>(1_000_000).fill(1);
-        expect(() => canonicalJson(wide)).toThrow(/node budget/);
+        expect(() => canonicalJson(wide)).toThrow(/^input rejected$/);
     });
 
     it('collides a bigint with its decimal string and not with a JSON number', () => {
@@ -119,8 +119,15 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
                 },
             });
         }
-        expect(() => canonicalJson(obj)).toThrow(/^canonical: output too large$/);
+        expect(() => canonicalJson(obj)).toThrow(/^input rejected$/);
         expect(reads).toBeGreaterThan(10);
         expect(reads).toBeLessThan(80);
     });
+
+    it('stops encoding once escaped output passes 64 MiB', () => {
+        const blob = '\u0000'.repeat(1_000_000);
+        const obj: Record<string, string> = {};
+        for (let i = 0; i < 12; i++) obj[`n${i}`] = blob;
+        expect(() => canonicalJson(obj)).toThrow(/^canonical: output too large$/);
+    }, 120_000);
 });

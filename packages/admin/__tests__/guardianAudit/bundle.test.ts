@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, toFunctionSelector, type Address, type Hex } from 'viem';
+import * as canonicalMod from '../../src/guardianAudit/canonical';
 import { canonicalDigest, canonicalJson } from '../../src/guardianAudit/canonical';
+import * as bundleMod from '../../src/guardianAudit/bundle';
 import {
     MAX_EVIDENCE_FILE_BYTES, buildEvidenceBundle, evidenceFileSha256, parseEvidenceFile, serializeEvidenceFile,
     verifyEvidenceBundle, verifyEvidenceFile, type EvidenceBundle, type RunMetadata,
 } from '../../src/guardianAudit/bundle';
-import { DEFAULT_RULESET, rulesetId, type RuleRecord, type Ruleset } from '../../src/guardianAudit/rules';
+import * as rulesMod from '../../src/guardianAudit/rules';
+import { DEFAULT_RULESET, validateRuleset, rulesetId, type RuleRecord, type Ruleset } from '../../src/guardianAudit/rules';
 import type { DecodedAction, FoundAction, ScanResult } from '../../src/guardianAudit/scan';
 import type { RawLog } from '../../src/guardianAudit/rpc';
 
@@ -319,7 +322,8 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const wide = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         wide.decoded = { kind: 'owner' };
         for (let i = 0; i < 65; i++) wide.decoded[`k${i}`] = i;
-        expect(() => build({ result: complete([wide], []) })).toThrow(/too large/);
+        const builtWide = build({ result: complete([wide], []) });
+        expect(Object.keys(builtWide.bundle.actions[0]!.decoded)).toHaveLength(66);
         const logless = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         delete (logless.log as { data?: string }).data;
         expect(() => build({ result: complete([logless], []) })).toThrow(/log is invalid/);
@@ -446,15 +450,15 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
 
     it('serializeEvidenceFile refuses a canonical form over 64 MiB', () => {
         const built = build({ result: complete([], []) });
-        const blob = 'a'.repeat(1_000_000);
         const seed = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         const packed = build({ result: complete([seed], []) }).bundle.actions[0]!;
         const actions = [];
-        for (let i = 0; i < 70; i++) {
+        const nul = '\u0000'.repeat(1_000_000);
+        for (let i = 0; i < 12; i++) {
             const copy = structuredClone(packed);
             copy.logIndex = i;
             copy.log.logIndex = i;
-            (copy.decoded as { blob?: string }).blob = blob;
+            (copy.decoded as { blob?: string }).blob = nul;
             actions.push(copy);
         }
         const bundle = { ...structuredClone(built.bundle), actions };
@@ -568,7 +572,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         found.decoded = { kind: 'owner', refs };
         const started = Date.now();
-        expect(() => build({ result: complete([found], []) })).toThrow(/^evidence value too large$/);
+        expect(() => build({ result: complete([found], []) })).toThrow(/^input rejected$/);
         expect(Date.now() - started).toBeLessThan(2_000);
     });
 
@@ -723,8 +727,8 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             });
         }
         ruleset.extra = extra;
-        expect(() => build({ result: complete([], []), ruleset })).toThrow(/too large/);
-        expect(reads).toBe(0);
+        expect(() => build({ result: complete([], []), ruleset })).toThrow(/^ruleset: unknown key$/);
+        expect(reads).toBe(100);
     });
 
     it('hides a secret thrown by a classifier getter or a rerun digest getter', () => {
@@ -738,7 +742,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             build({ result: complete([poisoned], []) });
             throw new Error('action getter escaped');
         } catch (e) {
-            expect((e as Error).message).toBe('evidence value unsupported');
+            expect((e as Error).message).toBe('input rejected');
             expect(String(e)).not.toContain('secret.example');
         }
         try {
@@ -755,7 +759,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             });
             throw new Error('classify getter escaped');
         } catch (e) {
-            expect((e as Error).message).toBe('evidence value unsupported');
+            expect((e as Error).message).toBe('input rejected');
             expect((e as Error).message).not.toContain(secret);
             expect(String(e)).not.toContain('secret.example');
         }
@@ -797,5 +801,127 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
 
     it('counts an unpaired surrogate as three bytes and does not swallow the next unit', () => {
         expect(() => evidenceFileSha256('\ud800é'.repeat(13_421_773))).toThrow(/^evidence file too large$/);
+    });
+
+    it('rejects a self-consistent file whose unattributed count or route fields are wrong', () => {
+        const published = build({ result: complete([], []) });
+        const fileFor = (bundle: EvidenceBundle): string => `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle,
+            digest: canonicalDigest(bundle),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        const counted = structuredClone(published.bundle);
+        counted.state = 'UNATTRIBUTED';
+        counted.unattributed = 999;
+        const text = fileFor(counted);
+        expect(() => parseEvidenceFile(text)).toThrow(/^unattributed count does not match$/);
+        const check = verifyEvidenceFile(text, { bundle: counted, digest: canonicalDigest(counted) });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('unattributed count does not match');
+
+        const seeded = build();
+        const fileForSeed = (bundle: EvidenceBundle): string => `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle,
+            digest: canonicalDigest(bundle),
+            runMetadata: seeded.runMetadata,
+        })}\n`;
+        const noEvent = structuredClone(seeded.bundle);
+        noEvent.actions[0]!.record = { route: 'unattributed' };
+        expect(() => parseEvidenceFile(fileForSeed(noEvent))).toThrow(/^evidence action is invalid$/);
+        const noSelector = structuredClone(seeded.bundle);
+        noSelector.actions[0]!.record = { route: 'public' };
+        expect(() => parseEvidenceFile(fileForSeed(noSelector))).toThrow(/^evidence action is invalid$/);
+        const recovered = structuredClone(seeded.bundle);
+        recovered.actions[0]!.record = { route: 'bls' };
+        expect(parseEvidenceFile(fileForSeed(recovered)).bundle.actions[0]!.record).toEqual({ route: 'bls' });
+    });
+
+    it('hides a secret thrown by a getter on canonical, ruleset, file, and provider inputs', () => {
+        const secret = 'https://secret/token';
+        const boom = () => { throw new Error(secret); };
+        const assertHidden = (run: () => unknown) => {
+            try {
+                run();
+                throw new Error('getter escaped');
+            } catch (e) {
+                const cause = e instanceof Error && 'cause' in e ? (e as { cause?: unknown }).cause : undefined;
+                const text = `${e instanceof Error ? `${e.name} ${e.message} ${e.stack ?? ''}` : String(e)} ${String(cause)}`;
+                expect(text).not.toContain('secret');
+                expect((e as Error).message).toBe('input rejected');
+            }
+        };
+        const box: Record<string, unknown> = {};
+        Object.defineProperty(box, 'a', { enumerable: true, get: boom });
+        assertHidden(() => canonicalJson(box));
+        const ruleset = structuredClone(DEFAULT_RULESET) as Ruleset & { comment?: unknown };
+        Object.defineProperty(ruleset, 'comment', { enumerable: true, configurable: true, get: boom });
+        assertHidden(() => validateRuleset(ruleset));
+        const published = build({ result: complete([], []) });
+        const parts: { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata } = {
+            bundle: published.bundle,
+            digest: published.digest,
+            runMetadata: published.runMetadata,
+        };
+        Object.defineProperty(parts, 'runMetadata', { enumerable: true, get: boom });
+        assertHidden(() => serializeEvidenceFile(parts));
+        const input = {
+            result: complete([], []),
+            scope: SCOPE,
+            chainId: 11155111,
+            ruleset: DEFAULT_RULESET,
+            roles: { superPaymaster: SP },
+            classify,
+            sdkVersion: '0.46.0-rc.2',
+            generatedAt: '2026-11-12T00:00:00.000Z',
+        };
+        Object.defineProperty(input, 'providers', { enumerable: true, get: boom });
+        assertHidden(() => buildEvidenceBundle(input));
+    });
+
+    it('never returns a secret from a proxy passed to any exported function', () => {
+        const secret = 'https://secret/token';
+        const trap = () => { throw new Error(secret); };
+        const poison = () => new Proxy({}, {
+            get: trap,
+            set: trap,
+            has: trap,
+            ownKeys: trap,
+            getOwnPropertyDescriptor: trap,
+            defineProperty: trap,
+            deleteProperty: trap,
+            getPrototypeOf: trap,
+            setPrototypeOf: trap,
+            isExtensible: trap,
+            preventExtensions: trap,
+            apply: trap,
+            construct: trap,
+        });
+        const rendered = (value: unknown): string => {
+            if (value instanceof Error) {
+                const cause = 'cause' in value ? rendered((value as { cause?: unknown }).cause) : '';
+                return `${value.name} ${value.message} ${value.stack ?? ''} ${cause}`;
+            }
+            if (typeof value === 'string') return value;
+            try {
+                return JSON.stringify(value) ?? '';
+            } catch (e) {
+                return rendered(e);
+            }
+        };
+        for (const mod of [canonicalMod, rulesMod, bundleMod]) {
+            for (const [name, value] of Object.entries(mod)) {
+                if (typeof value !== 'function') continue;
+                const args = Array.from({ length: Math.max(value.length, 1) }, () => poison());
+                let text = '';
+                try {
+                    text = rendered(name === 'GuardianAuditInputError' ? new (value as new (...a: unknown[]) => unknown)(...args) : (value as (...a: unknown[]) => unknown)(...args));
+                } catch (e) {
+                    text = rendered(e);
+                }
+                expect(text, name).not.toContain('secret');
+            }
+        }
     });
 });

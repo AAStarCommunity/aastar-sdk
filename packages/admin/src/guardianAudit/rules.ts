@@ -1,5 +1,5 @@
 import { getAddress, toFunctionSelector, type Hex } from 'viem';
-import { canonicalDigest } from './canonical.js';
+import { canonicalDigest, snapshotPlain } from './canonical.js';
 
 /**
  * Pure rule evaluation. No I/O: the same record and ruleset always give the same verdict,
@@ -172,30 +172,6 @@ function only(obj: Record<string, any>, allowed: readonly string[], section: str
     }
 }
 
-function nullClone(value: unknown, seen: Set<object>): unknown {
-    if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') return value;
-    if (typeof value !== 'object') throw new Error('ruleset: unsupported value');
-    if (seen.has(value)) throw new Error('ruleset: unsupported value');
-    seen.add(value);
-    if (Array.isArray(value)) {
-        const out: unknown[] = [];
-        for (const item of value) out.push(nullClone(item, seen));
-        seen.delete(value);
-        return out;
-    }
-    const out = Object.create(null) as Record<string, unknown>;
-    for (const key of ownKeys(value)) {
-        Object.defineProperty(out, key, {
-            value: nullClone(ownValue(value, key), seen),
-            enumerable: true,
-            writable: true,
-            configurable: true,
-        });
-    }
-    seen.delete(value);
-    return out;
-}
-
 function deepFreeze<T>(value: T): T {
     if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
     for (const key of Object.keys(value as object)) deepFreeze((value as Record<string, unknown>)[key]);
@@ -206,8 +182,10 @@ function deepFreeze<T>(value: T): T {
  * Validate a parsed ruleset. Unknown keys throw at every level; the message names the section, not the key.
  * Returns a new deep-frozen null-prototype copy. The input is not frozen and is not returned.
  */
-export function validateRuleset(rs: unknown): Ruleset {
-    if (!isRecord(rs) || rs.schema !== RULESET_SCHEMA) throw new Error('ruleset: unknown schema');
+export function validateRuleset(input: unknown): Ruleset {
+    const snap = snapshotPlain(input, { nodes: 0, bytes: 0 });
+    if (!isRecord(snap) || snap.schema !== RULESET_SCHEMA) throw new Error('ruleset: unknown schema');
+    const rs = snap;
     for (const key of ownKeys(rs)) {
         if (TOP_LEVEL.has(key)) continue;
         if (key.length > 160 || key.includes('://') || /[\r\n]/.test(key)) throw new Error('ruleset: invalid key');
@@ -295,16 +273,56 @@ export function validateRuleset(rs: unknown): Ruleset {
                 }
             }
         }
-        if (f.flagIfCallAlsoEmits && typeof f.alsoReason !== 'string') throw new Error('ruleset: alsoReason missing');
-        if (typeof f.alsoReason === 'string') shortText(f.alsoReason, 'publicRoute.functions.alsoReason', MAX_REASON);
+        if (Object.hasOwn(f, 'alsoReason')) shortText(f.alsoReason, 'publicRoute.functions.alsoReason', MAX_REASON);
+        else if (f.flagIfCallAlsoEmits) throw new Error('ruleset: alsoReason missing');
     }
-    return deepFreeze(nullClone(rs, new Set())) as Ruleset;
+    return deepFreeze(rs) as Ruleset;
 }
 
 /** `{ schema, digest }` of a validated ruleset. The digest covers every rule string. */
 export function rulesetId(rs: Ruleset): { schema: typeof RULESET_SCHEMA; digest: Hex } {
     const valid = validateRuleset(rs);
     return { schema: valid.schema, digest: canonicalDigest(valid) };
+}
+
+/** Every own value is a 20-byte address, on every route. The address is not copied into the error. */
+function assertRoleMap(roles: unknown): Record<string, string> {
+    if (!isRecord(roles)) throw new Error('roles missing');
+    for (const key in roles) {
+        if (!Object.hasOwn(roles, key)) continue;
+        const value = ownValue(roles, key);
+        if (typeof value !== 'string' || !/^0x[0-9a-fA-F]{40}$/i.test(value)) throw new Error('role address is invalid');
+        try {
+            getAddress(`0x${value.slice(2)}` as `0x${string}`);
+        } catch {
+            throw new Error('role address is invalid');
+        }
+    }
+    return roles;
+}
+
+/** Optional record fields have their exact type before any route returns. */
+function assertCallerRecord(record: Record<string, any>): void {
+    if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128
+        || record.event.includes('://') || /[\r\n]/.test(record.event))) {
+        throw new Error('record: event is not a short string');
+    }
+    if (record.kind !== undefined && (typeof record.kind !== 'string' || record.kind.length > 64
+        || record.kind.includes('://') || /[\r\n]/.test(record.kind))) {
+        throw new Error('record: kind is not a short string');
+    }
+    if (record.selector !== undefined && typeof record.selector !== 'string') throw new Error('record: selector is invalid');
+    if (record.fields !== undefined && !isRecord(record.fields)) throw new Error('record: fields invalid');
+    if (record.callEvents !== undefined) {
+        if (!Array.isArray(record.callEvents) || record.callEvents.length > MAX_RULE_KEYS) {
+            throw new Error('record: callEvents too large');
+        }
+        for (const name of record.callEvents) {
+            if (typeof name !== 'string' || name.length === 0 || name.length > 128 || name.includes('://') || /[\r\n]/.test(name)) {
+                throw new Error('record: callEvents invalid');
+            }
+        }
+    }
 }
 
 /**
@@ -314,25 +332,28 @@ export function rulesetId(rs: Ruleset): { schema: typeof RULESET_SCHEMA; digest:
 export function matchGeneric(
     rs: Ruleset, roles: Record<string, string>, target: unknown, callData: unknown,
 ): GenericExpected | null {
-    const rules = validateRuleset(rs);
-    if (!isRecord(roles)) throw new Error('roles missing');
-    if (typeof callData === 'string' && callData.length > 1_048_576) throw new Error('record: callData too long');
-    const sel = typeof callData === 'string' && callData.length >= 10 ? callData.slice(0, 10).toLowerCase() : null;
+    const budget = { nodes: 0, bytes: 0 };
+    const rules = validateRuleset(snapshotPlain(rs, budget));
+    const roleMap = assertRoleMap(snapshotPlain(roles, budget));
+    const tgt = snapshotPlain(target, budget);
+    const data = snapshotPlain(callData, budget);
+    if (typeof data === 'string' && data.length > 1_048_576) throw new Error('record: callData too long');
+    const sel = typeof data === 'string' && data.length >= 10 ? data.slice(0, 10).toLowerCase() : null;
     if (!Array.isArray(rules.bls.GENERIC.expected) || rules.bls.GENERIC.expected.length > MAX_RULE_KEYS) {
         throw new Error('ruleset: too large');
     }
     for (const e of rules.bls.GENERIC.expected) {
-        if (!Object.hasOwn(roles, e.target)) continue;
-        const addr = ownValue(roles, e.target);
-        if (!target) continue;
+        if (!Object.hasOwn(roleMap, e.target)) continue;
+        const addr = ownValue(roleMap, e.target);
+        if (!tgt) continue;
         if (typeof addr !== 'string' || addr.length !== 42) throw new Error('role address is invalid');
         let roleAddr: string;
         try {
-            roleAddr = getAddress(addr as `0x${string}`);
+            roleAddr = getAddress(`0x${addr.slice(2)}` as `0x${string}`);
         } catch {
             throw new Error('role address is invalid');
         }
-        if (!sameAddress(roleAddr, target)) continue;
+        if (!sameAddress(roleAddr, tgt)) continue;
         const want = selectorOf(e.signature);
         if (want !== null && sel !== null && want === sel) return e;
     }
@@ -342,8 +363,9 @@ export function matchGeneric(
 /** The publicRoute entry whose selector is `selector`, as [signature, entry], or null. */
 export function publicFunction(rs: Ruleset, selector: unknown): [string, PublicFunctionRule] | null {
     const rules = validateRuleset(rs);
-    if (typeof selector !== 'string' || selector.length !== 10) return null;
-    const want = selector.toLowerCase();
+    const snap = snapshotPlain(selector, { nodes: 0, bytes: 0 });
+    if (typeof snap !== 'string' || snap.length !== 10) return null;
+    const want = snap.toLowerCase();
     for (const sig of ownKeys(rules.publicRoute.functions)) {
         const got = selectorOf(sig);
         const entry = ownValue(rules.publicRoute.functions, sig);
@@ -370,20 +392,19 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
  */
 export function evaluate(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): Verdict {
-    if (!isRecord(record)
-        || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
+    const budget = { nodes: 0, bytes: 0 };
+    const snapRules = snapshotPlain(rs, budget);
+    const snapRoles = snapshotPlain(roles, budget);
+    const rec = snapshotPlain(record, budget);
+    if (!isRecord(rec)
+        || (rec.route !== 'bls' && rec.route !== 'owner' && rec.route !== 'public' && rec.route !== 'unattributed')) {
         throw new Error('record: unknown route');
     }
-    const rules = validateRuleset(rs);
-    if (!isRecord(roles)) throw new Error('roles missing');
-    if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128
-        || record.event.includes('://') || /[\r\n]/.test(record.event))) {
-        throw new Error('record: event is not a short string');
-    }
-    if (record.kind !== undefined && (typeof record.kind !== 'string' || record.kind.length > 64
-        || record.kind.includes('://') || /[\r\n]/.test(record.kind))) {
-        throw new Error('record: kind is not a short string');
-    }
+    const rules = validateRuleset(snapRules);
+    const roleMap = assertRoleMap(snapRoles);
+    assertCallerRecord(rec);
+    record = rec as RuleRecord;
+    roles = roleMap;
     if (record.route === 'public') {
         const pf = publicFunction(rules, record.selector);
         if (!pf) {
@@ -395,7 +416,6 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
         }
         const [sig, f] = pf;
         const callEvents = record.callEvents ?? [];
-        if (!Array.isArray(callEvents) || callEvents.length > MAX_RULE_KEYS) throw new Error('record: callEvents too large');
         const also = (f.flagIfCallAlsoEmits ?? []).filter((e) => callEvents.includes(e));
         if (also.length) {
             return {
@@ -460,11 +480,19 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
 
 /** Whether this record wants prices read before/after (price-update rules). */
 export function wantsPrice(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): boolean {
-    if (!isRecord(record)
-        || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
+    const budget = { nodes: 0, bytes: 0 };
+    const snapRules = snapshotPlain(rs, budget);
+    const snapRoles = snapshotPlain(roles, budget);
+    const rec = snapshotPlain(record, budget);
+    if (!isRecord(rec)
+        || (rec.route !== 'bls' && rec.route !== 'owner' && rec.route !== 'public' && rec.route !== 'unattributed')) {
         throw new Error('record: unknown route');
     }
-    const rules = validateRuleset(rs);
+    const rules = validateRuleset(snapRules);
+    const roleMap = assertRoleMap(snapRoles);
+    assertCallerRecord(rec);
+    record = rec as RuleRecord;
+    roles = roleMap;
     if (record.route === 'public') return !!publicFunction(rules, record.selector)?.[1].readPrice;
     if (record.route === 'owner' || record.route === 'unattributed') {
         const event = ownValue(rules.ownerRoute.events, typeof record.event === 'string' ? record.event : '');

@@ -354,4 +354,57 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         };
         expect(parsed).toEqual(DEFAULT_RULESET);
     });
+
+    it('snapshots a ruleset before a later getter can clear a boolean flag', () => {
+        const rs = structuredClone(DEFAULT_RULESET);
+        const events: string[] = [];
+        Object.defineProperty(events, '0', {
+            enumerable: true,
+            configurable: true,
+            get() {
+                (rs.bls.SLASH as { flag: unknown }).flag = 0;
+                return 'OperatorPaused';
+            },
+        });
+        events.length = 1;
+        rs.publicRoute.functions['pauseUnderstakedOperator(address)']!.events = events;
+        const verdict = evaluate(rs, roles, { route: 'bls', kind: 'SLASH' });
+        expect(verdict.flagged).toBe(true);
+        expect(verdict.rule).toBe('bls.SLASH');
+        const numeric = structuredClone(DEFAULT_RULESET);
+        (numeric.bls.SLASH as { flag: unknown }).flag = 0;
+        expect(() => evaluate(numeric, roles, { route: 'bls', kind: 'SLASH' })).toThrow(/^ruleset: bls\.SLASH\.flag must be boolean$/);
+    });
+
+    it('requires alsoReason to be a bounded string and rejects a deep subtree', () => {
+        const wide = structuredClone(DEFAULT_RULESET);
+        (wide.publicRoute.functions['pauseUnderstakedOperator(address)'] as { alsoReason?: unknown }).alsoReason = Array.from({ length: 65 }, () => 'x');
+        expect(() => validateRuleset(wide)).toThrow(/^ruleset: publicRoute\.functions\.alsoReason invalid$/);
+        const deep = structuredClone(DEFAULT_RULESET);
+        let nested: unknown = 'x';
+        for (let i = 0; i < 12_000; i++) nested = [nested];
+        (deep.publicRoute.functions['pauseUnderstakedOperator(address)'] as { alsoReason?: unknown }).alsoReason = nested;
+        expect(() => validateRuleset(deep)).toThrow(/^input rejected$/);
+    });
+
+    it('rejects a non-string callEvents element and a bad role on the public route', () => {
+        const update = toFunctionSelector('updatePrice()');
+        expect(() => evaluate(DEFAULT_RULESET, roles, {
+            route: 'public',
+            selector: update,
+            callEvents: [null as unknown as string],
+        })).toThrow(/^record: callEvents invalid$/);
+        expect(() => evaluate(DEFAULT_RULESET, { superPaymaster: 'invalid' }, {
+            route: 'public',
+            selector: update,
+        })).toThrow(/^role address is invalid$/);
+        expect(() => wantsPrice(DEFAULT_RULESET, null as unknown as Record<string, string>, {
+            route: 'public',
+            selector: update,
+        })).toThrow(/^roles missing$/);
+        expect(() => wantsPrice(DEFAULT_RULESET, { superPaymaster: null as unknown as string }, {
+            route: 'public',
+            selector: update,
+        })).toThrow(/^role address is invalid$/);
+    });
 });

@@ -1,5 +1,5 @@
 import { getAddress, sha256, stringToBytes, type Address, type Hex } from 'viem';
-import { canonicalDigest, canonicalJson, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES } from './canonical.js';
+import { canonicalDigest, canonicalJson, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES, snapshotPlain, type SnapshotBudget } from './canonical.js';
 import { evaluate, RULESET_SCHEMA, rulesetId, type RuleRecord, type Ruleset, type Verdict } from './rules.js';
 import { PROVIDER_NAME_RE, quantity } from './rpc.js';
 import type { FoundAction, ScanResult } from './scan.js';
@@ -127,11 +127,8 @@ function isRecord(v: unknown): v is Record<string, any> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/** Same node budget as canonical JSON. Repeated visits of a shared reference count again. */
-const MAX_COPY_NODES = 1_000_000;
 const MAX_COPY_DEPTH = 32;
 const MAX_COPY_KEYS = 64;
-const MAX_COPY_ARRAY = 4096;
 const HASH_RE = /^0x[0-9a-f]{64}$/;
 const ADDR_RE = /^0x[0-9a-f]{40}$/;
 const DATA_RE = /^0x[0-9a-f]*$/;
@@ -170,6 +167,7 @@ const PUBLIC_REASONS = new Set<string>([
     'evidence actions missing',
     'evidence value too large',
     'unattributed count missing',
+    'unattributed count does not match',
     'complete evidence has an unattributed action',
     'evidence action is outside the range',
     'evidence action does not match its log',
@@ -185,32 +183,12 @@ const PUBLIC_REASONS = new Set<string>([
     'generatedAt must be a string',
 ]);
 
-interface CopyBudget { n: number }
-
 function assertLabel(name: string): void {
     if (typeof name !== 'string' || name.length > 64 || !PROVIDER_NAME_RE.test(name)) throw new Error('provider name is not a label');
 }
 
 function boundedText(value: unknown, max: number): value is string {
     return typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('://') && !/[\r\n]/.test(value);
-}
-
-/** One read of caller-owned data. A throwing getter becomes a fixed error and drops its text. */
-function readOwn(value: object, key: string): unknown {
-    let desc: PropertyDescriptor | undefined;
-    try {
-        desc = Object.getOwnPropertyDescriptor(value, key);
-    } catch {
-        throw new Error('evidence value unsupported');
-    }
-    if (desc === undefined) return undefined;
-    if ('value' in desc) return desc.value;
-    if (typeof desc.get !== 'function') return undefined;
-    try {
-        return desc.get.call(value);
-    } catch {
-        throw new Error('evidence value unsupported');
-    }
 }
 
 function ownKeyList(obj: object, cap: number, message: string): string[] {
@@ -274,72 +252,6 @@ function assertRunMetadata(meta: unknown): RunMetadata {
     return { providers: [providers[0], providers[1]], sdkVersion: meta.sdkVersion, generatedAt: meta.generatedAt };
 }
 
-/**
- * Plain copy. One budget for the whole bundle: every visit counts, including a repeated visit of a
- * shared acyclic reference, and the budget is checked before descending. The seen set is the path,
- * so a DAG is copied again and a cycle still throws. Objects are null-prototype; an own `__proto__`
- * key is defined, not assigned.
- */
-function copyPlain(value: unknown, seen: Set<object>, depth: number, budget: CopyBudget): unknown {
-    budget.n += 1;
-    if (budget.n > MAX_COPY_NODES) throw new Error('evidence value too large');
-    if (typeof value === 'string') {
-        if (value.length > 1_048_576) throw new Error('evidence value too large');
-        return value;
-    }
-    if (value === null || typeof value === 'boolean' || typeof value === 'bigint') return value;
-    if (typeof value === 'number') {
-        if (!Number.isSafeInteger(value)) throw new Error('evidence number must be a safe integer');
-        return Object.is(value, -0) ? 0 : value;
-    }
-    if (typeof value !== 'object') throw new Error('evidence value unsupported');
-    if (seen.has(value)) throw new Error('evidence value cycle');
-    if (depth > MAX_COPY_DEPTH) throw new Error('evidence value too deep');
-    if (Array.isArray(value)) {
-        let length: number;
-        try {
-            length = value.length;
-        } catch {
-            throw new Error('evidence value unsupported');
-        }
-        if (length > MAX_COPY_ARRAY) throw new Error('evidence value too large');
-        const items = new Array<unknown>(length);
-        for (let i = 0; i < length; i++) items[i] = readOwn(value, String(i));
-        seen.add(value);
-        const out = new Array<unknown>(length);
-        for (let i = 0; i < length; i++) {
-            const item = items[i];
-            if (item === undefined) throw new Error('evidence value unsupported');
-            out[i] = copyPlain(item, seen, depth + 1, budget);
-        }
-        seen.delete(value);
-        return out;
-    }
-    const proto = Object.getPrototypeOf(value);
-    if (proto !== Object.prototype && proto !== null) throw new Error('evidence value unsupported');
-    const keys: string[] = [];
-    for (const key in value) {
-        if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
-        keys.push(key);
-        if (keys.length > MAX_COPY_KEYS) throw new Error('evidence value too large');
-    }
-    seen.add(value);
-    const out = Object.create(null) as Record<string, unknown>;
-    for (const key of keys) {
-        if (key.length > 128 || key.includes('://') || /[\r\n]/.test(key)) throw new Error('evidence value unsupported');
-        const child = readOwn(value, key);
-        if (child === undefined) continue;
-        Object.defineProperty(out, key, {
-            value: copyPlain(child, seen, depth + 1, budget),
-            enumerable: true,
-            writable: true,
-            configurable: true,
-        });
-    }
-    seen.delete(value);
-    return out;
-}
-
 function evidenceAddress(value: unknown): Address {
     if (typeof value !== 'string' || value.length !== 42) throw new Error('evidence address is invalid');
     try {
@@ -396,14 +308,6 @@ function byPosition(a: EvidenceAction, b: EvidenceAction): number {
     return 0;
 }
 
-const COPY_ERRORS = new Set([
-    'evidence value too large',
-    'evidence value cycle',
-    'evidence value too deep',
-    'evidence value unsupported',
-    'evidence number must be a safe integer',
-]);
-
 interface PreparedAction {
     blockNumber: number;
     blockHash: Hex;
@@ -442,9 +346,9 @@ function normalizeClassifier(value: unknown, depth: number): void {
 
 function assertRoleMap(roles: unknown): Record<string, string> {
     if (!isRecord(roles)) throw new Error('roles missing');
-    const keys = ownKeyList(roles, MAX_COPY_KEYS, 'evidence value too large');
-    for (const key of keys) {
-        const value = roles[key];
+    for (const key in roles) {
+        if (!Object.hasOwn(roles, key)) continue;
+        const value = (roles as Record<string, unknown>)[key];
         if (typeof value !== 'string' || value.length !== 42 || !/^0x[0-9a-fA-F]{40}$/i.test(value)) {
             throw new Error('role address is invalid');
         }
@@ -461,8 +365,8 @@ function assertRoleMap(roles: unknown): Record<string, string> {
  * One plain action, checked before any classifier runs.
  * `removed: true` is rejected here. The published log never carries `removed`.
  */
-function prepareAction(raw: unknown, range: { from: number; to: number }, identities: Set<string>, budget: CopyBudget): PreparedAction {
-    const snapshot = copyPlain(raw, new Set(), 0, budget);
+function prepareAction(raw: unknown, range: { from: number; to: number }, identities: Set<string>): PreparedAction {
+    const snapshot = raw;
     if (!isRecord(snapshot)) throw new Error('evidence action is invalid');
     if (!isRecord(snapshot.log)) throw new Error('evidence log is invalid');
     if (Object.prototype.hasOwnProperty.call(snapshot.log, 'removed') && snapshot.log.removed !== false) {
@@ -502,22 +406,16 @@ function classifyOne(
     classify: (action: FoundAction) => RuleRecord,
     ruleset: Ruleset,
     roles: Record<string, string>,
-    budget: CopyBudget,
+    budget: SnapshotBudget,
 ): EvidenceAction {
-    const arg = copyPlain(prepared.snapshot, new Set(), 0, budget);
+    const arg = snapshotPlain(prepared.snapshot, budget);
     let raw: unknown;
     try {
         raw = classify(arg as FoundAction);
     } catch {
         throw new Error('classify failed');
     }
-    let record: unknown;
-    try {
-        record = copyPlain(raw, new Set(), 0, budget);
-    } catch (e) {
-        if (e instanceof Error && COPY_ERRORS.has(e.message)) throw e;
-        throw new Error('evidence value unsupported');
-    }
+    const record = snapshotPlain(raw, budget);
     normalizeClassifier(record, 0);
     assertRecord(record);
     return {
@@ -578,6 +476,16 @@ function assertRecord(record: unknown): void {
         throw new Error('evidence action is invalid');
     }
     if (record.event !== undefined && (typeof record.event !== 'string' || record.event.length > 128)) {
+        throw new Error('evidence action is invalid');
+    }
+    if (record.route === 'unattributed' && (typeof record.event !== 'string' || record.event.length === 0)) {
+        throw new Error('evidence action is invalid');
+    }
+    if (record.route === 'public' && (typeof record.selector !== 'string' || !SELECTOR_RE.test(record.selector))) {
+        throw new Error('evidence action is invalid');
+    }
+    if (record.route === 'bls' && record.kind !== undefined
+        && (typeof record.kind !== 'string' || record.kind.length === 0 || record.kind.length > 64)) {
         throw new Error('evidence action is invalid');
     }
 }
@@ -660,9 +568,18 @@ function assertPublished(bundle: EvidenceBundle): void {
     if (!Array.isArray(bundle.actions) || bundle.actions.length > 100_000) throw new Error('evidence actions missing');
     const requireAttribution = bundle.state === 'COMPLETE';
     const identities = new Set<string>();
-    for (const action of bundle.actions) assertAction(action, range as { from: number; to: number }, requireAttribution, identities);
+    let missing = 0;
+    for (const action of bundle.actions) {
+        const published = assertAction(action, range as { from: number; to: number }, requireAttribution, identities);
+        if (published.attribution == null) missing += 1;
+    }
     assertSorted(bundle.actions as EvidenceAction[]);
-    if (bundle.state === 'UNATTRIBUTED' && !assertSafeCount(bundle.unattributed)) throw new Error('unattributed count missing');
+    if (bundle.state === 'UNATTRIBUTED') {
+        if (!assertSafeCount(bundle.unattributed)) throw new Error('unattributed count missing');
+        if (missing === 0 || bundle.unattributed !== missing) throw new Error('unattributed count does not match');
+    } else if (missing !== 0) {
+        throw new Error('complete evidence has an unattributed action');
+    }
 }
 
 /**
@@ -672,60 +589,55 @@ function assertPublished(bundle: EvidenceBundle): void {
  * `result.resolvedPrior` and `result.unattributed` are not read.
  */
 export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata } {
-    if (!isRecord(input)) throw new Error('evidence input is invalid');
-    const result = readOwn(input, 'result');
+    const budget: SnapshotBudget = { nodes: 0, bytes: 0 };
+    const snap = snapshotPlain(input, budget);
+    if (!isRecord(snap)) throw new Error('evidence input is invalid');
+    const result = snap.result;
     if (!isRecord(result)) throw new Error('evidence state is invalid');
-    const state = readOwn(result, 'state');
+    const state = result.state;
     if (state === 'INCOMPLETE') throw new Error('incomplete scan has no evidence');
     if (state !== 'COMPLETE' && state !== 'UNATTRIBUTED') throw new Error('evidence state is invalid');
-    const chainId = readOwn(input, 'chainId');
+    const chainId = snap.chainId;
     if (typeof chainId !== 'number' || !Number.isSafeInteger(chainId) || chainId <= 0) {
         throw new Error('evidence chainId is invalid');
     }
-    const scope = readOwn(input, 'scope');
+    const scope = snap.scope;
     if (typeof scope !== 'string' || !/^0x[0-9a-fA-F]{64}$/i.test(scope)) {
         throw new Error('evidence scope is invalid');
     }
-    const from = readOwn(result, 'from');
-    const to = readOwn(result, 'to');
+    const from = result.from;
+    const to = result.to;
     if (typeof from !== 'number' || typeof to !== 'number'
         || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < 0) {
         throw new Error('evidence range is invalid');
     }
-    const actions = readOwn(result, 'actions');
+    const actions = result.actions;
     if (!Array.isArray(actions)) throw new Error('evidence actions missing');
-    let actionCount: number;
-    try {
-        actionCount = actions.length;
-    } catch {
-        throw new Error('evidence value unsupported');
-    }
+    const actionCount = actions.length;
     if (actionCount > 100_000) throw new Error('evidence value too large');
-    const count = readOwn(result, 'count');
+    const count = result.count;
     if (typeof count !== 'number' || count !== actionCount) throw new Error('evidence count does not match actions');
-    const classify = readOwn(input, 'classify');
+    const classify = snap.classify;
     if (typeof classify !== 'function') throw new Error('classify is not a function');
-    const generatedAtRaw = readOwn(input, 'generatedAt');
+    const generatedAtRaw = snap.generatedAt;
     const runMetadata = assertRunMetadata({
-        providers: readOwn(input, 'providers'),
-        sdkVersion: readOwn(input, 'sdkVersion'),
+        providers: snap.providers,
+        sdkVersion: snap.sdkVersion,
         generatedAt: generatedAtRaw === undefined ? new Date().toISOString() : generatedAtRaw,
     });
-    const budget: CopyBudget = { n: 0 };
-    const roles = assertRoleMap(copyPlain(readOwn(input, 'roles'), new Set(), 0, budget));
-    const ruleset = copyPlain(readOwn(input, 'ruleset'), new Set(), 0, budget) as Ruleset;
+    const roles = assertRoleMap(snap.roles);
+    const ruleset = snap.ruleset as Ruleset;
     const id = rulesetId(ruleset);
     const range = { from, to };
-    const rawActions = new Array<unknown>(actionCount);
-    for (let i = 0; i < actionCount; i++) rawActions[i] = readOwn(actions, String(i));
     const identities = new Set<string>();
-    const prepared = rawActions.map((raw) => prepareAction(raw, range, identities, budget));
+    const prepared = actions.map((raw) => prepareAction(raw, range, identities));
     let missing = 0;
     for (const item of prepared) {
         if (item.attribution === null) missing += 1;
     }
     const publishedState = missing > 0 ? 'UNATTRIBUTED' : 'COMPLETE';
-    const packed = prepared.map((item) => classifyOne(item, classify as EvidenceInput['classify'], ruleset, roles, budget));
+    const recordBudget: SnapshotBudget = { nodes: 0, bytes: 0 };
+    const packed = prepared.map((item) => classifyOne(item, classify as EvidenceInput['classify'], ruleset, roles, recordBudget));
     packed.sort(byPosition);
     const bundle: EvidenceBundle = {
         schema: EVIDENCE_SCHEMA,
@@ -744,7 +656,10 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
 /** Recompute the bundle digest. A throw while canonicalising is a mismatch. */
 export function verifyEvidenceBundle(bundle: EvidenceBundle, digest: Hex): boolean {
     try {
-        return canonicalDigest(bundle) === digest;
+        const budget: SnapshotBudget = { nodes: 0, bytes: 0 };
+        const snapBundle = snapshotPlain(bundle, budget);
+        const snapDigest = snapshotPlain(digest, budget);
+        return canonicalDigest(snapBundle) === snapDigest;
     } catch {
         return false;
     }
@@ -756,17 +671,18 @@ export function verifyEvidenceBundle(bundle: EvidenceBundle, digest: Hex): boole
  * Refuses a file over {@link MAX_EVIDENCE_FILE_BYTES}.
  */
 export function serializeEvidenceFile(parts: { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata }): string {
-    if (!isRecord(parts) || !isRecord(parts.bundle) || typeof parts.digest !== 'string') {
+    const snap = snapshotPlain(parts, { nodes: 0, bytes: 0 });
+    if (!isRecord(snap) || !isRecord(snap.bundle) || typeof snap.digest !== 'string') {
         throw new Error('evidence file is missing bundle, digest, or runMetadata');
     }
-    assertPublished(parts.bundle as EvidenceBundle);
-    const runMetadata = assertRunMetadata(parts.runMetadata);
+    assertPublished(snap.bundle as EvidenceBundle);
+    const runMetadata = assertRunMetadata(snap.runMetadata);
     let body: string;
     try {
         body = canonicalJson({
             schema: EVIDENCE_FILE_SCHEMA,
-            bundle: parts.bundle,
-            digest: parts.digest,
+            bundle: snap.bundle,
+            digest: snap.digest,
             runMetadata,
         });
     } catch (e) {
@@ -848,12 +764,13 @@ export function verifyEvidenceFile(fileText: string, rerun: { bundle: EvidenceBu
             reasons.push(publicReason(e));
         }
         if (parsed) {
-            if (!isRecord(rerun) || typeof rerun.digest !== 'string' || !isRecord(rerun.bundle)) {
+            const safeRerun = snapshotPlain(rerun, { nodes: 0, bytes: 0 });
+            if (!isRecord(safeRerun) || typeof safeRerun.digest !== 'string' || !isRecord(safeRerun.bundle)) {
                 reasons.push('rerun bundle missing');
             } else {
                 try {
-                    if (rerun.digest !== parsed.digest) reasons.push('rerun digest differs from the file digest');
-                    if (canonicalJson(rerun.bundle) !== canonicalJson(parsed.bundle)) reasons.push('rerun bundle differs from the file bundle');
+                    if (safeRerun.digest !== parsed.digest) reasons.push('rerun digest differs from the file digest');
+                    if (canonicalJson(safeRerun.bundle) !== canonicalJson(parsed.bundle)) reasons.push('rerun bundle differs from the file bundle');
                 } catch {
                     reasons.push('rerun bundle differs from the file bundle');
                 }
