@@ -1089,18 +1089,32 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(b.calls).toHaveLength(0);
     });
 
-    it('rethrows typed store conflicts from commit', async () => {
-        const conflicts = [new StoreConflictError(), new ScopeChangedError(), new FinalityConflictError('checkpoint block 1 hash conflict on primary/secondary')];
+    it('replaces typed store errors so the message and cause cannot carry an endpoint', async () => {
+        const conflicts = [
+            { thrown: new StoreConflictError('https://user:pw@disk.example/conflict'), message: 'store revision conflict' },
+            { thrown: new ScopeChangedError('https://user:pw@disk.example/scope'), message: 'a changed watch set needs a new store (a backfill), never a silent resume' },
+            { thrown: new FinalityConflictError('https://user:pw@disk.example/final'), message: 'finality conflict' },
+        ];
         for (const conflict of conflicts) {
+            conflict.thrown.cause = new Error('https://user:pw@disk.example/cause');
             const { a, b } = pair(2);
             const store: GuardianAuditStore = {
                 getCheckpoint: async () => null,
                 listUnresolved: async () => [],
                 listAttributed: async () => [],
                 snapshot: async () => ({ revision: 0, checkpoint: null, scope: null, unresolved: [], attributed: [] }),
-                commit: async () => { throw conflict; },
+                commit: async () => { throw conflict.thrown; },
             };
-            await expect(run(a, b, store)).rejects.toBe(conflict);
+            try {
+                await run(a, b, store);
+                expect.fail('typed store error should throw');
+            } catch (error) {
+                expect(error).toBeInstanceOf(conflict.thrown.constructor);
+                expect(error).not.toBe(conflict.thrown);
+                expect((error as Error).message).toBe(conflict.message);
+                expect((error as Error).cause).toBeUndefined();
+                expect(String(error)).not.toMatch(/https:|user:pw|disk\.example/);
+            }
         }
     });
 

@@ -20,7 +20,12 @@ export interface WatchedContract {
     toBlock?: number;
     /** Decoder/ABI generation, for example `BLSAggregator-4.12.0`. Part of the stored scope. */
     generation: string;
-    /** `null` = unknown topic0 for this generation. `'ignore'` = known, not a guardian action. */
+    /**
+     * `null` = unknown topic0 for this generation. `'ignore'` = known, not a guardian action.
+     * Returning `'ignore'` is a trusted classification. An unknown topic must return null,
+     * which makes the scan INCOMPLETE. A decoder that labels a real guardian topic `'ignore'`
+     * is trusted; that mistake is not covered by the unknown-topic check.
+     */
     decode(log: RawLog): DecodedAction | 'ignore' | null;
 }
 
@@ -469,6 +474,8 @@ function attributedOf(action: FoundAction): AttributedAction {
  * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
  * Providers, watched entries, and numeric options are copied before the first await.
  * Later reads use that copy, so the caller cannot clear the watch set in flight.
+ * A decoder returning `'ignore'` is a trusted classification. The unknown-topic guarantee
+ * covers a null decode, not a decoder that misclassifies a known guardian topic as `'ignore'`.
  */
 function freezeProvider(rpc: RawRpc): RawRpc {
     const name = rpc.name;
@@ -487,11 +494,14 @@ function freezeWatched(watched: readonly WatchedContract[]): WatchedContract[] {
     }));
 }
 
-/** Typed conflicts keep their class. Anything else loses its message, which may hold a URL. */
+/**
+ * Typed conflicts keep their class and lose the store's object.
+ * A fixed message cannot carry an endpoint, and the new error has no cause.
+ */
 function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
-    if (error instanceof StoreConflictError || error instanceof ScopeChangedError || error instanceof FinalityConflictError) {
-        throw error;
-    }
+    if (error instanceof StoreConflictError) throw new StoreConflictError('store revision conflict');
+    if (error instanceof ScopeChangedError) throw new ScopeChangedError();
+    if (error instanceof FinalityConflictError) throw new FinalityConflictError('finality conflict');
     throw new Error(`guardian audit store ${stage} failed`);
 }
 

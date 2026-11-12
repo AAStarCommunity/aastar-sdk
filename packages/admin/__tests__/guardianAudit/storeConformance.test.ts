@@ -7,6 +7,7 @@ import {
     type Commit,
     type ConformanceResult,
     type GuardianAuditStore,
+    type StoreSnapshot,
     type StoreUnderTest,
     type UnresolvedAction,
 } from '../../src/guardianAudit';
@@ -220,6 +221,178 @@ function liveAttributed(): StoreUnderTest {
     return { store };
 }
 
+/** Rolls back a caught-up crash, but saves the checkpoint of a moving crash. */
+function crashMovingPersistsCheckpoint(): StoreUnderTest {
+    const inner = memoryStore();
+    let crash = false;
+    const store: GuardianAuditStore = {
+        snapshot: () => inner.snapshot(),
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        commit: async (change) => {
+            if (!crash) {
+                await inner.commit(change);
+                return;
+            }
+            crash = false;
+            if (change.next !== null) {
+                const partial: Commit = { ...change, unresolved: [], attributed: [], resolve: [] };
+                await inner.commit(partial);
+            }
+            throw new Error('https://user:pw@disk.example/moving');
+        },
+    };
+    return { store, crashNextCommit: () => { crash = true; } };
+}
+
+/** snapshot() returns one live object. Getters return clones. */
+function liveSnapshot(): StoreUnderTest {
+    const inner = memoryStore();
+    let cached: StoreSnapshot | null = null;
+    const store: GuardianAuditStore = {
+        async snapshot() {
+            if (!cached) cached = await inner.snapshot();
+            return cached;
+        },
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        async commit(change) {
+            await inner.commit(change);
+            cached = await inner.snapshot();
+        },
+    };
+    return { store };
+}
+
+/** Existing ids keep every field except reason and attribution. */
+function shallowReplace(): StoreUnderTest {
+    const inner = memoryStore();
+    const store: GuardianAuditStore = {
+        snapshot: () => inner.snapshot(),
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        commit: async (change) => {
+            const snap = await inner.snapshot();
+            const open = new Map(snap.unresolved.map((row) => [row.id, row]));
+            const done = new Map(snap.attributed.map((row) => [row.id, row]));
+            await inner.commit({
+                ...change,
+                unresolved: change.unresolved.map((row) => {
+                    const prior = open.get(row.id.toLowerCase());
+                    return prior ? { ...prior, reason: row.reason } : row;
+                }),
+                attributed: change.attributed.map((row) => {
+                    const prior = done.get(row.id.toLowerCase());
+                    return prior ? { ...prior, attribution: row.attribution } : row;
+                }),
+            });
+        },
+    };
+    return { store };
+}
+
+/** A different scope is refused only when the checkpoint moves. */
+function scopeOnlyWhenMoving(): StoreUnderTest {
+    const inner = memoryStore();
+    const store: GuardianAuditStore = {
+        snapshot: () => inner.snapshot(),
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        commit: async (change) => {
+            const snap = await inner.snapshot();
+            const differs = snap.scope !== null && change.scope.toLowerCase() !== snap.scope.toLowerCase();
+            if (differs && change.next === null) {
+                await inner.commit({ ...change, scope: snap.scope ?? change.scope });
+                return;
+            }
+            await inner.commit(change);
+        },
+    };
+    return { store };
+}
+
+type DefectForm = 'moving' | 'caught-up';
+type Defect = 'skip CAS' | 'partial write before crash' | 'ignore scope' | 'insert-only' | 'shallow-share snapshot' | 'shallow-share getter';
+
+function targets(form: DefectForm, change: Commit): boolean {
+    return (form === 'moving') === (change.next !== null);
+}
+
+/** One defect, applied only to commits of `form`, wrapped around memoryStore. */
+function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
+    const inner = memoryStore();
+    let crash = false;
+    let cached: StoreSnapshot | null = null;
+    const refresh = async () => { cached = await inner.snapshot(); };
+    const live = async () => {
+        if (!cached) await refresh();
+        return cached!;
+    };
+    const store: GuardianAuditStore = {
+        async snapshot() {
+            if (defect === 'shallow-share snapshot') {
+                if (!cached) await refresh();
+                return cached!;
+            }
+            return inner.snapshot();
+        },
+        async getCheckpoint() {
+            if (defect === 'shallow-share getter') return (await live()).checkpoint;
+            return inner.getCheckpoint();
+        },
+        async listUnresolved() {
+            if (defect === 'shallow-share getter') return (await live()).unresolved;
+            return inner.listUnresolved();
+        },
+        async listAttributed() {
+            if (defect === 'shallow-share getter') return (await live()).attributed;
+            return inner.listAttributed();
+        },
+        commit: async (change) => {
+            const hit = targets(form, change);
+            if (defect === 'skip CAS' && hit) {
+                const snap = await inner.snapshot();
+                await inner.commit({ ...change, expectedRevision: snap.revision });
+                return;
+            }
+            if (defect === 'partial write before crash' && crash) {
+                crash = false;
+                if (hit) {
+                    const partial: Commit = { ...change, unresolved: [], attributed: [], resolve: [] };
+                    await inner.commit(partial);
+                }
+                throw new Error('partial');
+            }
+            if (defect === 'ignore scope' && hit) {
+                const snap = await inner.snapshot();
+                const differs = snap.scope !== null && change.scope.toLowerCase() !== snap.scope.toLowerCase();
+                await inner.commit(differs ? { ...change, scope: snap.scope ?? change.scope } : change);
+                return;
+            }
+            if (defect === 'insert-only' && hit) {
+                const snap = await inner.snapshot();
+                const openIds = new Set(snap.unresolved.map((row) => row.id));
+                const doneIds = new Set(snap.attributed.map((row) => row.id));
+                await inner.commit({
+                    ...change,
+                    unresolved: change.unresolved.filter((row) => !openIds.has(row.id.toLowerCase())),
+                    attributed: change.attributed.filter((row) => !doneIds.has(row.id.toLowerCase())),
+                });
+                return;
+            }
+            await inner.commit(change);
+            if (defect === 'shallow-share snapshot' || defect === 'shallow-share getter') await refresh();
+        },
+    };
+    const under: StoreUnderTest = { store };
+    if (defect === 'partial write before crash') under.crashNextCommit = () => { crash = true; };
+    return under;
+}
+
 describe('guardian audit store conformance', () => {
     it('memoryStore passes every store conformance check', async () => {
         const results = await runStoreConformance(() => {
@@ -229,82 +402,123 @@ describe('guardian audit store conformance', () => {
         expect(results.map((item) => item.status)).toEqual(results.map(() => 'pass'));
         expect(results.map((item) => item.name)).toEqual([
             'empty snapshot',
-            'commit applies the whole change and bumps the revision',
-            'stale revision changes nothing',
-            'one of two concurrent commits wins',
-            'crash between write and commit',
-            'scope is recorded and a different scope is refused',
-            're-committing the same ids does not duplicate rows',
-            'callers cannot mutate stored rows',
+            'commit/moving', 'stale/moving', 'concurrent/moving', 'crash/moving', 'scope/moving', 'replacement/moving', 'idempotence/moving',
+            'commit/caught-up', 'stale/caught-up', 'concurrent/caught-up', 'crash/caught-up', 'scope/caught-up', 'replacement/caught-up', 'idempotence/caught-up',
+            'isolation',
         ]);
         expect(results.every((item) => item.detail === undefined)).toBe(true);
     });
 
-    it('a store with no fault hook skips the crash check', async () => {
+    it('a store with no fault hook skips both crash checks', async () => {
         const results = await runStoreConformance(() => ({ store: memoryStore() }));
-        expect(byName(results, 'crash between write and commit')).toEqual({
-            name: 'crash between write and commit',
-            status: 'skipped',
-            detail: 'no fault hook',
-        });
-        expect(results.filter((item) => item.name !== 'crash between write and commit').every((item) => item.status === 'pass')).toBe(true);
+        for (const name of ['crash/moving', 'crash/caught-up']) {
+            expect(byName(results, name)).toEqual({ name, status: 'skipped', detail: 'no fault hook' });
+        }
+        expect(results.filter((item) => !item.name.startsWith('crash/')).every((item) => item.status === 'pass')).toBe(true);
     });
 
-    it('ignoreRevision fails stale revision changes nothing', async () => {
+    it('ignoreRevision fails stale/moving and stale/caught-up', async () => {
         const results = await runStoreConformance(ignoreRevision);
-        onlyFails(results, 'stale revision changes nothing', 'stale revision was accepted');
-        expect(byName(results, 'crash between write and commit')).toEqual({
-            name: 'crash between write and commit',
-            status: 'skipped',
-            detail: 'no fault hook',
-        });
+        fails(results, 'stale/moving', 'moving stale revision was accepted');
+        fails(results, 'stale/caught-up', 'caught-up stale revision was accepted');
+        expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
+            'stale/moving', 'stale/caught-up',
+        ]);
     });
 
-    it('partialCrash fails crash between write and commit', async () => {
+    it('partialCrash fails crash/moving and crash/caught-up', async () => {
         const results = await runStoreConformance(partialCrash);
-        onlyFails(results, 'crash between write and commit', 'crash left a partial write');
-        expect(byName(results, 'crash between write and commit').detail).not.toMatch(/disk\.example|user:pw|https:/);
+        fails(results, 'crash/moving', 'moving crash left a partial write');
+        fails(results, 'crash/caught-up', 'caught-up crash left a partial write');
+        expect(byName(results, 'crash/moving').detail).not.toMatch(/disk\.example|user:pw|https:/);
+        expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
+            'crash/moving', 'crash/caught-up',
+        ]);
     });
 
     it('ignoreCaughtUpRevision fails the caught-up stale and concurrent checks', async () => {
         const results = await runStoreConformance(ignoreCaughtUpRevision);
-        fails(results, 'stale revision changes nothing', 'caught-up stale revision was accepted');
-        fails(results, 'one of two concurrent commits wins', 'caught-up commits did not split one and one');
-        const failed = results.filter((item) => item.status === 'fail').map((item) => item.name);
-        expect(failed).toEqual([
-            'stale revision changes nothing',
-            'one of two concurrent commits wins',
+        fails(results, 'stale/caught-up', 'caught-up stale revision was accepted');
+        fails(results, 'concurrent/caught-up', 'caught-up commits did not split one and one');
+        expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
+            'stale/caught-up', 'concurrent/caught-up',
         ]);
     });
 
-    it('crashResolvesEarly fails crash between write and commit', async () => {
+    it('crashResolvesEarly fails crash/moving and crash/caught-up', async () => {
         const results = await runStoreConformance(crashResolvesEarly);
-        onlyFails(results, 'crash between write and commit', 'crash left a partial write');
-        expect(byName(results, 'crash between write and commit').detail).not.toMatch(/disk\.example|user:pw|https:/);
+        fails(results, 'crash/moving', 'moving crash left a partial write');
+        fails(results, 'crash/caught-up', 'caught-up crash left a partial write');
+        expect(byName(results, 'crash/moving').detail).not.toMatch(/disk\.example|user:pw|https:/);
     });
 
-    it('silentScopeMismatch fails scope is recorded and a different scope is refused', async () => {
+    it('silentScopeMismatch fails scope/moving and scope/caught-up', async () => {
         const results = await runStoreConformance(silentScopeMismatch);
-        onlyFails(results, 'scope is recorded and a different scope is refused', 'different scope was accepted');
+        fails(results, 'scope/moving', 'moving different scope was accepted');
+        fails(results, 'scope/caught-up', 'caught-up different scope was accepted');
+        expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
+            'scope/moving', 'scope/caught-up',
+        ]);
     });
 
-    it('dropAttribution fails commit applies the whole change and bumps the revision', async () => {
+    it('dropAttribution fails commit/moving', async () => {
         const results = await runStoreConformance(dropAttribution);
-        fails(results, 'commit applies the whole change and bumps the revision', 'persisted rows differ');
+        fails(results, 'commit/moving', 'persisted rows differ');
+        fails(results, 'commit/caught-up', 'persisted rows differ');
     });
 
-    it('insertOnly fails re-committing the same ids does not duplicate rows', async () => {
+    it('insertOnly fails replacement/moving and replacement/caught-up', async () => {
         const results = await runStoreConformance(insertOnly);
-        onlyFails(results, 're-committing the same ids does not duplicate rows', 'replacement payload was dropped');
+        fails(results, 'replacement/moving', 'moving replacement payload was dropped');
+        fails(results, 'replacement/caught-up', 'caught-up replacement payload was dropped');
     });
 
-    it('emptyGetters fails callers cannot mutate stored rows', async () => {
+    it('emptyGetters fails isolation', async () => {
         const results = await runStoreConformance(emptyGetters);
-        onlyFails(results, 'callers cannot mutate stored rows', 'public reads disagree with the snapshot');
+        onlyFails(results, 'isolation', 'public reads disagree with the snapshot');
     });
 
-    it('liveAttributed fails callers cannot mutate stored rows', async () => {
+    it('liveAttributed fails isolation', async () => {
         const results = await runStoreConformance(liveAttributed);
-        onlyFails(results, 'callers cannot mutate stored rows', 'stored rows changed after mutation');
+        onlyFails(results, 'isolation', 'stored rows changed after mutation');
+    });
+
+    it('crashMovingPersistsCheckpoint fails crash/moving', async () => {
+        const results = await runStoreConformance(crashMovingPersistsCheckpoint);
+        fails(results, 'crash/moving', 'moving crash left a partial write');
+        expect(byName(results, 'crash/moving').detail).not.toMatch(/disk\.example|user:pw|https:/);
+        expect(byName(results, 'crash/caught-up').status).toBe('pass');
+    });
+
+    it('liveSnapshot fails isolation', async () => {
+        const results = await runStoreConformance(liveSnapshot);
+        onlyFails(results, 'isolation', 'stored rows changed after mutation');
+    });
+
+    it('shallowReplace fails replacement/moving and replacement/caught-up', async () => {
+        const results = await runStoreConformance(shallowReplace);
+        fails(results, 'replacement/moving', 'moving replacement payload was dropped');
+        fails(results, 'replacement/caught-up', 'caught-up replacement payload was dropped');
+    });
+
+    it('scopeOnlyWhenMoving fails scope/caught-up', async () => {
+        const results = await runStoreConformance(scopeOnlyWhenMoving);
+        fails(results, 'scope/caught-up', 'caught-up different scope was accepted');
+        expect(byName(results, 'scope/moving').status).toBe('pass');
+    });
+
+    it('each generated defect fails at least one check', async () => {
+        const forms: DefectForm[] = ['moving', 'caught-up'];
+        const defects: Defect[] = [
+            'skip CAS', 'partial write before crash', 'ignore scope', 'insert-only',
+            'shallow-share snapshot', 'shallow-share getter',
+        ];
+        for (const form of forms) {
+            for (const defect of defects) {
+                const results = await runStoreConformance(() => generatedDefect(form, defect));
+                const failed = results.filter((item) => item.status === 'fail');
+                expect(failed.length, `${defect}/${form}`).toBeGreaterThan(0);
+            }
+        }
     });
 });

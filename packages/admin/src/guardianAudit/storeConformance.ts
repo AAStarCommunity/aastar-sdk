@@ -1,6 +1,10 @@
 /**
  * Shared rules for GuardianAuditStore. No test runner and no Node builtins:
  * file stores and IndexedDB stores call this from their own runners.
+ *
+ * Every state-changing rule runs twice from a seeded store: `moving` (next set)
+ * and `caught-up` (next null). The seed is a checkpoint, two unresolved rows,
+ * two attributed rows, and a scope. Each of those commits also resolves an id.
  */
 import type { Address, Hex } from 'viem';
 import {
@@ -29,9 +33,14 @@ export interface ConformanceResult {
 }
 
 const WORD = `0x${'ab'.repeat(32)}` as Hex;
+const WORD2 = `0x${'cd'.repeat(32)}` as Hex;
 const SCOPE = `0x${'11'.repeat(32)}` as Hex;
 const OTHER_SCOPE = `0x${'22'.repeat(32)}` as Hex;
 const ADDR = '0x1111111111111111111111111111111111111111' as Address;
+const TIP: Checkpoint = { block: 4, hash: WORD };
+const MOVED: Checkpoint = { block: 9, hash: WORD2 };
+
+type Form = 'moving' | 'caught-up';
 
 class Fault extends Error {}
 class Skip extends Error {}
@@ -79,6 +88,10 @@ function commit(over: Partial<Commit> & Pick<Commit, 'expectedRevision'>): Commi
     };
 }
 
+function nextOf(form: Form): Checkpoint | null {
+    return form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : null;
+}
+
 /** Key order does not matter. Array order does. */
 function same(a: unknown, b: unknown): boolean {
     if (Object.is(a, b)) return true;
@@ -99,10 +112,72 @@ function frozen<T>(value: T): T {
     return structuredClone(value);
 }
 
-function readsMatch(store: GuardianAuditStore, snap: StoreSnapshot): Promise<boolean> {
-    return Promise.all([store.getCheckpoint(), store.listUnresolved(), store.listAttributed()]).then(([checkpoint, unresolvedRows, attributedRows]) => (
-        same(checkpoint, snap.checkpoint) && same(unresolvedRows, snap.unresolved) && same(attributedRows, snap.attributed)
-    ));
+/** Change every leaf of a returned value. Arrays are pushed after their current items are walked. */
+function deepMutate(value: unknown): void {
+    if (Array.isArray(value)) {
+        for (const item of [...value]) deepMutate(item);
+        value.push('mutated');
+        return;
+    }
+    if (typeof value !== 'object' || value === null) return;
+    const record = value as Record<string, unknown>;
+    for (const key of Object.keys(record)) {
+        const child = record[key];
+        if (child !== null && typeof child === 'object') deepMutate(child);
+        else if (typeof child === 'number') record[key] = child + 1;
+        else if (typeof child === 'string') record[key] = `${child}#`;
+        else if (typeof child === 'boolean') record[key] = !child;
+    }
+}
+
+function mutatedRow<T extends { id: string }>(row: T): T {
+    const copy = frozen(row);
+    deepMutate(copy);
+    copy.id = row.id;
+    return copy;
+}
+
+function seedRows() {
+    return {
+        unresolved: [unresolved(10, 'open-a'), unresolved(11, 'open-b')],
+        attributed: [attributed(12), attributed(13)],
+    };
+}
+
+function seedSnapshot(revision: number): StoreSnapshot {
+    const rows = seedRows();
+    return {
+        revision,
+        checkpoint: { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: rows.unresolved,
+        attributed: rows.attributed,
+    };
+}
+
+async function seed(store: GuardianAuditStore): Promise<StoreSnapshot> {
+    const first = await store.snapshot();
+    const rows = seedRows();
+    await store.commit(commit({
+        expectedRevision: first.revision,
+        next: { block: TIP.block, hash: TIP.hash },
+        unresolved: rows.unresolved,
+        attributed: rows.attributed,
+    }));
+    const snap = frozen(await store.snapshot());
+    const expected = seedSnapshot(first.revision + 1);
+    if (!same(snap.unresolved, expected.unresolved) || !same(snap.attributed, expected.attributed)) {
+        throw new Fault('persisted rows differ');
+    }
+    if (!same(snap, expected)) throw new Fault('seed did not persist');
+    return snap;
+}
+
+async function readsMatch(store: GuardianAuditStore, snap: StoreSnapshot): Promise<boolean> {
+    const [checkpoint, unresolvedRows, attributedRows] = await Promise.all([
+        store.getCheckpoint(), store.listUnresolved(), store.listAttributed(),
+    ]);
+    return same(checkpoint, snap.checkpoint) && same(unresolvedRows, snap.unresolved) && same(attributedRows, snap.attributed);
 }
 
 async function empty(got: StoreUnderTest): Promise<void> {
@@ -113,245 +188,225 @@ async function empty(got: StoreUnderTest): Promise<void> {
     if (!await readsMatch(got.store, snap)) throw new Fault('public reads disagree with the snapshot');
 }
 
-async function applies(got: StoreUnderTest): Promise<void> {
+async function applyCell(got: StoreUnderTest, form: Form): Promise<void> {
     const store = got.store;
-    const seeded = unresolved(0);
-    const first = await store.snapshot();
-    await store.commit(commit({ expectedRevision: first.revision, unresolved: [seeded] }));
-    const before = await store.snapshot();
-    const tip: Checkpoint = { block: 4, hash: WORD };
+    const seeded = await seed(store);
     await store.commit(commit({
-        expectedRevision: before.revision,
-        next: tip,
-        attributed: [attributed(1)],
-        unresolved: [unresolved(2)],
-        resolve: [seeded.id],
+        expectedRevision: seeded.revision,
+        next: nextOf(form),
+        resolve: [unresolved(10, 'open-a').id],
+        unresolved: [unresolved(20)],
+        attributed: [attributed(21)],
     }));
     const after = frozen(await store.snapshot());
-    if (after.revision !== before.revision + 1) throw new Fault('revision did not advance by one');
-    if (!same(after.checkpoint, tip)) throw new Fault('checkpoint was not committed');
-    if (after.scope?.toLowerCase() !== SCOPE) throw new Fault('scope was not recorded');
-    if (!same(after.unresolved, [unresolved(2)]) || !same(after.attributed, [attributed(1)])) {
-        throw new Fault('persisted rows differ');
-    }
+    const expected: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: [unresolved(11, 'open-b'), unresolved(20)],
+        attributed: [attributed(12), attributed(13), attributed(21)],
+    };
+    if (!same(after, expected)) throw new Fault(`${form} persisted rows differ`);
 }
 
-/** A stale token must fail for a moved checkpoint and for a caught-up `next: null` commit. */
-async function stale(got: StoreUnderTest): Promise<void> {
+async function staleCell(got: StoreUnderTest, form: Form): Promise<void> {
     const store = got.store;
-    const before = await store.snapshot();
-    await store.commit(commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD } }));
-    const mid = frozen(await store.snapshot());
+    const seeded = await seed(store);
     let threw = false;
     try {
         await store.commit(commit({
-            expectedRevision: before.revision,
-            next: { block: 9, hash: WORD },
-            unresolved: [unresolved(4)],
+            expectedRevision: seeded.revision - 1,
+            next: form === 'moving' ? { block: 99, hash: WORD2 } : null,
+            resolve: [unresolved(10, 'open-a').id],
+            unresolved: [unresolved(30)],
+            attributed: [attributed(31)],
         }));
     } catch (error) {
         threw = true;
-        if (!(error instanceof StoreConflictError)) throw new Fault('stale revision threw the wrong error');
+        if (!(error instanceof StoreConflictError)) throw new Fault(`${form} stale revision threw the wrong error`);
     }
-    if (!threw) throw new Fault('stale revision was accepted');
-    if (!same(await store.snapshot(), mid)) throw new Fault('stale revision changed the store');
-    threw = false;
-    try {
-        await store.commit(commit({
-            expectedRevision: before.revision,
-            next: null,
-            attributed: [attributed(4)],
-        }));
-    } catch (error) {
-        threw = true;
-        if (!(error instanceof StoreConflictError)) throw new Fault('caught-up stale revision threw the wrong error');
-    }
-    if (!threw) throw new Fault('caught-up stale revision was accepted');
-    if (!same(frozen(await store.snapshot()), mid)) throw new Fault('caught-up stale revision changed the store');
+    if (!threw) throw new Fault(`${form} stale revision was accepted`);
+    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} stale revision changed the store`);
 }
 
-async function oneRace(
-    store: GuardianAuditStore,
-    revision: number,
-    left: Commit,
-    right: Commit,
-    label: string,
-): Promise<'left' | 'right'> {
+async function concurrentCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    const seeded = await seed(store);
+    const left = form === 'moving'
+        ? commit({ expectedRevision: seeded.revision, next: { block: 5, hash: WORD }, resolve: [unresolved(10, 'open-a').id], unresolved: [unresolved(31)] })
+        : commit({ expectedRevision: seeded.revision, next: null, resolve: [unresolved(10, 'open-a').id], attributed: [attributed(31)] });
+    const right = form === 'moving'
+        ? commit({ expectedRevision: seeded.revision, next: { block: 6, hash: WORD2 }, resolve: [unresolved(10, 'open-a').id], unresolved: [unresolved(32)] })
+        : commit({ expectedRevision: seeded.revision, next: null, resolve: [unresolved(10, 'open-a').id], attributed: [attributed(32)] });
     const [a, b] = await Promise.allSettled([store.commit(left), store.commit(right)]);
     const won = [a, b].filter((item) => item.status === 'fulfilled');
     const lost = [a, b].filter((item) => item.status === 'rejected');
-    if (won.length !== 1 || lost.length !== 1) throw new Fault(`${label} commits did not split one and one`);
+    if (won.length !== 1 || lost.length !== 1) throw new Fault(`${form} commits did not split one and one`);
     const reason = (lost[0] as PromiseRejectedResult).reason;
-    if (!(reason instanceof StoreConflictError)) throw new Fault('the losing commit was not a revision conflict');
-    const snap = await store.snapshot();
-    if (snap.revision !== revision + 1) throw new Fault('winner did not advance the revision once');
-    return a.status === 'fulfilled' ? 'left' : 'right';
-}
-
-/** One winner when the checkpoint moves, and one winner when both commits leave it alone. */
-async function concurrent(got: StoreUnderTest): Promise<void> {
-    const store = got.store;
-    const before = await store.snapshot();
-    const moved = await oneRace(
-        store,
-        before.revision,
-        commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD }, unresolved: [unresolved(1)] }),
-        commit({ expectedRevision: before.revision, next: { block: 2, hash: WORD }, unresolved: [unresolved(2)] }),
-        'moving',
-    );
-    const movedSnap = frozen(await store.snapshot());
-    const movedRow = unresolved(moved === 'left' ? 1 : 2);
-    if (!same(movedSnap.checkpoint, { block: moved === 'left' ? 1 : 2, hash: WORD })) throw new Fault('snapshot is not the winner');
-    if (!same(movedSnap.unresolved, [movedRow])) throw new Fault('snapshot is not the winner');
-    const caught = await oneRace(
-        store,
-        movedSnap.revision,
-        commit({ expectedRevision: movedSnap.revision, next: null, attributed: [attributed(3)] }),
-        commit({ expectedRevision: movedSnap.revision, next: null, attributed: [attributed(4)] }),
-        'caught-up',
-    );
+    if (!(reason instanceof StoreConflictError)) throw new Fault(`${form} losing commit was not a revision conflict`);
+    const winner = a.status === 'fulfilled' ? 'left' : 'right';
     const after = frozen(await store.snapshot());
-    if (!same(after.checkpoint, movedSnap.checkpoint)) throw new Fault('caught-up commit moved the checkpoint');
-    if (!same(after.unresolved, movedSnap.unresolved)) throw new Fault('caught-up loser changed unresolved rows');
-    if (!same(after.attributed, [attributed(caught === 'left' ? 3 : 4)])) throw new Fault('caught-up snapshot is not the winner');
+    const added = winner === 'left' ? 31 : 32;
+    const expected: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving'
+            ? { block: winner === 'left' ? 5 : 6, hash: winner === 'left' ? WORD : WORD2 }
+            : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: form === 'moving'
+            ? [unresolved(11, 'open-b'), unresolved(added)]
+            : [unresolved(11, 'open-b')],
+        attributed: form === 'moving'
+            ? [attributed(12), attributed(13)]
+            : [attributed(12), attributed(13), attributed(added)],
+    };
+    if (!same(after, expected)) throw new Fault(`${form} snapshot is not the winner`);
 }
 
-async function crash(got: StoreUnderTest): Promise<void> {
+async function crashCell(got: StoreUnderTest, form: Form): Promise<void> {
     if (!got.crashNextCommit) throw new Skip('no fault hook');
     const store = got.store;
-    const seeded = await store.snapshot();
-    const tip: Checkpoint = { block: 3, hash: WORD };
-    await store.commit(commit({
-        expectedRevision: seeded.revision,
-        next: tip,
-        unresolved: [unresolved(0, 'kept')],
-        attributed: [attributed(1)],
-    }));
-    const before = frozen(await store.snapshot());
-    if (!same(before.unresolved, [unresolved(0, 'kept')]) || !same(before.attributed, [attributed(1)])) {
-        throw new Fault('seed did not persist');
-    }
-    if (!same(before.checkpoint, tip)) throw new Fault('seed did not persist');
+    const seeded = await seed(store);
     got.crashNextCommit();
     let threw = false;
     try {
         await store.commit(commit({
-            expectedRevision: before.revision,
-            next: null,
-            resolve: [unresolved(0, 'kept').id],
-            attributed: [attributed(0, { who: 'replacement', trace: { id: 'new' } })],
-            unresolved: [unresolved(5)],
+            expectedRevision: seeded.revision,
+            next: form === 'moving' ? { block: 99, hash: WORD2 } : null,
+            resolve: [unresolved(10, 'open-a').id],
+            unresolved: [unresolved(41)],
+            attributed: [attributed(40, { who: 'replacement', trace: { id: 'new' } })],
         }));
     } catch {
         threw = true;
     }
-    if (!threw) throw new Fault('armed crash did not reject the commit');
-    if (!same(frozen(await store.snapshot()), before)) throw new Fault('crash left a partial write');
+    if (!threw) throw new Fault(`${form} armed crash did not reject the commit`);
+    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial write`);
 }
 
-async function scope(got: StoreUnderTest): Promise<void> {
+async function scopeCell(got: StoreUnderTest, form: Form): Promise<void> {
     const store = got.store;
-    const before = await store.snapshot();
-    await store.commit(commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD } }));
-    const recorded = frozen(await store.snapshot());
-    if (recorded.scope?.toLowerCase() !== SCOPE) throw new Fault('first commit did not record scope');
+    const seeded = await seed(store);
     let threw = false;
     try {
         await store.commit(commit({
-            expectedRevision: recorded.revision,
+            expectedRevision: seeded.revision,
             scope: OTHER_SCOPE,
-            next: { block: 8, hash: WORD },
-            unresolved: [unresolved(7)],
+            next: nextOf(form),
+            resolve: [unresolved(10, 'open-a').id],
+            unresolved: [unresolved(51)],
+            attributed: [attributed(50)],
         }));
     } catch (error) {
         threw = true;
-        if (!(error instanceof ScopeChangedError)) throw new Fault('different scope threw the wrong error');
+        if (!(error instanceof ScopeChangedError)) throw new Fault(`${form} different scope threw the wrong error`);
     }
-    if (!threw) throw new Fault('different scope was accepted');
-    if (!same(frozen(await store.snapshot()), recorded)) throw new Fault('different scope changed the store');
+    if (!threw) throw new Fault(`${form} different scope was accepted`);
+    if (!same(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} different scope changed the store`);
 }
 
-async function idempotent(got: StoreUnderTest): Promise<void> {
+async function replacementCell(got: StoreUnderTest, form: Form): Promise<void> {
     const store = got.store;
-    const start = (await store.snapshot()).revision;
+    const seeded = await seed(store);
+    const open = mutatedRow(unresolved(11, 'open-b'));
+    const done = mutatedRow(attributed(12));
+    const payload = frozen({ open, done });
     await store.commit(commit({
-        expectedRevision: start,
-        unresolved: [unresolved(0)],
-        attributed: [attributed(1)],
+        expectedRevision: seeded.revision,
+        next: nextOf(form),
+        resolve: [unresolved(10, 'open-a').id],
+        unresolved: [open],
+        attributed: [done],
     }));
-    const mid = await store.snapshot();
-    if (mid.revision !== start + 1) throw new Fault('revision did not advance by one');
+    const after = frozen(await store.snapshot());
+    const expected: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: [payload.open],
+        attributed: [payload.done, attributed(13)],
+    };
+    if (!same(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
+}
+
+async function idempotentCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    const seeded = await seed(store);
     await store.commit(commit({
-        expectedRevision: mid.revision,
-        unresolved: [unresolved(0, 'again')],
-        attributed: [attributed(1, { who: 'again', trace: { id: 'new' } })],
+        expectedRevision: seeded.revision,
+        next: nextOf(form),
+        resolve: [unresolved(10, 'open-a').id],
+        unresolved: [unresolved(11, 'open-b')],
+        attributed: [attributed(12), attributed(13)],
     }));
-    const snap = frozen(await store.snapshot());
-    if (snap.revision !== mid.revision + 1) throw new Fault('replacement did not advance the revision');
-    const expectedAttribution = attributed(1, { who: 'again', trace: { id: 'new' } });
-    if (!same(snap.unresolved, [unresolved(0, 'again')]) || !same(snap.attributed, [expectedAttribution])) {
-        throw new Fault('replacement payload was dropped');
-    }
+    const after = frozen(await store.snapshot());
+    const expected: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: [unresolved(11, 'open-b')],
+        attributed: [attributed(12), attributed(13)],
+    };
+    if (after.unresolved.length !== 1 || after.attributed.length !== 2) throw new Fault(`${form} ids were duplicated`);
+    if (after.revision !== seeded.revision + 1) throw new Fault(`${form} replacement did not advance the revision`);
+    if (!same(after, expected)) throw new Fault(`${form} replacement payload was dropped`);
 }
 
 async function isolation(got: StoreUnderTest): Promise<void> {
     const store = got.store;
-    const open = unresolved(0);
-    const done = attributed(1);
-    const revision = (await store.snapshot()).revision;
-    const tip: Checkpoint = { block: 2, hash: WORD };
+    const openA = unresolved(10, 'open-a');
+    const openB = unresolved(11, 'open-b');
+    const doneA = attributed(12);
+    const doneB = attributed(13);
+    const next = { block: TIP.block, hash: TIP.hash };
+    const first = await store.snapshot();
     await store.commit(commit({
-        expectedRevision: revision,
-        next: tip,
-        unresolved: [open],
-        attributed: [done],
+        expectedRevision: first.revision,
+        next,
+        unresolved: [openA, openB],
+        attributed: [doneA, doneB],
     }));
-    open.reason = 'hacked';
-    open.log.topics.push(WORD);
-    const decoded = done.decoded as unknown as { detail: { slot: number } };
-    decoded.detail.slot = 99;
-    (done.attribution as { trace: { id: string } }).trace.id = 'hacked';
-    const snap = frozen(await store.snapshot());
-    if (!same(snap.unresolved, [unresolved(0)]) || !same(snap.attributed, [attributed(1)])) {
-        throw new Fault('committed input changed stored rows');
-    }
-    if (!same(snap.checkpoint, tip)) throw new Fault('stored checkpoint changed');
-    const [checkpoint, unresolvedRows, attributedRows] = await Promise.all([
-        store.getCheckpoint(),
-        store.listUnresolved(),
-        store.listAttributed(),
-    ]);
-    if (!same(checkpoint, snap.checkpoint) || !same(unresolvedRows, snap.unresolved) || !same(attributedRows, snap.attributed)) {
+    const canonical = seedSnapshot(first.revision + 1);
+    deepMutate(openA);
+    deepMutate(openB);
+    deepMutate(doneA);
+    deepMutate(doneB);
+    deepMutate(next);
+    const raw = await store.snapshot();
+    if (!same(frozen(raw), canonical)) throw new Fault('committed input changed stored rows');
+    const checkpoint = await store.getCheckpoint();
+    const unresolvedRows = await store.listUnresolved();
+    const attributedRows = await store.listAttributed();
+    if (!same(frozen(checkpoint), canonical.checkpoint) || !same(frozen(unresolvedRows), canonical.unresolved) || !same(frozen(attributedRows), canonical.attributed)) {
         throw new Fault('public reads disagree with the snapshot');
     }
-    if (checkpoint) checkpoint.block = 99;
-    const unresolvedRow = unresolvedRows[0];
-    const attributedRow = attributedRows[0];
-    if (!unresolvedRow || !attributedRow) throw new Fault('public reads disagree with the snapshot');
-    unresolvedRow.reason = 'hacked';
-    unresolvedRow.log.topics.push(WORD);
-    (attributedRow.decoded as unknown as { detail: { slot: number } }).detail.slot = 77;
-    (attributedRow.attribution as { trace: { id: string } }).trace.id = 'leaked';
+    deepMutate(raw);
+    deepMutate(checkpoint);
+    deepMutate(unresolvedRows);
+    deepMutate(attributedRows);
     const again = frozen(await store.snapshot());
     const [checkpointAgain, unresolvedAgain, attributedAgain] = await Promise.all([
-        store.getCheckpoint(),
-        store.listUnresolved(),
-        store.listAttributed(),
+        store.getCheckpoint(), store.listUnresolved(), store.listAttributed(),
     ]);
-    if (!same(again, snap) || !same(checkpointAgain, tip) || !same(unresolvedAgain, snap.unresolved) || !same(attributedAgain, snap.attributed)) {
+    if (!same(again, canonical) || !same(frozen(checkpointAgain), canonical.checkpoint) || !same(frozen(unresolvedAgain), canonical.unresolved) || !same(frozen(attributedAgain), canonical.attributed)) {
         throw new Fault('stored rows changed after mutation');
     }
 }
 
+const FORMS: Form[] = ['moving', 'caught-up'];
+
 const CHECKS: [string, (got: StoreUnderTest) => Promise<void>][] = [
     ['empty snapshot', empty],
-    ['commit applies the whole change and bumps the revision', applies],
-    ['stale revision changes nothing', stale],
-    ['one of two concurrent commits wins', concurrent],
-    ['crash between write and commit', crash],
-    ['scope is recorded and a different scope is refused', scope],
-    ['re-committing the same ids does not duplicate rows', idempotent],
-    ['callers cannot mutate stored rows', isolation],
+    ...FORMS.flatMap((form): [string, (got: StoreUnderTest) => Promise<void>][] => [
+        [`commit/${form}`, (got) => applyCell(got, form)],
+        [`stale/${form}`, (got) => staleCell(got, form)],
+        [`concurrent/${form}`, (got) => concurrentCell(got, form)],
+        [`crash/${form}`, (got) => crashCell(got, form)],
+        [`scope/${form}`, (got) => scopeCell(got, form)],
+        [`replacement/${form}`, (got) => replacementCell(got, form)],
+        [`idempotence/${form}`, (got) => idempotentCell(got, form)],
+    ]),
+    ['isolation', isolation],
 ];
 
 /** Run every store rule. One fresh store per check. Never throws. */
