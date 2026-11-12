@@ -14,6 +14,8 @@ export interface TransactionSponsoredEvent {
   user: string;
   apntsConsumed: bigint;
   xpntsCharged: bigint;
+  /** Index in the receipt log list. Set when the collector decodes a receipt. */
+  logIndex?: number;
 }
 
 export interface PostOpProcessedEvent {

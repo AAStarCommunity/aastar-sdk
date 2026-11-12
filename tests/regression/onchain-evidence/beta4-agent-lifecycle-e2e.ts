@@ -94,7 +94,7 @@ async function main() {
     const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
     const fees = await bumpedFees(publicClient); // explicit priority tip so txs confirm promptly
 
-    const factory = airAccountFactoryActions(FACTORY)(client as any);
+    const factory = airAccountFactoryActions(FACTORY)(client);
     const registryRead = agentRegistryActions(REGISTRY)(publicClient);
     // SDK scenario API for register/revoke (composed: registry call + account.execute wrap).
     // Migrated to viem: the service now takes a viem PublicClient as its first arg.
@@ -213,7 +213,7 @@ async function main() {
         const registerViaAccount = agentRegistrySvc.encodeRegisterAgentViaAccount(agentWallet, agentWalletSig) as Hex;
         try {
             // Submit the SDK-encoded execute calldata to the agent account (onlyOwnerOrEntryPoint; JASON is owner).
-            const execTx = await client.sendTransaction({ to: agentAccount, data: registerViaAccount, account: owner, chain: sepolia, ...fees } as any);
+            const execTx = await client.sendTransaction({ to: agentAccount, data: registerViaAccount, account: owner, chain: sepolia, ...fees });
             const ok = await waitOk(execTx, 'registerAgent (via AgentRegistryService.encodeRegisterAgentViaAccount)');
             steps.push({ step: '2. registerAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: execTx, note: ok ? undefined : 'reverted' });
 
@@ -249,7 +249,7 @@ async function main() {
         if (stillReg) {
             const revokeViaAccount = agentRegistrySvc.encodeRevokeAgentViaAccount(agentWallet) as Hex;
             try {
-                const revTx = await client.sendTransaction({ to: agentAccount, data: revokeViaAccount, account: owner, chain: sepolia, ...fees } as any);
+                const revTx = await client.sendTransaction({ to: agentAccount, data: revokeViaAccount, account: owner, chain: sepolia, ...fees });
                 const ok = await waitOk(revTx, 'revokeAgent (via AgentRegistryService.encodeRevokeAgentViaAccount)');
                 steps.push({ step: '4. revokeAgent', actor: `agentAccount ${agentAccount} (owner JASON)`, tx: revTx, note: ok ? undefined : 'reverted' });
                 if (ok) {

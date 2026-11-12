@@ -13,6 +13,14 @@
  *   DVT3_OPERATOR_PK        fresh operator EOA private key (already persisted board 600)
  *   PRIVATE_KEY_JASON       funder (from .env.sepolia)
  *   SEPOLIA_RPC_URL / RPC_URL
+ *
+ * GATED: without SDK_DIR this script SKIPS (exit 0), same as dvt-kms-onboard-e2e.ts.
+ * SDK_DIR is checked first, then `.env.sepolia` is loaded, then DVT3_KEYSTORE_JSON /
+ * DVT3_SECRET / DVT3_OPERATOR_PK — those three may be supplied by that file. Exit 0 keeps
+ * the existing skip. A reader that only checks `exit == 0` cannot tell this SKIP from a
+ * PASS; it has to parse the `⏭️  SKIP` line. Exit 78 is non-zero, so that reader would
+ * count the skip as a failure. A missing RPC / funder key after the board env is present
+ * is still a hard failure.
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -34,8 +42,26 @@ function requireEnv(name: string): string {
   return v;
 }
 
+/** Board-B inputs that may live in `$SDK_DIR/.env.sepolia` rather than the process environment. */
+const BOARD_FILE_ENV = ['DVT3_KEYSTORE_JSON', 'DVT3_SECRET', 'DVT3_OPERATOR_PK'] as const;
+
+// SDK_DIR is the only input that has to be present before dotenv. The other three used to be
+// checked after the file loaded; gating them first skips a checkout whose `.env.sepolia` has them.
+if (!process.env.SDK_DIR) {
+  console.log('⏭️  SKIP dvt3-register: SDK_DIR unset (board B EIP-2335 keystore is not on this');
+  console.log('    machine; SDK_DIR is the checkout that holds .env.sepolia). Set SDK_DIR + DVT3_KEYSTORE_JSON + DVT3_SECRET + DVT3_OPERATOR_PK to run.');
+  process.exit(0);
+}
+
 const SDK_DIR = requireEnv('SDK_DIR');
 dotenv.config({ path: path.resolve(SDK_DIR, '.env.sepolia') });
+
+const missingBoardFile = BOARD_FILE_ENV.filter((name) => !process.env[name]);
+if (missingBoardFile.length > 0) {
+  console.log(`⏭️  SKIP dvt3-register: ${missingBoardFile.join(', ')} unset (not in the environment or in`);
+  console.log('    $SDK_DIR/.env.sepolia). Set DVT3_KEYSTORE_JSON + DVT3_SECRET + DVT3_OPERATOR_PK to run.');
+  process.exit(0);
+}
 const norm = (pk: string): Hex => (pk.startsWith('0x') ? pk : `0x${pk}`) as Hex;
 const log = (...a: any[]) => console.log(...a);
 
@@ -141,7 +167,7 @@ async function main() {
   if (!b.registered || !b.staked) throw new Error('FAIL: expected registered && staked');
 
   // independent re-read
-  const dvt = dvtOperatorActions(validator)(publicClient as any);
+  const dvt = dvtOperatorActions(validator)(publicClient);
   const isReg = await dvt.isRegistered({ nodeId: b.nodeId });
   const owner = await dvt.nodeOperator({ nodeId: b.nodeId });
   log(`\nre-read: isRegistered=${isReg} nodeOperator=${owner}`);

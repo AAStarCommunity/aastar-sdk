@@ -15,6 +15,11 @@
  *
  * GATED: the KMS /pop endpoint is on the A-board loopback :3100 (Tailscale). Without KMS_POP_URL this
  * script SKIPS (exit 0) — it is ready to run the moment board access + the operator EOA are provided.
+ * Exit 0 preserves that skip. A reader that only checks `exit == 0` cannot tell this SKIP
+ * from a PASS; it has to parse the `⏭️  SKIP` line. Exit 78 is non-zero, so that reader
+ * would count the skip as a failure — this runner does not use it.
+ * `.env.sepolia` is loaded from the process cwd before this gate, so `KMS_POP_URL`
+ * set only in that file still starts onboarding.
  * Requires .env.sepolia: SEPOLIA_RPC_URL, PRIVATE_KEY_JASON (funder), and an operator key (see below).
  */
 import * as dotenv from 'dotenv';
@@ -26,11 +31,10 @@ import { onboardDvtNode, kmsPopSigner } from '@aastar/operator';
 import { CANONICAL_ADDRESSES, dvtOperatorActions } from '@aastar/core';
 import { kmsKeeperAccount } from './kmsKeeperAccount.js';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
-
 const norm = (pk: string): Hex => (pk.startsWith('0x') ? pk : `0x${pk}`) as Hex;
 
 async function main() {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
   const KMS_POP_URL = process.env.KMS_POP_URL;
   if (!KMS_POP_URL) {
     console.log('⏭️  SKIP dvt-kms-onboard-e2e: KMS_POP_URL unset (KMS /pop is on the A-board loopback :3100 via');
@@ -107,7 +111,7 @@ async function main() {
   console.log(`hashes          = ${JSON.stringify(result.hashes, null, 2)}`);
 
   // independent on-chain re-read
-  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient as any);
+  const dvt = dvtOperatorActions(c.aaStarBLSAlgorithm as Address)(publicClient);
   const isReg = await dvt.isRegistered({ nodeId: result.nodeId });
   const owner = await dvt.nodeOperator({ nodeId: result.nodeId });
   console.log(`\nre-read: isRegistered=${isReg}  nodeOperator=${owner}`);

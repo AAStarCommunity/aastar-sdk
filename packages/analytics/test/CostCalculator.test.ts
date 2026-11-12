@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CostCalculator } from '../src/core/CostCalculator';
+import { CostCalculator, UnverifiedSponsoredEventsError } from '../src/core/CostCalculator';
 import type { OnChainData } from '../src/core/DataCollector';
 import { parseEther } from 'viem';
 
@@ -17,10 +17,17 @@ describe('CostCalculator', () => {
             paymasterEvents: [
                 {
                     type: 'TransactionSponsored',
+                    operator: '0x1111111111111111111111111111111111111111',
                     user: '0xUser',
-                    apntsConsumed: 1000000000000000000n // 1 aPNTs (18 decimals)
+                    apntsConsumed: 1000000000000000000n, // 1 aPNTs (18 decimals)
+                    xpntsCharged: 0n,
+                    logIndex: 0,
                 }
             ],
+            pricedSponsored: {
+                logIndex: 0,
+                operator: '0x1111111111111111111111111111111111111111',
+            },
             // Layer 1 Cost = 100k gas * 1 gwei = 0.0001 ETH ($0.30)
         };
 
@@ -71,5 +78,77 @@ describe('CostCalculator', () => {
         
         // Profit: $0.70
         expect(result.economic.protocolUsdProfit).toBeCloseTo(0.70);
+    });
+
+    it('uses the priced TransactionSponsored event when an impostor log precedes it', () => {
+        const impostor = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        const trusted = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        const mockData = {
+            txHash: '0x789',
+            gasUsed: 100000n,
+            effectiveGasPrice: parseEther('0.000000001'),
+            blockNumber: 1n,
+            blockTimestamp: 1000n,
+            paymasterEvents: [
+                {
+                    type: 'TransactionSponsored' as const,
+                    operator: impostor,
+                    user: '0xUser',
+                    apntsConsumed: 9_000000000000000000n,
+                    xpntsCharged: 0n,
+                    logIndex: 0,
+                },
+                {
+                    type: 'TransactionSponsored' as const,
+                    operator: trusted,
+                    user: '0xUser',
+                    apntsConsumed: 1_000000000000000000n,
+                    xpntsCharged: 0n,
+                    logIndex: 1,
+                },
+            ],
+            pricedSponsored: { logIndex: 1, operator: trusted },
+        };
+
+        const result = calculator.calculate(mockData as OnChainData);
+
+        expect(result.meta.mode).toBe('super');
+        expect(result.economic.protocolUsdRevenue).toBeCloseTo(0.02);
+    });
+
+    function legacySponsoredFixture(): OnChainData {
+        return {
+            txHash: '0xabc',
+            gasUsed: 100000n,
+            effectiveGasPrice: parseEther('0.000000001'),
+            blockNumber: 1n,
+            blockTimestamp: 1000n,
+            status: 'success',
+            receipt: {} as OnChainData['receipt'],
+            paymasterEvents: [
+                {
+                    type: 'TransactionSponsored',
+                    operator: '0x1111111111111111111111111111111111111111',
+                    user: '0xUser',
+                    apntsConsumed: 1000000000000000000n,
+                    xpntsCharged: 0n,
+                },
+            ],
+        };
+    }
+
+    it('throws when TransactionSponsored events have no pricedSponsored', () => {
+        const mockData = legacySponsoredFixture();
+
+        expect(() => calculator.calculate(mockData)).toThrow(UnverifiedSponsoredEventsError);
+        expect(() => calculator.calculate(mockData)).toThrow(/without emitter verification/);
+        expect(() => calculator.calculate(mockData)).toThrow(/Re-collect with DataCollector/);
+    });
+
+    it('prices the first TransactionSponsored event when trustUnverifiedSponsoredEvents is set', () => {
+        const result = calculator.calculate(legacySponsoredFixture(), { trustUnverifiedSponsoredEvents: true });
+
+        expect(result.meta.mode).toBe('super');
+        expect(result.economic.protocolUsdRevenue).toBeCloseTo(0.02);
     });
 });

@@ -9,21 +9,64 @@
 
 import { DataCollector } from '../core/DataCollector.js';
 import { CostCalculator } from '../core/CostCalculator.js';
-import { BenchmarkLoader } from '../core/BenchmarkLoader.js';
+import { BenchmarkLoader, type L2Benchmark, type PaymasterBenchmark } from '../core/BenchmarkLoader.js';
 import { PriceOracle } from '../utils/PriceOracle.js';
-import type { Hash } from 'viem';
+import { sepolia } from 'viem/chains';
+import type { Chain, Hash, PublicClient } from 'viem';
+
+export interface TransactionAnalyzerOptions {
+  chain?: Chain;
+  superPaymasterAddress?: string;
+  paymasterAllowlist?: readonly string[];
+  /** Injected RPC client. Production CLIs omit this and use `rpcUrl`. */
+  client?: PublicClient;
+  cacheDir?: string;
+  enableCache?: boolean;
+  priceOracle?: { getEthPrice(): Promise<number>; getAPNTsPrice(): Promise<number> };
+  benchmarkLoader?: { loadAll(): Promise<{ l2: L2Benchmark[]; paymasters: PaymasterBenchmark[] }> };
+}
+
+/** Flags shared by the transaction-analysis CLIs. */
+export function readAnalyzeOverrides(args: readonly string[]): {
+  superPaymasterAddress?: string;
+  paymasterAllowlist?: string[];
+} {
+  const superPaymasterAddress = flagValue(args, '--super-paymaster');
+  const allowlist = flagValue(args, '--allowlist');
+  return {
+    superPaymasterAddress,
+    paymasterAllowlist: allowlist?.split(',').map((item) => item.trim()).filter((item) => item.length > 0),
+  };
+}
+
+function flagValue(args: readonly string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) return undefined;
+  const value = args[index + 1];
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`);
+  return value;
+}
 
 export class TransactionAnalyzer {
   private collector: DataCollector;
   private calculator: CostCalculator;
-  private benchmarkLoader: BenchmarkLoader;
-  private priceOracle: PriceOracle;
+  private benchmarkLoader: { loadAll(): Promise<{ l2: L2Benchmark[]; paymasters: PaymasterBenchmark[] }> };
+  private priceOracle: { getEthPrice(): Promise<number>; getAPNTsPrice(): Promise<number> };
 
-  constructor(rpcUrl: string) {
-    this.collector = new DataCollector(rpcUrl);
+  constructor(rpcUrl: string, options: TransactionAnalyzerOptions = {}) {
+    const chain = options.chain ?? sepolia;
+    this.collector = new DataCollector(
+      rpcUrl,
+      chain,
+      options.superPaymasterAddress,
+      options.cacheDir,
+      options.enableCache ?? true,
+      options.client,
+      options.paymasterAllowlist,
+    );
     this.calculator = new CostCalculator();
-    this.benchmarkLoader = new BenchmarkLoader();
-    this.priceOracle = new PriceOracle();
+    this.benchmarkLoader = options.benchmarkLoader ?? new BenchmarkLoader();
+    this.priceOracle = options.priceOracle ?? new PriceOracle();
   }
 
   /**

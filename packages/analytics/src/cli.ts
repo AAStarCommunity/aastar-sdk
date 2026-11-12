@@ -5,7 +5,7 @@
  * Usage: npx tsx packages/analytics/src/cli.ts analyze <txHash>
  */
 
-import { TransactionAnalyzer } from './analyzers/TransactionAnalyzer.js';
+import { readAnalyzeOverrides, TransactionAnalyzer } from './analyzers/TransactionAnalyzer.js';
 import * as dotenv from 'dotenv';
 
 dotenv.config({ path: '.env.sepolia' });
@@ -24,14 +24,14 @@ async function main() {
     const rpcUrl = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL_SEPOLIA;
     if (!rpcUrl) throw new Error('Missing RPC URL');
     
-    const analyzer = new TransactionAnalyzer(rpcUrl);
+    const analyzer = new TransactionAnalyzer(rpcUrl, readAnalyzeOverrides(args));
     const report = await analyzer.analyze(txHash);
     console.log(report);
     
   } else {
     console.log(`
 Usage:
-  npx tsx packages/analytics/src/cli.ts analyze <txHash>
+  npx tsx packages/analytics/src/cli.ts analyze <txHash> [--super-paymaster 0x...] [--allowlist 0x...,0x...]
     `);
   }
 }

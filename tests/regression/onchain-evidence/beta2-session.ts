@@ -117,7 +117,7 @@ async function main() {
     const send = async (label: string, data: Hex, to: Address = SESSION_KEY_VALIDATOR): Promise<string> => {
         const nonce = await publicClient.getTransactionCount({ address: owner.address, blockTag: 'pending' });
         const request = await walletClient.prepareTransactionRequest({ to, data, nonce, ...fees });
-        const serialized = await walletClient.signTransaction(request as any);
+        const serialized = await walletClient.signTransaction(request);
         const hash = keccak256(serialized);
         try {
             await walletClient.sendRawTransaction({ serializedTransaction: serialized });
