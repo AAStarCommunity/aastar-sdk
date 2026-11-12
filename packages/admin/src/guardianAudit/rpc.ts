@@ -227,10 +227,9 @@ export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to:
     let size = page;
     while (a <= to) {
         const b = Math.min(to, a + size - 1);
+        let pageLogs: unknown[];
         try {
-            for (const log of await rawGetLogs(rpc, { address, fromBlock: a, toBlock: b })) out.push(log);
-            a = b + 1;
-            size = page;
+            pageLogs = await rawGetLogs(rpc, { address, fromBlock: a, toBlock: b });
         } catch (error) {
             if (size === 1) {
                 if (error instanceof Error && error.message === `${rpc.name}: eth_getLogs answer is not an array`) throw error;
@@ -238,7 +237,12 @@ export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to:
                 throw new Error(`${rpc.name}: request failed`);
             }
             size = Math.max(1, Math.floor(size / 2));
+            continue;
         }
+        if (out.length + pageLogs.length > responseLimits.logs) throw new Error(`${rpc.name}: response too large`);
+        for (const log of pageLogs) out.push(log);
+        a = b + 1;
+        size = page;
     }
     return out;
 }

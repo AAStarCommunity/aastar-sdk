@@ -15,6 +15,10 @@ export interface ConsensusReceipt {
     cumulativeGasUsed: bigint;
     logsBloom: Hex;
     logs: readonly ConsensusLog[];
+    /** OP-Stack deposit nonce (type 0x7e). Absent pre-Regolith. */
+    depositNonce?: bigint;
+    /** OP-Stack deposit receipt version (type 0x7e). Absent before Canyon. */
+    depositReceiptVersion?: bigint;
 }
 
 type Nibbles = number[];
@@ -139,6 +143,19 @@ export function encodeReceipt(receipt: ConsensusReceipt, index: number): { key: 
     if (!BLOOM.test(receipt.logsBloom)) return null;
     if (receipt.cumulativeGasUsed < 0n) return null;
     const logs = receipt.logs.map((log) => [log.address, [...log.topics], log.data]);
+    const extra: Hex[] = [];
+    if (receipt.type === 0x7e) {
+        if (receipt.depositNonce === undefined) {
+            if (receipt.depositReceiptVersion !== undefined) return null;
+        } else {
+            if (receipt.depositNonce < 0n) return null;
+            extra.push(bytesToHex(uintBytes(receipt.depositNonce)));
+            if (receipt.depositReceiptVersion !== undefined) {
+                if (receipt.depositReceiptVersion < 0n) return null;
+                extra.push(bytesToHex(uintBytes(receipt.depositReceiptVersion)));
+            }
+        }
+    }
     let payload: Uint8Array;
     try {
         payload = hexToBytes(toRlp([
@@ -146,6 +163,7 @@ export function encodeReceipt(receipt: ConsensusReceipt, index: number): { key: 
             bytesToHex(uintBytes(receipt.cumulativeGasUsed)),
             receipt.logsBloom,
             logs,
+            ...extra,
         ]));
     } catch {
         return null;
@@ -213,8 +231,24 @@ export function receiptsRootFromRpc(raw: unknown): Hex | null {
             }
             logs.push({ address, topics, data });
         }
+        let depositNonce: bigint | undefined;
+        let depositReceiptVersion: bigint | undefined;
+        if (Number(type) === 0x7e) {
+            if (r.depositNonce !== undefined) {
+                const nonce = hexQty(r.depositNonce);
+                if (nonce === null) return null;
+                depositNonce = nonce;
+            }
+            if (r.depositReceiptVersion !== undefined) {
+                if (depositNonce === undefined) return null;
+                const version = hexQty(r.depositReceiptVersion);
+                if (version === null) return null;
+                depositReceiptVersion = version;
+            }
+        }
         const encoded = encodeReceipt({
             type: Number(type), ok: status === 1n, cumulativeGasUsed: gas, logsBloom: bloom, logs,
+            depositNonce, depositReceiptVersion,
         }, Number(index));
         if (!encoded) return null;
         seen.add(Number(index));

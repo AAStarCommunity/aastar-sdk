@@ -4,6 +4,8 @@ import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc } from '../../src/guardianAudi
 import fixture from './fixtures/sepolia-block-receipts.json';
 import fixture135 from './fixtures/sepolia-receipts-135.json';
 import fixtureFailed from './fixtures/sepolia-receipts-failed.json';
+import opSepolia from './fixtures/op-sepolia-block-receipts.json';
+import opMainnet from './fixtures/op-mainnet-block-receipts.json';
 
 /** Independent RLP + Merkle Patricia encoder. It does not call trie.ts. */
 function rlp(item: Uint8Array | Uint8Array[]): Uint8Array {
@@ -190,5 +192,23 @@ describe('real Sepolia receipt tries (unit, not acceptance)', () => {
         if (f === fixture135) expect(f.receipts.length).toBeGreaterThan(128);
         else expect(f.receipts.some((r: any) => r.status === '0x0')).toBe(true);
         expect(receiptsRootFromRpc(f.receipts)).toBe(f.header.receiptsRoot);
+    });
+
+    it('matches the OP Sepolia receiptsRoot for a type 0x7e deposit receipt', () => {
+        const deposit = opSepolia.receipts.find((item: { type: string }) => item.type === '0x7e');
+        expect(deposit?.depositNonce).toBeTruthy();
+        expect(deposit?.depositReceiptVersion).toBeTruthy();
+        expect(opSepolia.receipts.some((item: { type: string }) => item.type === '0x2')).toBe(true);
+        expect(receiptsRootFromRpc(opSepolia.receipts)).toBe(opSepolia.header.receiptsRoot);
+    });
+});
+
+describe('real OP Mainnet receipt trie (DSR: mainnet is the deploy target) (unit, not acceptance)', () => {
+    it('a block whose deposit (0x7e) receipt carries depositNonce and depositReceiptVersion rebuilds to its receiptsRoot', () => {
+        const deposit = opMainnet.receipts.find((item: { type: string }) => item.type === '0x7e') as Record<string, unknown> | undefined;
+        expect(deposit?.depositNonce).toBeDefined();
+        expect(deposit?.depositReceiptVersion).toBeDefined();
+        expect(opMainnet.receipts.length).toBeGreaterThan(2);
+        expect(receiptsRootFromRpc(opMainnet.receipts)).toBe(opMainnet.header.receiptsRoot);
     });
 });

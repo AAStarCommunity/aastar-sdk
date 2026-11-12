@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { Hex } from 'viem';
 import {
+    ScopeChangedError,
     StoreConflictError,
     memoryStore,
     runStoreConformance,
     type AttributedAction,
+    type Checkpoint,
     type Commit,
     type ConformanceResult,
     type GuardianAuditStore,
@@ -82,30 +85,33 @@ function ignoreCaughtUpRevision(): StoreUnderTest {
  */
 function partialCrash(): StoreUnderTest {
     const inner = memoryStore();
-    let crash = false;
+    let crashAt: number | null = null;
     const store: GuardianAuditStore = {
         snapshot: () => inner.snapshot(),
         getCheckpoint: () => inner.getCheckpoint(),
         listUnresolved: () => inner.listUnresolved(),
         listAttributed: () => inner.listAttributed(),
         commit: async (change) => {
-            if (!crash) {
+            const step = crashAt;
+            crashAt = null;
+            if (step === null) {
                 await inner.commit(change);
                 return;
             }
-            crash = false;
-            const partial: Commit = { ...change, attributed: [], unresolved: [], resolve: [] };
-            await inner.commit(partial);
+            if (step >= 1) {
+                const partial: Commit = { ...change, attributed: [], unresolved: [], resolve: [] };
+                await inner.commit(partial);
+            }
             throw new Error('https://user:pw@disk.example/partial');
         },
     };
-    return { store, crashNextCommit: () => { crash = true; } };
+    return { store, commitSteps: () => 1, crashDuringNextCommit: (step) => { crashAt = step; } };
 }
 
 /** Applies `resolve` to the live rows, then throws, leaving revision and attribution untouched. */
 function crashResolvesEarly(): StoreUnderTest {
     const inner = memoryStore();
-    let crash = false;
+    let crashAt: number | null = null;
     let dropped: Set<string> | null = null;
     const hide = (rows: UnresolvedAction[]) => (dropped ? rows.filter((row) => !dropped!.has(row.id)) : rows);
     const store: GuardianAuditStore = {
@@ -118,17 +124,18 @@ function crashResolvesEarly(): StoreUnderTest {
         listUnresolved: async () => hide(await inner.listUnresolved()),
         listAttributed: () => inner.listAttributed(),
         commit: async (change) => {
-            if (!crash) {
+            const step = crashAt;
+            crashAt = null;
+            if (step === null) {
                 dropped = null;
                 await inner.commit(change);
                 return;
             }
-            crash = false;
-            dropped = new Set(change.resolve.map((id) => id.toLowerCase()));
+            if (step >= 1) dropped = new Set(change.resolve.map((id) => id.toLowerCase()));
             throw new Error('https://user:pw@disk.example/resolve');
         },
     };
-    return { store, crashNextCommit: () => { crash = true; } };
+    return { store, commitSteps: () => 1, crashDuringNextCommit: (step) => { crashAt = step; } };
 }
 
 /** A different scope returns success and writes nothing. */
@@ -228,26 +235,27 @@ function liveAttributed(): StoreUnderTest {
 /** Rolls back a caught-up crash, but saves the checkpoint of a moving crash. */
 function crashMovingPersistsCheckpoint(): StoreUnderTest {
     const inner = memoryStore();
-    let crash = false;
+    let crashAt: number | null = null;
     const store: GuardianAuditStore = {
         snapshot: () => inner.snapshot(),
         getCheckpoint: () => inner.getCheckpoint(),
         listUnresolved: () => inner.listUnresolved(),
         listAttributed: () => inner.listAttributed(),
         commit: async (change) => {
-            if (!crash) {
+            const step = crashAt;
+            crashAt = null;
+            if (step === null) {
                 await inner.commit(change);
                 return;
             }
-            crash = false;
-            if (change.next !== null) {
+            if (change.next !== null && step >= 1) {
                 const partial: Commit = { ...change, unresolved: [], attributed: [], resolve: [] };
                 await inner.commit(partial);
             }
             throw new Error('https://user:pw@disk.example/moving');
         },
     };
-    return { store, crashNextCommit: () => { crash = true; } };
+    return { store, commitSteps: () => 1, crashDuringNextCommit: (step) => { crashAt = step; } };
 }
 
 /** snapshot() returns one live object. Getters return clones. */
@@ -329,7 +337,7 @@ function targets(form: DefectForm, change: Commit): boolean {
 /** One defect, applied only to commits of `form`, wrapped around memoryStore. */
 function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
     const inner = memoryStore();
-    let crash = false;
+    let crashAt: number | null = null;
     let cached: StoreSnapshot | null = null;
     const store: GuardianAuditStore = {
         async snapshot() {
@@ -355,9 +363,10 @@ function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
                 await inner.commit({ ...change, expectedRevision: snap.revision });
                 return;
             }
-            if (defect === 'partial write before crash' && crash) {
-                crash = false;
-                if (hit) {
+            if (defect === 'partial write before crash' && crashAt !== null) {
+                const step = crashAt;
+                crashAt = null;
+                if (step >= 1 && hit) {
                     const partial: Commit = { ...change, unresolved: [], attributed: [], resolve: [] };
                     await inner.commit(partial);
                 }
@@ -387,15 +396,64 @@ function generatedDefect(form: DefectForm, defect: Defect): StoreUnderTest {
         },
     };
     const under: StoreUnderTest = { store };
-    if (defect === 'partial write before crash') under.crashNextCommit = () => { crash = true; };
+    if (defect === 'partial write before crash') {
+        under.commitSteps = () => 1;
+        under.crashDuringNextCommit = (step) => { crashAt = step; };
+    }
     return under;
+}
+
+/**
+ * Checkpoint and revision are published, then an await, then the rows.
+ * commitSteps is 2. Crashing after the first write leaves the cursor moved.
+ */
+function nonAtomicCheckpointThenRows(): StoreUnderTest {
+    let revision = 0;
+    let scope: Hex | null = null;
+    let checkpoint: Checkpoint | null = null;
+    let open = new Map<string, UnresolvedAction>();
+    let attributed = new Map<string, AttributedAction>();
+    let crashAt: number | null = null;
+    const copy = <T>(value: T): T => structuredClone(value);
+    const snap = (): StoreSnapshot => ({
+        revision,
+        checkpoint: checkpoint ? copy(checkpoint) : null,
+        scope,
+        unresolved: [...open.values()].map((item) => copy(item)),
+        attributed: [...attributed.values()].map((item) => copy(item)),
+    });
+    const store: GuardianAuditStore = {
+        async snapshot() { return snap(); },
+        async getCheckpoint() { return checkpoint ? copy(checkpoint) : null; },
+        async listUnresolved() { return [...open.values()].map((item) => copy(item)); },
+        async listAttributed() { return [...attributed.values()].map((item) => copy(item)); },
+        async commit(change) {
+            if (change.expectedRevision !== revision) throw new StoreConflictError();
+            const nextScope = change.scope.toLowerCase() as Hex;
+            if (scope !== null && nextScope !== scope) throw new ScopeChangedError();
+            const step = crashAt;
+            crashAt = null;
+            const stop = (done: number) => step !== null && done >= step;
+            if (stop(0)) throw new Error('crash before write');
+            if (change.next) checkpoint = { block: change.next.block, hash: change.next.hash };
+            scope = nextScope;
+            revision++;
+            if (stop(1)) throw new Error('crash after checkpoint');
+            await Promise.resolve();
+            for (const item of change.attributed) attributed.set(item.id.toLowerCase(), copy({ ...item, id: item.id.toLowerCase() }));
+            for (const item of change.unresolved) open.set(item.id.toLowerCase(), copy({ ...item, id: item.id.toLowerCase() }));
+            for (const id of change.resolve) open.delete(id.toLowerCase());
+            if (stop(2)) throw new Error('crash after rows');
+        },
+    };
+    return { store, commitSteps: () => 2, crashDuringNextCommit: (step) => { crashAt = step; } };
 }
 
 describe('guardian audit store conformance', () => {
     it('memoryStore passes every store conformance check', async () => {
         const results = await runStoreConformance(() => {
             const store = memoryStore({ faultHook: true });
-            return { store, crashNextCommit: store.crashNextCommit };
+            return { store, crashDuringNextCommit: store.crashDuringNextCommit, commitSteps: store.commitSteps };
         });
         expect(results.map((item) => item.status)).toEqual(results.map(() => 'pass'));
         expect(results.map((item) => item.name)).toEqual([
@@ -405,7 +463,15 @@ describe('guardian audit store conformance', () => {
             'commit/caught-up', 'stale/caught-up', 'concurrent/caught-up', 'crash/caught-up', 'scope/caught-up', 'replacement/caught-up', 'idempotence/caught-up',
             'isolation/caught-up', 'isolation/replacement/caught-up',
         ]);
-        expect(results.every((item) => item.detail === undefined)).toBe(true);
+        expect(results.filter((item) => !item.name.startsWith('crash/')).every((item) => item.detail === undefined)).toBe(true);
+        expect(byName(results, 'crash/moving').detail).toBe('atomicity checked through the store\'s fault hook');
+        expect(byName(results, 'crash/caught-up').detail).toBe('atomicity checked through the store\'s fault hook');
+    });
+
+    it('a non-atomic store that writes the checkpoint before the rows fails both crash checks', async () => {
+        const results = await runStoreConformance(nonAtomicCheckpointThenRows);
+        fails(results, 'crash/moving', 'moving crash left a partial write');
+        fails(results, 'crash/caught-up', 'caught-up crash left a partial write');
     });
 
     it('a store with no fault hook skips both crash checks', async () => {
@@ -526,7 +592,8 @@ describe('guardian audit store conformance', () => {
             const inner = memoryStore({ faultHook: true });
             let live: StoreSnapshot | null = null;
             return {
-                crashNextCommit: inner.crashNextCommit,
+                crashDuringNextCommit: inner.crashDuringNextCommit,
+                commitSteps: inner.commitSteps,
                 store: {
                     ...inner,
                     snapshot: async () => live ?? inner.snapshot(),
@@ -554,7 +621,8 @@ describe('guardian audit store conformance', () => {
         const results = await runStoreConformance(() => {
             const inner = memoryStore({ faultHook: true });
             return {
-                crashNextCommit: inner.crashNextCommit,
+                crashDuringNextCommit: inner.crashDuringNextCommit,
+                commitSteps: inner.commitSteps,
                 store: {
                     ...inner,
                     commit: async (change) => {
@@ -578,7 +646,8 @@ describe('guardian audit store conformance', () => {
                 return snap;
             };
             return {
-                crashNextCommit: inner.crashNextCommit,
+                crashDuringNextCommit: inner.crashDuringNextCommit,
+                commitSteps: inner.commitSteps,
                 store: {
                     ...inner,
                     snapshot: flip,

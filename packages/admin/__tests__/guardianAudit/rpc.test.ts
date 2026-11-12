@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { header, pagedLogs, rawGetLogs, type RawRpc } from '../../src/guardianAudit/rpc';
+import { header, pagedLogs, rawGetLogs, responseLimits, type RawRpc } from '../../src/guardianAudit/rpc';
 
 const ADDR = '0x1111111111111111111111111111111111111111' as Address;
 
@@ -76,6 +76,18 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
             expect(String(error)).not.toMatch(/down|user:pw|disk\.example/);
             return true;
         });
+    });
+
+    it('stops a page of one block once the running log total exceeds the cap', async () => {
+        const perBlock = 5;
+        let calls = 0;
+        const node = rpc(() => {
+            calls += 1;
+            return Array.from({ length: perBlock }, () => ({ address: ADDR }));
+        });
+        await expect(pagedLogs(node, ADDR, 0, responseLimits.ancestry, 1)).rejects.toThrow(/^stub: response too large$/);
+        expect(calls).toBe(Math.floor(responseLimits.logs / perBlock) + 1);
+        expect(calls).toBeLessThan(responseLimits.ancestry + 1);
     });
 
     it('rejects a zero page and inverted bounds before any request', async () => {

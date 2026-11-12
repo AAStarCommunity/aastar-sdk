@@ -7,6 +7,14 @@
  * two attributed rows, and a scope. Each of those commits also resolves an id.
  * Row lists are equal by id. Insertion order is not part of the store contract.
  * Replacement rows are valid actions. `deepMutate` is only for alias probes.
+ *
+ * Atomicity is only as good as the store's honest fault hook. The suite cannot
+ * see inside the store. `crashDuringNextCommit(step)` aborts the next commit
+ * after `step` internal write steps (0 means before any write). `commitSteps()`
+ * is how many internal writes one commit performs (1 for a single atomic write).
+ * Each crash cell sweeps `step = 0..commitSteps()` and requires the snapshot to
+ * stay unchanged. A passing crash cell reports
+ * "atomicity checked through the store's fault hook".
  */
 import type { Address, Hex } from 'viem';
 import {
@@ -21,11 +29,16 @@ import {
     type UnresolvedAction,
 } from './store.js';
 
-/** A store plus an optional hook that crashes the next commit after writing has started. */
+/**
+ * A store plus the optional fault hook. Without both methods the crash cells are skipped.
+ * The hook is the only view the suite has of a commit's internal writes.
+ */
 export interface StoreUnderTest {
     store: GuardianAuditStore;
-    /** Arms a crash that aborts the next commit after it has started writing. */
-    crashNextCommit?: () => void;
+    /** Abort the next commit after `step` internal write steps. 0 is before any write. */
+    crashDuringNextCommit?: (step: number) => void;
+    /** Internal writes one commit performs. 1 when the publish is a single atomic write. */
+    commitSteps?: () => number;
 }
 
 export interface ConformanceResult {
@@ -305,24 +318,28 @@ async function concurrentCell(got: StoreUnderTest, form: Form): Promise<void> {
 }
 
 async function crashCell(got: StoreUnderTest, form: Form): Promise<void> {
-    if (!got.crashNextCommit) throw new Skip('no fault hook');
+    if (!got.crashDuringNextCommit || !got.commitSteps) throw new Skip('no fault hook');
+    const steps = got.commitSteps();
+    if (!Number.isSafeInteger(steps) || steps < 1) throw new Fault(`${form} commitSteps is not a positive integer`);
     const store = got.store;
-    const seeded = await seed(store);
-    got.crashNextCommit();
-    let threw = false;
-    try {
-        await store.commit(commit({
-            expectedRevision: seeded.revision,
-            next: form === 'moving' ? { block: 99, hash: WORD2 } : null,
-            resolve: [unresolved(10, 'open-a').id],
-            unresolved: [unresolved(41)],
-            attributed: [attributed(40, { who: 'replacement', trace: { id: 'new' } })],
-        }));
-    } catch {
-        threw = true;
+    const seeded = frozen(await seed(store));
+    for (let step = 0; step <= steps; step++) {
+        got.crashDuringNextCommit(step);
+        let threw = false;
+        try {
+            await store.commit(commit({
+                expectedRevision: seeded.revision,
+                next: form === 'moving' ? { block: 99, hash: WORD2 } : null,
+                resolve: [unresolved(10, 'open-a').id],
+                unresolved: [unresolved(41)],
+                attributed: [attributed(40, { who: 'replacement', trace: { id: 'new' } })],
+            }));
+        } catch {
+            threw = true;
+        }
+        if (!threw) throw new Fault(`${form} armed crash did not reject the commit`);
+        if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial write`);
     }
-    if (!threw) throw new Fault(`${form} armed crash did not reject the commit`);
-    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial write`);
 }
 
 async function scopeCell(got: StoreUnderTest, form: Form): Promise<void> {
@@ -462,7 +479,9 @@ export async function runStoreConformance(
     for (const [name, run] of CHECKS) {
         try {
             await run(await make());
-            results.push({ name, status: 'pass' });
+            results.push(name.startsWith('crash/')
+                ? { name, status: 'pass', detail: 'atomicity checked through the store\'s fault hook' }
+                : { name, status: 'pass' });
         } catch (error) {
             if (error instanceof Skip) results.push({ name, status: 'skipped', detail: error.message });
             else results.push({ name, status: 'fail', detail: error instanceof Fault ? error.message : 'check failed' });

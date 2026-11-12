@@ -60,6 +60,12 @@ export interface ScanRangeOptions {
     maxBlocks: number;
     attributor?: Attributor;
     page?: number;
+    /**
+     * Most blocks the parent-hash walk may cover from the scanned tip up to finalized.
+     * Default 100_000. The walk reads headers in batches of 100, so a gap of N costs
+     * about N/100 header batches. A larger gap is INCOMPLETE and is not fetched.
+     */
+    maxAnchorBlocks?: number;
 }
 
 interface ScanStats {
@@ -74,8 +80,8 @@ interface ScanStats {
 }
 
 export type ScanResult =
-    | (ScanStats & { state: 'COMPLETE' })
-    | (ScanStats & { state: 'UNATTRIBUTED'; unattributed: number })
+    | (ScanStats & { state: 'COMPLETE'; range?: { from: number; to: number; empty: true } })
+    | (ScanStats & { state: 'UNATTRIBUTED'; unattributed: number; range?: { from: number; to: number; empty: true } })
     | { state: 'INCOMPLETE'; reasons: string[]; from: number; to?: number };
 
 export class FinalityConflictError extends Error {
@@ -189,20 +195,31 @@ function callDecode(
     }
 }
 
+/** A decoder kind callers can store. Anything else is not an action. */
+function actionKind(decoded: DecodedAction): string | null {
+    return typeof decoded.kind === 'string' && decoded.kind.length > 0 ? decoded.kind : null;
+}
+
 /** Re-decode a stored row through the generation that owns its block. `null` = keep it unresolved. */
 function revive(
     watched: readonly WatchedContract[], item: UnresolvedAction,
 ): FoundAction | { incomplete: string } | null {
-    if (typeof item.address !== 'string' || item.address.length !== 42) return { incomplete: 'stored action is malformed' };
-    const address = getAddress(item.address);
+    let address: Address;
+    try {
+        address = requireAddress(item.address);
+    } catch {
+        return { incomplete: 'stored action malformed' };
+    }
     const contract = watched.find((c) => covers(c, address, item.blockNumber));
     if (!contract) return null;
     const decoded = callDecode(contract, item.log, address, item.blockNumber);
     if (!decoded.ok) return { incomplete: decoded.reason };
     if (decoded.value === null || decoded.value === 'ignore') return null;
+    const kind = actionKind(decoded.value);
+    if (!kind) return { incomplete: 'decoder returned an invalid kind' };
     return {
         blockNumber: item.blockNumber, blockHash: item.blockHash, txHash: item.txHash, logIndex: item.logIndex,
-        address, kind: decoded.value.kind, decoded: decoded.value, log: decoded.log,
+        address, kind, decoded: decoded.value, log: decoded.log,
     };
 }
 
@@ -261,12 +278,17 @@ function assertWatched(watched: readonly WatchedContract[], startBlock: number):
     }
 }
 
+const DEFAULT_MAX_ANCHOR_BLOCKS = 100_000;
+const HEADER_BATCH = 100;
+
 function assertConfig(
     startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
+    maxAnchorBlocks: number | undefined,
 ): void {
     assertWatched(watched, startBlock);
     if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error('maxBlocks must be >= 1');
     if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
+    if (maxAnchorBlocks !== undefined && !safeInt(maxAnchorBlocks, 1)) throw new Error('maxAnchorBlocks must be >= 1');
 }
 
 /** Keep a short label. Anything else, including a credential, becomes a fixed reason. */
@@ -316,13 +338,13 @@ async function readHeader(rpc: RawRpc, tag: number | 'finalized'): Promise<Block
     }
 }
 
-async function loadHeaders(rpc: RawRpc, from: number, to: number): Promise<Map<number, BlockHeader> | string> {
-    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to < from || to - from > responseLimits.ancestry) {
+async function loadHeaders(rpc: RawRpc, from: number, to: number, limit: number): Promise<Map<number, BlockHeader> | string> {
+    if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to < from || to - from > limit) {
         return `finalized ancestry exceeds the bound on ${rpc.name}`;
     }
     const out = new Map<number, BlockHeader>();
-    for (let start = from; start <= to; start += 100) {
-        const end = Math.min(to, start + 99);
+    for (let start = from; start <= to; start += HEADER_BATCH) {
+        const end = Math.min(to, start + HEADER_BATCH - 1);
         const nums = Array.from({ length: end - start + 1 }, (_, i) => start + i);
         const batch = await Promise.all(nums.map((n) => readHeader(rpc, n)));
         for (const item of batch) {
@@ -452,14 +474,14 @@ async function prove(
 
 /**
  * Parent hashes from `to + 1` through this provider's finalized height.
- * Cost is one header per block of (finalized - to), in batches of at most 100.
+ * Headers are read in batches of 100. A gap above `maxAnchorBlocks` is not fetched.
  */
-async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number): Promise<string | null> {
-    if (fin.number > to && fin.number - to > responseLimits.ancestry) {
+async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number, maxAnchorBlocks: number): Promise<string | null> {
+    if (fin.number > to && fin.number - to > maxAnchorBlocks) {
         return `finalized ancestry exceeds the bound on ${rpc.name}`;
     }
     if (fin.number <= to) return null;
-    const headers = await loadHeaders(rpc, to + 1, fin.number);
+    const headers = await loadHeaders(rpc, to + 1, fin.number, maxAnchorBlocks);
     if (typeof headers === 'string') return headers;
     let prev = tip;
     for (let n = to + 1; n <= fin.number; n++) {
@@ -481,7 +503,7 @@ async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number): Prom
  * from finalized down to the checkpoint block. Nothing here commits.
  */
 async function bindFinalized(
-    pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader, saved: Checkpoint,
+    pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader, saved: Checkpoint, maxAnchorBlocks: number,
 ): Promise<string | null> {
     const want = saved.hash.toLowerCase();
     for (const { rpc, fin } of [{ rpc: pa, fin: finA }, { rpc: pb, fin: finB }]) {
@@ -490,9 +512,29 @@ async function bindFinalized(
             return `finalized hash disagrees with header at block ${saved.block} on ${rpc.name}`;
         }
         if (fin.number > saved.block) {
-            const broken = await anchor(rpc, fin, saved.hash, saved.block);
+            const broken = await anchor(rpc, fin, saved.hash, saved.block, maxAnchorBlocks);
             if (broken) return broken;
         }
+    }
+    return null;
+}
+
+/**
+ * Fresh store, nothing to scan: heights may differ. The headers at the lower
+ * finalized height must carry the same hash. No log read.
+ */
+async function agreeFinalized(pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader): Promise<string | null> {
+    const min = Math.min(finA.number, finB.number);
+    const ha = await readHeader(pa, min);
+    if (typeof ha === 'string') return ha;
+    const hb = await readHeader(pb, min);
+    if (typeof hb === 'string') return hb;
+    if (ha.hash.toLowerCase() !== hb.hash.toLowerCase()) return `providers disagree on block hash at ${min}`;
+    if (finA.number === min && finA.hash.toLowerCase() !== ha.hash.toLowerCase()) {
+        return `finalized hash disagrees with header at block ${min} on ${pa.name}`;
+    }
+    if (finB.number === min && finB.hash.toLowerCase() !== hb.hash.toLowerCase()) {
+        return `finalized hash disagrees with header at block ${min} on ${pb.name}`;
     }
     return null;
 }
@@ -506,33 +548,6 @@ function attributedOf(action: FoundAction): AttributedAction {
     };
 }
 
-/**
- * Scan `(checkpoint, min(finalized A, finalized B)]`, at most `maxBlocks`.
- * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE writes nothing.
- *
- * receiptsRoot, logsBloom, and parentHash are trusted because both providers agree
- * on them and parentHash reaches each provider's finalized header. The header hash
- * itself is not recomputed: several header fields are fork-dependent.
- * A clipped range (`to` below finalized) reads headers from `to + 1` toward finalized,
- * at most `responseLimits.ancestry` blocks. A larger gap is INCOMPLETE and is not fetched.
- * Each scan takes one snapshot and commits against that revision. The commit is
- * all-or-nothing: a stale revision throws StoreConflictError and writes nothing,
- * whether or not `next` moves the checkpoint. Two scans may run together. The one
- * that commits second fails, including a caught-up scan whose checkpoint does not change.
- * INCOMPLETE does not commit. The checkpoint value itself is not the concurrency token.
- * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
- * height must reach the checkpoint block, an equal height must carry its hash, and a
- * greater height must walk parentHash back to that block. A break commits nothing.
- * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
- * The first commit records it. A later scan whose scope differs throws ScopeChangedError
- * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
- * Providers, watched entries, the attributor, and numeric options are copied before the first await.
- * Later reads use that copy, so the caller cannot clear the watch set or replace the attributor in flight.
- * Decoder and attributor results are cloned before the next callback. A provider response is copied
- * before the other provider is awaited.
- * A decoder returning `'ignore'` is a trusted classification. The unknown-topic guarantee
- * covers a null decode, not a decoder that misclassifies a known guardian topic as `'ignore'`.
- */
 function freezeProvider(rpc: RawRpc): RawRpc {
     const name = rpc.name;
     const request = rpc.request.bind(rpc);
@@ -561,27 +576,74 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
     throw new Error(`guardian audit store ${stage} failed`);
 }
 
+/**
+ * Scan `(checkpoint, min(finalized A, finalized B)]`, at most `maxBlocks`.
+ * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE writes nothing.
+ *
+ * receiptsRoot, logsBloom, and parentHash are trusted because both providers agree
+ * on them and parentHash reaches each provider's finalized header. The header hash
+ * itself is not recomputed: several header fields are fork-dependent.
+ * Both providers may share an upstream. A block whose agreed header bloom says the
+ * watched address is absent is not receipt-proven: that bloom is a header field,
+ * not a receipt body.
+ * A clipped range (`to` below finalized) reads headers from `to + 1` toward finalized
+ * in batches of 100. `maxAnchorBlocks` (default 100_000) caps that walk. A gap of N
+ * costs about N/100 header batches, up to 1_000 batches at the default. A larger gap
+ * is INCOMPLETE and is not fetched.
+ * A fresh store whose `startBlock` is already past finalized still compares both
+ * providers. Heights may differ. Header hashes must agree at the lower height.
+ * That result is COMPLETE with count 0 only after the comparison, and it carries
+ * `range: { from, to, empty: true }` so the caller can see that nothing was scanned.
+ * Each scan takes one snapshot and commits against that revision. The commit is
+ * all-or-nothing: a stale revision throws StoreConflictError and writes nothing,
+ * whether or not `next` moves the checkpoint. Two scans may run together. The one
+ * that commits second fails, including a caught-up scan whose checkpoint does not change.
+ * INCOMPLETE does not commit. The checkpoint value itself is not the concurrency token.
+ * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
+ * height must reach the checkpoint block, an equal height must carry its hash, and a
+ * greater height must walk parentHash back to that block. A break commits nothing.
+ * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
+ * The first commit records it. A later scan whose scope differs throws ScopeChangedError
+ * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
+ * Providers, watched entries, the attributor, and numeric options are copied before the first await.
+ * Later reads use that copy, so the caller cannot clear the watch set or replace the attributor in flight.
+ * The store snapshot is deep-copied once, immediately after it is read. Later reads use that copy.
+ * Decoder and attributor results are cloned before the next callback. A provider response is copied
+ * before the other provider is awaited.
+ * A decoder returning `'ignore'` is a trusted classification. The unknown-topic guarantee
+ * covers a null decode, not a decoder that misclassifies a known guardian topic as `'ignore'`.
+ * `decoded.kind` must be a non-empty string. Anything else is INCOMPLETE.
+ */
 export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
-    const raw = opts.providers;
-    if (raw.length !== 2 || raw[0] === raw[1] || raw[0].name === raw[1].name) {
+    const providers = opts.providers;
+    const count = providers.length;
+    const left = providers[0];
+    const right = providers[1];
+    if (count !== 2 || !left || !right) throw new Error('guardian audit requires two distinct providers');
+    const pa = freezeProvider(left);
+    const pb = freezeProvider(right);
+    const sharedRequest = left.request === right.request
+        && Object.prototype.hasOwnProperty.call(left, 'request')
+        && Object.prototype.hasOwnProperty.call(right, 'request');
+    if (left === right || pa.name === pb.name || pa.request === pb.request || sharedRequest) {
         throw new Error('guardian audit requires two distinct providers');
     }
-    const pa = freezeProvider(raw[0]);
-    const pb = freezeProvider(raw[1]);
     const watched = freezeWatched(opts.watched);
     const startBlock = opts.startBlock;
     const maxBlocks = opts.maxBlocks;
     const pageOption = opts.page;
+    const anchorOption = opts.maxAnchorBlocks;
     const store = opts.store;
     const attributor = freezeAttributor(opts.attributor);
     assertName(pa.name);
     assertName(pb.name);
-    assertConfig(startBlock, maxBlocks, pageOption, watched);
+    assertConfig(startBlock, maxBlocks, pageOption, watched, anchorOption);
     const page = pageOption ?? 2000;
+    const maxAnchorBlocks = anchorOption ?? DEFAULT_MAX_ANCHOR_BLOCKS;
     const scope = watchScope(watched, startBlock);
     let snap: StoreSnapshot;
     try {
-        snap = await store.snapshot();
+        snap = structuredClone(await store.snapshot());
     } catch (error) {
         storeFailure('snapshot', error);
     }
@@ -604,11 +666,11 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const from = saved ? saved.block + 1 : startBlock;
     const to = Math.min(finA.number, finB.number, from + maxBlocks - 1);
     if (from > to) {
-        if (saved) {
-            const why = await bindFinalized(pa, pb, finA, finB, saved);
-            if (why) return bad(from, to, why);
-        }
-        return finish(watched, attributor, store, [], from, to, 0, 0, null, snap, scope);
+        const why = saved
+            ? await bindFinalized(pa, pb, finA, finB, saved, maxAnchorBlocks)
+            : await agreeFinalized(pa, pb, finA, finB);
+        if (why) return bad(from, to, why);
+        return finish(watched, attributor, store, [], from, to, 0, 0, null, snap, scope, true);
     }
 
     const buckets: Bucket[] = [];
@@ -640,9 +702,9 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
 
     // Headers of one provider at a time, ≤100 in flight.
-    const headersA = await loadHeaders(pa, from, to);
+    const headersA = await loadHeaders(pa, from, to, responseLimits.ancestry);
     if (typeof headersA === 'string') return bad(from, to, headersA);
-    const headersB = await loadHeaders(pb, from, to);
+    const headersB = await loadHeaders(pb, from, to, responseLimits.ancestry);
     if (typeof headersB === 'string') return bad(from, to, headersB);
     let bloomFalsePositives = 0;
     for (let n = from; n <= to; n++) {
@@ -717,9 +779,9 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     if (againB.number === to && againB.hash.toLowerCase() !== tipB.hash.toLowerCase()) {
         return bad(from, to, `finalized hash moved at block ${to} on ${pb.name}`);
     }
-    const breakA = await anchor(pa, againA, tipHeader.hash, to);
+    const breakA = await anchor(pa, againA, tipHeader.hash, to, maxAnchorBlocks);
     if (breakA) return bad(from, to, breakA);
-    const breakB = await anchor(pb, againB, tipB.hash, to);
+    const breakB = await anchor(pb, againB, tipB.hash, to, maxAnchorBlocks);
     if (breakB) return bad(from, to, breakB);
 
     const actions: FoundAction[] = [];
@@ -732,9 +794,11 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
                 return bad(from, to, `undecodable topic0 ${log.topics[0] ?? '0x'} from ${bucket.address} at block ${log.blockNumber}`);
             }
             if (decoded.value === 'ignore') { ignored++; continue; }
+            const kind = actionKind(decoded.value);
+            if (!kind) return bad(from, to, 'decoder returned an invalid kind');
             actions.push({
                 blockNumber: log.blockNumber, blockHash: log.blockHash, txHash: log.txHash, logIndex: log.logIndex,
-                address: bucket.address, kind: decoded.value.kind, decoded: decoded.value, log: decoded.log,
+                address: bucket.address, kind, decoded: decoded.value, log: decoded.log,
             });
         }
     }
@@ -748,7 +812,7 @@ async function finish(
     watched: readonly WatchedContract[], attributor: Attributor | undefined, store: GuardianAuditStore,
     actions: FoundAction[], from: number, to: number,
     bloomFalsePositives: number, ignored: number, tip: Hex | null,
-    snap: StoreSnapshot, scope: Hex,
+    snap: StoreSnapshot, scope: Hex, emptyRange = false,
 ): Promise<ScanResult> {
     actions.sort((x, y) => x.blockNumber - y.blockNumber || x.logIndex - y.logIndex);
     const resolvedPrior: FoundAction[] = [];
@@ -798,7 +862,8 @@ async function finish(
     const stats: ScanStats = {
         bloomFalsePositives, ignored, count: actions.length, from, to, actions, resolvedPrior,
     };
+    const range = emptyRange ? { from, to, empty: true as const } : undefined;
     return stillPrior + fresh.length > 0
-        ? { state: 'UNATTRIBUTED', unattributed: stillPrior + fresh.length, ...stats }
-        : { state: 'COMPLETE', ...stats };
+        ? { state: 'UNATTRIBUTED', unattributed: stillPrior + fresh.length, ...stats, ...(range ? { range } : {}) }
+        : { state: 'COMPLETE', ...stats, ...(range ? { range } : {}) };
 }

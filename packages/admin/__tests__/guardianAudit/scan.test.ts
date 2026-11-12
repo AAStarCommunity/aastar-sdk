@@ -20,6 +20,7 @@ import {
     type RawLog,
     type RawRpc,
     type ScanResult,
+    type StoreSnapshot,
     type UnresolvedAction,
     type WatchedContract,
 } from '../../src/guardianAudit';
@@ -351,6 +352,43 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(twin.calls).toHaveLength(0);
     });
 
+    it('reads the provider pair once so a getter array cannot freeze one provider twice', async () => {
+        const { a, b } = pair(1);
+        let read0 = 0;
+        const providers = new Proxy([b, a] as [RawRpc, RawRpc], {
+            get(target, prop, receiver) {
+                if (prop === '0') {
+                    read0 += 1;
+                    return read0 === 1 ? b : a;
+                }
+                if (prop === '1') return a;
+                return Reflect.get(target, prop, receiver);
+            },
+        });
+        const result = await scanRange({
+            providers, watched: [watched()], store: memoryStore(), startBlock: 1, maxBlocks: 5,
+        });
+        expect(result.state).toBe('COMPLETE');
+        expect(b.calls.length).toBeGreaterThan(0);
+        expect(a.calls.length).toBeGreaterThan(0);
+    });
+
+    it('rejects two objects that share one request function', async () => {
+        const { a } = pair(1);
+        const shared = a.request.bind(a);
+        await expect(scanRange({
+            providers: [
+                { name: 'primary', request: shared },
+                { name: 'secondary', request: shared },
+            ],
+            watched: [watched()],
+            store: memoryStore(),
+            startBlock: 1,
+            maxBlocks: 5,
+        })).rejects.toThrow(/two distinct providers/);
+        expect(a.calls).toHaveLength(0);
+    });
+
     it('is INCOMPLETE when a caught-up finalized hash disagrees with the checkpoint', async () => {
         const { a, b } = pair(1);
         const store = memoryStore();
@@ -412,9 +450,33 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         const { a, b } = pair(4);
         const store = memoryStore();
         const result = await run(a, b, store, { startBlock: 20 });
-        expect(result).toMatchObject({ state: 'COMPLETE', count: 0, from: 20, to: 4 });
-        expect(a.calls.map((call) => call.method)).toEqual(['eth_getBlockByNumber']);
+        expect(result).toMatchObject({
+            state: 'COMPLETE', count: 0, from: 20, to: 4,
+            range: { from: 20, to: 4, empty: true },
+        });
+        expect(a.calls.every((call) => call.method === 'eth_getBlockByNumber')).toBe(true);
+        expect(a.calls.map((call) => call.params[0])).toEqual(expect.arrayContaining(['finalized', '0x4']));
+        expect(b.calls.map((call) => call.params[0])).toContain('0x4');
+        expect(logRanges(a)).toEqual([]);
         expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('compares finalized hashes at the lower height when a fresh store is already caught up', async () => {
+        const ahead = pair(4, 6);
+        const okResult = await run(ahead.a, ahead.b, memoryStore(), { startBlock: 20 });
+        expect(okResult).toMatchObject({
+            state: 'COMPLETE', count: 0,
+            range: { from: 20, to: 4, empty: true },
+        });
+        expect(ahead.a.calls.map((call) => call.params[0])).toContain('0x4');
+        expect(ahead.b.calls.map((call) => call.params[0])).toContain('0x4');
+        expect(logRanges(ahead.a)).toEqual([]);
+
+        const split = pair(4, 6);
+        split.b.setHash(4, bhash(4, 'other'));
+        const result = await run(split.a, split.b, memoryStore(), { startBlock: 20 });
+        expectIncomplete(result, /providers disagree on block hash at 4/);
+        expect(logRanges(split.a)).toEqual([]);
     });
 
     it('clips to maxBlocks and to the lower finalized head', async () => {
@@ -1599,23 +1661,113 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         expect(a.calls).toHaveLength(0);
         expect(() => watchScope([watched({ fromBlock: Number.NaN })], 1)).toThrow(/fromBlock/);
         expect(() => watchScope([watched()], Number.NaN)).toThrow(/startBlock/);
+        const { a: capped, b: cappedB } = pair(1);
+        await expect(run(capped, cappedB, memoryStore(), { maxAnchorBlocks: 0 })).rejects.toThrow(/maxAnchorBlocks/);
+        await expect(run(capped, cappedB, memoryStore(), { maxAnchorBlocks: Number.NaN })).rejects.toThrow(/maxAnchorBlocks/);
+        expect(capped.calls).toHaveLength(0);
     });
 
-    it('does not walk a finalized gap past the ancestry bound', async () => {
+    it('does not walk a finalized gap past maxAnchorBlocks', async () => {
         const { a, b } = pair(1);
-        a.finalized = 100_000;
-        b.finalized = 100_000;
+        a.finalized = 80;
+        b.finalized = 80;
         for (const node of [a, b]) {
-            node.blocks.set(100_000, {
-                hash: bhash(100_000), parent: bhash(0), logs: [], bloom: bloomOf([]),
+            node.blocks.set(80, {
+                hash: bhash(80), parent: bhash(0), logs: [], bloom: bloomOf([]),
                 hide: new Set(), receipts: [], receiptsRoot: EMPTY_RECEIPTS_ROOT,
             });
         }
-        const result = await run(a, b, memoryStore(), { maxBlocks: 1 });
+        const result = await run(a, b, memoryStore(), { maxBlocks: 1, maxAnchorBlocks: 10 });
         expectIncomplete(result, /finalized ancestry exceeds the bound/);
         const tags = a.calls.filter((call) => call.method === 'eth_getBlockByNumber').map((call) => call.params[0]);
         expect(tags).not.toContain('0x2');
-        expect(tags).not.toContain(numberToHex(100_000));
+        expect(tags).not.toContain(numberToHex(80));
+    });
+
+    it('completes a 5000-block backlog with the default anchor cap, in header batches of 100', async () => {
+        const tip = 5000;
+        const { a, b } = pair(tip);
+        const store = memoryStore();
+        let inflight = 0;
+        let peak = 0;
+        const wrap = (node: Fake) => {
+            const orig = node.request.bind(node);
+            node.request = async (args) => {
+                inflight += 1;
+                peak = Math.max(peak, inflight);
+                try { return await orig(args); } finally { inflight -= 1; }
+            };
+        };
+        wrap(a);
+        wrap(b);
+        const result = await run(a, b, store, { maxBlocks: 50 });
+        expect(result).toMatchObject({ state: 'COMPLETE', from: 1, to: 50, count: 0 });
+        expect(await store.getCheckpoint()).toEqual({ block: 50, hash: bhash(50) });
+        expect(peak).toBe(100);
+        expect(a.calls.some((call) => call.params[0] === numberToHex(tip))).toBe(true);
+    });
+
+    it('turns a stored address that carries a URL into INCOMPLETE without a foreign message', async () => {
+        const poison = 'http://user:pw@evil.example/secretkeyXXXXX';
+        expect(poison).toHaveLength(42);
+        const { a, b } = pair(1);
+        const store = memoryStore();
+        const item = row(1, 0);
+        item.address = poison as Address;
+        await save(store, null, [item]);
+        let thrown: unknown;
+        let result: ScanResult | undefined;
+        try {
+            result = await run(a, b, store);
+        } catch (error) {
+            thrown = error;
+        }
+        expect(thrown).toBeUndefined();
+        expectIncomplete(result!, /^stored action malformed$/);
+        expect(JSON.stringify(result)).not.toMatch(/user:pw|evil\.example|http:/);
+    });
+
+    it('is INCOMPLETE when the decoder returns an empty or non-string kind', async () => {
+        const { a, b } = pair(1);
+        addBoth(a, b, 1, TOPIC);
+        const badKinds: unknown[] = ['', 1, undefined];
+        for (const kind of badKinds) {
+            const result = await run(a, b, memoryStore(), {
+                watched: [watched({
+                    decode: () => (kind === undefined ? {} : { kind }) as { kind: string },
+                })],
+            });
+            expectIncomplete(result, /^decoder returned an invalid kind$/);
+        }
+    });
+
+    it('keeps using the snapshot copy taken before the next provider read', async () => {
+        const { a, b } = pair(2);
+        const inner = memoryStore();
+        let handed: StoreSnapshot | null = null;
+        const store: GuardianAuditStore = {
+            async snapshot() {
+                handed = await inner.snapshot();
+                return handed;
+            },
+            getCheckpoint: () => inner.getCheckpoint(),
+            listUnresolved: () => inner.listUnresolved(),
+            listAttributed: () => inner.listAttributed(),
+            commit: (change) => inner.commit(change),
+        };
+        const orig = a.request.bind(a);
+        a.request = async (args) => {
+            if (handed) {
+                handed.revision = 99;
+                handed.checkpoint = { block: 50, hash: bhash(50) };
+                handed.unresolved.push(row(1, 0));
+            }
+            return orig(args);
+        };
+        const result = await run(a, b, store);
+        expect(result).toMatchObject({ state: 'COMPLETE', from: 1, to: 2 });
+        expect(await inner.getCheckpoint()).toEqual({ block: 2, hash: bhash(2) });
+        expect(await inner.listUnresolved()).toEqual([]);
     });
 });
 

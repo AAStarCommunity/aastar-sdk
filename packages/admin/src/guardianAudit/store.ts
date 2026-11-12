@@ -102,15 +102,25 @@ function copy<T>(value: T): T {
     return structuredClone(value);
 }
 
-/** `faultHook` adds `crashNextCommit`, which aborts the next commit after it has started writing. */
-export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditStore & { crashNextCommit?: () => void } {
+/**
+ * `faultHook` adds `commitSteps` and `crashDuringNextCommit`.
+ * This store publishes one atomic write, so `commitSteps()` is 1.
+ * A crash armed at any step in `0..commitSteps()` throws before that write is visible.
+ */
+export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditStore & {
+    crashDuringNextCommit?: (step: number) => void;
+    commitSteps?: () => number;
+} {
     let revision = 0;
     let scope: Hex | null = null;
     let checkpoint: Checkpoint | null = null;
     let open = new Map<string, UnresolvedAction>();
     let attributed = new Map<string, AttributedAction>();
-    let crash = false;
-    const store: GuardianAuditStore & { crashNextCommit?: () => void } = {
+    let crashAt: number | null = null;
+    const store: GuardianAuditStore & {
+        crashDuringNextCommit?: (step: number) => void;
+        commitSteps?: () => number;
+    } = {
         async snapshot() {
             return {
                 revision,
@@ -140,8 +150,8 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
                 nextOpen.set(id, copy({ ...item, id }));
             }
             for (const id of change.resolve) nextOpen.delete(id.toLowerCase());
-            if (crash) {
-                crash = false;
+            if (crashAt !== null) {
+                crashAt = null;
                 throw new Error('memory store crash');
             }
             open = nextOpen;
@@ -151,6 +161,9 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
             revision++;
         },
     };
-    if (options?.faultHook) store.crashNextCommit = () => { crash = true; };
+    if (options?.faultHook) {
+        store.commitSteps = () => 1;
+        store.crashDuringNextCommit = (step) => { crashAt = step; };
+    }
     return store;
 }
