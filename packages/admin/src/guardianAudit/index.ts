@@ -26,6 +26,6 @@ export {
 
 export type { EvidenceAction, EvidenceBundle, EvidenceFile, EvidenceFileCheck, EvidenceInput, RunMetadata } from './bundle.js';
 export {
-    EVIDENCE_FILE_SCHEMA, EVIDENCE_SCHEMA, RUN_METADATA_VARIABLE_FIELDS, buildEvidenceBundle, evidenceFileSha256,
+    EVIDENCE_FILE_SCHEMA, EVIDENCE_SCHEMA, MAX_EVIDENCE_FILE_BYTES, RUN_METADATA_VARIABLE_FIELDS, buildEvidenceBundle, evidenceFileSha256,
     parseEvidenceFile, serializeEvidenceFile, verifyEvidenceBundle, verifyEvidenceFile,
 } from './bundle.js';

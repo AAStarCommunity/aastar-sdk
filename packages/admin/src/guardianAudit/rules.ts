@@ -6,6 +6,8 @@ import { canonicalDigest } from './canonical.js';
  * so a flag can be re-derived from the pinned ruleset digest after the fact.
  * Ported from the DVT guardian-watcher evaluator. Selectors use viem `toFunctionSelector`
  * (keccak256 of the signature, first 4 bytes), the same bytes as `ethers.id(sig).slice(0, 10)`.
+ * Lookups of events, functions, BLS kinds, and roles use own properties only.
+ * `validateRuleset` returns a deep-frozen null-prototype copy. `DEFAULT_RULESET` is frozen in place.
  */
 export const RULESET_SCHEMA = 'aastar.guardian-audit.ruleset.v1' as const;
 
@@ -119,9 +121,20 @@ function ownKeys(obj: object): string[] {
     return keys;
 }
 
-function unknownKey(label: string): never {
-    if (label.length > 160 || label.includes('://') || /[\r\n]/.test(label)) throw new Error('ruleset: invalid key');
-    throw new Error(`ruleset: unknown key ${label}`);
+/** Own data only. `constructor`, `toString`, and `__proto__` are not rules. */
+function ownValue(obj: object, key: string): unknown {
+    if (!Object.hasOwn(obj, key)) return undefined;
+    const desc = Object.getOwnPropertyDescriptor(obj, key);
+    if (desc === undefined || desc.get !== undefined || !('value' in desc)) return undefined;
+    return desc.value;
+}
+
+/**
+ * `section` is one of our tokens (`source`, `bls.SLASH`, `ownerRoute.events`, …).
+ * The rejected key is not copied into the message.
+ */
+function unknownKey(section: string): never {
+    throw new Error(`ruleset: unknown key in ${section}`);
 }
 
 function shortText(value: unknown, where: string, max: number): void {
@@ -133,7 +146,7 @@ function shortText(value: unknown, where: string, max: number): void {
 function assertFlag(obj: Record<string, any>, where: string, withReason: boolean): void {
     if (typeof obj.flag !== 'boolean') throw new Error(`ruleset: ${where}.flag must be boolean`);
     if (withReason) shortText(obj.reason, `${where}.reason`, MAX_REASON);
-    if ('readPrice' in obj && typeof obj.readPrice !== 'boolean') throw new Error(`ruleset: ${where}.readPrice must be boolean`);
+    if (Object.hasOwn(obj, 'readPrice') && typeof obj.readPrice !== 'boolean') throw new Error(`ruleset: ${where}.readPrice must be boolean`);
 }
 
 function selectorOf(signature: string): Hex | null {
@@ -153,17 +166,52 @@ function sameAddress(left: unknown, right: unknown): boolean {
     }
 }
 
-function only(obj: Record<string, any>, allowed: readonly string[], where: string): void {
+function only(obj: Record<string, any>, allowed: readonly string[], section: string): void {
     for (const key of ownKeys(obj)) {
-        if (!allowed.includes(key)) unknownKey(`${where}.${key}`);
+        if (!allowed.includes(key)) unknownKey(section);
     }
 }
 
-/** Validate a parsed ruleset; throws on a shape the evaluator would silently misread. Unknown keys throw at every level. */
+function nullClone(value: unknown, seen: Set<object>): unknown {
+    if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') return value;
+    if (typeof value !== 'object') throw new Error('ruleset: unsupported value');
+    if (seen.has(value)) throw new Error('ruleset: unsupported value');
+    seen.add(value);
+    if (Array.isArray(value)) {
+        const out: unknown[] = [];
+        for (const item of value) out.push(nullClone(item, seen));
+        seen.delete(value);
+        return out;
+    }
+    const out = Object.create(null) as Record<string, unknown>;
+    for (const key of ownKeys(value)) {
+        Object.defineProperty(out, key, {
+            value: nullClone(ownValue(value, key), seen),
+            enumerable: true,
+            writable: true,
+            configurable: true,
+        });
+    }
+    seen.delete(value);
+    return out;
+}
+
+function deepFreeze<T>(value: T): T {
+    if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+    for (const key of Object.keys(value as object)) deepFreeze((value as Record<string, unknown>)[key]);
+    return Object.freeze(value);
+}
+
+/**
+ * Validate a parsed ruleset. Unknown keys throw at every level; the message names the section, not the key.
+ * Returns a new deep-frozen null-prototype copy. The input is not frozen and is not returned.
+ */
 export function validateRuleset(rs: unknown): Ruleset {
     if (!isRecord(rs) || rs.schema !== RULESET_SCHEMA) throw new Error('ruleset: unknown schema');
     for (const key of ownKeys(rs)) {
-        if (!TOP_LEVEL.has(key)) unknownKey(key);
+        if (TOP_LEVEL.has(key)) continue;
+        if (key.length > 160 || key.includes('://') || /[\r\n]/.test(key)) throw new Error('ruleset: invalid key');
+        throw new Error('ruleset: unknown key');
     }
     if (rs.comment !== undefined) shortText(rs.comment, 'comment', MAX_REASON);
     if (!isRecord(rs.source)) throw new Error('ruleset: source missing');
@@ -205,11 +253,11 @@ export function validateRuleset(rs: unknown): Ruleset {
     shortText(rs.ownerRoute.label, 'ownerRoute.label', MAX_SOURCE);
     if (rs.ownerRoute.comment !== undefined) shortText(rs.ownerRoute.comment, 'ownerRoute.comment', MAX_REASON);
     for (const name of ownKeys(rs.ownerRoute.events)) {
-        const event = rs.ownerRoute.events[name];
+        const event = ownValue(rs.ownerRoute.events, name);
         if (!isRecord(event)) throw new Error('ruleset: ownerRoute.events invalid');
         if (name.length > 128 || name.includes('://') || /[\r\n]/.test(name)) throw new Error('ruleset: invalid key');
-        only(event, OWNER_EVENT_KEYS, `ownerRoute.events.${name}`);
-        assertFlag(event, `ownerRoute.events.${name}`, false);
+        only(event, OWNER_EVENT_KEYS, 'ownerRoute.events');
+        assertFlag(event, 'ownerRoute.events', false);
     }
     const pr = rs.publicRoute;
     if (!isRecord(pr) || typeof pr.label !== 'string' || !isRecord(pr.functions) || !isRecord(pr.unattributed)) {
@@ -220,19 +268,21 @@ export function validateRuleset(rs: unknown): Ruleset {
     if (pr.comment !== undefined) shortText(pr.comment, 'publicRoute.comment', MAX_REASON);
     only(pr.unattributed, FLAG_KEYS, 'publicRoute.unattributed');
     assertFlag(pr.unattributed, 'publicRoute.unattributed', true);
+    const seenSelectors = new Set<string>();
     for (const sig of ownKeys(pr.functions)) {
-        const f = pr.functions[sig];
+        const f = ownValue(pr.functions, sig);
         if (sig.length > 160 || sig.includes('://') || /[\r\n]/.test(sig)) throw new Error('ruleset: invalid key');
-        if (!isRecord(f) || !Array.isArray(f.events)) {
-            throw new Error(`ruleset: publicRoute.functions.${sig} needs events and reason`);
-        }
+        if (!isRecord(f) || !Array.isArray(f.events)) throw new Error('ruleset: publicRoute.functions invalid');
         if (f.events.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
-        only(f, PUBLIC_FN_KEYS, `publicRoute.functions.${sig}`);
-        assertFlag(f, `publicRoute.functions.${sig}`, true);
-        if (selectorOf(sig) === null) throw new Error('ruleset: bad signature');
+        only(f, PUBLIC_FN_KEYS, 'publicRoute.functions');
+        assertFlag(f, 'publicRoute.functions', true);
+        const sel = selectorOf(sig);
+        if (sel === null) throw new Error('ruleset: bad signature');
+        if (seenSelectors.has(sel)) throw new Error('ruleset: duplicate selector');
+        seenSelectors.add(sel);
         for (const ev of f.events) {
             if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://') || /[\r\n]/.test(ev)) {
-                throw new Error(`ruleset: publicRoute.functions.${sig}.events invalid`);
+                throw new Error('ruleset: publicRoute.functions.events invalid');
             }
         }
         if (f.flagIfCallAlsoEmits !== undefined) {
@@ -241,16 +291,14 @@ export function validateRuleset(rs: unknown): Ruleset {
             }
             for (const ev of f.flagIfCallAlsoEmits) {
                 if (typeof ev !== 'string' || ev.length === 0 || ev.length > 128 || ev.includes('://')) {
-                    throw new Error(`ruleset: publicRoute.functions.${sig}.flagIfCallAlsoEmits invalid`);
+                    throw new Error('ruleset: publicRoute.functions.flagIfCallAlsoEmits invalid');
                 }
             }
         }
-        if (f.flagIfCallAlsoEmits && typeof f.alsoReason !== 'string') {
-            throw new Error(`ruleset: publicRoute.functions.${sig}.alsoReason missing`);
-        }
-        if (typeof f.alsoReason === 'string') shortText(f.alsoReason, `publicRoute.functions.${sig}.alsoReason`, MAX_REASON);
+        if (f.flagIfCallAlsoEmits && typeof f.alsoReason !== 'string') throw new Error('ruleset: alsoReason missing');
+        if (typeof f.alsoReason === 'string') shortText(f.alsoReason, 'publicRoute.functions.alsoReason', MAX_REASON);
     }
-    return rs as Ruleset;
+    return deepFreeze(nullClone(rs, new Set())) as Ruleset;
 }
 
 /** `{ schema, digest }` of a validated ruleset. The digest covers every rule string. */
@@ -259,19 +307,24 @@ export function rulesetId(rs: Ruleset): { schema: typeof RULESET_SCHEMA; digest:
     return { schema: valid.schema, digest: canonicalDigest(valid) };
 }
 
-/** The expected-set entry a GENERIC call matches, by target role address and selector, or null. */
+/**
+ * The expected-set entry a GENERIC call matches, by target role address and selector, or null.
+ * A target that names no own role returns null (unexpected). It does not throw.
+ */
 export function matchGeneric(
     rs: Ruleset, roles: Record<string, string>, target: unknown, callData: unknown,
 ): GenericExpected | null {
-    validateRuleset(rs);
+    const rules = validateRuleset(rs);
+    if (!isRecord(roles)) throw new Error('roles missing');
     if (typeof callData === 'string' && callData.length > 1_048_576) throw new Error('record: callData too long');
     const sel = typeof callData === 'string' && callData.length >= 10 ? callData.slice(0, 10).toLowerCase() : null;
-    if (!Array.isArray(rs.bls.GENERIC.expected) || rs.bls.GENERIC.expected.length > MAX_RULE_KEYS) {
+    if (!Array.isArray(rules.bls.GENERIC.expected) || rules.bls.GENERIC.expected.length > MAX_RULE_KEYS) {
         throw new Error('ruleset: too large');
     }
-    for (const e of rs.bls.GENERIC.expected) {
-        const addr = roles[e.target];
-        if (!addr || !target) continue;
+    for (const e of rules.bls.GENERIC.expected) {
+        if (!Object.hasOwn(roles, e.target)) continue;
+        const addr = ownValue(roles, e.target);
+        if (!target) continue;
         if (typeof addr !== 'string' || addr.length !== 42) throw new Error('role address is invalid');
         let roleAddr: string;
         try {
@@ -288,22 +341,24 @@ export function matchGeneric(
 
 /** The publicRoute entry whose selector is `selector`, as [signature, entry], or null. */
 export function publicFunction(rs: Ruleset, selector: unknown): [string, PublicFunctionRule] | null {
-    validateRuleset(rs);
+    const rules = validateRuleset(rs);
     if (typeof selector !== 'string' || selector.length !== 10) return null;
     const want = selector.toLowerCase();
-    for (const sig of ownKeys(rs.publicRoute.functions)) {
+    for (const sig of ownKeys(rules.publicRoute.functions)) {
         const got = selectorOf(sig);
-        if (got !== null && got === want) return [sig, rs.publicRoute.functions[sig]!];
+        const entry = ownValue(rules.publicRoute.functions, sig);
+        if (got !== null && got === want && isRecord(entry)) return [sig, entry as PublicFunctionRule];
     }
     return null;
 }
 
 /** Events that some permissionless function can emit: their caller decides the route. */
 export function ambiguousEvents(rs: Ruleset): Set<string> {
-    validateRuleset(rs);
+    const rules = validateRuleset(rs);
     const names: string[] = [];
-    for (const sig of ownKeys(rs.publicRoute.functions)) {
-        const events = rs.publicRoute.functions[sig]!.events;
+    for (const sig of ownKeys(rules.publicRoute.functions)) {
+        const entry = ownValue(rules.publicRoute.functions, sig);
+        const events = isRecord(entry) ? entry.events : undefined;
         if (!Array.isArray(events) || events.length > MAX_RULE_KEYS) throw new Error('ruleset: too large');
         names.push(...events);
     }
@@ -315,7 +370,7 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
  */
 export function evaluate(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): Verdict {
-    validateRuleset(rs);
+    const rules = validateRuleset(rs);
     if (!isRecord(roles)) throw new Error('roles missing');
     if (!isRecord(record)
         || (record.route !== 'bls' && record.route !== 'owner' && record.route !== 'public' && record.route !== 'unattributed')) {
@@ -330,7 +385,7 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
         throw new Error('record: kind is not a short string');
     }
     if (record.route === 'public') {
-        const pf = publicFunction(rs, record.selector);
+        const pf = publicFunction(rules, record.selector);
         if (!pf) {
             return {
                 flagged: true,
@@ -351,12 +406,13 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
         }
         return {
             flagged: !!f.flag,
-            reasons: [`${rs.publicRoute.label}: ${sig}: ${f.reason}`],
+            reasons: [`${rules.publicRoute.label}: ${sig}: ${f.reason}`],
             rule: `publicRoute.functions.${sig}`,
         };
     }
     if (record.route === 'unattributed') {
-        const u = rs.publicRoute.unattributed;
+        if (typeof record.event !== 'string' || record.event.length === 0) throw new Error('record: event is not a short string');
+        const u = rules.publicRoute.unattributed;
         return {
             flagged: !!u.flag,
             reasons: [`${u.reason}: ${record.event}`],
@@ -364,27 +420,27 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
         };
     }
     if (record.route === 'owner') {
-        const event = record.event ?? '';
-        const r = rs.ownerRoute.events[event];
-        if (!r) {
+        const event = typeof record.event === 'string' ? record.event : '';
+        const r = ownValue(rules.ownerRoute.events, event);
+        if (!isRecord(r)) {
             return {
                 flagged: true,
-                reasons: [`unlisted SuperPaymaster event ${record.event}`],
+                reasons: [`unlisted SuperPaymaster event ${event}`],
                 rule: 'ownerRoute.unlisted',
             };
         }
         return {
             flagged: !!r.flag,
-            reasons: [`${rs.ownerRoute.label}: ${event}`],
+            reasons: [`${rules.ownerRoute.label}: ${event}`],
             rule: `ownerRoute.events.${event}`,
         };
     }
     if (record.kind === undefined) {
-        const r = rs.bls.UNRECOVERED;
+        const r = rules.bls.UNRECOVERED;
         return { flagged: !!r.flag, reasons: [r.reason], rule: 'bls.UNRECOVERED' };
     }
     if (record.kind === 'GENERIC') {
-        const e = matchGeneric(rs, roles, record.fields?.target, record.fields?.callData);
+        const e = matchGeneric(rules, roles, record.fields?.target, record.fields?.callData);
         if (e) {
             return {
                 flagged: !!e.flag,
@@ -392,12 +448,11 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
                 rule: `bls.GENERIC.expected:${e.target}.${e.signature}`,
             };
         }
-        const u = rs.bls.GENERIC.unexpected;
+        const u = rules.bls.GENERIC.unexpected;
         return { flagged: !!u.flag, reasons: [u.reason], rule: 'bls.GENERIC.unexpected' };
     }
-    const table = rs.bls as unknown as Record<string, FlagReason | undefined>;
-    const r = table[record.kind];
-    if (!r || typeof r.reason !== 'string') {
+    const r = ownValue(rules.bls, record.kind);
+    if (!isRecord(r) || typeof r.reason !== 'string') {
         return { flagged: true, reasons: [`unknown kind ${record.kind}`], rule: 'bls.unknown' };
     }
     return { flagged: !!r.flag, reasons: [r.reason], rule: `bls.${record.kind}` };
@@ -405,14 +460,15 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
 
 /** Whether this record wants prices read before/after (price-update rules). */
 export function wantsPrice(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): boolean {
-    validateRuleset(rs);
+    const rules = validateRuleset(rs);
     if (!isRecord(record)) throw new Error('record: unknown route');
-    if (record.route === 'public') return !!publicFunction(rs, record.selector)?.[1].readPrice;
+    if (record.route === 'public') return !!publicFunction(rules, record.selector)?.[1].readPrice;
     if (record.route === 'owner' || record.route === 'unattributed') {
-        return !!rs.ownerRoute.events[record.event ?? '']?.readPrice;
+        const event = ownValue(rules.ownerRoute.events, typeof record.event === 'string' ? record.event : '');
+        return isRecord(event) && !!event.readPrice;
     }
     if (record.kind !== 'GENERIC') return false;
-    return !!matchGeneric(rs, roles, record.fields?.target, record.fields?.callData)?.readPrice;
+    return !!matchGeneric(rules, roles, record.fields?.target, record.fields?.callData)?.readPrice;
 }
 
 const SOURCE: RulesetSource = {
@@ -512,3 +568,4 @@ export const DEFAULT_RULESET: Ruleset = {
         },
     },
 };
+deepFreeze(DEFAULT_RULESET);

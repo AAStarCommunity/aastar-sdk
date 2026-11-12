@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, toFunctionSelector, type Address, type Hex } from 'viem';
 import { canonicalDigest, canonicalJson } from '../../src/guardianAudit/canonical';
 import {
-    buildEvidenceBundle, evidenceFileSha256, parseEvidenceFile, serializeEvidenceFile, verifyEvidenceBundle, verifyEvidenceFile,
-    type EvidenceBundle, type RunMetadata,
+    MAX_EVIDENCE_FILE_BYTES, buildEvidenceBundle, evidenceFileSha256, parseEvidenceFile, serializeEvidenceFile,
+    verifyEvidenceBundle, verifyEvidenceFile, type EvidenceBundle, type RunMetadata,
 } from '../../src/guardianAudit/bundle';
 import { DEFAULT_RULESET, rulesetId, type RuleRecord, type Ruleset } from '../../src/guardianAudit/rules';
 import type { DecodedAction, FoundAction, ScanResult } from '../../src/guardianAudit/scan';
@@ -221,10 +221,23 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(() => parseEvidenceFile(reordered)).toThrow(/not canonical/);
         const extraTop = JSON.parse(text) as Record<string, unknown>;
         extraTop.note = true;
-        expect(() => parseEvidenceFile(JSON.stringify(extraTop) + '\n')).toThrow(/unknown key note/);
+        try {
+            parseEvidenceFile(JSON.stringify(extraTop) + '\n');
+            throw new Error('accepted an extra file key');
+        } catch (e) {
+            expect((e as Error).message).toBe('evidence file: unknown key');
+            expect((e as Error).message).not.toContain('note');
+        }
         const extraMeta = JSON.parse(text) as { runMetadata: Record<string, unknown> };
         extraMeta.runMetadata.endpoint = 'https://rpc.example';
-        expect(() => parseEvidenceFile(JSON.stringify(extraMeta) + '\n')).toThrow(/runMetadata: unknown key endpoint/);
+        try {
+            parseEvidenceFile(JSON.stringify(extraMeta) + '\n');
+            throw new Error('accepted an extra runMetadata key');
+        } catch (e) {
+            expect((e as Error).message).toBe('runMetadata: unknown key');
+            expect((e as Error).message).not.toContain('endpoint');
+            expect((e as Error).message).not.toContain('http');
+        }
         const lying = JSON.parse(text) as { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata };
         lying.digest = flipByte(lying.digest);
         const lyingText = serializeEvidenceFile(lying);
@@ -377,9 +390,193 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
     });
 
     it('rejects an oversized evidence file before parsing it', () => {
-        expect(() => evidenceFileSha256(' '.repeat(2_000_001))).toThrow(/too large/);
-        expect(() => parseEvidenceFile(' '.repeat(2_000_001))).toThrow(/too large/);
+        expect(evidenceFileSha256(' '.repeat(2_000_001))).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(() => parseEvidenceFile(' '.repeat(2_000_001))).toThrow(/not JSON/);
+        const wide = 'é'.repeat(Math.floor(MAX_EVIDENCE_FILE_BYTES / 2) + 1);
+        expect(wide.length).toBeLessThanOrEqual(MAX_EVIDENCE_FILE_BYTES);
+        expect(() => evidenceFileSha256(wide)).toThrow(/^evidence file too large$/);
+        const over = 'x'.repeat(MAX_EVIDENCE_FILE_BYTES + 1);
+        expect(() => evidenceFileSha256(over)).toThrow(/^evidence file too large$/);
+        expect(() => parseEvidenceFile(over)).toThrow(/^evidence file too large$/);
         expect(() => evidenceFileSha256(1 as unknown as string)).toThrow(/not a string/);
+        const sample = build();
+        expect(verifyEvidenceFile(over, { bundle: sample.bundle, digest: sample.digest })).toEqual({
+            ok: false,
+            sha256: '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+            reasons: ['evidence file too large'],
+        });
+        expect(verifyEvidenceFile(1 as unknown as string, { bundle: sample.bundle, digest: sample.digest })).toEqual({
+            ok: false,
+            sha256: '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+            reasons: ['evidence file is not a string'],
+        });
         expect(() => build({ generatedAt: 'https://evil.example/when' })).toThrow(/generatedAt must be a string/);
+    });
+
+    it('round-trips a 2000-action bundle above the old character cap', () => {
+        const data = `0x${'ab'.repeat(800)}` as Hex;
+        const actions: FoundAction[] = [];
+        for (let i = 0; i < 2000; i++) {
+            const tx = `0x${i.toString(16).padStart(64, '0')}` as Hex;
+            const item = action({ blockNumber: 4, logIndex: i, txHash: tx, kind: 'owner' });
+            item.log = { ...item.log, data };
+            actions.push(item);
+        }
+        const built = build({ result: complete(actions, []) });
+        const text = serializeEvidenceFile(built);
+        expect(text.length).toBeGreaterThan(2_000_000);
+        expect(text.length).toBeLessThan(MAX_EVIDENCE_FILE_BYTES);
+        const parsed = parseEvidenceFile(text);
+        expect(parsed.bundle.actions).toHaveLength(2000);
+        const check = verifyEvidenceFile(text, { bundle: built.bundle, digest: built.digest });
+        expect(check).toEqual({ ok: true, sha256: evidenceFileSha256(text), reasons: [] });
+    }, 60_000);
+
+    it('serializeEvidenceFile refuses a canonical form over 64 MiB', () => {
+        const built = build({ result: complete([], []) });
+        const blob = 'a'.repeat(1_000_000);
+        const seed = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        const packed = build({ result: complete([seed], []) }).bundle.actions[0]!;
+        const actions = [];
+        for (let i = 0; i < 70; i++) {
+            const copy = structuredClone(packed);
+            copy.logIndex = i;
+            copy.log.logIndex = i;
+            (copy.decoded as { blob?: string }).blob = blob;
+            actions.push(copy);
+        }
+        const bundle = { ...structuredClone(built.bundle), actions, resolvedPrior: [] as typeof actions };
+        expect(() => serializeEvidenceFile({
+            bundle, digest: word('ab'), runMetadata: built.runMetadata,
+        })).toThrow(/^evidence file too large$/);
+    }, 120_000);
+
+    it('normalizes two providers logs to one digest', () => {
+        const base = action({ blockNumber: 10, logIndex: 10, txHash: word('aa'), kind: 'owner' });
+        const left = action({ blockNumber: 10, logIndex: 10, txHash: word('aa'), kind: 'owner' });
+        const right = action({ blockNumber: 10, logIndex: 10, txHash: word('aa'), kind: 'owner' });
+        left.log = {
+            ...base.log,
+            address: getAddress(SP),
+            topics: [word('11').toUpperCase() as Hex],
+            data: '0xAB' as Hex,
+            blockNumber: '0x0a' as Hex,
+            blockHash: word('a1').toUpperCase() as Hex,
+            logIndex: '0x0a' as Hex,
+            removed: false,
+            transactionIndex: '0x3',
+        } as RawLog;
+        right.log = {
+            ...base.log,
+            address: SP,
+            topics: [word('11')],
+            data: '0xab' as Hex,
+            blockNumber: '0xa' as Hex,
+            blockHash: word('a1'),
+            logIndex: '0xa' as Hex,
+            removed: false,
+        };
+        const a = build({ result: complete([left], []) });
+        const b = build({ result: complete([right], []) });
+        expect(a.digest).toBe(b.digest);
+        expect(Object.keys(a.bundle.actions[0]!.log).sort()).toEqual([
+            'address', 'blockHash', 'blockNumber', 'data', 'logIndex', 'topics', 'transactionHash',
+        ]);
+        expect(a.bundle.actions[0]!.log.blockNumber).toBe(10);
+        expect(a.bundle.actions[0]!.log.logIndex).toBe(10);
+        expect(a.bundle.actions[0]!.log.data).toBe('0xab');
+        expect(a.bundle.actions[0]!.log.address).toBe(SP);
+        expect(a.bundle.actions[0]!.log).not.toHaveProperty('removed');
+    });
+
+    it('orders equal positions by blockHash then txHash', () => {
+        const laterHash = action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), blockHash: word('a2'), kind: 'owner' });
+        const earlierHash = action({ blockNumber: 5, logIndex: 1, txHash: word('ff'), blockHash: word('a1'), kind: 'owner' });
+        const byHash = build({ result: complete([laterHash, earlierHash], []) });
+        expect(byHash.bundle.actions.map((item) => item.blockHash)).toEqual([word('a1'), word('a2')]);
+        const aa = action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), blockHash: word('b2'), kind: 'owner' });
+        const cc = action({ blockNumber: 5, logIndex: 1, txHash: word('cc'), blockHash: word('b2'), kind: 'owner' });
+        const byTx = build({ result: complete([cc, aa], []) });
+        expect(byTx.bundle.actions.map((item) => item.txHash)).toEqual([word('aa'), word('cc')]);
+    });
+
+    it('rejects a forged bundle whose digest was recomputed', () => {
+        const published = build();
+        const fileFor = (bundle: EvidenceBundle): string => `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle,
+            digest: canonicalDigest(bundle),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        const extra = structuredClone(published.bundle) as EvidenceBundle & { note?: boolean };
+        extra.note = true;
+        expect(() => parseEvidenceFile(fileFor(extra))).toThrow(/^evidence bundle is invalid$/);
+        const junk = structuredClone(published.bundle) as EvidenceBundle & { ruleset: unknown };
+        junk.ruleset = 'junk';
+        expect(() => parseEvidenceFile(fileFor(junk))).toThrow(/^evidence bundle is invalid$/);
+        const bogus = structuredClone(published.bundle);
+        (bogus.actions[0] as { bogus?: boolean }).bogus = true;
+        expect(() => parseEvidenceFile(fileFor(bogus))).toThrow(/^evidence action is invalid$/);
+        const badHash = structuredClone(published.bundle);
+        badHash.actions[0]!.txHash = `0x${'g'.repeat(64)}` as Hex;
+        expect(() => parseEvidenceFile(fileFor(badHash))).toThrow(/^evidence hash is invalid$/);
+        const unsorted = structuredClone(published.bundle);
+        unsorted.actions.reverse();
+        expect(() => parseEvidenceFile(fileFor(unsorted))).toThrow(/^evidence actions are unsorted$/);
+        const verdict = structuredClone(published.bundle);
+        (verdict.actions[0]!.verdict as { extra?: boolean }).extra = true;
+        expect(() => parseEvidenceFile(fileFor(verdict))).toThrow(/^evidence action is invalid$/);
+        const upper = serializeEvidenceFile(published).replace(word('cc'), word('cc').toUpperCase());
+        expect(() => parseEvidenceFile(upper)).toThrow(/^evidence hash is invalid$/);
+        const fractional = JSON.parse(serializeEvidenceFile(published)) as { bundle: { chainId: number } };
+        fractional.bundle.chainId = 1.5;
+        const check = verifyEvidenceFile(`${JSON.stringify(fractional)}\n`, {
+            bundle: published.bundle, digest: published.digest,
+        });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toEqual(['evidence file rejected']);
+        expect(check.reasons.join(' ')).not.toContain('safe integer');
+    });
+
+    it('stops a shared-reference dag on one node budget', () => {
+        const leaf = Array.from({ length: 4096 }, () => 1);
+        const refs = Array.from({ length: 4096 }, () => leaf);
+        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        found.decoded = { kind: 'owner', refs };
+        const started = Date.now();
+        expect(() => build({ result: complete([found], []) })).toThrow(/^evidence value too large$/);
+        expect(Date.now() - started).toBeLessThan(2_000);
+    });
+
+    it('copies an own __proto__ key without polluting Object.prototype', () => {
+        const decoded: Record<string, unknown> = { kind: 'owner' };
+        Object.defineProperty(decoded, '__proto__', { value: { polluted: true }, enumerable: true, configurable: true });
+        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', decoded: decoded as DecodedAction });
+        const built = build({ result: complete([found], []) });
+        const stored = built.bundle.actions[0]!.decoded as Record<string, unknown>;
+        expect(Object.getPrototypeOf(stored)).toBe(null);
+        expect(Object.hasOwn(stored, '__proto__')).toBe(true);
+        expect(Object.getOwnPropertyDescriptor(stored, '__proto__')?.value).toEqual({ polluted: true });
+        expect((Object.prototype as { polluted?: boolean }).polluted).toBeUndefined();
+        expect(canonicalJson(stored)).toBe('{"__proto__":{"polluted":true},"kind":"owner"}');
+    });
+
+    it('evaluates the stored record, not a later read of the original', () => {
+        let reads = 0;
+        const record: Record<string, unknown> = {};
+        Object.defineProperty(record, 'route', { enumerable: true, get: () => 'owner' });
+        Object.defineProperty(record, 'event', {
+            enumerable: true,
+            get: () => {
+                reads += 1;
+                return reads === 1 ? 'GuardianSet' : 'NotAnEvent';
+            },
+        });
+        const built = build({
+            result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []),
+            classify: () => record as RuleRecord,
+        });
+        expect(built.bundle.actions[0]!.verdict.rule).toBe('ownerRoute.events.GuardianSet');
+        expect(reads).toBe(1);
     });
 });

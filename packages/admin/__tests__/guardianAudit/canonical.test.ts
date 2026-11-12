@@ -64,4 +64,30 @@ describe('guardian-audit canonical json (unit, not acceptance)', () => {
         const wide = new Array<number>(1_000_000).fill(1);
         expect(() => canonicalJson(wide)).toThrow(/node budget/);
     });
+
+    it('collides a bigint with its decimal string and not with a JSON number', () => {
+        expect(canonicalJson(123n)).toBe(canonicalJson('123'));
+        expect(canonicalJson(123n)).not.toBe(canonicalJson(123));
+        expect(canonicalJson(1n)).toBe('"1"');
+        expect(canonicalJson(1)).toBe('1');
+    });
+
+    it('reads each property value once', () => {
+        let n = 0;
+        const obj = {};
+        Object.defineProperty(obj, 'a', { enumerable: true, get() { n += 1; return 1; } });
+        expect(canonicalJson(obj)).toBe('{"a":1}');
+        expect(n).toBe(1);
+    });
+
+    it('canonicalises a null-prototype object and an own __proto__ key', () => {
+        const obj = Object.create(null) as Record<string, number>;
+        obj.b = 1;
+        obj.a = 2;
+        expect(canonicalJson(obj)).toBe('{"a":2,"b":1}');
+        const proto = Object.create(null) as Record<string, unknown>;
+        Object.defineProperty(proto, '__proto__', { value: { p: 1 }, enumerable: true });
+        expect(canonicalJson(proto)).toBe('{"__proto__":{"p":1}}');
+        expect((Object.prototype as { p?: number }).p).toBeUndefined();
+    });
 });

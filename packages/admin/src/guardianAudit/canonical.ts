@@ -3,13 +3,19 @@ import { keccak256, stringToBytes, type Hex } from 'viem';
 /**
  * Byte-stable JSON for evidence digests.
  * Object keys sort by UTF-16 code unit. `undefined` object properties are omitted.
- * An `undefined` array element is an error. A bigint is a JSON string of its base-10 digits
- * so a uint256 is not rounded into a JSON number. A string is lower-cased only when the whole
- * value matches `^0x[0-9a-fA-F]*$`.
+ * An `undefined` array element is an error.
+ *
+ * Representation (honest reruns must agree on these):
+ * - A string value matching `^0x[0-9a-fA-F]*$` is lower-cased. Keys are not. `0X` is not hex.
+ * - A bigint is a JSON string of its base-10 digits, so a uint256 is not rounded into a JSON number.
+ *   `123n` and the string `'123'` therefore collide by design. A JSON number and a bigint do not:
+ *   `canonicalJson(1)` is `1` and `canonicalJson(1n)` is `"1"`.
+ * - Each own property value is snapshotted once. A getter runs once per visit.
  *
  * Iterative. One node for the root, one for each array element, one for each own property
  * (the same accounting as `measure` in attribute.ts). More than {@link MAX_NODES} throws.
  * Depth shares that cap. A cycle throws; a shared acyclic reference is written twice.
+ * A null-prototype object is plain JSON, same as `Object.prototype`.
  */
 const MAX_NODES = 1_000_000;
 /** One string or object key. Checked before the hex regex and before `JSON.stringify`. */
@@ -18,9 +24,10 @@ const MAX_STRING = 1_048_576;
 const MAX_BIGINT_BITS = 1024;
 const HEX_RE = /^0x[0-9a-fA-F]*$/;
 
+type Entry = { key: string; value: unknown };
 type Frame =
     | { op: 'array'; items: unknown[]; index: number; depth: number; ref: object; comma: boolean }
-    | { op: 'object'; value: Record<string, unknown>; keys: string[]; index: number; depth: number; comma: boolean };
+    | { op: 'object'; entries: Entry[]; index: number; depth: number; ref: object; comma: boolean };
 
 function plainObject(value: object): boolean {
     const proto = Object.getPrototypeOf(value);
@@ -31,6 +38,15 @@ function cmpKey(a: string, b: string): number {
     if (a < b) return -1;
     if (a > b) return 1;
     return 0;
+}
+
+/** One read. Bracket access would treat an own `__proto__` key as the prototype. */
+function readOwn(value: object, key: string): unknown {
+    const desc = Object.getOwnPropertyDescriptor(value, key);
+    if (desc === undefined) return undefined;
+    if ('value' in desc) return desc.value;
+    if (typeof desc.get === 'function') return desc.get.call(value);
+    return undefined;
 }
 
 export function canonicalJson(value: unknown): string {
@@ -44,16 +60,16 @@ export function canonicalJson(value: unknown): string {
         if (nodes > MAX_NODES) throw new Error('canonical: node budget exceeded');
     };
 
-    const ownKeys = (value: object): string[] => {
-        const keys: string[] = [];
-        for (const key in value) {
-            if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+    const ownEntries = (obj: object): Entry[] => {
+        const entries: Entry[] = [];
+        for (const key in obj) {
+            if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
             charge(1);
             if (key.length > MAX_STRING) throw new Error('canonical: string too long');
-            keys.push(key);
+            entries.push({ key, value: readOwn(obj, key) });
         }
-        keys.sort(cmpKey);
-        return keys;
+        entries.sort((a, b) => cmpKey(a.key, b.key));
+        return entries;
     };
 
     const write = (v: unknown, depth: number): void => {
@@ -98,10 +114,10 @@ export function canonicalJson(value: unknown): string {
             return;
         }
         if (!plainObject(v)) throw new Error('canonical: unsupported value');
-        const keys = ownKeys(v);
+        const entries = ownEntries(v);
         seen.add(v);
         parts.push('{');
-        stack.push({ op: 'object', value: v as Record<string, unknown>, keys, index: 0, depth, comma: false });
+        stack.push({ op: 'object', entries, index: 0, depth, ref: v, comma: false });
     };
 
     charge(1);
@@ -114,7 +130,8 @@ export function canonicalJson(value: unknown): string {
                 seen.delete(frame.ref);
                 continue;
             }
-            const el = frame.items[frame.index++];
+            const el = readOwn(frame.items, String(frame.index));
+            frame.index += 1;
             if (el === undefined) throw new Error('canonical: undefined array element');
             if (frame.comma) parts.push(',');
             frame.comma = true;
@@ -122,18 +139,19 @@ export function canonicalJson(value: unknown): string {
             write(el, frame.depth + 1);
             continue;
         }
-        while (frame.index < frame.keys.length && frame.value[frame.keys[frame.index]!] === undefined) frame.index++;
-        if (frame.index >= frame.keys.length) {
+        while (frame.index < frame.entries.length && frame.entries[frame.index]!.value === undefined) frame.index += 1;
+        if (frame.index >= frame.entries.length) {
             parts.push('}');
-            seen.delete(frame.value);
+            seen.delete(frame.ref);
             continue;
         }
-        const key = frame.keys[frame.index++]!;
+        const entry = frame.entries[frame.index]!;
+        frame.index += 1;
         if (frame.comma) parts.push(',');
         frame.comma = true;
-        parts.push(JSON.stringify(key), ':');
+        parts.push(JSON.stringify(entry.key), ':');
         stack.push(frame);
-        write(frame.value[key], frame.depth + 1);
+        write(entry.value, frame.depth + 1);
     }
     return parts.join('');
 }

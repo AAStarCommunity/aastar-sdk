@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { getAddress, keccak256, stringToBytes, toFunctionSelector, type Hex } from 'viem';
+import { getAddress, keccak256, sha256, stringToBytes, toFunctionSelector, type Hex } from 'viem';
 import {
-    DEFAULT_RULESET, ambiguousEvents, evaluate, rulesetId, validateRuleset, wantsPrice, type RuleRecord,
+    DEFAULT_RULESET, RULESET_SCHEMA, ambiguousEvents, evaluate, matchGeneric, rulesetId, validateRuleset, wantsPrice,
+    type RuleRecord,
 } from '../../src/guardianAudit/rules';
 
 const SP = '0x2222222222222222222222222222222222222222';
@@ -153,7 +155,13 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
 
     it('rejects the DVT schema id, unknown keys, and a missing section', () => {
         expect(() => validateRuleset({ ...DEFAULT_RULESET, schema: 'dvt.guardian-watcher.ruleset.v1' })).toThrow(/unknown schema/);
-        expect(() => validateRuleset({ ...DEFAULT_RULESET, extra: true })).toThrow(/unknown key extra/);
+        try {
+            validateRuleset({ ...DEFAULT_RULESET, extra: true });
+            throw new Error('accepted an extra key');
+        } catch (e) {
+            expect((e as Error).message).toBe('ruleset: unknown key');
+            expect((e as Error).message).not.toContain('extra');
+        }
         const missing = JSON.parse(JSON.stringify(DEFAULT_RULESET)) as typeof DEFAULT_RULESET;
         delete (missing.bls as { QUEUE?: unknown }).QUEUE;
         expect(() => validateRuleset(missing)).toThrow(/bls\.QUEUE missing/);
@@ -162,41 +170,50 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(() => validateRuleset(noPublic)).toThrow(/publicRoute missing/);
         const badFn = JSON.parse(JSON.stringify(DEFAULT_RULESET));
         delete badFn.publicRoute.functions['updatePrice()'].reason;
-        expect(() => validateRuleset(badFn)).toThrow(/publicRoute\.functions\.updatePrice\(\)\.reason invalid/);
+        expect(() => validateRuleset(badFn)).toThrow(/^ruleset: publicRoute\.functions\.reason invalid$/);
         const noAlso = JSON.parse(JSON.stringify(DEFAULT_RULESET));
         delete noAlso.publicRoute.functions['updatePrice()'].alsoReason;
-        expect(() => validateRuleset(noAlso)).toThrow(/alsoReason missing/);
+        expect(() => validateRuleset(noAlso)).toThrow(/^ruleset: alsoReason missing$/);
     });
 
     it('rejects unknown keys in every section and requires the source object', () => {
         const clone = () => JSON.parse(JSON.stringify(DEFAULT_RULESET));
+        const reject = (body: () => void, message: string, absent: string[]): void => {
+            try {
+                body();
+                throw new Error(`accepted ${message}`);
+            } catch (e) {
+                expect((e as Error).message).toBe(message);
+                for (const word of absent) expect((e as Error).message).not.toContain(word);
+            }
+        };
         const slash = clone();
         slash.bls.SLASH.note = true;
-        expect(() => validateRuleset(slash)).toThrow(/bls\.SLASH\.note/);
+        reject(() => validateRuleset(slash), 'ruleset: unknown key in bls.SLASH', ['note']);
         const expected = clone();
         expected.bls.GENERIC.expected[0].note = true;
-        expect(() => validateRuleset(expected)).toThrow(/bls\.GENERIC\.expected\.note/);
+        reject(() => validateRuleset(expected), 'ruleset: unknown key in bls.GENERIC.expected', ['note']);
         const unexpected = clone();
         unexpected.bls.GENERIC.unexpected.note = true;
-        expect(() => validateRuleset(unexpected)).toThrow(/bls\.GENERIC\.unexpected\.note/);
+        reject(() => validateRuleset(unexpected), 'ruleset: unknown key in bls.GENERIC.unexpected', ['note']);
         const generic = clone();
         generic.bls.GENERIC.note = true;
-        expect(() => validateRuleset(generic)).toThrow(/bls\.GENERIC\.note/);
+        reject(() => validateRuleset(generic), 'ruleset: unknown key in bls.GENERIC', ['note']);
         const event = clone();
         event.ownerRoute.events.PriceUpdated.note = true;
-        expect(() => validateRuleset(event)).toThrow(/ownerRoute\.events\.PriceUpdated\.note/);
+        reject(() => validateRuleset(event), 'ruleset: unknown key in ownerRoute.events', ['note', 'PriceUpdated']);
         const owner = clone();
         owner.ownerRoute.note = true;
-        expect(() => validateRuleset(owner)).toThrow(/ownerRoute\.note/);
+        reject(() => validateRuleset(owner), 'ruleset: unknown key in ownerRoute', ['note']);
         const fn = clone();
         fn.publicRoute.functions['updatePrice()'].note = true;
-        expect(() => validateRuleset(fn)).toThrow(/publicRoute\.functions\.updatePrice\(\)\.note/);
+        reject(() => validateRuleset(fn), 'ruleset: unknown key in publicRoute.functions', ['note', 'updatePrice']);
         const pub = clone();
         pub.publicRoute.note = true;
-        expect(() => validateRuleset(pub)).toThrow(/publicRoute\.note/);
+        reject(() => validateRuleset(pub), 'ruleset: unknown key in publicRoute', ['note']);
         const unattributed = clone();
         unattributed.publicRoute.unattributed.note = true;
-        expect(() => validateRuleset(unattributed)).toThrow(/publicRoute\.unattributed\.note/);
+        reject(() => validateRuleset(unattributed), 'ruleset: unknown key in publicRoute.unattributed', ['note']);
         const noSource = clone();
         delete noSource.source;
         expect(() => validateRuleset(noSource)).toThrow(/source missing/);
@@ -208,11 +225,21 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(() => validateRuleset(shortSource)).toThrow(/source\.sha256 missing/);
         const extraSource = clone();
         extraSource.source.extra = 'no';
-        expect(() => validateRuleset(extraSource)).toThrow(/source\.extra/);
+        reject(() => validateRuleset(extraSource), 'ruleset: unknown key in source', ['extra']);
     });
 
-    it('pins the default ruleset digest', () => {
-        expect(validateRuleset(DEFAULT_RULESET)).toBe(DEFAULT_RULESET);
+    it('pins the default ruleset digest as a regression detector', () => {
+        const validated = validateRuleset(DEFAULT_RULESET);
+        expect(validated).not.toBe(DEFAULT_RULESET);
+        expect(validated).toEqual(DEFAULT_RULESET);
+        expect(Object.getPrototypeOf(validated)).toBe(null);
+        expect(Object.getPrototypeOf(validated.bls)).toBe(null);
+        expect(Object.isFrozen(validated)).toBe(true);
+        expect(Object.isFrozen(validated.source)).toBe(true);
+        expect(Object.isFrozen(DEFAULT_RULESET)).toBe(true);
+        expect(Object.isFrozen(DEFAULT_RULESET.source)).toBe(true);
+        expect(Object.isFrozen(DEFAULT_RULESET.bls)).toBe(true);
+        expect(() => { DEFAULT_RULESET.comment = 'mutated'; }).toThrow();
         expect(DEFAULT_RULESET.schema).toBe('aastar.guardian-audit.ruleset.v1');
         expect(DEFAULT_RULESET.source).toEqual({
             repo: 'AAStarCommunity/YetAnotherAA-Validator',
@@ -278,5 +305,51 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: toFunctionSelector('updatePrice()'),
             callEvents: Array.from({ length: 65 }, () => 'PriceUpdated'),
         })).toThrow(/callEvents too large/);
+    });
+
+    it('treats prototype names as unlisted or unknown', () => {
+        for (const name of ['constructor', 'toString', '__proto__']) {
+            const owner = evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: name });
+            expect(owner.flagged).toBe(true);
+            expect(owner.rule).toBe('ownerRoute.unlisted');
+            const kind = evaluate(DEFAULT_RULESET, roles, { route: 'bls', kind: name });
+            expect(kind.flagged).toBe(true);
+            expect(kind.rule).toBe('bls.unknown');
+            const custom = structuredClone(DEFAULT_RULESET);
+            custom.bls.GENERIC.expected[0]!.target = name;
+            expect(matchGeneric(custom, roles, SP, priceCall)).toBeNull();
+            expect(evaluate(custom, roles, bls('GENERIC', { target: SP, callData: priceCall })).rule).toBe('bls.GENERIC.unexpected');
+        }
+    });
+
+    it('requires an event on the unattributed route and rejects a duplicate selector', () => {
+        expect(() => evaluate(DEFAULT_RULESET, roles, { route: 'unattributed' })).toThrow(/^record: event is not a short string$/);
+        try {
+            evaluate(DEFAULT_RULESET, roles, { route: 'unattributed' });
+        } catch (e) {
+            expect((e as Error).message).not.toContain('undefined');
+        }
+        const dup = structuredClone(DEFAULT_RULESET);
+        dup.publicRoute.functions['updatePrice( )'] = structuredClone(dup.publicRoute.functions['updatePrice()']!);
+        expect(() => validateRuleset(dup)).toThrow(/^ruleset: duplicate selector$/);
+        const missingRole = structuredClone(DEFAULT_RULESET);
+        missingRole.bls.GENERIC.expected[0]!.target = 'noSuchRole';
+        expect(matchGeneric(missingRole, roles, SP, priceCall)).toBeNull();
+        expect(evaluate(missingRole, roles, bls('GENERIC', { target: SP, callData: priceCall })).rule).toBe('bls.GENERIC.unexpected');
+    });
+
+    it('matches the pinned DVT ruleset bytes, with only schema replaced and source added', () => {
+        const raw = readFileSync(new URL('./fixtures/dvt-ruleset-8a7cda74.json', import.meta.url));
+        expect(sha256(new Uint8Array(raw))).toBe(DEFAULT_RULESET.source.sha256);
+        const parsed = JSON.parse(raw.toString('utf8')) as { schema: string; source?: unknown };
+        parsed.schema = RULESET_SCHEMA;
+        parsed.source = {
+            repo: DEFAULT_RULESET.source.repo,
+            tag: DEFAULT_RULESET.source.tag,
+            commit: DEFAULT_RULESET.source.commit,
+            path: DEFAULT_RULESET.source.path,
+            sha256: DEFAULT_RULESET.source.sha256,
+        };
+        expect(parsed).toEqual(DEFAULT_RULESET);
     });
 });
