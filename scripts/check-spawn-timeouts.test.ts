@@ -3,6 +3,7 @@
  * the CLI calls, so a detector that matches nothing cannot go green on an empty violation list.
  */
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -470,10 +471,14 @@ describe('the scripts CI actually runs', () => {
     it('the tree is clean', () => {
         const report = checkRepo(repoRoot);
         expect(report.violations).toEqual([]);
-        // Pin the count. A detector that stops seeing spawning files drops it toward 0 and the
-        // verdict above would still be green if this were only toBeGreaterThan(0) on a bug
-        // that also stopped emitting violations. 18 is the spawning set under the file-level rule.
-        expect(report.checked).toBe(18);
+        // A detector that stops seeing spawning files would also stop emitting violations, so the
+        // count needs a floor derived independently of the analyzer, not a frozen number: every
+        // in-scope file that names child_process / execa in its own text is spawning by the rule
+        // (the analyzer adds files that reach it transitively on top of these).
+        const direct = listScriptTestFiles(repoRoot).files.filter((f) =>
+            /['"](?:node:)?child_process['"]|['"]execa['"]/.test(readFileSync(resolve(repoRoot, f), 'utf8')));
+        expect(direct.length).toBeGreaterThan(0);
+        expect(report.checked).toBeGreaterThanOrEqual(direct.length);
         expect(verdict(report).ok).toBe(true);
     });
 });
