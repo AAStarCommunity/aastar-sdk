@@ -9,3 +9,7 @@ export { memoryStore, unresolvedId } from './store.js';
 
 export type { Attributor, DecodedAction, FoundAction, ScanRangeOptions, ScanResult, WatchedContract } from './scan.js';
 export { FinalityConflictError, scanRange } from './scan.js';
+
+export type { AttributeTxResult, CallHop, LogAttribution } from './attribute.js';
+export { attributeTx } from './attribute.js';
+export { traceAttributor } from './traceAttributor.js';
