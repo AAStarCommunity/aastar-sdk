@@ -1,0 +1,11 @@
+export type { BlockHeader, LogFilter, RawLog, RawRpc } from './rpc.js';
+export { header, pagedLogs, rawGetLogs } from './rpc.js';
+
+export type { BloomLog } from './bloom.js';
+export { bloomOf, mayContain, mayContainAddress, mayHaveLog } from './bloom.js';
+
+export type { Checkpoint, GuardianAuditStore, UnresolvedAction } from './store.js';
+export { memoryStore, unresolvedId } from './store.js';
+
+export type { Attributor, DecodedAction, FoundAction, ScanRangeOptions, ScanResult, WatchedContract } from './scan.js';
+export { FinalityConflictError, scanRange } from './scan.js';
