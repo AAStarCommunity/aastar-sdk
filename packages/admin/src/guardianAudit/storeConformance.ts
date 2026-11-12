@@ -11,6 +11,7 @@ import {
     type Checkpoint,
     type Commit,
     type GuardianAuditStore,
+    type StoreSnapshot,
     type UnresolvedAction,
 } from './store.js';
 
@@ -56,12 +57,14 @@ function unresolved(index: number, reason = 'no attributor'): UnresolvedAction {
     };
 }
 
-function attributed(index: number): AttributedAction {
+function attributed(index: number, attribution: unknown = { who: 'guardian', trace: { id: 't' } }): AttributedAction {
     return {
         id: unresolvedId(WORD, index),
         blockNumber: 1, blockHash: WORD, txHash: WORD, logIndex: index,
-        address: ADDR, kind: 'guardian-added', decoded: { kind: 'guardian-added' },
-        log: log(index), attribution: { who: 'guardian' },
+        address: ADDR, kind: 'guardian-added',
+        decoded: { kind: 'guardian-added', detail: { slot: index } },
+        log: log(index),
+        attribution,
     };
 }
 
@@ -76,6 +79,7 @@ function commit(over: Partial<Commit> & Pick<Commit, 'expectedRevision'>): Commi
     };
 }
 
+/** Key order does not matter. Array order does. */
 function same(a: unknown, b: unknown): boolean {
     if (Object.is(a, b)) return true;
     if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
@@ -91,11 +95,22 @@ function same(a: unknown, b: unknown): boolean {
     return aKeys.every((key) => same(left[key], right[key]));
 }
 
+function frozen<T>(value: T): T {
+    return structuredClone(value);
+}
+
+function readsMatch(store: GuardianAuditStore, snap: StoreSnapshot): Promise<boolean> {
+    return Promise.all([store.getCheckpoint(), store.listUnresolved(), store.listAttributed()]).then(([checkpoint, unresolvedRows, attributedRows]) => (
+        same(checkpoint, snap.checkpoint) && same(unresolvedRows, snap.unresolved) && same(attributedRows, snap.attributed)
+    ));
+}
+
 async function empty(got: StoreUnderTest): Promise<void> {
-    const snap = await got.store.snapshot();
+    const snap = frozen(await got.store.snapshot());
     if (!Number.isSafeInteger(snap.revision) || snap.revision < 0) throw new Fault('revision is not a safe integer');
     if (snap.checkpoint !== null || snap.scope !== null) throw new Fault('fresh store is not empty');
     if (snap.unresolved.length !== 0 || snap.attributed.length !== 0) throw new Fault('fresh store has rows');
+    if (!await readsMatch(got.store, snap)) throw new Fault('public reads disagree with the snapshot');
 }
 
 async function applies(got: StoreUnderTest): Promise<void> {
@@ -104,29 +119,29 @@ async function applies(got: StoreUnderTest): Promise<void> {
     const first = await store.snapshot();
     await store.commit(commit({ expectedRevision: first.revision, unresolved: [seeded] }));
     const before = await store.snapshot();
-    const kept = unresolved(2);
-    const accepted = attributed(1);
     const tip: Checkpoint = { block: 4, hash: WORD };
     await store.commit(commit({
         expectedRevision: before.revision,
         next: tip,
-        attributed: [accepted],
-        unresolved: [kept],
+        attributed: [attributed(1)],
+        unresolved: [unresolved(2)],
         resolve: [seeded.id],
     }));
-    const after = await store.snapshot();
+    const after = frozen(await store.snapshot());
     if (after.revision !== before.revision + 1) throw new Fault('revision did not advance by one');
     if (!same(after.checkpoint, tip)) throw new Fault('checkpoint was not committed');
     if (after.scope?.toLowerCase() !== SCOPE) throw new Fault('scope was not recorded');
-    if (after.unresolved.length !== 1 || after.unresolved[0]?.logIndex !== 2) throw new Fault('resolve or unresolved was partial');
-    if (after.attributed.length !== 1 || after.attributed[0]?.logIndex !== 1) throw new Fault('attributed row missing');
+    if (!same(after.unresolved, [unresolved(2)]) || !same(after.attributed, [attributed(1)])) {
+        throw new Fault('persisted rows differ');
+    }
 }
 
+/** A stale token must fail for a moved checkpoint and for a caught-up `next: null` commit. */
 async function stale(got: StoreUnderTest): Promise<void> {
     const store = got.store;
     const before = await store.snapshot();
     await store.commit(commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD } }));
-    const mid = await store.snapshot();
+    const mid = frozen(await store.snapshot());
     let threw = false;
     try {
         await store.commit(commit({
@@ -140,53 +155,105 @@ async function stale(got: StoreUnderTest): Promise<void> {
     }
     if (!threw) throw new Fault('stale revision was accepted');
     if (!same(await store.snapshot(), mid)) throw new Fault('stale revision changed the store');
+    threw = false;
+    try {
+        await store.commit(commit({
+            expectedRevision: before.revision,
+            next: null,
+            attributed: [attributed(4)],
+        }));
+    } catch (error) {
+        threw = true;
+        if (!(error instanceof StoreConflictError)) throw new Fault('caught-up stale revision threw the wrong error');
+    }
+    if (!threw) throw new Fault('caught-up stale revision was accepted');
+    if (!same(frozen(await store.snapshot()), mid)) throw new Fault('caught-up stale revision changed the store');
 }
 
+async function oneRace(
+    store: GuardianAuditStore,
+    revision: number,
+    left: Commit,
+    right: Commit,
+    label: string,
+): Promise<'left' | 'right'> {
+    const [a, b] = await Promise.allSettled([store.commit(left), store.commit(right)]);
+    const won = [a, b].filter((item) => item.status === 'fulfilled');
+    const lost = [a, b].filter((item) => item.status === 'rejected');
+    if (won.length !== 1 || lost.length !== 1) throw new Fault(`${label} commits did not split one and one`);
+    const reason = (lost[0] as PromiseRejectedResult).reason;
+    if (!(reason instanceof StoreConflictError)) throw new Fault('the losing commit was not a revision conflict');
+    const snap = await store.snapshot();
+    if (snap.revision !== revision + 1) throw new Fault('winner did not advance the revision once');
+    return a.status === 'fulfilled' ? 'left' : 'right';
+}
+
+/** One winner when the checkpoint moves, and one winner when both commits leave it alone. */
 async function concurrent(got: StoreUnderTest): Promise<void> {
     const store = got.store;
     const before = await store.snapshot();
-    const left = unresolved(1);
-    const right = unresolved(2);
-    const [a, b] = await Promise.allSettled([
-        store.commit(commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD }, unresolved: [left] })),
-        store.commit(commit({ expectedRevision: before.revision, next: { block: 2, hash: WORD }, unresolved: [right] })),
-    ]);
-    const won = [a, b].filter((item) => item.status === 'fulfilled');
-    const lost = [a, b].filter((item) => item.status === 'rejected');
-    if (won.length !== 1 || lost.length !== 1) throw new Fault('concurrent commits did not split one and one');
-    const reason = (lost[0] as PromiseRejectedResult).reason;
-    if (!(reason instanceof StoreConflictError)) throw new Fault('the losing commit was not a revision conflict');
-    const winner = a.status === 'fulfilled' ? { block: 1, index: 1 } : { block: 2, index: 2 };
-    const snap = await store.snapshot();
-    if (snap.revision !== before.revision + 1) throw new Fault('winner did not advance the revision once');
-    if (snap.checkpoint?.block !== winner.block) throw new Fault('snapshot is not the winner');
-    if (snap.unresolved.length !== 1 || snap.unresolved[0]?.logIndex !== winner.index) throw new Fault('snapshot is not the winner');
+    const moved = await oneRace(
+        store,
+        before.revision,
+        commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD }, unresolved: [unresolved(1)] }),
+        commit({ expectedRevision: before.revision, next: { block: 2, hash: WORD }, unresolved: [unresolved(2)] }),
+        'moving',
+    );
+    const movedSnap = frozen(await store.snapshot());
+    const movedRow = unresolved(moved === 'left' ? 1 : 2);
+    if (!same(movedSnap.checkpoint, { block: moved === 'left' ? 1 : 2, hash: WORD })) throw new Fault('snapshot is not the winner');
+    if (!same(movedSnap.unresolved, [movedRow])) throw new Fault('snapshot is not the winner');
+    const caught = await oneRace(
+        store,
+        movedSnap.revision,
+        commit({ expectedRevision: movedSnap.revision, next: null, attributed: [attributed(3)] }),
+        commit({ expectedRevision: movedSnap.revision, next: null, attributed: [attributed(4)] }),
+        'caught-up',
+    );
+    const after = frozen(await store.snapshot());
+    if (!same(after.checkpoint, movedSnap.checkpoint)) throw new Fault('caught-up commit moved the checkpoint');
+    if (!same(after.unresolved, movedSnap.unresolved)) throw new Fault('caught-up loser changed unresolved rows');
+    if (!same(after.attributed, [attributed(caught === 'left' ? 3 : 4)])) throw new Fault('caught-up snapshot is not the winner');
 }
 
 async function crash(got: StoreUnderTest): Promise<void> {
     if (!got.crashNextCommit) throw new Skip('no fault hook');
-    const before = await got.store.snapshot();
+    const store = got.store;
+    const seeded = await store.snapshot();
+    const tip: Checkpoint = { block: 3, hash: WORD };
+    await store.commit(commit({
+        expectedRevision: seeded.revision,
+        next: tip,
+        unresolved: [unresolved(0, 'kept')],
+        attributed: [attributed(1)],
+    }));
+    const before = frozen(await store.snapshot());
+    if (!same(before.unresolved, [unresolved(0, 'kept')]) || !same(before.attributed, [attributed(1)])) {
+        throw new Fault('seed did not persist');
+    }
+    if (!same(before.checkpoint, tip)) throw new Fault('seed did not persist');
     got.crashNextCommit();
     let threw = false;
     try {
-        await got.store.commit(commit({
+        await store.commit(commit({
             expectedRevision: before.revision,
-            next: { block: 9, hash: WORD },
+            next: null,
+            resolve: [unresolved(0, 'kept').id],
+            attributed: [attributed(0, { who: 'replacement', trace: { id: 'new' } })],
             unresolved: [unresolved(5)],
-            attributed: [attributed(6)],
         }));
     } catch {
         threw = true;
     }
     if (!threw) throw new Fault('armed crash did not reject the commit');
-    if (!same(await got.store.snapshot(), before)) throw new Fault('crash left a partial write');
+    if (!same(frozen(await store.snapshot()), before)) throw new Fault('crash left a partial write');
 }
 
 async function scope(got: StoreUnderTest): Promise<void> {
     const store = got.store;
     const before = await store.snapshot();
     await store.commit(commit({ expectedRevision: before.revision, next: { block: 1, hash: WORD } }));
-    const recorded = await store.snapshot();
+    const recorded = frozen(await store.snapshot());
     if (recorded.scope?.toLowerCase() !== SCOPE) throw new Fault('first commit did not record scope');
     let threw = false;
     try {
@@ -200,45 +267,80 @@ async function scope(got: StoreUnderTest): Promise<void> {
         threw = true;
         if (!(error instanceof ScopeChangedError)) throw new Fault('different scope threw the wrong error');
     }
-    const after = await store.snapshot();
-    if (!same(after, recorded)) throw new Fault('different scope changed the store');
-    if (!threw && after.scope?.toLowerCase() !== SCOPE) throw new Fault('different scope was stored');
+    if (!threw) throw new Fault('different scope was accepted');
+    if (!same(frozen(await store.snapshot()), recorded)) throw new Fault('different scope changed the store');
 }
 
 async function idempotent(got: StoreUnderTest): Promise<void> {
     const store = got.store;
-    const open = unresolved(0);
-    const done = attributed(1);
-    let revision = (await store.snapshot()).revision;
-    await store.commit(commit({ expectedRevision: revision, unresolved: [open], attributed: [done] }));
-    revision = (await store.snapshot()).revision;
+    const start = (await store.snapshot()).revision;
     await store.commit(commit({
-        expectedRevision: revision,
-        unresolved: [{ ...open, reason: 'again' }],
-        attributed: [{ ...done, attribution: { who: 'again' } }],
+        expectedRevision: start,
+        unresolved: [unresolved(0)],
+        attributed: [attributed(1)],
     }));
-    const snap = await store.snapshot();
-    if (snap.unresolved.length !== 1 || snap.attributed.length !== 1) throw new Fault('ids were duplicated');
+    const mid = await store.snapshot();
+    if (mid.revision !== start + 1) throw new Fault('revision did not advance by one');
+    await store.commit(commit({
+        expectedRevision: mid.revision,
+        unresolved: [unresolved(0, 'again')],
+        attributed: [attributed(1, { who: 'again', trace: { id: 'new' } })],
+    }));
+    const snap = frozen(await store.snapshot());
+    if (snap.revision !== mid.revision + 1) throw new Fault('replacement did not advance the revision');
+    const expectedAttribution = attributed(1, { who: 'again', trace: { id: 'new' } });
+    if (!same(snap.unresolved, [unresolved(0, 'again')]) || !same(snap.attributed, [expectedAttribution])) {
+        throw new Fault('replacement payload was dropped');
+    }
 }
 
 async function isolation(got: StoreUnderTest): Promise<void> {
     const store = got.store;
     const open = unresolved(0);
+    const done = attributed(1);
     const revision = (await store.snapshot()).revision;
-    await store.commit(commit({ expectedRevision: revision, next: { block: 2, hash: WORD }, unresolved: [open] }));
+    const tip: Checkpoint = { block: 2, hash: WORD };
+    await store.commit(commit({
+        expectedRevision: revision,
+        next: tip,
+        unresolved: [open],
+        attributed: [done],
+    }));
     open.reason = 'hacked';
     open.log.topics.push(WORD);
-    const view = await store.snapshot();
-    const row = view.unresolved[0];
-    if (!row || !view.checkpoint) throw new Fault('committed row missing');
-    row.reason = 'hacked';
-    row.log.topics.push(WORD);
-    view.checkpoint.block = 99;
-    view.unresolved.push(unresolved(3));
-    const again = await store.snapshot();
-    if (again.unresolved.length !== 1 || again.unresolved[0]?.reason !== 'no attributor') throw new Fault('stored row changed');
-    if (again.unresolved[0]?.log.topics.length !== 1) throw new Fault('stored log changed');
-    if (again.checkpoint?.block !== 2) throw new Fault('stored checkpoint changed');
+    const decoded = done.decoded as unknown as { detail: { slot: number } };
+    decoded.detail.slot = 99;
+    (done.attribution as { trace: { id: string } }).trace.id = 'hacked';
+    const snap = frozen(await store.snapshot());
+    if (!same(snap.unresolved, [unresolved(0)]) || !same(snap.attributed, [attributed(1)])) {
+        throw new Fault('committed input changed stored rows');
+    }
+    if (!same(snap.checkpoint, tip)) throw new Fault('stored checkpoint changed');
+    const [checkpoint, unresolvedRows, attributedRows] = await Promise.all([
+        store.getCheckpoint(),
+        store.listUnresolved(),
+        store.listAttributed(),
+    ]);
+    if (!same(checkpoint, snap.checkpoint) || !same(unresolvedRows, snap.unresolved) || !same(attributedRows, snap.attributed)) {
+        throw new Fault('public reads disagree with the snapshot');
+    }
+    if (checkpoint) checkpoint.block = 99;
+    const unresolvedRow = unresolvedRows[0];
+    const attributedRow = attributedRows[0];
+    if (!unresolvedRow || !attributedRow) throw new Fault('public reads disagree with the snapshot');
+    unresolvedRow.reason = 'hacked';
+    unresolvedRow.log.topics.push(WORD);
+    (attributedRow.decoded as unknown as { detail: { slot: number } }).detail.slot = 77;
+    (attributedRow.attribution as { trace: { id: string } }).trace.id = 'leaked';
+    const again = frozen(await store.snapshot());
+    const [checkpointAgain, unresolvedAgain, attributedAgain] = await Promise.all([
+        store.getCheckpoint(),
+        store.listUnresolved(),
+        store.listAttributed(),
+    ]);
+    if (!same(again, snap) || !same(checkpointAgain, tip) || !same(unresolvedAgain, snap.unresolved) || !same(attributedAgain, snap.attributed)) {
+        throw new Fault('stored rows changed after mutation');
+    }
 }
 
 const CHECKS: [string, (got: StoreUnderTest) => Promise<void>][] = [
