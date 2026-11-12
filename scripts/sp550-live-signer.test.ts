@@ -226,3 +226,44 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         expect(r.output).toMatch(/refused: --fork-setup impersonates accounts: mode fork only/);
     }, 60_000);
 });
+
+describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)', () => {
+    const run = (cfgOver: Record<string, unknown>, flags: string[]) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
+        const cfg = path.join(dir, 'run.json');
+        fs.writeFileSync(cfg, JSON.stringify({
+            network: 'sepolia', mode: 'live', rpcUrls: ['https://rpc.invalid'], bundlerUrl: 'https://bundler.invalid',
+            operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20), userKey: { keystore: path.join(dir, 'absent.json') }, ...cfgOver,
+        }));
+        try {
+            const out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg, ...flags], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+            return { status: 0, output: out };
+        } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
+    };
+    const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'http://127.0.0.1:9', userKey: { anvilIndex: 3 } };
+    it('live mode without --live-go is refused', () => {
+        const r = run({}, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode live sends real ops: pass --live-go sepolia/);
+    }, 60_000);
+    it('live mode with --live-go naming another network is refused', () => {
+        const r = run({}, ['--live-go', 'op-sepolia']);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode live sends real ops: pass --live-go sepolia/);
+    }, 60_000);
+    it('fork mode with a non-loopback RPC is refused', () => {
+        const r = run({ ...fork, rpcUrls: ['https://rpc.invalid'] }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode fork: every RPC and the bundler must be loopback/);
+    }, 60_000);
+    it('fork mode with a non-loopback bundler is refused', () => {
+        const r = run({ ...fork, bundlerUrl: 'https://bundler.invalid' }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode fork: every RPC and the bundler must be loopback/);
+    }, 60_000);
+    it('fork mode with a key other than { anvilIndex } is refused', () => {
+        const r = run({ ...fork, userKey: { keystore: 'k.json' } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode fork: userKey must be \{ anvilIndex \}/);
+    }, 60_000);
+});

@@ -158,6 +158,7 @@ pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia 2
 - 签名器**只**从加密 keystore 加载，密码由作者在隐藏提示符下输入；不在 TTY 下运行会被拒绝（`scripts/sp550-live-signer.ts`）。
 - 实链没有 `--fork-setup`。账户已部署、有 ENDUSER、xPNTs 有余额、renewalMode = SP_K，这几项要事先准备好，而且准备它们的交易同样要作者给 go。`--preflight` 会逐项核对，不发任何 op。
 - 逐 op 硬检查与分叉完全相同；退出码 0 才算通过。
+- **重试的 op 已经发出去了。** 「一个 op 只签一次」这项检查在提交之后才做：SDK 遇到 fee/PVG 重试时会重新签名，第二个签好的 op 在本次运行被判失败之前就已经到了 bundler。在实链上，这是一笔真实的 op，可能被打包并扣费。所以出现这类失败时，先到链上查清这个 sender 的 nonce 和 `UserOperationEvent`，再决定是否重跑。
 - **gas 只来自实链。** 每个 op 的 gas 都取自实链 bundler 的 `eth_estimateUserOperationGas`，SDK 和本地 forge 都不估算（DSR：stable forge 1.7.1 不懂 Amsterdam 的 gas 规则）。`live-e2e.log` 的 `GAS SOURCE` 行会记下 bundler 的主机名和它报告的 client 版本，不记完整 URL。
 
 ### 3. 日志

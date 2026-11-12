@@ -280,7 +280,7 @@ async function main() {
         return { flags, postOpGasLimit };
     };
     const bundlerCalls: BundlerCall[] = [];
-    tapBundler(cfg.bundlerUrl, () => signs, bundlerCalls);
+    const untapBundler = tapBundler(cfg.bundlerUrl, () => signs, bundlerCalls);
     const DUMMY_SIGNATURE = PaymasterClient.dummySignature();
     let lastSent = 0;
     const spaced = async () => {
@@ -325,34 +325,39 @@ async function main() {
     };
     const noop = encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
 
-    // ---- 4. S1 ----
-    const s1 = await op('S1 PaymasterClient.submitGaslessUserOperation', noop);
-    if (cfg.requireFreshAccount === true) {
-        // op() already failed the run unless UserOperationEvent.success; these make "first op of a new account" checkable.
-        if (s1.before.used !== 0n || s1.before.locked !== 0n || s1.before.renewUsed !== 0n) {
-            fail(`requireFreshAccount: S1 was not the account's first sponsored op (allowance used ${s1.before.used}, lockedOf ${s1.before.locked}, autoRenewUsed ${s1.before.renewUsed})`);
+    try {
+        // ---- 4. S1 ----
+        const s1 = await op('S1 PaymasterClient.submitGaslessUserOperation', noop);
+        if (cfg.requireFreshAccount === true) {
+            // op() already failed the run unless UserOperationEvent.success; these make "first op of a new account" checkable.
+            if (s1.before.used !== 0n || s1.before.locked !== 0n || s1.before.renewUsed !== 0n) {
+                fail(`requireFreshAccount: S1 was not the account's first sponsored op (allowance used ${s1.before.used}, lockedOf ${s1.before.locked}, autoRenewUsed ${s1.before.renewUsed})`);
+            }
+            result(`A7 FRESH ACCOUNT: account ${account} created in this run (no code before it), S1 is its first sponsored op (allowance used 0, lockedOf 0, autoRenewUsed 0) and succeeded · tx ${s1.txHash}`);
         }
-        result(`A7 FRESH ACCOUNT: account ${account} created in this run (no code before it), S1 is its first sponsored op (allowance used 0, lockedOf 0, autoRenewUsed 0) and succeeded · tx ${s1.txHash}`);
-    }
 
-    // ---- 5. S3b inline renewal ----
-    let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
-    if (!renewal) {
-        const floor = BigInt(await tok('SP_CAP_FLOOR'));
-        if ((await state()).cap > floor) {
-            await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
-                abi: SimpleAccountABI, functionName: 'execute',
-                args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
-            }));
+        // ---- 5. S3b inline renewal ----
+        let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
+        if (!renewal) {
+            const floor = BigInt(await tok('SP_CAP_FLOOR'));
+            if ((await state()).cap > floor) {
+                await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
+                    abi: SimpleAccountABI, functionName: 'execute',
+                    args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
+                }));
+            }
+            for (let i = 1; i <= maxOps && !renewal; i++) {
+                const r = await op(`S3b spend ${i}/${maxOps}`, noop);
+                if (r.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = r;
+            }
         }
-        for (let i = 1; i <= maxOps && !renewal; i++) {
-            const r = await op(`S3b spend ${i}/${maxOps}`, noop);
-            if (r.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = r;
-        }
+        if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
+        // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
+        result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
+    } finally {
+        // fail() exits the process; this covers the normal path and a thrown error.
+        untapBundler();
     }
-    if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
-    // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
-    result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
     console.log('\nPASS');
 }
 
