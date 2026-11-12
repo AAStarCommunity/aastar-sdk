@@ -82,7 +82,7 @@ async function main() {
 
     // ── 0. preconditions ────────────────────────────────────────────────────────────────────
     console.log('[0] committee preconditions');
-    const st = await getCommitteeState(pc as any, COMMITTEE);
+    const st = await getCommitteeState(pc, COMMITTEE);
     console.log(`     router=${ROUTER}  committeeValidator=${COMMITTEE}`);
     check(st.active, 'committeeActive()', `${st.active}`);
     check(st.quorumUsable, 'requiredQuorum() is a real value, not the sentinel', `${st.requiredQuorum}`);
@@ -91,23 +91,23 @@ async function main() {
 
     // ── 0b. account: deploy + enroll (idempotent) ───────────────────────────────────────────
     const config = buildInitConfig({ guardians: [], dailyLimit: 10n ** 18n, approvedAlgIds: [ALG_BLS] });
-    const account = (await airAccountFactoryActions(FACTORY)(pc as any).getAddress({ owner: owner.address, salt: SALT, config })) as Address;
+    const account = (await airAccountFactoryActions(FACTORY)(pc).getAddress({ owner: owner.address, salt: SALT, config })) as Address;
     console.log(`\n[0b] account = ${account}`);
     if (!(await pc.getCode({ address: account }))?.replace('0x', '')) {
-        const tx = await airAccountFactoryActions(FACTORY)(wc as any).createAccount({ owner: owner.address, salt: SALT, config, account: owner });
+        const tx = await airAccountFactoryActions(FACTORY)(wc).createAccount({ owner: owner.address, salt: SALT, config, account: owner });
         const r = await pc.waitForTransactionReceipt({ hash: tx });
         check(r.status === 'success', 'createAccount (v0.31.0 factory)', tx);
     } else console.log('     already deployed (idempotent rerun)');
 
-    if (!(await isAccountEnrolled(pc as any, COMMITTEE, account))) {
-        const tx = await wc.writeContract({ address: account, abi: AAStarAirAccountV7ABI as any, functionName: 'enrollInCommitteeValidator' });
+    if (!(await isAccountEnrolled(pc, COMMITTEE, account))) {
+        const tx = await wc.writeContract({ address: account, abi: AAStarAirAccountV7ABI, functionName: 'enrollInCommitteeValidator' });
         const r = await pc.waitForTransactionReceipt({ hash: tx });
         check(r.status === 'success', 'enrollInCommitteeValidator() (one-time, owner tx)', tx);
     } else console.log('     already enrolled');
-    check(await isAccountEnrolled(pc as any, COMMITTEE, account), 'enrolledAccount(account) == true');
+    check(await isAccountEnrolled(pc, COMMITTEE, account), 'enrolledAccount(account) == true');
 
     // ── 1. UserOp + hash ────────────────────────────────────────────────────────────────────
-    const nonce = (await entryPointActions(ENTRY_POINT)(pc as any).getNonce({ sender: account, key: 0n })) as bigint;
+    const nonce = (await entryPointActions(ENTRY_POINT)(pc).getNonce({ sender: account, key: 0n })) as bigint;
     const userOp = {
         sender: account, nonce, initCode: '0x' as Hex, callData: '0x' as Hex,
         accountGasLimits: concat([numberToHex(300_000n, { size: 16 }), numberToHex(300_000n, { size: 16 })]) as Hex,
@@ -115,7 +115,7 @@ async function main() {
         gasFees: concat([numberToHex(2_000_000_000n, { size: 16 }), numberToHex(3_000_000_000n, { size: 16 })]) as Hex,
         paymasterAndData: '0x' as Hex, signature: '0x' as Hex,
     };
-    const userOpHash = (await pc.readContract({ address: ENTRY_POINT, abi: EntryPointABI as any, functionName: 'getUserOpHash', args: [userOp] })) as Hex;
+    const userOpHash = (await pc.readContract({ address: ENTRY_POINT, abi: EntryPointABI, functionName: 'getUserOpHash', args: [userOp] })) as Hex;
     console.log(`\n[1] userOpHash = ${userOpHash}`);
 
     // ── 2. node co-signatures ───────────────────────────────────────────────────────────────
@@ -130,12 +130,12 @@ async function main() {
         try {
             const res = await fetch(`${url}/signature/sign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userOp: rpcOp, ownerAuth }) });
             const raw = await res.text();
-            const b = (() => { try { return JSON.parse(raw); } catch { return {} as any; } })();
+            const b = (() => { try { return JSON.parse(raw); } catch { return {}; } })();
             if (!res.ok || !b.nodeId || !b.signature) { console.warn(`     ! ${url} -> ${res.status} ${raw.slice(0, 120)}`); continue; }
             const id = norm(b.nodeId), sig = norm(b.signature);
             if (id !== norm(pinned)) { console.warn(`     ! ${url} reported ${id}, config pins ${norm(pinned)}`); continue; }
             if (seenSig.has(sig)) { console.warn(`     ! ${url} byte-identical partial — one key behind two ids`); continue; }
-            const reg = (await pc.readContract({ address: COMMITTEE, abi: AAStarCommitteeValidatorABI as any, functionName: 'isRegistered', args: [id] })) as boolean;
+            const reg = (await pc.readContract({ address: COMMITTEE, abi: AAStarCommitteeValidatorABI, functionName: 'isRegistered', args: [id] })) as boolean;
             if (!reg) { console.warn(`     ! ${url} nodeId not registered on the COMMITTEE validator`); continue; }
             seenSig.add(sig); partials.push({ nodeId: id, signature: sig });
             console.log(`     ${url}  ${id.slice(0, 18)}…  registered`);
@@ -145,17 +145,17 @@ async function main() {
     if (BigInt(partials.length) < st.requiredQuorum) throw new Error('under quorum — aborting');
 
     // ── 3. slot + Merkle proofs ─────────────────────────────────────────────────────────────
-    const { signers, atBlock } = await fetchCommitteeSigners(pc as any, COMMITTEE, partials.map((p) => p.nodeId));
+    const { signers, atBlock } = await fetchCommitteeSigners(pc, COMMITTEE, partials.map((p) => p.nodeId));
     // Was `(last set mutation ${lastSetMutationBlock})` — printing a field this function no longer
     // returns, i.e. the literal string "undefined" in the evidence output. Reporting the roots says
     // something checkable instead.
-    const fresh = await readFrozenRootAgreement(pc as any, COMMITTEE);
+    const fresh = await readFrozenRootAgreement(pc, COMMITTEE);
     console.log(`\n[3] proofs fetched at block ${atBlock}; epoch ${fresh.epoch}, running root ` +
         `${fresh.runningRoot.slice(0, 12)}… vs frozen(e-1) ${fresh.frozenRoot.slice(0, 12)}… → ` +
         `${fresh.agrees ? 'proofs would verify' : 'STALE, proofs would NOT verify'}`);
     check(signers.every((s) => s.merkleProof.length === st.treeDepth), 'every proof has TREE_DEPTH siblings');
 
-    await assertCommitteeSubmittable(pc as any, COMMITTEE, account, signers.length);
+    await assertCommitteeSubmittable(pc, COMMITTEE, account, signers.length);
     check(true, 'assertCommitteeSubmittable passed (active + enrolled + quorum)');
 
     // ── 4. assemble ─────────────────────────────────────────────────────────────────────────
@@ -173,11 +173,11 @@ async function main() {
     const validate = async (s: Hex) => {
         try {
             const { result } = await pc.simulateContract({
-                address: account, abi: AAStarAirAccountV7ABI as any, functionName: 'validateUserOp',
+                address: account, abi: AAStarAirAccountV7ABI, functionName: 'validateUserOp',
                 args: [{ ...userOp, signature: s }, userOpHash, 0n], account: ENTRY_POINT,
             });
             return result as bigint;
-        } catch (e: any) { return `revert: ${(e?.shortMessage || e?.message || '').slice(0, 60)}` as any; }
+        } catch (e: any) { return `revert: ${(e?.shortMessage || e?.message || '').slice(0, 60)}`; }
     };
     const res = await validate(sig);
     console.log(`\n[5] validateUserOp(committee) = ${res}`);

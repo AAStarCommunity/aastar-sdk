@@ -207,7 +207,7 @@ async function main() {
     steps.push({ step: 'removeGuardianWithMixedSigs(index=0, signerIdxs=[1,2], 2 ECDSA sigs)', actor: `owner-relayed JASON ${owner.address}`, tx: removeTx });
 
     // Post-tx asserts: count 3→2, set shifted left, GuardianRemoved fired, nonce 0→1.
-    const removeEvents = parseEventLogs({ abi: AirAccountExtensionABI as any, logs: removeRcpt.logs, eventName: 'GuardianRemoved' });
+    const removeEvents = parseEventLogs({ abi: AirAccountExtensionABI, logs: removeRcpt.logs, eventName: 'GuardianRemoved' });
     const removed = removeEvents.find((e: any) => Number(e.args.index) === removeIndex);
     if (!removed) throw new Error('GuardianRemoved event for index 0 not found in receipt');
     if (getAddress((removed as any).args.guardian) !== getAddress(guardianToRemove)) {
@@ -229,7 +229,7 @@ async function main() {
     // DECODE-VERIFY (post-tx): tx.to == account; calldata decodes to exactly what we sent.
     const removeTxData = await publicClient.getTransaction({ hash: removeTx });
     if (getAddress(removeTxData.to as Address) !== getAddress(account)) throw new Error(`removeTx.to ${removeTxData.to} != account ${account}`);
-    const removeDecoded = decodeFunctionData({ abi: AirAccountExtensionABI as any, data: removeTxData.input });
+    const removeDecoded = decodeFunctionData({ abi: AirAccountExtensionABI, data: removeTxData.input });
     if (removeDecoded.functionName !== 'removeGuardianWithMixedSigs') throw new Error(`decoded fn ${removeDecoded.functionName} != removeGuardianWithMixedSigs`);
     const [dIdx, dSignerIdxs, dSigs] = removeDecoded.args as [number, readonly number[], readonly Hex[]];
     if (Number(dIdx) !== removeIndex) throw new Error(`decoded index ${dIdx} != ${removeIndex}`);
@@ -273,7 +273,7 @@ async function main() {
     console.log(`   ✅ addGuardianWithMixedSigs (2-of-2 ECDSA consensus, on-chain ecrecover PASSED): ${addTx}`);
     steps.push({ step: 'addGuardianWithMixedSigs(newGuardian, signerIdxs=[0,1], 2 ECDSA sigs)', actor: `owner-relayed JASON ${owner.address}`, tx: addTx });
 
-    const addEvents = parseEventLogs({ abi: AirAccountExtensionABI as any, logs: addRcpt.logs, eventName: 'GuardianAdded' });
+    const addEvents = parseEventLogs({ abi: AirAccountExtensionABI, logs: addRcpt.logs, eventName: 'GuardianAdded' });
     const added = addEvents.find((e: any) => getAddress(e.args.guardian) === getAddress(newGuardian.address));
     if (!added) throw new Error('GuardianAdded event for newGuardian not found in receipt');
     if (Number((added as any).args.index) !== 2) throw new Error(`GuardianAdded.index ${(added as any).args.index} != 2 (appended slot)`);
@@ -287,7 +287,7 @@ async function main() {
 
     const addTxData = await publicClient.getTransaction({ hash: addTx });
     if (getAddress(addTxData.to as Address) !== getAddress(account)) throw new Error(`addTx.to ${addTxData.to} != account ${account}`);
-    const addDecoded = decodeFunctionData({ abi: AirAccountExtensionABI as any, data: addTxData.input });
+    const addDecoded = decodeFunctionData({ abi: AirAccountExtensionABI, data: addTxData.input });
     if (addDecoded.functionName !== 'addGuardianWithMixedSigs') throw new Error(`decoded fn ${addDecoded.functionName} != addGuardianWithMixedSigs`);
     console.log('   🔍 DECODE-VERIFY (post-tx): tx.to == account, calldata decodes to addGuardianWithMixedSigs ✅');
 
@@ -329,7 +329,7 @@ async function main() {
     console.log(`   ✅ modifyTierLimitsWithMixedGuardians (2-of-2 ECDSA consensus, on-chain ecrecover PASSED): ${tierTx}`);
     steps.push({ step: 'modifyTierLimitsWithMixedGuardians(tier1,tier2,deadline, signerIdxs=[0,1], 2 ECDSA sigs)', actor: `owner-relayed JASON ${owner.address}`, tx: tierTx });
 
-    const tierEvents = parseEventLogs({ abi: AirAccountExtensionABI as any, logs: tierRcpt.logs, eventName: 'TierLimitsSet' });
+    const tierEvents = parseEventLogs({ abi: AirAccountExtensionABI, logs: tierRcpt.logs, eventName: 'TierLimitsSet' });
     const tierSet = tierEvents[0] as any;
     if (!tierSet) throw new Error('TierLimitsSet event not found in receipt');
     if (BigInt(tierSet.args.tier1) !== tier1 || BigInt(tierSet.args.tier2) !== tier2) {
@@ -344,7 +344,7 @@ async function main() {
 
     const tierTxData = await publicClient.getTransaction({ hash: tierTx });
     if (getAddress(tierTxData.to as Address) !== getAddress(account)) throw new Error(`tierTx.to ${tierTxData.to} != account ${account}`);
-    const tierDecoded = decodeFunctionData({ abi: AirAccountExtensionABI as any, data: tierTxData.input });
+    const tierDecoded = decodeFunctionData({ abi: AirAccountExtensionABI, data: tierTxData.input });
     if (tierDecoded.functionName !== 'modifyTierLimitsWithMixedGuardians') throw new Error(`decoded fn ${tierDecoded.functionName} != modifyTierLimitsWithMixedGuardians`);
     console.log('   🔍 DECODE-VERIFY (post-tx): tx.to == account, calldata decodes to modifyTierLimitsWithMixedGuardians ✅');
 
