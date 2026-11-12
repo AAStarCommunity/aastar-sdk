@@ -150,7 +150,8 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
         if (book[k] !== undefined && absent.has(k)) problems.push(`addresses.${k}: pinned and declared absent`);
     }
     for (const k of absent) {
-        if (SP550_ADDRESS_OWNER[k as AddressBookKey] !== 'sp-optional') problems.push(`absent: ${k} is not an sp-optional key`);
+        // disclosureRegistry is a top-level pin, not a book key (sp550PinProblems checks it).
+        if (k !== 'disclosureRegistry' && SP550_ADDRESS_OWNER[k as AddressBookKey] !== 'sp-optional') problems.push(`absent: ${k} is not an sp-optional key`);
     }
     problems.push(...sp550BookOwnershipProblems(pins));
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
@@ -184,6 +185,12 @@ export function sp550BookOwnershipProblems(pins: Sp550CutoverPins | undefined): 
 }
 
 /**
+ * A pin set that passed validation: every field is set except the two that may be legitimately empty,
+ * `absent` and `disclosureRegistry` (declared absent when 5.5.0 deploys none).
+ */
+export type Sp550ValidatedPins<T extends Sp550CutoverPins> = Required<Omit<T, 'absent' | 'disclosureRegistry'>> & Pick<T, 'absent' | 'disclosureRegistry'>;
+
+/**
  * Upgrade pins for a chain, or throw naming every problem — the full upgrade rule set (fields,
  * codehashes, book ownership, aliases) and any release hold. Consumers use this, not the field-level
  * requireSp550CutoverPins.
@@ -192,7 +199,7 @@ export function requireSp550UpgradePins(
     chainId: number,
     pins = SP550_CUTOVER_PINS[chainId],
     opts: { allowRc?: boolean } = {},
-): Required<Sp550CutoverPins> {
+): Sp550ValidatedPins<Sp550CutoverPins> {
     const problems = sp550UpgradePinProblems(pins, opts);
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) problems.push(`release hold: ${hold}`);
@@ -202,7 +209,7 @@ export function requireSp550UpgradePins(
                 `They are read back from the chain after the upgrade; until then the SDK must not use 5.5.0 addresses.`,
         );
     }
-    return pins as Required<Sp550CutoverPins>;
+    return pins as Sp550ValidatedPins<Sp550CutoverPins>;
 }
 
 /** Pins for a chain, or throw naming every problem: the full upgrade rule set (same as requireSp550UpgradePins). */
@@ -222,7 +229,7 @@ export function requireSp550FreshDeployPins(
     chainId: number,
     pins = SP550_FRESH_DEPLOY_PINS[chainId],
     opts: { allowRc?: boolean } = {},
-): Required<Sp550FreshDeployPins> {
+): Sp550ValidatedPins<Sp550FreshDeployPins> {
     const problems = sp550FreshPinProblems(pins, opts);
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) problems.push(`release hold: ${hold}`);
@@ -232,7 +239,7 @@ export function requireSp550FreshDeployPins(
                 `They are read back from two RPCs after the deploy; until then the SDK must not use 5.5.0 addresses there.`,
         );
     }
-    return pins as Required<Sp550FreshDeployPins>;
+    return pins as Sp550ValidatedPins<Sp550FreshDeployPins>;
 }
 
 /**

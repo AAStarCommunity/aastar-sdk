@@ -14,6 +14,9 @@ import { isIP } from 'net';
 
 export type PinFillMode = 'upgrade' | 'fresh';
 
+/** The only absences an upgrade manifest declares, each through its top-level "n/a:none". */
+const UPGRADE_DECLARED_ABSENT: readonly string[] = ['timelockController', 'disclosureRegistry'];
+
 /** Every key a pins JSON may carry; anything else is refused rather than silently dropped. */
 const UPGRADE_KEYS = [
     'tag', 'spVersion', 'superPaymaster', 'spImpl', 'spImplCodehash', 'spAdminExtension', 'superPaymasterLens', 'lensVersion',
@@ -70,8 +73,24 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         } else throw new Error(`manifest pins: timelockController ${JSON.stringify(t)} is neither an address nor "n/a:none"`);
         obj = rest;
     }
-    if (mode === 'upgrade' && obj.absent !== undefined && JSON.stringify(obj.absent) !== JSON.stringify(['timelockController'])) {
-        throw new Error(`manifest pins: an upgrade declares absence only for the timelock (via timelockController: "n/a:none"), not ${JSON.stringify(obj.absent)}`);
+    // The DisclosureRegistry is declared the same way (author 2026-11-12: 5.5.0 deploys none): an address,
+    // with codehashes.disclosureRegistry, or "n/a:none", recorded in `absent`. Required: silence is refused.
+    {
+        if (((obj.absent ?? []) as string[]).includes('disclosureRegistry')) throw new Error('manifest pins: absent lists disclosureRegistry — its absence is declared only by the top-level disclosureRegistry: "n/a:none"');
+        if (!('disclosureRegistry' in obj)) throw new Error('manifest pins: disclosureRegistry is not declared (an address with codehashes.disclosureRegistry, or "n/a:none")');
+        const d = obj.disclosureRegistry;
+        if (d === 'n/a:none') {
+            const { disclosureRegistry: _d, ...rest } = obj;
+            if (((rest.codehashes ?? {}) as Record<string, unknown>).disclosureRegistry !== undefined) throw new Error('manifest pins: disclosureRegistry is "n/a:none" but codehashes.disclosureRegistry is given');
+            rest.absent = [...new Set([...((rest.absent ?? []) as string[]), 'disclosureRegistry'])];
+            obj = rest;
+        } else if (!(typeof d === 'string' && isAddress(d))) throw new Error(`manifest pins: disclosureRegistry ${JSON.stringify(d)} is neither an address nor "n/a:none"`);
+    }
+    if (mode === 'upgrade' && obj.absent !== undefined) {
+        const a = obj.absent as unknown[];
+        if (!Array.isArray(a) || a.some((k) => !UPGRADE_DECLARED_ABSENT.includes(k as string))) {
+            throw new Error(`manifest pins: an upgrade declares absence only for the timelock and the DisclosureRegistry (via "n/a:none"), not ${JSON.stringify(obj.absent)}`);
+        }
     }
     const unknown = Object.keys(obj).filter((k) => !allowed.includes(k) && !(mode === 'upgrade' && k === 'absent'));
     if (unknown.length) throw new Error(`manifest pins: unknown key(s) for a ${mode} deploy: ${unknown.join(', ')} (refusing rather than dropping them)`);
@@ -105,7 +124,8 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
         if (typeof a !== 'string' || !isAddress(a)) throw new Error(`book switch ${k}: ${JSON.stringify(a)} is not an address`);
     }
     // A fresh deploy's `absent` keys leave the book (null = remove the entry).
-    const removed: Record<string, null> = mode === 'fresh' ? Object.fromEntries((pins.absent ?? []).map((k) => [k, null])) : {};
+    // disclosureRegistry is not a book entry: its absence leaves the book as it is.
+    const removed: Record<string, null> = mode === 'fresh' ? Object.fromEntries((pins.absent ?? []).filter((k) => k !== 'disclosureRegistry').map((k) => [k, null])) : {};
     for (const k of Object.keys(removed)) if (k in out) throw new Error(`book switch ${k}: both pinned and declared absent`);
     return { ...out, ...removed };
 }

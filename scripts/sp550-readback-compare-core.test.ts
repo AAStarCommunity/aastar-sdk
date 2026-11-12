@@ -487,3 +487,23 @@ describe('a contract the pins declare absent must not be in the read-back (Grok)
         expect(await run(rb, { pins: { ...PINS, absent: ['timelockController'] } })).toEqual(expect.arrayContaining([expect.stringMatching(/not an "n\/a:" not-deployed placeholder/)]));
     });
 });
+
+describe('no DisclosureRegistry (author 2026-11-12): every field of its entry is "n/a:not deployed"', () => {
+    const { disclosureRegistry: _d, ...rest } = PINS;
+    const { disclosureRegistry: _h, ...codehashes } = PINS.codehashes;
+    const pins = { ...rest, codehashes, absent: ['disclosureRegistry'] };
+    const FIELDS = ['address', 'version', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash', 'owner', 'pendingOwner', 'guardian', 'roles', 'WRITER', 'AGGREGATOR'];
+    const placeholder = () => Object.fromEntries(FIELDS.map((f) => [f, 'n/a:not deployed']));
+    it('pins declaring it absent and a placeholder entry (WRITER / AGGREGATOR included) pass', async () => {
+        const rb = good(); rb.contracts.disclosureRegistry = placeholder();
+        expect(await run(rb, { pins })).toEqual([]);
+    });
+    it.each([
+        ['WRITER as another n/a reason', { WRITER: 'n/a:none' }],
+        ['a real AGGREGATOR', { AGGREGATOR: A(0x23) }],
+        ['a real address', { address: A(0x1c), codehash: H(0x1c) }],
+    ])('%s is refused', async (_n, patch) => {
+        const rb = good(); rb.contracts.disclosureRegistry = { ...placeholder(), ...patch };
+        expect(await run(rb, { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/contracts\.disclosureRegistry: not an "n\/a:" not-deployed placeholder/)]));
+    });
+});

@@ -487,3 +487,43 @@ describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns
     it.each(['::ffff:127.0.0.1', '[::ffff:127.0.0.53]', '::ffff:0.0.0.0'])('%s', (h) => expect(isLoopbackHost(h)).toBe(true));
     it.each(['::ffff:128.0.0.1', '::ffff:10.0.0.1'])('%s is not', (h) => expect(isLoopbackHost(h)).toBe(false));
 });
+
+describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0 deploys none)', () => {
+    const { disclosureRegistry: _d, ...noReg } = MANIFEST;
+    const { disclosureRegistry: _h, ...noRegHashes } = MANIFEST.codehashes;
+    const NONE = { ...noReg, disclosureRegistry: 'n/a:none', codehashes: noRegHashes };
+    it.each(['upgrade', 'fresh'] as const)('"n/a:none" is recorded in absent and passes validation (%s)', (mode) => {
+        const p = parseManifestPins(NONE, mode);
+        expect(p.disclosureRegistry).toBeUndefined();
+        expect(p.absent).toEqual(['timelockController', 'disclosureRegistry']);
+        expect(sp550PinProblems(p as any, { allowRc: true })).toEqual([]);
+    });
+    it('a fresh book switch does not treat it as a book entry', () => {
+        const p = parseManifestPins({ ...NONE, addresses: { registry: A(0x21) }, absent: ['pnts'] }, 'fresh');
+        const sw = bookSwitch('fresh', p);
+        expect('disclosureRegistry' in sw).toBe(false);
+        expect(sw.pnts).toBeNull();
+    });
+    it('an upgrade book switch is unchanged by it', () => {
+        expect(bookSwitch('upgrade', parseManifestPins(NONE, 'upgrade'))).toEqual(bookSwitch('upgrade', parseManifestPins(MANIFEST, 'upgrade')));
+    });
+    it.each([
+        ['silence', noReg, /disclosureRegistry is not declared/],
+        ['"n/a:none" with a codehash', { ...NONE, codehashes: MANIFEST.codehashes }, /"n\/a:none" but codehashes\.disclosureRegistry is given/],
+        ['another n/a spelling', { ...NONE, disclosureRegistry: 'n/a:not deployed' }, /neither an address nor "n\/a:none"/],
+        ['a raw absent entry', { ...MANIFEST, absent: ['disclosureRegistry'] }, /absent lists disclosureRegistry/],
+        ['an upgrade declaring a book key absent', { ...NONE, absent: ['pnts'] }, /declares absence only for the timelock and the DisclosureRegistry/],
+    ])('%s is refused', (_n, raw, msg) => {
+        expect(() => parseManifestPins(raw, 'upgrade')).toThrow(msg);
+    });
+    it('the live read-back must carry the not-deployed placeholder for it', () => {
+        const p = parseManifestPins(NONE, 'upgrade');
+        const placeholder = { address: 'n/a:not deployed', codehash: 'n/a:not deployed', version: 'n/a:not deployed', WRITER: 'n/a:not deployed', AGGREGATOR: 'n/a:not deployed' };
+        const timelock = { address: 'n/a:not deployed', codehash: 'n/a:not deployed' };
+        const base = { contracts: { timelockController: timelock, disclosureRegistry: placeholder } };
+        const only = (rb: any) => spLiveReadbackProblems(rb, p as any, 11155111, []).filter((x) => x.includes('disclosureRegistry'));
+        expect(only(base)).toEqual([]);
+        expect(only({ contracts: { ...base.contracts, disclosureRegistry: { ...placeholder, WRITER: 'n/a:none' } } })).toEqual([expect.stringMatching(/contracts\.disclosureRegistry is not an "n\/a:" not-deployed placeholder/)]);
+        expect(only({ contracts: { timelockController: timelock } })).toEqual([expect.stringMatching(/contracts\.disclosureRegistry is not an "n\/a:" not-deployed placeholder/)]);
+    });
+});
