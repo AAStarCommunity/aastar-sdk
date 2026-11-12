@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { type Address, size } from 'viem';
 import { getSuperPaymasterMiddleware } from '../src/SuperPaymaster/index';
-import { resolveSuperPaymasterSponsorship, SuperPaymasterInflightGuard, atLeast } from '../src/SuperPaymaster/v550';
+import { resolveSuperPaymasterSponsorship, SuperPaymasterInflightGuard, atLeast, inflightHoldExpiresAtMs, readSuperPaymasterValidUntilSec, SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS } from '../src/SuperPaymaster/v550';
 
 const SP: Address = '0x2222222222222222222222222222222222222222';
 const OPERATOR: Address = '0x4444444444444444444444444444444444444444';
@@ -49,6 +49,7 @@ describe('resolveSuperPaymasterSponsorship', () => {
 
 describe('SuperPaymasterInflightGuard (spec §3.2 F1: one in-flight op per sender)', () => {
     beforeEach(() => SuperPaymasterInflightGuard.clearAll());
+    afterEach(() => vi.restoreAllMocks());
 
     it('blocks a second op while the recorded nonce is not consumed', () => {
         SuperPaymasterInflightGuard.record(31337, EP, SENDER, 5n, '0xabc');
@@ -59,6 +60,37 @@ describe('SuperPaymasterInflightGuard (spec §3.2 F1: one in-flight op per sende
         expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 6n)).not.toThrow();
         // and the record is gone
         expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 5n)).not.toThrow();
+    });
+    it('an unconfirmed hold expires at stampExpiry; a confirmed record does not', () => {
+        const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+        const release = SuperPaymasterInflightGuard.reserve(31337, EP, SENDER, 5n);
+        SuperPaymasterInflightGuard.stampExpiry(31337, EP, SENDER, 5_000);
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 5n)).toThrow(/one in-flight/);
+        now.mockReturnValue(5_000);
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 5n)).not.toThrow();
+        // The expired reservation is gone, so its release() must not drop a later record.
+        SuperPaymasterInflightGuard.record(31337, EP, SENDER, 5n, '0xabc');
+        release();
+        SuperPaymasterInflightGuard.stampExpiry(31337, EP, SENDER, 1);
+        now.mockReturnValue(1_000 + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS);
+        expect(() => SuperPaymasterInflightGuard.assertNoneInFlight(31337, EP, SENDER, 5n)).toThrow(/\(0xabc\)/);
+    });
+    it('inflightHoldExpiresAtMs uses validUntil when it is a safe unix second, else the default TTL', () => {
+        expect(inflightHoldExpiresAtMs(1_000, 8_600n)).toBe(8_600_000);
+        expect(inflightHoldExpiresAtMs(1_000, 0n)).toBe(1_000 + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS);
+        expect(inflightHoldExpiresAtMs(1_000, undefined)).toBe(1_000 + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS);
+    });
+    it('readSuperPaymasterValidUntilSec is updatedAt + priceStalenessThreshold, and undefined when the read fails', async () => {
+        const client = {
+            readContract: vi.fn(async ({ functionName }: any) => {
+                if (functionName === 'cachedPrice') return { price: 1n, updatedAt: 5_000n, roundId: 1n, decimals: 8 };
+                if (functionName === 'priceStalenessThreshold') return 3_600n;
+                throw new Error(functionName);
+            }),
+        };
+        await expect(readSuperPaymasterValidUntilSec(client, SP)).resolves.toBe(8_600n);
+        client.readContract.mockRejectedValue(new Error('rpc down'));
+        await expect(readSuperPaymasterValidUntilSec(client, SP)).resolves.toBeUndefined();
     });
     it('is keyed per chain / entryPoint / sender (case-insensitive)', () => {
         SuperPaymasterInflightGuard.record(31337, EP, SENDER, 1n);

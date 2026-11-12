@@ -2,7 +2,7 @@ import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, con
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
-import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
+import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, inflightHoldExpiresAtMs, readSuperPaymasterValidUntilSec, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 
 /** Options of PaymasterClient.submitGaslessUserOperation. */
 export type SubmitGaslessOptions = {
@@ -112,7 +112,20 @@ function isExplicitTxRejection(err: unknown, transportType: unknown): boolean {
 }
 
 /** Per-call handle on the SuperPaymaster 5.5.0 in-flight reservation (see submitGaslessUserOperation). */
-type InflightGuardControl = { release?: () => void; inSend?: boolean };
+type InflightGuardControl = {
+    release?: () => void;
+    inSend?: boolean;
+    /** Set on a 5.5.0 reservation. Stamps a clock expiry on that unconfirmed hold. */
+    stampExpiry?: (expiresAtMs: number) => void;
+};
+
+/** viem normalises to 'success' | 'reverted'; a stub or a raw RPC client may still hand back 0 / 1. */
+function receiptReverted(status: unknown): boolean {
+    return status === 'reverted' || status === 0 || status === 0n || status === '0x0' || status === '0x00';
+}
+function receiptSucceeded(status: unknown): boolean {
+    return status === 'success' || status === 1 || status === 1n || status === '0x1' || status === '0x01';
+}
 
 /**
  * PaymasterClient
@@ -272,6 +285,11 @@ export class PaymasterClient {
             superPaymasterFlags?: number;
             /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
             superPaymasterAutoRenew?: boolean;
+            /**
+             * Sponsorship already read for this op. When set, it is not read again — a 5.4.2→5.5.0
+             * upgrade between submit's read and this one would otherwise build two generations.
+             */
+            sponsorship?: SuperPaymasterSponsorshipContext;
         }
     ) {
         // 0. Check cachedPrice (Critical for Paymaster V4)
@@ -337,7 +355,7 @@ export class PaymasterClient {
              // Always carry the operator's token: REQUIRED by 5.5.0, ignored by 5.4.2 (see
              // @aastar/core encodeSuperPaymasterData). Estimating with a 104-byte layout against
              // 5.5.0 would sigFail and produce no estimate at all.
-             const sp = await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
+             const sp = options.sponsorship ?? await resolveSuperPaymasterSponsorship(client, paymasterAddress, options.operator);
              estSp = { ctx: sp, pmVerificationGas: atLeast(300000n, sp.verificationGasFloor), pmPostOpGas: atLeast(300000n, sp.minPostOpGas) };
              paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
                 verificationGasLimit: estSp.pmVerificationGas,
@@ -506,9 +524,11 @@ export class PaymasterClient {
     ): Promise<`0x${string}`> {
         // The 5.5.0 single-in-flight slot is reserved synchronously before the first await that
         // follows the check, so concurrent calls for one sender cannot both pass. An explicit
-        // failure (anything thrown outside the bundler round-trip) releases it; a transport error
-        // DURING eth_sendUserOperation is ambiguous — the bundler may hold the op — so the slot is
-        // kept and the caller must release() it after confirming the op was dropped.
+        // failure (anything thrown outside the bundler round-trip, including a JSON-RPC error)
+        // releases it. Estimation uses a dummy signature, so a lost estimate is not an in-flight
+        // op and releases too. A transport error DURING eth_sendUserOperation (or a handleOps
+        // broadcast whose receipt never arrives) is ambiguous — the bundler or node may hold the
+        // op — so the slot stays, but only until the op's validUntil (or the default TTL).
         const guard: InflightGuardControl = {};
         try {
             return await PaymasterClient.submitGaslessUserOperationGuarded(
@@ -516,7 +536,16 @@ export class PaymasterClient {
             );
         } catch (e) {
             if (guard.inSend) {
-                console.warn('[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot (SuperPaymasterInflightGuard.release to clear)');
+                if (guard.stampExpiry) {
+                    // validUntil when the price window is readable; otherwise the bounded default.
+                    // A failed read must not turn into a second thrown error and skip the stamp.
+                    const validUntilSec = await readSuperPaymasterValidUntilSec(client, paymasterAddress);
+                    const expiresAtMs = inflightHoldExpiresAtMs(Date.now(), validUntilSec);
+                    guard.stampExpiry(expiresAtMs);
+                    console.warn(`[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot until ${expiresAtMs} (SuperPaymasterInflightGuard.release to clear sooner)`);
+                } else {
+                    console.warn('[PaymasterClient] bundler round-trip failed ambiguously; keeping the SuperPaymaster in-flight slot (SuperPaymasterInflightGuard.release to clear)');
+                }
             } else {
                 guard.release?.();
             }
@@ -562,6 +591,7 @@ export class PaymasterClient {
                 // so a caller that loses this race signs nothing. (Estimation below uses a dummy
                 // signature and asks the signer nothing.)
                 guard.release = SuperPaymasterInflightGuard.reserve(chainIdForGuard, entryPoint, aaAddress, BigInt(nonce as any));
+                guard.stampExpiry = (expiresAtMs) => SuperPaymasterInflightGuard.stampExpiry(chainIdForGuard, entryPoint, aaAddress, expiresAtMs);
             }
         }
 
@@ -584,7 +614,8 @@ export class PaymasterClient {
                     factoryData: options?.factoryData,
                     airAccountSig: options?.airAccountSig, // forward so the estimation dummy has the same format (#115 H-1)
                     superPaymasterFlags: options?.superPaymasterFlags,
-                    superPaymasterAutoRenew: options?.superPaymasterAutoRenew
+                    superPaymasterAutoRenew: options?.superPaymasterAutoRenew,
+                    sponsorship: spCtx, // one op, one resolve — do not re-read across a 5.4.2→5.5.0 upgrade
                 }
             );
             const tuned = options?.tuneEstimate?.(est) ?? {};
@@ -906,6 +937,19 @@ export class PaymasterClient {
                  } catch (e) {
                      if (isExplicitTxRejection(e, wallet.transport?.type)) guard.inSend = false;
                      throw e;
+                 }
+                 // writeContract resolves when the tx is accepted, not when it lands. A throw
+                 // here leaves inSend set: the tx may still be pending. A reverted handleOps
+                 // does not move the nonce, so recording the hash would pin the sender on an
+                 // op that can never be included.
+                 const receipt: { status?: unknown } = await client.waitForTransactionReceipt({ hash: txHash });
+                 if (receiptReverted(receipt?.status)) {
+                     guard.inSend = false;
+                     guard.release?.();
+                     throw new Error(`direct handleOps reverted (tx ${txHash}, status ${String(receipt.status)}); the SuperPaymaster in-flight slot was released`);
+                 }
+                 if (!receiptSucceeded(receipt?.status)) {
+                     throw new Error(`direct handleOps receipt status ${String(receipt?.status)} is not success (tx ${txHash}); keeping the SuperPaymaster in-flight slot`);
                  }
                  guard.inSend = false;
                  if (spCtx?.generation === 'v5.5') SuperPaymasterInflightGuard.record(chainIdForGuard, entryPoint, aaAddress, userOp.nonce, txHash);

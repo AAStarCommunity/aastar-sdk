@@ -154,6 +154,57 @@ export function atLeast(value: bigint | undefined, floor: bigint): bigint {
 }
 
 /**
+ * Backstop for an ambiguous in-flight hold whose `validUntil` could not be read
+ * (the same RPC trouble that left the send's receipt unknown). One hour: the
+ * price-staleness window operators ship with (`priceStalenessThreshold` default),
+ * and finite — a lost answer must not pin the sender until process exit.
+ * A shorter window is used when {@link readSuperPaymasterValidUntilSec} succeeds.
+ */
+export const SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS = 60 * 60 * 1000;
+
+const MAX_VALID_UNTIL_SEC = BigInt(Number.MAX_SAFE_INTEGER) / 1000n;
+
+/**
+ * Absolute expiry (unix ms) for an unconfirmed hold.
+ * `validUntilSec` is the op's inclusion deadline when the caller already knows it
+ * (SuperPaymaster: `cachedPrice.updatedAt + priceStalenessThreshold` — the contract
+ * generates validUntil itself and does not put it on the UserOp). Otherwise `nowMs`
+ * plus {@link SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS}. A non-positive or
+ * non-safe value is treated as unknown.
+ */
+export function inflightHoldExpiresAtMs(nowMs: number, validUntilSec?: bigint): number {
+    if (validUntilSec !== undefined && validUntilSec > 0n && validUntilSec <= MAX_VALID_UNTIL_SEC) {
+        return Number(validUntilSec) * 1000;
+    }
+    return nowMs + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS;
+}
+
+/**
+ * SuperPaymaster's own inclusion deadline: `cachedPrice.updatedAt + priceStalenessThreshold`
+ * (see PaymasterUtils). Undefined when either read fails or either value is 0 — the caller
+ * then uses {@link SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS}. Never throws.
+ */
+export async function readSuperPaymasterValidUntilSec(client: any, paymaster: Address): Promise<bigint | undefined> {
+    try {
+        const cache = (await client.readContract({
+            address: paymaster,
+            abi: SuperPaymasterV550ABI,
+            functionName: 'cachedPrice',
+        })) as { updatedAt?: bigint | number } | readonly unknown[];
+        const updatedAt = BigInt((cache as any)?.updatedAt ?? (cache as readonly unknown[])?.[1] ?? 0);
+        const threshold = BigInt(await client.readContract({
+            address: paymaster,
+            abi: SuperPaymasterV550ABI,
+            functionName: 'priceStalenessThreshold',
+        }));
+        if (updatedAt <= 0n || threshold <= 0n) return undefined;
+        return updatedAt + threshold;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
  * Single in-flight op per sender through SuperPaymaster 5.5.0 (spec 03-final-spec §3.2, F1):
  * "SDK and AirAccount enforce". This is the SDK half, scoped to what an SDK can actually know —
  * the ops IT submitted in this process. An op is in flight from submission until the account's
@@ -161,9 +212,14 @@ export function atLeast(value: bigint | undefined, floor: bigint): bigint {
  *
  * It does not (cannot) see ops submitted by another process or wallet for the same sender; the
  * bundler-side `same_sender_mempool_count 1` (spec §3.2, measured on Rundler) covers that.
+ *
+ * A hold whose send answer was lost is unconfirmed (`userOpHash` unset). It expires at the op's
+ * validUntil when that is known, otherwise after {@link SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS},
+ * so a dropped op cannot pin the sender until process exit. A confirmed record does not expire
+ * on the clock: the EntryPoint nonce is its lifetime.
  */
 export class SuperPaymasterInflightGuard {
-    private static readonly pending = new Map<string, { nonce: bigint; userOpHash?: string; reservation?: symbol }>();
+    private static readonly pending = new Map<string, { nonce: bigint; userOpHash?: string; reservation?: symbol; expiresAtMs?: number }>();
 
     private static key(chainId: number | bigint, entryPoint: Address, sender: Address): string {
         return `${chainId}:${entryPoint.toLowerCase()}:${sender.toLowerCase()}`;
@@ -177,6 +233,12 @@ export class SuperPaymasterInflightGuard {
         const k = this.key(chainId, entryPoint, sender);
         const rec = this.pending.get(k);
         if (!rec) return;
+        // Unconfirmed holds (no userOpHash: the send's answer was lost) expire at validUntil
+        // or the default TTL. A confirmed record stays until the nonce moves — the op was accepted.
+        if (rec.userOpHash === undefined && rec.expiresAtMs !== undefined && Date.now() >= rec.expiresAtMs) {
+            this.pending.delete(k);
+            return;
+        }
         if (currentNonce > rec.nonce) {
             this.pending.delete(k);
             return;
@@ -215,6 +277,16 @@ export class SuperPaymasterInflightGuard {
         const prev = this.pending.get(k);
         if (prev && prev.nonce > nonce) return;
         this.pending.set(k, { nonce, userOpHash });
+    }
+
+    /**
+     * Expire an unconfirmed reservation at `expiresAtMs` (unix ms). No-op once record()
+     * has confirmed the op (userOpHash set) — that hold tracks the nonce, not the clock.
+     */
+    static stampExpiry(chainId: number | bigint, entryPoint: Address, sender: Address, expiresAtMs: number): void {
+        const rec = this.pending.get(this.key(chainId, entryPoint, sender));
+        if (!rec || rec.userOpHash !== undefined) return;
+        rec.expiresAtMs = expiresAtMs;
     }
 
     /** Drop a record (e.g. after the caller observed a receipt or decided the op was dropped). */

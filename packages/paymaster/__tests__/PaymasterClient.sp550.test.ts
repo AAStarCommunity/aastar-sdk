@@ -4,7 +4,7 @@ import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient } from '../src/V4/PaymasterClient';
 import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
-import { SuperPaymasterInflightGuard } from '../src/SuperPaymaster/v550';
+import { SuperPaymasterInflightGuard, SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS } from '../src/SuperPaymaster/v550';
 
 // Offline harness (same stubbing as scripts/cc128/count-signatures.ts): real SDK code, a real
 // viem LocalAccount on anvil's public mnemonic, stubbed public client + bundler. No network.
@@ -37,6 +37,8 @@ function harness(
         transport?: { type?: string };
         /** Answers a readContract first; return undefined to fall through to the defaults. */
         readContract?: (functionName: string, args: readonly any[] | undefined, blockNumber?: bigint) => unknown;
+        /** handleOps receipt. Default: success. A throw leaves the in-flight slot held. */
+        receipt?: (hash: Hex) => unknown;
     } = {},
 ) {
     const signs: Hex[][] = [];
@@ -65,6 +67,10 @@ function harness(
         estimateFeesPerGas: async () => ({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n }),
         getGasPrice: async () => 1_000_000_000n,
         getBlockNumber: async () => 1234n,
+        waitForTransactionReceipt: async ({ hash }: { hash: Hex }) => {
+            if (opts.receipt) return opts.receipt(hash);
+            return { status: 'success', transactionHash: hash };
+        },
         readContract: async ({ functionName, args, blockNumber }: { functionName: string; args?: readonly any[]; blockNumber?: bigint }) => {
             const own = opts.readContract?.(functionName, args, blockNumber);
             if (own !== undefined) return own;
@@ -209,6 +215,58 @@ describe('PaymasterClient × SP 5.5.0: single in-flight op per sender', () => {
         SuperPaymasterInflightGuard.release(11155111, EP, SENDER);
         await expect(submit()).resolves.toBe(OP_HASH);
     });
+
+    it('ambiguous eth_sendUserOperation expires the hold at validUntil (updatedAt + priceStalenessThreshold)', async () => {
+        // updatedAt 5_000s + threshold 3_600s → validUntil 8_600s = 8_600_000 ms.
+        // A default 1h TTL counted from `now` would still be in the future at 8_600_000.
+        const now = vi.spyOn(Date, 'now').mockReturnValue(8_000_000);
+        let drop = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (drop) throw new TypeError('fetch failed');
+            return { result: OP_HASH };
+        }, {
+            readContract: (functionName) => {
+                if (functionName === 'cachedPrice') return { price: 1n, updatedAt: 5_000n, roundId: 1n, decimals: 8 };
+                if (functionName === 'priceStalenessThreshold') return 3_600n;
+                return undefined;
+            },
+        });
+        await expect(submit()).rejects.toThrow(/fetch failed/);
+        drop = false;
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+        now.mockReturnValue(8_600_000);
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
+
+    it('ambiguous eth_sendUserOperation expires the hold after the default TTL when validUntil cannot be read', async () => {
+        const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+        let drop = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (drop) throw new TypeError('fetch failed');
+            return { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toThrow(/fetch failed/);
+        drop = false;
+        now.mockReturnValue(1_000_000 + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS - 1);
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+        now.mockReturnValue(1_000_000 + SUPER_PAYMASTER_INFLIGHT_DEFAULT_TTL_MS);
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
+
+    it('a JSON-RPC error from eth_sendUserOperation still releases the hold immediately', async () => {
+        vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+        let reject = true;
+        const { submit } = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            return reject ? { error: { code: -32500, message: 'AA33 reverted' } } : { result: OP_HASH };
+        });
+        await expect(submit()).rejects.toThrow(/AA33/);
+        reject = false;
+        // Same frozen clock: a TTL stamp here would still be in the future.
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
 });
 
 describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot unless the node refused', () => {
@@ -253,6 +311,41 @@ describe('PaymasterClient × SP 5.5.0: direct handleOps fallback keeps the slot 
         await expect(submit()).rejects.toThrow();
         await expect(submit()).resolves.toBe('0x' + 'ee'.repeat(32));
     });
+
+    const TX = ('0x' + 'cd'.repeat(32)) as Hex;
+
+    it.each([
+        ['reverted', 'reverted'],
+        ['0', 0],
+        ['0n', 0n],
+    ])('handleOps receipt status %s releases the hold and throws', async (_name, status) => {
+        let reverted = true;
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: () => {
+                if (!reverted) return { status: 'success', transactionHash: TX };
+                reverted = false;
+                return { status };
+            },
+        });
+        await expect(submit()).rejects.toThrow(/direct handleOps reverted/);
+        await expect(submit()).resolves.toBe(TX);
+    });
+
+    it('handleOps receipt success records the hold (a second op is rejected with the tx hash)', async () => {
+        const { submit } = harness(noSendBundler, { writeContract: async () => TX });
+        await expect(submit()).resolves.toBe(TX);
+        await expect(submit()).rejects.toThrow(new RegExp(TX));
+    });
+
+    it('handleOps receipt wait throwing is ambiguous: the hold stays', async () => {
+        const { submit } = harness(noSendBundler, {
+            writeContract: async () => TX,
+            receipt: () => { throw new Error('receipt timeout'); },
+        });
+        await expect(submit()).rejects.toThrow(/receipt timeout/);
+        await expect(submit()).rejects.toThrow(/one in-flight/);
+    });
 });
 
 describe('PaymasterClient: estimation asks the signer nothing', () => {
@@ -285,6 +378,25 @@ describe('PaymasterClient: estimation asks the signer nothing', () => {
         for (let i = 0; i < 4; i++) {
             await expect(recoverAddress({ hash: keccak256(toHex(i)), signature: sig })).resolves.toMatch(/^0x[0-9a-fA-F]{40}$/);
         }
+    });
+
+    it('submit and estimate share one resolveSuperPaymasterSponsorship (a mid-op upgrade cannot disagree)', async () => {
+        // The second version() read would observe 5.4.2. Estimation must keep the first
+        // read's 5.5.0 layout (73-byte paymasterData → flags byte 0), not re-resolve.
+        let versionReads = 0;
+        const { submit, calls } = harness(async (method) => (method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }), {
+            readContract: (functionName) => {
+                if (functionName !== 'version') return undefined;
+                versionReads += 1;
+                return versionReads === 1 ? 'SuperPaymaster-5.5.0' : 'SuperPaymaster-5.4.2';
+            },
+        });
+        await expect(submit()).resolves.toBe(OP_HASH);
+        expect(versionReads).toBe(1);
+        expect(calls.map((c) => [c.method, c.flags])).toEqual([
+            ['eth_estimateUserOperationGas', 0],
+            ['eth_sendUserOperation', 0],
+        ]);
     });
 
     it('transport failure during estimation → slot released (the request held no executable op)', async () => {
