@@ -323,6 +323,44 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         expect(revoke.emitter).toBe(addr(GUARD));
     });
 
+    it('gives each log a fresh frozen path and builds only the focused log', () => {
+        const trace = frame('CALL', EOA, ENTRY, {
+            input: '0x',
+            calls: [
+                frame('CALL', ENTRY, GUARD, { input: '0x11111111', logs: [tlog(GUARD, TOPIC)] }),
+                frame('CALL', ENTRY, GUARD, { input: '0x22222222', logs: [tlog(GUARD, TOPIC_B)] }),
+            ],
+        });
+        const receipt = [rlog(GUARD, 10, TOPIC), rlog(GUARD, 11, TOPIC_B)];
+        const res = attributeTx(trace, receipt);
+        expect(res.aligned).toBe(true);
+        if (!res.aligned) return;
+        const first = res.byLogIndex.get(10)!;
+        const second = res.byLogIndex.get(11)!;
+        expect(first).not.toBe(second);
+        expect(first.forwardingPath).not.toBe(second.forwardingPath);
+        expect(first.forwardingPath[0]).not.toBe(second.forwardingPath[0]);
+        expect(Object.isFrozen(first)).toBe(true);
+        expect(Object.isFrozen(first.forwardingPath)).toBe(true);
+        expect(Object.isFrozen(first.forwardingPath[0])).toBe(true);
+        const kept = second.forwardingPath[0]!.from;
+        const hop = first.forwardingPath[0]!;
+        try {
+            (hop as { from: Address }).from = addr(OTHER);
+        } catch {
+            // Strict mode rejects the write. Sloppy mode would ignore it.
+        }
+        expect(hop.from).toBe(kept);
+        expect(second.forwardingPath[0]!.from).toBe(kept);
+
+        const focused = attributeTx(trace, receipt, 10);
+        expect(focused.aligned).toBe(true);
+        if (!focused.aligned) return;
+        expect(focused.byLogIndex.get(10)!.forwardingPath).toHaveLength(2);
+        expect(focused.byLogIndex.get(11)!.forwardingPath).toEqual([]);
+        expect(focused.byLogIndex.get(10)!.forwardingPath[0]).not.toBe(first.forwardingPath[0]);
+    });
+
     it('rejects a log whose address is not the frame context', () => {
         const trace = frame('CALL', EOA, SP, {
             calls: [frame('DELEGATECALL', SP, EXT, { logs: [tlog(EXT)] })],

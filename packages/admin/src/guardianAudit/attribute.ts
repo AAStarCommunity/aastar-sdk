@@ -23,7 +23,7 @@ export interface LogAttribution {
     /** msg.sender of the emitting context. */
     immediateCaller: Address;
     /** Root frame through the emitting frame, delegatecalls included. */
-    forwardingPath: CallHop[];
+    forwardingPath: readonly CallHop[];
     /** Storage context of the emitting frame. Equals the log address when aligned. */
     emitter: Address;
 }
@@ -49,7 +49,12 @@ const MAX_FRAMES = 100_000;
 const MAX_LOGS = 10_000;
 /** Cumulative string bytes across one raw receipt + trace, before any normalization. */
 const MAX_LOG_BYTES = 8 * 1024 * 1024;
-/** Structural cap for one raw JSON value. Pending stack slots are reserved up front. */
+/**
+ * Structural cap for one raw JSON value. Pending stack slots are reserved up front.
+ * A trace above this many nodes is rejected whole, including a legitimate one that merely
+ * does not fit. Attributing a prefix could accept a log that a frame past the cap would
+ * have contradicted, so the budget fails closed.
+ */
 export const MEASURE_NODES = 250_000;
 export const MEASURE_BYTES = MAX_LOG_BYTES;
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
@@ -236,7 +241,7 @@ function exceedsLogBytes(trace: unknown, receiptLogs: unknown[]): boolean {
     return take(receiptLogs);
 }
 
-/** Shared ancestry. The array is built only for a log that is actually emitted. */
+/** Internal spine. Each published path copies these hops, so logs do not share CallHop objects. */
 interface PathLink {
     hop: CallHop;
     parent: PathLink | null;
@@ -262,7 +267,10 @@ interface FrameNode {
 
 interface FlatLog {
     raw: unknown;
-    attribution: LogAttribution;
+    transactionSender: Address;
+    immediateCaller: Address;
+    emitter: Address;
+    path: PathLink | null;
 }
 
 function emptyInfo(): Info {
@@ -273,11 +281,25 @@ function doneFrame(): FrameNode {
     return { emit: [], has: false, logs: [], calls: [], info: emptyInfo() };
 }
 
-function pathOf(tail: PathLink | null): CallHop[] {
+/** Fresh frozen hops. Two logs that share a spine still receive distinct CallHop objects. */
+function pathOf(tail: PathLink | null): readonly CallHop[] {
     const hops: CallHop[] = [];
-    for (let link = tail; link; link = link.parent) hops.push(link.hop);
+    for (let link = tail; link; link = link.parent) {
+        const hop = link.hop;
+        hops.push(Object.freeze({ type: hop.type, from: hop.from, to: hop.to, selector: hop.selector }));
+    }
     hops.reverse();
-    return hops;
+    return Object.freeze(hops);
+}
+
+function publish(log: FlatLog, index: number, focusLogIndex: number | undefined): LogAttribution {
+    const build = focusLogIndex === undefined || index === focusLogIndex;
+    return Object.freeze({
+        transactionSender: log.transactionSender,
+        immediateCaller: log.immediateCaller,
+        emitter: log.emitter,
+        forwardingPath: build ? pathOf(log.path) : Object.freeze([] as CallHop[]),
+    });
 }
 
 function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
@@ -362,7 +384,8 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
         // the buckets would disagree. All-missing logs stay "after the children".
         if (missing && present) note('trace log positions are mixed');
         else if (missing && childNodes.some((c) => c.has)) note('trace logs lack positions');
-        // Static context propagates. A surviving log anywhere under the frame is impossible.
+        // `kind` is only this frame's type; it is not copied onto children. A nested log still
+        // counts: `has` is set on a child when any surviving log exists in that subtree.
         if (info.kind === 'STATICCALL' && (logs.length > 0 || childNodes.some((c) => c.has))) {
             note('staticcall emitted a log');
         }
@@ -421,12 +444,10 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
                 if (lc(addr) !== lc(x.info.context)) note('log address is not its frame\'s context');
                 out.push({
                     raw: l,
-                    attribution: {
-                        transactionSender: x.info.transactionSender,
-                        immediateCaller: x.info.msgSender,
-                        forwardingPath: pathOf(x.info.path),
-                        emitter: x.info.context,
-                    },
+                    transactionSender: x.info.transactionSender,
+                    immediateCaller: x.info.msgSender,
+                    emitter: x.info.context,
+                    path: x.info.path,
                 });
             }
         } else if (x.emit) {
@@ -440,8 +461,12 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
 /**
  * Receipt positions (`index` or `logIndex`) must be strict, unique and contiguous.
  * Flattened trace logs, in emission order, must then equal those receipt logs 1:1.
+ * `focusLogIndex`, when passed, materializes `forwardingPath` only for that receipt index.
+ * Omit it and every log's path is built. Each published path is its own frozen hop list.
  */
-export function attributeTx(trace: unknown, receiptLogs: unknown[]): AttributeTxResult {
+export function attributeTx(
+    trace: unknown, receiptLogs: unknown[], focusLogIndex?: number,
+): AttributeTxResult {
     if (Array.isArray(receiptLogs) && receiptLogs.length > MAX_LOGS) {
         return { aligned: false, why: 'trace too large' };
     }
@@ -483,7 +508,8 @@ export function attributeTx(trace: unknown, receiptLogs: unknown[]): AttributeTx
         if (!sameLog(flat.logs[i]!.raw, rl[i])) {
             return { aligned: false, why: `log ${i} differs between trace and receipt` };
         }
-        byLogIndex.set(receiptPos(rl[i])!, flat.logs[i]!.attribution);
+        const index = receiptPos(rl[i])!;
+        byLogIndex.set(index, publish(flat.logs[i]!, index, focusLogIndex));
     }
     return { aligned: true, byLogIndex };
 }

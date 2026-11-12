@@ -666,6 +666,129 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         expect(await withTrace(trace)).toEqual({ ok: false, reason: 'trace value mismatch on alpha' });
     });
 
+    it('rejects a block number that is not the action block', async () => {
+        expect(await withTrace(
+            traceOf(),
+            receiptOf({ blockNumber: '0x11' }),
+            txOf({ blockNumber: '0x11' }),
+        )).toEqual({ ok: false, reason: 'block number mismatch on alpha' });
+    });
+
+    it('rejects a trace provider receipt from another block or index', async () => {
+        const otherBlock = `0x${'33'.repeat(32)}` as Hex;
+        const run = async (second: Record<string, unknown>) => {
+            const seen: string[] = [];
+            let alphaReceipts = 0;
+            const alpha: RawRpc = {
+                name: 'alpha',
+                async request({ method }) {
+                    seen.push(`alpha:${method}`);
+                    if (method === 'eth_getTransactionReceipt') {
+                        alphaReceipts += 1;
+                        return alphaReceipts > 1 ? receiptOf(second) : receiptOf();
+                    }
+                    if (method === 'eth_getTransactionByHash') return txOf();
+                    return traceOf();
+                },
+            };
+            const beta: RawRpc = {
+                name: 'beta',
+                async request({ method }) {
+                    if (method === 'eth_getTransactionReceipt') return receiptOf();
+                    if (method === 'eth_getTransactionByHash') return txOf();
+                    return traceOf();
+                },
+            };
+            const result = await traceAttributor({
+                providers: [alpha, beta],
+                traceProviders: [alpha],
+            }).attribute(action());
+            return { result, seen };
+        };
+        const wrongBlock = await run({ blockHash: otherBlock });
+        expect(wrongBlock.result).toEqual({ ok: false, reason: 'trace receipt block mismatch on alpha' });
+        const traceAt = wrongBlock.seen.indexOf('alpha:debug_traceTransaction');
+        expect(traceAt).toBeGreaterThan(wrongBlock.seen.indexOf('alpha:eth_getTransactionReceipt'));
+        expect(wrongBlock.seen.lastIndexOf('alpha:eth_getTransactionReceipt')).toBeGreaterThan(traceAt);
+        expect(await run({ transactionIndex: '0x9' })).toMatchObject({
+            result: { ok: false, reason: 'trace receipt index mismatch on alpha' },
+        });
+    });
+
+    it('ignores mutations of the caller provider arrays', async () => {
+        const calls: string[] = [];
+        const make = (name: string): RawRpc => ({
+            name,
+            async request({ method }) {
+                calls.push(`${name}:${method}`);
+                if (method === 'eth_getTransactionReceipt') return receiptOf();
+                if (method === 'eth_getTransactionByHash') return txOf();
+                return traceOf();
+            },
+        });
+        const alpha = make('alpha');
+        const beta = make('beta');
+        const gamma = make('gamma');
+        const providers = [alpha, beta];
+        const traces = [alpha];
+        const built = traceAttributor({
+            providers: providers as unknown as readonly [RawRpc, RawRpc],
+            traceProviders: traces as unknown as readonly [RawRpc],
+        });
+        providers[0] = gamma;
+        providers[1] = gamma;
+        traces[0] = gamma;
+        const result = await built.attribute(action());
+        expect(result).toMatchObject({ ok: true, attribution: { attributionSource: 'single:alpha' } });
+        expect(calls.some((call) => call.startsWith('gamma:'))).toBe(false);
+        expect(calls).toContain('alpha:eth_getTransactionByHash');
+        expect(calls).toContain('beta:eth_getTransactionByHash');
+        expect(calls).toContain('alpha:debug_traceTransaction');
+    });
+
+    it('rejects a URL-like provider name without echoing it', () => {
+        const leak = 'https://rpc.example/secret-LEAKED';
+        const make = (name: string): RawRpc => ({ name, async request() { return null; } });
+        const blow = (run: () => unknown) => {
+            expect(run).toThrow(/^guardian audit provider name is invalid$/);
+        };
+        blow(() => traceAttributor({
+            providers: [make(leak), make('beta')],
+            traceProviders: [make('gamma')],
+        }));
+        blow(() => traceAttributor({
+            providers: [make('alpha'), make('beta')],
+            traceProviders: [make(leak)],
+        }));
+    });
+
+    it('returns frozen attributions that share no hop objects across calls', async () => {
+        const { providers, traceProviders } = pair((_name, method) => (
+            method === 'eth_getTransactionReceipt' ? receiptOf() : traceOf()
+        ));
+        const built = attr({ providers, traceProviders });
+        const first = await built.attribute(action());
+        const second = await built.attribute(action());
+        expect(first.ok).toBe(true);
+        expect(second.ok).toBe(true);
+        if (!first.ok || !second.ok) return;
+        expect(first.attribution).not.toBe(second.attribution);
+        expect(first.attribution.forwardingPath).not.toBe(second.attribution.forwardingPath);
+        expect(first.attribution.forwardingPath[0]).not.toBe(second.attribution.forwardingPath[0]);
+        expect(Object.isFrozen(first.attribution)).toBe(true);
+        expect(Object.isFrozen(first.attribution.forwardingPath)).toBe(true);
+        expect(Object.isFrozen(first.attribution.forwardingPath[0])).toBe(true);
+        const kept = second.attribution.forwardingPath[0]!.to;
+        const hop = first.attribution.forwardingPath[0]!;
+        try {
+            (hop as { to: string }).to = OTHER;
+        } catch {
+            // Frozen in strict mode.
+        }
+        expect(hop.to).not.toBe(OTHER);
+        expect(second.attribution.forwardingPath[0]!.to).toBe(kept);
+    });
+
     it('rejects completeness or trace providers that are not distinct', () => {
         const make = (name: string): RawRpc => ({ name, async request() { return null; } });
         const alpha = make('alpha');

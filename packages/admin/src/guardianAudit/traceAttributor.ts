@@ -4,6 +4,14 @@ import { quantity, type RawRpc } from './rpc.js';
 import type { Attributor, FoundAction } from './scan.js';
 
 const TRACE_OPTS = { tracer: 'callTracer', tracerConfig: { withLog: true } } as const;
+/** Same label rule as the core. A URL is not a provider name, and the name is never put in an error. */
+const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+function assertProviderName(name: unknown): void {
+    if (typeof name !== 'string' || !PROVIDER_NAME.test(name)) {
+        throw new Error('guardian audit provider name is invalid');
+    }
+}
 
 /** Messages longer than this are ignored. They are never sliced, joined, or passed to a regex. */
 const CLASSIFY_MESSAGE_MAX = 512;
@@ -278,6 +286,10 @@ async function readSide(rpc: RawRpc, action: FoundAction): Promise<Side> {
     if (txR.v === null || typeof txR.v !== 'object') return { ok: false, reason: `no transaction on ${rpc.name}` };
     const tx = txR.v as Record<string, unknown>;
     if (!sameBlock(tx, receiptR.v)) return { ok: false, reason: 'providers disagree on the transaction' };
+    const receiptHeight = quantity((receiptR.v as Record<string, unknown>).blockNumber);
+    if (receiptHeight === null || receiptHeight !== action.blockNumber || quantity(tx.blockNumber) !== action.blockNumber) {
+        return { ok: false, reason: `block number mismatch on ${rpc.name}` };
+    }
     // Each provider is checked on its own. Agreement between them is not enough.
     if (!sameText(tx.hash, action.txHash)) return { ok: false, reason: `transaction hash mismatch on ${rpc.name}` };
     if (hexQuantity(tx.value) === null) return { ok: false, reason: `transaction value invalid on ${rpc.name}` };
@@ -299,6 +311,47 @@ type Traced =
     | { ok: true; attribution: LogAttribution }
     | { ok: false; reason: string };
 
+/**
+ * The trace RPC is keyed only by tx hash. Re-read the receipt afterwards and pin it to the
+ * block the completeness providers already agreed on.
+ */
+async function traceReceiptBinds(rpc: RawRpc, action: FoundAction, verified: unknown): Promise<string | null> {
+    const got = await rpc.request({ method: 'eth_getTransactionReceipt', params: [action.txHash] }).then(
+        (v) => ({ ok: true as const, v }),
+        () => ({ ok: false as const }),
+    );
+    if (!got.ok) return `trace receipt read failed on ${rpc.name}`;
+    const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
+    if (!measure(got.v, budget)) return 'trace too large';
+    if (!got.v || typeof got.v !== 'object') return `trace receipt read failed on ${rpc.name}`;
+    const claimed = got.v as Record<string, unknown>;
+    const bound = verified && typeof verified === 'object' ? verified as Record<string, unknown> : {};
+    if (lc(claimed.blockHash) === '' || lc(claimed.blockHash) !== lc(bound.blockHash)) {
+        return `trace receipt block mismatch on ${rpc.name}`;
+    }
+    const claimedIndex = hexQuantity(claimed.transactionIndex);
+    const boundIndex = hexQuantity(bound.transactionIndex);
+    if (claimedIndex === null || boundIndex === null || claimedIndex !== boundIndex) {
+        return `trace receipt index mismatch on ${rpc.name}`;
+    }
+    return null;
+}
+
+function seal(attribution: LogAttribution, attributionSource: string) {
+    return Object.freeze({
+        transactionSender: attribution.transactionSender,
+        immediateCaller: attribution.immediateCaller,
+        emitter: attribution.emitter,
+        forwardingPath: Object.freeze(attribution.forwardingPath.map((hop) => Object.freeze({
+            type: hop.type,
+            from: hop.from,
+            to: hop.to,
+            selector: hop.selector,
+        }))),
+        attributionSource,
+    });
+}
+
 async function readTrace(
     rpc: RawRpc, action: FoundAction, tx: Record<string, unknown>, receipt: unknown, logs: unknown[],
 ): Promise<Traced> {
@@ -312,6 +365,10 @@ async function readTrace(
         const reason = traceUnsupported(got.e) ? `trace unsupported on ${rpc.name}` : `trace read failed on ${rpc.name}`;
         return { ok: false, reason };
     }
+    // After the trace, not before. A receipt from another block rejects the trace.
+    const unbound = await traceReceiptBinds(rpc, action, receipt);
+    if (unbound) return { ok: false, reason: unbound };
+    // MEASURE_NODES is fail-closed: a larger trace is rejected even when it would have been legitimate.
     const budget = { nodes: MEASURE_NODES, bytes: MEASURE_BYTES };
     if (!measure(got.v, budget)) return { ok: false, reason: 'trace too large' };
     const failure = jsonRpcFailure(got.v);
@@ -321,7 +378,7 @@ async function readTrace(
     }
     const mismatch = traceMatchesTx(got.v, tx, receipt, rpc.name);
     if (mismatch) return { ok: false, reason: mismatch };
-    const aligned = attributeTx(got.v, logs);
+    const aligned = attributeTx(got.v, logs, action.logIndex);
     if (!aligned.aligned) return { ok: false, reason: aligned.why };
     const attribution = aligned.byLogIndex.get(action.logIndex);
     if (!attribution) return { ok: false, reason: `attribution missing on ${rpc.name}` };
@@ -342,22 +399,45 @@ export interface TraceAttributorOptions {
  * Trace providers serve `debug_traceTransaction` (callTracer, withLog). One source is enough when
  * the other completeness provider has no trace API.
  *
+ * `debug_traceTransaction` selects by transaction hash, not by block. After that call returns,
+ * each trace provider's receipt is read again and its `blockHash` and `transactionIndex` must
+ * equal the dual-verified receipt. This does not switch to `debug_traceBlockByHash` (availability
+ * on our providers is unverified). Residual trust, stated here: `scanRange` only emits actions
+ * from a finalized block, and a transaction hash belongs to exactly one canonical block, so a
+ * trace of that hash executes in that block. A trace provider that traces a non-canonical copy
+ * of the hash is outside this model. A second trace provider is how that case is checked.
+ *
  * The decoded JSON is already allocated by the transport, so callers must use a transport with a
- * response-size cap. This module bounds its own work after decoding.
+ * response-size cap. This module bounds its own work after decoding. A trace above
+ * {@link MEASURE_NODES} is rejected whole, even a legitimate one: a prefix is not evidence.
  */
 export function traceAttributor(opts: TraceAttributorOptions): Attributor {
-    const [pa, pb] = opts.providers;
-    if (opts.providers.length !== 2 || pa === pb || pa.name === pb.name) {
+    const listed = opts.providers;
+    const providers = Object.freeze([listed[0], listed[1]]);
+    const pa = providers[0];
+    const pb = providers[1];
+    if (listed.length !== 2 || !pa || !pb) {
         throw new Error('guardian audit requires two distinct providers');
     }
-    const traces = opts.traceProviders;
-    if (traces.length !== 1 && traces.length !== 2) {
+    assertProviderName(pa.name);
+    assertProviderName(pb.name);
+    if (pa === pb || pa.name === pb.name) {
+        throw new Error('guardian audit requires two distinct providers');
+    }
+    const traceListed = opts.traceProviders;
+    if (traceListed.length !== 1 && traceListed.length !== 2) {
         throw new Error('guardian audit requires one or two trace providers');
     }
-    const [ta, tb] = traces;
+    const ta = traceListed[0];
+    const tb = traceListed.length === 2 ? traceListed[1] : undefined;
+    if (!ta) throw new Error('guardian audit requires one or two trace providers');
+    assertProviderName(ta.name);
+    if (tb) assertProviderName(tb.name);
     if (tb && (ta === tb || ta.name === tb.name)) {
         throw new Error('guardian audit requires two distinct providers');
     }
+    // Copies, not the caller's arrays. Later writes to those arrays are not observed.
+    const traces = Object.freeze(tb ? [ta, tb] : [ta]);
     return {
         async attribute(action) {
             try {
@@ -372,18 +452,13 @@ export function traceAttributor(opts: TraceAttributorOptions): Attributor {
                 );
                 const first = traced[0]!;
                 if (!first.ok) return first;
-                if (!tb) {
-                    return { ok: true, attribution: { ...first.attribution, attributionSource: `single:${ta.name}` } };
-                }
+                if (!tb) return { ok: true, attribution: seal(first.attribution, `single:${ta.name}`) };
                 const second = traced[1]!;
                 if (!second.ok) return second;
                 if (!sameAttribution(first.attribution, second.attribution)) {
                     return { ok: false, reason: 'trace providers disagree' };
                 }
-                return {
-                    ok: true,
-                    attribution: { ...first.attribution, attributionSource: `dual:${ta.name}+${tb.name}` },
-                };
+                return { ok: true, attribution: seal(first.attribution, `dual:${ta.name}+${tb.name}`) };
             } catch {
                 return { ok: false, reason: 'attribution failed' };
             }
