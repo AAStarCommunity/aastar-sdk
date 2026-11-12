@@ -92,29 +92,82 @@ function sameAttribution(a: LogAttribution, b: LogAttribution): boolean {
     return a.forwardingPath.every((hop, i) => sameHop(hop, b.forwardingPath[i]!));
 }
 
-const HEX = /^0x[0-9a-fA-F]*$/;
+function asRecord(v: unknown): Record<string, unknown> | null {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    return v as Record<string, unknown>;
+}
 
-/** Deep equality. Hex strings compare case-insensitively; `0x0` and `0x00` stay distinct. */
-function sameJson(a: unknown, b: unknown): boolean {
-    if (typeof a === 'string' && typeof b === 'string') {
-        if (HEX.test(a) && HEX.test(b)) return a.toLowerCase() === b.toLowerCase();
-        return a === b;
+function sameHexText(a: unknown, b: unknown): boolean {
+    return typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase();
+}
+
+/** `null` is a value (no address). A missing field only equals a missing field. */
+function sameNullableHex(a: unknown, b: unknown): boolean {
+    if (a === undefined && b === undefined) return true;
+    if (a === null && b === null) return true;
+    return sameHexText(a, b);
+}
+
+function sameQty(a: unknown, b: unknown): boolean {
+    const x = hexQuantity(a);
+    const y = hexQuantity(b);
+    return x !== null && y !== null && x === y;
+}
+
+/**
+ * Cross-provider agreement uses attribution-relevant fields only.
+ * Hex is lower-cased. Quantities (`blockNumber`, `transactionIndex`, `value`, `nonce`,
+ * `status`, `logIndex`) compare as bigint, so `0x0` and `0x00` agree.
+ * Extra provider-specific fields are ignored.
+ *
+ * tx: hash, blockHash, blockNumber, transactionIndex, from, to, input, value, nonce.
+ * receipt: transactionHash, blockHash, blockNumber, transactionIndex, status,
+ * contractAddress, logs[{address, topics, data, logIndex}].
+ */
+function sameTx(a: unknown, b: unknown): boolean {
+    const x = asRecord(a);
+    const y = asRecord(b);
+    if (!x || !y) return false;
+    return sameHexText(x.hash, y.hash)
+        && sameHexText(x.blockHash, y.blockHash)
+        && sameQty(x.blockNumber, y.blockNumber)
+        && sameQty(x.transactionIndex, y.transactionIndex)
+        && sameHexText(x.from, y.from)
+        && sameNullableHex(x.to, y.to)
+        && sameHexText(x.input, y.input)
+        && sameQty(x.value, y.value)
+        && sameQty(x.nonce, y.nonce);
+}
+
+function sameReceiptLog(a: unknown, b: unknown): boolean {
+    const x = asRecord(a);
+    const y = asRecord(b);
+    if (!x || !y) return false;
+    if (!sameHexText(x.address, y.address) || !sameHexText(x.data, y.data) || !sameQty(x.logIndex, y.logIndex)) {
+        return false;
     }
-    if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return Object.is(a, b);
-    if (Array.isArray(a) !== Array.isArray(b)) return false;
-    if (Array.isArray(a) && Array.isArray(b)) {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) if (!sameJson(a[i], b[i])) return false;
-        return true;
+    const xt = x.topics;
+    const yt = y.topics;
+    if (!Array.isArray(xt) || !Array.isArray(yt) || xt.length !== yt.length) return false;
+    return xt.every((topic, i) => sameHexText(topic, yt[i]));
+}
+
+function sameReceipt(a: unknown, b: unknown): boolean {
+    const x = asRecord(a);
+    const y = asRecord(b);
+    if (!x || !y) return false;
+    if (!sameHexText(x.transactionHash, y.transactionHash)
+        || !sameHexText(x.blockHash, y.blockHash)
+        || !sameQty(x.blockNumber, y.blockNumber)
+        || !sameQty(x.transactionIndex, y.transactionIndex)
+        || !sameQty(x.status, y.status)
+        || !sameNullableHex(x.contractAddress, y.contractAddress)) {
+        return false;
     }
-    const ao = a as Record<string, unknown>;
-    const bo = b as Record<string, unknown>;
-    const keys = Object.keys(ao);
-    if (keys.length !== Object.keys(bo).length) return false;
-    for (const key of keys) {
-        if (!Object.prototype.hasOwnProperty.call(bo, key) || !sameJson(ao[key], bo[key])) return false;
-    }
-    return true;
+    const xl = x.logs;
+    const yl = y.logs;
+    if (!Array.isArray(xl) || !Array.isArray(yl) || xl.length !== yl.length) return false;
+    return xl.every((log, i) => sameReceiptLog(log, yl[i]));
 }
 
 function sameText(a: unknown, b: unknown): boolean {
@@ -311,7 +364,7 @@ export function traceAttributor(opts: TraceAttributorOptions): Attributor {
                 const [sa, sb] = await Promise.all([readSide(pa, action), readSide(pb, action)]);
                 if (!sa.ok) return sa;
                 if (!sb.ok) return sb;
-                if (!sameJson(sa.receipt, sb.receipt) || !sameJson(sa.tx, sb.tx)) {
+                if (!sameReceipt(sa.receipt, sb.receipt) || !sameTx(sa.tx, sb.tx)) {
                     return { ok: false, reason: 'providers disagree on the transaction' };
                 }
                 const traced = await Promise.all(

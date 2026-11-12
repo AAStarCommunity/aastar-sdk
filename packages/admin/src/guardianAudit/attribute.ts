@@ -5,6 +5,7 @@ import { getAddress, type Address, type Hex } from 'viem';
  * Pure: no I/O. A reverted frame is dropped with its subtree (the receipt drops those logs).
  * CALL / CREATE / CREATE2 enter `to`. DELEGATECALL keeps the caller's storage and msg.sender.
  * CALLCODE keeps the caller's storage but sets msg.sender to the calling frame's context.
+ * callTracer sets every child `from` to its parent frame's storage context. A contradiction is rejected.
  * A successful STATICCALL cannot emit. SELFDESTRUCT is a non-emitting position slot.
  * Any doubt returns aligned: false.
  */
@@ -293,14 +294,18 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
             return doneFrame();
         }
         const o = f as Record<string, unknown>;
-        // Receipt omits logs from a reverted frame and from everything it called.
-        if (o.error) return doneFrame();
-
         const type = frameType(o.type);
         const from = asAddress(o.from);
         const to = asAddress(o.to);
         const logs = Array.isArray(o.logs) ? o.logs : [];
         const calls = Array.isArray(o.calls) ? o.calls : [];
+        // callTracer's child `from` is the caller: the parent frame's storage context.
+        // That holds for CALL, STATICCALL, CALLCODE, DELEGATECALL, CREATE, and CREATE2.
+        if (parent && from && lc(from) !== lc(parent.context)) {
+            note('frame sender is not its parent\'s context');
+        }
+        // Receipt omits logs from a reverted frame and from everything it called.
+        if (o.error) return doneFrame();
         // Beneficiary is not an execution context. The frame still occupies a position slot.
         if (type === 'SELFDESTRUCT') {
             if (!from || !to) note('trace frame address malformed');

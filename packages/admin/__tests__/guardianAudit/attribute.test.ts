@@ -127,10 +127,11 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
     });
 
     it('inherits the CALLCODE sender through a later delegatecall, using context not from', () => {
-        // CALLCODE's `from` is the code address EXT. The calling context is still SP.
+        // callTracer reports CALLCODE `from` as the parent storage context (SP), not the code address.
+        // msg.sender becomes that context, and the inner delegatecall inherits it.
         const trace = frame('CALL', EOA, SP, {
-            calls: [frame('CALLCODE', EXT, OTHER2, {
-                calls: [frame('DELEGATECALL', EXT, OTHER, { logs: [tlog(SP)] })],
+            calls: [frame('CALLCODE', SP, OTHER2, {
+                calls: [frame('DELEGATECALL', SP, OTHER, { logs: [tlog(SP)] })],
             })],
         });
         const got = one(trace, [rlog(SP, 0)], 0);
@@ -139,9 +140,49 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         expect(got.transactionSender).toBe(addr(EOA));
         expect(got.forwardingPath).toEqual([
             hop('CALL', EOA, SP, '0x12345678'),
-            hop('CALLCODE', EXT, OTHER2, '0x12345678'),
-            hop('DELEGATECALL', EXT, OTHER, '0x12345678'),
+            hop('CALLCODE', SP, OTHER2, '0x12345678'),
+            hop('DELEGATECALL', SP, OTHER, '0x12345678'),
         ]);
+    });
+
+    it('attributes a call made inside a delegatecall to the storage context', () => {
+        // The inner CALL's sender is the delegatecall storage context (SP), not the EOA or the code address.
+        const trace = frame('CALL', EOA, SP, {
+            calls: [frame('DELEGATECALL', SP, EXT, {
+                calls: [frame('CALL', SP, GUARD, { logs: [tlog(GUARD)] })],
+            })],
+        });
+        const got = one(trace, [rlog(GUARD, 0)], 0);
+        expect(got.immediateCaller).toBe(addr(SP));
+        expect(got.emitter).toBe(addr(GUARD));
+        expect(got.transactionSender).toBe(addr(EOA));
+        expect(got.forwardingPath).toEqual([
+            hop('CALL', EOA, SP, '0x12345678'),
+            hop('DELEGATECALL', SP, EXT, '0x12345678'),
+            hop('CALL', SP, GUARD, '0x12345678'),
+        ]);
+    });
+
+    it('rejects a nested call whose sender is not the parent context', () => {
+        const trace = frame('CALL', EOA, SP, {
+            calls: [frame('CALL', OTHER, GUARD, { logs: [tlog(GUARD)] })],
+        });
+        expect(attributeTx(trace, [rlog(GUARD, 0)])).toEqual({
+            aligned: false,
+            why: 'frame sender is not its parent\'s context',
+        });
+    });
+
+    it('rejects a call inside a delegatecall that names the code address as sender', () => {
+        const trace = frame('CALL', EOA, SP, {
+            calls: [frame('DELEGATECALL', SP, EXT, {
+                calls: [frame('CALL', EXT, GUARD, { logs: [tlog(GUARD)] })],
+            })],
+        });
+        expect(attributeTx(trace, [rlog(GUARD, 0)])).toEqual({
+            aligned: false,
+            why: 'frame sender is not its parent\'s context',
+        });
     });
 
     it.each(['CREATE', 'CREATE2'] as const)('uses to as the %s context', (type) => {
@@ -419,13 +460,15 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
     });
 
     it('rejects a trace deeper than 1025, including inside a reverted subtree', () => {
-        const leaf = frame('CALL', EOA, TARGET, { logs: [tlog(TARGET)] });
+        // Each child sender is its parent context. Only the root sender is the EOA.
+        const leaf = frame('CALL', TARGET, TARGET, { logs: [tlog(TARGET)] });
         let ok: Record<string, unknown> = leaf;
-        for (let i = 1; i < 1025; i++) ok = frame('CALL', EOA, TARGET, { calls: [ok] });
+        for (let i = 1; i < 1024; i++) ok = frame('CALL', TARGET, TARGET, { calls: [ok] });
+        ok = frame('CALL', EOA, TARGET, { calls: [ok] });
         expect(attributeTx(ok, [rlog(TARGET, 0)]).aligned).toBe(true);
 
-        let deep: Record<string, unknown> = frame('CALL', EOA, TARGET);
-        for (let i = 1; i < 1025; i++) deep = frame('CALL', EOA, TARGET, { calls: [deep] });
+        let deep: Record<string, unknown> = frame('CALL', TARGET, TARGET);
+        for (let i = 1; i < 1025; i++) deep = frame('CALL', TARGET, TARGET, { calls: [deep] });
         deep.error = 'reverted';
         const wrapped = frame('CALL', EOA, TARGET, { calls: [deep] });
         expect(attributeTx(wrapped, [])).toEqual({ aligned: false, why: 'trace deeper than 1025' });

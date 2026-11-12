@@ -483,6 +483,55 @@ describe('guardian-audit trace attributor (unit, not acceptance)', () => {
         });
     });
 
+    it('agrees when quantities match numerically and a receipt carries an extra field', async () => {
+        const actionLog = {
+            address: getAddress(TARGET),
+            topics: [TOPIC],
+            data: '0x',
+            logIndex: '0x7',
+        };
+        const { providers, traceProviders } = pair(
+            (name, method) => {
+                if (method !== 'eth_getTransactionReceipt') return traceOf();
+                if (name === 'beta') {
+                    return receiptOf({
+                        status: '0x01',
+                        l1Fee: '0x1',
+                        logs: [{ ...actionLog, logIndex: '0x07' }],
+                    });
+                }
+                return receiptOf({ logs: [actionLog] });
+            },
+            (name) => txOf(name === 'beta' ? { value: '0x00', nonce: '0x1' } : { value: '0x0', nonce: '0x01' }),
+        );
+        const result = await attr({ providers, traceProviders }).attribute(action());
+        expect(result).toMatchObject({
+            ok: true,
+            attribution: { attributionSource: 'dual:alpha+beta', immediateCaller: getAddress(FROM) },
+        });
+    });
+
+    it('rejects providers that agree on the receipt except for one log data field', async () => {
+        const actionLog = {
+            address: getAddress(TARGET),
+            topics: [TOPIC],
+            data: '0x',
+            logIndex: '0x7',
+        };
+        const { providers, traceProviders } = pair((name, method) => {
+            if (method !== 'eth_getTransactionReceipt') return traceOf();
+            const other = {
+                address: getAddress(OTHER),
+                topics: [TOPIC],
+                data: name === 'beta' ? '0xbb' : '0xaa',
+                logIndex: '0x8',
+            };
+            return receiptOf({ logs: [actionLog, other] });
+        });
+        const result = await attr({ providers, traceProviders }).attribute(action());
+        expect(result).toEqual({ ok: false, reason: 'providers disagree on the transaction' });
+    });
+
     it('rejects completeness providers that disagree on the transaction', async () => {
         const { providers, traceProviders } = pair(
             (_name, method) => (method === 'eth_getTransactionReceipt' ? receiptOf() : traceOf()),
