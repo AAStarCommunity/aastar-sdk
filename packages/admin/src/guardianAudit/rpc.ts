@@ -2,6 +2,7 @@ import { getAddress, numberToHex, type Address, type Hex } from 'viem';
 
 /**
  * EIP-1193 transport. `name` is a provider name for run metadata, never a URL.
+ * Request timeouts belong to the caller's transport. This scanner does not time out `request`.
  * viem: `{ name, request: client.request }`
  * ethers v6 (not imported): `{ name, request: ({ method, params }) => provider.send(method, params ?? []) }`
  */
@@ -40,6 +41,10 @@ export const responseLimits = {
     hex: 131072,
     quantity: 18,
     ancestry: 4096,
+    /** data + topics + logsBloom bytes of one receipt, before any encoding. */
+    receiptPayload: 1_048_576,
+    /** Those same bytes summed across one block. */
+    blockPayload: 32 * 1_048_576,
 } as const;
 
 const WORD_LEN = 66;
@@ -98,6 +103,42 @@ function clipStr(v: unknown, max: number): unknown {
     return v.length > max ? 'oversize' : v;
 }
 
+/** Byte length of a hex string, from its length. Non-hex counts as 0. No character walk. */
+function hexByteLen(v: unknown): number {
+    if (typeof v !== 'string' || v.length < 2 || v.charCodeAt(0) !== 48 || v.charCodeAt(1) !== 120) return 0;
+    return (v.length - 2) >> 1;
+}
+
+/**
+ * data, topics, and logsBloom bytes. `true` when one receipt exceeds 1 MiB or the block exceeds 32 MiB.
+ * The length of `raw` must already be within `responseLimits.receipts`. Returns before encoding.
+ */
+export function receiptPayloadTooLarge(raw: unknown[]): boolean {
+    let total = 0;
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
+        if (typeof item !== 'object' || item === null) continue;
+        const rec = item as Record<string, unknown>;
+        let bytes = hexByteLen(rec.logsBloom);
+        if (Array.isArray(rec.logs)) {
+            for (let j = 0; j < rec.logs.length; j++) {
+                const log = rec.logs[j];
+                if (typeof log === 'object' && log !== null) {
+                    const row = log as Record<string, unknown>;
+                    bytes += hexByteLen(row.data);
+                    if (Array.isArray(row.topics)) {
+                        for (let k = 0; k < row.topics.length; k++) bytes += hexByteLen(row.topics[k]);
+                    }
+                }
+                if (bytes > responseLimits.receiptPayload) return true;
+            }
+        }
+        if (bytes > responseLimits.receiptPayload || total + bytes > responseLimits.blockPayload) return true;
+        total += bytes;
+    }
+    return false;
+}
+
 function snapshotTopics(v: unknown): unknown {
     if (!Array.isArray(v)) return v;
     if (v.length > responseLimits.topics) return null;
@@ -134,9 +175,14 @@ function snapshotDeposit(v: unknown): { ok: true; value?: string } | { ok: false
     return { ok: true, value: typeof v === 'string' ? v : numberToHex(n) };
 }
 
-/** Plain copy of a receipt list. `null` when the list is not a bounded array. Does not read elements past the cap. */
-export function snapshotReceipts(raw: unknown): unknown[] | null {
+/**
+ * Plain copy of a receipt list. `null` when the list is not a bounded array.
+ * `'too-large'` when data, topics, and bloom exceed the payload budget.
+ * The budget is checked before the copy. Does not read elements past the cap.
+ */
+export function snapshotReceipts(raw: unknown): unknown[] | 'too-large' | null {
     if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
+    if (receiptPayloadTooLarge(raw)) return 'too-large';
     const out: unknown[] = [];
     let logs = 0;
     for (let i = 0; i < raw.length; i++) {

@@ -15,6 +15,9 @@
  * Each crash cell sweeps `step = 0..commitSteps()` and requires the snapshot to
  * stay unchanged. A passing crash cell reports
  * "atomicity checked through the store's fault hook".
+ * Without both hook methods the crash cells are `skipped` and the detail is
+ * exactly "no fault hook". A non-atomic store that omits the hook reports no
+ * crash failure. The concurrency cell runs both commits on one store instance.
  */
 import type { Address, Hex } from 'viem';
 import {

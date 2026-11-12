@@ -1,5 +1,5 @@
 import { bytesToHex, concat, hexToBytes, keccak256, toRlp, type Hex } from 'viem';
-import { responseLimits } from './rpc.js';
+import { receiptPayloadTooLarge, responseLimits } from './rpc.js';
 
 /** keccak256(rlp('')). Header receiptsRoot of a block with no receipts. */
 export const EMPTY_RECEIPTS_ROOT: Hex = keccak256(hexToBytes('0x80'));
@@ -15,7 +15,10 @@ export interface ConsensusReceipt {
     cumulativeGasUsed: bigint;
     logsBloom: Hex;
     logs: readonly ConsensusLog[];
-    /** OP-Stack deposit nonce (type 0x7e). Absent pre-Regolith. */
+    /**
+     * OP-Stack deposit nonce (type 0x7e). Encoded only together with
+     * `depositReceiptVersion` (Canyon and later). A pre-Canyon nonce is not encoded.
+     */
     depositNonce?: bigint;
     /** OP-Stack deposit receipt version (type 0x7e). Absent before Canyon. */
     depositReceiptVersion?: bigint;
@@ -164,17 +167,12 @@ export function encodeReceipt(receipt: ConsensusReceipt, index: number): { key: 
     if (receipt.cumulativeGasUsed < 0n) return null;
     const logs = receipt.logs.map((log) => [log.address, [...log.topics], log.data]);
     const extra: Hex[] = [];
-    if (receipt.type === 0x7e) {
-        if (receipt.depositNonce === undefined) {
-            if (receipt.depositReceiptVersion !== undefined) return null;
-        } else {
-            if (receipt.depositNonce < 0n) return null;
-            extra.push(bytesToHex(uintBytes(receipt.depositNonce)));
-            if (receipt.depositReceiptVersion !== undefined) {
-                if (receipt.depositReceiptVersion < 0n) return null;
-                extra.push(bytesToHex(uintBytes(receipt.depositReceiptVersion)));
-            }
-        }
+    // op-geth appends nonce and version together, and only when the version is present.
+    if (receipt.type === 0x7e && receipt.depositReceiptVersion !== undefined) {
+        if (receipt.depositNonce === undefined || receipt.depositNonce < 0n) return null;
+        if (receipt.depositReceiptVersion < 0n) return null;
+        extra.push(bytesToHex(uintBytes(receipt.depositNonce)));
+        extra.push(bytesToHex(uintBytes(receipt.depositReceiptVersion)));
     }
     let payload: Uint8Array;
     try {
@@ -217,6 +215,7 @@ function asHex(v: unknown, max: number = responseLimits.hex): Hex | null {
 /** Build the receipts trie from an `eth_getBlockReceipts` answer. `null` = cannot encode. Length is checked before any element is read. */
 export function receiptsRootFromRpc(raw: unknown): Hex | null {
     if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
+    if (receiptPayloadTooLarge(raw)) return null;
     const pairs: { key: Uint8Array; value: Uint8Array }[] = [];
     const seen = new Set<number>();
     let logCount = 0;
@@ -253,18 +252,13 @@ export function receiptsRootFromRpc(raw: unknown): Hex | null {
         }
         let depositNonce: bigint | undefined;
         let depositReceiptVersion: bigint | undefined;
-        if (Number(type) === 0x7e) {
-            if (r.depositNonce !== undefined) {
-                const nonce = hexQty(r.depositNonce);
-                if (nonce === null) return null;
-                depositNonce = nonce;
-            }
-            if (r.depositReceiptVersion !== undefined) {
-                if (depositNonce === undefined) return null;
-                const version = hexQty(r.depositReceiptVersion);
-                if (version === null) return null;
-                depositReceiptVersion = version;
-            }
+        if (Number(type) === 0x7e && r.depositReceiptVersion !== undefined) {
+            if (r.depositNonce === undefined) return null;
+            const nonce = hexQty(r.depositNonce);
+            const version = hexQty(r.depositReceiptVersion);
+            if (nonce === null || version === null) return null;
+            depositNonce = nonce;
+            depositReceiptVersion = version;
         }
         const encoded = encodeReceipt({
             type: Number(type), ok: status === 1n, cumulativeGasUsed: gas, logsBloom: bloom, logs,

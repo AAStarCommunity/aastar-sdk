@@ -21,7 +21,10 @@ export interface WatchedContract {
     address: Address;
     fromBlock: number;
     toBlock?: number;
-    /** Decoder/ABI generation, for example `BLSAggregator-4.12.0`. Part of the stored scope. */
+    /**
+     * Decoder/ABI generation, for example `BLSAggregator-4.12.0`. Part of the stored scope.
+     * Windows of one address must be contiguous and non-overlapping. A gap is a config error.
+     */
     generation: string;
     /**
      * `null` = unknown topic0 for this generation. `'ignore'` = known, not a guardian action.
@@ -58,12 +61,13 @@ export interface ScanRangeOptions {
     store: GuardianAuditStore;
     startBlock: number;
     maxBlocks: number;
+    /** Chain the providers must report from `eth_chainId`. Part of the stored scope. */
+    chainId: number;
     attributor?: Attributor;
     page?: number;
     /**
      * Most blocks the parent-hash walk may cover from the scanned tip up to finalized.
-     * Default 100_000. The walk reads headers in batches of 100, so a gap of N costs
-     * about N/100 header batches. A larger gap is INCOMPLETE and is not fetched.
+     * Default 100_000. See `scanRange` for the cost and the catch-up recovery.
      */
     maxAnchorBlocks?: number;
 }
@@ -229,10 +233,11 @@ function assertName(name: string): void {
 }
 
 /**
- * Hash of `startBlock` and the watched set. Address is lower case, `toBlock` is null when open.
+ * Hash of `chainId`, `startBlock`, and the watched set. Address is lower case, `toBlock` is null when open.
  * The list is sorted so input order does not change the scope.
  */
-export function watchScope(watched: readonly WatchedContract[], startBlock: number): Hex {
+export function watchScope(watched: readonly WatchedContract[], startBlock: number, chainId: number): Hex {
+    assertChainId(chainId);
     assertWatched(watched, startBlock);
     const rows = watched.map((contract) => ({
         address: requireAddress(contract.address).toLowerCase(),
@@ -251,11 +256,16 @@ export function watchScope(watched: readonly WatchedContract[], startBlock: numb
         if (a.generation !== b.generation) return a.generation < b.generation ? -1 : 1;
         return 0;
     });
-    return keccak256(stringToHex(JSON.stringify({ startBlock, watched: rows })));
+    return keccak256(stringToHex(JSON.stringify({ chainId, startBlock, watched: rows })));
+}
+
+function assertChainId(chainId: number): void {
+    if (!safeInt(chainId, 1)) throw new Error('chainId must be a positive safe integer');
 }
 
 function assertWatched(watched: readonly WatchedContract[], startBlock: number): void {
     if (!safeInt(startBlock, 0)) throw new Error('startBlock must be >= 0');
+    if (!Array.isArray(watched) || watched.length === 0) throw new Error('watched set is empty');
     const spans: { address: Address; from: number; to: number }[] = [];
     for (const contract of watched) {
         if (typeof contract.decode !== 'function') throw new Error('decoder is required');
@@ -268,13 +278,23 @@ function assertWatched(watched: readonly WatchedContract[], startBlock: number):
         if (contract.toBlock !== undefined && contract.toBlock < contract.fromBlock) {
             throw new Error(`toBlock precedes fromBlock for ${address}`);
         }
-        const end = contract.toBlock ?? Number.POSITIVE_INFINITY;
-        for (const prev of spans) {
-            if (prev.address === address && prev.from <= end && contract.fromBlock <= prev.to) {
-                throw new Error(`watched address ${address} has overlapping generation windows`);
-            }
+        spans.push({ address, from: contract.fromBlock, to: contract.toBlock ?? Number.POSITIVE_INFINITY });
+    }
+    const byAddress = new Map<string, { from: number; to: number }[]>();
+    for (let i = 0; i < spans.length; i++) {
+        const span = spans[i]!;
+        const list = byAddress.get(span.address);
+        if (list) list.push(span);
+        else byAddress.set(span.address, [span]);
+    }
+    for (const [address, list] of byAddress) {
+        list.sort((a, b) => a.from - b.from);
+        for (let i = 1; i < list.length; i++) {
+            const prev = list[i - 1]!;
+            const curr = list[i]!;
+            if (curr.from <= prev.to) throw new Error(`watched address ${address} has overlapping generation windows`);
+            if (curr.from > prev.to + 1) throw new Error(`watched address ${address} has a gap in generation windows`);
         }
-        spans.push({ address, from: contract.fromBlock, to: end });
     }
 }
 
@@ -283,8 +303,9 @@ const HEADER_BATCH = 100;
 
 function assertConfig(
     startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
-    maxAnchorBlocks: number | undefined,
+    maxAnchorBlocks: number | undefined, chainId: number,
 ): void {
+    assertChainId(chainId);
     assertWatched(watched, startBlock);
     if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error('maxBlocks must be >= 1');
     if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
@@ -328,6 +349,19 @@ async function judge(
 }
 
 /** Evidence read. The string is a sanitized reason: stage and provider name, never the error text. */
+/** `eth_chainId`. A bad answer is a config error and does not echo the payload. */
+async function readChainId(rpc: RawRpc): Promise<number> {
+    let raw: unknown;
+    try {
+        raw = await rpc.request({ method: 'eth_chainId', params: [] });
+    } catch {
+        throw new Error(`${rpc.name}: request failed`);
+    }
+    const got = quantity(raw);
+    if (got === null || got < 1) throw new Error('chain id unreadable');
+    return got;
+}
+
 async function readHeader(rpc: RawRpc, tag: number | 'finalized'): Promise<BlockHeader | string> {
     try {
         return await header(rpc, tag);
@@ -359,6 +393,7 @@ async function readReceipts(rpc: RawRpc, hash: Hex): Promise<unknown[] | string>
     try {
         const raw = await rpc.request({ method: 'eth_getBlockReceipts', params: [hash] });
         const copied = snapshotReceipts(raw);
+        if (copied === 'too-large') return 'receipts too large';
         if (!copied) return `receipts read failed for ${rpc.name}`;
         return copied;
     } catch {
@@ -580,16 +615,25 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * Scan `(checkpoint, min(finalized A, finalized B)]`, at most `maxBlocks`.
  * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE writes nothing.
  *
- * receiptsRoot, logsBloom, and parentHash are trusted because both providers agree
- * on them and parentHash reaches each provider's finalized header. The header hash
- * itself is not recomputed: several header fields are fork-dependent.
- * Both providers may share an upstream. A block whose agreed header bloom says the
- * watched address is absent is not receipt-proven: that bloom is a header field,
- * not a receipt body.
- * A clipped range (`to` below finalized) reads headers from `to + 1` toward finalized
- * in batches of 100. `maxAnchorBlocks` (default 100_000) caps that walk. A gap of N
- * costs about N/100 header batches, up to 1_000 batches at the default. A larger gap
- * is INCOMPLETE and is not fetched.
+ * Under the two-provider trust model (agreed headers are trusted; a block whose
+ * agreed bloom excludes the watched address is not receipt-proven). receiptsRoot,
+ * logsBloom, and parentHash are trusted because both providers agree on them and
+ * parentHash reaches each provider's finalized header. The header hash itself is
+ * not recomputed: several header fields are fork-dependent. Both providers may
+ * share an upstream.
+ * A clipped range (`to` below finalized) re-walks headers from `to + 1` through
+ * finalized on every scan, on both providers. Headers walked per provider are about
+ * `finalized - to`, in batches of 100. `maxAnchorBlocks` (default 100_000) caps that
+ * walk. A larger gap is INCOMPLETE, the checkpoint stays, and the next scan walks
+ * the same gap again. This scan does not cache anchor headers.
+ * Recovery when `finalized - to > maxAnchorBlocks`: raise `maxAnchorBlocks` to at
+ * least `finalized - to` for the catch-up run, or raise `maxBlocks` so the scanned
+ * tip lands inside the bound. `to = min(finalized, from + maxBlocks - 1)`, and the
+ * walk fits when `to >= finalized - maxAnchorBlocks`, so
+ * `maxBlocks >= finalized - maxAnchorBlocks - from + 1`. A keeper more than
+ * 100_000 blocks behind (about 2.3 days on OP at a 2 second block time) does not
+ * recover on the defaults.
+ * Request timeouts belong to the caller's transport. scanRange does not time out a request.
  * A fresh store whose `startBlock` is already past finalized still compares both
  * providers. Heights may differ. Header hashes must agree at the lower height.
  * That result is COMPLETE with count 0 only after the comparison, and it carries
@@ -602,9 +646,13 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
  * height must reach the checkpoint block, an equal height must carry its hash, and a
  * greater height must walk parentHash back to that block. A break commits nothing.
- * The stored scope hashes startBlock and each watched generation (address, fromBlock, toBlock).
- * The first commit records it. A later scan whose scope differs throws ScopeChangedError
- * before any chain read. A changed watch set needs a new store (a backfill), never a silent resume.
+ * The stored scope hashes chainId, startBlock, and each watched generation
+ * (address, fromBlock, toBlock). Windows of one address must be contiguous.
+ * The first commit records the scope. A later scan whose scope differs throws
+ * ScopeChangedError before any chain read. A changed watch set or chain needs a
+ * new store (a backfill), never a silent resume.
+ * The attributor runs before commit. Its side effects are not rolled back when
+ * commit throws StoreConflictError.
  * Providers, watched entries, the attributor, and numeric options are copied before the first await.
  * Later reads use that copy, so the caller cannot clear the watch set or replace the attributor in flight.
  * The store snapshot is deep-copied once, immediately after it is read. Later reads use that copy.
@@ -633,14 +681,15 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const maxBlocks = opts.maxBlocks;
     const pageOption = opts.page;
     const anchorOption = opts.maxAnchorBlocks;
+    const chainId = opts.chainId;
     const store = opts.store;
     const attributor = freezeAttributor(opts.attributor);
     assertName(pa.name);
     assertName(pb.name);
-    assertConfig(startBlock, maxBlocks, pageOption, watched, anchorOption);
+    assertConfig(startBlock, maxBlocks, pageOption, watched, anchorOption, chainId);
     const page = pageOption ?? 2000;
     const maxAnchorBlocks = anchorOption ?? DEFAULT_MAX_ANCHOR_BLOCKS;
-    const scope = watchScope(watched, startBlock);
+    const scope = watchScope(watched, startBlock, chainId);
     let snap: StoreSnapshot;
     try {
         snap = structuredClone(await store.snapshot());
@@ -648,6 +697,8 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         storeFailure('snapshot', error);
     }
     if (snap.scope !== null && snap.scope.toLowerCase() !== scope.toLowerCase()) throw new ScopeChangedError();
+    const [idA, idB] = await Promise.all([readChainId(pa), readChainId(pb)]);
+    if (idA !== chainId || idB !== chainId) throw new Error('chain id mismatch');
     const finA = await readHeader(pa, 'finalized');
     if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: startBlock };
     const finB = await readHeader(pb, 'finalized');

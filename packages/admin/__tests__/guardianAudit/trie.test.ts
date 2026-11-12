@@ -6,6 +6,7 @@ import fixture135 from './fixtures/sepolia-receipts-135.json';
 import fixtureFailed from './fixtures/sepolia-receipts-failed.json';
 import opSepolia from './fixtures/op-sepolia-block-receipts.json';
 import opMainnet from './fixtures/op-mainnet-block-receipts.json';
+import opPreCanyon from './fixtures/op-mainnet-110000000-pre-canyon-receipts.json';
 
 /** Independent RLP + Merkle Patricia encoder. It does not call trie.ts. */
 function rlp(item: Uint8Array | Uint8Array[]): Uint8Array {
@@ -211,6 +212,23 @@ describe('guardian-audit receipts trie (unit, not acceptance)', () => {
         expect(trieRoot([{ key: '0x01' as unknown as Uint8Array, value }])).toBeNull();
         expect(trieRoot(null as unknown as { key: Uint8Array; value: Uint8Array }[])).toBeNull();
     });
+
+    it('rejects two receipts that share a transactionIndex', () => {
+        expect(receiptsRootFromRpc([receipt(0, { data: '0x01' }), receipt(0, { data: '0x02' })])).toBeNull();
+        expect(receiptsRootFromRpc([receipt(0), receipt(1)])).not.toBeNull();
+    });
+
+    it('encodes a pre-Canyon deposit nonce only when a version is present', () => {
+        const bloom = `0x${'00'.repeat(256)}`;
+        const base = {
+            type: '0x7e', status: '0x1', cumulativeGasUsed: '0x1', logsBloom: bloom,
+            transactionIndex: '0x0', logs: [],
+        };
+        const nonceOnly = { ...base, depositNonce: '0x10' };
+        const versioned = { ...base, depositNonce: '0x10', depositReceiptVersion: '0x1' };
+        expect(receiptsRootFromRpc([nonceOnly])).toBe(receiptsRootFromRpc([base]));
+        expect(receiptsRootFromRpc([versioned])).not.toBe(receiptsRootFromRpc([base]));
+    });
 });
 
 describe('real Sepolia receipt tries (unit, not acceptance)', () => {
@@ -239,5 +257,14 @@ describe('real OP Mainnet receipt trie (DSR: mainnet is the deploy target) (unit
         expect(deposit?.depositReceiptVersion).toBeDefined();
         expect(opMainnet.receipts.length).toBeGreaterThan(2);
         expect(receiptsRootFromRpc(opMainnet.receipts)).toBe(opMainnet.header.receiptsRoot);
+    });
+
+    it('rebuilds pre-Canyon OP Mainnet block 110000000, whose deposit receipt has a nonce and no version', () => {
+        const deposit = opPreCanyon.receipts.find((item: { type: string }) => item.type === '0x7e') as Record<string, unknown>;
+        expect(deposit.depositNonce).toBeDefined();
+        expect(deposit.depositReceiptVersion).toBeUndefined();
+        expect(opPreCanyon.receipts.some((item: { type: string }) => item.type === '0x0')).toBe(true);
+        expect(opPreCanyon.receipts.some((item: { type: string }) => item.type === '0x2')).toBe(true);
+        expect(receiptsRootFromRpc(opPreCanyon.receipts)).toBe(opPreCanyon.header.receiptsRoot);
     });
 });
