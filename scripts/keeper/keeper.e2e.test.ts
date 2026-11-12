@@ -91,7 +91,7 @@ async function fakeRpc(opts: { spBroken?: boolean } = {}): Promise<Fake> {
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
     for (const c of cleanups.splice(0).reverse()) await c();
-});
+}, 30_000);
 
 function closeServer(server: Server): Promise<void> {
     return new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });

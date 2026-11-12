@@ -22,7 +22,7 @@ mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
 writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\n');
 chmodSync(join(bin, 'pnpm'), 0o755);
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
 function run(args: string[], key = 'dummy-not-a-key') {
     const r = spawnSync('bash', [join(dir, 'run-keeper.sh'), ...args], {

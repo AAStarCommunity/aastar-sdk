@@ -10,10 +10,15 @@ import { readFileSync } from 'node:fs';
 
 import { checkClosure, extractClosingClaims, extractRecords } from './check-followup-closure.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const open = (n: number) => `- [ ] FU-${n} · B · src=x · 2026-09-05 · text`;
 const doneBy = (n: number, pr: number) => `- [x] FU-${n} · B · src=x · 2026-09-05 · text · done=PR#${pr}`;
 
-describe('the two drifts this was built from', () => {
+describe('the two drifts this was built from', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('FU-31 shape is NOT covered — recorded, not asserted away', () => {
     // The entry was written down as a DISCOVERY by the PR that also fixed it, so it never passed
     // through `followups.sh done`. The body mentions it; the ledger on this branch says open.
@@ -44,7 +49,7 @@ describe('the two drifts this was built from', () => {
   });
 });
 
-describe('the deliberate escape hatch', () => {
+describe('the deliberate escape hatch', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('an explicit refusal to close is accepted, in English', () => {
     expect(checkClosure('This PR does not close FU-38 — it needs a CI secret.', [open(38)].join('\n'), 1)).toEqual([]);
   });
@@ -76,7 +81,7 @@ describe('the deliberate escape hatch', () => {
   );
 });
 
-describe('edges', () => {
+describe('edges', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('a follow-up mentioned but absent from the ledger is reported', () => {
     // Catches a typo'd number, which otherwise reads as a reference to work that does not exist.
     expect(checkClosure('Closes FU-999.', [open(1)].join('\n'), 1)[0].detail).toMatch(/no such entry exists/);
@@ -97,7 +102,7 @@ describe('edges', () => {
   });
 });
 
-describe('the real ledger', () => {
+describe('the real ledger', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   it('parses, and the entry format this gate depends on still matches', () => {
     // Instrument check: every assertion above uses synthetic lines, so a change to the real entry
     // format would leave them all green while the gate stopped recognising anything.
@@ -108,7 +113,7 @@ describe('the real ledger', () => {
   });
 });
 
-describe('who is claiming — judged by quotation syntax, not by PR numbers', () => {
+describe('who is claiming — judged by quotation syntax, not by PR numbers', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // Two rounds of narrowing, both found by running on real text. The second narrowing used "does the
   // line cite another PR number" as the signal for "someone else is claiming" — a correlated but
   // DIFFERENT quantity, wrong in both directions. All four cases below were measured in review.
@@ -147,7 +152,7 @@ describe('who is claiming — judged by quotation syntax, not by PR numbers', ()
   });
 });
 
-describe('the third kind of statement: recording someone else\'s closure', () => {
+describe('the third kind of statement: recording someone else\'s closure', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // Raised in review on #360, and it is the gap that mattered most: a bookkeeping-only PR had NO
   // honest phrasing. Claiming closure made the gate demand `done=PR#<this>` — which would have the
   // ledger assert that a one-line markdown change delivered a `requireStake()` watch. Saying nothing
@@ -207,7 +212,7 @@ describe('the third kind of statement: recording someone else\'s closure', () =>
   });
 });
 
-describe('FU-67 — the number printed and the number checked must be one computation', () => {
+describe('FU-67 — the number printed and the number checked must be one computation', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   // #375 review found the symptom; the cause turned out to be sharper than "a missing filter".
   // This file computed "the follow-ups this PR claims to close" TWICE — once inside `checkClosure`
   // (through `isQuoted`) and once in the runner's summary line (straight from `matchAll`). They

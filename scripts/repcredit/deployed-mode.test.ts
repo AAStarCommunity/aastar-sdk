@@ -25,6 +25,11 @@ import {
   resolveDeployedAddresses,
 } from './deployed-mode.js';
 
+// This file's import graph reaches child_process (directly, through a helper, or via a
+// non-literal import()). execFileSync / spawn block the event loop vitest's timer runs on,
+// so this bounds the verdict, not a hung child. A describe timeout does not cover hooks.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 const A = (h: string) => h as Address;
 const ROUTER = A('0xA97A752779ebfDA58612F6727Ec7C8366c39f897');
 const ALG1 = A('0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9');
@@ -32,7 +37,7 @@ const ALG1 = A('0x7ac7E9d471742FA4397Beef0B5b11fbD22D196a9');
 // Hoisted: `checkStackInvariants` now takes its expectations from the pin, so its tests need it too.
 const pin = readDeployedStackPin('sepolia');
 
-describe('resolveDeployedAddresses — provenance is recorded, never merged away', () => {
+describe('resolveDeployedAddresses — provenance is recorded, never merged away', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const book = CANONICAL_ADDRESSES[11155111] as unknown as Record<string, string>;
 
   it('resolves all nine keys the runner requires', () => {
@@ -77,7 +82,7 @@ describe('resolveDeployedAddresses — provenance is recorded, never merged away
   });
 });
 
-describe('checkStackInvariants — the two readings that differ from fresh-deploy', () => {
+describe('checkStackInvariants — the two readings that differ from fresh-deploy', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const good = { defaultThreshold: 2n, aggregatorVersion: 'BLSAggregator-4.11.0', nodeCount: 3 };
   // Both expectations come from the pin, exactly as the runner passes them. Reading them here
   // instead of retyping them is the point: a test that hard-codes what the code hard-codes agrees
@@ -125,7 +130,7 @@ describe('checkStackInvariants — the two readings that differ from fresh-deplo
   });
 });
 
-describe('checkAccountRouting — scoped to the accounts this run created', () => {
+describe('checkAccountRouting — scoped to the accounts this run created', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const expected = { validatorRouter: ROUTER, algorithm1: ALG1 };
 
   it('accepts accounts that route to the frozen router and validator', () => {
@@ -154,7 +159,7 @@ describe('checkAccountRouting — scoped to the accounts this run created', () =
   });
 });
 
-describe('checkFunderRole — the funder may fund, and may not govern', () => {
+describe('checkFunderRole — the funder may fund, and may not govern', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const FUNDER = A('0x00000000000000000000000000000000000f00d1');
   const gov = [
     { label: 'registry.owner', address: A('0x0000000000000000000000000000000000000001') },
@@ -194,7 +199,7 @@ describe('checkFunderRole — the funder may fund, and may not govern', () => {
   });
 });
 
-describe('checkValidatorRoster — two independent paths to the same set', () => {
+describe('checkValidatorRoster — two independent paths to the same set', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const SLOTS = [
     '0x5D870E132CC010E882E90f4aFaACDC4F19C7Eca3',
     '0x40F0b12128f256B62Fa22b36D37012Ee004bbd1f',
@@ -251,7 +256,7 @@ describe('checkValidatorRoster — two independent paths to the same set', () =>
   });
 });
 
-describe('the reads — wired for the first time in #387, so they are pinned here', () => {
+describe('the reads — wired for the first time in #387, so they are pinned here', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const AGG = A('0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D');
   const REG = A('0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71');
   const ZERO = A('0x0000000000000000000000000000000000000000');
@@ -315,7 +320,7 @@ describe('the reads — wired for the first time in #387, so they are pinned her
   });
 });
 
-describe('readValidatorSetFromManifest — refuses an artefact that is not the pinned one', () => {
+describe('readValidatorSetFromManifest — refuses an artefact that is not the pinned one', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
   const bytes = (o: unknown) => new TextEncoder().encode(JSON.stringify(o));
   const good = { validatorSet: { slotOrder: ['0x1'], activeCount: 3, orderedAddressSetHash: '0xabc' } };
 

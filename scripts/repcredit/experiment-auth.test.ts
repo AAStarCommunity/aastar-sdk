@@ -70,7 +70,7 @@ function recordingFetch(responses: Array<{ status: number; body?: unknown } | 'n
   return { impl, calls };
 }
 
-describe('experiment auth client', () => {
+describe('experiment auth client', { timeout: 30_000 }, () => {
   it('signs the exact bytes it sends', async () => {
     const secret = generateExperimentSecret();
     const { impl, calls } = recordingFetch([{ status: 200, body: { ok: true } }]);
@@ -350,7 +350,7 @@ function committedGuardSource(): string {
  * exercise both modes in one process. These cases do — and a guard nobody can make fire is not a
  * guard: each one below FAILS if the env var is ever allowed to redirect a release-grade run.
  */
-describe('reviewed-revision authority', () => {
+describe('reviewed-revision authority', { timeout: 30_000 }, () => {
   const PINNED = 'e0b5efe3c5e86bd070b6e9dc90f8ebd69c4133f9';
 
   it('release mode takes the revision from the repo, not the environment', () => {
@@ -618,7 +618,7 @@ describe('real YAAA /repcredit HTTP guard', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
     anvil?.kill('SIGTERM');
     await new Promise(r => setTimeout(r, 300));
     if (workdir) rmSync(workdir, { recursive: true, force: true });
-  });
+  }, SPAWN_VERDICT_TIMEOUT_MS);
 
   it('has a live node to test against (or is explicitly allowed to skip)', () => {
     if (artifactProblem && forceHttp) {

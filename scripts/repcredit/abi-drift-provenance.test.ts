@@ -643,7 +643,7 @@ function withFixture(bypass: Bypass, assertions: (lenient: Run, strict: Run) => 
  * are deliberately literal string comparisons against the workflow TEXT rather than a YAML parse,
  * so a value moved into an expression or a matrix reads as a failure to be reviewed, not as a pass.
  */
-describe('the CI workflow checks out exactly the reviewed revisions', () => {
+describe('the CI workflow checks out exactly the reviewed revisions', { timeout: 30_000 }, () => {
   const workflow = readFileSync(join(SDK_REPO, '.github/workflows/ci.yml'), 'utf8');
   const pin = JSON.parse(readFileSync(join(SDK_REPO, 'scripts/upstream-abi-pin.json'), 'utf8')) as {
     repos: Record<string, { revision: string }>;

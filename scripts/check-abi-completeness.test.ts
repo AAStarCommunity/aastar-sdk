@@ -25,7 +25,7 @@ const AA_SENTINELS = ['AAStarAirAccountV7', 'AAStarAirAccountFactoryV7'];
 const roots: string[] = [];
 afterEach(() => {
   for (const r of roots.splice(0)) rmSync(r, { recursive: true, force: true });
-});
+}, 30_000);
 
 /** Build <root>/sdk + sibling upstreams; `null` contracts = the src dir exists but is empty. */
 function layout(spContracts: string[] | null, aaContracts: string[] = AA_SENTINELS): string {
