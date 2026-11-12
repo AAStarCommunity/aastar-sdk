@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { header, pagedLogs, rawGetLogs, responseLimits, snapshotReceipts, type RawRpc } from '../../src/guardianAudit/rpc';
+import { header, pagedLogs, rawGetLogs, receiptPayloadTooLarge, responseLimits, snapshotReceipts, type RawRpc } from '../../src/guardianAudit/rpc';
 
 const ADDR = '0x1111111111111111111111111111111111111111' as Address;
 
@@ -151,5 +151,30 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
                 return true;
             });
         }
+    });
+});
+
+describe('receiptPayloadTooLarge checks array counts before reading elements (Codex verify on #445 G3) (unit, not acceptance)', () => {
+    /** An array of `length` whose elements throw if read. */
+    const untouchable = (length: number) => {
+        const a: unknown[] = [];
+        a.length = length;
+        Object.defineProperty(a, 0, { get() { throw new Error('element read'); } });
+        return a;
+    };
+    it('too many logs in one receipt', () => {
+        expect(receiptPayloadTooLarge([{ logs: untouchable(responseLimits.logsPerReceipt + 1) }])).toBe(true);
+    });
+    it('too many logs across receipts', () => {
+        const per = responseLimits.logsPerReceipt;
+        const receipts = Array.from({ length: Math.ceil(responseLimits.logs / per) }, () => ({ logs: new Array(per).fill(null) }));
+        receipts.push({ logs: untouchable(per) });
+        expect(receiptPayloadTooLarge(receipts)).toBe(true);
+    });
+    it('too many topics in one log', () => {
+        expect(receiptPayloadTooLarge([{ logs: [{ data: '0x', topics: untouchable(responseLimits.topics + 1) }] }])).toBe(true);
+    });
+    it('too many receipts', () => {
+        expect(receiptPayloadTooLarge(untouchable(responseLimits.receipts + 1))).toBe(true);
     });
 });

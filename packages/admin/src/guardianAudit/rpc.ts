@@ -110,24 +110,33 @@ function hexByteLen(v: unknown): number {
 }
 
 /**
- * data, topics, and logsBloom bytes. `true` when one receipt exceeds 1 MiB or the block exceeds 32 MiB.
- * The length of `raw` must already be within `responseLimits.receipts`. Returns before encoding.
+ * data, topics, and logsBloom bytes. `true` when one receipt exceeds 1 MiB or the block exceeds 32 MiB,
+ * or when any array is longer than its count limit (checked before its elements are read).
+ * Returns before encoding.
  */
 export function receiptPayloadTooLarge(raw: unknown[]): boolean {
+    if (raw.length > responseLimits.receipts) return true;
     let total = 0;
+    let logCount = 0;
     for (let i = 0; i < raw.length; i++) {
         const item = raw[i];
         if (typeof item !== 'object' || item === null) continue;
         const rec = item as Record<string, unknown>;
         let bytes = hexByteLen(rec.logsBloom);
-        if (Array.isArray(rec.logs)) {
-            for (let j = 0; j < rec.logs.length; j++) {
-                const log = rec.logs[j];
+        const logs = rec.logs;
+        if (Array.isArray(logs)) {
+            if (logs.length > responseLimits.logsPerReceipt) return true;
+            logCount += logs.length;
+            if (logCount > responseLimits.logs) return true;
+            for (let j = 0; j < logs.length; j++) {
+                const log = logs[j];
                 if (typeof log === 'object' && log !== null) {
                     const row = log as Record<string, unknown>;
                     bytes += hexByteLen(row.data);
-                    if (Array.isArray(row.topics)) {
-                        for (let k = 0; k < row.topics.length; k++) bytes += hexByteLen(row.topics[k]);
+                    const topics = row.topics;
+                    if (Array.isArray(topics)) {
+                        if (topics.length > responseLimits.topics) return true;
+                        for (let k = 0; k < topics.length; k++) bytes += hexByteLen(topics[k]);
                     }
                 }
                 if (bytes > responseLimits.receiptPayload) return true;
