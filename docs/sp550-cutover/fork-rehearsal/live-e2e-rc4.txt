@@ -1,0 +1,15 @@
+# SP 5.5.0 rc.4 local Sepolia fork — scripts/sp550-live-e2e.ts --fork-setup (2026-11-11)
+# fork block 12090052 (archive source via SP550_FORK_URL, not logged), SP fbd74fb1, UltraRelay-AAStar bc38114 on 127.0.0.1:3046
+# gate: pins.fork.json + spVersion, --block latest, allowRc, bookOverrides aPNTs/xPNTsFactory (fork-only)
+fork-only SDK book override: aPNTs 0x696A73701b104c6cCBbAadDD2216788ea08EaB89 -> 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7
+fork-only SDK book override: xPNTsFactory 0x67422d2e44a33c8dA99b3b776841bF316bD209a2 -> 0xC85d2B918209E7b53613965A1e624E3759DC6224
+=== SP 5.5.0 cutover gate — sepolia (chain 11155111, upgrade), all reads at block 12090090 (lowest latest), pins from <out>/pins.e2e.json (= pins.fork.json + spVersion) ===
+fork setup: createAccount · tx 0x340b46032be427be30c8648126972a470e4069eead81e523e2f7b8b4d60c46b5
+fork setup: GToken.approve(staking, 300000000000000000) · tx 0x4c208d4343c2a905f1aef6609e7c5fbc97fb589daa33ddfab4b24a85df01be2a
+fork setup: Registry.safeMintForRole(ENDUSER) · tx 0x1541ce84f4e3394bbd5747fb767531968663a505ae5c0aa3aabf96e0dae10a3f
+fork setup: xPNTs.mint · tx 0xd54c5c636d73d75180ef14e8d36b49426a9c720799bbc26e44f7e1b45c5e991a
+RESULT S1 PaymasterClient.submitGaslessUserOperation: success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x00 (SDK-selected) allowance used 0->84193714030298473587/5000000000000000000000 autoRenewUsed 0->0 AllowanceRenewed(bySP)=false · tx 0x0204450ff7fd407a80b2cf9655a75b06f04a50a634902081c571b0b717ff33ee
+RESULT S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000): success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x00 (SDK-selected) allowance used 84193714030298473587->162647519155138371441/250000000000000000000 autoRenewUsed 0->0 AllowanceRenewed(bySP)=false · tx 0xe77d0a2f4c502c9d7ccf1b97a4dd595bffd9f5e48f790b4394136ef2c2b716f8
+RESULT S3b spend 1/8: success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x01 (SDK-selected) allowance used 162647519155138371441->80973775470666347692/250000000000000000000 autoRenewUsed 0->1 AllowanceRenewed(bySP)=true · tx 0x4525b76ac5068d98c30729ff63c13952965523c210504f4af910e624f9ddfd91
+RESULT S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[124] of tx 0x4525b76ac5068d98c30729ff63c13952965523c210504f4af910e624f9ddfd91; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1
+PASS
