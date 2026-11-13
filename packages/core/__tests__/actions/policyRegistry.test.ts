@@ -64,33 +64,61 @@ describe('PolicyRegistryActions', () => {
     });
   });
 
-  describe('getContractScope', () => {
-    it('decodes the ContractScope struct', async () => {
-      publicClient.readContract.mockResolvedValue({
-        allowed: true,
-        requireDVTAlways: false,
-        velocityLimit: 9999n,
-        velocityWindow: 3600n,
-        configured: true,
-      });
+  describe('getTargetScope', () => {
+    const scope = { allowed: true, requireDVTAlways: false, velocityWindow: 3600n, configured: true };
+    it('reads getTargetScope and decodes the 4-field ContractScope (no velocityLimit since 3.0)', async () => {
+      publicClient.readContract.mockResolvedValue(scope);
       const actions = policyRegistryActions(PR_ADDRESS)(publicClient);
-      const r = await actions.getContractScope({ sender: SENDER, target: TARGET });
-      expect(r).toEqual({
-        allowed: true,
-        requireDVTAlways: false,
-        velocityLimit: 9999n,
-        velocityWindow: 3600n,
-        configured: true,
-      });
+      expect(await actions.getTargetScope({ sender: SENDER, target: TARGET })).toEqual(scope);
+      const call = publicClient.readContract.mock.calls[0][0];
+      expect(call.functionName).toBe('getTargetScope');
+      expect(call.args).toEqual([SENDER, TARGET]);
+    });
+    it('the deprecated getContractScope alias makes the same on-chain call', async () => {
+      publicClient.readContract.mockResolvedValue(scope);
+      const { getContractScope } = policyRegistryActions(PR_ADDRESS)(publicClient); // detached: no `this`
+      expect(await getContractScope({ sender: SENDER, target: TARGET })).toEqual(scope);
+      expect(publicClient.readContract.mock.calls[0][0].functionName).toBe('getTargetScope');
+    });
+  });
+
+  describe('getTargetVelocity', () => {
+    it('passes (sender, target, asset) and decodes (limit, configured)', async () => {
+      publicClient.readContract.mockResolvedValue([9999n, true]);
+      const actions = policyRegistryActions(PR_ADDRESS)(publicClient);
+      expect(await actions.getTargetVelocity({ sender: SENDER, target: TARGET, asset: ASSET })).toEqual({ limit: 9999n, configured: true });
+      const call = publicClient.readContract.mock.calls[0][0];
+      expect(call.functionName).toBe('getTargetVelocity');
+      expect(call.args).toEqual([SENDER, TARGET, ASSET]);
     });
   });
 
   describe('getAssetSpend', () => {
-    it('decodes (spentInWindow, windowStart)', async () => {
-      publicClient.readContract.mockResolvedValue([1234n, 1700000000n]);
+    it('decodes (spentInWindow, windowStart); the counter is uint256 since 3.0', async () => {
+      const big = 2n ** 200n;
+      publicClient.readContract.mockResolvedValue([big, 1700000000n]);
       const actions = policyRegistryActions(PR_ADDRESS)(publicClient);
       const r = await actions.getAssetSpend({ sender: SENDER, asset: ASSET });
-      expect(r).toEqual({ spentInWindow: 1234n, windowStart: 1700000000n });
+      expect(r).toEqual({ spentInWindow: big, windowStart: 1700000000n });
+    });
+  });
+
+  describe('getTargetSpend (3.0.2)', () => {
+    it('passes (sender, target, asset) and decodes (spentInWindow, windowStart)', async () => {
+      publicClient.readContract.mockResolvedValue([77n, 1700000000n]);
+      const actions = policyRegistryActions(PR_ADDRESS)(publicClient);
+      expect(await actions.getTargetSpend({ sender: SENDER, target: TARGET, asset: ASSET })).toEqual({ spentInWindow: 77n, windowStart: 1700000000n });
+      const call = publicClient.readContract.mock.calls[0][0];
+      expect(call.functionName).toBe('getTargetSpend');
+      expect(call.args).toEqual([SENDER, TARGET, ASSET]);
+    });
+    it('the vendored ABI is 3.0.2: getTargetSpend 0x0c4752d2 and VelocityDisabled 0x071caaf1', async () => {
+      const { PolicyRegistryABI } = await import('../../src/abis/index');
+      const { toFunctionSelector, toFunctionSignature, keccak256, toHex } = await import('viem');
+      const fn = (PolicyRegistryABI as any[]).find((e) => e.type === 'function' && e.name === 'getTargetSpend');
+      expect(toFunctionSelector(toFunctionSignature(fn))).toBe('0x0c4752d2');
+      expect((PolicyRegistryABI as any[]).some((e) => e.type === 'error' && e.name === 'VelocityDisabled')).toBe(true);
+      expect(keccak256(toHex('VelocityDisabled()')).slice(0, 10)).toBe('0x071caaf1');
     });
   });
 
@@ -142,7 +170,7 @@ describe('PolicyRegistryActions', () => {
   // ── Immediate tighten / freeze writes ───────────────────────────────────────
   describe('immediate tighten / freeze (guardian or timelock)', () => {
     const assetParams = { dvtTriggerAmount: 100n, perTxHardCap: 500n, dailyLimit: 1000n, windowSeconds: 0n };
-    const scopeParams = { allowed: false, requireDVTAlways: true, velocityLimit: 0n, velocityWindow: 0n, selectorAllowlist: [SELECTOR] };
+    const scopeParams = { allowed: false, requireDVTAlways: true, velocityWindow: 0n, selectorAllowlist: [SELECTOR] };
 
     it('tightenAssetPolicy calls writeContract with (sender, asset, params)', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash');
@@ -162,6 +190,15 @@ describe('PolicyRegistryActions', () => {
       expect(call.args).toEqual([SENDER, TARGET, scopeParams]);
     });
 
+    it('tightenTargetVelocity calls writeContract with (sender, target, asset, limit)', async () => {
+      walletClient.writeContract.mockResolvedValue('0xhash');
+      const actions = policyRegistryActions(PR_ADDRESS)(walletClient);
+      await actions.tightenTargetVelocity({ sender: SENDER, target: TARGET, asset: ASSET, limit: 10n, account: walletClient.account });
+      const call = walletClient.writeContract.mock.calls[0][0];
+      expect(call.functionName).toBe('tightenTargetVelocity');
+      expect(call.args).toEqual([SENDER, TARGET, ASSET, 10n]);
+    });
+
     it('freezeSender calls writeContract with (sender)', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash');
       const actions = policyRegistryActions(PR_ADDRESS)(walletClient);
@@ -175,7 +212,7 @@ describe('PolicyRegistryActions', () => {
   // ── Timelocked loosen / admin writes (onlyTimelock) ─────────────────────────
   describe('timelocked loosen / admin (onlyTimelock — routed through external TimelockController)', () => {
     const assetParams = { dvtTriggerAmount: 100n, perTxHardCap: 500n, dailyLimit: 1000n, windowSeconds: 0n };
-    const scopeParams = { allowed: true, requireDVTAlways: false, velocityLimit: 9999n, velocityWindow: 3600n, selectorAllowlist: [SELECTOR] };
+    const scopeParams = { allowed: true, requireDVTAlways: false, velocityWindow: 3600n, selectorAllowlist: [SELECTOR] };
 
     it('setAssetPolicy calls writeContract with (sender, asset, params)', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash');
@@ -193,6 +230,15 @@ describe('PolicyRegistryActions', () => {
       const call = walletClient.writeContract.mock.calls[0][0];
       expect(call.functionName).toBe('setContractScope');
       expect(call.args).toEqual([SENDER, TARGET, scopeParams]);
+    });
+
+    it('setTargetVelocity calls writeContract with (sender, target, asset, limit)', async () => {
+      walletClient.writeContract.mockResolvedValue('0xhash');
+      const actions = policyRegistryActions(PR_ADDRESS)(walletClient);
+      await actions.setTargetVelocity({ sender: SENDER, target: TARGET, asset: ASSET, limit: 9999n, account: walletClient.account });
+      const call = walletClient.writeContract.mock.calls[0][0];
+      expect(call.functionName).toBe('setTargetVelocity');
+      expect(call.args).toEqual([SENDER, TARGET, ASSET, 9999n]);
     });
 
     it('unfreezeSender calls writeContract with (sender)', async () => {

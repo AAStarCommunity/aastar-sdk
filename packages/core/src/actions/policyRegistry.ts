@@ -40,15 +40,19 @@ export type AssetPolicyInput = {
     windowSeconds: bigint;
 };
 
-/** Per-(sender, target) scope. Selectors are queried via {@link isSelectorAllowed}. */
+/**
+ * Per-(sender, target) target-global scope. Selectors are queried via {@link isSelectorAllowed};
+ * the velocity LIMIT is per asset since PolicyRegistry-3.0 (see {@link TargetVelocity}).
+ */
 export type ContractScope = {
     /** target on this sender's call-target allowlist. */
     allowed: boolean;
     /** this target always requires DVT co-sign regardless of amount. */
     requireDVTAlways: boolean;
-    /** max cumulative amount routed to this target per window. */
-    velocityLimit: bigint;
-    /** velocity window length, seconds (0 => no velocity limit). */
+    /**
+     * velocity window length, seconds (0 => no velocity limit). When non-zero, every asset moved
+     * to this target needs its own {@link TargetVelocity}; a missing one makes checkPolicy REJECT.
+     */
     velocityWindow: bigint;
     /** false => no scope set for this (sender, target). */
     configured: boolean;
@@ -58,10 +62,23 @@ export type ContractScope = {
 export type ContractScopeInput = {
     allowed: boolean;
     requireDVTAlways: boolean;
-    velocityLimit: bigint;
     velocityWindow: bigint;
     /** selectors to mark allowed for this target (ADDITIVE on `setContractScope`). */
     selectorAllowlist: Hex[];
+};
+
+/**
+ * Per-(sender, target, asset) velocity limit: max cumulative native-unit amount of `asset` routed
+ * to `target` per {@link ContractScope.velocityWindow}. Keyed by asset so incomparable units never mix.
+ */
+export type TargetVelocity = {
+    limit: bigint;
+    /**
+     * false => no CURRENT limit: never set, or set before the target's velocity window was disabled
+     * (disabling invalidates every stored limit; re-enabling needs a fresh setTargetVelocity), or the
+     * window is 0 now (PolicyRegistry-3.0.2). With a non-zero window, false fails closed (REJECT).
+     */
+    configured: boolean;
 };
 
 /** Sender-keyed cumulative spend counter for one asset/target window. */
@@ -84,10 +101,23 @@ export type PolicyRegistryActions = {
 
     // ── Config + counter views ─────────────────────────────────────────────────
     getAssetPolicy: (args: { sender: Address, asset: Address }) => Promise<AssetPolicy>;
+    /** Target-global scope (`getTargetScope` on chain). */
+    getTargetScope: (args: { sender: Address, target: Address }) => Promise<ContractScope>;
+    /** @deprecated Renamed on chain to `getTargetScope` (PolicyRegistry-3.0); same call. */
     getContractScope: (args: { sender: Address, target: Address }) => Promise<ContractScope>;
+    /** Velocity limit for `asset` routed to `target` by `sender`; stale or disabled limits read as unconfigured. */
+    getTargetVelocity: (args: { sender: Address, target: Address, asset: Address }) => Promise<TargetVelocity>;
     isSelectorAllowed: (args: { sender: Address, target: Address, selector: Hex }) => Promise<boolean>;
-    /** Cumulative native-unit spend + window start for this (sender, asset). */
+    /**
+     * Cumulative native-unit spend + window start for this (sender, asset). Window-aware since
+     * PolicyRegistry-3.0.2: `spentInWindow` is 0 once the window has expired.
+     */
     getAssetSpend: (args: { sender: Address, asset: Address }) => Promise<SpendCounter>;
+    /**
+     * Cumulative spend of `asset` routed to `target` in the current target velocity window
+     * (PolicyRegistry-3.0.2). 0 when the window expired, velocity is disabled, or no current limit exists.
+     */
+    getTargetSpend: (args: { sender: Address, target: Address, asset: Address }) => Promise<SpendCounter>;
     isFrozen: (args: { sender: Address }) => Promise<boolean>;
     isAuthorizedConsumer: (args: { consumer: Address }) => Promise<boolean>;
 
@@ -122,6 +152,12 @@ export type PolicyRegistryActions = {
      */
     tightenContractScope: (args: { sender: Address, target: Address, params: ContractScopeInput, account?: Account | Address }) => Promise<Hash>;
     /**
+     * Immediately lower an EXISTING (sender, target, asset) velocity limit. Reverts
+     * `VelocityDisabled` while the target's velocity window is 0, and `NotStrictlyTighter` if no
+     * current limit exists or `limit` is higher. `onlyGuardianOrTimelock`.
+     */
+    tightenTargetVelocity: (args: { sender: Address, target: Address, asset: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
+    /**
      * Immediately freeze `sender`: {@link checkPolicy} returns REJECT for all ops.
      * `onlyGuardianOrTimelock` (guardian = AirAccount 2-of-3 RecoveryService). Lifting
      * the freeze is a loosening → {@link unfreezeSender} (timelocked).
@@ -147,6 +183,12 @@ export type PolicyRegistryActions = {
      */
     setContractScope: (args: { sender: Address, target: Address, params: ContractScopeInput, account?: Account | Address }) => Promise<Hash>;
     /**
+     * Set the (sender, target, asset) velocity limit. `onlyTimelock` — schedule + execute through
+     * {@link timelock}, like {@link setContractScope}. Reverts `VelocityDisabled` (no event) while
+     * the target's velocity window is 0, so enable the window with setContractScope first.
+     */
+    setTargetVelocity: (args: { sender: Address, target: Address, asset: Address, limit: bigint, account?: Account | Address }) => Promise<Hash>;
+    /**
      * Lift a freeze on `sender`. Unfreeze is a loosening → `onlyTimelock`; must be
      * scheduled + executed through the external {@link timelock} controller (2-day delay).
      * Calling directly reverts `NotTimelock`.
@@ -162,7 +204,7 @@ export type PolicyRegistryActions = {
 };
 
 /**
- * Action factory for the SuperPaymaster v5.4 PolicyRegistry (DVT layer-1 account policy).
+ * Action factory for the SuperPaymaster PolicyRegistry-3.0.2 (DVT layer-1 account policy).
  *
  * Asymmetric lifecycle (enforced ON-CHAIN — the SDK is only a client and does NOT
  * re-implement the delay):
@@ -221,25 +263,46 @@ export const policyRegistryActions = (address: Address) => (client: PublicClient
         }
     },
 
-    async getContractScope({ sender, target }) {
+    async getTargetScope({ sender, target }) {
         try {
             validateAddress(sender, 'sender');
             validateAddress(target, 'target');
             const r = await (client as PublicClient).readContract({
                 address,
                 abi: PolicyRegistryABI,
-                functionName: 'getContractScope',
+                functionName: 'getTargetScope',
                 args: [sender, target]
             }) as any;
             return {
                 allowed: r.allowed as boolean,
                 requireDVTAlways: r.requireDVTAlways as boolean,
-                velocityLimit: r.velocityLimit as bigint,
                 velocityWindow: r.velocityWindow as bigint,
                 configured: r.configured as boolean,
             };
         } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'getContractScope');
+            throw AAStarError.fromViemError(error as Error, 'getTargetScope');
+        }
+    },
+
+    async getContractScope(args) {
+        return policyRegistryActions(address)(client).getTargetScope(args);
+    },
+
+    async getTargetVelocity({ sender, target, asset }) {
+        try {
+            validateAddress(sender, 'sender');
+            validateAddress(target, 'target');
+            validateAddress(asset, 'asset');
+            const r = await (client as PublicClient).readContract({
+                address,
+                abi: PolicyRegistryABI,
+                functionName: 'getTargetVelocity',
+                args: [sender, target, asset]
+            }) as any;
+            // outputs: (uint128 limit, bool configured)
+            return { limit: r[0] as bigint, configured: r[1] as boolean };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getTargetVelocity');
         }
     },
 
@@ -269,10 +332,28 @@ export const policyRegistryActions = (address: Address) => (client: PublicClient
                 functionName: 'getAssetSpend',
                 args: [sender, asset]
             }) as any;
-            // outputs: (uint128 spentInWindow, uint64 windowStart)
+            // outputs: (uint256 spentInWindow, uint64 windowStart)
             return { spentInWindow: r[0] as bigint, windowStart: r[1] as bigint };
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'getAssetSpend');
+        }
+    },
+
+    async getTargetSpend({ sender, target, asset }) {
+        try {
+            validateAddress(sender, 'sender');
+            validateAddress(target, 'target');
+            validateAddress(asset, 'asset');
+            const r = await (client as PublicClient).readContract({
+                address,
+                abi: PolicyRegistryABI,
+                functionName: 'getTargetSpend',
+                args: [sender, target, asset]
+            }) as any;
+            // outputs: (uint256 spentInWindow, uint64 windowStart)
+            return { spentInWindow: r[0] as bigint, windowStart: r[1] as bigint };
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'getTargetSpend');
         }
     },
 
@@ -407,6 +488,25 @@ export const policyRegistryActions = (address: Address) => (client: PublicClient
         }
     },
 
+    async tightenTargetVelocity({ sender, target, asset, limit, account }) {
+        try {
+            validateAddress(sender, 'sender');
+            validateAddress(target, 'target');
+            validateAddress(asset, 'asset');
+            validateRequired(limit, 'limit');
+            return await (client as any).writeContract({
+                address,
+                abi: PolicyRegistryABI,
+                functionName: 'tightenTargetVelocity',
+                args: [sender, target, asset, limit],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'tightenTargetVelocity');
+        }
+    },
+
     async freezeSender({ sender, account }) {
         try {
             validateAddress(sender, 'sender');
@@ -457,6 +557,25 @@ export const policyRegistryActions = (address: Address) => (client: PublicClient
             });
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'setContractScope');
+        }
+    },
+
+    async setTargetVelocity({ sender, target, asset, limit, account }) {
+        try {
+            validateAddress(sender, 'sender');
+            validateAddress(target, 'target');
+            validateAddress(asset, 'asset');
+            validateRequired(limit, 'limit');
+            return await (client as any).writeContract({
+                address,
+                abi: PolicyRegistryABI,
+                functionName: 'setTargetVelocity',
+                args: [sender, target, asset, limit],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            throw AAStarError.fromViemError(error as Error, 'setTargetVelocity');
         }
     },
 

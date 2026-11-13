@@ -104,7 +104,8 @@ class PaymasterOperator {
   
   // 流动性管理
   depositCollateral(amount: bigint): Promise<Hash>
-  withdrawCollateral(amount: bigint): Promise<Hash>
+  requestCollateralWithdrawal(amount: bigint): Promise<Hash>   // 5.5.1+: starts the 48 h delay
+  executeCollateralWithdrawal(amount?: bigint): Promise<Hash>  // matured request (5.4.2: one call)
   
   // 运营监控
   getOperatorStats(): Promise<OperatorStats>

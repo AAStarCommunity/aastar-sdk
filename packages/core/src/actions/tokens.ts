@@ -51,11 +51,18 @@ const blockPin = (blockNumber?: bigint, blockTag?: BlockTag): BlockPin =>
 export type Credibility = {
     /** 0–100 trust score (uint8) derived on-chain from backing vs. issuance. */
     credibilityScore: number;
-    /** True when circulating (issued) value exceeds backing — the community over-issued its xPNTs. */
+    /**
+     * True when circulating (issued) value exceeds backing — the community over-issued its xPNTs.
+     * From SuperPaymaster 5.5.1 on, backing counts only the operator's unescrowed aPNTs balance:
+     * an amount in a pending `requestWithdraw` no longer backs issuance, so a request alone can flip this.
+     */
     isOverIssued: boolean;
     /** Circulating xPNTs value in the contract's USD accounting unit (raw uint256). */
     issuedValueUSD: bigint;
-    /** Backing/collateral value in the contract's USD accounting unit (raw uint256). */
+    /**
+     * Backing/collateral value in the contract's USD accounting unit (raw uint256). From
+     * SuperPaymaster 5.5.1 on this is the unescrowed aPNTs balance only (withdrawal escrow excluded).
+     */
     backingValueUSD: bigint;
     /** Effective issuance cap in the contract's USD accounting unit (raw uint256). */
     effectiveCapUSD: bigint;
@@ -157,7 +164,7 @@ export type XPNTsTokenActions = ERC20Actions & {
     // --- Economic credibility (CC-33: community xPNTs credibility disclosure) ---
     /** 0–100 on-chain trust score for a community xPNTs token. */
     credibilityScore: (args: { token: Address } & BlockPin) => Promise<number>;
-    /** True when the community over-issued (circulating value > backing). */
+    /** True when the community over-issued (circulating value > backing; backing excludes withdrawal escrow from SP 5.5.1). */
     isOverIssued: (args: { token: Address } & BlockPin) => Promise<boolean>;
     issuedValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;
     backingValueUSD: (args: { token: Address } & BlockPin) => Promise<bigint>;

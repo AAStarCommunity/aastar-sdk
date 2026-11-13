@@ -111,6 +111,10 @@ export type SuperPaymasterActions = {
     depositETH: (args: { value: bigint, account?: Account | Address }) => Promise<Hash>;
     depositFor: (args: { targetOperator: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
     withdrawTo: (args: { to: Address, amount: bigint, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * `withdraw(amount)`: one call on 5.4.2. On SuperPaymaster-5.5.1 the same selector REQUIRES a
+     * matured `requestWithdraw` (OPERATOR_WITHDRAWAL_DELAY, 48 h) — use superPaymasterWithdrawalActions.
+     */
     withdraw: (args: { amount: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // Staking (for SuperPaymaster role)

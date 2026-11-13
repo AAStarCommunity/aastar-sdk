@@ -7,6 +7,11 @@
           "name": "_registry",
           "type": "address",
           "internalType": "address"
+        },
+        {
+          "name": "firstProposalId",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "nonpayable"
@@ -488,6 +493,17 @@
     },
     {
       "type": "error",
+      "name": "InvalidFirstProposalId",
+      "inputs": [
+        {
+          "name": "firstProposalId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
       "name": "NotActiveValidator",
       "inputs": [
         {
@@ -542,6 +558,11 @@
     {
       "type": "error",
       "name": "ProposalExecutedAlready",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ProposalIdSpaceExhausted",
       "inputs": []
     },
     {

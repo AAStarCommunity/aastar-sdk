@@ -205,7 +205,11 @@ await communityClient.configureSBTRules({
 const status = await operatorClient.checkResources(myAddress);
 
 if (status.hasRole) {
-    await operatorClient.withdrawCollateral(parseEther("50"));
+    // SuperPaymaster 5.5.1+: request now (the amount moves into escrow and stops backing sponsorship),
+    // withdraw after OPERATOR_WITHDRAWAL_DELAY (48 h) and within OPERATOR_WITHDRAWAL_WINDOW (read from the contract; 24 h on 5.5.1)
+    await operatorClient.requestCollateralWithdrawal(parseEther("50"));
+    // ...48 h later:
+    await operatorClient.executeCollateralWithdrawal();
 } else {
     console.log(status.recommendations); 
     // "Fund aPNTs for collateral", "Stake GToken"

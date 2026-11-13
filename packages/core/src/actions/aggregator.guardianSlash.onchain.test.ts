@@ -7,11 +7,12 @@
  * WHAT THIS CAN AND CANNOT SETTLE
  * -------------------------------
  * It settles that each getter EXISTS on the deployed aggregator, returns the width the SDK expects,
- * and — for `guardianSlashCases` — that the return is exactly 224 bytes (7 words), which is the one
- * measurement separating the deployed 4.11.0 struct from the 4.12.0 source struct that shares its
- * selector.
+ * and — for `guardianSlashCases` — that the return width matches the live version: 224 bytes
+ * (7 words) for the deployed 4.11.0, which this rc.8 build must refuse, or 256 bytes (8 words) for
+ * 4.13.0, which it decodes. Width is the one measurement separating the two structs, since they
+ * share a selector.
  *
- * It does NOT settle that the 7 words decode into the RIGHT fields. No guardian-slash case has ever
+ * It does NOT settle that the words decode into the RIGHT fields. No guardian-slash case has ever
  * been queued on this aggregator, so every id returns 224 zero bytes, and zeroes decode identically
  * under any field ordering. That link is pinned offline against
  * `BLSAggregator-4.11.0.deployed.json` (matched 70/70 on non-tuple selectors against the deployed
@@ -42,12 +43,15 @@ const RPC = process.env.SEPOLIA_RPC_URL ?? process.env.SEPOLIA_RPC ?? 'https://e
 const AGG = CANONICAL_ADDRESSES[11155111].blsAggregator as Address;
 const agg = () => aggregatorActions(AGG)(createPublicClient({ transport: http(RPC) }) as never);
 
+/** guardianSlashCases width per aggregator version this file can judge. 4.11.0 is what Sepolia runs before rc.8. */
+const SLASH_CASE_WIDTH: Record<string, 7 | 8> = { 'BLSAggregator-4.11.0': 7, 'BLSAggregator-4.13.0': 8 };
+
 describe('guardian-slash read surface vs the live BLSAggregator', () => {
-    it.runIf(RUN_ONCHAIN)('is talking to BLSAggregator-4.11.0 — the version these shapes belong to', async () => {
-        // Anchor first. Every other assertion here is only meaningful for 4.11.0; if the aggregator
-        // has been upgraded, a shape mismatch below is expected news, not a defect, and this line is
-        // what tells the two apart.
-        expect(await agg().version()).toBe('BLSAggregator-4.11.0');
+    it.runIf(RUN_ONCHAIN)('is talking to a BLSAggregator whose guardianSlashCases width this file knows', async () => {
+        // Anchor first. This build ships the rc.8 ABI (BLSAggregator-4.13.0, 8 words) while the
+        // Sepolia aggregator is still 4.11.0 (7 words) until the rc.8 deployment. Both are named
+        // here on purpose: any third version is news to review, not something to decode.
+        expect(Object.keys(SLASH_CASE_WIDTH)).toContain(await agg().version());
     });
 
     it.runIf(RUN_ONCHAIN)('the two cooldown constants read back as the spec.md pins', async () => {
@@ -80,25 +84,30 @@ describe('guardian-slash read surface vs the live BLSAggregator', () => {
         expect(queue).not.toBe(execute);
     });
 
-    it.runIf(RUN_ONCHAIN)('guardianSlashCases returns exactly 7 words — the deployed 4.11.0 struct', async () => {
-        // THE load-bearing assertion of this file. If the aggregator is upgraded to the 4.12.0
-        // struct, the selector does not change and a plain readContract would keep "working" while
-        // returning shifted values; guardianSlashCase throws GUARDIAN_SLASH_CASE_SHAPE instead.
-        // Reading id 0 is enough: the struct width does not depend on whether a case exists.
+    it.runIf(RUN_ONCHAIN)('guardianSlashCases: a 4.11.0 aggregator is refused by width, a 4.13.0 one decodes', async () => {
+        // THE load-bearing assertion of this file. 4.11.0 and 4.13.0 share the guardianSlashCases
+        // selector and differ by one word (slashBps), so a plain readContract would keep "working"
+        // against the wrong one while returning shifted values. Reading id 0 is enough: the struct
+        // width does not depend on whether a case exists.
         //
-        // ⚠️ ONLY THE WIDTH GUARD IS AWAKE HERE. Measured by mutation against this live chain
-        // (review of #362, CI's own public endpoint):
+        // Before the rc.8 deployment the live answer is 224 bytes and this build must REFUSE it;
+        // after it, 256 bytes and the read must decode. The version read decides which one is
+        // asserted, and an unknown version fails the anchor above.
         //
-        //   GUARDIAN_SLASH_CASE_WORDS   7 → 8   → 1 failed  ← the width guard carries this test
-        //   GUARDIAN_SLASH_CASE_VERIFIER_WORD 6 → 0 → 7 passed  ← the zero-padding guard is SILENT
-        //
-        // That second result is not a defect, it is the consequence of there being no queued case:
-        // the return is 224 zero bytes, and the zero address is legitimately zero-padded, so that
-        // assertion reads the same whichever word it points at. Do NOT read this green as "field
-        // displacement is covered" — it is covered by the sentinel fixture in the offline suite,
-        // and the on-chain half of it wakes up when the first real case is queued.
+        // ⚠️ ONLY THE WIDTH GUARD IS AWAKE HERE. No guardian-slash case has been queued, so the
+        // return is all zero bytes and the zero address is legitimately zero-padded; the
+        // field-displacement half is covered by the sentinel fixture in the offline suite.
+        const version = await agg().version();
+        if (SLASH_CASE_WIDTH[version] === 7) {
+            await expect(agg().guardianSlashCase({ caseId: 0n })).rejects.toThrow(
+                /returned 224 bytes for guardianSlashCases\(0\), expected 256 .*BLSAggregator-4\.11\.0 struct/,
+            );
+            return;
+        }
+        expect(SLASH_CASE_WIDTH[version]).toBe(8);
         const c = await agg().guardianSlashCase({ caseId: 0n });
         expect(c.status).toBe(GuardianSlashStatus.NONE);
+        expect(c.slashBps).toBe(0);
         expect(c.verifier).toBe('0x0000000000000000000000000000000000000000');
     });
 

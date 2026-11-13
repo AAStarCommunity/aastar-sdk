@@ -1273,3 +1273,30 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         expect(c.sent[0].a0).toBe(finals[2]);
     });
 });
+
+describe('PaymasterClient × SP 5.5.x: the postOp limit is never below the on-chain minPostOpGas (rc.8: 500,000)', () => {
+    it('an explicit 499,999 is raised to gasParams().minPostOpGas = 500,000, in the estimate and in the sent op', async () => {
+        const sent: bigint[] = [];
+        const estimated: bigint[] = [];
+        const { submit } = harness(async (method, op) => {
+            if (method === 'eth_estimateUserOperationGas') { estimated.push(BigInt(op.paymasterPostOpGasLimit)); return ESTIMATE; }
+            if (method === 'eth_sendUserOperation') { sent.push(BigInt(op.paymasterPostOpGasLimit)); return { result: OP_HASH }; }
+            throw new Error(method);
+        }, {
+            readContract: (fn) => (fn === 'gasParams' ? [{ minPostOpGas: 500_000n, settleGasBound: 0n, cWrap: 0n, cPostop: 0n }] : undefined),
+        });
+        await expect(submit({ paymasterPostOpGasLimit: 499_999n })).resolves.toBe(OP_HASH);
+        expect(estimated.every((g) => g >= 500_000n)).toBe(true);
+        expect(sent).toEqual([500_000n]);
+    });
+    it('a higher explicit limit is kept (floors only raise)', async () => {
+        const sent: bigint[] = [];
+        const { submit } = harness(async (method, op) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (method === 'eth_sendUserOperation') { sent.push(BigInt(op.paymasterPostOpGasLimit)); return { result: OP_HASH }; }
+            throw new Error(method);
+        }, { readContract: (fn) => (fn === 'gasParams' ? [{ minPostOpGas: 500_000n, settleGasBound: 0n, cWrap: 0n, cPostop: 0n }] : undefined) });
+        await submit({ paymasterPostOpGasLimit: 700_000n });
+        expect(sent).toEqual([700_000n]);
+    });
+});

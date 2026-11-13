@@ -426,6 +426,17 @@ describe('the SDK book names what the gate certified (clestons B1 / N1 / N2)', (
         expect(r.exitCode).toBe(1);
         expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(/superPaymaster and addresses\.xPNTsFactory are the same address/);
     });
+    it('upgrade: two pinned contracts at one address are an alias, refused (clestons L1 on #426)', async () => {
+        const m = deployment(sepolia.id, 'upgrade');
+        const pins = { ...m.pins, globalTierSource: m.p.aoa };
+        BOOKS.set(pins, BOOKS.get(m.pins)!);
+        m.reads[`${m.p.factory}.defaultTierSource`] = m.p.aoa;
+        const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
+        expect(r.exitCode).toBe(1);
+        // The aliased address also fails its codehash pin (it now holds the registry's code); the alias is the cause.
+        expect(failed(r)).toEqual(['pins complete and well-formed', 'keccak256(code(globalTierSource)) == pins.codehashes.globalTierSource']);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(/aoaProtocolRegistry and globalTierSource are the same address/);
+    });
     it('fresh: a key declared absent must not be in the SDK book', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
         const book = { ...BOOKS.get(m.pins)!, pnts: A(0x996) };
