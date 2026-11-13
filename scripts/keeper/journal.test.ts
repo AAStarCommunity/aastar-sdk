@@ -3,7 +3,7 @@
  */
 import { spawn } from 'node:child_process';
 import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { link, open, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -63,7 +63,7 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             firstSentAt: 1,
         });
         const body = JSON.parse(readFileSync(path, 'utf8')) as { version: number; inFlight: { hashes: string[]; raws: string[] } };
-        expect(body.version).toBe(2);
+        expect(body.version).toBe(3);
         expect(body.inFlight.hashes).toHaveLength(JOURNAL_HASH_CAP);
         expect(body.inFlight.hashes[0]).toBe(hashes[6]);
         expect(body.inFlight.raws).toHaveLength(3);
@@ -295,7 +295,70 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     });
 });
 
-describe('lock port bands (#447 clestons N2)', () => {
+describe('journal durability', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    function hooks(fail: 'none' | 'dir' | 'file') {
+        return {
+            async write(fh: { writeFile: (body: string, enc: 'utf8') => Promise<void> }, body: string) {
+                await fh.writeFile(body, 'utf8');
+            },
+            async fsyncFile(fh: { sync: () => Promise<void> }) {
+                if (fail === 'file') throw new Error('injected fsync');
+                await fh.sync();
+            },
+            async rename(from: string, to: string) { await rename(from, to); },
+            async link(from: string, to: string) { await link(from, to); },
+            async fsyncDir(dirPath: string) {
+                if (fail === 'dir') throw new Error('injected dir');
+                const dh = await open(dirPath, 'r');
+                try { await dh.sync(); } finally { await dh.close(); }
+            },
+        };
+    }
+
+    it('a failed directory barrier after publish refuses replay until a later barrier succeeds', async () => {
+        const path = join(dir(), 'journal.json');
+        setDurabilityHooks(hooks('dir'));
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        await expect(journal.init()).rejects.toThrow('journal: parent sync failed');
+        expect(existsSync(path)).toBe(true);
+        const blocked = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        expect(await blocked.load()).toBe('barrier');
+        expect(blocked.inFlight()).toBeNull();
+        setDurabilityHooks(null);
+        expect(await blocked.load()).toBe('ok');
+    });
+
+    it('refuses to link over an existing journal', async () => {
+        const path = join(dir(), 'journal.json');
+        writeFileSync(path, 'MARKER');
+        chmodSync(path, 0o600);
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        await expect(journal.init()).rejects.toThrow('journal: already exists');
+        expect(readFileSync(path, 'utf8')).toBe('MARKER');
+    });
+
+    it('leaves no journal file when the file fsync fails', async () => {
+        const path = join(dir(), 'journal.json');
+        setDurabilityHooks(hooks('file'));
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        await expect(journal.init()).rejects.toThrow('journal: create failed');
+        expect(existsSync(path)).toBe(false);
+    });
+
+    it('loads a version-2 file without the send account', async () => {
+        const path = join(dir(), 'v2.json');
+        writeFileSync(path, JSON.stringify({
+            version: 2, chainId: 11155111, signer: SIGNER, inFlight: flight(),
+        }));
+        chmodSync(path, 0o600);
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        expect(await journal.load()).toBe('ok');
+        expect(journal.account()).toEqual({ sentAt: [], ceilingClosed: false, lastLatest: null });
+        expect(journal.inFlight()?.broadcastOnce).toEqual([]);
+    });
+});
+
+describe('lock port bands (#447 clestons N2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('keeps both lock bands disjoint and below every common ephemeral range', () => {
         for (let i = 0; i < 2000; i++) {
             const signer = `0x${i.toString(16).padStart(40, '0')}`;

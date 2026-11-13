@@ -2,16 +2,16 @@
  * run-keeper.sh argument assembly: which baked addresses reach keeper.ts for a given command line.
  *
  * The REAL script runs under bash, copied into an empty temp dir (it cds to its own directory, so
- * no .env.<network> file is reachable) with a fake `pnpm` first on PATH that prints its argv and
- * exits. Nothing starts: keeper.ts is never executed.
+ * no .env.<network> file is reachable) with a fake `node` first on PATH that prints its argv and
+ * exits. Nothing starts: keeper.ts is never executed. The script execs that node under `env -i`.
  *
  * Regression locked down (PR #425 review): a substring grep took --paymaster-missing-alert for
  * --paymaster, so the baked Sepolia V4 was silently dropped and the keeper refreshed a different
  * V4 — the outage this PR fixes, without an alert.
  */
 import { afterAll, describe, expect, it } from 'vitest';
-import { spawnSync } from 'node:child_process';
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -20,14 +20,21 @@ const dir = mkdtempSync(join(tmpdir(), 'run-keeper-'));
 const bin = join(dir, 'bin');
 mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
+mkdirSync(join(dir, 'node_modules', 'tsx', 'dist'), { recursive: true });
+writeFileSync(join(dir, 'node_modules', 'tsx', 'dist', 'loader.mjs'), '// test loader\n');
+writeFileSync(
+    join(bin, 'node'),
+    '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY|RPC_URL|UNLISTED)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+);
 writeFileSync(
     join(bin, 'pnpm'),
-    '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY|RPC_URL|UNLISTED)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+    '#!/bin/sh\necho "pnpm should not run" >&2\nexit 99\n',
 );
 writeFileSync(
     join(bin, 'env'),
     '#!/bin/sh\nfor a in "$@"; do printf "ENVARG %s\\n" "$a"; done\nexec /usr/bin/env "$@"\n',
 );
+chmodSync(join(bin, 'node'), 0o755);
 chmodSync(join(bin, 'pnpm'), 0o755);
 chmodSync(join(bin, 'env'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
@@ -84,8 +91,11 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         const r = run(['op-mainnet', '--once']);
         expect(r.stderr).not.toMatch(/unbound variable/);
         expect(r.status).toBe(0);
-        // The fake pnpm really ran (not an early exit 0): it printed the keeper invocation.
-        expect(r.argv.slice(0, 5)).toEqual(['exec', 'tsx', 'scripts/keeper.ts', '--network', 'op-mainnet']);
+        // The fake node really ran (not an early exit 0): it printed the keeper invocation.
+        expect(r.argv.slice(0, 3)).toEqual(['--import', join(dir, 'node_modules', 'tsx', 'dist', 'loader.mjs'), 'scripts/keeper.ts']);
+        expect(r.argv.slice(3, 5)).toEqual(['--network', 'op-mainnet']);
+        expect(r.argv).not.toContain('--external-ethusd-url');
+        expect(r.argv).not.toContain('--cast-bin');
         expect(valuesOf(r.argv, '--paymaster')).toEqual([]);
         expect(valuesOf(r.argv, '--superpaymaster')).toEqual([]);
     });
@@ -131,6 +141,53 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(spawned).not.toContain(url);
         expect(spawned).not.toContain('chat-sentinel');
         expect(clean.envArgs[0]).toBe('-i');
-        expect(clean.argv.slice(0, 5)).toEqual(['exec', 'tsx', 'scripts/keeper.ts', '--network', 'sepolia']);
+        expect(clean.argv.slice(0, 3)).toEqual(['--import', join(dir, 'node_modules', 'tsx', 'dist', 'loader.mjs'), 'scripts/keeper.ts']);
+        expect(clean.argv).not.toContain('--external-ethusd-url');
+        expect(clean.argv.join('\n')).not.toContain('ethusd-sentinel');
+
+        const priced = run(['sepolia', '--once', '--dry-run'], {
+            sign: false,
+            env: { KEEPER_ETHUSD_URL: 'https://user:ethusd-sentinel@example.test/price' },
+        });
+        expect(priced.status, priced.stderr).toBe(0);
+        expect([...priced.envArgs, ...priced.argv, ...priced.envLines].join('\n')).not.toContain('ethusd-sentinel');
+    });
+
+    it('the wrapper pid is the node pid, so SIGTERM stops the keeper', async () => {
+        const home = mkdtempSync(join(tmpdir(), 'run-keeper-pid-'));
+        const nodeBin = join(home, 'bin');
+        mkdirSync(nodeBin);
+        const node = join(nodeBin, 'node');
+        writeFileSync(node, `#!/bin/sh
+echo $$ > "$HOME/node.pid"
+printf '%s\\n' "$@" > "$HOME/argv.txt"
+trap 'echo TERM > "$HOME/got"; exit 0' TERM INT
+while true; do sleep 0.2; done
+`);
+        chmodSync(node, 0o755);
+        const child = spawn('bash', [join(process.cwd(), 'run-keeper.sh'), 'sepolia', '--dry-run', '--once'], {
+            cwd: process.cwd(),
+            env: { PATH: `${nodeBin}:${process.env.PATH}`, HOME: home, KEEPER_ETHUSD_URL: 'https://user:ethusd-sentinel@example.test/price' },
+        });
+        const pidFile = join(home, 'node.pid');
+        const started = Date.now();
+        while (!existsSync(pidFile) && Date.now() - started < 5_000) {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        const nodePid = Number(readFileSync(pidFile, 'utf8').trim());
+        expect(nodePid).toBe(child.pid);
+        child.kill('SIGTERM');
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 5_000);
+            child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        expect(code).toBe(0);
+        expect(readFileSync(join(home, 'got'), 'utf8')).toContain('TERM');
+        const argv = readFileSync(join(home, 'argv.txt'), 'utf8');
+        expect(argv).toContain('--import');
+        expect(argv).toContain('scripts/keeper.ts');
+        expect(argv).not.toContain('ethusd-sentinel');
+        expect(argv).not.toContain('pnpm');
+        rmSync(home, { recursive: true, force: true });
     });
 });

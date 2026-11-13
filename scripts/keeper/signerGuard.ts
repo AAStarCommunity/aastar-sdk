@@ -1,7 +1,8 @@
 /**
  * Signer identity for the price keeper (DSR B1, DSR on #446).
  * Every read is at one block hash. A failed read is not "ok".
- * Against SuperPaymaster 5.4.2 the refuse-start set is the deployer, SP.owner(), and Registry.owner().
+ * Against SuperPaymaster 5.4.2 the refuse-start set is the deployer, SP.owner(), Registry.owner(),
+ * and the resolved PaymasterV4 owner().
  * `sp-mismatch` stays on the result type so the shared gate can name an rc.8 deployment mismatch;
  * this price keeper never returns that kind.
  */
@@ -98,9 +99,14 @@ export async function checkSignerIdentity(input: {
     signer: Address;
     sp: Address;
     registry: Address;
+    /** Resolved PaymasterV4. Omitted until the address is known. A failed owner() read is not ok. */
+    paymaster?: Address | null;
     deployers?: readonly Address[];
 }): Promise<IdentityResult> {
     if (!isBytes32(input.blockHash) || !isAddress(input.signer) || !isAddress(input.sp) || !isAddress(input.registry)) {
+        return bad(['signer identity: bad parameters']);
+    }
+    if (input.paymaster !== undefined && input.paymaster !== null && !isAddress(input.paymaster)) {
         return bad(['signer identity: bad parameters']);
     }
     const deployers: string[] = [norm(DEPLOYER_ADDRESS)];
@@ -120,8 +126,15 @@ export async function checkSignerIdentity(input: {
     same(signer, spOwner, 'signer equals superpaymaster owner', problems);
     const registryOwner = await readOwner(input.chain, input.registry, REGISTRY_OWNER_ABI, blockHash, 'Registry.owner', problems);
     same(signer, registryOwner, 'signer equals registry owner', problems);
+    let paymasterOwner: Address | null = null;
+    if (input.paymaster) {
+        paymasterOwner = await readOwner(input.chain, input.paymaster, REGISTRY_OWNER_ABI, blockHash, 'Paymaster.owner', problems);
+        same(signer, paymasterOwner, 'signer equals paymaster owner', problems);
+    }
 
     if (problems.length) return bad(problems);
-    if (!spOwner || !registryOwner) return bad(problems.length ? problems : ['read failed: owner']);
+    if (!spOwner || !registryOwner || (input.paymaster && !paymasterOwner)) {
+        return bad(problems.length ? problems : ['read failed: owner']);
+    }
     return { ok: true };
 }

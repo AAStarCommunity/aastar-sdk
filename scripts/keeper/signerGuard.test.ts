@@ -1,6 +1,6 @@
 /**
  * Signer identity on the 5.4.2 ABI. A missing read is not ok.
- * The refuse-start set is the deployer, SP.owner(), and Registry.owner().
+ * The refuse-start set is the deployer, SP.owner(), Registry.owner(), and PaymasterV4.owner().
  */
 import { describe, expect, it } from 'vitest';
 import { encodeFunctionData, encodeFunctionResult, getAddress, type Address, type Hex } from 'viem';
@@ -11,6 +11,7 @@ const SIGNER = getAddress('0x1111111111111111111111111111111111111111');
 const SP = getAddress('0x2222222222222222222222222222222222222222');
 const REG = getAddress('0x3333333333333333333333333333333333333333');
 const OTHER = getAddress('0x9999999999999999999999999999999999999999');
+const PM = getAddress('0x4444444444444444444444444444444444444444');
 
 const OWNER_ABI = [{
     type: 'function',
@@ -26,7 +27,11 @@ function addr(who: Address): Hex {
     return encodeFunctionResult({ abi: OWNER_ABI, functionName: 'owner', result: who });
 }
 
-function chain(opts: { owners?: Partial<Record<string, Address>>; throwAll?: boolean; calls?: string[] } = {}): IdentityChain {
+function resolved(who: Address | 'throw' | undefined): Address {
+    return !who || who === 'throw' ? OTHER : who;
+}
+
+function chain(opts: { owners?: Partial<Record<string, Address | 'throw'>>; throwAll?: boolean; calls?: string[] } = {}): IdentityChain {
     const owners = opts.owners ?? {};
     return {
         async call({ to, data, blockHash }) {
@@ -34,8 +39,12 @@ function chain(opts: { owners?: Partial<Record<string, Address>>; throwAll?: boo
             if (opts.throwAll) throw new Error('rpc exploded with a path /tmp/secret');
             if (blockHash !== BLOCK) throw new Error('wrong block');
             if (data.slice(0, 10) !== OWNER_SEL) throw new Error('unexpected call');
-            if (to.toLowerCase() === SP.toLowerCase()) return addr(owners.spOwner ?? OTHER);
-            if (to.toLowerCase() === REG.toLowerCase()) return addr(owners.regOwner ?? OTHER);
+            if (to.toLowerCase() === SP.toLowerCase()) return addr(resolved(owners.spOwner));
+            if (to.toLowerCase() === REG.toLowerCase()) return addr(resolved(owners.regOwner));
+            if (to.toLowerCase() === PM.toLowerCase()) {
+                if (owners.pmOwner === 'throw') throw new Error('rpc exploded paymaster owner /tmp/secret');
+                return addr(resolved(owners.pmOwner));
+            }
             throw new Error('unexpected call');
         },
     };
@@ -82,5 +91,24 @@ describe('signer identity', () => {
         expect(result).toEqual({ ok: true });
         expect(calls).toHaveLength(2);
         expect(calls.every((line) => line.includes(OWNER_SEL))).toBe(true);
+    });
+
+    it('refuses a signer that is PaymasterV4 owner()', async () => {
+        const result = await check({ chain: chain({ owners: { pmOwner: SIGNER } }), paymaster: PM });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.kind).toBe('privileged');
+            expect(result.problems).toContain('signer equals paymaster owner');
+        }
+    });
+
+    it('a failed PaymasterV4 owner() read is not ok and hides the rpc text', async () => {
+        const result = await check({ chain: chain({ owners: { pmOwner: 'throw' } }), paymaster: PM });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.kind).toBe('read-failed');
+            expect(result.problems).toContain('read failed: Paymaster.owner');
+            expect(result.problems.join(' ')).not.toMatch(/secret|paymaster owner/);
+        }
     });
 });

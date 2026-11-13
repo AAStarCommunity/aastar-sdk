@@ -78,6 +78,37 @@ function hasFlag(args: string[], key: string): boolean {
     return args.includes(key);
 }
 
+const BOOLEAN_FLAGS = new Set([
+    '--help', '-h', '--dry-run', '--once', '--logo', '--no-logo', '--probe-env', '--reset-send-ceiling',
+    '--no-superpaymaster', '--disable-superpaymaster', '--no-paymaster', '--disable-paymaster',
+    '--mode', '--cast-account',
+    '--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec', '--resync-journal',
+]);
+
+const VALUE_FLAGS = new Set([
+    '--network', '--keystore', '--password-file', '--signer', '--cast-bin', '--journal', '--env-file', '--registry',
+    '--low-balance-wei', '--superpaymaster', '--paymaster', '--price-feed', '--max-fee-gwei', '--max-gas',
+    '--max-sends-per-hour', '--paymaster-operator', '--poll-interval', '--safety-margin', '--max-updates-per-day',
+    '--max-base-fee-gwei', '--health-interval', '--volatility-threshold-bps', '--volatility-cooldown',
+    '--chainlink-stale-sec', '--external-ethusd-url', '--paymaster-missing-alert',
+]);
+
+/** Reject unknown tokens and `--name=value` before any default is applied. The token is named; values are not. */
+function rejectUnknownArgs(args: string[]): void {
+    for (let i = 0; i < args.length; i++) {
+        const token = args[i] ?? '';
+        const shown = token.length > 80 ? token.slice(0, 80) : token;
+        if (!shown.startsWith('-') || shown.includes('=')) throw new Error(`keeper: unrecognized option ${shown}`);
+        if (VALUE_FLAGS.has(shown)) {
+            const next = args[i + 1];
+            if (next === undefined || next.startsWith('--')) throw new Error(`keeper: ${shown} requires a value`);
+            i += 1;
+            continue;
+        }
+        if (!BOOLEAN_FLAGS.has(shown)) throw new Error(`keeper: unrecognized option ${shown}`);
+    }
+}
+
 function flagPath(args: string[], key: string): string | undefined {
     const raw = getArgValue(args, key);
     if (raw === undefined) return undefined;
@@ -253,7 +284,8 @@ function usage(): string {
         '   --max-base-fee-gwei <n>     skip updates if base fee too high',
         '   --max-fee-gwei <n>          fee ceiling for a live run (required, 1..10000)',
         '   --max-gas <n>               gas limit ceiling for updatePrice (default 500000)',
-        '   --max-sends-per-hour <n>    signed broadcasts per rolling hour, then all sends stay closed until restart',
+        '   --max-sends-per-hour <n>    signed broadcasts per rolling hour; the ceiling is persisted',
+        '   --reset-send-ceiling        reopen a closed ceiling once the rolling hour has room',
         '   --price-feed <address>      Chainlink ETH/USD feed override',
         '',
         'Telegram notifications (optional):',
@@ -310,6 +342,7 @@ const LOW_BALANCE_OTHER = 5_000_000_000_000_000n;
 async function main() {
     installPipeSafety();
     const args = process.argv.slice(2).filter((a) => a !== '--');
+    rejectUnknownArgs(args);
     if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
         console.log(section('HELP'));
         console.log(usage());
@@ -331,7 +364,6 @@ async function main() {
     const passwordFilePath = flagPath(args, '--password-file');
     const signerAddress = parseSignerFlag(getArgValue(args, '--signer'), !dryRun ? true : Boolean(getArgValue(args, '--signer')));
     const castBinArg = getArgValue(args, '--cast-bin');
-    const castBin = castBinArg === undefined ? 'cast' : absoluteKeeperPath(process.cwd(), castBinArg);
     if (!dryRun && (!keystorePath || !passwordFilePath || !signerAddress)) {
         throw new Error('keeper: live runs require --keystore, --password-file and --signer');
     }
@@ -364,6 +396,7 @@ async function main() {
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
     const once = hasFlag(args, '--once');
+    const resetSendCeiling = hasFlag(args, '--reset-send-ceiling');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
@@ -381,11 +414,21 @@ async function main() {
         }
     }
     assertTelegramConfigValid();
+    const castFromEnv = process.env.KEEPER_CAST_BIN;
+    const castBin = castBinArg !== undefined
+        ? absoluteKeeperPath(process.cwd(), castBinArg)
+        : typeof castFromEnv === 'string' && castFromEnv.length > 0
+            ? absoluteKeeperPath(process.cwd(), castFromEnv)
+            : 'cast';
+    const castSource = castBinArg !== undefined ? 'cli' : typeof castFromEnv === 'string' && castFromEnv.length > 0 ? 'env' : 'default';
     const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
     const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
     const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
-    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
+    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url')
+        || process.env.KEEPER_ETHUSD_URL
+        || process.env.EXTERNAL_ETHUSD_URL
+        || 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT';
     const paymasterMissingAlertSec = BigInt(
         getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
     );
@@ -393,6 +436,7 @@ async function main() {
     if (hasFlag(args, '--probe-env')) {
         console.log('probe secrets=absent');
         console.log(`probe KEEPER_CAST_BIN=${process.env.KEEPER_CAST_BIN === undefined ? 'absent' : 'present'}`);
+        console.log(`probe cast-source=${castSource}`);
         console.log(`probe KEYSTORE_PATH=${process.env.KEYSTORE_PATH === undefined ? 'absent' : 'present'}`);
         return;
     }
@@ -558,16 +602,18 @@ async function main() {
         const head = await headChain.latestHeader();
         if (!head) return readFailed(['latest block unavailable']);
         const sp = superPaymaster as Address;
-        const registryAddr = registryFlag ?? (canonical?.registry as Address | undefined);
+        const registryAddr = registryForIdentity;
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
+        const paymasterForGuard = !disablePaymaster && paymaster && isAddress(paymaster) ? paymaster : null;
         return checkSignerIdentity({
             chain: asIdentityChain(headChain),
             blockHash: head.hash,
             signer: signerAddress,
             sp,
             registry: registryAddr,
+            paymaster: paymasterForGuard,
             deployers: [DEPLOYER_ADDRESS],
         });
     }
@@ -593,15 +639,16 @@ async function main() {
     let stopping = false;
     let sleepTimer: ReturnType<typeof setTimeout> | null = null;
     const refreshAlerted = new Set<string>();
-    try {
     if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
         await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
         const opened = await journal.load();
-        if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe') {
+        if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe' || opened === 'barrier') {
             const reason = opened === 'mismatch'
                 ? 'sender: journal belongs to another signer'
-                : opened === 'unsafe' ? 'sender: journal unsafe' : 'sender: journal corrupt';
+                : opened === 'unsafe' ? 'sender: journal unsafe'
+                : opened === 'barrier' ? 'sender: journal barrier incomplete'
+                : 'sender: journal corrupt';
             console.error(reason);
             await sendTelegramMessage(`[keeper] ${reason}`);
             process.exit(1);
@@ -613,8 +660,9 @@ async function main() {
             journal,
             signerAddress,
             chainId: config.chain.id,
-            superPaymaster: !disableSuperPaymaster && superPaymaster && isAddress(superPaymaster) ? superPaymaster : null,
-            paymaster: () => (disablePaymaster || !paymaster || !isAddress(paymaster) ? null : paymaster),
+            // A disabled kind blocks new sends. The address stays so an in-flight raw can still be checked and cancelled.
+            superPaymaster: superPaymaster && isAddress(superPaymaster) ? superPaymaster : null,
+            paymaster: () => (!paymaster || !isAddress(paymaster) ? null : paymaster),
             enabledKinds: {
                 'price-super': !disableSuperPaymaster,
                 'price-paymaster': !disablePaymaster,
@@ -622,6 +670,7 @@ async function main() {
             maxGas,
             maxFeeWei,
             maxSendsPerHour,
+            resetSendCeiling,
             alert: alertLine,
         });
     }
@@ -734,6 +783,7 @@ async function main() {
     };
 
     const tick = async () => {
+        sender?.tick();
         tickIndex += 1;
         console.log('');
         console.log(section(`TICK #${tickIndex} @ ${new Date().toISOString()}`));
@@ -1155,9 +1205,7 @@ async function main() {
         });
         if (stopping) break;
     }
-    } finally {
-        if (!stopping) process.exit(0);
-    }
+    process.exit(0);
 }
 
 main().catch(async (e) => {

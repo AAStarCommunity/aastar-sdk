@@ -13,6 +13,7 @@ import {
     type TransactionSerialized,
 } from 'viem';
 import { CANCEL_GAS, type RawSigner, type SignRequest } from './castSigner.js';
+import type { JournalAccount } from './journal.js';
 import { Journal, JOURNAL_HASH_CAP, JOURNAL_RAW_KEEP, type InFlight, type IntentKind } from './journal.js';
 import { replayRawAllowed } from './replayGuard.js';
 
@@ -107,9 +108,13 @@ const REFUSED = {
 const ALERT = {
     foreign: 'signer nonce moved outside this keeper',
     feeCeiling: 'in-flight at fee ceiling',
+    stuckCeiling: 'in-flight at fee ceiling; cannot replace or cancel',
+    aboveCeiling: 'in-flight above current fee ceiling — cancel required',
     sendCeiling: 'send ceiling exceeded — all sends closed',
     unseen: 'nonce consumed (not by a tx we can see)',
 } as const;
+
+const DEFERRED_RECEIPT_TRIES = 10;
 
 const HOUR_MS = 3_600_000;
 
@@ -197,6 +202,45 @@ export function checkIntent(kind: string, tx: IntentTx, targets: IntentTargets):
         return targets.paymaster !== null && to === norm(targets.paymaster);
     }
     return false;
+}
+
+/** The one signing gate. The request is the exact object cast will receive. */
+export function authorizeSign(kind: string, req: SignRequest, targets: IntentTargets, maxFeeWei: bigint): boolean {
+    if (!req || typeof req.to !== 'string' || typeof req.data !== 'string') return false;
+    if (typeof req.gasLimit !== 'bigint' || typeof req.maxFeePerGas !== 'bigint' || typeof req.maxPriorityFeePerGas !== 'bigint') return false;
+    if (typeof maxFeeWei !== 'bigint' || maxFeeWei <= 0n) return false;
+    if (req.maxPriorityFeePerGas < 0n || req.maxFeePerGas < req.maxPriorityFeePerGas) return false;
+    if (req.maxFeePerGas > maxFeeWei || req.maxPriorityFeePerGas > maxFeeWei) return false;
+    if (kind === 'cancel') {
+        if (req.cancel !== true) return false;
+    } else if (req.cancel === true) {
+        return false;
+    }
+    return checkIntent(kind, {
+        to: req.to,
+        data: req.data,
+        value: 0n,
+        gas: req.gasLimit,
+        chainId: req.chainId,
+        type: 'eip1559',
+        accessListEmpty: true,
+    }, targets);
+}
+
+/** Outgoing tip, then `2 * baseFee + tip`, then the ceiling. `over` cannot outbid inside the ceiling. */
+export function replacementFees(
+    prevFee: bigint,
+    prevTip: bigint,
+    quoted: { baseFee: bigint; tip: bigint },
+    maxFeeWei: bigint,
+): { fee: bigint; tip: bigint } | 'over' {
+    if (prevFee < 0n || prevTip < 0n || quoted.baseFee < 0n || quoted.tip < 0n) return 'over';
+    const tip = bumpFee(prevTip, quoted.tip);
+    const floor = 2n * quoted.baseFee + tip;
+    const fee = bumpFee(prevFee, floor);
+    if (fee > maxFeeWei || tip > maxFeeWei) return 'over';
+    if (fee <= prevFee || tip <= prevTip) return 'over';
+    return { fee, tip };
 }
 
 function fixedSignReason(error: unknown): string {
@@ -293,7 +337,14 @@ export class Sender {
     private readonly sentAt: number[] = [];
     private readonly alerted = new Set<string>();
     private lastLatest: bigint | null = null;
-    private unreported: { nonce: number; hashes: Hex[]; kind: IntentKind } | null = null;
+    private hydrated = false;
+    private accountDirty = false;
+    private readonly resetSendCeiling: boolean;
+    /** Set by tick(). The next settle consumes each flag at most once. */
+    private ageArmed = false;
+    private gapArmed = false;
+    private gapTicks = 0;
+    private unreported: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number } | null = null;
 
     constructor(opts: {
         chain: ChainIO;
@@ -312,6 +363,8 @@ export class Sender {
         receiptWaitMs?: number;
         pollIntervalMs?: number;
         alert: (msg: string) => void;
+        /** Clear a closed ceiling once the rolling hour has room again. */
+        resetSendCeiling?: boolean;
     }) {
         const receiptWaitMs = opts.receiptWaitMs ?? 90_000;
         const pollIntervalMs = opts.pollIntervalMs ?? 3_000;
@@ -340,6 +393,9 @@ export class Sender {
         }
         const now = opts.now ?? (() => Date.now());
         if (typeof now !== 'function') throw new Error('sender: now invalid');
+        if (opts.resetSendCeiling !== undefined && typeof opts.resetSendCeiling !== 'boolean') {
+            throw new Error('sender: resetSendCeiling invalid');
+        }
         this.chain = opts.chain;
         this.signer = opts.signer;
         this.journal = opts.journal;
@@ -356,7 +412,14 @@ export class Sender {
         this.paymaster = opts.paymaster;
         this.superPaymaster = opts.superPaymaster;
         this.enabled = { 'price-super': enabled['price-super'], 'price-paymaster': enabled['price-paymaster'] };
+        this.resetSendCeiling = opts.resetSendCeiling === true;
         Object.freeze(this.enabled);
+    }
+
+    /** One keeper loop iteration. Settlement from several call sites in that iteration ages once. */
+    tick(): void {
+        this.ageArmed = true;
+        this.gapArmed = true;
     }
 
     /** Price and pause scopes stay separate. Pause does not authorize a transaction. */
@@ -444,11 +507,13 @@ export class Sender {
         return Number.isSafeInteger(now) && now >= 0 && now < this.gate.validUntil;
     }
 
-    /** Sync. Call only after the last awaited prerequisite. */
+    /**
+     * Sync. Call only after the last awaited prerequisite.
+     * A disabled kind blocks a new send elsewhere. It does not block maintenance of a raw already signed.
+     */
     private allows(kind: IntentKind): boolean {
         if (this.ceilingClosed || !this.chainIdOk || !this.timeFresh() || !this.gate.price) return false;
-        if (kind === 'cancel') return true;
-        return this.enabled[kind] === true;
+        return kind === 'cancel' || kind === 'price-super' || kind === 'price-paymaster';
     }
 
     private alertOnce(key: string, message = key): void {
@@ -493,25 +558,35 @@ export class Sender {
     private async openFlight(): Promise<InFlight | null | 'bad'> {
         const loaded = await this.journal.load();
         if (loaded === 'missing') return null;
-        if (loaded === 'corrupt') return 'bad';
-        if (loaded === 'unsafe' || loaded === 'mismatch') return 'bad';
+        if (loaded !== 'ok') return 'bad';
+        await this.hydrate();
         return this.journal.inFlight();
     }
 
+    private journalReason(loaded: string): string {
+        if (loaded === 'mismatch') return 'sender: journal belongs to another signer';
+        if (loaded === 'unsafe') return REFUSED.unsafe;
+        if (loaded === 'corrupt') return REFUSED.corrupt;
+        return REFUSED.refusedJournal;
+    }
+
     private async settle(): Promise<MaintainResult> {
-        const reported = await this.reportDeferred();
-        if (reported) return reported;
         const loaded = await this.journal.load();
         if (loaded === 'missing') return { status: 'idle' };
-        if (loaded === 'corrupt') return { status: 'refused', reason: REFUSED.corrupt };
-        if (loaded === 'unsafe') return { status: 'refused', reason: REFUSED.unsafe };
-        if (loaded === 'mismatch') return { status: 'refused', reason: 'sender: journal belongs to another signer' };
+        if (loaded !== 'ok') return { status: 'refused', reason: this.journalReason(loaded) };
+        await this.hydrate();
         const flight = this.journal.inFlight();
-        if (!flight) {
-            await this.noteForeign(null);
-            return { status: 'idle' };
-        }
-        // Prerequisite read. broadcast() reads the chain id again, and that second read is the last await.
+        const result = flight ? await this.serviceFlight(flight) : await this.idleForeign();
+        await this.reportDeferred();
+        return result;
+    }
+
+    private async idleForeign(): Promise<MaintainResult> {
+        await this.noteForeign(null);
+        return { status: 'idle' };
+    }
+
+    private async serviceFlight(flight: InFlight): Promise<MaintainResult> {
         const chain = await this.seenChain();
         if (chain !== 'ok') {
             const reason = chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead;
@@ -520,27 +595,58 @@ export class Sender {
         }
         const nonces = await this.readNonces();
         if (nonces.kind !== 'ok') return { status: 'refused', reason: nonces.reason };
-        this.noteNonce(nonces.latest, nonces.pending, flight);
-        if (nonces.latest > BigInt(flight.nonce)) {
-            return this.consume(flight);
+        if (!(await this.rememberNonce(nonces.latest, nonces.pending, flight))) {
+            return { status: 'refused', reason: REFUSED.journal };
+        }
+        if (nonces.latest > BigInt(flight.nonce)) return this.consume(flight);
+        if (nonces.latest < BigInt(flight.nonce) && nonces.pending <= nonces.latest) {
+            if (this.gapArmed) {
+                this.gapArmed = false;
+                this.gapTicks += 1;
+            }
+            if (this.gapTicks >= this.bumpAfterTicks) {
+                const message = `nonce gap below in-flight ${flight.nonce}; re-signing at latest`;
+                this.alertOnce(`gap:${flight.nonce}`, message);
+                try {
+                    await this.journal.writeInFlight(null);
+                } catch {
+                    return { status: 'refused', reason: REFUSED.journal };
+                }
+                this.gapTicks = 0;
+                return { status: 'idle' };
+            }
+        } else {
+            this.gapTicks = 0;
         }
         const disabled = flight.kind !== 'cancel' && this.enabled[flight.kind] !== true;
-        if (disabled) return this.cancelInFlight(flight);
+        if (disabled) {
+            const decoded = await this.decodedFlight(flight);
+            if (!decoded) return { status: 'refused', reason: REFUSED.refusedJournal };
+            return this.cancelInFlight(flight, decoded);
+        }
         return this.serviceOpen(flight);
     }
 
-    private noteNonce(latest: bigint, pending: bigint, flight: InFlight | null): void {
+    private noteNonce(latest: bigint, pending: bigint, flight: InFlight | null): boolean {
         const unexplained = flight
             ? latest > BigInt(flight.nonce) + 1n || (latest <= BigInt(flight.nonce) && pending > BigInt(flight.nonce) + 1n)
-            : (this.lastLatest !== null && latest > this.lastLatest + 1n) || pending > latest;
+            : (this.lastLatest !== null && latest > this.lastLatest) || pending > latest;
         if (unexplained) this.alertOnce(ALERT.foreign);
+        const changed = this.lastLatest !== latest;
         this.lastLatest = latest;
+        return changed;
+    }
+
+    private async rememberNonce(latest: bigint, pending: bigint, flight: InFlight | null): Promise<boolean> {
+        const changed = this.noteNonce(latest, pending, flight);
+        if (!changed && !this.accountDirty) return true;
+        return this.persistAccount();
     }
 
     private async noteForeign(flight: InFlight | null): Promise<void> {
         const nonces = await this.readNonces();
         if (nonces.kind !== 'ok') return;
-        this.noteNonce(nonces.latest, nonces.pending, flight);
+        await this.rememberNonce(nonces.latest, nonces.pending, flight);
     }
 
     private async consume(flight: InFlight): Promise<MaintainResult> {
@@ -551,7 +657,7 @@ export class Sender {
             return { status: 'refused', reason: REFUSED.journal };
         }
         if (found === 'unread') {
-            this.unreported = { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind };
+            this.unreported = { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind, tries: 0 };
             return { status: 'pending' };
         }
         if (found === 'none') {
@@ -561,17 +667,19 @@ export class Sender {
         return { status: 'consumed', hash: found.transactionHash, receipt: found, kind: flight.kind };
     }
 
-    private async reportDeferred(): Promise<MaintainResult | null> {
+    /** Best-effort receipt for a nonce already cleared. It never decides the settle result. */
+    private async reportDeferred(): Promise<void> {
         const pending = this.unreported;
-        if (!pending) return null;
-        const found = await this.findReceipt(pending.hashes);
-        if (found === 'unread') return { status: 'pending' };
-        this.unreported = null;
-        if (found === 'none') {
-            this.alertOnce(`${ALERT.unseen}:${pending.nonce}`, ALERT.unseen);
-            return { status: 'consumed', unseen: true, kind: pending.kind };
+        if (!pending) return;
+        if (pending.tries >= DEFERRED_RECEIPT_TRIES) {
+            this.unreported = null;
+            return;
         }
-        return { status: 'consumed', hash: found.transactionHash, receipt: found, kind: pending.kind };
+        pending.tries += 1;
+        const found = await this.findReceipt(pending.hashes);
+        if (found === 'unread') return;
+        this.unreported = null;
+        if (found === 'none') this.alertOnce(`${ALERT.unseen}:${pending.nonce}`, ALERT.unseen);
     }
 
     private async findReceipt(hashes: readonly Hex[]): Promise<'unread' | 'none' | ChainReceipt> {
@@ -608,52 +716,95 @@ export class Sender {
         return unread ? 'unread' : 'none';
     }
 
-    private async serviceOpen(flight: InFlight): Promise<MaintainResult> {
-        const attempts = flight.attempts >= Number.MAX_SAFE_INTEGER ? flight.attempts : flight.attempts + 1;
-        const bumped = attempts >= this.bumpAfterTicks ? await this.replace(flight, attempts) : 'rebroadcast';
-        if (bumped === 'rebroadcast') {
-            const sent = await this.rebroadcast(flight);
-            if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
-            if (sent === 'gate') return { status: 'refused', reason: REFUSED.gate };
-            if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
-            if (sent === 'ceiling') return { status: 'refused', reason: REFUSED.ceiling };
-            try {
-                await this.journal.writeInFlight({ ...flight, attempts, raws: [...flight.raws], hashes: [...flight.hashes] });
-            } catch {
-                return { status: 'refused', reason: REFUSED.journal };
-            }
-        }
-        const fresh = this.journal.inFlight() ?? flight;
-        const hash = fresh.hashes[fresh.hashes.length - 1];
+    private takeAge(current: number): number {
+        if (!this.ageArmed) return current;
+        this.ageArmed = false;
+        if (current >= Number.MAX_SAFE_INTEGER) return current;
+        return current + 1;
+    }
+
+    private pendingOf(flight: InFlight): MaintainResult {
+        const hash = flight.hashes[flight.hashes.length - 1];
         return hash ? { status: 'pending', hash } : { status: 'refused', reason: REFUSED.journal };
     }
 
-    /** Latest raw, re-checked, then broadcast. The gate check inside broadcast is the last sync check. */
-    private async rebroadcast(flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling'> {
+    private aboveCeiling(decoded: Decoded): boolean {
+        return decoded.maxFeePerGas > this.maxFeeWei || decoded.maxPriorityFeePerGas > this.maxFeeWei;
+    }
+
+    /** Journal metadata must match the decoded raw. The signer never sees a second set of fields. */
+    private async decodedFlight(flight: InFlight): Promise<Decoded | null> {
+        const raw = flight.raws[flight.raws.length - 1];
+        if (!raw) return null;
+        const decoded = await decodeRaw(raw, this.signerAddress);
+        if (!decoded) return null;
+        if (decoded.nonce !== flight.nonce || decoded.gas !== flight.gasLimit) return null;
+        if (decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) return null;
+        if (!checkIntent(flight.kind, asIntent(decoded), this.targets())) return null;
+        return decoded;
+    }
+
+    private async serviceOpen(flight: InFlight): Promise<MaintainResult> {
+        const attempts = this.takeAge(flight.attempts);
+        const once = flight.broadcastOnce ?? [];
+        const aged = attempts === flight.attempts ? flight : { ...flight, attempts, raws: [...flight.raws], hashes: [...flight.hashes], broadcastOnce: [...once] };
+        const decoded = await this.decodedFlight(aged);
+        if (!decoded) return { status: 'refused', reason: REFUSED.refusedJournal };
+        if (this.aboveCeiling(decoded)) {
+            this.alertOnce(ALERT.aboveCeiling);
+            if (flight.kind === 'cancel') return this.pendingOf(flight);
+            return this.cancelInFlight(aged, decoded);
+        }
+        if (attempts >= this.bumpAfterTicks) {
+            const bumped = await this.replace(aged, decoded);
+            if (bumped === 'replaced') return this.pendingOf(this.journal.inFlight() ?? aged);
+            if (bumped === 'kept') return this.pendingOf(this.journal.inFlight() ?? aged);
+        }
+        const sent = await this.rebroadcast(aged);
+        if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
+        if (sent === 'gate') return { status: 'refused', reason: REFUSED.gate };
+        if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
+        if (sent === 'ceiling') return { status: 'refused', reason: REFUSED.ceiling };
+        if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
+        if (sent === 'above') return this.cancelInFlight(this.journal.inFlight() ?? aged, decoded);
+        return this.pendingOf(this.journal.inFlight() ?? aged);
+    }
+
+    /** Latest raw, re-checked against the current ceiling, then broadcast. */
+    private async rebroadcast(flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling' | 'above' | 'journal'> {
         const loaded = await this.journal.load();
         if (loaded !== 'ok') return 'refused';
         const current = this.journal.inFlight();
         if (!current) return 'refused';
         const raw = current.raws[current.raws.length - 1];
         if (!raw) return 'refused';
-        const decoded = await decodeRaw(raw, this.signerAddress);
+        const decoded = await this.decodedFlight({ ...current, attempts: flight.attempts });
         if (!decoded) return 'refused';
-        // Point (c): the in-flight raw is an intent, or it is not broadcast.
-        if (!checkIntent(current.kind, asIntent(decoded), this.targets())) return 'refused';
+        if (this.aboveCeiling(decoded)) {
+            this.alertOnce(ALERT.aboveCeiling);
+            return 'above';
+        }
         const entry = {
             nonce: current.nonce,
             kind: current.kind,
             to: decoded.to,
             data: decoded.data,
-            gasLimit: current.gasLimit,
-            maxFeePerGas: current.maxFeePerGas,
-            maxPriorityFeePerGas: current.maxPriorityFeePerGas,
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
         };
-        if (decoded.nonce !== current.nonce || decoded.gas !== current.gasLimit) return 'refused';
         if (!(await replayRawAllowed(raw, entry, { chainId: this.chainId, signer: this.signerAddress }, () => true))) {
             return 'refused';
         }
-        return this.broadcast(raw, current.kind, false);
+        const aged = { ...current, attempts: flight.attempts };
+        if (aged.attempts !== current.attempts) {
+            try {
+                await this.journal.writeInFlight(aged);
+            } catch {
+                return 'journal';
+            }
+        }
+        return this.broadcast(raw, this.journal.inFlight() ?? aged);
     }
 
     private async signNew(job: SendRequest): Promise<SendResult> {
@@ -669,45 +820,21 @@ export class Sender {
         let gasLimit = estimated + estimated / 5n;
         if (gasLimit > this.maxGas) gasLimit = this.maxGas;
         if (gasLimit < estimated) return { status: 'refused', reason: REFUSED.gas };
-        let maxFee = 2n * quoted.baseFee + quoted.tip;
         const maxTip = quoted.tip > this.maxFeeWei ? this.maxFeeWei : quoted.tip;
+        let maxFee = 2n * quoted.baseFee + maxTip;
         if (maxFee < maxTip) maxFee = maxTip;
-        if (maxFee > this.maxFeeWei) return { status: 'refused', reason: REFUSED.fee };
+        if (maxFee > this.maxFeeWei || maxTip > this.maxFeeWei) return { status: 'refused', reason: REFUSED.fee };
         const nonces = await this.readNonces();
         if (nonces.kind !== 'ok') return { status: 'refused', reason: nonces.reason };
-        this.noteNonce(nonces.latest, nonces.pending, null);
         if (nonces.pending > BigInt(Number.MAX_SAFE_INTEGER)) return { status: 'refused', reason: REFUSED.nonce };
         const nonce = Number(nonces.pending);
-        const loaded = await this.journal.load();
-        if (loaded === 'corrupt' || loaded === 'unsafe' || loaded === 'mismatch') {
-            return { status: 'refused', reason: loaded === 'mismatch' ? 'sender: journal belongs to another signer' : loaded === 'unsafe' ? REFUSED.unsafe : REFUSED.corrupt };
-        }
-        if (loaded === 'missing') {
-            try {
-                await this.journal.init();
-            } catch {
-                return { status: 'refused', reason: REFUSED.journal };
-            }
+        const opened = await this.ensureJournal();
+        if (opened !== 'ok') return { status: 'refused', reason: opened };
+        if (!(await this.rememberNonce(nonces.latest, nonces.pending, null))) {
+            return { status: 'refused', reason: REFUSED.journal };
         }
         if (this.journal.inFlight()) return { status: 'refused', reason: REFUSED.journal };
-        const requestTx: IntentTx = {
-            to: job.to,
-            data: job.data,
-            value: 0n,
-            gas: gasLimit,
-            chainId: this.chainId,
-            type: 'eip1559',
-            accessListEmpty: true,
-        };
-        // Point (a): the request is an intent before cast is called.
-        if (!checkIntent(job.kind, requestTx, this.targets())) {
-            this.alertOnce(`${REFUSED.unresolved}:${job.kind}`, REFUSED.unresolved);
-            return { status: 'refused', reason: REFUSED.request };
-        }
-        if ((await this.seenChain()) !== 'ok') return { status: 'refused', reason: REFUSED.chainRead };
-        if (this.ceilingClosed) return { status: 'refused', reason: REFUSED.ceiling };
-        if (!this.allows(job.kind)) return this.refuseGate();
-        const signed = await this.signOf({
+        const request: SignRequest = {
             to: job.to,
             data: job.data,
             nonce,
@@ -715,15 +842,24 @@ export class Sender {
             maxFeePerGas: maxFee,
             maxPriorityFeePerGas: maxTip,
             chainId: this.chainId,
-        });
+        };
+        if (!authorizeSign(job.kind, request, this.targets(), this.maxFeeWei)) {
+            this.alertOnce(`${REFUSED.unresolved}:${job.kind}`, REFUSED.unresolved);
+            return { status: 'refused', reason: REFUSED.request };
+        }
+        if ((await this.seenChain()) !== 'ok') return { status: 'refused', reason: REFUSED.chainRead };
+        if (this.ceilingClosed) return { status: 'refused', reason: REFUSED.ceiling };
+        if (!this.allows(job.kind)) return this.refuseGate();
+        const signed = await this.signOf(request);
         if (!signed.ok) return { status: 'refused', reason: signed.reason };
+        if (!this.allows(job.kind)) return this.refuseGate();
         const decoded = await decodeRaw(signed.raw, this.signerAddress);
         if (!decoded) return { status: 'refused', reason: REFUSED.sign };
-        // Point (b): the raw cast returned is an intent, or it is dropped.
         if (!checkIntent(job.kind, asIntent(decoded), this.targets())) return { status: 'refused', reason: REFUSED.sign };
         if (decoded.nonce !== nonce || decoded.gas !== gasLimit || decoded.maxFeePerGas !== maxFee || decoded.maxPriorityFeePerGas !== maxTip) {
             return { status: 'refused', reason: REFUSED.sign };
         }
+        if (!this.allows(job.kind)) return this.refuseGate();
         const hash = keccak256(signed.raw);
         const entry: InFlight = {
             kind: job.kind,
@@ -735,6 +871,7 @@ export class Sender {
             maxPriorityFeePerGas: maxTip,
             attempts: 0,
             firstSentAt: this.safeNow(),
+            broadcastOnce: [],
         };
         if (!(await replayRawAllowed(signed.raw, {
             nonce,
@@ -752,43 +889,62 @@ export class Sender {
         } catch {
             return { status: 'refused', reason: REFUSED.journal };
         }
-        const sent = await this.broadcast(signed.raw, job.kind, true);
+        const sent = await this.broadcast(signed.raw, entry);
         if (sent === 'gate') return this.refuseGate();
         if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
         if (sent === 'ceiling') return { status: 'refused', reason: REFUSED.ceiling };
+        if (sent === 'above') return { status: 'refused', reason: REFUSED.fee };
+        if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
         if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
         return { status: 'pending', hash };
     }
 
-    private async replace(flight: InFlight, attempts: number): Promise<'replaced' | 'rebroadcast'> {
+    /**
+     * Sign the decoded raw's fields, not a second copy stored beside it.
+     * A cancel stays a cancel. Attempts restart after a bump that was journaled.
+     */
+    private async replace(flight: InFlight, decoded: Decoded): Promise<'replaced' | 'rebroadcast' | 'kept'> {
         const quoted = await this.readFees();
         if (typeof quoted === 'string') return 'rebroadcast';
-        const floorFee = 2n * quoted.baseFee + quoted.tip;
-        const nextFee = bumpFee(flight.maxFeePerGas, floorFee);
-        const nextTip = bumpFee(flight.maxPriorityFeePerGas, quoted.tip);
-        if (nextFee > this.maxFeeWei || nextTip > this.maxFeeWei) {
-            this.alertOnce(ALERT.feeCeiling);
-            return 'rebroadcast';
+        const fees = replacementFees(decoded.maxFeePerGas, decoded.maxPriorityFeePerGas, quoted, this.maxFeeWei);
+        if (fees === 'over') {
+            if (this.aboveCeiling(decoded)) this.alertOnce(ALERT.aboveCeiling);
+            else this.alertOnce(ALERT.feeCeiling);
+            return this.aboveCeiling(decoded) ? 'kept' : 'rebroadcast';
         }
-        const raw = flight.raws[flight.raws.length - 1];
-        const decoded = raw ? await decodeRaw(raw, this.signerAddress) : null;
-        if (!decoded) return 'rebroadcast';
-        if (!checkIntent(flight.kind, asIntent(decoded), this.targets())) return 'rebroadcast';
-        if ((await this.seenChain()) !== 'ok') return 'rebroadcast';
-        if (!this.allows(flight.kind)) return 'rebroadcast';
-        const signed = await this.signOf({
+        const request: SignRequest = {
             to: decoded.to,
             data: decoded.data,
-            nonce: flight.nonce,
-            gasLimit: flight.gasLimit,
-            maxFeePerGas: nextFee,
-            maxPriorityFeePerGas: nextTip,
+            nonce: decoded.nonce,
+            gasLimit: decoded.gas,
+            maxFeePerGas: fees.fee,
+            maxPriorityFeePerGas: fees.tip,
             chainId: this.chainId,
-        });
+            cancel: flight.kind === 'cancel' ? true : undefined,
+        };
+        if (!authorizeSign(flight.kind, request, this.targets(), this.maxFeeWei)) return 'rebroadcast';
+        if ((await this.seenChain()) !== 'ok') return 'rebroadcast';
+        if (!this.allows(flight.kind)) return 'rebroadcast';
+        const signed = await this.signOf(request);
         if (!signed.ok) return 'rebroadcast';
+        if (!this.allows(flight.kind)) return 'rebroadcast';
         const again = await decodeRaw(signed.raw, this.signerAddress);
-        if (!again || !checkIntent(flight.kind, asIntent(again), this.targets())) return 'rebroadcast';
-        if (again.maxFeePerGas !== nextFee || again.maxPriorityFeePerGas !== nextTip || again.nonce !== flight.nonce) return 'rebroadcast';
+        if (!again || !authorizeSign(flight.kind, {
+            to: again.to,
+            data: again.data,
+            nonce: again.nonce,
+            gasLimit: again.gas,
+            maxFeePerGas: again.maxFeePerGas,
+            maxPriorityFeePerGas: again.maxPriorityFeePerGas,
+            chainId: again.chainId,
+            cancel: flight.kind === 'cancel' ? true : undefined,
+        }, this.targets(), this.maxFeeWei)) {
+            return 'rebroadcast';
+        }
+        if (again.maxFeePerGas !== fees.fee || again.maxPriorityFeePerGas !== fees.tip || again.nonce !== flight.nonce || again.gas !== decoded.gas) {
+            return 'rebroadcast';
+        }
+        if (!this.allows(flight.kind)) return 'rebroadcast';
         const hash = keccak256(signed.raw);
         const hashes = [...flight.hashes, hash];
         while (hashes.length > JOURNAL_HASH_CAP) hashes.shift();
@@ -798,57 +954,62 @@ export class Sender {
             ...flight,
             raws,
             hashes,
-            maxFeePerGas: nextFee,
-            maxPriorityFeePerGas: nextTip,
-            attempts,
+            gasLimit: decoded.gas,
+            maxFeePerGas: fees.fee,
+            maxPriorityFeePerGas: fees.tip,
+            attempts: 0,
+            broadcastOnce: [...(flight.broadcastOnce ?? [])],
         };
         try {
             await this.journal.writeInFlight(next);
         } catch {
             return 'rebroadcast';
         }
-        await this.broadcast(signed.raw, flight.kind, true);
+        await this.broadcast(signed.raw, next);
         return 'replaced';
     }
 
-    private async cancelInFlight(flight: InFlight): Promise<MaintainResult> {
-        if (flight.kind === 'cancel') return this.serviceOpen(flight);
+    private async cancelInFlight(flight: InFlight, decoded: Decoded): Promise<MaintainResult> {
+        if (flight.kind === 'cancel') return this.pendingOf(flight);
+        if (this.aboveCeiling(decoded)) this.alertOnce(ALERT.aboveCeiling);
         const quoted = await this.readFees();
         if (typeof quoted === 'string') return { status: 'refused', reason: quoted };
-        const floorFee = 2n * quoted.baseFee + quoted.tip;
-        let maxFee = bumpFee(flight.maxFeePerGas, floorFee);
-        let maxTip = bumpFee(flight.maxPriorityFeePerGas, quoted.tip);
-        if (maxFee > this.maxFeeWei) maxFee = this.maxFeeWei;
-        if (maxTip > this.maxFeeWei) maxTip = this.maxFeeWei;
-        if (maxFee < maxTip) maxFee = maxTip;
-        const cancelTx: IntentTx = {
-            to: this.signerAddress,
-            data: '0x',
-            value: 0n,
-            gas: CANCEL_GAS,
-            chainId: this.chainId,
-            type: 'eip1559',
-            accessListEmpty: true,
-        };
-        if (!checkIntent('cancel', cancelTx, this.targets())) return { status: 'refused', reason: REFUSED.request };
-        if ((await this.seenChain()) !== 'ok') return { status: 'refused', reason: REFUSED.chainRead };
-        if (this.ceilingClosed) return { status: 'refused', reason: REFUSED.ceiling };
-        if (!this.allows('cancel')) return { status: 'refused', reason: REFUSED.gate };
-        const signed = await this.signOf({
+        const fees = replacementFees(decoded.maxFeePerGas, decoded.maxPriorityFeePerGas, quoted, this.maxFeeWei);
+        if (fees === 'over') {
+            if (this.aboveCeiling(decoded)) return this.pendingOf(flight);
+            this.alertOnce(ALERT.stuckCeiling);
+            const sent = await this.rebroadcast(flight);
+            if (sent === 'gate') return { status: 'refused', reason: REFUSED.gate };
+            if (sent === 'ceiling') return { status: 'refused', reason: REFUSED.ceiling };
+            if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
+            if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
+            return this.pendingOf(this.journal.inFlight() ?? flight);
+        }
+        const request: SignRequest = {
             to: this.signerAddress,
             data: '0x',
             nonce: flight.nonce,
             gasLimit: CANCEL_GAS,
-            maxFeePerGas: maxFee,
-            maxPriorityFeePerGas: maxTip,
+            maxFeePerGas: fees.fee,
+            maxPriorityFeePerGas: fees.tip,
             chainId: this.chainId,
             cancel: true,
-        });
+        };
+        if (!authorizeSign('cancel', request, this.targets(), this.maxFeeWei)) return { status: 'refused', reason: REFUSED.request };
+        if ((await this.seenChain()) !== 'ok') return { status: 'refused', reason: REFUSED.chainRead };
+        if (this.ceilingClosed) return { status: 'refused', reason: REFUSED.ceiling };
+        if (!this.allows('cancel')) return { status: 'refused', reason: REFUSED.gate };
+        const signed = await this.signOf(request);
         if (!signed.ok) return { status: 'refused', reason: signed.reason };
-        const decoded = await decodeRaw(signed.raw, this.signerAddress);
-        if (!decoded || !checkIntent('cancel', asIntent(decoded), this.targets())) {
+        if (!this.allows('cancel')) return { status: 'refused', reason: REFUSED.gate };
+        const again = await decodeRaw(signed.raw, this.signerAddress);
+        if (!again || !checkIntent('cancel', asIntent(again), this.targets())) {
             return { status: 'refused', reason: REFUSED.sign };
         }
+        if (again.maxFeePerGas !== fees.fee || again.maxPriorityFeePerGas !== fees.tip) {
+            return { status: 'refused', reason: REFUSED.sign };
+        }
+        if (!this.allows('cancel')) return { status: 'refused', reason: REFUSED.gate };
         const hash = keccak256(signed.raw);
         const hashes = [...flight.hashes, hash];
         while (hashes.length > JOURNAL_HASH_CAP) hashes.shift();
@@ -858,31 +1019,67 @@ export class Sender {
             raws: [signed.raw],
             hashes,
             gasLimit: CANCEL_GAS,
-            maxFeePerGas: maxFee,
-            maxPriorityFeePerGas: maxTip,
-            attempts: flight.attempts,
+            maxFeePerGas: fees.fee,
+            maxPriorityFeePerGas: fees.tip,
+            attempts: 0,
             firstSentAt: flight.firstSentAt,
+            broadcastOnce: [...(flight.broadcastOnce ?? [])],
         };
         try {
             await this.journal.writeInFlight(next);
         } catch {
             return { status: 'refused', reason: REFUSED.journal };
         }
-        const sent = await this.broadcast(signed.raw, 'cancel', true);
+        const sent = await this.broadcast(signed.raw, next);
         if (sent === 'gate') return { status: 'refused', reason: REFUSED.gate };
         if (sent === 'ceiling') return { status: 'refused', reason: REFUSED.ceiling };
+        if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
         return { status: 'pending', hash };
     }
 
     /**
-     * Last awaited prerequisite is the chain-id read. The gate check is synchronous and is the next statement.
-     * `count` is true for a raw signed on this call (a new nonce or a replacement), false for a rebroadcast.
+     * Last awaited prerequisite is the journal write of a first broadcast, or the chain-id read for a repeat.
+     * The gate check after that await is synchronous. A raw is charged once, on its first broadcast.
      */
-    private async broadcast(raw: Hex, kind: IntentKind, count: boolean): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling'> {
+    private async broadcast(raw: Hex, flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling' | 'above' | 'journal'> {
         const chainOk = await this.seenChain();
         if (chainOk !== 'ok') return 'chain';
-        if (!this.allows(kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
-        if (count && !this.takeSendSlot()) return 'ceiling';
+        if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
+        const decoded = await decodeRaw(raw, this.signerAddress);
+        if (!decoded || decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) {
+            return 'refused';
+        }
+        if (this.aboveCeiling(decoded)) {
+            this.alertOnce(ALERT.aboveCeiling);
+            return 'above';
+        }
+        if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
+        const hash = keccak256(raw);
+        const already = flight.broadcastOnce ?? [];
+        const counted = already.some((item) => norm(item) === norm(hash));
+        if (!counted) {
+            if (!this.takeSendSlot()) {
+                if (!(await this.persistAccount())) return 'journal';
+                return 'ceiling';
+            }
+            const broadcastOnce = [...already, hash];
+            while (broadcastOnce.length > JOURNAL_HASH_CAP) broadcastOnce.shift();
+            const next = { ...flight, broadcastOnce };
+            try {
+                await this.journal.commit({
+                    inFlight: next,
+                    sentAt: [...this.sentAt],
+                    ceilingClosed: this.ceilingClosed,
+                    lastLatest: this.lastLatest,
+                });
+                this.accountDirty = false;
+            } catch {
+                this.hydrated = false;
+                this.accountDirty = true;
+                return 'journal';
+            }
+            if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
+        }
         try {
             await this.chain.sendRawTransaction(raw);
         } catch {
@@ -891,18 +1088,71 @@ export class Sender {
         return 'ok';
     }
 
+    private async hydrate(): Promise<void> {
+        if (this.hydrated) return;
+        const account: JournalAccount = this.journal.account();
+        this.sentAt.length = 0;
+        for (const at of account.sentAt) this.sentAt.push(at);
+        this.ceilingClosed = account.ceilingClosed;
+        if (this.lastLatest === null) this.lastLatest = account.lastLatest;
+        this.pruneSends();
+        let reopen = false;
+        if (this.resetSendCeiling && this.ceilingClosed && this.sentAt.length < this.maxSendsPerHour) {
+            this.ceilingClosed = false;
+            reopen = true;
+        }
+        this.hydrated = true;
+        if (reopen) await this.persistAccount();
+    }
+
+    private async ensureJournal(): Promise<'ok' | string> {
+        const loaded = await this.journal.load();
+        if (loaded === 'missing') {
+            try {
+                await this.journal.init();
+            } catch {
+                return REFUSED.journal;
+            }
+            this.hydrated = true;
+            if (!(await this.persistAccount())) return REFUSED.journal;
+            return 'ok';
+        }
+        if (loaded !== 'ok') return this.journalReason(loaded);
+        await this.hydrate();
+        return 'ok';
+    }
+
+    private async persistAccount(): Promise<boolean> {
+        try {
+            await this.journal.commit({
+                sentAt: [...this.sentAt],
+                ceilingClosed: this.ceilingClosed,
+                lastLatest: this.lastLatest,
+            });
+            this.accountDirty = false;
+            return true;
+        } catch {
+            this.accountDirty = true;
+            return false;
+        }
+    }
+
+    private pruneSends(): void {
+        const now = this.safeNow();
+        const fresh = this.sentAt.filter((at) => now - at < HOUR_MS);
+        this.sentAt.length = 0;
+        for (const at of fresh) this.sentAt.push(at);
+    }
+
     private takeSendSlot(): boolean {
         if (this.ceilingClosed) return false;
-        const now = this.safeNow();
-        const fresh = this.sentAt.filter((t) => now - t < HOUR_MS);
-        this.sentAt.length = 0;
-        for (const t of fresh) this.sentAt.push(t);
+        this.pruneSends();
         if (this.sentAt.length >= this.maxSendsPerHour) {
             this.ceilingClosed = true;
             this.alertOnce(ALERT.sendCeiling);
             return false;
         }
-        this.sentAt.push(now);
+        this.sentAt.push(this.safeNow());
         return true;
     }
 

@@ -68,11 +68,6 @@ for secret_name in RPC_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
   fi
 done
 
-CAST_ARGS=()
-if [ -n "${KEEPER_CAST_BIN:-}" ] && ! has_arg --cast-bin "$@"; then
-  CAST_ARGS+=(--cast-bin "$KEEPER_CAST_BIN")
-fi
-
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()
 # Explicit ifs: an empty baked value must append nothing (and must not read as a failure).
@@ -83,20 +78,27 @@ if [ -n "$PAYMASTER_V4" ] && ! has_arg --paymaster "$@"; then
   ADDR_ARGS+=(--paymaster "$PAYMASTER_V4")
 fi
 
-EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT}"
-
 # ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
-# env -i starts from PATH and HOME only. Node reads RPC_URL and Telegram from --env-file, not from argv.
+# env -i starts from PATH and HOME only. Node is exec'd directly so this process image is the keeper.
+# KEEPER_ETHUSD_URL and KEEPER_CAST_BIN stay in --env-file; they are not copied onto argv.
+NODE="$(command -v node || true)"
+if [ -z "$NODE" ]; then
+  echo "error: node is not on PATH" >&2
+  exit 1
+fi
+LOADER="${PWD}/node_modules/tsx/dist/loader.mjs"
+if [ ! -f "$LOADER" ]; then
+  echo "error: pinned tsx loader missing" >&2
+  exit 1
+fi
 echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
-exec env -i PATH="${PATH:-/usr/bin:/bin}" HOME="${HOME:-}" pnpm exec tsx scripts/keeper.ts \
+exec env -i PATH="${PATH:-/usr/bin:/bin}" HOME="${HOME:-}" "$NODE" --import "$LOADER" scripts/keeper.ts \
   --network "$NETWORK" \
   ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
-  --external-ethusd-url "$EXT_URL" \
   --poll-interval "${KEEPER_POLL_INTERVAL:-180}" \
   --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" \
   --health-interval "${KEEPER_HEALTH_INTERVAL:-1800}" \
   --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" \
   --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" \
-  ${CAST_ARGS[@]+"${CAST_ARGS[@]}"} \
   -- \
   "$@"

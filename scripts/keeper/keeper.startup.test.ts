@@ -4,7 +4,7 @@
  * The RPC answers owner() the way SuperPaymaster 5.4.2 and Registry do. cast is a fake that must not be reached.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -13,6 +13,7 @@ import { encodeFunctionResult, getAddress, type Address, type Hex } from 'viem';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { DEPLOYER_ADDRESS } from './signerGuard';
+import { acquireKeeperLock } from './journal';
 
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
 const TSX_LOADER = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
@@ -156,4 +157,116 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
     it('refuses to start when --signer is Registry.owner()', async () => {
         await expectRefuse(SIGNER, { sp: OTHER, registry: SIGNER }, 'signer equals registry owner');
     }, 60_000);
+
+    it('exits 1 when the password file is not mode 0600', async () => {
+        const { server, url } = await listen({ sp: OTHER, registry: OTHER });
+        const dir = mkdtempSync(join(tmpdir(), 'keeper-pw-'));
+        chmodSync(dir, 0o700);
+        const pw = join(dir, 'password');
+        const ks = join(dir, 'keystore');
+        writeFileSync(pw, 'not-a-real-password\n');
+        writeFileSync(ks, '{}\n');
+        chmodSync(pw, 0o644);
+        chmodSync(ks, 0o600);
+        const cast = join(dir, 'cast');
+        writeFileSync(cast, '#!/bin/sh\nexit 1\n');
+        chmodSync(cast, 0o755);
+        try {
+            const child = spawn(process.execPath, [
+                '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+                '--network', 'sepolia', '--no-logo', '--once',
+                '--no-superpaymaster', '--disable-paymaster',
+                '--keystore', ks, '--password-file', pw, '--signer', SIGNER, '--max-fee-gwei', '1',
+                '--cast-bin', cast, '--journal', join(dir, 'journal.json'),
+                '--superpaymaster', SP, '--registry', REG,
+            ], { cwd: dir, env: { PATH: process.env.PATH ?? '', HOME: dir, RPC_URL: url } });
+            let out = '';
+            child.stdout.on('data', (d) => { out += d.toString(); });
+            child.stderr.on('data', (d) => { out += d.toString(); });
+            const status = await new Promise<number | null>((resolve) => {
+                const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+                child.once('close', (code) => { clearTimeout(timer); resolve(code); });
+            });
+            expect(status, out).toBe(1);
+            expect(out).toContain('secret file: password file mode is not 0600');
+            expect(out).not.toContain('not-a-real-password');
+        } finally {
+            await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
+
+    it('exits 1 when the keeper lock is already held', async () => {
+        const { server, url } = await listen({ sp: OTHER, registry: OTHER });
+        const dir = mkdtempSync(join(tmpdir(), 'keeper-lock-'));
+        chmodSync(dir, 0o700);
+        const pw = join(dir, 'password');
+        const ks = join(dir, 'keystore');
+        writeFileSync(pw, 'not-a-real-password\n');
+        writeFileSync(ks, '{}\n');
+        chmodSync(pw, 0o600);
+        chmodSync(ks, 0o600);
+        const journal = join(dir, 'journal.json');
+        const release = await acquireKeeperLock({ journalPath: journal, chainId: 11155111, signer: SIGNER });
+        try {
+            const child = spawn(process.execPath, [
+                '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+                '--network', 'sepolia', '--no-logo', '--once',
+                '--no-superpaymaster', '--disable-paymaster',
+                '--keystore', ks, '--password-file', pw, '--signer', SIGNER, '--max-fee-gwei', '1',
+                '--journal', journal, '--superpaymaster', SP, '--registry', REG,
+            ], { cwd: dir, env: { PATH: process.env.PATH ?? '', HOME: dir, RPC_URL: url } });
+            let out = '';
+            child.stdout.on('data', (d) => { out += d.toString(); });
+            child.stderr.on('data', (d) => { out += d.toString(); });
+            const status = await new Promise<number | null>((resolve) => {
+                const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+                child.once('close', (code) => { clearTimeout(timer); resolve(code); });
+            });
+            expect(status, out).toBe(1);
+            expect(out).toContain('journal: lock held');
+        } finally {
+            await release();
+            await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
+
+    it('exits 1 when the journal directory barrier cannot be completed', async () => {
+        const { server, url } = await listen({ sp: OTHER, registry: OTHER });
+        const dir = mkdtempSync(join(tmpdir(), 'keeper-barrier-'));
+        chmodSync(dir, 0o700);
+        const pw = join(dir, 'password');
+        const ks = join(dir, 'keystore');
+        writeFileSync(pw, 'not-a-real-password\n');
+        writeFileSync(ks, '{}\n');
+        chmodSync(pw, 0o600);
+        chmodSync(ks, 0o600);
+        const journalDir = join(dir, 'closed');
+        mkdirSync(journalDir, { mode: 0o700 });
+        chmodSync(journalDir, 0o000);
+        try {
+            const child = spawn(process.execPath, [
+                '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+                '--network', 'sepolia', '--no-logo', '--once',
+                '--no-superpaymaster', '--disable-paymaster',
+                '--keystore', ks, '--password-file', pw, '--signer', SIGNER, '--max-fee-gwei', '1',
+                '--journal', join(journalDir, 'journal.json'),
+                '--superpaymaster', SP, '--registry', REG,
+            ], { cwd: dir, env: { PATH: process.env.PATH ?? '', HOME: dir, RPC_URL: url } });
+            let out = '';
+            child.stdout.on('data', (d) => { out += d.toString(); });
+            child.stderr.on('data', (d) => { out += d.toString(); });
+            const status = await new Promise<number | null>((resolve) => {
+                const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+                child.once('close', (code) => { clearTimeout(timer); resolve(code); });
+            });
+            expect(status, out).toBe(1);
+            expect(out).toContain('sender: journal barrier incomplete');
+        } finally {
+            chmodSync(journalDir, 0o700);
+            await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
 });

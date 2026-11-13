@@ -2,7 +2,7 @@
  * Drop secret-bearing environment variables before any other keeper code reads them.
  * The names are removed. The values are never logged.
  */
-const SECRET_ENV = /PRIVATE_KEY|MNEMONIC|KEYSTORE_PASSWORD/i;
+const SECRET_ENV = /PRIVATE_KEY|MNEMONIC|KEYSTORE_PASSWORD|PASSPHRASE|PASSWORD/i;
 
 export function scrubSecretEnv(env: NodeJS.ProcessEnv): string[] {
     const removed: string[] = [];
@@ -51,7 +51,7 @@ export const KEEPER_ENV_ALLOW = [
 ] as const;
 
 const ALLOWED_ENV = new Set<string>(KEEPER_ENV_ALLOW);
-const SECRET_NAME = /PRIVATE_KEY|MNEMONIC|KEYSTORE_PASSWORD|SEED/i;
+const SECRET_NAME = /PRIVATE_KEY|MNEMONIC|KEYSTORE_PASSWORD|SEED|PASSPHRASE|PASSWORD/i;
 const ENV_KEY = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 export function isSecretEnvName(name: string): boolean {

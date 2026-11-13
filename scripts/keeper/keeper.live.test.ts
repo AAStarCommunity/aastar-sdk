@@ -10,7 +10,9 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { encodeFunctionResult, getAddress, parseAbi, toFunctionSelector, type Address, type Hex } from 'viem';
+import { encodeFunctionResult, getAddress, keccak256, parseAbi, toFunctionSelector, type Address, type Hex } from 'viem';
+import { signTransaction } from 'viem/accounts';
+import { UPDATE_PRICE_DATA } from './sender.js';
 import { CANONICAL_ADDRESSES } from '../../packages/core/src/addresses.js';
 import { acquireKeeperLock, Journal } from './journal.js';
 
@@ -46,7 +48,15 @@ function block(number = '0x10'): Record<string, string | string[]> {
     };
 }
 
-function listen(opts: { phaseFile: string; clockFile: string; onSend: () => void; hangCount?: boolean; onCount?: () => void }): Promise<string> {
+function listen(opts: {
+    phaseFile: string;
+    clockFile: string;
+    onSend: () => void;
+    hangCount?: boolean;
+    onCount?: () => void;
+    /** Leave both nonce tags unchanged. A broadcast must not look mined inside the same tick. */
+    holdCount?: boolean;
+}): Promise<string> {
     const ownerAbi = parseAbi(['function owner() view returns (address)']);
     const roundAbi = parseAbi(['function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)']);
     const decAbi = parseAbi(['function decimals() view returns (uint8)']);
@@ -79,7 +89,7 @@ function listen(opts: { phaseFile: string; clockFile: string; onSend: () => void
                 else if (method === 'eth_estimateGas') result = '0x186a0';
                 else if (method === 'eth_maxPriorityFeePerGas' || method === 'eth_gasPrice') result = '0x3b9aca00';
                 else if (method === 'eth_sendRawTransaction') {
-                    nonce += 1;
+                    if (!opts.holdCount) nonce += 1;
                     opts.onSend();
                     result = '0x' + 'ab'.repeat(32);
                 } else if (method === 'eth_getTransactionReceipt') {
@@ -292,23 +302,27 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         let out = '';
         child.stdout.on('data', (chunk) => { out += chunk.toString(); });
         child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+        const signs = () => readFileSync(castLog, 'utf8').split('SIGN\n').length - 1;
         const waitSends = async (atLeast: number, ms: number) => {
             const start = Date.now();
             while (sends < atLeast && Date.now() - start < ms) await new Promise((resolve) => setTimeout(resolve, 100));
         };
         const stable = async (ms: number) => {
             const before = sends;
+            const beforeSigns = signs();
             await new Promise((resolve) => setTimeout(resolve, ms));
-            return sends === before;
+            return sends === before && signs() === beforeSigns;
         };
         try {
             await waitSends(1, 15_000);
             expect(sends, out).toBeGreaterThanOrEqual(1);
             const signedOnce = sends;
+            const signsOnce = signs();
             writeFileSync(clock, String(T0 + HOUR + 1));
             writeFileSync(phase, JSON.stringify({ phase: 'privileged' }));
-            expect(await stable(2_500), out + `\nsends=${sends}`).toBe(true);
+            expect(await stable(2_500), out + `\nsends=${sends} signs=${signs()}`).toBe(true);
             expect(sends).toBe(signedOnce);
+            expect(signs()).toBe(signsOnce);
             writeFileSync(clock, String(T0 + HOUR + 2_000));
             writeFileSync(phase, JSON.stringify({ phase: 'ok' }));
             await waitSends(signedOnce + 1, 8_000);
@@ -330,8 +344,10 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             }
             expect(out, out).toContain('all-closed:read-expired');
             const closed = sends;
-            expect(await stable(2_500), out + `\nsends=${sends}`).toBe(true);
+            const signsClosed = signs();
+            expect(await stable(2_500), out + `\nsends=${sends} signs=${signs()}`).toBe(true);
             expect(sends).toBe(closed);
+            expect(signs()).toBe(signsClosed);
             writeFileSync(clock, String(T0 + HOUR + 2_000 + SIX_H + 2_000));
             writeFileSync(phase, JSON.stringify({ phase: 'ok' }));
             await waitSends(closed + 1, 8_000);
@@ -357,14 +373,28 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const journalPath = join(root, 'journal.json');
         const journal = new Journal(journalPath, { chainId: 11155111, signer: SIGNER });
         await journal.init();
+        const planted = await signTransaction({
+            privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+            transaction: {
+                type: 'eip1559',
+                chainId: 11155111,
+                nonce: 0,
+                gas: 120_000n,
+                maxFeePerGas: 2_000_000_000n,
+                maxPriorityFeePerGas: 1_000_000_000n,
+                to: SP,
+                data: UPDATE_PRICE_DATA,
+                value: 0n,
+            },
+        });
         await journal.writeInFlight({
             kind: 'price-super',
             nonce: 0,
-            raws: ['0xabcd'],
-            hashes: [('0x' + 'ab'.repeat(32)) as Hex],
+            raws: [planted],
+            hashes: [keccak256(planted)],
             gasLimit: 120_000n,
-            maxFeePerGas: 1n,
-            maxPriorityFeePerGas: 1n,
+            maxFeePerGas: 2_000_000_000n,
+            maxPriorityFeePerGas: 1_000_000_000n,
             attempts: 0,
             firstSentAt: 1,
         });
@@ -389,6 +419,58 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         expect(log, out).toContain('SIGN');
         expect(log.toLowerCase()).toContain(SIGNER.toLowerCase());
         expect(log).toContain('0x');
+        const aged = JSON.parse(readFileSync(journalPath, 'utf8')) as { inFlight: { attempts: number; kind: string } | null };
+        expect(aged.inFlight?.kind).toBe('cancel');
+    });
+
+    it('ages the in-flight raw once on a keeper tick', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        dirs.push(root);
+        const phase = join(root, 'phase.json');
+        const clock = join(root, 'clock');
+        const castLog = join(root, 'cast.log');
+        writeFileSync(phase, JSON.stringify({ phase: 'ok' }));
+        writeFileSync(clock, String(T0));
+        writeFileSync(castLog, '');
+        const cast = join(root, 'cast.mjs');
+        writeCast(cast, castLog, 0);
+        const secrets = keystore(root);
+        const journalPath = join(root, 'journal.json');
+        const journal = new Journal(journalPath, { chainId: 11155111, signer: SIGNER });
+        await journal.init();
+        const planted = await signTransaction({
+            privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+            transaction: {
+                type: 'eip1559', chainId: 11155111, nonce: 0, gas: 120_000n,
+                maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+                to: SP, data: UPDATE_PRICE_DATA, value: 0n,
+            },
+        });
+        await journal.writeInFlight({
+            kind: 'price-super', nonce: 0, raws: [planted], hashes: [keccak256(planted)],
+            gasLimit: 120_000n, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+            attempts: 0, firstSentAt: 1,
+        });
+        const url = await listen({ phaseFile: phase, clockFile: clock, onSend: () => {}, holdCount: true });
+        const child = spawn(process.execPath, [
+            '--import', pathToFileURL(TSX).href, KEEPER,
+            '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--poll-interval', '30',
+            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
+            '--cast-bin', cast, '--journal', journalPath,
+            '--superpaymaster', SP, '--registry', REG,
+        ], { cwd: root, env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url } });
+        let out = '';
+        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 25_000);
+            child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        const body = JSON.parse(readFileSync(journalPath, 'utf8')) as { inFlight: { attempts: number } | null };
+        expect(code, out).toBe(0);
+        expect(body.inFlight?.attempts).toBe(1);
+        expect(readFileSync(castLog, 'utf8')).not.toContain('SIGN');
     });
 
     it('the lock is not released before process exit', async () => {
