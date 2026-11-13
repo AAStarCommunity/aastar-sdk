@@ -18,5 +18,5 @@ export { FinalityConflictError, scanRange, watchScope } from './scan.js';
 
 export type { AttributeTxResult, CallHop, LogAttribution } from './attribute.js';
 export { attributeTx } from './attribute.js';
-export type { TraceAttributorOptions } from './traceAttributor.js';
+export type { TraceAttribution, TraceAttributorOptions } from './traceAttributor.js';
 export { traceAttributor } from './traceAttributor.js';

@@ -169,7 +169,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         });
         expect(attributeTx(trace, [rlog(GUARD, 0)])).toEqual({
             aligned: false,
-            why: 'frame sender is not its parent\'s context',
+            why: 'frame sender is not its parent context',
         });
     });
 
@@ -181,15 +181,16 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         });
         expect(attributeTx(trace, [rlog(GUARD, 0)])).toEqual({
             aligned: false,
-            why: 'frame sender is not its parent\'s context',
+            why: 'frame sender is not its parent context',
         });
     });
 
-    it.each(['CREATE', 'CREATE2'] as const)('uses to as the %s context', (type) => {
-        const got = one(frame(type, EOA, TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)], 0);
+    it.each(['CREATE', 'CREATE2'] as const)('uses to as the %s context and does not read a selector from initcode', (type) => {
+        const got = one(frame(type, EOA, TARGET, { input: '0x12345678dead', logs: [tlog(TARGET)] }), [rlog(TARGET, 0)], 0);
         expect(got.emitter).toBe(addr(TARGET));
         expect(got.immediateCaller).toBe(addr(EOA));
         expect(got.forwardingPath[0]?.type).toBe(type);
+        expect(got.forwardingPath[0]?.selector).toBeNull();
     });
 
     it('rejects a log emitted anywhere under a staticcall', () => {
@@ -297,7 +298,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
             rlog(OTHER2, 1, TOPIC_C),
             rlog(GUARD, 2),
         ];
-        expect(attributeTx(trace, receipt)).toEqual({ aligned: false, why: 'trace has 1 logs, receipt 3' });
+        expect(attributeTx(trace, receipt)).toEqual({ aligned: false, why: 'trace has 1 logs receipt 3' });
     });
 
     it('attributes execute and revoke in one transaction separately', () => {
@@ -367,7 +368,7 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         });
         expect(attributeTx(trace, [rlog(EXT, 0)])).toEqual({
             aligned: false,
-            why: 'log address is not its frame\'s context',
+            why: 'log address is not its frame context',
         });
     });
 
@@ -666,6 +667,89 @@ describe('guardian-audit trace attribution (unit, not acceptance)', () => {
         expect(measure({ [key]: null }, budget)).toBe(false);
         expect(budget.bytes).toBe(MEASURE_BYTES - key.length);
         expect(budget.bytes).toBeLessThan(0);
+    });
+
+    it('returns only reasons safeReason accepts', () => {
+        const safe = /^[0-9A-Za-z ._-]{1,64}$/;
+        const got = new Set<string>();
+        const take = (trace: unknown, receipt: unknown, opts?: { only?: number[] }) => {
+            const res = attributeTx(trace, receipt as unknown[], opts);
+            expect(res.aligned).toBe(false);
+            if (res.aligned) return;
+            expect(res.why).toMatch(safe);
+            got.add(res.why);
+        };
+        take(frame('CALL', EOA, TARGET, { calls: [null] }), []);
+        take(frame('CALL', EOA, SP, {
+            calls: [frame('CALL', OTHER, GUARD, { logs: [tlog(GUARD)] })],
+        }), [rlog(GUARD, 0)]);
+        take(frame('CALL', '0x1234', TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)]);
+        take(frame('CALL', EOA, TARGET, {
+            calls: [frame('SELFDESTRUCT', TARGET, TARGET, { logs: [tlog(TARGET)] })],
+        }), []);
+        take({ from: EOA, to: TARGET, logs: [tlog(TARGET)] }, [rlog(TARGET, 0)]);
+        take(frame('CALLCODE', EOA, TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)]);
+        take(frame('DELEGATECALL', EOA, TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)]);
+        take(frame('CALL', EOA, TARGET, {
+            calls: [frame('CALL', TARGET, OTHER)],
+            logs: [tlog(TARGET), { ...tlog(TARGET, TOPIC_B), position: 0 }],
+        }), [rlog(TARGET, 0)]);
+        take(frame('CALL', EOA, TARGET, {
+            logs: [tlog(TARGET)],
+            calls: [frame('CALL', TARGET, OTHER, { logs: [tlog(OTHER, TOPIC_B)] })],
+        }), [rlog(OTHER, 0, TOPIC_B), rlog(TARGET, 1)]);
+        take(frame('STATICCALL', EOA, TARGET, { logs: [tlog(TARGET)] }), [rlog(TARGET, 0)]);
+        take(frame('CALL', EOA, TARGET, {
+            logs: [{ ...tlog(TARGET), position: 1 }],
+        }), [rlog(TARGET, 0)]);
+        take(frame('CALL', EOA, SP, {
+            calls: [frame('DELEGATECALL', SP, EXT, { logs: [tlog(EXT)] })],
+        }), [rlog(EXT, 0)]);
+        take(frame('CALL', EOA, TARGET), [], { only: Array.from({ length: 17 }, (_, i) => i) });
+        take(null, []);
+        let deep: Record<string, unknown> = frame('CALL', TARGET, TARGET);
+        for (let i = 1; i < 1025; i++) deep = frame('CALL', TARGET, TARGET, { calls: [deep] });
+        deep = frame('CALL', EOA, TARGET, { calls: [deep] });
+        take(deep, [rlog(TARGET, 0)]);
+        take({ type: 'CALL', from: EOA, to: TARGET, calls: { length: 2 } }, []);
+        take({ type: 'CALL', from: EOA, to: TARGET, logs: { length: 1 } }, []);
+        take(frame('CALL', EOA, TARGET), { length: 1 });
+        take(frame('CALL', EOA, TARGET, { logs: [tlog(TARGET), tlog(TARGET, TOPIC_B)] }), [rlog(TARGET, 0), rlog(TARGET, 2, TOPIC_B)]);
+        const cap = 10_000;
+        take(
+            frame('CALL', EOA, TARGET, { logs: Array.from({ length: cap }, () => tlog(TARGET)) }),
+            Array.from({ length: cap - 1 }, (_, i) => rlog(TARGET, i)),
+        );
+        take(
+            frame('CALL', EOA, TARGET, {
+                logs: Array.from({ length: cap }, (_, i) => tlog(TARGET, TOPIC, i === cap - 1 ? '0x01' : '0x')),
+            }),
+            Array.from({ length: cap }, (_, i) => rlog(TARGET, i)),
+        );
+        for (const why of got) expect(why).toMatch(safe);
+        expect([...got].sort()).toEqual([
+            'callcode at trace root',
+            'delegatecall at trace root',
+            'frame sender is not its parent context',
+            'log 9999 differs between trace and receipt',
+            'log address is not its frame context',
+            'no trace',
+            'receipt log positions invalid or duplicated',
+            'receipt logs are not an array',
+            'selfdestruct frame has logs or children',
+            'staticcall emitted a log',
+            'trace calls are not an array',
+            'trace deeper than 1025',
+            'trace frame address malformed',
+            'trace frame malformed',
+            'trace frame type invalid',
+            'trace has 10000 logs receipt 9999',
+            'trace log position invalid or out of order',
+            'trace log positions are mixed',
+            'trace logs are not an array',
+            'trace logs lack positions',
+            'trace too large',
+        ]);
     });
 });
 

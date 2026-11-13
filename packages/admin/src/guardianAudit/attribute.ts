@@ -352,7 +352,7 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
         // callTracer's child `from` is the caller: the parent frame's storage context.
         // That holds for CALL, STATICCALL, CALLCODE, DELEGATECALL, CREATE, and CREATE2.
         if (parent && from && lc(from) !== lc(parent.context)) {
-            note('frame sender is not its parent\'s context');
+            note('frame sender is not its parent context');
         }
         // Receipt omits logs from a reverted frame and from everything it called.
         if (o.error) return doneFrame();
@@ -365,12 +365,17 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
         if (!type) note('trace frame type invalid');
         if (!from || !to) note('trace frame address malformed');
 
+        // CREATE / CREATE2 `input` is initcode, not calldata, so it has no selector.
+        const selector = type === 'CREATE' || type === 'CREATE2' ? null : selectorOf(o.input);
         const hop: CallHop | null = type && from && to
-            ? { type, from, to, selector: selectorOf(o.input) }
+            ? { type, from, to, selector }
             : null;
         const link: PathLink | null = hop ? { hop, parent: parent?.path ?? null } : (parent?.path ?? null);
         let info: Info;
         if (type === 'DELEGATECALL' || type === 'CALLCODE') {
+            // Redundant for a real log: the root context is ZERO, so the address check already
+            // fails. Left in place so a root delegatecall or callcode is still named when it
+            // emits nothing that would reach that check.
             if (!parent) note(type === 'CALLCODE' ? 'callcode at trace root' : 'delegatecall at trace root');
             // Storage stays with the caller. CALLCODE, unlike DELEGATECALL, sets msg.sender
             // to the calling frame's context. Later delegatecalls inherit that sender.
@@ -469,7 +474,7 @@ function flatten(trace: unknown): { logs: FlatLog[] } | { why: string } {
         if ('bucket' in x) {
             for (const l of x.bucket) {
                 const addr = l !== null && typeof l === 'object' ? (l as { address?: unknown }).address : undefined;
-                if (lc(addr) !== lc(x.info.context)) note('log address is not its frame\'s context');
+                if (lc(addr) !== lc(x.info.context)) note('log address is not its frame context');
                 out.push({
                     raw: l,
                     transactionSender: x.info.transactionSender,
@@ -532,7 +537,7 @@ export function attributeTx(
     const rl = new Array<unknown>(receiptLogs.length);
     for (let i = 0; i < receiptLogs.length; i++) rl[pos[i]! - lo] = receiptLogs[i];
     if (flat.logs.length !== rl.length) {
-        return { aligned: false, why: `trace has ${flat.logs.length} logs, receipt ${rl.length}` };
+        return { aligned: false, why: `trace has ${flat.logs.length} logs receipt ${rl.length}` };
     }
 
     for (let i = 0; i < rl.length; i++) {
