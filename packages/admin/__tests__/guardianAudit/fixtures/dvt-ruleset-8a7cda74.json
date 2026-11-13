@@ -1,0 +1,127 @@
+{
+  "schema": "dvt.guardian-watcher.ruleset.v1",
+  "comment": "M0 \u00a75.2. Pinned in git: every record and every registry entry carries the commit SHA of this file. Targets are release-manifest ROLES, resolved to addresses from the watcher config.",
+  "bls": {
+    "SLASH": {
+      "flag": true,
+      "reason": "BLS operator slash executed (impossible through DVTValidator in 5.5.0: empty evidence allowlist; so this came by the owner route)"
+    },
+    "REPUTATION": {
+      "flag": true,
+      "reason": "BLS reputation batch (5.5.0 does no reputation scoring)"
+    },
+    "QUEUE": {
+      "flag": true,
+      "reason": "operator frozen by a guardian quorum (queueSlashWithConsensus)"
+    },
+    "GENERIC": {
+      "expected": [
+        {
+          "target": "superPaymaster",
+          "signature": "updatePriceDVT(int256,uint256,bytes,uint8)",
+          "flag": true,
+          "reason": "BLS price update: threshold is caller-chosen (>= minThreshold); SP caps each update but not a chain of updates",
+          "readPrice": true
+        }
+      ],
+      "unexpected": {
+        "flag": true,
+        "reason": "generic BLS call outside the expected target/selector set"
+      }
+    },
+    "UNRECOVERED": {
+      "flag": true,
+      "reason": "BLS-executed action whose message could not be authenticated from the transaction"
+    }
+  },
+  "ownerRoute": {
+    "label": "owner/guardian route: not BLS, no on-chain signer verification",
+    "events": {
+      "PriceUpdated": {
+        "flag": true,
+        "readPrice": true
+      },
+      "PriceModeChanged": {
+        "flag": true
+      },
+      "EmergencyPriceQueued": {
+        "flag": true
+      },
+      "EmergencyPriceExecuted": {
+        "flag": true,
+        "readPrice": true
+      },
+      "EmergencyPriceCancelled": {
+        "flag": true
+      },
+      "SlashQueued": {
+        "flag": true
+      },
+      "SlashCancelled": {
+        "flag": true
+      },
+      "OperatorSlashed": {
+        "flag": true
+      },
+      "SlashExecutedWithProof": {
+        "flag": true
+      },
+      "OperatorPaused": {
+        "flag": true
+      },
+      "OperatorUnpaused": {
+        "flag": true
+      },
+      "GlobalPauseSet": {
+        "flag": true
+      },
+      "GuardianSet": {
+        "flag": true
+      },
+      "BLSAggregatorQueued": {
+        "flag": true
+      },
+      "BLSAggregatorUpdated": {
+        "flag": true
+      }
+    },
+    "comment": "Events from a call into SuperPaymaster whose selector is NOT one of publicRoute.functions (owner, guardian or aggregator-only functions). The caller and selector are recorded when known."
+  },
+  "publicRoute": {
+    "comment": "#400 M1 (DSR verdicts 2026-11-10). SuperPaymaster functions ANYONE may call that emit watched events (SP 5.5.1 SuperPaymasterAdmin.sol: updatePrice :507, executeEmergencyPrice :417, pauseUnderstakedOperator :105). An event is classified by the selector and msg.sender of the SP call that emitted it; the caller is recorded and never accused.",
+    "label": "permissionless call: caller recorded, not accused",
+    "functions": {
+      "updatePrice()": {
+        "events": [
+          "PriceUpdated",
+          "PriceModeChanged",
+          "EmergencyPriceCancelled"
+        ],
+        "flag": false,
+        "reason": "routine permissionless price refresh (Chainlink)",
+        "flagIfCallAlsoEmits": ["PriceModeChanged", "EmergencyPriceCancelled"],
+        "alsoReason": "price mode changed via permissionless refresh (caller not accused)",
+        "readPrice": true
+      },
+      "executeEmergencyPrice()": {
+        "events": [
+          "PriceModeChanged",
+          "EmergencyPriceExecuted",
+          "PriceUpdated"
+        ],
+        "flag": true,
+        "reason": "permissionless execution of an owner-queued emergency price (caller not accused)",
+        "readPrice": true
+      },
+      "pauseUnderstakedOperator(address)": {
+        "events": ["OperatorPaused"],
+        "flag": false,
+        "reason": "permissionless pause of an understaked operator (routine; W3)"
+      }
+    },
+    "unattributed": {
+      "flag": true,
+      "reason": "SuperPaymaster event that a permissionless function can also emit, whose emitting call could not be determined after every retry (not attributed to anyone)"
+    }
+  }
+}
