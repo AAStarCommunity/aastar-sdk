@@ -20,7 +20,6 @@
  * crash failure. The concurrency cell runs both commits on one store instance.
  */
 import type { Address, Hex } from 'viem';
-import { isolatedClone } from './isolated.js';
 import {
     ScopeChangedError,
     StoreConflictError,
@@ -114,20 +113,35 @@ function nextOf(form: Form): Checkpoint | null {
     return form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : null;
 }
 
-/** Key order does not matter. Array order does, except row lists compared by id. */
+/**
+ * Key order does not matter. Array order does, except row lists compared by id. Prototypes must match,
+ * every own string key counts (enumerable or not), Uint8Array compares bytes, and any other non-plain
+ * object (Error, Map, Set, Date, ...) is never equal to anything but itself: rows are plain data.
+ */
 function same(a: unknown, b: unknown): boolean {
     if (Object.is(a, b)) return true;
     if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
-    if (Array.isArray(a) || Array.isArray(b)) {
-        if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
-        return a.every((item, i) => same(item, b[i]));
+    const proto = Object.getPrototypeOf(a);
+    if (proto !== Object.getPrototypeOf(b)) return false;
+    if (proto === Uint8Array.prototype) {
+        const x = a as Uint8Array;
+        const y = b as Uint8Array;
+        return x.length === y.length && x.every((byte, i) => byte === y[i]);
     }
-    const aKeys = Object.keys(a).sort();
-    const bKeys = Object.keys(b).sort();
-    if (aKeys.length !== bKeys.length || aKeys.some((key, i) => key !== bKeys[i])) return false;
-    const left = a as Record<string, unknown>;
-    const right = b as Record<string, unknown>;
-    return aKeys.every((key) => same(left[key], right[key]));
+    if (Array.isArray(a)) {
+        const y = b as unknown[];
+        return a.length === y.length && a.every((item, i) => same(item, y[i]));
+    }
+    if (proto !== Object.prototype && proto !== null) return false;
+    const aKeys = Reflect.ownKeys(a);
+    const bKeys = Reflect.ownKeys(b);
+    if (aKeys.some((key) => typeof key === 'symbol') || bKeys.some((key) => typeof key === 'symbol')) return false;
+    const left = (aKeys as string[]).sort();
+    const right = (bKeys as string[]).sort();
+    if (left.length !== right.length || left.some((key, i) => key !== right[i])) return false;
+    const x = a as Record<string, unknown>;
+    const y = b as Record<string, unknown>;
+    return left.every((key) => same(x[key], y[key]));
 }
 
 function rowKey(row: unknown): string {
@@ -153,8 +167,25 @@ function sameSnapshot(a: StoreSnapshot, b: StoreSnapshot): boolean {
         && sameRows(a.attributed, b.attributed);
 }
 
+/**
+ * An independent plain-data copy for expected values. It deliberately does not reuse the store's or
+ * scanner's clone helper, so a bug there cannot also hide in what the suite compares against.
+ */
 function frozen<T>(value: T): T {
-    return isolatedClone(value);
+    const copyOf = (v: unknown): unknown => {
+        if (v === null || typeof v !== 'object') return v;
+        const proto = Object.getPrototypeOf(v);
+        if (proto === Uint8Array.prototype) return Uint8Array.from(v as Uint8Array);
+        if (Array.isArray(v)) return v.map(copyOf);
+        if (proto !== Object.prototype && proto !== null) throw new Fault('a returned value is not plain data');
+        const out: Record<string, unknown> = {};
+        for (const key of Reflect.ownKeys(v)) {
+            if (typeof key === 'symbol') throw new Fault('a returned value is not plain data');
+            out[key] = copyOf((v as Record<string, unknown>)[key]);
+        }
+        return out;
+    };
+    return copyOf(value) as T;
 }
 
 /** Change every leaf of a returned value. Arrays are pushed after their current items are walked. */
@@ -165,13 +196,19 @@ function deepMutate(value: unknown): void {
         return;
     }
     if (typeof value !== 'object' || value === null) return;
+    if (value instanceof Uint8Array) {
+        for (let i = 0; i < value.length; i++) value[i] = value[i] ^ 0xff;
+        return;
+    }
     const record = value as Record<string, unknown>;
-    for (const key of Object.keys(record)) {
+    for (const key of Reflect.ownKeys(record)) {
+        if (typeof key === 'symbol') continue;
         const child = record[key];
         if (child !== null && typeof child === 'object') deepMutate(child);
         else if (typeof child === 'number') record[key] = child + 1;
         else if (typeof child === 'string') record[key] = `${child}#`;
         else if (typeof child === 'boolean') record[key] = !child;
+        else if (typeof child === 'bigint') record[key] = child + 1n;
     }
 }
 
