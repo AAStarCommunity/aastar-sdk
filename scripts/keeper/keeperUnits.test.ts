@@ -159,7 +159,7 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const noRegistry = await run([
             '--keystore', join(cwd, 'ks'),
             '--password-file', join(cwd, 'pw'),
-            '--signer', '0x1111111111111111111111111111111111111111',
+            '--signer', '0x6666666666666666666666666666666666666666',
             '--max-fee-gwei', '1',
             '--once',
             '--no-superpaymaster',

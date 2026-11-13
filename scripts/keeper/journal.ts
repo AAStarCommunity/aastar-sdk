@@ -479,16 +479,20 @@ function hookLockExit(): void {
     });
 }
 
-/** Stable loopback port for one chain and signer. The kernel drops it when the process dies. */
+/**
+ * Stable loopback port for one chain and signer. The kernel drops it when the process dies.
+ * Both lock bands sit in 20000-31999, below the Linux (32768+) and macOS (49152+) ephemeral ranges,
+ * so an unrelated outgoing connection cannot hold a lock port (#447 clestons N2).
+ */
 export function keeperLockPort(chainId: number, signer: string): number {
     const digest = createHash('sha256').update(`aastar-keeper:${chainId}:${signer.toLowerCase()}`).digest();
-    return 20_000 + (digest.readUInt16BE(0) % 25_000);
+    return 20_000 + (digest.readUInt16BE(0) % 6_000);
 }
 
 /** Second lock, keyed by the journal's canonical path, so two signers cannot share one file. */
 export function journalFileLockPort(realPath: string): number {
     const digest = createHash('sha256').update(`aastar-keeper-file:${realPath}`).digest();
-    return 45_000 + (digest.readUInt16BE(0) % 20_000);
+    return 26_000 + (digest.readUInt16BE(0) % 6_000);
 }
 
 function listenLoopback(port: number): Promise<Server> {
@@ -499,7 +503,7 @@ function listenLoopback(port: number): Promise<Server> {
     return new Promise((resolve, reject) => {
         const fail = (error: NodeJS.ErrnoException) => {
             server.removeListener('listening', ok);
-            if (error.code === 'EADDRINUSE') reject(new Error('journal: lock held'));
+            if (error.code === 'EADDRINUSE') reject(new Error(`journal: lock held (127.0.0.1:${port})`));
             else reject(new Error('journal: lock unreadable'));
         };
         const ok = () => {

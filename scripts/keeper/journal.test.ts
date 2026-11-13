@@ -11,7 +11,7 @@ import { connect } from 'node:net';
 import { createServer } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
+import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
 
 const SIGNER = '0x3333333333333333333333333333333333333333' as Address;
 const OTHER = '0x4444444444444444444444444444444444444444' as Address;
@@ -210,7 +210,8 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
     it('releases the lock when a keeper --once process exits, and after SIGKILL', async () => {
         const holder = '0x8888888888888888888888888888888888888888' as Address;
-        const onceSigner = '0x9999999999999999999999999999999999999999' as Address;
+        // Distinct from every other test file's signer: the lock port is derived from (chain, signer) and files run in parallel.
+        const onceSigner = '0x5555555555555555555555555555555555555555' as Address;
         const root = dir();
         const journalPath = join(root, 'once', 'journal.json');
         const tsx = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
@@ -293,3 +294,18 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         await released();
     });
 });
+
+describe('lock port bands (#447 clestons N2)', () => {
+    it('keeps both lock bands disjoint and below every common ephemeral range', () => {
+        for (let i = 0; i < 2000; i++) {
+            const signer = `0x${i.toString(16).padStart(40, '0')}`;
+            const a = keeperLockPort(11155111, signer);
+            const b = journalFileLockPort(`/tmp/keeper-${i}/journal.json`);
+            expect(a).toBeGreaterThanOrEqual(20_000);
+            expect(a).toBeLessThan(26_000);
+            expect(b).toBeGreaterThanOrEqual(26_000);
+            expect(b).toBeLessThan(32_000);
+        }
+    });
+});
+
