@@ -488,7 +488,7 @@ describe('PR-Daemon F4: the dotted IPv4-mapped loopback (what dns.lookup returns
     it.each(['::ffff:128.0.0.1', '::ffff:10.0.0.1'])('%s is not', (h) => expect(isLoopbackHost(h)).toBe(false));
 });
 
-describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0 deploys none)', () => {
+describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0 deploys none)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const { disclosureRegistry: _d, ...noReg } = MANIFEST;
     const { disclosureRegistry: _h, ...noRegHashes } = MANIFEST.codehashes;
     const NONE = { ...noReg, disclosureRegistry: 'n/a:none', codehashes: noRegHashes };
@@ -525,5 +525,11 @@ describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0
         expect(only(base)).toEqual([]);
         expect(only({ contracts: { ...base.contracts, disclosureRegistry: { ...placeholder, WRITER: 'n/a:none' } } })).toEqual([expect.stringMatching(/contracts\.disclosureRegistry is not an "n\/a:" not-deployed placeholder/)]);
         expect(only({ contracts: { timelockController: timelock } })).toEqual([expect.stringMatching(/contracts\.disclosureRegistry is not an "n\/a:" not-deployed placeholder/)]);
+    });
+});
+
+describe('absent must be an array of key names (PR-Daemon #443 N1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it.each([[{}], ['pnts'], [[1]], [null]])('absent %j is a manifest error, not a TypeError', (absent) => {
+        expect(() => parseManifestPins({ ...MANIFEST, absent }, 'fresh')).toThrow(/manifest pins: absent must be an array of key names/);
     });
 });

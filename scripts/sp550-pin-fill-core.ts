@@ -43,6 +43,9 @@ export function parseManifestPins(json: unknown, mode: PinFillMode): Sp550FreshD
         const renamed = Object.keys((obj.addresses ?? {}) as object).filter((k) => k in PINS_FILE_ALIASES);
         if (renamed.length) throw new Error(`manifest pins: addresses.${renamed.join(', addresses.')} pinned without _aliases (SP's pins files declare ${JSON.stringify(PINS_FILE_ALIASES)})`);
     }
+    if ('absent' in obj && !(Array.isArray(obj.absent) && obj.absent.every((k) => typeof k === 'string'))) {
+        throw new Error(`manifest pins: absent must be an array of key names, not ${JSON.stringify(obj.absent)}`);
+    }
     // The pins file declares the timelock (DSR ruling, SP emits exactly this): top-level "timelockController"
     // is the only source — an address, its codehash under codehashes.timelockController; or "n/a:none", with
     // no codehash. The SDK files it as the certified book entry addresses.timelockController.

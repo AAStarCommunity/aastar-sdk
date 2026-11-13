@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
+import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import {
     AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
     classifyCallError, contractKeyOf, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
@@ -505,5 +506,33 @@ describe('no DisclosureRegistry (author 2026-11-12): every field of its entry is
     ])('%s is refused', async (_n, patch) => {
         const rb = good(); rb.contracts.disclosureRegistry = { ...placeholder(), ...patch };
         expect(await run(rb, { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/contracts\.disclosureRegistry: not an "n\/a:" not-deployed placeholder/)]));
+    });
+});
+
+describe('disclosureRegistry rolesSource, aligned with DVT a7-fork VERIFIED-ABSENT (SP/DVT 2026-11-12)', () => {
+    const { disclosureRegistry: _d, ...rest } = PINS;
+    const { disclosureRegistry: _h, ...codehashes } = PINS.codehashes;
+    const pins = { ...rest, codehashes, absent: ['disclosureRegistry'] };
+    const FIELDS = ['address', 'version', 'codehash', 'erc1967Impl', 'implCodehash', 'extension', 'extensionCodehash', 'owner', 'pendingOwner', 'guardian', 'roles', 'WRITER', 'AGGREGATOR'];
+    const placeholder = (extra: Record<string, unknown> = {}) => ({ ...Object.fromEntries(FIELDS.map((f) => [f, 'n/a:not deployed'])), ...extra });
+    it('rolesSource absent passes', async () => {
+        const rb = good(); rb.contracts.disclosureRegistry = placeholder();
+        expect('rolesSource' in rb.contracts.disclosureRegistry).toBe(false);
+        expect(await run(rb, { pins })).toEqual([]);
+    });
+    it('rolesSource exactly "n/a:not deployed" passes', async () => {
+        const rb = good(); rb.contracts.disclosureRegistry = placeholder({ rolesSource: 'n/a:not deployed' });
+        expect(await run(rb, { pins })).toEqual([]);
+    });
+    it.each([
+        ['another n/a reason', 'n/a:none'],
+        ['an object', { kind: 'events' }],
+        ['null', null],
+    ])('rolesSource as %s is refused', async (_n, rolesSource) => {
+        const rb = good(); rb.contracts.disclosureRegistry = placeholder({ rolesSource });
+        expect(await run(rb, { pins })).toEqual(expect.arrayContaining([expect.stringMatching(/contracts\.disclosureRegistry: not an "n\/a:" not-deployed placeholder/)]));
+    });
+    it('no SDK address book carries a disclosureRegistry entry', () => {
+        for (const book of Object.values(CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)) expect(Object.keys(book)).not.toContain('disclosureRegistry');
     });
 });
