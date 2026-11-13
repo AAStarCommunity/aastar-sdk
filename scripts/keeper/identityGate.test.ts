@@ -2,7 +2,7 @@
  * The three identity-gate branches. The clock is a number, not Date.now.
  */
 import { describe, expect, it } from 'vitest';
-import { decideIdentityGate, IDENTITY_GRACE_MS } from './identityGate';
+import { decideIdentityGate, gateAfterIdentityRead, IDENTITY_GRACE_MS } from './identityGate';
 
 const T0 = 1_700_000_000_000;
 const SIX_H = 6 * 60 * 60 * 1000;
@@ -106,5 +106,46 @@ describe('identity gate scopes', () => {
         expect(recovered.price).toBe(true);
         expect(recovered.pause).toBe(true);
         expect(recovered.alert).toContain('signer identity recovered; price and pause resumed');
+    });
+
+    it('confirmed privilege clears grace so a later read failure does not reopen price', () => {
+        const ok = decideIdentityGate({
+            nowMs: T0,
+            lastOkAt: 0,
+            previousKey: '',
+            verdict: { ok: true },
+        });
+        expect(ok.price).toBe(true);
+        const privileged = decideIdentityGate({
+            nowMs: T0 + 1_000,
+            lastOkAt: ok.lastOkAt,
+            previousKey: ok.key,
+            verdict: { ok: false, kind: 'privileged', problems: ['signer equals deployer'] },
+        });
+        expect(privileged.price).toBe(false);
+        expect(privileged.lastOkAt).toBe(0);
+        const failed = decideIdentityGate({
+            nowMs: T0 + 2_000,
+            lastOkAt: privileged.lastOkAt,
+            previousKey: privileged.key,
+            verdict: { ok: false, kind: 'read-failed', problems: ['read failed: SP.owner'] },
+        });
+        expect(failed.price).toBe(false);
+        expect(failed.pause).toBe(false);
+    });
+
+    it('reads the decision clock after the identity RPC resolves', async () => {
+        let now = T0;
+        const decision = await gateAfterIdentityRead({
+            read: async () => {
+                now = T0 + SIX_H + 1;
+                return { ok: false, kind: 'read-failed', problems: ['read failed: SP.owner'] };
+            },
+            lastOkAt: T0,
+            previousKey: 'open',
+            now: () => now,
+        });
+        expect(decision.price).toBe(false);
+        expect(decision.pause).toBe(false);
     });
 });

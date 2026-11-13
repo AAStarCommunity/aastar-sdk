@@ -33,6 +33,12 @@ function hexData(value: unknown, max: number): Hex | null {
     return parsed.ok ? parsed.data : null;
 }
 
+function receiptHash(value: unknown): Hex | null {
+    const parsed = explainHex(value, 66);
+    if (!parsed.ok || parsed.data.length !== 66) return null;
+    return parsed.data;
+}
+
 function revertDataOf(error: unknown): Hex | undefined {
     let cur: unknown = error;
     for (let i = 0; i < 5 && cur && typeof cur === 'object'; i++) {
@@ -77,17 +83,36 @@ export function adaptChainIO(client: Client, opts: { tipWei?: bigint } = {}): Ch
                 const gasUsed = receipt.gasUsed;
                 const blockHash = receipt.blockHash;
                 const blockNumber = receipt.blockNumber;
-                if (!blockHash || typeof gasUsed !== 'bigint' || typeof blockNumber !== 'bigint') return null;
+                const txHash = receiptHash(receipt.transactionHash);
+                if (!blockHash || !txHash || typeof gasUsed !== 'bigint' || typeof blockNumber !== 'bigint') return null;
                 return {
                     status: receipt.status === 'success' ? 'success' : 'reverted',
                     gasUsed,
                     blockHash,
                     blockNumber,
-                    transactionHash: hash,
+                    transactionHash: txHash,
                 };
             } catch {
                 return null;
             }
+        },
+        async chainId() {
+            let raw: unknown;
+            try {
+                raw = await client.request({ method: 'eth_chainId' });
+            } catch {
+                throw new Error('sender: chain id unreadable');
+            }
+            if (typeof raw !== 'string' || raw.length < 3 || raw.length > 66) throw new Error('sender: chain id unreadable');
+            if (raw.charCodeAt(0) !== 48 || raw.charCodeAt(1) !== 120) throw new Error('sender: chain id unreadable');
+            let id: bigint;
+            try {
+                id = BigInt(raw);
+            } catch {
+                throw new Error('sender: chain id unreadable');
+            }
+            if (id <= 0n || id > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('sender: chain id unreadable');
+            return Number(id);
         },
         async getBlockByNumber(n) {
             try {

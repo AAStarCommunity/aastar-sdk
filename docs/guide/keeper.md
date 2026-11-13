@@ -50,11 +50,11 @@ From the monorepo root:
 
 `--dry-run` signs nothing and does not need a keystore. A live run refuses to start without `--keystore`, `--password-file` and `--signer`.
 
-`KEEPER_PRIVATE_KEY`, `PRIVATE_KEY_SUPPLIER` and `PRIVATE_KEY` in `.env.<network>` are not read and are not a signing path. `run-keeper.sh` does not export them.
+`run-keeper.sh` does not source `.env.<network>` and launches Node with `env -i`, so inherited `PRIVATE_KEY`, `MNEMONIC`, `KEYSTORE_PASSWORD` and `SEED` names never enter the process. A secret-named variable already in the environment refuses startup. Non-secret config is passed with `--env-file` or the allowlisted variables.
 
 ## Migrating off KEEPER_PRIVATE_KEY
 
-Stop the old keeper before the first start of this process. Make sure nothing is pending for the signer: no unmined transaction from the old process, from another host, or from a manual `cast`. This keeper's journal starts from the chain nonce. A pending transaction leaves latest and pending nonces different, and sends stay refused until that nonce is included. `--resync-journal` is only for the case where latest equals pending and the journal has no in-flight entry.
+Stop the old keeper before the first start of this process. Make sure nothing is pending for the signer: no unmined transaction from the old process, from another host, or from a manual `cast`. This keeper's journal starts from the chain nonce. A pending transaction leaves latest and pending nonces different, and sends stay refused until that nonce is included. `--resync-journal` needs `--signer` (and `--journal` / `--env-file` when those are not the defaults). It does not need a keystore. It runs when latest equals pending and either nothing is in flight, or the in-flight nonce was consumed by a transaction that is not ours. That refusal is stored in the journal as `foreignNonce` and cleared only by this command.
 
 ## Signer
 
@@ -74,14 +74,14 @@ mkdir -m 0700 -p ~/.aastar-keeper/keys
 chmod 0600 ~/.aastar-keeper/keys/password
 ```
 
-The nonce journal defaults to `~/.aastar-keeper/<network>.journal.json`. Its directory is created at mode `0700` before the process binds a loopback socket keyed by chain id and signer. The kernel drops that socket when the process dies, including after `SIGKILL`. A second live process with the same chain and signer is refused, even if it uses another journal path. There is no lock file and no stale-lock replacement. A corrupt journal, or one written for another chain or signer, refuses every send until an operator intervenes. If the chain nonce moves ahead of the journal, the key was used outside this process: every send is refused and an alert names the expected nonce and the nonce the chain reported. Normal runs never rewrite the journal to match that nonce. `--resync-journal` is the one-shot recovery: it runs only when the chain's latest nonce equals its pending nonce and every journal entry is included, then it sets the base nonce to that value, drops the entries, prints what changed, alerts, and exits. A chain nonce behind the journal is refused as `sender: nonce behind journal` and is not sticky. If the last journal entry is included but none of its hashes still have a receipt, that entry is put back to `sent` and its original bytes are rebroadcast.
+The nonce journal defaults to `~/.aastar-keeper/<network>.journal.json`. The file must be a regular file, mode `0600`, owned by this uid. Symlinks are refused. Its directory is created at mode `0700`, and each new directory is fsynced into its parent, before the process binds two loopback sockets: one keyed by chain id and signer, and one keyed by the journal's real path. The kernel drops both when the process dies, including after `SIGKILL`. Shutdown on SIGINT/SIGTERM stops new sends, waits for the in-flight sign and journal write (at most 120 seconds), kills cast, then releases those sockets. A second live process with the same chain and signer, or the same journal path, is refused. There is no lock file and no stale-lock replacement. A corrupt journal, an unsafe file, or one written for another chain or signer, refuses every send until an operator intervenes. Every stored raw is checked against the signer, chain, nonce and the entry's intent before it is broadcast. If the chain nonce moves ahead of the journal and none of our hashes is in a canonical block, the key was used outside this process: `foreignNonce` is written and every send is refused until `--resync-journal`. A chain nonce behind the journal is refused as `sender: nonce behind journal` and is not sticky. Included entries whose blocks are no longer canonical are demoted from the earliest missing nonce and go through the same gate as any other outstanding transaction.
 
 At startup the signer must not be the deployer `0xb5600060e6de5E11D3636731964218E53caadf0E`, the SuperPaymaster owner, or the Registry owner. On SuperPaymaster 5.4.2 that refuse-start set is exactly those three (DSR on #446). The check reads `owner()` at one block hash. A failed read refuses to start. The same check runs again every hour, and on every tick while sends are closed.
 
 The identity gate has two branches:
 
-1. The signer is confirmed privileged (deployer, SuperPaymaster owner, or Registry owner). All sends close. The alert says price updates have also stopped.
-2. An identity read failed. Price updates continue for at most 6 hours after the last successful check, then all sends close. The alert during that window says `pause only; price updates continue`. When the 6 hours end, the alert says price updates have also stopped. Recovery says `signer identity recovered; price and pause resumed`.
+1. The signer is confirmed privileged (deployer, SuperPaymaster owner, or Registry owner). All sends close, and the previous six-hour grace is cleared. The alert says price updates have also stopped. Price reopens only after a later successful non-privileged check.
+2. An identity read failed. Price updates continue for at most 6 hours after the last successful non-privileged check, then all sends close. The deadline is taken when that decision is made, after the ownership reads return. The alert during that window says `pause only; price updates continue`. When the 6 hours end, the alert says price updates have also stopped. Recovery says `signer identity recovered; price and pause resumed`.
 
 A recovery alerts once when sends open again, not on every check. A network with no registry address refuses to start until `--registry <address>` is passed. Passing `--signer` on a dry-run runs the same check and does not sign.
 
@@ -100,7 +100,7 @@ Dry-run prints the balance texts on stdout and does not send them.
 
 ## Required ENV
 
-The keeper loads `.env.<network>` from the current working directory for RPC and Telegram only.
+The keeper does not load `.env.<network>`. Set `RPC_URL` in the environment, or pass `--env-file <path>` containing only allowlisted keys. Any other key refuses startup and the error names the key.
 
 - `RPC_URL`
 
@@ -119,7 +119,8 @@ Optional:
 - `--signer <address>` (required unless `--dry-run`; the recovered sender must match)
 - `--cast-bin <path>` (default `cast`)
 - `--journal <path>` (default `~/.aastar-keeper/<network>.journal.json`)
-- `--resync-journal` (one-shot; requires `--signer`; exits after the realign)
+- `--env-file <path>` (optional; allowlisted keys only)
+- `--resync-journal` (one-shot; requires `--signer` only; exits after the realign)
 - `--registry <address>` (required for signer identity when the network has no registry)
 - `--low-balance-wei <n>`
 - `--superpaymaster <address>` (override)

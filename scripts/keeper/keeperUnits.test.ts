@@ -76,36 +76,54 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         if (!existsSync(TSX_LOADER)) throw new Error('tsx loader missing');
         const cwd = mkdtempSync(join(tmpdir(), 'keeper-probe-'));
         dirs.push(cwd);
-        writeFileSync(join(cwd, '.env.sepolia'), 'PRIVATE_KEY=file-sentinel\nTEST_PRIVATE_KEY=file-test-sentinel\nMNEMONIC=file-words\nPRIVATE_KEY_SUPPLIER=supplier-sentinel\nKEYSTORE_PASSWORD=pw-sentinel\nRPC_URL=http://127.0.0.1:1\n');
-        const child = spawn(process.execPath, ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--probe-env', '--dry-run'], {
+        writeFileSync(join(cwd, '.env.sepolia'), 'PRIVATE_KEY=file-sentinel\nRPC_URL=http://127.0.0.1:9\n');
+        const inherited = spawn(process.execPath, ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--probe-env', '--dry-run'], {
             cwd,
             env: {
                 PATH: process.env.PATH ?? '',
                 HOME: cwd,
                 PRIVATE_KEY: 'env-sentinel',
-                KEEPER_PRIVATE_KEY: 'keeper-sentinel',
-                KEYSTORE_PATH: '/tmp/keystore',
                 KEEPER_CAST_BIN: 'cast',
             },
         });
-        let out = '';
-        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
-        const code = await new Promise<number | null>((resolve) => {
-            child.once('close', resolve);
+        let inheritedOut = '';
+        inherited.stdout.on('data', (chunk) => { inheritedOut += chunk.toString(); });
+        inherited.stderr.on('data', (chunk) => { inheritedOut += chunk.toString(); });
+        const inheritedCode = await new Promise<number | null>((resolve) => inherited.once('close', resolve));
+        expect(inheritedCode, inheritedOut).toBe(1);
+        expect(inheritedOut).toContain('keeper: secret env refused: PRIVATE_KEY');
+        expect(inheritedOut).not.toContain('env-sentinel');
+        expect(inheritedOut).not.toContain('file-sentinel');
+        expect(inheritedOut).not.toContain('Key Length');
+
+        const envFile = join(cwd, 'keeper.env');
+        writeFileSync(envFile, 'RPC_URL=http://127.0.0.1:9\nSUPPLIER_TOKEN=supplier-sentinel\n');
+        const extra = spawn(process.execPath, ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--dry-run', '--env-file', envFile], {
+            cwd,
+            env: { PATH: process.env.PATH ?? '', HOME: cwd },
         });
-        expect(code, out).toBe(0);
-        expect(out).toContain('probe secrets=absent');
-        expect(out).toContain('probe KEEPER_CAST_BIN=present');
-        expect(out).toContain('probe KEYSTORE_PATH=present');
-        expect(out).not.toContain('env-sentinel');
-        expect(out).not.toContain('file-sentinel');
-        expect(out).not.toContain('file-test-sentinel');
-        expect(out).not.toContain('Key Length');
-        expect(out).not.toContain('supplier-sentinel');
-        expect(out).not.toContain('pw-sentinel');
-        expect(out).toContain('ignored KEEPER_PRIVATE_KEY from environment; keystore only');
-        expect(out).not.toContain('keeper-sentinel');
+        let extraOut = '';
+        extra.stdout.on('data', (chunk) => { extraOut += chunk.toString(); });
+        extra.stderr.on('data', (chunk) => { extraOut += chunk.toString(); });
+        const extraCode = await new Promise<number | null>((resolve) => extra.once('close', resolve));
+        expect(extraCode, extraOut).toBe(1);
+        expect(extraOut).toContain('keeper: env file key refused: SUPPLIER_TOKEN');
+        expect(extraOut).not.toContain('supplier-sentinel');
+
+        const allowed = join(cwd, 'allowed.env');
+        writeFileSync(allowed, 'RPC_URL=http://127.0.0.1:9\nKEEPER_CAST_BIN=cast\n');
+        const ok = spawn(process.execPath, ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--probe-env', '--dry-run', '--env-file', allowed], {
+            cwd,
+            env: { PATH: process.env.PATH ?? '', HOME: cwd, KEYSTORE_PATH: '/tmp/keystore' },
+        });
+        let okOut = '';
+        ok.stdout.on('data', (chunk) => { okOut += chunk.toString(); });
+        ok.stderr.on('data', (chunk) => { okOut += chunk.toString(); });
+        const okCode = await new Promise<number | null>((resolve) => ok.once('close', resolve));
+        expect(okCode, okOut).toBe(0);
+        expect(okOut).toContain('probe secrets=absent');
+        expect(okOut).toContain('probe KEEPER_CAST_BIN=present');
+        expect(okOut).not.toContain('http://127.0.0.1:9');
     });
 
     it('rejects pause-duty flags and a registry-less network', async () => {

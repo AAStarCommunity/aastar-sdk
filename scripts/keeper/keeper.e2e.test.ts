@@ -127,7 +127,7 @@ async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) =
             cwd,
             env: {
                 PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '', RPC_URL: rpc,
-                TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', KEEPER_PRIVATE_KEY: '', PRIVATE_KEY_SUPPLIER: '', PRIVATE_KEY: '',
+                TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '',
             },
             stdio: ['ignore', 'pipe', 'pipe'],
         },

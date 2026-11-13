@@ -2,7 +2,7 @@
  * Offline signer. `cast mktx` builds and signs a raw transaction and does not broadcast.
  * Stderr from cast is never copied into an error: it can contain paths.
  */
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { chmodSync, lstatSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -34,6 +34,14 @@ export interface RawSigner {
 
 const OUTPUT_CAP = 1_000_000;
 const castWorkDirs = new Set<string>();
+const castChildren = new Set<ChildProcess>();
+
+/** Stop every cast child this process started. Shutdown calls this before it drops the lock. */
+export function killCastChildren(): void {
+    for (const child of castChildren) {
+        try { child.kill('SIGKILL'); } catch { /* already gone */ }
+    }
+}
 let castExitHooked = false;
 
 function hookCastExit(): void {
@@ -214,6 +222,8 @@ export function createCastSigner(opts: {
                     stdio: ['ignore', 'pipe', 'pipe'],
                     env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },
                 });
+                castChildren.add(child);
+                child.once('close', () => { castChildren.delete(child); });
                 let out = '';
                 let settled = false;
                 const fail = () => {

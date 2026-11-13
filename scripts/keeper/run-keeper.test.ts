@@ -22,19 +22,19 @@ mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
 writeFileSync(
     join(bin, 'pnpm'),
-    '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+    '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY|RPC_URL|UNLISTED)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
 );
 chmodSync(join(bin, 'pnpm'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
 const SIGN = ['--keystore', '/tmp/ks', '--password-file', '/tmp/pw', '--signer', '0x0000000000000000000000000000000000000001'];
 
-function run(args: string[], opts: { sign?: boolean } = {}) {
+function run(args: string[], opts: { sign?: boolean; env?: NodeJS.ProcessEnv } = {}) {
     const full = opts.sign === false ? args : [...args, ...SIGN];
     const r = spawnSync('bash', [join(dir, 'run-keeper.sh'), ...full], {
         cwd: dir,
         encoding: 'utf8',
-        env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir },
+        env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, ...opts.env },
     });
     const lines = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: '));
     const envLines = lines.filter((l) => l.startsWith('ENV_'));
@@ -101,5 +101,24 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(r.stdout).not.toContain(sentinel);
         expect(r.envLines.join('\n')).not.toMatch(/KEEPER_PRIVATE_KEY|PRIVATE_KEY/);
         expect(r.argv).not.toContain(sentinel);
+    });
+
+    it('resync needs only --signer, and inherited secrets are not passed to node', () => {
+        const signer = '0x0000000000000000000000000000000000000001';
+        const ok = run(['sepolia', '--resync-journal', '--signer', signer], { sign: false });
+        expect(ok.status, ok.stderr).toBe(0);
+        expect(ok.argv).toContain('--resync-journal');
+        expect(ok.argv).not.toContain('--keystore');
+        const missing = run(['sepolia', '--resync-journal'], { sign: false });
+        expect(missing.status).toBe(1);
+        expect(missing.stderr).toMatch(/requires --signer/);
+        const forwarded = run(['sepolia', '--once', '--dry-run'], {
+            sign: false,
+            env: { PRIVATE_KEY: 'sentinel-secret', RPC_URL: 'http://127.0.0.1:9', UNLISTED: 'nope' },
+        });
+        expect(forwarded.status, forwarded.stderr).toBe(0);
+        expect(forwarded.stdout).not.toContain('sentinel-secret');
+        expect(forwarded.envLines.some((line) => line.startsWith('ENV_RPC_URL='))).toBe(true);
+        expect(forwarded.envLines.join('\n')).not.toContain('UNLISTED');
     });
 });

@@ -126,8 +126,6 @@ async function expectRefuse(signer: Address, owners: { sp: Address; registry: Ad
                 RPC_URL: url,
                 TELEGRAM_BOT_TOKEN: '',
                 TELEGRAM_CHAT_ID: '',
-                KEEPER_PRIVATE_KEY: '',
-                PRIVATE_KEY: '',
             },
         });
         let out = '';
