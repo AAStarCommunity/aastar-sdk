@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
 import { signTransaction } from 'viem/accounts';
 import { Journal, type InFlight } from './journal.js';
-import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, checkIntent, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
+import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, authorizeSign, checkIntent, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
 
 const TO = '0x1111111111111111111111111111111111111111' as Address;
 const OTHER = '0x2222222222222222222222222222222222222222' as Address;
@@ -949,3 +949,17 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         }
     });
 });
+
+describe('authorizeSign is the signing gate on fees (#447 clestons M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const SP = getAddress('0x00000000000000000000000000000000000000a1');
+    const targets = { superPaymaster: SP, paymaster: null, signer: SIGNER, chainId: 11155111, maxGas: 500_000n };
+    const req = (maxFeePerGas: bigint, maxPriorityFeePerGas: bigint) => ({
+        to: SP, data: UPDATE_PRICE_DATA, nonce: 1, gasLimit: 100_000n, maxFeePerGas, maxPriorityFeePerGas, chainId: 11155111,
+    });
+    it('accepts a request at the ceiling and refuses one a single wei above it', () => {
+        expect(authorizeSign('price-super', req(1_000n, 10n), targets, 1_000n)).toBe(true);
+        expect(authorizeSign('price-super', req(1_001n, 10n), targets, 1_000n)).toBe(false);
+        expect(authorizeSign('price-super', req(1_000n, 1_001n), targets, 1_000n)).toBe(false);
+    });
+});
+
