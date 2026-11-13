@@ -1040,6 +1040,10 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
         await expect(scanRange({
             providers, store, chainId: 1, startBlock: 1, maxBlocks: 0, watched: [watched()],
         })).rejects.toThrow(/maxBlocks/);
+        // #445 N1: above the cap the message names the cap, not only the lower bound.
+        await expect(scanRange({
+            providers, store, chainId: 1, startBlock: 1, maxBlocks: 5000, watched: [watched()],
+        })).rejects.toThrow(/maxBlocks must be >= 1 and <= 4096/);
         await expect(scanRange({
             providers, store, chainId: 1, startBlock: -1, maxBlocks: 5, watched: [watched()],
         })).rejects.toThrow(/startBlock/);
@@ -1993,11 +1997,10 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             if (args.method === 'eth_chainId') return 'https://user:pw@example.test';
             return orig(args);
         };
-        await expect(run(secret.a, secret.b)).rejects.toSatisfy((error: Error) => {
-            expect(error.message).toBe('chain id unreadable');
-            expect(String(error)).not.toMatch(/user:pw|example\.test/);
-            return true;
-        });
+        // #445 N2: an unreadable chain id is evidence that could not be read (INCOMPLETE), not a crash.
+        const garbled = await run(secret.a, secret.b);
+        expect(garbled.state).toBe('INCOMPLETE');
+        expect(JSON.stringify(garbled)).not.toMatch(/user:pw|example\.test/);
 
         const { a, b } = pair(2);
         const store = memoryStore();
@@ -2033,3 +2036,32 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
 });
 
 const ok: Attributor = { async attribute() { return { ok: true, attribution: { who: 'guardian' } }; } };
+
+describe('eth_chainId read failures are INCOMPLETE, only a real mismatch throws (#445 N2) (unit, not acceptance)', () => {
+    it('a provider that throws on eth_chainId -> INCOMPLETE naming the provider, nothing written', async () => {
+        const { a, b } = pair(1);
+        const store = memoryStore();
+        const before = await store.snapshot();
+        const flaky: RawRpc = { name: a.name, request: async (args) => {
+            if (args.method === 'eth_chainId') throw new Error('https://user:pw@rpc.example/secret');
+            return a.request(args);
+        } };
+        const result = await run(flaky, b, store);
+        expect(result.state).toBe('INCOMPLETE');
+        expect(JSON.stringify(result)).toContain(`chain id read failed for ${a.name}`);
+        expect(JSON.stringify(result)).not.toContain('secret');
+        expect(await store.snapshot()).toEqual(before);
+    });
+    it('an unreadable chain id -> INCOMPLETE', async () => {
+        const { a, b } = pair(1);
+        const garbled: RawRpc = { name: b.name, request: async (args) => (args.method === 'eth_chainId' ? 'nope' : b.request(args)) };
+        const result = await run(a, garbled);
+        expect(result.state).toBe('INCOMPLETE');
+        expect(JSON.stringify(result)).toContain(`chain id unreadable from ${b.name}`);
+    });
+    it('a readable but different chain id still throws', async () => {
+        const { a, b } = pair(1);
+        const other: RawRpc = { name: b.name, request: async (args) => (args.method === 'eth_chainId' ? '0x2' : b.request(args)) };
+        await expect(run(a, other)).rejects.toThrow(/chain id mismatch/);
+    });
+});

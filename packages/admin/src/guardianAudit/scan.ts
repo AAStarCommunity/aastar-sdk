@@ -307,7 +307,7 @@ function assertConfig(
 ): void {
     assertChainId(chainId);
     assertWatched(watched, startBlock);
-    if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error('maxBlocks must be >= 1');
+    if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error(`maxBlocks must be >= 1 and <= ${responseLimits.ancestry}`);
     if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
     if (maxAnchorBlocks !== undefined && !safeInt(maxAnchorBlocks, 1)) throw new Error('maxAnchorBlocks must be >= 1');
 }
@@ -348,20 +348,23 @@ async function judge(
     }
 }
 
-/** Evidence read. The string is a sanitized reason: stage and provider name, never the error text. */
-/** `eth_chainId`. A bad answer is a config error and does not echo the payload. */
-async function readChainId(rpc: RawRpc): Promise<number> {
+/**
+ * `eth_chainId`. A failed or unreadable read is evidence that could not be read: a sanitized reason
+ * (INCOMPLETE, retried next scan). Only a readable chain id that differs is a configuration error.
+ */
+async function readChainId(rpc: RawRpc): Promise<number | string> {
     let raw: unknown;
     try {
         raw = await rpc.request({ method: 'eth_chainId', params: [] });
     } catch {
-        throw new Error(`${rpc.name}: request failed`);
+        return `chain id read failed for ${rpc.name}`;
     }
     const got = quantity(raw);
-    if (got === null || got < 1) throw new Error('chain id unreadable');
+    if (got === null || got < 1) return `chain id unreadable from ${rpc.name}`;
     return got;
 }
 
+/** Evidence read. The string is a sanitized reason: stage and provider name, never the error text. */
 async function readHeader(rpc: RawRpc, tag: number | 'finalized'): Promise<BlockHeader | string> {
     try {
         return await header(rpc, tag);
@@ -627,10 +630,11 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * walk. A larger gap is INCOMPLETE, the checkpoint stays, and the next scan walks
  * the same gap again. This scan does not cache anchor headers.
  * Recovery when `finalized - to > maxAnchorBlocks`: raise `maxAnchorBlocks` to at
- * least `finalized - to` for the catch-up run, or raise `maxBlocks` so the scanned
- * tip lands inside the bound. `to = min(finalized, from + maxBlocks - 1)`, and the
- * walk fits when `to >= finalized - maxAnchorBlocks`, so
- * `maxBlocks >= finalized - maxAnchorBlocks - from + 1`. A keeper more than
+ * least `finalized - to` for the catch-up run. Raising `maxBlocks` helps only within
+ * its own cap of 4096 (`responseLimits.ancestry`): `to = min(finalized, from + maxBlocks - 1)`
+ * and the walk fits when `to >= finalized - maxAnchorBlocks`, i.e. when
+ * `finalized - maxAnchorBlocks - from + 1 <= 4096`; beyond that only `maxAnchorBlocks`
+ * recovers. A keeper more than
  * 100_000 blocks behind (about 2.3 days on OP at a 2 second block time) does not
  * recover on the defaults.
  * Request timeouts belong to the caller's transport. scanRange does not time out a request.
@@ -698,6 +702,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
     if (snap.scope !== null && snap.scope.toLowerCase() !== scope.toLowerCase()) throw new ScopeChangedError();
     const [idA, idB] = await Promise.all([readChainId(pa), readChainId(pb)]);
+    for (const id of [idA, idB]) if (typeof id === 'string') return { state: 'INCOMPLETE', reasons: [id], from: startBlock };
     if (idA !== chainId || idB !== chainId) throw new Error('chain id mismatch');
     const finA = await readHeader(pa, 'finalized');
     if (typeof finA === 'string') return { state: 'INCOMPLETE', reasons: [finA], from: startBlock };
