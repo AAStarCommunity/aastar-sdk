@@ -21,6 +21,41 @@ export interface GateDecision {
     reason: string;
 }
 
+function canonicalAddr(value: string): string | null {
+    if (typeof value !== 'string' || value.length !== 42) return null;
+    if (value.charCodeAt(0) !== 48 || (value.charCodeAt(1) !== 120 && value.charCodeAt(1) !== 88)) return null;
+    for (let i = 2; i < value.length; i++) {
+        const c = value.charCodeAt(i);
+        const hex = (c >= 48 && c <= 57) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);
+        if (!hex) return null;
+    }
+    return value.toLowerCase();
+}
+
+/**
+ * Identity is bound to the target set {SuperPaymaster, PaymasterV4, Registry}.
+ * An empty PaymasterV4 is a different set from a resolved one. Checksum case does not count.
+ */
+export function identityTargetKey(parts: { sp: string; v4: string | null; registry: string }): string {
+    const sp = canonicalAddr(parts.sp);
+    const registry = canonicalAddr(parts.registry);
+    if (!sp || !registry) return '';
+    if (parts.v4 === null) return `${sp}||${registry}`;
+    const v4 = canonicalAddr(parts.v4);
+    if (!v4) return '';
+    return `${sp}|${v4}|${registry}`;
+}
+
+/**
+ * The startup target set is the only set this process may price.
+ * A different set closes the whole price gate and does not reopen it.
+ */
+export function priceClosedByTargetDrift(startupKey: string, nowKey: string): boolean {
+    if (typeof startupKey !== 'string' || typeof nowKey !== 'string') return true;
+    if (startupKey.length === 0 || startupKey.length > 200 || nowKey.length === 0 || nowKey.length > 200) return true;
+    return startupKey !== nowKey;
+}
+
 function clockOk(now: number): boolean {
     return Number.isSafeInteger(now) && now >= 0;
 }

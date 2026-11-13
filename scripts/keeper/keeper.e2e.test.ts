@@ -1,7 +1,7 @@
 /**
  * End-to-end: the REAL scripts/keeper.ts main loop, in --dry-run, against a fake JSON-RPC server.
- * The unit tests prove the resolver; this proves keeper.ts actually calls it every tick, ahead of
- * the SuperPaymaster reads, and then refreshes V4 — removing that wiring turns this red.
+ * PaymasterV4 is resolved once at startup. A boot failure leaves V4 disabled for the process.
+ * A resolved V4 is still refreshed when a SuperPaymaster read fails.
  *
  * Isolation: the child runs in an empty temp dir with TELEGRAM_* and key variables set to empty
  * strings (dotenv never overrides an existing variable), so no .env file, real key or Telegram bot
@@ -44,11 +44,10 @@ const sel = (sig: string) => toFunctionSelector(sig);
 
 type Fake = { server: Server; url: string; methods: string[]; calls: { to: string; data: string }[]; codeCalls: () => number };
 
-/** getCode(V4) fails until the first eth_getBlockByNumber — i.e. through INIT and tick 1's resolution. */
-async function fakeRpc(opts: { spBroken?: boolean; balanceWei?: bigint; balanceFails?: boolean; spOwner?: string; registryOwner?: string } = {}): Promise<Fake> {
+/** `codeFails` makes getCode(V4) fail. Startup is the only resolution, so later ticks must not retry it. */
+async function fakeRpc(opts: { spBroken?: boolean; balanceWei?: bigint; balanceFails?: boolean; spOwner?: string; registryOwner?: string; codeFails?: boolean } = {}): Promise<Fake> {
     const methods: string[] = [];
     const calls: { to: string; data: string }[] = [];
-    let blockSeen = false;
     let codeCalls = 0;
     const spOwner = opts.spOwner ?? OWNER;
     const registryOwner = opts.registryOwner ?? OWNER;
@@ -58,12 +57,12 @@ async function fakeRpc(opts: { spBroken?: boolean; balanceWei?: bigint; balanceF
             case 'eth_chainId': return { result: '0xaa36a7' };
             case 'eth_blockNumber': return { result: '0x100' };
             case 'eth_getBlockByNumber':
-                blockSeen = true;
                 return { result: { number: '0x100', hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now().toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
             case 'eth_getCode': {
                 if (String(params[0]).toLowerCase() !== V4) return { result: '0x6080' };
                 codeCalls++;
-                return blockSeen ? { result: '0x6080' } : { error: { code: -32000, message: 'header not found' } };
+                if (opts.codeFails) return { error: { code: -32000, message: 'header not found' } };
+                return { result: '0x6080' };
             }
             case 'eth_getBalance': {
                 if (opts.balanceFails) return { error: { code: -32000, message: 'fake: balance unavailable' } };
@@ -152,30 +151,29 @@ async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) =
 // to exit and for the pipes to drain; a per-test timeout overrides this default.
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 
-describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refreshed', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('getCode(V4) fails at INIT and tick 1, succeeds at tick 2 → tick 2 sends V4 updatePrice (dry-run)', async () => {
-        const fake = await fakeRpc();
+describe('keeper.ts main loop: V4 is resolved once at startup', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('unresolved at startup never sends a PaymasterV4 update and alerts once', async () => {
+        const fake = await fakeRpc({ codeFails: true });
         cleanups.push(() => closeServer(fake.server));
-        const updateLine = `action=sendTx kind=paymaster method=updatePrice() target=${V4}`;
-        const out = await runKeeper(fake.url, [], (o) => o.toLowerCase().includes(updateLine.toLowerCase()));
-        const lower = out.toLowerCase();
-
-        expect(lower).toMatch(/paymaster=not-found \(transient error=getbytecode/);
-        expect(lower).toMatch(/tick #1[\s\S]*paymaster decision=skip reason=not-found transient/);
-        expect(lower).toMatch(new RegExp(`tick #2[\\s\\S]*paymaster resolved=${V4}`));
-        expect(lower).toContain(updateLine.toLowerCase());
-        expect(fake.codeCalls()).toBeGreaterThanOrEqual(3); // INIT, tick 1, tick 2
+        const alert = 'PaymasterV4 unresolved at startup; V4 price updates disabled until restart';
+        const out = await runKeeper(fake.url, [], (o) => /TICK #2/.test(o));
+        expect(out.split(alert).length - 1).toBe(1);
+        expect(out).toMatch(/paymaster=unresolved/);
+        expect(out).toMatch(/super decision=/);
+        expect(out).not.toMatch(/kind=paymaster/);
+        expect(out).not.toContain('header not found');
+        expect(out).not.toContain('getBytecode');
+        expect(fake.codeCalls()).toBe(1);
     }, 60_000);
 
-    it('a persistently failing SuperPaymaster read does not stop V4 from being resolved', async () => {
-        // Codex review: resolution used to sit after the SP reads, so an SP failure skipped it.
+    it('a resolved PaymasterV4 still updates on tick 1 when SuperPaymaster reads fail', async () => {
         const fake = await fakeRpc({ spBroken: true });
         cleanups.push(() => closeServer(fake.server));
         const updateLine = `action=sendtx kind=paymaster method=updateprice() target=${V4}`;
-        const out = await runKeeper(fake.url, [], (o) => o.toLowerCase().includes(updateLine) || /TICK #4/.test(o));
+        const out = await runKeeper(fake.url, [], (o) => o.toLowerCase().includes(updateLine));
         expect(out).toMatch(/keeper: superpaymaster read failed/);
-        expect(out.toLowerCase()).toMatch(new RegExp(`tick #2[\\s\\S]*paymaster resolved=${V4}`));
-        expect(out.toLowerCase()).toMatch(new RegExp(`tick #2[\\s\\S]*action=sendtx kind=paymaster method=updateprice\\(\\) target=${V4.toLowerCase()}`));
+        expect(out).not.toContain('fake: SuperPaymaster read failing');
+        expect(out.toLowerCase()).toMatch(new RegExp(`tick #1[\\s\\S]*action=sendtx kind=paymaster method=updateprice\\(\\) target=${V4.toLowerCase()}`));
     }, 60_000);
 
     it('--disable-paymaster: V4 is never resolved', async () => {

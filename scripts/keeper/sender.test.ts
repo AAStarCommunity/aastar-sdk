@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
 import { signTransaction } from 'viem/accounts';
 import { Journal, type InFlight } from './journal.js';
-import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, authorizeSign, checkIntent, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
+import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, authorizeSign, bumpedFee, checkIntent, manualStallCommand, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
 
 const TO = '0x1111111111111111111111111111111111111111' as Address;
 const OTHER = '0x2222222222222222222222222222222222222222' as Address;
@@ -507,7 +507,10 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const settled = await h.sender.maintain();
         expect(settled.status).toBe('consumed');
         expect(h.journal.inFlight()).toBeNull();
-        await h.sender.flushReceipt();
+        for (let i = 0; i < 3; i++) {
+            h.sender.tick();
+            await h.sender.flushReceipt();
+        }
         expect(h.sender.drainSettlements()[0]?.outcome).toBe('unavailable');
         expect(h.alerts).toContain('nonce consumed, receipt unavailable');
         const next = await h.sender.send(h.job());
@@ -521,6 +524,8 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(result.status).toBe('refused');
         expect(JSON.stringify(result)).not.toContain('999');
         expect(h.broadcasts).toEqual([]);
+        expect(h.signed).toEqual([]);
+        expect(h.journal.inFlight()).toBeNull();
     });
 
     it('validates config before any chain read', () => {
@@ -722,7 +727,8 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         let reads = 0;
         h.chain.chainId = async () => {
             reads += 1;
-            if (failBroadcastChain && reads >= 2) throw new Error('rpc path /tmp/secret');
+            // The post-sign chain read is the second call and must pass. The broadcast read is the third.
+            if (failBroadcastChain && reads >= 3) throw new Error('rpc path /tmp/secret');
             return CHAIN_ID;
         };
         h.chain.sendRawTransaction = async (raw) => {
@@ -947,6 +953,219 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         } finally {
             setDurabilityHooks(null);
         }
+    });
+
+    it('pending nonce failure still closes sends and alerts when the stall window has elapsed', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        h.clock.now = 1 + 600_000;
+        h.chain.getTransactionCount = async (_addr, tag) => {
+            if (tag === 'pending') throw new Error('pending-nonce-sentinel');
+            return 7n;
+        };
+        const stalled = await h.sender.maintain();
+        expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+        expect(h.alerts.join('\n')).not.toContain('pending-nonce-sentinel');
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; inFlight: { nonce: number } | null };
+        expect(disk.stalled).toBe(true);
+        expect(disk.inFlight?.nonce).toBe(7);
+        const again = await h.sender.send(h.job());
+        expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.signed).toEqual([]);
+    });
+
+    it('a failed stall commit still closes sends and alerts', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        const before = readFileSync(h.path, 'utf8');
+        const originalCommit = h.journal.commit.bind(h.journal);
+        let failCommit = true;
+        h.journal.commit = ((...args: Parameters<typeof h.journal.commit>) => {
+            if (failCommit) return Promise.reject(new Error('journal-commit-sentinel'));
+            return originalCommit(...args);
+        }) as typeof h.journal.commit;
+        const stalled = await h.sender.maintain();
+        expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+        expect(h.alerts.join('\n')).not.toContain('journal-commit-sentinel');
+        expect(readFileSync(h.path, 'utf8')).toBe(before);
+        // Journal writes work again, and the flight is inside the stall window.
+        // Only the in-memory latch may keep the next send closed.
+        failCommit = false;
+        h.clock.now = 1_000;
+        const again = await h.sender.send(h.job());
+        expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.signed).toEqual([]);
+    });
+
+    it('a mined stalled nonce stays closed until --clear-stall', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        expect((await h.sender.maintain()).status).toBe('refused');
+        h.setNonce(8n, 8n);
+        const mined = await h.sender.maintain();
+        expect(mined).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.journal.inFlight()).toBeNull();
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number };
+        expect(disk.stalled).toBe(true);
+        expect(disk.stalledNonce).toBe(7);
+        const restarted = h.reopen();
+        expect(await restarted.send(h.job())).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        const cleared = await restarted.clearStall();
+        expect(cleared.status).toBe('cleared');
+        expect((await restarted.send(h.job())).status).toBe('pending');
+    });
+
+    it('an exhausted hourly budget is closed before a new signature', async () => {
+        const h = harness({ maxSendsPerHour: 1 });
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            return keccak256(raw);
+        };
+        expect((await h.sender.send(h.job())).status).toBe('pending');
+        expect((await h.sender.maintain()).status).toBe('pending');
+        expect(h.signed).toHaveLength(1);
+        expect(h.broadcasts).toHaveLength(2);
+        h.setNonce(8n, 8n);
+        expect((await h.sender.maintain()).status).toBe('consumed');
+        const second = await h.sender.send(h.job());
+        expect(second).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
+        expect(h.signed).toHaveLength(1);
+        expect(h.journal.inFlight()).toBeNull();
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { ceilingClosed: boolean; inFlight: unknown };
+        expect(disk.ceilingClosed).toBe(true);
+        expect(disk.inFlight).toBeNull();
+    });
+
+    it('two consumed nonces each settle, including when lookups overlap', async () => {
+        const straight = harness();
+        straight.chain.getTransactionReceipt = async (hash) => ({
+            status: 'success', gasUsed: 10n, blockHash: BLOCK, blockNumber: 1n, transactionHash: hash,
+        });
+        const firstRaw = await plant(straight, { nonce: 7 });
+        const secondRaw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 8 });
+        straight.setNonce(8n, 8n);
+        expect((await straight.sender.maintain()).status).toBe('consumed');
+        straight.sender.tick();
+        await straight.sender.flushReceipt();
+        await straight.journal.writeInFlight({
+            kind: 'price-super', nonce: 8, raws: [secondRaw], hashes: [keccak256(secondRaw)],
+            gasLimit: 120_000n, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
+        });
+        straight.setNonce(9n, 9n);
+        expect((await straight.sender.maintain()).status).toBe('consumed');
+        straight.sender.tick();
+        await straight.sender.flushReceipt();
+        const straightEvents = straight.sender.drainSettlements();
+        expect(straightEvents.map((ev) => ev.nonce)).toEqual([7, 8]);
+        expect(straightEvents.every((ev) => ev.outcome === 'receipt')).toBe(true);
+        expect(keccak256(firstRaw)).toBe(straightEvents[0]?.hash);
+
+        const h = harness();
+        const raw7 = await plant(h, { nonce: 7 });
+        const hash7 = keccak256(raw7);
+        let release: () => void = () => {};
+        let entered = false;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        h.chain.getTransactionReceipt = async (hash) => {
+            if (hash.toLowerCase() === hash7.toLowerCase()) {
+                entered = true;
+                await gate;
+                return { status: 'success', gasUsed: 10n, blockHash: BLOCK, blockNumber: 1n, transactionHash: hash7 };
+            }
+            return { status: 'reverted', gasUsed: 11n, blockHash: BLOCK, blockNumber: 2n, transactionHash: hash };
+        };
+        h.setNonce(8n, 8n);
+        expect((await h.sender.maintain()).status).toBe('consumed');
+        const wait = Date.now();
+        while (!entered && Date.now() - wait < 1_000) await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(entered).toBe(true);
+        const raw8 = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 8 });
+        const hash8 = keccak256(raw8);
+        await h.journal.writeInFlight({
+            kind: 'price-super', nonce: 8, raws: [raw8], hashes: [hash8],
+            gasLimit: 120_000n, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
+        });
+        h.setNonce(9n, 9n);
+        expect((await h.sender.maintain()).status).toBe('consumed');
+        const started = Date.now();
+        const next = await h.sender.send(h.job());
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(next.status).toBe('pending');
+        release();
+        h.sender.tick();
+        await h.sender.flushReceipt();
+        h.sender.tick();
+        await h.sender.flushReceipt();
+        const events = h.sender.drainSettlements();
+        expect(events.map((ev) => ev.nonce).sort()).toEqual([7, 8]);
+        expect(events.find((ev) => ev.nonce === 7)?.outcome).toBe('receipt');
+        expect(events.find((ev) => ev.nonce === 8)?.outcome).toBe('reverted');
+    });
+
+    it('clear-stall refuses a mismatched or unreadable chain id and keeps the journal', async () => {
+        const mismatched = harness({ stallSec: 600 });
+        await plant(mismatched, { nonce: 7 });
+        mismatched.setNonce(7n, 8n);
+        mismatched.clock.now = 1 + 600_000;
+        await mismatched.sender.maintain();
+        const before = readFileSync(mismatched.path, 'utf8');
+        mismatched.setChainId(async () => 999);
+        const refused = await mismatched.sender.clearStall();
+        expect(refused).toEqual({ status: 'refused', reason: 'sender: chain id mismatch' });
+        expect(JSON.stringify(refused)).not.toContain('999');
+        expect(readFileSync(mismatched.path, 'utf8')).toBe(before);
+
+        const unread = harness({ stallSec: 600 });
+        await plant(unread, { nonce: 7 });
+        unread.setNonce(7n, 8n);
+        unread.clock.now = 1 + 600_000;
+        await unread.sender.maintain();
+        const kept = readFileSync(unread.path, 'utf8');
+        unread.setChainId(async () => { throw new Error('chain-id-sentinel'); });
+        const blocked = await unread.sender.clearStall();
+        expect(blocked).toEqual({ status: 'refused', reason: 'sender: chain id unreadable' });
+        expect(JSON.stringify(blocked) + unread.alerts.join('\n')).not.toContain('chain-id-sentinel');
+        expect(readFileSync(unread.path, 'utf8')).toBe(kept);
+    });
+
+    it('post-sign chain mismatch journals nothing', async () => {
+        const h = harness();
+        h.chain.chainId = async () => (h.signed.length > 0 ? 999 : CHAIN_ID);
+        const result = await h.sender.send(h.job());
+        expect(result).toEqual({ status: 'refused', reason: 'sender: chain id mismatch' });
+        expect(JSON.stringify(result)).not.toContain('999');
+        expect(h.signed).toHaveLength(1);
+        expect(h.broadcasts).toEqual([]);
+        expect(h.journal.inFlight()).toBeNull();
+    });
+
+    it('manual stall command names the chain, the env-file RPC, and a 125% fee', async () => {
+        expect(bumpedFee(210n)).toBe(263n);
+        expect(bumpedFee(10n)).toBe(13n);
+        expect(manualStallCommand({
+            chainId: CHAIN_ID, nonce: 7, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n,
+            keystorePath: '<path>', passwordFilePath: '<path>', signer: SIGNER,
+        })).toContain('--rpc-url "$RPC_URL"');
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7, maxFee: 210n, tip: 10n });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        await h.sender.maintain();
+        const early = await h.sender.clearStall();
+        expect(early.status).toBe('refused');
+        const line = h.alerts.find((item) => item.includes('stall clear refused')) ?? '';
+        expect(line).toContain(`--chain ${CHAIN_ID}`);
+        expect(line).toContain('--rpc-url "$RPC_URL"');
+        expect(line).toContain('--nonce 7');
+        expect(line).toContain('--gas-price 263');
+        expect(line).toContain('--priority-gas-price 13');
+        expect(line).not.toMatch(/https?:/);
     });
 });
 

@@ -26,8 +26,10 @@ export const UPDATE_PRICE_DATA = encodeFunctionData({
 
 /** Documented k in `k * baseFee + tip`. */
 export const FEE_BASE_MULTIPLIER = 3n;
-/** One receipt lookup. It is not on the signing queue. */
+/** One receipt lookup. It is not on the signing queue. Each consumed nonce gets at most three. */
 export const RECEIPT_LOOKUP_MS = 5_000;
+export const RECEIPT_TRIES = 3;
+const RECEIPT_QUEUE_MAX = 8;
 const DEFAULT_STALL_SEC = 600;
 const DEFAULT_MAX_TIP_WEI = 2n * 1_000_000_000n;
 
@@ -222,6 +224,34 @@ export function checkIntent(
     return false;
 }
 
+/** Round up so the printed replacement is at least 125% of the stuck fee. */
+export function bumpedFee(value: bigint): bigint {
+    if (typeof value !== 'bigint' || value <= 0n) return 0n;
+    return (value * 125n + 99n) / 100n;
+}
+
+/**
+ * Operator command when --clear-stall is too early.
+ * `$RPC_URL` is a shell instruction. The keeper does not print the URL.
+ * The operator reads it from the same env file passed as --env-file.
+ */
+export function manualStallCommand(input: {
+    chainId: number;
+    nonce: number;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+    keystorePath: string;
+    passwordFilePath: string;
+    signer: string;
+}): string {
+    const fee = bumpedFee(input.maxFeePerGas);
+    const tip = bumpedFee(input.maxPriorityFeePerGas);
+    return `Read RPC_URL from the keeper env file (the value is not printed). `
+        + `cast send --chain ${input.chainId} --rpc-url "$RPC_URL" --nonce ${input.nonce} `
+        + `--gas-price ${fee} --priority-gas-price ${tip} `
+        + `--keystore ${input.keystorePath} --password-file ${input.passwordFilePath} ${input.signer} --value 0`;
+}
+
 /** The one signing gate. The request is the exact object cast will receive. */
 export function authorizeSign(kind: string, req: SignRequest, targets: IntentTargets, maxFeeWei: bigint): boolean {
     if (!req || typeof req.to !== 'string' || typeof req.data !== 'string') return false;
@@ -345,7 +375,7 @@ export class Sender {
     private readonly superPaymaster: Address | null;
     private readonly enabled: EnabledKinds;
     private readonly readStaleness: () => Promise<StalenessRead | 'unreadable'>;
-    private readonly manualStep: (nonce: number) => string;
+    private readonly manualStep: (nonce: number, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) => string;
     private readonly limits: Readonly<{
         chainId: number;
         maxGas: bigint;
@@ -378,12 +408,13 @@ export class Sender {
     /** Price-paymaster signs only after an identity check that included the current owner. */
     private paymasterIdentity = true;
     private readonly settlements: SettlementEvent[] = [];
+    private readonly receiptQueue: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number }[] = [];
     private receiptTask: Promise<void> | null = null;
     /** Resolves once the deferred lookup has been started. */
     private receiptArm: Promise<void> | null = null;
-    private receiptArmed = false;
-    /** One lookup attempt per consumed nonce. A later tick does not start another. */
-    private receiptUsed = false;
+    /** One lookup per nonce per tick. The epoch advances in tick(). */
+    private receiptEpoch = 0;
+    private readonly receiptEpochOf = new Map<number, number>();
 
     constructor(opts: {
         chain: ChainIO;
@@ -405,8 +436,8 @@ export class Sender {
         resetSendCeiling?: boolean;
         /** Cached updatedAt plus the on-chain staleness threshold, read when a stall is declared. */
         readStaleness?: () => Promise<StalenessRead | 'unreadable'>;
-        /** Exact command printed when --clear-stall is too early. */
-        manualStep?: (nonce: number) => string;
+        /** Exact command printed when --clear-stall is too early. Fees are the stuck transaction's. */
+        manualStep?: (nonce: number, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) => string;
     }) {
         const stallSec = opts.stallSec ?? DEFAULT_STALL_SEC;
         const maxTipWei = opts.maxTipWei ?? DEFAULT_MAX_TIP_WEI;
@@ -461,8 +492,15 @@ export class Sender {
         this.enabled = { 'price-super': enabled['price-super'], 'price-paymaster': enabled['price-paymaster'] };
         this.resetSendCeiling = opts.resetSendCeiling === true;
         this.readStaleness = opts.readStaleness ?? (async () => 'unreadable');
-        this.manualStep = opts.manualStep ?? ((nonce) =>
-            `cast send --nonce ${nonce} --keystore <path> --password-file <path> ${opts.signerAddress} --value 0`);
+        this.manualStep = opts.manualStep ?? ((nonce, fees) => manualStallCommand({
+            chainId: opts.chainId,
+            nonce,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            keystorePath: '<path>',
+            passwordFilePath: '<path>',
+            signer: opts.signerAddress,
+        }));
         this.limits = Object.freeze({
             chainId: opts.chainId,
             maxGas,
@@ -477,7 +515,10 @@ export class Sender {
     }
 
     /** One keeper loop iteration. Stall is measured from firstSentAt, not from tick counts. */
-    tick(): void {}
+    tick(): void {
+        this.receiptEpoch += 1;
+        this.pumpReceipts();
+    }
 
     /** Price and pause scopes stay separate. Pause does not authorize a transaction. */
     setGate(gate: { price: boolean; pause: boolean; reason: string; validUntil?: number }): void {
@@ -521,11 +562,14 @@ export class Sender {
         return out;
     }
 
-    /** Wait for the one receipt lookup. It is not inside the signing queue. */
+    /** Wait for receipt lookups already started. It is not inside the signing queue. */
     async flushReceipt(): Promise<void> {
-        if (this.receiptArm) await this.receiptArm;
-        const task = this.receiptTask;
-        if (task) await task;
+        for (let i = 0; i < RECEIPT_QUEUE_MAX + 1; i++) {
+            if (this.receiptArm) await this.receiptArm;
+            const task = this.receiptTask;
+            if (!task) return;
+            await task;
+        }
     }
 
     /** Wait until the queue is idle, or until timeoutMs. Does not cancel the in-flight send. */
@@ -688,6 +732,23 @@ export class Sender {
     }
 
     private async serviceFlight(flight: InFlight): Promise<MaintainResult> {
+        const overdue = this.stallDue(flight);
+        if (overdue || this.stalled) {
+            this.rememberStall(flight);
+            await this.emitStall(flight);
+            if ((await this.seenChain()) === 'ok') {
+                const nonces = await this.readNonces();
+                if (nonces.kind === 'ok') {
+                    this.noteNonce(nonces.latest, nonces.pending, flight);
+                    if (nonces.latest > BigInt(flight.nonce)) {
+                        await this.consume(flight, nonces.latest);
+                        return { status: 'refused', reason: REFUSED.stalled };
+                    }
+                }
+            }
+            if (this.accountDirty) await this.persistAccount();
+            return { status: 'refused', reason: REFUSED.stalled };
+        }
         const chain = await this.seenChain();
         if (chain !== 'ok') {
             const reason = chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead;
@@ -699,12 +760,7 @@ export class Sender {
         if (!(await this.rememberNonce(nonces.latest, nonces.pending, flight))) {
             return { status: 'refused', reason: REFUSED.journal };
         }
-        if (nonces.latest > BigInt(flight.nonce)) return this.consume(flight);
-        if (this.stalled || this.stallDue(flight)) {
-            const declared = await this.declareStall(flight);
-            if (!declared) return { status: 'refused', reason: REFUSED.journal };
-            return { status: 'refused', reason: REFUSED.stalled };
-        }
+        if (nonces.latest > BigInt(flight.nonce)) return this.consume(flight, nonces.latest);
         const sent = await this.rebroadcast(flight);
         if (sent === 'above') return this.pendingOf(flight);
         if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
@@ -721,45 +777,28 @@ export class Sender {
         return Number.isSafeInteger(age) && age >= this.stallSec * 1000;
     }
 
-    private async declareStall(flight: InFlight): Promise<boolean> {
-        if (!this.stalled) {
-            this.stalled = true;
-            this.stalledNonce = flight.nonce;
-            const text = await this.stalenessText();
-            try {
-                await this.journal.commit({
-                    inFlight: flight,
-                    sentAt: [...this.sentAt],
-                    ceilingClosed: this.ceilingClosed,
-                    lastLatest: this.lastLatest,
-                    stalled: true,
-                    stalledNonce: flight.nonce,
-                });
-                this.accountDirty = false;
-            } catch {
-                this.hydrated = false;
-                this.accountDirty = true;
-                this.stalled = false;
-                this.stalledNonce = null;
-                return false;
-            }
-            const message = `in-flight nonce ${flight.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${text}`;
-            this.alertOnce(`stall:${flight.nonce}`, message);
-            return true;
-        }
+    /** In-memory latch first. A failed journal write does not clear it. */
+    private rememberStall(flight: InFlight): void {
+        if (this.stalled) return;
+        this.stalled = true;
+        this.stalledNonce = flight.nonce;
+        this.accountDirty = true;
+    }
+
+    private async emitStall(flight: InFlight): Promise<void> {
         const text = await this.stalenessText();
         const message = `in-flight nonce ${flight.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${text}`;
         this.alertOnce(`stall:${flight.nonce}`, message);
-        return true;
     }
 
     private async stalenessText(): Promise<string> {
-        let read: StalenessRead | 'unreadable';
+        let read: StalenessRead | 'unreadable' | 'timeout';
         try {
-            read = await this.readStaleness();
+            read = await this.withTimeout(this.readStaleness(), this.limits.receiptLookupMs);
         } catch {
             read = 'unreadable';
         }
+        if (read === 'timeout') read = 'unreadable';
         if (read === 'unreadable' || typeof read.updatedAtSec !== 'bigint' || typeof read.thresholdSec !== 'bigint') {
             return 'SuperPaymaster price staleness unreadable';
         }
@@ -780,9 +819,15 @@ export class Sender {
         await this.hydrate();
         const flight = this.journal.inFlight();
         if (!this.stalled && !flight) return { status: 'idle' };
+        const chain = await this.seenChain();
+        if (chain !== 'ok') return { status: 'refused', reason: chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
         const nonce = this.stalledNonce ?? flight?.nonce ?? null;
+        const fees = {
+            maxFeePerGas: flight?.maxFeePerGas ?? 0n,
+            maxPriorityFeePerGas: flight?.maxPriorityFeePerGas ?? 0n,
+        };
         if (nonce === null) {
-            this.alert(this.manualStep(0));
+            this.alert(this.manualStep(0, fees));
             return { status: 'refused', reason: REFUSED.clearStall };
         }
         const nonces = await this.readNonces();
@@ -807,10 +852,10 @@ export class Sender {
             this.stalledNonce = null;
             this.lastLatest = nonces.latest;
             this.accountDirty = false;
-            if (snapshot) this.scheduleReceipt(snapshot);
+            if (snapshot) this.deferReceipt(snapshot);
             return { status: 'cleared' };
         }
-        this.alert(`stall clear refused: chain latest is not past nonce ${nonce}. ${this.manualStep(nonce)}`);
+        this.alert(`stall clear refused: chain latest is not past nonce ${nonce}. ${this.manualStep(nonce, fees)}`);
         return { status: 'refused', reason: REFUSED.clearStall };
     }
 
@@ -836,23 +881,24 @@ export class Sender {
         await this.rememberNonce(nonces.latest, nonces.pending, flight);
     }
 
-    /** Durable clear first. The receipt lookup is outside this queue. */
-    private async consume(flight: InFlight): Promise<MaintainResult> {
+    /**
+     * Durable clear of the flight first. The stall latch stays until --clear-stall.
+     * The receipt lookup is outside this queue.
+     */
+    private async consume(flight: InFlight, latest?: bigint): Promise<MaintainResult> {
         const snapshot: ReceiptSnapshot = { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind };
         try {
             await this.journal.commit({
                 inFlight: null,
                 sentAt: [...this.sentAt],
                 ceilingClosed: this.ceilingClosed,
-                lastLatest: this.lastLatest,
-                stalled: false,
-                stalledNonce: null,
+                lastLatest: latest ?? this.lastLatest,
+                stalled: this.stalled,
+                stalledNonce: this.stalledNonce,
             });
         } catch {
             return { status: 'refused', reason: REFUSED.journal };
         }
-        this.stalled = false;
-        this.stalledNonce = null;
         this.accountDirty = false;
         this.deferReceipt(snapshot);
         return { status: 'consumed', unseen: true, kind: flight.kind };
@@ -860,32 +906,67 @@ export class Sender {
 
     /** After the journal commit returns. The lookup is not on the signing queue. */
     private deferReceipt(snapshot: ReceiptSnapshot): void {
-        if (this.receiptArmed || this.receiptUsed || this.receiptTask) return;
-        this.receiptArmed = true;
-        this.receiptArm = new Promise((resolve) => {
-            setTimeout(() => {
-                this.scheduleReceipt(snapshot);
-                resolve();
-            }, 0);
-        });
-    }
-
-    private scheduleReceipt(snapshot: ReceiptSnapshot): void {
-        if (this.receiptTask || this.receiptUsed) return;
-        this.receiptUsed = true;
-        const task = this.lookupReceipt(snapshot).finally(() => {
-            if (this.receiptTask === task) this.receiptTask = null;
-        });
-        this.receiptTask = task;
-    }
-
-    private async lookupReceipt(snapshot: ReceiptSnapshot): Promise<void> {
-        const found = await this.withTimeout(this.findReceipt(snapshot.hashes), this.limits.receiptLookupMs);
-        if (found === 'timeout' || found === 'unread' || found === 'none') {
+        if (this.receiptQueue.some((job) => job.nonce === snapshot.nonce)) return;
+        const hashes: Hex[] = [];
+        const source = snapshot.hashes.length > JOURNAL_HASH_CAP
+            ? snapshot.hashes.slice(snapshot.hashes.length - JOURNAL_HASH_CAP)
+            : snapshot.hashes;
+        if (source.length > JOURNAL_HASH_CAP) return;
+        for (let i = 0; i < source.length; i++) {
+            const hash = source[i];
+            if (typeof hash !== 'string' || hash.length < 4 || hash.length > 66) continue;
+            hashes.push(hash);
+        }
+        if (this.receiptQueue.length >= RECEIPT_QUEUE_MAX) {
             this.settlements.push({ kind: snapshot.kind, nonce: snapshot.nonce, outcome: 'unavailable' });
             this.alertOnce(`${ALERT.unavailable}:${snapshot.nonce}`, ALERT.unavailable);
             return;
         }
+        this.receiptQueue.push({ nonce: snapshot.nonce, hashes, kind: snapshot.kind, tries: 0 });
+        this.receiptArm = Promise.resolve().then(() => {
+            this.pumpReceipts();
+        });
+    }
+
+    /** One bounded lookup per queued nonce for this tick. A running lookup is not cancelled. */
+    private pumpReceipts(): void {
+        if (this.receiptTask) return;
+        let job: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number } | undefined;
+        for (let i = 0; i < this.receiptQueue.length; i++) {
+            const item = this.receiptQueue[i];
+            if (!item || item.tries >= RECEIPT_TRIES) continue;
+            if (this.receiptEpochOf.get(item.nonce) === this.receiptEpoch) continue;
+            job = item;
+            break;
+        }
+        if (!job) return;
+        this.receiptEpochOf.set(job.nonce, this.receiptEpoch);
+        job.tries += 1;
+        const task = this.lookupReceipt(job).finally(() => {
+            if (this.receiptTask === task) this.receiptTask = null;
+            this.pumpReceipts();
+        });
+        this.receiptTask = task;
+    }
+
+    private dropReceipt(nonce: number): void {
+        for (let i = 0; i < this.receiptQueue.length; i++) {
+            if (this.receiptQueue[i]?.nonce !== nonce) continue;
+            this.receiptQueue.splice(i, 1);
+            return;
+        }
+    }
+
+    private async lookupReceipt(snapshot: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number }): Promise<void> {
+        const found = await this.withTimeout(this.findReceipt(snapshot.hashes), this.limits.receiptLookupMs);
+        if (found === 'timeout' || found === 'unread' || found === 'none') {
+            if (snapshot.tries < RECEIPT_TRIES) return;
+            this.dropReceipt(snapshot.nonce);
+            this.settlements.push({ kind: snapshot.kind, nonce: snapshot.nonce, outcome: 'unavailable' });
+            this.alertOnce(`${ALERT.unavailable}:${snapshot.nonce}`, ALERT.unavailable);
+            return;
+        }
+        this.dropReceipt(snapshot.nonce);
         this.settlements.push({
             kind: snapshot.kind,
             nonce: snapshot.nonce,
@@ -1043,8 +1124,14 @@ export class Sender {
             this.alertOnce(`${REFUSED.unresolved}:${job.kind}`, REFUSED.unresolved);
             return { status: 'refused', reason: REFUSED.request };
         }
-        if ((await this.seenChain()) !== 'ok') return { status: 'refused', reason: REFUSED.chainRead };
-        if (this.ceilingClosed) return { status: 'refused', reason: REFUSED.ceiling };
+        const beforeSign = await this.seenChain();
+        if (beforeSign !== 'ok') return { status: 'refused', reason: beforeSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        if (this.ceilingClosed || this.budgetExhausted()) {
+            this.ceilingClosed = true;
+            this.alertOnce(ALERT.sendCeiling);
+            if (!(await this.persistAccount())) return { status: 'refused', reason: REFUSED.journal };
+            return { status: 'refused', reason: REFUSED.ceiling };
+        }
         if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (!this.allows(job.kind)) return this.refuseGate();
         const signed = await this.signOf(request);
@@ -1052,14 +1139,12 @@ export class Sender {
             this.alertOnce(signed.reason);
             return { status: 'refused', reason: signed.reason };
         }
-        if (!this.allows(job.kind)) return this.refuseGate();
         const decoded = await decodeRaw(signed.raw, this.signerAddress);
         if (!decoded) return { status: 'refused', reason: REFUSED.sign };
         if (!checkIntent(job.kind, asIntent(decoded), this.targets())) return { status: 'refused', reason: REFUSED.sign };
         if (decoded.nonce !== nonce || decoded.gas !== gasLimit || decoded.maxFeePerGas !== fees.fee || decoded.maxPriorityFeePerGas !== fees.tip) {
             return { status: 'refused', reason: REFUSED.sign };
         }
-        if (!this.allows(job.kind)) return this.refuseGate();
         const hash = keccak256(signed.raw);
         const entry: InFlight = {
             kind: job.kind,
@@ -1084,6 +1169,9 @@ export class Sender {
         }, { chainId: this.chainId, signer: this.signerAddress }, () => true))) {
             return { status: 'refused', reason: REFUSED.sign };
         }
+        const afterSign = await this.seenChain();
+        if (afterSign !== 'ok') return { status: 'refused', reason: afterSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        if (!this.allows(job.kind)) return this.refuseGate();
         try {
             await this.journal.writeInFlight(entry);
         } catch {
@@ -1213,6 +1301,13 @@ export class Sender {
         const fresh = this.sentAt.filter((at) => now - at < HOUR_MS);
         this.sentAt.length = 0;
         for (const at of fresh) this.sentAt.push(at);
+    }
+
+    /** True when the first broadcast of a new raw would be refused. Does not charge a slot. */
+    private budgetExhausted(): boolean {
+        if (this.ceilingClosed) return true;
+        this.pruneSends();
+        return this.sentAt.length >= this.maxSendsPerHour;
     }
 
     private takeSendSlot(): boolean {

@@ -52,7 +52,7 @@ From the monorepo root:
 
 `--dry-run` signs nothing and does not need a keystore. A live run refuses to start without `--keystore`, `--password-file`, `--signer` and `--max-fee-gwei`.
 
-`run-keeper.sh` does not source `.env.<network>`. It `exec`s Node directly (`env -i PATH HOME`, pinned `tsx` loader, no `pnpm` or `tsx` launcher in between), so the supervisor's PID is the keeper. `RPC_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` must not be set in the caller: the wrapper refuses and tells you to put them in `--env-file`. The wrapper places `--` before your flags so Node does not treat `--env-file` as its own dotenv option (that open blocks on a fifo). The keeper opens the file itself, non-blocking, and keeps only the allowlisted keys. `KEEPER_ETHUSD_URL` and `EXTERNAL_ETHUSD_URL` are read there too; the wrapper does not copy them onto argv. A secret-named variable already in the environment refuses startup, including `ETH_PASSWORD`, `CAST_PASSWORD`, and any name containing `PASSWORD` or `PASSPHRASE`.
+`run-keeper.sh` does not source `.env.<network>`. It `exec`s Node directly (`env -i PATH HOME`, pinned `tsx` loader, no `pnpm` or `tsx` launcher in between), so the supervisor's PID is the keeper. `RPC_URL`, `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` must not be set in the caller: the wrapper refuses and tells you to put them in `--env-file`. The same refusal applies to any exported name that matches the keeper's secret-name policy (`PRIVATE_KEY`, `MNEMONIC`, `KEYSTORE_PASSWORD`, `SEED`, `PASSPHRASE`, `PASSWORD`), including `ETH_PASSWORD`, `CAST_PASSWORD`, and `KEEPER_PRIVATE_KEY`. The wrapper names the variable and does not print the value. The wrapper places `--` before your flags so Node does not treat `--env-file` as its own dotenv option (that open blocks on a fifo). The keeper opens the file itself, non-blocking, and keeps only the allowlisted keys. `KEEPER_ETHUSD_URL` and `EXTERNAL_ETHUSD_URL` are read there too; the wrapper does not copy them onto argv.
 
 ## Migrating off KEEPER_PRIVATE_KEY
 
@@ -62,7 +62,7 @@ Stop the old keeper before the first start of this process. The journal stores o
 
 Price updates share one process, one sender and one nonce journal. Two sends never run at the same time.
 
-The key stays in an encrypted keystore. This process never sees it. `cast mktx` builds and signs a raw transaction and does not broadcast; the keeper broadcasts that raw transaction with `eth_sendRawTransaction`. Pass the binary with `--cast-bin` when `cast` is not on `PATH` (on this workstation that is `~/.foundry/bin/cast`). No `ETH_KEYSTORE`, `ETH_PASSWORD` or `ETH_RPC_URL` is forwarded to `cast`.
+The key stays in an encrypted keystore. This process never sees it. `cast mktx` builds and signs a raw transaction and does not broadcast; the keeper broadcasts that raw transaction with `eth_sendRawTransaction`. The default name `cast`, a `KEEPER_CAST_BIN` value, and `--cast-bin` are resolved once at startup to an absolute real path. That path is what every later spawn runs. `PATH` is not searched again. The file and every ancestor directory up to `/` must be a non-sticky directory or regular file owned by root or the keeper uid, and not group- or world-writable. `/tmp` fails that check. The keeper re-checks the pinned file before each spawn and refuses to sign if it changed. The keeper's uid is inside the trust boundary because it can read the keystore and the password file anyway. Anything able to run as that uid can sign. The checks exist to stop other users from substituting the signer. No `ETH_KEYSTORE`, `ETH_PASSWORD` or `ETH_RPC_URL` is forwarded to `cast`.
 
 Password file rules, checked before the first signature:
 
@@ -82,24 +82,25 @@ The key signs only two intents, and only while the gate is open: `updatePrice()`
 
 The nonce journal defaults to `~/.aastar-keeper/<network>.journal.json`. It stores one in-flight transaction or nothing, plus the rolling-hour send timestamps, whether the send ceiling is closed, and the last observed mined nonce. The file must be a regular file, mode `0600`, owned by this uid. Symlinks and FIFOs are refused on every read. Its directory is created at mode `0700`, and each new directory is fsynced into its parent, before the process binds two loopback sockets: one keyed by chain id and signer, and one keyed by the journal's real path. The first version of the file is written to a temporary name, fsynced, and published with a link that does not overwrite an existing file. A failed directory fsync after that publish refuses replay until a later barrier succeeds. Accepted connections on those sockets are closed immediately. The kernel drops both when the process dies, including after `SIGKILL`. Shutdown on SIGINT/SIGTERM stops new sends, waits for the in-flight sign and journal write (at most 120 seconds), kills cast, then exits. It does not unlock early. A second live process on the same host with the same chain and signer, or the same journal path, is refused. The lock is per host: two hosts or containers that share the key are an operator error. The keeper can only alert. There is no lock file and no stale-lock replacement. A corrupt journal, an unsafe file, or one written for another chain or signer, refuses every send until an operator intervenes. The latest raw's fees must match the journal entry, and must be within the current `--max-fee-gwei`, before it is broadcast.
 
-A live run requires `--max-fee-gwei` (1 to 10000). There is one in-flight transaction. Each tick, if the chain's latest nonce is already above that nonce, the keeper clears the journal entry first, then does one receipt lookup with a 5 second timeout. That lookup is not on the signing queue and is not retried again on a later tick. The settlement is `confirmed=receipt`, `confirmed=reverted`, or `nonce consumed, receipt unavailable`. The next send does not wait on a receipt that never returns.
+A live run requires `--max-fee-gwei` (1 to 10000). There is one in-flight transaction. Each tick, if the chain's latest nonce is already above that nonce, the keeper clears the journal entry first. Receipt lookups are a queue of consumed nonces, off the signing queue: one lookup per nonce per tick, at most three tries, at most eight queued. Each consumed nonce then settles as `confirmed=receipt`, `confirmed=reverted`, or `nonce consumed, receipt unavailable`. A lookup that has not finished does not delay the next send. Before a new flight is signed, an exhausted hourly budget is written as closed and the signature is refused. Rebroadcasts of a raw that was already charged stay free. After `cast` returns, the keeper reads the chain id again and re-checks the send gate before it journals the raw.
 
 If the nonce is still in flight, the same raw is rebroadcast after the signer, chain id, nonce, intent, and fee checks. The rebroadcast is free against the hourly ceiling. A raw above the current `--max-fee-gwei` is not rebroadcast and still counts toward the stall.
 
-`--stall-sec` defaults to 600 on every chain. That is about 50 blocks on Sepolia (12s) and about 300 blocks on OP (2s). If the in-flight nonce is still not included when that window ends, the keeper alerts `in-flight nonce N not included after <window>; ALL sends closed until a human acts; SuperPaymaster price goes stale at <ISO time> (in <minutes> min)`. The deadline is the cached `updatedAt` plus the on-chain `priceStalenessThreshold`, read at that moment. A 600s stall is not the price-staleness window (often 4200s): the stall closes sends early so a human can act before the cached price goes stale. If that read fails, the alert says `SuperPaymaster price staleness unreadable`. `stalled: true` is stored in the journal. A restart stays stalled and refuses every send.
+`--stall-sec` defaults to 600 on every chain. That is about 50 blocks on Sepolia (12s) and about 300 blocks on OP (2s). The stall is the time since that in-flight transaction's `firstSentAt`. It does not wait for a nonce read or a journal write. When the window has elapsed, sends close immediately and the keeper alerts `in-flight nonce N not included after <window>; ALL sends closed until a human acts; SuperPaymaster price goes stale at <ISO time> (in <minutes> min)`. The deadline is the cached `updatedAt` plus the on-chain `priceStalenessThreshold`, read at that moment. A 600s stall is not the price-staleness window (often 4200s): the stall closes sends early so a human can act before the cached price goes stale. If that read fails, the alert says `SuperPaymaster price staleness unreadable`. `stalled: true` and `stalledNonce` are stored in the journal and retried until that write succeeds. A restart stays stalled and refuses every send. The in-flight entry is cleared when the nonce is mined. The stall latch is not. Only `--clear-stall` clears it, and only after a fresh chain-id read matches this journal and the latest nonce is already above `stalledNonce`. A mismatch or an unreadable chain id leaves the journal as it is.
 
-Clear it only after the nonce is gone. From the keystore, replace or cancel that nonce yourself, then run one shot:
+Clear it only after the nonce is gone. Read `RPC_URL` from the same env file you pass as `--env-file` (the keeper does not print that value). From the keystore, replace the stuck nonce at a fee at least 125% of the stuck transaction, on that chain, then run one shot:
 
 ```bash
-cast send --nonce N --keystore ~/.aastar-keeper/keys/keeper --password-file ~/.aastar-keeper/keys/password <signer> --value 0
+# Read RPC_URL from the keeper env file (the value is not printed).
+cast send --chain <chainId> --rpc-url "$RPC_URL" --nonce N --gas-price <ceil of 125% of the stuck max fee> --priority-gas-price <ceil of 125% of the stuck tip> --keystore ~/.aastar-keeper/keys/keeper --password-file ~/.aastar-keeper/keys/password <signer> --value 0
 ./run-keeper.sh sepolia --clear-stall --keystore ... --password-file ... --signer ... --max-fee-gwei 50
 ```
 
-`--clear-stall` is accepted only when the chain's latest nonce is already above the stalled nonce. Otherwise it refuses and prints that `cast send` line. It does not sign a replacement.
+`--clear-stall` does not sign a replacement.
 
-Signed broadcasts are capped per rolling hour by `--max-sends-per-hour`. A raw is charged on its first broadcast, including a maintenance rebroadcast of a raw that has never been sent. Rebroadcasting a raw that was already charged is free. The default is `min(2 * ceil(3600 / pollInterval), 30)`: two price targets per poll, capped at 30. Crossing the cap alerts `send ceiling exceeded — all sends closed`. The timestamps and the closed bit are in the journal, so a restart or a `--once` loop does not get a fresh budget. The ceiling stays closed until the rolling hour has room again and the operator passes `--reset-send-ceiling`.
+Signed broadcasts are capped per rolling hour by `--max-sends-per-hour`. A raw is charged on its first broadcast, including a maintenance rebroadcast of a raw that has never been sent. Rebroadcasting a raw that was already charged is free. Before a new flight is signed, a full budget is persisted as closed and the signature is refused, so an unpublished raw is not left behind. The default is `min(2 * ceil(3600 / pollInterval), 30)`: two price targets per poll, capped at 30. Crossing the cap alerts `send ceiling exceeded — all sends closed`. The timestamps and the closed bit are in the journal, so a restart or a `--once` loop does not get a fresh budget. The ceiling stays closed until the rolling hour has room again and the operator passes `--reset-send-ceiling`.
 
-At startup the signer must not be the deployer `0xb5600060e6de5E11D3636731964218E53caadf0E`, the SuperPaymaster owner, the Registry owner, or the owner of the configured PaymasterV4. That Paymaster check runs even when `--no-paymaster` disables updates. The check reads `owner()` at one block hash. A failed read refuses to start. The same check runs again every hour, and on every tick while sends are closed. When PaymasterV4 resolution newly succeeds, or the address changes, price-paymaster signing stays closed until a fresh identity check that included that owner succeeds. A grace period from a check that omitted it does not open those sends. The registry address is the flag, else the canonical book, else `config.<network>.json`.
+At startup the signer must not be the deployer `0xb5600060e6de5E11D3636731964218E53caadf0E`, the SuperPaymaster owner, the Registry owner, or the owner of the configured or resolved PaymasterV4. That Paymaster check runs even when `--no-paymaster` disables updates. The check reads `owner()` at one block hash. A failed read refuses to start. The same check runs again every hour, and on every tick while sends are closed. Identity is bound to the target set {SuperPaymaster, PaymasterV4, Registry}. PaymasterV4 comes only from `--paymaster`, the canonical book, or `config.<network>.json`, or it is resolved once from the factory at startup. That identity and owner guard must pass before the first tick. If PaymasterV4 cannot be resolved at startup, V4 price updates stay disabled until the process restarts, and the keeper alerts once: `PaymasterV4 unresolved at startup; V4 price updates disabled until restart`. No target is added or changed mid-run. If the set ever differs from the startup set, the whole price gate closes and stays closed. A grace period from the previous set does not reopen it. The registry address is the flag, else the canonical book, else `config.<network>.json`.
 
 The identity gate has two branches:
 
@@ -122,7 +123,7 @@ Telegram is optional (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`). The keeper adds
 - `sender: above fee ceiling` when an in-flight raw is above the current `--max-fee-gwei` and is not rebroadcast
 - `in-flight nonce N not included after <window>; ALL sends closed until a human acts` when the stall window ends
 - `sender: broadcast failed` and `sender: sign failed` when a send or rebroadcast fails. The journal is kept
-- `nonce consumed, receipt unavailable` when the nonce is consumed and the one receipt lookup does not return
+- `nonce consumed, receipt unavailable` when a consumed nonce has no receipt after three lookups
 
 Dry-run prints the balance texts on stdout and does not send them.
 
@@ -132,7 +133,7 @@ The keeper does not load `.env.<network>`. Put `RPC_URL` in `--env-file`. The wr
 
 `--env-file` is opened with `O_NOFOLLOW|O_NONBLOCK`. It must be a regular file, mode exactly `0600`, owned by the uid running the keeper. Its parent directory must be owned by that uid and must not be group- or world-writable. A symlink, a fifo, a wrong mode, or a foreign owner refuses startup. The error names the check and not the file contents.
 
-`KEEPER_CAST_BIN` (or `--cast-bin`) must be an absolute path. The keeper resolves it once with `realpath` and then requires the target to be a regular file owned by this uid or by root, and not group- or world-writable. Anything else refuses startup. When neither the flag nor the env value is set, `cast` on `PATH` is used and is not stat-checked.
+`KEEPER_CAST_BIN` and `--cast-bin` must be absolute paths. The default name `cast` is looked up on `PATH` once at startup. In every case the keeper pins the absolute real path. The file and every ancestor up to `/` must be owned by this uid or by root, must not be group- or world-writable, and must not be sticky. A change before a later spawn refuses signing. The keeper's uid is inside the trust boundary because it can read the keystore and the password file anyway. Anything able to run as that uid can sign. The checks exist to stop other users from substituting the signer.
 
 On anvil, and on any network whose canonical book lacks an address, the keeper reads `superPaymaster`, `paymasterV4`, `priceFeed`, `registry` and `paymasterFactory` from `config.<network>.json` in the repo. Only those address fields are used. `--price-feed` overrides the feed. `.env.<network>` is not read.
 
@@ -143,7 +144,7 @@ Optional:
 - `OFFICIAL_OPERATOR` (used to derive the official Paymaster from the factory when no canonical instance exists)
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID` (must be numeric like `123...`/`-100...` or start with `@`)
-- `KEEPER_CAST_BIN` (absolute path to a regular file owned by this uid or root, not group- or world-writable; the flag wins, then this value, then `cast` on `PATH`)
+- `KEEPER_CAST_BIN` (absolute path; pinned with the same trusted-ancestor checks as `--cast-bin`; the flag wins, then this value, then one `PATH` lookup of `cast`)
 - `KEEPER_ETHUSD_URL` or `EXTERNAL_ETHUSD_URL` (external price URL; the flag wins, otherwise the Binance ETHUSDT ticker)
 
 ## CLI Flags
@@ -152,7 +153,7 @@ Optional:
 - `--keystore <path>` (required unless `--dry-run`)
 - `--password-file <path>` (required unless `--dry-run`)
 - `--signer <address>` (required unless `--dry-run`; the recovered sender must match)
-- `--cast-bin <path>` (absolute path; default `cast` on `PATH` when neither this flag nor `KEEPER_CAST_BIN` is set)
+- `--cast-bin <path>` (absolute path, or the default name `cast` looked up once on `PATH`; pinned before the first spawn)
 - `--journal <path>` (default `~/.aastar-keeper/<network>.journal.json`)
 - `--env-file <path>` (optional; allowlisted keys only; pass it after `--` if you invoke node yourself, so Node does not open the file)
 - `--registry <address>` (required for signer identity when neither the canonical book nor `config.<network>.json` has a registry)
@@ -163,7 +164,7 @@ Optional:
 - `--max-fee-gwei <n>` (required for a live run)
 - `--max-tip-gwei <n>` (default 2; 0 is allowed)
 - `--stall-sec <n>` (default 600 on every chain)
-- `--clear-stall` (one shot; accepted only after the stalled nonce is already mined)
+- `--clear-stall` (one shot; requires a fresh matching chain id and a latest nonce already above the stalled nonce; does not run when the chain id mismatches or cannot be read)
 - `--max-gas <n>` (default 500000; applies to a new signature, not to rebroadcast of an already-signed raw)
 - `--max-sends-per-hour <n>` (default `min(2 * ceil(3600 / pollInterval), 30)`; exceeding it closes sends until `--reset-send-ceiling` and the hour has room)
 - `--reset-send-ceiling` (reopen a persisted ceiling once the rolling hour has room)

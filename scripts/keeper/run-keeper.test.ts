@@ -153,6 +153,18 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect([...priced.envArgs, ...priced.argv, ...priced.envLines].join('\n')).not.toContain('ethusd-sentinel');
     });
 
+    it('exported ETH_PASSWORD is refused by the wrapper', () => {
+        const sentinel = 'password-sentinel';
+        for (const name of ['ETH_PASSWORD', 'CAST_PASSWORD', 'KEEPER_PRIVATE_KEY']) {
+            const refused = run(['sepolia', '--once', '--dry-run'], { sign: false, env: { [name]: sentinel } });
+            expect(refused.status, refused.stderr).toBe(1);
+            expect(refused.stderr).toContain(name);
+            expect(refused.stderr).toMatch(/put it in --env-file/);
+            expect(refused.stdout).not.toContain(sentinel);
+            expect(refused.stderr).not.toContain(sentinel);
+        }
+    });
+
     it('the wrapper pid is the node pid, so SIGTERM stops the keeper', async () => {
         const home = mkdtempSync(join(tmpdir(), 'run-keeper-pid-'));
         const nodeBin = join(home, 'bin');

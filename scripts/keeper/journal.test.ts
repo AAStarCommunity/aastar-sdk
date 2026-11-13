@@ -12,6 +12,7 @@ import { createServer } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
 import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
+import { trustedScratch } from './trustScratch.js';
 
 const SIGNER = '0x3333333333333333333333333333333333333333' as Address;
 const OTHER = '0x4444444444444444444444444444444444444444' as Address;
@@ -272,10 +273,15 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         writeFileSync(password, 'pw\n');
         chmodSync(password, 0o600);
         const keeper = join(process.cwd(), 'scripts/keeper.ts');
+        const castDir = trustedScratch('journal-cast');
+        dirs.push(castDir);
+        const cast = join(castDir, 'cast');
+        writeFileSync(cast, '#!/bin/sh\nexit 1\n');
+        chmodSync(cast, 0o755);
         const once = spawn(process.execPath, [
             '--import', pathToFileURL(tsx).href, keeper,
             '--network', 'sepolia', '--once', '--no-logo', '--no-superpaymaster', '--disable-paymaster',
-            '--max-fee-gwei', '100',
+            '--max-fee-gwei', '100', '--cast-bin', cast,
             '--keystore', keystore, '--password-file', password, '--signer', onceSigner, '--journal', journalPath,
         ], {
             cwd: root,

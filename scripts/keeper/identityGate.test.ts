@@ -2,7 +2,7 @@
  * The three identity-gate branches. The clock is a number, not Date.now.
  */
 import { describe, expect, it } from 'vitest';
-import { decideIdentityGate, gateAfterIdentityRead, IDENTITY_GRACE_MS } from './identityGate';
+import { decideIdentityGate, gateAfterIdentityRead, identityTargetKey, priceClosedByTargetDrift, IDENTITY_GRACE_MS } from './identityGate';
 
 const T0 = 1_700_000_000_000;
 const SIX_H = 6 * 60 * 60 * 1000;
@@ -147,5 +147,31 @@ describe('identity gate scopes', () => {
         });
         expect(decision.price).toBe(false);
         expect(decision.pause).toBe(false);
+    });
+
+    it('a changed PaymasterV4 is a different target set', () => {
+        const sp = '0x1111111111111111111111111111111111111111';
+        const registry = '0x3333333333333333333333333333333333333333';
+        const v4 = '0x2222222222222222222222222222222222222222';
+        const empty = identityTargetKey({ sp, v4: null, registry });
+        const found = identityTargetKey({ sp, v4, registry });
+        expect(empty).not.toBe(found);
+        expect(empty).toBe(`${sp}||${registry}`);
+        expect(found).toBe(`${sp}|${v4}|${registry}`);
+        expect(identityTargetKey({ sp: sp.toUpperCase(), v4: v4.toUpperCase(), registry })).toBe(found);
+        expect(identityTargetKey({ sp: 'not-an-address', v4: null, registry })).toBe('');
+        expect(identityTargetKey({ sp, v4: '0x1234', registry })).toBe('');
+    });
+
+    it('a target set other than the startup set closes the price gate', () => {
+        const sp = '0x1111111111111111111111111111111111111111';
+        const registry = '0x3333333333333333333333333333333333333333';
+        const v4 = '0x2222222222222222222222222222222222222222';
+        const startup = identityTargetKey({ sp, v4: null, registry });
+        const drifted = identityTargetKey({ sp, v4, registry });
+        expect(startup.length).toBeGreaterThan(0);
+        expect(drifted.length).toBeGreaterThan(0);
+        expect(priceClosedByTargetDrift(startup, startup)).toBe(false);
+        expect(priceClosedByTargetDrift(startup, drifted)).toBe(true);
     });
 });

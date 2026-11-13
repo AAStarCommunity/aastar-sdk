@@ -5,18 +5,19 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { fileURLToPath } from 'node:url';
-import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
+import { resolvePaymasterV4 } from './keeper/paymasterResolver.js';
 import { noteBalance, type BalanceClock } from './keeper/balanceAlert.js';
 import { absoluteKeeperPath } from './keeper/cliPaths.js';
 import { createCastSigner, killCastChildren } from './keeper/castSigner.js';
 import { readDeploymentAddresses, type DeploymentAddresses } from './keeper/deploymentConfig.js';
 import { acquireKeeperLock, Journal } from './keeper/journal.js';
-import { defaultMaxSendsPerHour, Sender, type MaintainResult, type SendResult, type SettlementEvent } from './keeper/sender.js';
-import { castBinRefusal, envFileRefusal, type ModeStat } from './keeper/startupGuards.js';
+import { defaultMaxSendsPerHour, manualStallCommand, Sender, type MaintainResult, type SendResult, type SettlementEvent } from './keeper/sender.js';
+import { envFileRefusal, type ModeStat } from './keeper/startupGuards.js';
+import { trustedExecutable } from './keeper/trustedExecutable.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
 import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
-import { decideIdentityGate, gateAfterIdentityRead } from './keeper/identityGate.js';
+import { decideIdentityGate, gateAfterIdentityRead, identityTargetKey, priceClosedByTargetDrift } from './keeper/identityGate.js';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
 import { KEEPER_ENV_ALLOW, parseKeeperEnv, secretEnvNames } from './keeper/secretEnv.js';
 import { runKeeperStep } from './keeper/keeperStep.js';
@@ -159,27 +160,30 @@ async function readKeeperEnvFile(filePath: string): Promise<Record<string, strin
     }
 }
 
-/** Flag or env-file cast path. Default PATH `cast` is not stat-checked. */
-async function resolveCastBin(chosen: string | undefined, source: 'cli' | 'env' | 'default'): Promise<string> {
-    if (source === 'default' || chosen === undefined) return 'cast';
-    if (chosen.length === 0 || chosen.length > 4_096 || !path.isAbsolute(chosen)) {
-        throw new Error('keeper: cast bin refused: not absolute');
+/**
+ * Pin cast once, including the default PATH name. The returned path is absolute.
+ * Spawn uses that path. PATH is not consulted again.
+ */
+function resolveCastBin(chosen: string | undefined, source: 'cli' | 'env' | 'default'): string {
+    if (source !== 'default') {
+        if (chosen === undefined || chosen.length === 0 || chosen.length > 4_096 || !path.isAbsolute(chosen)) {
+            throw new Error('keeper: cast bin refused: not absolute');
+        }
     }
-    let resolved: string;
-    try {
-        resolved = await fs.promises.realpath(chosen);
-    } catch {
-        throw new Error('keeper: cast bin refused: unreadable');
+    return trustedExecutable(source === 'default' || chosen === undefined ? 'cast' : chosen).path;
+}
+
+/** Flag wins. Otherwise the first present env key. The error names the flag or the key, never the value. */
+function parseFlagOrEnv(args: string[], flag: string, envKeys: readonly string[], fallback: number, min: number, max: number): number {
+    const fromFlag = getArgValue(args, flag);
+    if (fromFlag !== undefined) return parseBoundedInt(fromFlag, fallback, min, max, flag);
+    for (let i = 0; i < envKeys.length; i++) {
+        const key = envKeys[i] ?? '';
+        const value = process.env[key];
+        if (value === undefined || value.length === 0) continue;
+        return parseBoundedInt(value, fallback, min, max, key);
     }
-    let st: fs.Stats;
-    try {
-        st = await fs.promises.lstat(resolved);
-    } catch {
-        throw new Error('keeper: cast bin refused: unreadable');
-    }
-    const reason = castBinRefusal(modeStat(st), process.getuid?.());
-    if (reason) throw new Error(reason);
-    return resolved;
+    return fallback;
 }
 
 function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number, label: string): number {
@@ -350,7 +354,7 @@ function usage(): string {
         '   --external-ethusd-url <url>      external ETH/USD JSON endpoint (or env EXTERNAL_ETHUSD_URL)',
         '   --volatility-threshold-bps <n>   alert if external move/deviation >= n bps (default 0=off)',
         '   --volatility-cooldown <sec>      alert rate limit (default 600)',
-        '   --paymaster-missing-alert <sec>  alert when PaymasterV4 stays unresolved this long (default 1800, 0=off)',
+        '   --paymaster-missing-alert <sec>  accepted; does not retry an unresolved PaymasterV4 (disabled until restart)',
         '',
         'Networks: anvil | sepolia | op-sepolia | op-mainnet | mainnet',
         'Config: pass RPC_URL in the environment or in --env-file. .env.<network> is not read.'
@@ -423,8 +427,7 @@ async function main() {
     const stallSec = parseBoundedInt(getArgValue(args, '--stall-sec'), 600, 1, 86_400, '--stall-sec');
     const clearStall = hasFlag(args, '--clear-stall');
     const maxGas = BigInt(parseBoundedInt(getArgValue(args, '--max-gas'), 500_000, 21_000, 30_000_000, '--max-gas'));
-    const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
-    if (pollIntervalSec <= 0n || pollIntervalSec > 86_400n) throw new Error('keeper: --poll-interval invalid');
+    const pollIntervalSec = BigInt(parseBoundedInt(getArgValue(args, '--poll-interval'), 30, 1, 86_400, '--poll-interval'));
     const maxSendsPerHour = parseBoundedInt(
         getArgValue(args, '--max-sends-per-hour'),
         defaultMaxSendsPerHour(Number(pollIntervalSec)),
@@ -446,9 +449,12 @@ async function main() {
         getArgValue(args, '--low-balance-wei'),
         network === 'sepolia' ? LOW_BALANCE_SEPOLIA : LOW_BALANCE_OTHER,
     );
-    const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
-    const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
-    const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
+    const safetyMarginSec = BigInt(parseBoundedInt(getArgValue(args, '--safety-margin'), 600, 0, 31_536_000, '--safety-margin'));
+    const maxUpdatesPerDay = parseBoundedInt(getArgValue(args, '--max-updates-per-day'), 24, 1, 100_000, '--max-updates-per-day');
+    const maxBaseFeeGweiRaw = getArgValue(args, '--max-base-fee-gwei');
+    const maxBaseFeeWei = maxBaseFeeGweiRaw === undefined
+        ? null
+        : BigInt(parseBoundedInt(maxBaseFeeGweiRaw, 0, 0, 1_000_000, '--max-base-fee-gwei')) * 1_000_000_000n;
     const once = hasFlag(args, '--once');
     const resetSendCeiling = hasFlag(args, '--reset-send-ceiling');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
@@ -475,18 +481,23 @@ async function main() {
             ? 'env'
             : 'default';
     const castChosen = castSource === 'cli' ? castBinArg : castSource === 'env' ? castFromEnv : undefined;
-    const castBin = await resolveCastBin(castChosen, castSource);
-    const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
-    const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
-    const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
-    const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
+    const castBin = (!dryRun || castSource !== 'default') ? resolveCastBin(castChosen, castSource) : 'cast';
+    const healthIntervalSec = BigInt(parseFlagOrEnv(args, '--health-interval', ['KEEPER_HEALTH_INTERVAL_SEC'], 1800, 0, 31_536_000));
+    const volatilityThresholdBps = BigInt(parseFlagOrEnv(args, '--volatility-threshold-bps', ['KEEPER_VOLATILITY_THRESHOLD_BPS'], 0, 0, 1_000_000));
+    const volatilityCooldownSec = BigInt(parseFlagOrEnv(args, '--volatility-cooldown', ['KEEPER_VOLATILITY_COOLDOWN_SEC'], 600, 0, 31_536_000));
+    const chainlinkStaleSec = BigInt(parseFlagOrEnv(args, '--chainlink-stale-sec', ['KEEPER_CHAINLINK_STALE_SEC'], 600, 0, 31_536_000));
     const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url')
         || process.env.KEEPER_ETHUSD_URL
         || process.env.EXTERNAL_ETHUSD_URL
         || 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT';
-    const paymasterMissingAlertSec = BigInt(
-        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
-    );
+    const paymasterMissingAlertSec = BigInt(parseFlagOrEnv(
+        args,
+        '--paymaster-missing-alert',
+        ['KEEPER_PAYMASTER_MISSING_ALERT_SEC'],
+        1800,
+        0,
+        31_536_000,
+    ));
     const telegramEnabled = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
     if (hasFlag(args, '--probe-env')) {
         console.log('probe secrets=absent');
@@ -542,25 +553,28 @@ async function main() {
 
     const paymasterCandidate = (paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig || null) as `0x${string}` | null;
     const paymasterWasExplicit = Boolean(paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig);
-    // Resolved now for the INIT report, and again on every tick while unresolved: a failure here
-    // (e.g. RPC not up yet after a reboot) must not disable V4 for the life of the process.
-    const paymasterTracker = new PaymasterTracker(
-        publicClient,
-        {
+    // Resolved once, before the first tick. A miss leaves V4 disabled until process restart.
+    // --paymaster-missing-alert is still parsed and logged; it does not schedule another read.
+    const V4_UNRESOLVED_ALERT = 'PaymasterV4 unresolved at startup; V4 price updates disabled until restart';
+    let paymaster: `0x${string}` | null = null;
+    let paymasterInit = 'disabled';
+    if (!disablePaymaster) {
+        const r = await resolvePaymasterV4(publicClient, {
             candidate: paymasterCandidate,
             factory: paymasterFactory,
             factoryAbi: PAYMASTER_FACTORY_ABI,
             operator: paymasterOperator,
             verifyOperatorMapping: Boolean(paymasterOperatorFromArgs) || !paymasterWasExplicit,
-        },
-        paymasterMissingAlertSec
-    );
-    let paymaster: `0x${string}` | null = null;
-    let paymasterInit = 'disabled';
-    if (!disablePaymaster) {
-        const r = await paymasterTracker.ensure(nowSec());
-        paymaster = paymasterTracker.current;
-        paymasterInit = r.kind === 'found' ? r.address : `not-found (${describeUnresolved(r)}; retried every tick)`;
+        });
+        if (r.kind === 'found') {
+            paymaster = r.address;
+            paymasterInit = r.address;
+        } else {
+            paymaster = null;
+            paymasterInit = 'unresolved';
+            console.error(V4_UNRESOLVED_ALERT);
+            await sendTelegramMessage(`[keeper] ${V4_UNRESOLVED_ALERT}`);
+        }
     }
 
     if (printLogo) console.log(`${logo()}\n`);
@@ -643,6 +657,8 @@ async function main() {
     let identityGateKey = '';
     /** Lowercase PaymasterV4 included in the last successful identity check. Null means none. */
     let coveredPaymaster: string | null = null;
+    /** Last identity check's {SuperPaymaster, PaymasterV4, Registry}. Empty until one succeeds. */
+    let clearedIdentitySet = '';
     let operationalFailure = false;
     let externalSkipAlerted = false;
     let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
@@ -656,6 +672,14 @@ async function main() {
         return { ok: false, kind: 'read-failed', problems };
     }
 
+    /** Resolved V4, or the configured address only when updates were turned off on purpose. */
+    function adoptedPaymaster(): `0x${string}` | null {
+        if (disablePaymaster) {
+            return paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null;
+        }
+        return paymaster && isAddress(paymaster) ? paymaster : null;
+    }
+
     async function evaluateIdentity(): Promise<IdentityResult> {
         if (!signerAddress) return readFailed(['signer missing']);
         const head = await headChain.latestHeader();
@@ -665,9 +689,7 @@ async function main() {
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
-        const resolved = paymaster && isAddress(paymaster) ? paymaster : null;
-        const configured = paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null;
-        const paymasterForGuard = resolved ?? configured;
+        const paymasterForGuard = adoptedPaymaster();
         return checkSignerIdentity({
             chain: asIdentityChain(headChain),
             blockHash: head.hash,
@@ -729,16 +751,13 @@ async function main() {
             journal,
             signerAddress,
             chainId: config.chain.id,
-            // Updates can be disabled. The configured address stays so an already-signed raw can be rebroadcast.
+            // --disable-paymaster keeps the configured address so an already-signed raw can be rebroadcast.
+            // A candidate whose startup resolution failed is not a target.
             superPaymaster: superPaymaster && isAddress(superPaymaster) ? superPaymaster : null,
-            paymaster: () => {
-                if (paymaster && isAddress(paymaster)) return paymaster;
-                if (paymasterCandidate && isAddress(paymasterCandidate)) return paymasterCandidate;
-                return null;
-            },
+            paymaster: () => adoptedPaymaster(),
             enabledKinds: {
                 'price-super': !disableSuperPaymaster,
-                'price-paymaster': !disablePaymaster,
+                'price-paymaster': !disablePaymaster && paymaster !== null,
             },
             maxGas,
             maxFeeWei,
@@ -766,8 +785,15 @@ async function main() {
                     return 'unreadable';
                 }
             },
-            manualStep: (nonce) =>
-                `cast send --nonce ${nonce} --keystore ${keystorePath} --password-file ${passwordFilePath} ${signerAddress} --value 0`,
+            manualStep: (nonce, fees) => manualStallCommand({
+                chainId: config.chain.id,
+                nonce,
+                maxFeePerGas: fees.maxFeePerGas,
+                maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+                keystorePath,
+                passwordFilePath,
+                signer: signerAddress,
+            }),
             alert: alertLine,
         });
         sender.setPaymasterIdentity(false);
@@ -787,14 +813,14 @@ async function main() {
             nextIdentityAt = scheduledIdentityAt(openedAt);
             lastIdentityOkAt = decision.lastOkAt;
             identityGateKey = decision.key;
-            const checked = (paymaster && isAddress(paymaster) ? paymaster : null)
-                ?? (paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null);
+            const checked = adoptedPaymaster();
             if (checked) {
                 coveredPaymaster = checked.toLowerCase();
                 sender.setPaymasterIdentity(true);
             } else {
                 sender.setPaymasterIdentity(false);
             }
+            clearedIdentitySet = currentIdentitySetKey();
         }
     }
 
@@ -818,7 +844,7 @@ async function main() {
         await sendTelegramMessage(
             `[keeper] stopped (${signal})\nnetwork=${network}\n` +
                 `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
-                `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`
+                `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'unresolved'}`
         );
         process.exit(0);
     };
@@ -829,7 +855,7 @@ async function main() {
     await sendTelegramMessage(
         `[keeper] started\nnetwork=${network}\n` +
             `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
-            `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}\n` +
+            `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'unresolved'}\n` +
             `signing=${dryRun ? 'dry-run' : 'keystore'}\ndryRun=${dryRun}`
     );
 
@@ -944,47 +970,24 @@ async function main() {
         );
     }
 
-    async function syncPaymasterIdentity(): Promise<void> {
+    function currentIdentitySetKey(): string {
+        const v4 = !disablePaymaster && paymaster && isAddress(paymaster) ? paymaster : null;
+        const registry = registryForIdentity && isAddress(registryForIdentity) ? registryForIdentity : '';
+        const sp = superPaymaster && isAddress(superPaymaster) ? superPaymaster : '';
+        return identityTargetKey({ sp, v4, registry });
+    }
+
+    /**
+     * Backstop: a target set other than the one cleared at startup closes price and stays closed.
+     * This does not resolve a new PaymasterV4 and does not adopt the new set.
+     */
+    function applyStartupTargetSet(): void {
         if (!sender || !signerAddress) return;
-        const current = paymaster && isAddress(paymaster) ? paymaster : null;
-        const key = current ? current.toLowerCase() : null;
-        if (key !== null && key === coveredPaymaster) {
-            sender.setPaymasterIdentity(true);
-            return;
-        }
+        const nextKey = currentIdentitySetKey();
+        if (!priceClosedByTargetDrift(clearedIdentitySet, nextKey)) return;
+        sender.setGate({ price: false, pause: false, reason: 'sender: paymaster identity pending', validUntil: 0 });
         sender.setPaymasterIdentity(false);
-        if (!key) return;
-        let identity: IdentityResult;
-        try {
-            identity = await evaluateIdentity();
-        } catch {
-            operationalFailure = true;
-            console.error('keeper: paymaster identity failed');
-            return;
-        }
-        if (!identity.ok) {
-            operationalFailure = true;
-            const decision = decideIdentityGate({
-                nowMs: Date.now(),
-                lastOkAt: lastIdentityOkAt,
-                previousKey: identityGateKey,
-                verdict: identity,
-            });
-            sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
-            lastIdentityOkAt = decision.lastOkAt;
-            identityGateKey = decision.key;
-            coveredPaymaster = null;
-            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
-            if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
-            return;
-        }
-        coveredPaymaster = key;
-        sender.setPaymasterIdentity(true);
-        const decision = decideIdentityGate({ nowMs: Date.now(), lastOkAt: 0, previousKey: '', verdict: identity });
-        sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
-        lastIdentityOkAt = decision.lastOkAt;
-        identityGateKey = decision.key;
-        nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
+        coveredPaymaster = null;
     }
 
     const tick = async () => {
@@ -1013,24 +1016,6 @@ async function main() {
             dayStartSec = currentSec;
         }
 
-        // V4 resolution runs FIRST and cannot throw: an RPC outage or a failing SuperPaymaster read
-        // below must not stop V4 from being re-resolved, nor its not-found alert from being
-        // evaluated (see scripts/keeper/paymasterResolver.ts).
-        if (!disablePaymaster) {
-            try {
-                paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
-                    network,
-                    candidateLabel: paymasterCandidate || 'derive-from-factory',
-                    operator: paymasterOperator,
-                    log: (line) => console.log(line),
-                    notify: sendTelegramMessage,
-                });
-            } catch {
-                operationalFailure = true;
-                console.error('keeper: paymaster resolution failed');
-            }
-        }
-
         let baseFeePerGas: bigint | undefined;
         try {
             const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
@@ -1039,9 +1024,7 @@ async function main() {
             operationalFailure = true;
             console.error('keeper: block read failed');
         }
-        const baseFeeOk =
-            !maxBaseFeeGwei ||
-            (baseFeePerGas !== undefined && baseFeePerGas <= BigInt(Math.floor(Number(maxBaseFeeGwei) * 1e9)));
+        const baseFeeOk = maxBaseFeeWei === null || (baseFeePerGas !== undefined && baseFeePerGas <= maxBaseFeeWei);
         const baseFeeInfo = baseFeePerGas !== undefined ? `${formatGwei(baseFeePerGas)} gwei` : 'n/a';
 
         let chainlinkUpdatedAt = 0n;
@@ -1239,7 +1222,7 @@ async function main() {
 
             if (!shouldUpdate) return;
             if (!baseFeeOk && currentSec + 180n < validUntil) {
-                console.log(`skip superPaymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeGwei})`);
+                console.log(`skip superPaymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeWei === null ? '' : (maxBaseFeeWei / 1_000_000_000n).toString()})`);
                 return;
             }
 
@@ -1260,7 +1243,7 @@ async function main() {
 
         const refreshPaymaster = async () => {
             if (disablePaymaster) return;
-            if (!paymaster) return; // unresolved this tick — logged / alerted at the top of the tick
+            if (!paymaster) return; // unresolved at startup; stays disabled until restart
 
             let pmPriceFeed = priceFeed;
             try {
@@ -1335,7 +1318,7 @@ async function main() {
 
             if (!shouldUpdate) return;
             if (!baseFeeOk && currentSec + 180n < pmValidUntil) {
-                console.log(`skip paymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeGwei})`);
+                console.log(`skip paymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeWei === null ? '' : (maxBaseFeeWei / 1_000_000_000n).toString()})`);
                 return;
             }
 
@@ -1354,6 +1337,7 @@ async function main() {
             await broadcastUpdate(paymaster, 'paymaster', PAYMASTER_V4_ABI, { before: BigInt(pmCachedUpdatedAt), expected: pmChainlinkUpdatedAt });
         };
 
+        applyStartupTargetSet();
         if (superLoaded) {
             try {
                 await refreshSuper();
@@ -1363,7 +1347,6 @@ async function main() {
             }
         }
         try {
-            if (!disablePaymaster) await syncPaymasterIdentity();
             await refreshPaymaster();
         } catch {
             operationalFailure = true;
@@ -1380,7 +1363,7 @@ async function main() {
 
         const superHealth = disableSuperPaymaster ? 'disabled' : superCacheOk ? '✅' : 'not-ok';
         const paymasterHealth =
-            disablePaymaster ? 'disabled' : !paymaster ? 'not-found' : paymasterCacheOk === null ? 'unknown' : paymasterCacheOk ? '✅' : 'not-ok';
+            disablePaymaster ? 'disabled' : !paymaster ? 'unresolved' : paymasterCacheOk === null ? 'unknown' : paymasterCacheOk ? '✅' : 'not-ok';
         console.log(`health superCache=${superHealth} paymasterCache=${paymasterHealth}`);
 
         const superOk = disableSuperPaymaster ? true : superCacheOk;
@@ -1395,7 +1378,7 @@ async function main() {
             await sendTelegramMessage(
                 `[keeper] health change\nnetwork=${network}\n` +
                     `super=${disableSuperPaymaster ? 'disabled' : superOk ? '✅ ok' : 'not-ok'} remainingSec=${(validUntil > currentSec ? validUntil - currentSec : 0n).toString()}\n` +
-                    `paymaster=${disablePaymaster ? 'disabled' : !paymaster ? 'not-found' : pmOk ? '✅ ok' : 'not-ok'}\n` +
+                    `paymaster=${disablePaymaster ? 'disabled' : !paymaster ? 'unresolved' : pmOk ? '✅ ok' : 'not-ok'}\n` +
                     `baseFee=${baseFeeInfo}`
             );
         }
@@ -1426,8 +1409,7 @@ async function main() {
         if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
         if (decision.key === 'open') {
             nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
-            const current = (paymaster && isAddress(paymaster) ? paymaster : null)
-                ?? (paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null);
+            const current = adoptedPaymaster();
             if (current) {
                 coveredPaymaster = current.toLowerCase();
                 sender.setPaymasterIdentity(true);

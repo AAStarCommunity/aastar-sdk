@@ -15,6 +15,7 @@ import { identityDue, scheduledIdentityAt } from './identitySchedule';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './priceConfirm';
 import { scrubSecretEnv } from './secretEnv';
 import type { ChainReceipt } from './sender';
+import { trustedScratch } from './trustScratch.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
 const SAFE_CAST = realpathSync(process.execPath);
@@ -161,12 +162,18 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(invalidRegistry.out).toContain('keeper: --registry invalid');
         const cwd = mkdtempSync(join(tmpdir(), 'keeper-partial-'));
         dirs.push(cwd);
+        const castDir = trustedScratch('partial-cast');
+        dirs.push(castDir);
+        const cast = join(castDir, 'cast');
+        writeFileSync(cast, '#!/bin/sh\nexit 1\n');
+        chmodSync(cast, 0o755);
         const noRegistry = await run([
             '--keystore', join(cwd, 'ks'),
             '--password-file', join(cwd, 'pw'),
             '--signer', '0x6666666666666666666666666666666666666666',
             '--max-fee-gwei', '1',
             '--once',
+            '--cast-bin', cast,
             '--no-superpaymaster',
             '--disable-paymaster',
         ], { RPC_URL: 'http://127.0.0.1:1' }, 'anvil', false);
@@ -292,9 +299,11 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         if (!existsSync(TSX_LOADER)) throw new Error('tsx loader missing');
         const cwd = mkdtempSync(join(tmpdir(), 'keeper-castbin-'));
         dirs.push(cwd);
+        const binDir = trustedScratch('castbin');
+        dirs.push(binDir);
         const file = join(cwd, 'keeper.env');
-        const envCast = join(cwd, 'cast-env');
-        const cliCast = join(cwd, 'cast-cli');
+        const envCast = join(binDir, 'cast-env');
+        const cliCast = join(binDir, 'cast-cli');
         writeFileSync(envCast, '#!/bin/sh\nexit 0\n');
         writeFileSync(cliCast, '#!/bin/sh\nexit 0\n');
         chmodSync(envCast, 0o755);
@@ -470,6 +479,38 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(followed.code, followed.out).toBe(1);
         expect(followed.out).toContain('keeper: cast bin refused: writable');
         expect(followed.out).not.toContain(viaLink);
+    });
+
+    it('a non-numeric option or env value is refused without echoing it', async () => {
+        if (!existsSync(TSX_LOADER)) throw new Error('tsx loader missing');
+        const sentinel = 'password-sentinel';
+        const run = (args: string[], env: NodeJS.ProcessEnv = {}) => {
+            const cwd = mkdtempSync(join(tmpdir(), 'keeper-num-'));
+            dirs.push(cwd);
+            const child = spawn(process.execPath, ['--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--network', 'sepolia', '--dry-run', '--no-logo', ...args], {
+                cwd,
+                env: { PATH: process.env.PATH ?? '', HOME: cwd, ...env },
+            });
+            let out = '';
+            child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+            child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+            return new Promise<{ code: number | null; out: string }>((resolve) => {
+                child.once('close', (code) => resolve({ code, out }));
+            });
+        };
+        const flag = await run(['--health-interval', sentinel]);
+        expect(flag.code, flag.out).toBe(1);
+        expect(flag.out).toContain('keeper: --health-interval invalid');
+        expect(flag.out).not.toContain(sentinel);
+        const cwd = mkdtempSync(join(tmpdir(), 'keeper-num-env-'));
+        dirs.push(cwd);
+        const file = join(cwd, 'keeper.env');
+        writeFileSync(file, `RPC_URL=http://127.0.0.1:9\nKEEPER_HEALTH_INTERVAL_SEC=${sentinel}\n`);
+        chmodSync(file, 0o600);
+        const fromEnv = await run(['--probe-env', '--env-file', file]);
+        expect(fromEnv.code, fromEnv.out).toBe(1);
+        expect(fromEnv.out).toContain('keeper: KEEPER_HEALTH_INTERVAL_SEC invalid');
+        expect(fromEnv.out).not.toContain(sentinel);
     });
 
     it('a never-ending external price body does not block the tick', async () => {

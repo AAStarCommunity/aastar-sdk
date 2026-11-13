@@ -4,13 +4,14 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getAddress, type Address, type Hex, type TransactionSerializable } from 'viem';
 import { privateKeyToAccount, signTransaction } from 'viem/accounts';
 import { createCastSigner, validateSecretFiles, type SignRequest } from './castSigner';
+import { trustedScratch } from './trustScratch.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 90_000;
 
@@ -44,7 +45,10 @@ const REQ: SignRequest = {
     chainId: 11155111,
 };
 
-function script(dir: string, body: string): string {
+/** The binary's ancestors must be trusted. Secret files may stay in the temp directory. */
+function script(body: string): string {
+    const dir = trustedScratch('cast-bin');
+    dirs.push(dir);
     const path = join(dir, 'cast');
     writeFileSync(path, `#!/bin/sh\n${body}\n`);
     chmodSync(path, 0o755);
@@ -56,8 +60,9 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const before = process.listenerCount('exit');
         const first = layout();
         const second = layout();
-        createCastSigner({ castBin: 'cast', keystorePath: first.ks, passwordFilePath: first.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000aa') });
-        createCastSigner({ castBin: 'cast', keystorePath: second.ks, passwordFilePath: second.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000bb') });
+        const bin = script('exit 0');
+        createCastSigner({ castBin: bin, keystorePath: first.ks, passwordFilePath: first.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000aa') });
+        createCastSigner({ castBin: bin, keystorePath: second.ks, passwordFilePath: second.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000bb') });
         expect(process.listenerCount('exit') - before).toBe(1);
     });
 
@@ -86,7 +91,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const files = layout();
         const rawPath = join(files.dir, 'raw');
         writeFileSync(rawPath, raw);
-        const bin = script(files.dir, `cat ${JSON.stringify(rawPath)}`);
+        const bin = script( `cat ${JSON.stringify(rawPath)}`);
         const signer = createCastSigner({
             castBin: bin,
             keystorePath: files.ks,
@@ -110,7 +115,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             value: 0n,
         });
         const files = layout();
-        const bin = script(files.dir, `echo "keystore-path-sentinel /tmp/secret-keystore" >&2\nprintf '%s\\nextra\\n' ${JSON.stringify(raw)}`);
+        const bin = script( `echo "keystore-path-sentinel /tmp/secret-keystore" >&2\nprintf '%s\\nextra\\n' ${JSON.stringify(raw)}`);
         const signer = createCastSigner({
             castBin: bin,
             keystorePath: files.ks,
@@ -125,7 +130,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const files = layout();
         const envPath = join(files.dir, 'env');
         const argPath = join(files.dir, 'args');
-        const bin = script(files.dir, `env > ${JSON.stringify(envPath)}\nprintf "%s\\n" "$@" > ${JSON.stringify(argPath)}\nexit 1`);
+        const bin = script( `env > ${JSON.stringify(envPath)}\nprintf "%s\\n" "$@" > ${JSON.stringify(argPath)}\nexit 1`);
         const signer = createCastSigner({
             castBin: bin,
             keystorePath: files.ks,
@@ -157,12 +162,14 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
     it('SKIP when KEEPER_CAST_BIN is unset and cast is not on PATH; otherwise a throwaway mktx recovers', async () => {
         const fromEnv = process.env.KEEPER_CAST_BIN;
+        const foundry = join(homedir(), '.foundry', 'bin', 'cast');
         const onPath = !fromEnv && spawnSync('cast', ['--version'], { encoding: 'utf8' }).status === 0;
-        if (!fromEnv && !onPath) {
+        const pinned = fromEnv || (existsSync(foundry) ? foundry : '');
+        if (!pinned && !onPath) {
             console.log('SKIP real cast: KEEPER_CAST_BIN unset and cast is not on PATH');
             return;
         }
-        const bin = fromEnv || 'cast';
+        const bin = pinned || 'cast';
         const dir = mkdtempSync(join(tmpdir(), 'cast-real-'));
         dirs.push(dir);
         chmodSync(dir, 0o700);
@@ -192,9 +199,26 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(from.toLowerCase()).toBe(row!.address.toLowerCase());
     }, 60_000);
 
+    it('refuses a replaced executable before spawn', async () => {
+        const lay = layout();
+        const mark = join(lay.dir, 'ran');
+        const bin = script(`echo ran > ${JSON.stringify(mark)}`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: lay.ks,
+            passwordFilePath: lay.pw,
+            signerAddress: getAddress('0x1111111111111111111111111111111111111111'),
+        });
+        unlinkSync(bin);
+        writeFileSync(bin, `#!/bin/sh\necho ran > ${JSON.stringify(mark)}\n`);
+        chmodSync(bin, 0o755);
+        await expect(signer.sign(REQ)).rejects.toThrow(/^cast signer: executable refused$/);
+        expect(existsSync(mark)).toBe(false);
+    });
+
     it('refuses a password symlink swapped in after construction', async () => {
         const lay = layout();
-        const bin = script(lay.dir, 'echo 0x02');
+        const bin = script( 'echo 0x02');
         const signer = createCastSigner({
             castBin: bin,
             keystorePath: lay.ks,
@@ -232,7 +256,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('signs in a fresh empty 0700 directory', async () => {
         const lay = layout();
         const mark = join(lay.dir, 'cwd.txt');
-        const bin = script(lay.dir, `pwd > '${mark}'\necho 0x02`);
+        const bin = script( `pwd > '${mark}'\necho 0x02`);
         const signer = createCastSigner({
             castBin: bin,
             keystorePath: lay.ks,
@@ -265,7 +289,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         for (const transaction of cases) {
             const lay = layout();
             const raw = await signTransaction({ privateKey: key, transaction });
-            const bin = script(lay.dir, `printf '%s' '${raw}'`);
+            const bin = script( `printf '%s' '${raw}'`);
             const signer = createCastSigner({
                 castBin: bin,
                 keystorePath: lay.ks,

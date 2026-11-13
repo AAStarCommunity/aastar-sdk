@@ -13,6 +13,7 @@ import {
     type Hex,
     type TransactionSerialized,
 } from 'viem';
+import { trustedExecutable, type PinnedExecutable } from './trustedExecutable.js';
 
 export interface SignRequest {
     to: Address;
@@ -172,6 +173,9 @@ export function createCastSigner(opts: {
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120_000) {
         throw new Error('cast signer: timeout rejected');
     }
+    const pinned: PinnedExecutable = trustedExecutable(opts.castBin);
+    const spawnPath = pinned.path;
+    const recheck = pinned.recheck;
     validateSecretFiles(opts.keystorePath, opts.passwordFilePath);
     const signerAddress = opts.signerAddress;
     const work = mkdtempSync(join(tmpdir(), 'keeper-cast-'));
@@ -199,8 +203,13 @@ export function createCastSigner(opts: {
                 req.to,
                 req.data,
             ];
+            try {
+                recheck();
+            } catch {
+                throw new Error('cast signer: executable refused');
+            }
             const raw = await new Promise<Hex>((resolve, reject) => {
-                const child = spawn(opts.castBin, args, {
+                const child = spawn(spawnPath, args, {
                     cwd: work,
                     stdio: ['ignore', 'pipe', 'pipe'],
                     env: { PATH: process.env.PATH ?? '', HOME: process.env.HOME ?? '' },

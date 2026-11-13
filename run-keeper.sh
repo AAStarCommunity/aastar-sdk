@@ -67,6 +67,17 @@ for secret_name in RPC_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
     exit 1
   fi
 done
+# Same name class as SECRET_NAME in scripts/keeper/secretEnv.ts. Exported names only. The value is not printed.
+shopt -s nocasematch
+while IFS= read -r secret_name; do
+  case "$secret_name" in
+    *PRIVATE_KEY*|*MNEMONIC*|*KEYSTORE_PASSWORD*|*SEED*|*PASSPHRASE*|*PASSWORD*)
+      echo "error: ${secret_name} is set in the environment; put it in --env-file and unset it before launching" >&2
+      exit 1
+      ;;
+  esac
+done < <(compgen -e || true)
+shopt -u nocasematch
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()

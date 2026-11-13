@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-    PaymasterTracker,
-    paymasterTickStep,
     resolvePaymasterV4,
     type PaymasterResolverClient,
     type PaymasterResolverParams,
@@ -39,58 +37,6 @@ function client(bytecode: (string | Error)[], opts: { mapped?: string; derived?:
         readContract: typeof readContract;
     };
 }
-
-const ctx = () => {
-    const lines: string[] = [];
-    const notes: string[] = [];
-    return {
-        lines,
-        notes,
-        c: { network: 'sepolia', candidateLabel: V4, operator: OPERATOR, log: (l: string) => lines.push(l), notify: async (t: string) => { notes.push(t); } },
-    };
-};
-
-describe('keeper PaymasterV4 resolution survives a boot-time RPC failure', () => {
-    // The Mini incident: RPC not ready at boot → getBytecode threw → V4 skipped until restart.
-    it('getBytecode throws on tick 1 and succeeds on tick 2 → tick 2 refreshes V4', async () => {
-        const cl = client([new Error('fetch failed (ECONNREFUSED)'), '0x6080']);
-        const tracker = new PaymasterTracker(cl, params(), 1800n);
-        const { c, lines } = ctx();
-
-        expect(await paymasterTickStep(tracker, 1000n, c)).toBeNull();
-        expect(lines.at(-1)).toMatch(/decision=skip reason=not-found transient error=getBytecode/);
-
-        expect(await paymasterTickStep(tracker, 1060n, c)).toBe(V4);
-        expect(lines.at(-1)).toBe(`paymaster resolved=${V4} afterSec=60`);
-        expect(cl.getBytecode).toHaveBeenCalledTimes(2);
-
-        // Once found it is kept: no further chain reads.
-        expect(await paymasterTickStep(tracker, 1120n, c)).toBe(V4);
-        expect(cl.getBytecode).toHaveBeenCalledTimes(2);
-    });
-
-    it('a resolution is announced only after a not-found alert went out', async () => {
-        const { c, notes } = ctx();
-        await paymasterTickStep(new PaymasterTracker(client(['0x6080']), params(), 1800n), 1000n, c);
-        expect(notes).toHaveLength(0);
-
-        // Unresolved for 300s, below the 1800s alert threshold: no alert, so no "resolved" either.
-        const quiet = new PaymasterTracker(client([new Error('timeout'), '0x6080']), params(), 1800n);
-        await paymasterTickStep(quiet, 1000n, c);
-        await paymasterTickStep(quiet, 1300n, c);
-        expect(notes).toHaveLength(0);
-
-        // Unresolved past the threshold: the alert goes out, and so does the recovery.
-        const loud = new PaymasterTracker(client([new Error('timeout'), new Error('timeout'), '0x6080']), params(), 1800n);
-        await paymasterTickStep(loud, 1000n, c);
-        await paymasterTickStep(loud, 2800n, c);
-        await paymasterTickStep(loud, 2900n, c);
-        expect(notes).toEqual([
-            expect.stringMatching(/paymaster not found[\s\S]*unresolvedSec=1800/),
-            expect.stringMatching(/paymaster resolved[\s\S]*unresolvedSec=1900/),
-        ]);
-    });
-});
 
 describe('transient vs absent', () => {
     it.each([
@@ -133,50 +79,5 @@ describe('transient vs absent', () => {
         expect(r).toMatchObject({ kind: 'absent', reason: 'no-candidate' });
         expect(cl.readContract).not.toHaveBeenCalled();
         expect(cl.getBytecode).not.toHaveBeenCalled();
-    });
-
-    it('both kinds are re-resolved every tick (a V4 deployed later is picked up)', async () => {
-        const cl = client(['0x', '0x', '0x6080']);
-        const t = new PaymasterTracker(cl, params(), 1800n);
-        const { c } = ctx();
-        expect(await paymasterTickStep(t, 0n, c)).toBeNull();
-        expect(await paymasterTickStep(t, 60n, c)).toBeNull();
-        expect(await paymasterTickStep(t, 120n, c)).toBe(V4);
-    });
-});
-
-describe('not-found alert', () => {
-    it('fires once the V4 has been unresolved for the threshold, then at most once per threshold', async () => {
-        const t = new PaymasterTracker(client([new Error('down')]), params(), 600n);
-        const { c, notes } = ctx();
-        for (const now of [0n, 300n, 599n]) await paymasterTickStep(t, now, c);
-        expect(notes).toHaveLength(0);
-        await paymasterTickStep(t, 600n, c);
-        expect(notes).toEqual([expect.stringMatching(/paymaster not found[\s\S]*transient[\s\S]*unresolvedSec=600/)]);
-        await paymasterTickStep(t, 900n, c);
-        expect(notes).toHaveLength(1);
-        await paymasterTickStep(t, 1200n, c);
-        expect(notes).toHaveLength(2);
-    });
-
-    it('a notifier that never settles (or throws) does not hold the tick', async () => {
-        const t = new PaymasterTracker(client([new Error('down')]), params(), 1n);
-        const lines: string[] = [];
-        const hang = { network: 'sepolia', candidateLabel: V4, operator: OPERATOR, notifyTimeoutMs: 50, log: (l: string) => lines.push(l), notify: () => new Promise<void>(() => {}) };
-        await paymasterTickStep(t, 0n, hang);
-        const started = Date.now();
-        await expect(paymasterTickStep(t, 10n, hang)).resolves.toBeNull();
-        expect(Date.now() - started).toBeLessThan(2_000);
-        expect(lines.at(-1)).toMatch(/notify timed out after 50ms/);
-        const boom = { ...hang, notify: async () => { throw new Error('telegram 502'); } };
-        await expect(paymasterTickStep(t, 20n, boom)).resolves.toBeNull();
-        expect(lines.at(-1)).toMatch(/notify failed: telegram 502/);
-    });
-
-    it('threshold 0 disables the alert', async () => {
-        const t = new PaymasterTracker(client([new Error('down')]), params(), 0n);
-        const { c, notes } = ctx();
-        for (const now of [0n, 10_000n, 20_000n]) await paymasterTickStep(t, now, c);
-        expect(notes).toHaveLength(0);
     });
 });
