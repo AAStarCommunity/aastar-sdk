@@ -1,7 +1,14 @@
 import { getAddress, numberToHex, type Address, type Hex } from 'viem';
 
 /**
- * EIP-1193 transport. `name` is a provider name for run metadata, never a URL.
+ * Provider `name` and evidence `runMetadata.providers` entries.
+ * A short label: a letter or digit, then letters, digits, `.`, `_`, or `-`. A URL cannot match.
+ * One pattern, shared by the scan and the evidence file.
+ */
+export const PROVIDER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/**
+ * EIP-1193 transport. `name` must match {@link PROVIDER_NAME_RE}. It is a label for run metadata, never a URL.
  * Request timeouts belong to the caller's transport. This scanner does not time out `request`.
  * viem: `{ name, request: client.request }`
  * ethers v6 (not imported): `{ name, request: ({ method, params }) => provider.send(method, params ?? []) }`
@@ -55,7 +62,7 @@ export const responseLimits = {
 const WORD_LEN = 66;
 const BLOOM_LEN = 514;
 const ADDR_LEN = 42;
-const PROVIDER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const PROVIDER_NAME = PROVIDER_NAME_RE;
 
 function hexOk(v: string): boolean {
     if (v.charCodeAt(0) !== 48 || v.charCodeAt(1) !== 120) return false;
