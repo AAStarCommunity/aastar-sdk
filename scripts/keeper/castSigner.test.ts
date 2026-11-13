@@ -1,0 +1,316 @@
+/**
+ * cast mktx is the only signer. Stderr and the process environment stay out of errors.
+ * The real-cast case prints SKIP and passes when KEEPER_CAST_BIN is unset and `cast` is not on PATH.
+ */
+import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { chmodSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { getAddress, type Address, type Hex, type TransactionSerializable } from 'viem';
+import { privateKeyToAccount, signTransaction } from 'viem/accounts';
+import { createCastSigner, validateSecretFiles, type SignRequest } from './castSigner';
+
+const SPAWN_VERDICT_TIMEOUT_MS = 90_000;
+
+const dirs: string[] = [];
+afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+}, SPAWN_VERDICT_TIMEOUT_MS);
+
+function layout(opts: { pw?: number; dir?: number; ks?: number; linkPw?: boolean } = {}) {
+    const dir = mkdtempSync(join(tmpdir(), 'cast-signer-'));
+    dirs.push(dir);
+    chmodSync(dir, opts.dir ?? 0o700);
+    const pw = join(dir, 'password');
+    const ks = join(dir, 'keystore');
+    writeFileSync(ks, '{}\n');
+    chmodSync(ks, opts.ks ?? 0o600);
+    writeFileSync(pw, 'not-a-real-password\n');
+    chmodSync(pw, opts.pw ?? 0o600);
+    const passwordFile = opts.linkPw ? join(dir, 'link') : pw;
+    if (opts.linkPw) symlinkSync(pw, passwordFile);
+    return { dir, pw: passwordFile, ks };
+}
+
+const REQ: SignRequest = {
+    to: getAddress('0x00000000000000000000000000000000000000aa'),
+    data: '0x1234',
+    nonce: 3,
+    gasLimit: 50_000n,
+    maxFeePerGas: 200n,
+    maxPriorityFeePerGas: 10n,
+    chainId: 11155111,
+};
+
+function script(dir: string, body: string): string {
+    const path = join(dir, 'cast');
+    writeFileSync(path, `#!/bin/sh\n${body}\n`);
+    chmodSync(path, 0o755);
+    return path;
+}
+
+describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('registers one process exit cleanup for every signer', () => {
+        const before = process.listenerCount('exit');
+        const first = layout();
+        const second = layout();
+        createCastSigner({ castBin: 'cast', keystorePath: first.ks, passwordFilePath: first.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000aa') });
+        createCastSigner({ castBin: 'cast', keystorePath: second.ks, passwordFilePath: second.pw, signerAddress: getAddress('0x00000000000000000000000000000000000000bb') });
+        expect(process.listenerCount('exit') - before).toBe(1);
+    });
+
+    it('refuses mode 0644, directory 0755, and a symlink', () => {
+        const loose = layout({ pw: 0o644 });
+        expect(() => validateSecretFiles(loose.ks, loose.pw)).toThrow(/password file mode is not 0600/);
+        const openDir = layout({ dir: 0o755 });
+        expect(() => validateSecretFiles(openDir.ks, openDir.pw)).toThrow(/password directory mode is not 0700/);
+        const linked = layout({ linkPw: true });
+        expect(() => validateSecretFiles(linked.ks, linked.pw)).toThrow(/password file is not a regular file/);
+    });
+
+    it('refuses a recovered sender that is not the configured signer', async () => {
+        const account = privateKeyToAccount(('0x' + 'ab'.repeat(32)) as Hex);
+        const raw = await account.signTransaction({
+            type: 'eip1559',
+            chainId: REQ.chainId,
+            nonce: REQ.nonce,
+            gas: REQ.gasLimit,
+            maxFeePerGas: REQ.maxFeePerGas,
+            maxPriorityFeePerGas: REQ.maxPriorityFeePerGas,
+            to: REQ.to,
+            data: REQ.data,
+            value: 0n,
+        });
+        const files = layout();
+        const rawPath = join(files.dir, 'raw');
+        writeFileSync(rawPath, raw);
+        const bin = script(files.dir, `cat ${JSON.stringify(rawPath)}`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: files.ks,
+            passwordFilePath: files.pw,
+            signerAddress: getAddress('0x00000000000000000000000000000000000000bb'),
+        });
+        await expect(signer.sign(REQ)).rejects.toThrow(/^cast signer: recovered sender mismatch$/);
+    });
+
+    it('refuses extra cast output with a fixed message and does not copy stderr', async () => {
+        const account = privateKeyToAccount(('0x' + 'cd'.repeat(32)) as Hex);
+        const raw = await account.signTransaction({
+            type: 'eip1559',
+            chainId: REQ.chainId,
+            nonce: REQ.nonce,
+            gas: REQ.gasLimit,
+            maxFeePerGas: REQ.maxFeePerGas,
+            maxPriorityFeePerGas: REQ.maxPriorityFeePerGas,
+            to: REQ.to,
+            data: REQ.data,
+            value: 0n,
+        });
+        const files = layout();
+        const bin = script(files.dir, `echo "keystore-path-sentinel /tmp/secret-keystore" >&2\nprintf '%s\\nextra\\n' ${JSON.stringify(raw)}`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: files.ks,
+            passwordFilePath: files.pw,
+            signerAddress: account.address,
+            timeoutMs: 5_000,
+        });
+        await expect(signer.sign(REQ)).rejects.toThrow(/^cast signer: output rejected$/);
+    });
+
+    it('does not pass ETH_PASSWORD or ETH_RPC_URL to cast', async () => {
+        const files = layout();
+        const envPath = join(files.dir, 'env');
+        const argPath = join(files.dir, 'args');
+        const bin = script(files.dir, `env > ${JSON.stringify(envPath)}\nprintf "%s\\n" "$@" > ${JSON.stringify(argPath)}\nexit 1`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: files.ks,
+            passwordFilePath: files.pw,
+            signerAddress: getAddress('0x00000000000000000000000000000000000000bb'),
+        });
+        const previous = process.env.ETH_PASSWORD;
+        process.env.ETH_PASSWORD = 'leak-sentinel';
+        process.env.ETH_RPC_URL = 'http://leak.invalid';
+        process.env.ETH_KEYSTORE = '/tmp/leak-keystore';
+        try {
+            await expect(signer.sign(REQ)).rejects.toThrow(/^cast signer: signing failed$/);
+        } finally {
+            if (previous === undefined) delete process.env.ETH_PASSWORD;
+            else process.env.ETH_PASSWORD = previous;
+            delete process.env.ETH_RPC_URL;
+            delete process.env.ETH_KEYSTORE;
+        }
+        const dumped = await import('node:fs').then((fs) => fs.readFileSync(envPath, 'utf8'));
+        const args = await import('node:fs').then((fs) => fs.readFileSync(argPath, 'utf8'));
+        expect(dumped).not.toContain('leak-sentinel');
+        expect(dumped).not.toContain('ETH_PASSWORD');
+        expect(dumped).not.toContain('ETH_RPC_URL');
+        expect(dumped).not.toContain('ETH_KEYSTORE');
+        expect(args).not.toContain('--rpc-url');
+        expect(args).toContain('--keystore');
+        expect(args).toContain('mktx');
+    });
+
+    it('SKIP when KEEPER_CAST_BIN is unset and cast is not on PATH; otherwise a throwaway mktx recovers', async () => {
+        const fromEnv = process.env.KEEPER_CAST_BIN;
+        const onPath = !fromEnv && spawnSync('cast', ['--version'], { encoding: 'utf8' }).status === 0;
+        if (!fromEnv && !onPath) {
+            console.log('SKIP real cast: KEEPER_CAST_BIN unset and cast is not on PATH');
+            return;
+        }
+        const bin = fromEnv || 'cast';
+        const dir = mkdtempSync(join(tmpdir(), 'cast-real-'));
+        dirs.push(dir);
+        chmodSync(dir, 0o700);
+        const pw = randomBytes(16).toString('hex');
+        const pwFile = join(dir, 'password');
+        writeFileSync(pwFile, pw);
+        chmodSync(pwFile, 0o600);
+        const ksDir = join(dir, 'keys');
+        mkdirSync(ksDir, { mode: 0o700 });
+        const created = spawnSync(bin, ['wallet', 'new', ksDir, '--unsafe-password', pw, '--json'], { encoding: 'utf8' });
+        expect(created.status).toBe(0);
+        const parsed = JSON.parse(created.stdout) as { address: string; path: string }[];
+        const row = parsed[0];
+        expect(row?.address).toBeTruthy();
+        chmodSync(row!.path, 0o600);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: row!.path,
+            passwordFilePath: pwFile,
+            signerAddress: getAddress(row!.address as Address),
+            timeoutMs: 30_000,
+        });
+        const raw = await signer.sign(REQ);
+        expect(raw.startsWith('0x')).toBe(true);
+        const { recoverTransactionAddress } = await import('viem');
+        const from = await recoverTransactionAddress({ serializedTransaction: raw as `0x02${string}` });
+        expect(from.toLowerCase()).toBe(row!.address.toLowerCase());
+    }, 60_000);
+
+    it('refuses a password symlink swapped in after construction', async () => {
+        const lay = layout();
+        const bin = script(lay.dir, 'echo 0x02');
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: lay.ks,
+            passwordFilePath: lay.pw,
+            signerAddress: getAddress('0x1111111111111111111111111111111111111111'),
+        });
+        const other = join(lay.dir, 'other');
+        writeFileSync(other, 'other\n');
+        chmodSync(other, 0o600);
+        unlinkSync(lay.pw);
+        symlinkSync(other, lay.pw);
+        await expect(signer.sign(REQ)).rejects.toThrow('secret file: password file is not a regular file');
+    });
+
+    it('refuses a group-writable keystore and a group-writable keystore directory', () => {
+        const lay = layout({ ks: 0o664 });
+        expect(() => validateSecretFiles(lay.ks, lay.pw)).toThrow('secret file: keystore is group or world writable');
+        const root = mkdtempSync(join(tmpdir(), 'cast-ksdir-'));
+        dirs.push(root);
+        const pwDir = join(root, 'pw');
+        const ksDir = join(root, 'ks');
+        mkdirSync(pwDir, { mode: 0o700 });
+        mkdirSync(ksDir, { mode: 0o775 });
+        chmodSync(pwDir, 0o700);
+        chmodSync(ksDir, 0o775);
+        const pw = join(pwDir, 'password');
+        const ks = join(ksDir, 'keystore');
+        writeFileSync(pw, 'pw\n');
+        writeFileSync(ks, '{}\n');
+        chmodSync(pw, 0o600);
+        chmodSync(ks, 0o600);
+        expect(() => validateSecretFiles(ks, pw)).toThrow('secret file: keystore directory is group or world writable');
+    });
+
+    it('signs in a fresh empty 0700 directory', async () => {
+        const lay = layout();
+        const mark = join(lay.dir, 'cwd.txt');
+        const bin = script(lay.dir, `pwd > '${mark}'\necho 0x02`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: lay.ks,
+            passwordFilePath: lay.pw,
+            signerAddress: getAddress('0x1111111111111111111111111111111111111111'),
+        });
+        await signer.sign(REQ).catch(() => {});
+        const cwd = readFileSync(mark, 'utf8').trim();
+        expect(cwd).toContain('keeper-cast-');
+        expect(readdirSync(cwd)).toEqual([]);
+        expect(statSync(cwd).mode & 0o777).toBe(0o700);
+    });
+
+    it('accepts a cancel shape only when the request is a cancel', async () => {
+        const key = ('0x' + 'ab'.repeat(32)) as Hex;
+        const account = privateKeyToAccount(key);
+        const transaction: TransactionSerializable = {
+            type: 'eip1559',
+            chainId: 11155111,
+            nonce: 4,
+            gas: 21_000n,
+            maxFeePerGas: 200n,
+            maxPriorityFeePerGas: 10n,
+            to: account.address,
+            data: '0x',
+            value: 0n,
+        };
+        const raw = await signTransaction({ privateKey: key, transaction });
+        const lay = layout();
+        const bin = script(lay.dir, `printf '%s' '${raw}'`);
+        const signer = createCastSigner({
+            castBin: bin,
+            keystorePath: lay.ks,
+            passwordFilePath: lay.pw,
+            signerAddress: account.address,
+        });
+        const cancelReq: SignRequest = {
+            to: account.address,
+            data: '0x',
+            nonce: 4,
+            gasLimit: 21_000n,
+            maxFeePerGas: 200n,
+            maxPriorityFeePerGas: 10n,
+            chainId: 11155111,
+            cancel: true,
+        };
+        await expect(signer.sign(cancelReq)).resolves.toBe(raw);
+        const plain: SignRequest = { ...cancelReq, cancel: false };
+        await expect(signer.sign(plain)).rejects.toThrow('cast signer: signed fields mismatch');
+    });
+
+    it('refuses a correctly signed transaction whose fields do not match the request', async () => {
+        const key = ('0x' + 'ab'.repeat(32)) as Hex;
+        const account = privateKeyToAccount(key);
+        const other = getAddress('0x00000000000000000000000000000000000000bb');
+        const cases: TransactionSerializable[] = [
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: other, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: '0x99', value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce + 1, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: 1, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: 60_000n, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: 300n, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: 11n, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 1n },
+            { type: 'legacy', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, gasPrice: REQ.maxFeePerGas, to: REQ.to, data: REQ.data, value: 0n },
+            { type: 'eip1559', chainId: REQ.chainId, nonce: REQ.nonce, gas: REQ.gasLimit, maxFeePerGas: REQ.maxFeePerGas, maxPriorityFeePerGas: REQ.maxPriorityFeePerGas, to: REQ.to, data: REQ.data, value: 0n, accessList: [{ address: REQ.to, storageKeys: [] }] },
+        ];
+        for (const transaction of cases) {
+            const lay = layout();
+            const raw = await signTransaction({ privateKey: key, transaction });
+            const bin = script(lay.dir, `printf '%s' '${raw}'`);
+            const signer = createCastSigner({
+                castBin: bin,
+                keystorePath: lay.ks,
+                passwordFilePath: lay.pw,
+                signerAddress: account.address,
+            });
+            await expect(signer.sign(REQ), JSON.stringify(transaction.type) + String(transaction.value)).rejects.toThrow('cast signer: signed fields mismatch');
+        }
+    });
+});

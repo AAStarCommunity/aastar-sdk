@@ -1,5 +1,4 @@
-import { createPublicClient, createWalletClient, formatGwei, http, parseAbi } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, encodeFunctionData, formatGwei, http, isAddress, parseAbi, type Address } from 'viem';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -7,11 +6,20 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
-import readline from 'readline';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
+import { noteBalance, type BalanceClock } from './keeper/balanceAlert.js';
+import { createCastSigner } from './keeper/castSigner.js';
+import { acquireKeeperLock, Journal, resyncJournal } from './keeper/journal.js';
+import { Sender, type SendResult } from './keeper/sender.js';
+import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
+import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
+import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
+import { decideIdentityGate } from './keeper/identityGate.js';
+import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
+import { ignoredSecretWarning, pinScrubbedSecrets, scrubSecretEnv } from './keeper/secretEnv.js';
+import { runKeeperStep } from './keeper/keeperStep.js';
 
-type KeeperMode = 'cast' | 'privateKey';
+let activeNetwork = 'unknown';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const TELEGRAM_BOT_USERNAME = '@AAstarMonitorBot' as const;
@@ -53,6 +61,14 @@ function getArgValue(args: string[], key: string): string | undefined {
     return args[idx + 1];
 }
 
+function requireArgValue(args: string[], key: string): string | undefined {
+    const idx = args.indexOf(key);
+    if (idx < 0) return undefined;
+    const next = args[idx + 1];
+    if (next === undefined || next.startsWith('--')) throw new Error(`keeper: ${key} requires a value`);
+    return next;
+}
+
 function hasFlag(args: string[], key: string): boolean {
     return args.includes(key);
 }
@@ -64,26 +80,6 @@ function nowSec(): bigint {
 function formatTs(ts: bigint): string {
     if (ts <= 0n) return '0';
     return new Date(Number(ts) * 1000).toISOString();
-}
-
-async function promptHidden(prompt: string): Promise<string> {
-    return await new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-        const onData = (char: Buffer) => {
-            const c = char.toString();
-            if (c === '\n' || c === '\r' || c === '\u0004') return;
-            readline.cursorTo(process.stdout, 0);
-            process.stdout.write(prompt);
-            process.stdout.write('*'.repeat((rl as any).line?.length || 0));
-        };
-        process.stdin.on('data', onData);
-        rl.question(prompt, (value) => {
-            process.stdin.off('data', onData);
-            rl.close();
-            process.stdout.write('\n');
-            resolve(value);
-        });
-    });
 }
 
 async function sendTelegramMessage(text: string): Promise<void> {
@@ -146,19 +142,26 @@ function usage(): string {
     return [
         'Keeper quickstart:',
         '',
-        '1) Private key mode (simplest):',
-        '   - Set env: KEEPER_PRIVATE_KEY=0x... (or PRIVATE_KEY_SUPPLIER=0x...)',
-        '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet',
+        'Live runs sign with cast mktx (the key never enters this process):',
+        '   pnpm exec tsx scripts/keeper.ts --network sepolia \\',
+        '     --keystore <path> --password-file <path> --signer <address>',
         '',
-        '2) Cast mode (use Foundry keystore/account):',
-        '   - Run with keystore: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --keystore <path>',
-        '   - Or use cast account: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <name>',
+        'The password file is mode 0600 inside a 0700 directory owned by this user.',
+        '--dry-run signs nothing and does not need a keystore.',
         '',
         'Common flags:',
         '   --poll-interval <sec>       check interval (e.g. 180)',
         '   --safety-margin <sec>       refresh before expiry (e.g. 600)',
         '   --dry-run                   print actions without sending tx',
         '   --once                      run one tick then exit',
+        '   --resync-journal            realign the journal to the chain nonce, then exit',
+        '   --keystore <path>           encrypted keystore (required unless --dry-run)',
+        '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
+        '   --signer <address>          address cast must recover (required unless --dry-run)',
+        '   --cast-bin <path>           cast binary (default: cast)',
+        '   --journal <path>            nonce journal (default: ~/.aastar-keeper/<network>.journal.json)',
+        '   --registry <address>        registry used for signer identity',
+        '   --low-balance-wei <n>       signer balance alert threshold',
         '   --no-superpaymaster         disable SuperPaymaster updates',
         '   --no-paymaster              disable PaymasterV4 updates',
         '   --max-updates-per-day <n>   per-target limit (default 24)',
@@ -192,77 +195,66 @@ function shortUsage(): string {
     ].join('\n');
 }
 
-async function runCastSend(params: {
-    rpcUrl: string;
-    target: `0x${string}`;
-    keystorePath?: string;
-    accountName?: string;
-    passwordFilePath: string;
-    gasPriceWei?: bigint;   // explicit gas-price to avoid cast hanging on estimation
-    processTimeoutMs?: number; // hard kill timeout (default 90s)
-}): Promise<string> {
-    const cmd = 'cast';
-    const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
-
-    if (params.keystorePath) {
-        castArgs.push('--keystore', params.keystorePath);
-    } else if (params.accountName) {
-        castArgs.push('--account', params.accountName);
-    } else {
-        throw new Error('cast mode requires --keystore or --cast-account/DEPLOYER_ACCOUNT');
+function parseWeiFlag(raw: string | undefined, fallback: bigint): bigint {
+    if (raw === undefined) return fallback;
+    if (raw.length === 0 || raw.length > 40) throw new Error('keeper: --low-balance-wei invalid');
+    for (let i = 0; i < raw.length; i++) {
+        const c = raw.charCodeAt(i);
+        if (c < 48 || c > 57) throw new Error('keeper: --low-balance-wei invalid');
     }
-
-    // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
-    if (params.gasPriceWei && params.gasPriceWei > 0n) {
-        castArgs.push('--gas-price', params.gasPriceWei.toString());
-    }
-
-    castArgs.push('--password-file', params.passwordFilePath, params.target, 'updatePrice()');
-
-    const killTimeoutMs = params.processTimeoutMs ?? 90_000;
-
-    return await new Promise((resolve, reject) => {
-        const child = spawn(cmd, castArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
-        let out = '';
-        let err = '';
-        let settled = false;
-
-        // Hard kill timeout — cast --timeout only controls receipt polling, not the process
-        const killTimer = setTimeout(() => {
-            if (settled) return;
-            settled = true;
-            child.kill('SIGKILL');
-            reject(new Error(`cast send timed out after ${killTimeoutMs}ms (process killed)`));
-        }, killTimeoutMs);
-
-        child.stdout.on('data', (d) => { out += d.toString(); });
-        child.stderr.on('data', (d) => { err += d.toString(); });
-        child.on('error', (e) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(killTimer);
-            reject(e);
-        });
-        child.on('close', (code) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(killTimer);
-            const merged = `${out}\n${err}`.trim();
-            if (code !== 0) return reject(new Error(merged || `cast exited with code ${code}`));
-            const txMatch = merged.match(/transactionHash\s+([0x][0-9a-fA-F]{64})/);
-            if (txMatch?.[1]) return resolve(txMatch[1]);
-            const altMatch = merged.match(/(0x[0-9a-fA-F]{64})/);
-            if (altMatch?.[1]) return resolve(altMatch[1]);
-            return resolve('');
-        });
-    });
+    return BigInt(raw);
 }
+
+function parseSignerFlag(raw: string | undefined, required: boolean): Address | null {
+    if (!raw) {
+        if (required) throw new Error('keeper: --signer is required unless --dry-run');
+        return null;
+    }
+    if (raw.length !== 42 || !isAddress(raw)) throw new Error('keeper: --signer invalid');
+    if (raw !== raw.toLowerCase() && !isAddress(raw, { strict: true })) throw new Error('keeper: --signer invalid');
+    return raw as Address;
+}
+
+const LOW_BALANCE_SEPOLIA = 20_000_000_000_000_000n;
+const LOW_BALANCE_OTHER = 5_000_000_000_000_000n;
 
 async function main() {
     installPipeSafety();
     const args = process.argv.slice(2).filter((a) => a !== '--');
+    if (hasFlag(args, '--help') || hasFlag(args, '-h')) {
+        console.log(section('HELP'));
+        console.log(usage());
+        return;
+    }
     const network = (getArgValue(args, '--network') || 'op-sepolia') as NetworkName;
-    const mode = ((getArgValue(args, '--mode') || '').toLowerCase() as KeeperMode) || (getArgValue(args, '--keystore') ? 'cast' : 'privateKey');
+    activeNetwork = network;
+    if (hasFlag(args, '--mode') || hasFlag(args, '--cast-account')) {
+        throw new Error('keeper: --mode and --cast-account were removed; use --keystore --password-file --signer');
+    }
+    for (const gone of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
+        if (hasFlag(args, gone)) throw new Error(`keeper: ${gone} is not part of the price keeper`);
+    }
+    const dryRun = hasFlag(args, '--dry-run');
+    const keystorePath = getArgValue(args, '--keystore');
+    const passwordFilePath = getArgValue(args, '--password-file');
+    const signerAddress = parseSignerFlag(getArgValue(args, '--signer'), !dryRun);
+    const castBin = getArgValue(args, '--cast-bin') || 'cast';
+    const resync = hasFlag(args, '--resync-journal');
+    if (resync && !signerAddress) throw new Error('keeper: --resync-journal requires --signer');
+    if (!dryRun && !resync && (!keystorePath || !passwordFilePath || !signerAddress)) {
+        throw new Error('keeper: live runs require --keystore, --password-file and --signer');
+    }
+    const journalPath = getArgValue(args, '--journal')
+        || path.join(os.homedir(), '.aastar-keeper', `${network}.journal.json`);
+    const registryFlagRaw = requireArgValue(args, '--registry');
+    const registryFlag = registryFlagRaw
+        ? (isAddress(registryFlagRaw) ? registryFlagRaw as Address : null)
+        : null;
+    if (registryFlagRaw && !registryFlag) throw new Error('keeper: --registry invalid');
+    const lowBalanceWei = parseWeiFlag(
+        getArgValue(args, '--low-balance-wei'),
+        network === 'sepolia' ? LOW_BALANCE_SEPOLIA : LOW_BALANCE_OTHER,
+    );
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
@@ -272,19 +264,12 @@ async function main() {
     const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
     const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
-    const dryRun = hasFlag(args, '--dry-run');
     const once = hasFlag(args, '--once');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
-    const help = hasFlag(args, '--help') || hasFlag(args, '-h');
 
-    if (help) {
-        console.log(section('HELP'));
-        console.log(usage());
-        return;
-    }
-
+    const scrubbedSecrets = new Set<string>();
     const envFiles: string[] =
         network === 'op-mainnet' ? ['.env.optimism', '.env.op-mainnet'] : [`.env.${network}`];
     for (const envFile of envFiles) {
@@ -293,6 +278,9 @@ async function main() {
             dotenv.config({ path: fullPath });
         }
     }
+    const scrubbedFirst = scrubSecretEnv(process.env);
+    for (const name of scrubbedFirst) scrubbedSecrets.add(name);
+    pinScrubbedSecrets(process.env, scrubbedFirst);
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
@@ -316,7 +304,7 @@ async function main() {
             mainnet
         };
         const chain = chains[network];
-        const canonicalFallback = (CANONICAL_ADDRESSES as Record<number, any>)[chain.id];
+        const canonicalFallback = (CANONICAL_ADDRESSES as Record<number, any>)[chain.id] ?? {};
         config = {
             name: network,
             chain,
@@ -330,10 +318,52 @@ async function main() {
             explorerUrl: ''
         } as any;
     }
+    for (const name of scrubSecretEnv(process.env)) scrubbedSecrets.add(name);
+    const secretWarning = ignoredSecretWarning([...scrubbedSecrets]);
+    if (secretWarning) console.log(secretWarning);
+    if (hasFlag(args, '--probe-env')) {
+        const leaked = Object.keys(process.env).filter((key) => /PRIVATE_KEY|MNEMONIC|KEYSTORE_PASSWORD/i.test(key));
+        console.log(`probe secrets=${leaked.length === 0 ? 'absent' : 'present'}`);
+        console.log(`probe KEEPER_CAST_BIN=${process.env.KEEPER_CAST_BIN === undefined ? 'absent' : 'present'}`);
+        console.log(`probe KEYSTORE_PATH=${process.env.KEYSTORE_PATH === undefined ? 'absent' : 'present'}`);
+        return;
+    }
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
 
+    if (resync) {
+        if (!signerAddress) throw new Error('keeper: --resync-journal requires --signer');
+        let releaseResync: (() => Promise<void>) | null = null;
+        try {
+            releaseResync = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
+            const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
+            const latestRaw = await publicClient.getTransactionCount({ address: signerAddress, blockTag: 'latest' });
+            const pendingRaw = await publicClient.getTransactionCount({ address: signerAddress, blockTag: 'pending' });
+            const asNonce = (value: unknown): bigint => {
+                if (typeof value === 'bigint') return value;
+                if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
+                return -1n;
+            };
+            const result = await resyncJournal(journal, asNonce(latestRaw), asNonce(pendingRaw));
+            if (!result.ok) {
+                console.error(result.reason);
+                await sendTelegramMessage(`[keeper] ${result.reason}`);
+                throw new Error(result.reason);
+            }
+            const line = `journal resynced base ${result.from} -> ${result.to} dropped ${result.dropped}`;
+            console.log(line);
+            await sendTelegramMessage(`[keeper] ${line}`);
+        } finally {
+            if (releaseResync) await releaseResync();
+        }
+        return;
+    }
+
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
-    const superPaymasterDefault = (canonical?.superPaymaster || config.contracts.superPaymaster) as `0x${string}`;
+    const registryForIdentity = registryFlag ?? (canonical?.registry as Address | undefined);
+    if (!dryRun && signerAddress && (!registryForIdentity || !isAddress(registryForIdentity))) {
+        throw new Error(`signer identity: ${network} has no registry address; pass --registry <address>`);
+    }
+    const superPaymasterDefault = (canonical?.superPaymaster || config.contracts?.superPaymaster) as `0x${string}`;
     const priceFeed = (canonical?.priceFeed || config.contracts.priceFeed) as `0x${string}`;
     const superPaymaster = (getArgValue(args, '--superpaymaster') || superPaymasterDefault) as `0x${string}`;
 
@@ -378,13 +408,14 @@ async function main() {
     console.log(section('INIT'));
 
     console.log(`network=${network}`);
-    console.log(`rpcUrl=${config.rpcUrl}`);
+    console.log('rpcUrl=<set>');
     console.log(`superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}`);
     console.log(`paymaster=${paymasterInit}`);
     console.log(`paymasterFactory=${paymasterFactory}`);
     console.log(`paymasterOperator=${paymasterOperator}`);
     console.log(`priceFeed=${priceFeed}`);
-    console.log(`mode=${mode}`);
+    console.log(`signing=${dryRun ? 'dry-run' : 'keystore'}`);
+    console.log(`signer=${signerAddress ?? 'none'}`);
     console.log(`pollIntervalSec=${pollIntervalSec.toString()}`);
     console.log(`safetyMarginSec=${safetyMarginSec.toString()}`);
     console.log(`healthIntervalSec=${healthIntervalSec.toString()}`);
@@ -429,31 +460,8 @@ async function main() {
     console.log('dm: message bot /start first');
     console.log('group/channel: add bot and allow posting');
 
-    let passwordFilePath: string | null = null;
-    const keystorePath = getArgValue(args, '--keystore');
-    const castAccount = getArgValue(args, '--cast-account') || process.env.DEPLOYER_ACCOUNT;
-    const passwordFromEnv = process.env.CAST_KEYSTORE_PASSWORD;
-
-    if (mode === 'cast') {
-        if (!keystorePath && castAccount?.startsWith('0x')) {
-            throw new Error('cast mode: when providing an address, use --keystore <path> instead of --cast-account');
-        }
-        if (!keystorePath && !castAccount) {
-            throw new Error('cast mode requires --keystore or --cast-account (or DEPLOYER_ACCOUNT in env)');
-        }
-        if (!dryRun) {
-            const pw = passwordFromEnv || (await promptHidden('Keystore password: '));
-            const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aastar-keeper-'));
-            passwordFilePath = path.join(dir, 'pw');
-            await fs.promises.writeFile(passwordFilePath, pw, { mode: 0o600 });
-        }
-    }
-
-    const keeperKey = (process.env.KEEPER_PRIVATE_KEY || process.env.PRIVATE_KEY_SUPPLIER) as `0x${string}` | undefined;
-    const keeperAccount = keeperKey ? privateKeyToAccount(keeperKey) : null;
-    const walletClient = keeperAccount
-        ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
-        : null;
+    const headChain = adaptHeadChain(publicClient);
+    let sender: Sender | null = null;
 
     const updatesTodayByPaymaster = new Map<string, number>();
     let dayStartSec = nowSec();
@@ -466,68 +474,107 @@ async function main() {
     let lastPaymasterHealthOk: boolean | null = null;
     const chainlinkDecimalsCache = new Map<string, number>();
 
-    const cleanup = async () => {
-        try {
-            if (passwordFilePath) {
-                await fs.promises.rm(path.dirname(passwordFilePath), { recursive: true, force: true });
-            }
-        } catch {}
+    const countedTx = new Set<string>();
+    const refusedReasons = new Set<string>();
+    let nextIdentityAt = 0;
+    let lastIdentityOkAt = 0;
+    let identityGateKey = '';
+    let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
+
+    const alertLine = (msg: string) => {
+        console.error(msg);
+        void sendTelegramMessage(`[keeper] ${msg}`);
     };
 
-    const waitForReceiptOrState = async (params: {
-        kind: 'super' | 'paymaster';
-        target: `0x${string}`;
-        txHash: string;
-        beforeUpdatedAt: bigint;
-        expectedUpdatedAt: bigint;
-    }): Promise<'receipt' | 'state' | 'pending'> => {
-        const hash = params.txHash as `0x${string}`;
-        try {
-            await publicClient.waitForTransactionReceipt({
-                hash,
-                timeout: 10 * 60 * 1000,
-                pollingInterval: 2000
-            });
-            return 'receipt';
-        } catch (e: any) {
-            const msg = e?.message || String(e);
-            if (!/Timed out/i.test(msg)) throw e;
-        }
+    function readFailed(problems: string[]): IdentityResult {
+        return { ok: false, kind: 'read-failed', problems };
+    }
 
-        const deadlineMs = Date.now() + 10 * 60 * 1000;
-        while (Date.now() < deadlineMs) {
-            try {
-                if (params.kind === 'super') {
-                    const cache = await publicClient.readContract({
-                        address: params.target,
-                        abi: SUPERPAYMASTER_ABI,
-                        functionName: 'cachedPrice'
-                    });
-                    const updatedAt = cache[1] as bigint;
-                    if (updatedAt > params.beforeUpdatedAt && updatedAt >= params.expectedUpdatedAt) return 'state';
-                } else {
-                    const pmCache = await publicClient.readContract({
-                        address: params.target,
-                        abi: PAYMASTER_V4_ABI,
-                        functionName: 'cachedPrice'
-                    });
-                    const updatedAt = (pmCache as any)?.updatedAt !== undefined ? (pmCache as any).updatedAt : (pmCache as any)[1];
-                    const u = BigInt(updatedAt);
-                    if (u > params.beforeUpdatedAt && u >= params.expectedUpdatedAt) return 'state';
-                }
-            } catch {}
-            await sleepMs(3000);
+    async function evaluateIdentity(): Promise<IdentityResult> {
+        if (!signerAddress) return readFailed(['signer missing']);
+        const head = await headChain.latestHeader();
+        if (!head) return readFailed(['latest block unavailable']);
+        const sp = superPaymaster as Address;
+        const registryAddr = registryFlag ?? (canonical?.registry as Address | undefined);
+        if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
+            return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
-        return 'pending';
-    };
+        return checkSignerIdentity({
+            chain: asIdentityChain(headChain),
+            blockHash: head.hash,
+            signer: signerAddress,
+            sp,
+            registry: registryAddr,
+            deployers: [DEPLOYER_ADDRESS],
+        });
+    }
+
+    async function maybeAlertLowBalance(): Promise<void> {
+        if (!signerAddress) return;
+        const nowMs = Date.now();
+        if (nowMs < balanceClock.nextCheckAt) return;
+        let balance: bigint | null = null;
+        try {
+            const raw = await publicClient.getBalance({ address: signerAddress });
+            balance = typeof raw === 'bigint' ? raw : null;
+        } catch {
+            balance = null;
+        }
+        const noted = noteBalance({ nowMs, clock: balanceClock, balance, thresholdWei: lowBalanceWei });
+        balanceClock = noted.clock;
+        if (!noted.alert) return;
+        if (dryRun) console.log(noted.alert);
+        else alertLine(noted.alert);
+    }
+
+    let releaseLock: (() => Promise<void>) | null = null;
+    const refreshAlerted = new Set<string>();
+    try {
+    if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
+        releaseLock = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
+        const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
+        const opened = await journal.load();
+        if (opened === 'corrupt' || opened === 'mismatch') {
+            const reason = opened === 'mismatch' ? 'sender: journal belongs to another signer' : 'sender: journal corrupt';
+            console.error(reason);
+            await sendTelegramMessage(`[keeper] ${reason}`);
+            await releaseLock();
+            process.exit(1);
+        }
+        sender = new Sender({
+            chain: adaptChainIO(publicClient),
+            signer: createCastSigner({ castBin, keystorePath, passwordFilePath, signerAddress }),
+            journal,
+            signerAddress,
+            chainId: config.chain.id,
+            alert: alertLine,
+        });
+    }
+    if (signerAddress) {
+        const identity = await evaluateIdentity();
+        if (!identity.ok) {
+            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+            await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`);
+            if (releaseLock) await releaseLock();
+            process.exit(1);
+        }
+        console.log('signer-identity=ok');
+        if (sender) {
+            const openedAt = Date.now();
+            sender.setGate({ price: true, pause: true, reason: '' });
+            nextIdentityAt = scheduledIdentityAt(openedAt);
+            lastIdentityOkAt = openedAt;
+            identityGateKey = 'open';
+        }
+    }
 
     const onExit = async (signal: string) => {
+        if (releaseLock) await releaseLock();
         await sendTelegramMessage(
             `[keeper] stopped (${signal})\nnetwork=${network}\n` +
                 `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
                 `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`
         );
-        await cleanup();
         process.exit(0);
     };
 
@@ -538,7 +585,7 @@ async function main() {
         `[keeper] started\nnetwork=${network}\n` +
             `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
             `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}\n` +
-            `mode=${mode}\ndryRun=${dryRun}`
+            `signing=${dryRun ? 'dry-run' : 'keystore'}\ndryRun=${dryRun}`
     );
 
     const getChainlinkDecimals = async (feed: `0x${string}`): Promise<number> => {
@@ -611,9 +658,11 @@ async function main() {
         console.log('');
         console.log(section(`TICK #${tickIndex} @ ${new Date().toISOString()}`));
         const currentSec = nowSec();
+        await maybeAlertLowBalance();
 
         if (currentSec - dayStartSec >= 86400n) {
             updatesTodayByPaymaster.clear();
+            countedTx.clear();
             dayStartSec = currentSec;
         }
 
@@ -721,27 +770,65 @@ async function main() {
             }
         }
 
-        const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
-            if (mode === 'cast') {
-                if (!passwordFilePath) throw new Error('cast mode requires password file (should have been created at startup)');
-                return await runCastSend({
-                    rpcUrl: config.rpcUrl,
-                    target,
-                    keystorePath: keystorePath || undefined,
-                    accountName: !keystorePath ? castAccount || undefined : undefined,
-                    passwordFilePath,
-                    gasPriceWei,
-                    processTimeoutMs: 90_000
-                });
+        const broadcastUpdate = async (
+            target: `0x${string}`,
+            kind: 'super' | 'paymaster',
+            abi: typeof SUPERPAYMASTER_ABI | typeof PAYMASTER_V4_ABI,
+            confirm: { before: bigint; expected: bigint }
+        ): Promise<void> => {
+            if (!sender) {
+                console.error('sender: not configured');
+                return;
             }
-            if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY or PRIVATE_KEY_SUPPLIER');
-            const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
-            return await walletClient.writeContract({
-                address: target,
-                abi,
-                functionName: 'updatePrice',
-                account: keeperAccount
-            });
+            const data = encodeFunctionData({ abi, functionName: 'updatePrice' });
+            const sendKind = kind === 'super' ? 'price-super' : 'price-paymaster';
+            let result: SendResult;
+            try {
+                result = await sender.send({ kind: sendKind, to: target, data });
+            } catch {
+                console.error('sender: send failed');
+                await sendTelegramMessage(`[keeper] send failed\nnetwork=${network}\nkind=${kind}`);
+                return;
+            }
+            const report = describePriceSend(result);
+            if (report.kind === 'refused') {
+                console.log(`refused: kind=${kind} reason=${report.reason}`);
+                if (noteRefusal(refusedReasons, report.reason)) {
+                    await sendTelegramMessage(`[keeper] send refused\nnetwork=${network}\nkind=${kind}\nreason=${report.reason}`);
+                }
+                return;
+            }
+            if (report.kind === 'blocked') {
+                console.log(`blocked: kind=${kind} inFlight=${report.hash}`);
+                return;
+            }
+            const txHash = report.hash;
+            if (!countedTx.has(txHash)) {
+                countedTx.add(txHash);
+                const updatesToday = updatesTodayByPaymaster.get(target) || 0;
+                updatesTodayByPaymaster.set(target, updatesToday + 1);
+            }
+            let confirmed = report.kind === 'reverted' ? 'reverted' : report.kind === 'receipt' ? 'receipt' : 'pending';
+            if (report.kind === 'pending') {
+                try {
+                    const cache = await publicClient.readContract({ address: target, abi, functionName: 'cachedPrice' });
+                    const updated = (cache as { updatedAt?: bigint })?.updatedAt ?? (cache as unknown as readonly unknown[])[1];
+                    if (typeof updated === 'bigint' && cacheConfirms(confirm.before, confirm.expected, updated)) confirmed = 'state-change';
+                } catch {
+                    confirmed = 'pending';
+                }
+            }
+            if (confirmed === 'receipt' || confirmed === 'state-change') refusedReasons.clear();
+            if (confirmed === 'pending') {
+                console.log(`pending: kind=${kind} tx=${txHash} (receipt timeout; will re-check next tick)`);
+            } else {
+                console.log(`confirmed: ${confirmed} kind=${kind} tx=${txHash}`);
+            }
+            const label = kind === 'super' ? 'superPaymaster' : 'paymaster';
+            console.log(`updated: ${label} tx=${txHash}`);
+            await sendTelegramMessage(
+                `[keeper] ${label} updatePrice broadcast\nnetwork=${network}\ntarget=${target}\ntx=${txHash}\nconfirmed=${confirmed}`
+            );
         };
 
         const refreshSuper = async () => {
@@ -782,33 +869,7 @@ async function main() {
             }
 
             console.log(`action=sendTx kind=super method=updatePrice() target=${superPaymaster}`);
-            let sendGasPrice: bigint | undefined;
-            try { sendGasPrice = await publicClient.getGasPrice(); } catch {}
-            const txHash = await sendUpdate(superPaymaster, 'super', sendGasPrice);
-            updatesTodayByPaymaster.set(superPaymaster, updatesToday + 1);
-
-            if (txHash) {
-                const confirmedBy = await waitForReceiptOrState({
-                    kind: 'super',
-                    target: superPaymaster,
-                    txHash,
-                    beforeUpdatedAt: cachedUpdatedAt,
-                    expectedUpdatedAt: chainlinkUpdatedAt
-                });
-                if (confirmedBy === 'receipt') {
-                    console.log(`confirmed: receipt kind=super tx=${txHash}`);
-                } else if (confirmedBy === 'state') {
-                    console.log(`confirmed: state-change kind=super tx=${txHash}`);
-                } else {
-                    console.log(`pending: kind=super tx=${txHash} (receipt timeout; will re-check next tick)`);
-                }
-                console.log(`updated: superPaymaster tx=${txHash}`);
-                await sendTelegramMessage(
-                    `[keeper] superPaymaster updatePrice broadcast\nnetwork=${network}\ntarget=${superPaymaster}\ntx=${txHash}\nconfirmed=${confirmedBy}`
-                );
-            } else {
-                console.log(`updated: tx hash not detected (cast output parse) target=${superPaymaster}`);
-            }
+            await broadcastUpdate(superPaymaster, 'super', SUPERPAYMASTER_ABI, { before: cachedUpdatedAt, expected: chainlinkUpdatedAt });
         };
 
         const refreshPaymaster = async () => {
@@ -904,33 +965,7 @@ async function main() {
             }
 
             console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster}`);
-            let sendGasPrice: bigint | undefined;
-            try { sendGasPrice = await publicClient.getGasPrice(); } catch {}
-            const txHash = await sendUpdate(paymaster, 'paymaster', sendGasPrice);
-            updatesTodayByPaymaster.set(paymaster, updatesToday + 1);
-
-            if (txHash) {
-                const confirmedBy = await waitForReceiptOrState({
-                    kind: 'paymaster',
-                    target: paymaster,
-                    txHash,
-                    beforeUpdatedAt: BigInt(pmCachedUpdatedAt),
-                    expectedUpdatedAt: pmChainlinkUpdatedAt
-                });
-                if (confirmedBy === 'receipt') {
-                    console.log(`confirmed: receipt kind=paymaster tx=${txHash}`);
-                } else if (confirmedBy === 'state') {
-                    console.log(`confirmed: state-change kind=paymaster tx=${txHash}`);
-                } else {
-                    console.log(`pending: kind=paymaster tx=${txHash} (receipt timeout; will re-check next tick)`);
-                }
-                console.log(`updated: paymaster tx=${txHash}`);
-                await sendTelegramMessage(
-                    `[keeper] paymaster updatePrice broadcast\nnetwork=${network}\ntarget=${paymaster}\ntx=${txHash}\nconfirmed=${confirmedBy}`
-                );
-            } else {
-                console.log(`updated: tx hash not detected (cast output parse) target=${paymaster}`);
-            }
+            await broadcastUpdate(paymaster, 'paymaster', PAYMASTER_V4_ABI, { before: BigInt(pmCachedUpdatedAt), expected: pmChainlinkUpdatedAt });
         };
 
         await refreshSuper();
@@ -966,14 +1001,49 @@ async function main() {
         }
     };
 
+    async function refreshIdentity(): Promise<boolean> {
+        if (!sender) return true;
+        const nowMs = Date.now();
+        if (!identityDue(nowMs, nextIdentityAt, sender.gateOpen())) return true;
+        const identity = await evaluateIdentity();
+        const decision = decideIdentityGate({
+            nowMs,
+            lastOkAt: lastIdentityOkAt,
+            previousKey: identityGateKey,
+            verdict: identity,
+        });
+        lastIdentityOkAt = decision.lastOkAt;
+        identityGateKey = decision.key;
+        sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason });
+        if (!identity.ok) {
+            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+        }
+        if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
+        if (identity.ok) nextIdentityAt = scheduledIdentityAt(nowMs);
+        return decision.pause;
+    }
+
     for (;;) {
         try {
-            await tick();
-        } catch (e: any) {
-            const msg = e?.message || String(e);
-            console.error(`[${new Date().toISOString()}] error: ${msg}`);
+            // Price keeper: no pause round. The step still takes the pause hooks; they never run.
+            await runKeeperStep({
+                refreshIdentity,
+                tick,
+                pauseDue: false,
+                network,
+                alerted: refreshAlerted,
+                alert: async (msg) => {
+                    console.error(msg);
+                    await sendTelegramMessage(`[keeper] ${msg}`);
+                },
+                onPause: async () => {},
+                onPauseSkipped: async () => {},
+            });
+        } catch (e: unknown) {
+            const report = loopErrorReport(network, e, 'error');
+            console.error(`[${new Date().toISOString()}] error: ${report.stderr}`);
             try {
-                await sendTelegramMessage(`[keeper] error\nnetwork=${network}\nmsg=${msg}`);
+                await sendTelegramMessage(report.telegram);
             } catch {}
         }
 
@@ -982,14 +1052,16 @@ async function main() {
         console.log(section(`SLEEP ${pollIntervalSec.toString()}s`));
         await new Promise((r) => setTimeout(r, Number(pollIntervalSec) * 1000));
     }
-
-    await cleanup();
+    } finally {
+        if (releaseLock) await releaseLock();
+    }
 }
 
 main().catch(async (e) => {
+    const report = loopErrorReport(activeNetwork, e, 'fatal');
     try {
-        await sendTelegramMessage(`[keeper] fatal\nmsg=${e?.message || String(e)}`);
+        await sendTelegramMessage(report.telegram);
     } catch {}
-    console.error(e);
+    console.error(report.stderr);
     process.exit(1);
 });

@@ -9,8 +9,9 @@
 #   ./run-keeper.sh sepolia --once          # one tick then exit
 #   ./run-keeper.sh sepolia --once --dry-run  # show what it would do, send nothing
 #
-# Everything is auto-wired:
-#   - the signing key is read from ./.env.<network>'s PRIVATE_KEY (no manual export)
+# Everything is auto-wired except the signer:
+#   - live runs need --keystore, --password-file and --signer (the key never enters this process)
+#   - --dry-run signs nothing and needs no keystore
 #   - the SuperPaymaster + PaymasterV4 addresses are baked in per network below
 #     (update the CONFIG block when a deployment changes)
 #
@@ -52,17 +53,17 @@ case "$NETWORK" in
     ;;
 esac
 
-# ── Auto-load the signing key from .env.<network> ─────────────────────────────
-ENV_FILE=".env.${NETWORK}"
-if [ -z "${KEEPER_PRIVATE_KEY:-}" ]; then
-  if [ -f "$ENV_FILE" ]; then
-    PK="$(grep -m1 '^PRIVATE_KEY=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'"' \r' || true)"
-    [ -n "$PK" ] && export KEEPER_PRIVATE_KEY="$PK"
+# Signing: an encrypted keystore. This script does not read PRIVATE_KEY from .env.<network>.
+if ! has_arg --dry-run "$@"; then
+  if ! has_arg --keystore "$@" || ! has_arg --password-file "$@" || ! has_arg --signer "$@"; then
+    echo "error: live runs require --keystore, --password-file and --signer (or pass --dry-run)" >&2
+    exit 1
   fi
 fi
-if [ -z "${KEEPER_PRIVATE_KEY:-}" ] && ! has_arg --dry-run "$@"; then
-  echo "error: no signing key — set PRIVATE_KEY in $ENV_FILE (or export KEEPER_PRIVATE_KEY)" >&2
-  exit 1
+
+CAST_ARGS=()
+if [ -n "${KEEPER_CAST_BIN:-}" ] && ! has_arg --cast-bin "$@"; then
+  CAST_ARGS+=(--cast-bin "$KEEPER_CAST_BIN")
 fi
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
@@ -88,4 +89,5 @@ exec pnpm exec tsx scripts/keeper.ts \
   --health-interval "${KEEPER_HEALTH_INTERVAL:-1800}" \
   --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" \
   --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" \
+  ${CAST_ARGS[@]+"${CAST_ARGS[@]}"} \
   "$@"

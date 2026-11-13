@@ -20,18 +20,26 @@ const dir = mkdtempSync(join(tmpdir(), 'run-keeper-'));
 const bin = join(dir, 'bin');
 mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
-writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\n');
+writeFileSync(
+    join(bin, 'pnpm'),
+    '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
+);
 chmodSync(join(bin, 'pnpm'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
-function run(args: string[], key = 'dummy-not-a-key') {
-    const r = spawnSync('bash', [join(dir, 'run-keeper.sh'), ...args], {
+const SIGN = ['--keystore', '/tmp/ks', '--password-file', '/tmp/pw', '--signer', '0x0000000000000000000000000000000000000001'];
+
+function run(args: string[], opts: { sign?: boolean } = {}) {
+    const full = opts.sign === false ? args : [...args, ...SIGN];
+    const r = spawnSync('bash', [join(dir, 'run-keeper.sh'), ...full], {
         cwd: dir,
         encoding: 'utf8',
-        env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_PRIVATE_KEY: key },
+        env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir },
     });
-    const argv = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: '));
-    return { status: r.status, stderr: r.stderr, argv };
+    const lines = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: '));
+    const envLines = lines.filter((l) => l.startsWith('ENV_'));
+    const argv = lines.filter((l) => !l.startsWith('ENV_'));
+    return { status: r.status, stderr: r.stderr, stdout: r.stdout, argv, envLines };
 }
 
 /** Every value passed for `flag`, in order. */
@@ -76,9 +84,22 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(valuesOf(r.argv, '--superpaymaster')).toEqual([]);
     });
 
-    it('no key: refuses unless --dry-run is passed exactly', () => {
-        expect(run(['sepolia', '--once'], '').status).toBe(1);
-        expect(run(['sepolia', '--once', '--dry-run-lookalike'], '').status).toBe(1);
-        expect(run(['sepolia', '--once', '--dry-run'], '').status).toBe(0);
+    it('no keystore flags: refuses unless --dry-run is passed exactly', () => {
+        const missing = run(['sepolia', '--once'], { sign: false });
+        expect(missing.status).toBe(1);
+        expect(missing.stderr).toMatch(/require --keystore/);
+        expect(run(['sepolia', '--once', '--keystore', '/tmp/ks'], { sign: false }).status).toBe(1);
+        expect(run(['sepolia', '--once', '--dry-run-lookalike'], { sign: false }).status).toBe(1);
+        expect(run(['sepolia', '--once', '--dry-run'], { sign: false }).status).toBe(0);
+    });
+
+    it('PRIVATE_KEY in .env.sepolia is not read and KEEPER_PRIVATE_KEY is not exported', () => {
+        const sentinel = 'not-a-real-key-sentinel';
+        writeFileSync(join(dir, '.env.sepolia'), `PRIVATE_KEY=${sentinel}\n`);
+        const r = run(['sepolia', '--once']);
+        expect(r.status).toBe(0);
+        expect(r.stdout).not.toContain(sentinel);
+        expect(r.envLines.join('\n')).not.toMatch(/KEEPER_PRIVATE_KEY|PRIVATE_KEY/);
+        expect(r.argv).not.toContain(sentinel);
     });
 });

@@ -1,10 +1,12 @@
-pnpm exec tsx scripts/keeper.ts \
-  --network op-mainnet \
+#!/usr/bin/env bash
+# Flag checks live in run-keeper.sh. Pass --keystore, --password-file and --signer, or --dry-run.
+set -euo pipefail
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec ./run-keeper.sh op-mainnet \
   --external-ethusd-url "https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT" \
   --poll-interval 180 \
   --safety-margin 600 \
-  --mode cast \
-  --cast-account optimism-deployer \
   --health-interval 1800 \
   --volatility-threshold-bps 150 \
-  --volatility-cooldown 600
+  --volatility-cooldown 600 \
+  "$@"
