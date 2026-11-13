@@ -137,6 +137,7 @@ const REFUSED = {
 const ALERT = {
     foreign: 'signer nonce moved outside this keeper',
     aboveFee: 'sender: above fee ceiling',
+    aboveGas: 'sender: above gas ceiling',
     sendCeiling: 'send ceiling exceeded — all sends closed',
     unavailable: 'nonce consumed, receipt unavailable',
 } as const;
@@ -198,7 +199,7 @@ export function defaultMaxSendsPerHour(pollIntervalSec: number): number {
 /**
  * The only authorization check. Price targets must be the configured addresses.
  * An unresolved PaymasterV4 or SuperPaymaster refuses that kind.
- * Replay passes enforceMaxGas false so a lowered --max-gas does not block an already-signed raw.
+ * Replay uses the same gas ceiling as a new signature.
  */
 export function checkIntent(
     kind: string,
@@ -230,6 +231,19 @@ export function bumpedFee(value: bigint): bigint {
     return (value * 125n + 99n) / 100n;
 }
 
+/** POSIX single quotes. A path longer than 4096, or one containing NUL, is rejected without being printed. */
+function shellQuote(value: string): string {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 4_096 || value.includes('\0')) {
+        throw new Error('sender: manual command rejected');
+    }
+    let out = "'";
+    for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        out += ch === "'" ? `'"'"'` : ch;
+    }
+    return `${out}'`;
+}
+
 /**
  * Operator command when --clear-stall is too early.
  * `$RPC_URL` is a shell instruction. The keeper does not print the URL.
@@ -244,12 +258,17 @@ export function manualStallCommand(input: {
     passwordFilePath: string;
     signer: string;
 }): string {
+    if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) throw new Error('sender: manual command rejected');
+    if (!Number.isSafeInteger(input.nonce) || input.nonce < 0) throw new Error('sender: manual command rejected');
+    if (typeof input.maxFeePerGas !== 'bigint' || typeof input.maxPriorityFeePerGas !== 'bigint') {
+        throw new Error('sender: manual command rejected');
+    }
     const fee = bumpedFee(input.maxFeePerGas);
     const tip = bumpedFee(input.maxPriorityFeePerGas);
     return `Read RPC_URL from the keeper env file (the value is not printed). `
         + `cast send --chain ${input.chainId} --rpc-url "$RPC_URL" --nonce ${input.nonce} `
         + `--gas-price ${fee} --priority-gas-price ${tip} `
-        + `--keystore ${input.keystorePath} --password-file ${input.passwordFilePath} ${input.signer} --value 0`;
+        + `--keystore ${shellQuote(input.keystorePath)} --password-file ${shellQuote(input.passwordFilePath)} ${shellQuote(input.signer)} --value 0`;
 }
 
 /** The one signing gate. The request is the exact object cast will receive. */
@@ -417,6 +436,9 @@ export class Sender {
     /** One lookup per nonce per tick. The epoch advances in tick(). */
     private receiptEpoch = 0;
     private readonly receiptEpochOf = new Map<number, number>();
+    /** In-memory flight. Stall timing does not re-read the journal. */
+    private flightSnap: { nonce: number; firstSentAt: number } | null = null;
+    private stallTimer: ReturnType<typeof setTimeout> | null = null;
 
     constructor(opts: {
         chain: ChainIO;
@@ -549,6 +571,7 @@ export class Sender {
     /** Refuse new work. An in-flight send already on the queue still finishes. */
     stop(): void {
         this.stopping = true;
+        this.clearStallTimer();
     }
 
     /** Copies. Mutating a returned event does not change the next drain. */
@@ -602,7 +625,10 @@ export class Sender {
     async maintain(): Promise<MaintainResult> {
         if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
         try {
-            return await this.enqueue(() => this.settle());
+            return await this.enqueue(async () => {
+                if (this.accountDirty) await this.persistAccount();
+                return this.settle();
+            });
         } catch {
             this.alertOnce(REFUSED.send);
             return { status: 'refused', reason: REFUSED.send };
@@ -716,16 +742,31 @@ export class Sender {
         if (loaded === 'unsafe') return REFUSED.unsafe;
         if (loaded === 'corrupt') return REFUSED.corrupt;
         if (loaded === 'barrier') return 'sender: journal barrier incomplete';
+        if (loaded === 'substituted') return 'sender: journal path substituted';
         return REFUSED.refusedJournal;
     }
 
     private async settle(): Promise<MaintainResult> {
         const loaded = await this.journal.load();
         if (loaded === 'missing') return { status: 'idle' };
+        if (loaded === 'barrier') {
+            const alarm = this.journal.alarmFlight();
+            if (alarm) this.noteFlight(alarm);
+            this.alertOnce('sender: journal barrier incomplete');
+            if (this.flightSnap && (this.stalled || this.stallDueSnap(this.flightSnap))) {
+                await this.declareStall(this.flightSnap, false);
+            }
+            return { status: 'refused', reason: 'sender: journal barrier incomplete' };
+        }
+        if (loaded === 'substituted') {
+            this.alertOnce('sender: journal path substituted');
+            return { status: 'refused', reason: 'sender: journal path substituted' };
+        }
         if (loaded !== 'ok') return { status: 'refused', reason: this.journalReason(loaded) };
         await this.hydrate();
         const flight = this.journal.inFlight();
         if (!flight) {
+            this.noteFlight(null);
             await this.noteForeign(null);
             if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
             return { status: 'idle' };
@@ -734,16 +775,16 @@ export class Sender {
     }
 
     private async serviceFlight(flight: InFlight): Promise<MaintainResult> {
+        this.noteFlight(flight);
         const overdue = this.stallDue(flight);
-        if (overdue || this.stalled) {
-            this.rememberStall(flight);
-            await this.emitStall(flight);
+        if (this.stalled) {
+            await this.emitStall(flight.nonce);
             if ((await this.seenChain()) === 'ok') {
-                const nonces = await this.readNonces();
-                if (nonces.kind === 'ok') {
-                    this.noteNonce(nonces.latest, nonces.pending, flight);
-                    if (nonces.latest > BigInt(flight.nonce)) {
-                        await this.consume(flight, nonces.latest);
+                const latest = await this.readLatest();
+                if (latest.kind === 'ok') {
+                    this.noteNonce(latest.latest, latest.latest, flight);
+                    if (latest.latest > BigInt(flight.nonce)) {
+                        await this.consume(flight, latest.latest);
                         return { status: 'refused', reason: REFUSED.stalled };
                     }
                 }
@@ -751,6 +792,7 @@ export class Sender {
             if (this.accountDirty) await this.persistAccount();
             return { status: 'refused', reason: REFUSED.stalled };
         }
+        if (overdue) return this.declareStall(flight, true);
         const chain = await this.seenChain();
         if (chain !== 'ok') {
             const reason = chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead;
@@ -775,22 +817,63 @@ export class Sender {
     }
 
     private stallDue(flight: InFlight): boolean {
+        return this.stallDueSnap(flight);
+    }
+
+    private stallDueSnap(flight: { firstSentAt: number }): boolean {
         const age = this.safeNow() - flight.firstSentAt;
         return Number.isSafeInteger(age) && age >= this.stallSec * 1000;
     }
 
     /** In-memory latch first. A failed journal write does not clear it. */
-    private rememberStall(flight: InFlight): void {
+    private rememberStall(nonce: number): void {
         if (this.stalled) return;
         this.stalled = true;
-        this.stalledNonce = flight.nonce;
+        this.stalledNonce = nonce;
         this.accountDirty = true;
     }
 
-    private async emitStall(flight: InFlight): Promise<void> {
-        const text = await this.stalenessText();
-        const message = `in-flight nonce ${flight.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${text}`;
-        this.alertOnce(`stall:${flight.nonce}`, message);
+    /**
+     * A new overdue flight whose latest nonce is already past it is settled with no latch.
+     * `keepFlight` is true when the caller still holds the journal flight for consume.
+     */
+    private async declareStall(flight: InFlight | { nonce: number; firstSentAt: number }, keepFlight: boolean): Promise<MaintainResult> {
+        if (!this.stalled && (await this.seenChain()) === 'ok') {
+            const latest = await this.readLatest();
+            if (latest.kind === 'ok' && latest.latest > BigInt(flight.nonce)) {
+                if (keepFlight) {
+                    this.noteFlight(null);
+                    return this.consume(flight as InFlight, latest.latest);
+                }
+                const loaded = await this.journal.load();
+                if (loaded === 'ok') {
+                    await this.hydrate();
+                    const open = this.journal.inFlight();
+                    if (open && open.nonce === flight.nonce) {
+                        this.noteFlight(null);
+                        return this.consume(open, latest.latest);
+                    }
+                }
+                this.noteFlight(null);
+                return { status: 'idle' };
+            }
+        }
+        this.rememberStall(flight.nonce);
+        await this.emitStall(flight.nonce);
+        if (this.accountDirty) await this.persistAccount();
+        return { status: 'refused', reason: REFUSED.stalled };
+    }
+
+    private async emitStall(nonce: number): Promise<void> {
+        let text = 'staleness unreadable';
+        try {
+            text = await this.stalenessText();
+        } catch {
+            text = 'staleness unreadable';
+        }
+        if (this.accountDirty) await this.persistAccount();
+        const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${text}`;
+        this.alertOnce(`stall:${nonce}`, message);
     }
 
     private async stalenessText(): Promise<string> {
@@ -806,8 +889,10 @@ export class Sender {
         }
         if (read.updatedAtSec < 0n || read.thresholdSec < 0n) return 'SuperPaymaster price staleness unreadable';
         const deadlineSec = read.updatedAtSec + read.thresholdSec;
-        if (deadlineSec > BigInt(Number.MAX_SAFE_INTEGER)) return 'SuperPaymaster price staleness unreadable';
+        // Date rejects values past ±8_640_000_000_000_000 ms. A larger second count must not throw.
+        if (deadlineSec > 8_640_000_000_000n) return 'staleness unreadable';
         const deadlineMs = Number(deadlineSec) * 1000;
+        if (!Number.isFinite(deadlineMs) || Math.abs(deadlineMs) > 8_640_000_000_000_000) return 'staleness unreadable';
         const iso = new Date(deadlineMs).toISOString();
         const left = deadlineMs - this.safeNow();
         const minutes = left <= 0 ? 0 : Math.ceil(left / 60_000);
@@ -832,9 +917,9 @@ export class Sender {
             this.alert(this.manualStep(0, fees));
             return { status: 'refused', reason: REFUSED.clearStall };
         }
-        const nonces = await this.readNonces();
-        if (nonces.kind !== 'ok') return { status: 'refused', reason: nonces.reason };
-        if (nonces.latest > BigInt(nonce)) {
+        const latest = await this.readLatest();
+        if (latest.kind !== 'ok') return { status: 'refused', reason: latest.reason };
+        if (latest.latest > BigInt(nonce)) {
             const snapshot: ReceiptSnapshot | null = flight
                 ? { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind }
                 : null;
@@ -843,7 +928,7 @@ export class Sender {
                     inFlight: null,
                     sentAt: [...this.sentAt],
                     ceilingClosed: this.ceilingClosed,
-                    lastLatest: nonces.latest,
+                    lastLatest: latest.latest,
                     stalled: false,
                     stalledNonce: null,
                 });
@@ -852,7 +937,8 @@ export class Sender {
             }
             this.stalled = false;
             this.stalledNonce = null;
-            this.lastLatest = nonces.latest;
+            this.lastLatest = latest.latest;
+            this.noteFlight(null);
             this.accountDirty = false;
             if (snapshot) this.deferReceipt(snapshot);
             return { status: 'cleared' };
@@ -878,6 +964,16 @@ export class Sender {
     }
 
     private async noteForeign(flight: InFlight | null): Promise<void> {
+        if (!flight) {
+            const latest = await this.readLatest();
+            if (latest.kind !== 'ok') return;
+            const unexplained = this.lastLatest !== null && latest.latest > this.lastLatest;
+            if (unexplained) this.alertOnce(ALERT.foreign);
+            const changed = this.lastLatest !== latest.latest;
+            this.lastLatest = latest.latest;
+            if (changed || this.accountDirty) await this.persistAccount();
+            return;
+        }
         const nonces = await this.readNonces();
         if (nonces.kind !== 'ok') return;
         await this.rememberNonce(nonces.latest, nonces.pending, flight);
@@ -902,6 +998,7 @@ export class Sender {
             return { status: 'refused', reason: REFUSED.journal };
         }
         this.accountDirty = false;
+        this.noteFlight(null);
         this.deferReceipt(snapshot);
         return { status: 'consumed', unseen: true, kind: flight.kind };
     }
@@ -1037,15 +1134,16 @@ export class Sender {
         return decoded.maxFeePerGas > this.maxFeeWei || decoded.maxPriorityFeePerGas > this.maxFeeWei;
     }
 
-    /** Journal metadata must match the decoded raw. Replay does not apply the current gas cap. */
-    private async decodedFlight(flight: InFlight): Promise<Decoded | null> {
+    /** Journal metadata must match the decoded raw. Replay applies the current gas cap. */
+    private async decodedFlight(flight: InFlight): Promise<Decoded | 'gas' | null> {
         const raw = flight.raws[flight.raws.length - 1];
         if (!raw) return null;
         const decoded = await decodeRaw(raw, this.signerAddress);
         if (!decoded) return null;
         if (decoded.nonce !== flight.nonce || decoded.gas !== flight.gasLimit) return null;
         if (decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) return null;
-        if (!checkIntent(flight.kind, asIntent(decoded), this.targets(), { enforceMaxGas: false })) return null;
+        if (decoded.gas > this.maxGas) return 'gas';
+        if (!checkIntent(flight.kind, asIntent(decoded), this.targets())) return null;
         return decoded;
     }
 
@@ -1058,6 +1156,10 @@ export class Sender {
         const raw = current.raws[current.raws.length - 1];
         if (!raw) return 'refused';
         const decoded = await this.decodedFlight(current);
+        if (decoded === 'gas') {
+            this.alertOnce(ALERT.aboveGas);
+            return 'above';
+        }
         if (!decoded) return 'refused';
         if (this.aboveCeiling(decoded)) {
             this.alertOnce(ALERT.aboveFee);
@@ -1081,7 +1183,7 @@ export class Sender {
                 chainId: this.chainId,
                 type: 'eip1559',
                 accessListEmpty: true,
-            }, this.targets(), { enforceMaxGas: false });
+            }, this.targets());
         });
         if (!allowed) return 'refused';
         return this.broadcast(raw, current);
@@ -1179,6 +1281,7 @@ export class Sender {
         } catch {
             return { status: 'refused', reason: REFUSED.journal };
         }
+        this.noteFlight(entry);
         const sent = await this.broadcast(signed.raw, entry);
         if (sent === 'gate') return this.refuseGate();
         if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
@@ -1252,8 +1355,15 @@ export class Sender {
         for (const at of account.sentAt) this.sentAt.push(at);
         this.ceilingClosed = account.ceilingClosed;
         if (this.lastLatest === null) this.lastLatest = account.lastLatest;
-        this.stalled = account.stalled === true;
-        this.stalledNonce = account.stalled ? account.stalledNonce : null;
+        if (account.stalled === true) {
+            this.stalled = true;
+            this.stalledNonce = account.stalledNonce;
+        } else if (this.stalled) {
+            this.accountDirty = true;
+        } else {
+            this.stalled = false;
+            this.stalledNonce = null;
+        }
         this.pruneSends();
         let reopen = false;
         if (this.resetSendCeiling && this.ceilingClosed && this.sentAt.length < this.maxSendsPerHour) {
@@ -1344,6 +1454,65 @@ export class Sender {
         } catch {
             return REFUSED.fee;
         }
+    }
+
+    private async readLatest(): Promise<{ kind: 'ok'; latest: bigint } | { kind: 'stop'; reason: string }> {
+        try {
+            const latest = await this.chain.getTransactionCount(this.signerAddress, 'latest');
+            if (typeof latest !== 'bigint' || latest < 0n) return { kind: 'stop', reason: REFUSED.nonce };
+            return { kind: 'ok', latest };
+        } catch {
+            return { kind: 'stop', reason: REFUSED.nonce };
+        }
+    }
+
+    private noteFlight(snap: { nonce: number; firstSentAt: number } | null): void {
+        if (!snap) {
+            this.flightSnap = null;
+            this.clearStallTimer();
+            return;
+        }
+        const next = { nonce: snap.nonce, firstSentAt: snap.firstSentAt };
+        const same = this.flightSnap !== null
+            && this.flightSnap.nonce === next.nonce
+            && this.flightSnap.firstSentAt === next.firstSentAt;
+        this.flightSnap = next;
+        if (!same) this.armWatchdog(next);
+    }
+
+    private clearStallTimer(): void {
+        if (this.stallTimer) clearTimeout(this.stallTimer);
+        this.stallTimer = null;
+    }
+
+    /** Wall-clock delay from the same clock `stallDue` uses. Re-armed per flight. Does not keep the process alive. */
+    private armWatchdog(snap: { nonce: number; firstSentAt: number }): void {
+        this.clearStallTimer();
+        const dueAt = snap.firstSentAt + this.stallSec * 1000;
+        let delay = dueAt - this.safeNow();
+        if (!Number.isFinite(delay) || delay < 0) delay = 0;
+        const maxDelay = 2_147_483_647;
+        const wait = delay > maxDelay ? maxDelay : delay;
+        const timer = setTimeout(() => {
+            this.stallTimer = null;
+            if (wait === maxDelay && this.safeNow() < dueAt) {
+                this.armWatchdog(snap);
+                return;
+            }
+            void this.enqueue(() => this.watchdogLocked(snap)).catch(() => {});
+        }, wait);
+        timer.unref?.();
+        this.stallTimer = timer;
+    }
+
+    private async watchdogLocked(snap: { nonce: number; firstSentAt: number }): Promise<void> {
+        if (this.stopping) return;
+        if (!this.flightSnap || this.flightSnap.nonce !== snap.nonce || this.flightSnap.firstSentAt !== snap.firstSentAt) return;
+        if (!this.stallDueSnap(snap) && !this.stalled) {
+            this.armWatchdog(snap);
+            return;
+        }
+        await this.declareStall(snap, false);
     }
 
     private async readNonces(): Promise<{ kind: 'ok'; latest: bigint; pending: bigint } | { kind: 'stop'; reason: string }> {

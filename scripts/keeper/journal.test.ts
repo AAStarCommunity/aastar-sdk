@@ -2,7 +2,7 @@
  * Single in-flight journal: durability, file checks, and the process-lifetime lock.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { link, open, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { connect } from 'node:net';
 import { createServer } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
+import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, pinJournalDirectory, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
 import { trustedScratch } from './trustScratch.js';
 
 const SIGNER = '0x3333333333333333333333333333333333333333' as Address;
@@ -214,7 +214,11 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         // Distinct from every other test file's signer: the lock port is derived from (chain, signer) and files run in parallel.
         const onceSigner = '0x5555555555555555555555555555555555555555' as Address;
         const root = dir();
-        const journalPath = join(root, 'once', 'journal.json');
+        // The live --once process pins the journal directory. /tmp is sticky, so the journal
+        // cannot live under TMPDIR. The lock holder above does not pin and stays on tmpdir.
+        const liveRoot = trustedScratch('journal-once');
+        dirs.push(liveRoot);
+        const journalPath = join(liveRoot, 'once', 'journal.json');
         const tsx = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
         if (!existsSync(tsx)) throw new Error('tsx loader missing');
         const holdScript = join(root, 'hold.ts');
@@ -373,6 +377,41 @@ describe('journal durability', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(await journal.load()).toBe('ok');
         expect(journal.account()).toEqual({ sentAt: [], ceilingClosed: false, lastLatest: null, stalled: false, stalledNonce: null });
         expect(journal.inFlight()?.broadcastOnce).toEqual([]);
+    });
+});
+
+describe('pinned journal directory', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('a renamed directory that is recreated is not read and is not rewritten', async () => {
+        const root = trustedScratch('jpin');
+        dirs.push(root);
+        const journalDir = join(root, 'jdir');
+        mkdirSync(journalDir, { mode: 0o700 });
+        const file = join(journalDir, 'journal.json');
+        const pin = await pinJournalDirectory(file);
+        const journal = new Journal(file, { chainId: 11155111, signer: SIGNER }, pin);
+        await journal.init();
+        const aside = join(root, 'aside');
+        renameSync(journalDir, aside);
+        mkdirSync(journalDir, { mode: 0o700 });
+        expect(await journal.load()).toBe('substituted');
+        await expect(journal.writeInFlight(null)).rejects.toThrow('journal: path substituted');
+        expect(existsSync(join(aside, 'journal.json'))).toBe(true);
+        expect(existsSync(join(journalDir, 'journal.json'))).toBe(false);
+        expect(readFileSync(join(aside, 'journal.json'), 'utf8').length).toBeGreaterThan(0);
+    });
+
+    it('refuses a sticky ancestor and does not print the path', async () => {
+        const root = trustedScratch('jsticky');
+        dirs.push(root);
+        const sticky = join(root, 'password-sentinel');
+        mkdirSync(sticky, { mode: 0o1755 });
+        chmodSync(sticky, 0o1755);
+        await expect(pinJournalDirectory(join(sticky, 'journal.json'))).rejects.toThrow(/^keeper: journal refused: sticky$/);
+        try {
+            await pinJournalDirectory(join(sticky, 'journal.json'));
+        } catch (error) {
+            expect(String(error)).not.toContain('password-sentinel');
+        }
     });
 });
 

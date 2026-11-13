@@ -4,7 +4,7 @@
 import { chmodSync, lstatSync, mkdirSync, realpathSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { trustedExecutable } from './trustedExecutable.js';
+import { entryPathFrom, loaderPathFromArgv, recheck, trustedExecutable, trustedPath } from './trustedExecutable.js';
 import { trustedScratch } from './trustScratch.js';
 
 const dirs: string[] = [];
@@ -79,5 +79,47 @@ describe('trusted executable', () => {
         chmodSync(first.file, 0o755);
         expect(lstatSync(first.file).ino).not.toBe(pin.ino);
         expect(() => pin.recheck()).toThrow('keeper: cast bin refused: changed');
+    });
+});
+
+describe('trusted path', () => {
+    it('refuses a sticky ancestor that is not group-writable and does not print the path', () => {
+        const root = trustedScratch('tpath');
+        dirs.push(root);
+        const sticky = join(root, 'password-sentinel');
+        mkdirSync(sticky, { mode: 0o1755 });
+        chmodSync(sticky, 0o1755);
+        const file = join(sticky, 'node');
+        writeFileSync(file, '#!/bin/sh\nexit 0\n');
+        chmodSync(file, 0o755);
+        expect(() => trustedPath(file, 'file')).toThrow(/^keeper: path refused: sticky$/);
+        try {
+            trustedPath(file, 'file');
+        } catch (error) {
+            expect(String(error)).not.toContain('password-sentinel');
+            expect(String(error)).not.toContain(file);
+        }
+    });
+
+    it('rejects a lookalike pin and a replaced inode', () => {
+        const made = bin('node');
+        const pin = trustedPath(made.file, 'file');
+        expect(Object.isFrozen(pin)).toBe(true);
+        expect(() => recheck({ path: pin.path, dev: pin.dev, ino: pin.ino })).toThrow('keeper: path refused: unreadable');
+        unlinkSync(made.file);
+        writeFileSync(made.file, '#!/bin/sh\nexit 1\n');
+        chmodSync(made.file, 0o755);
+        expect(() => recheck(pin)).toThrow('keeper: path refused: changed');
+    });
+
+    it('reads only an absolute local loader and entry', () => {
+        expect(loaderPathFromArgv(['--import', '/usr/local/lib/loader.mjs'])).toBe('/usr/local/lib/loader.mjs');
+        expect(loaderPathFromArgv(['--import=file:///usr/local/lib/loader.mjs'])).toBe('/usr/local/lib/loader.mjs');
+        expect(loaderPathFromArgv(['--import', 'tsx'])).toBeNull();
+        expect(loaderPathFromArgv(['--import', 'https://example.invalid/loader.mjs'])).toBeNull();
+        expect(loaderPathFromArgv(['--import'])).toBeNull();
+        expect(entryPathFrom('file:///usr/local/lib/keeper.ts', undefined)).toBe('/usr/local/lib/keeper.ts');
+        expect(entryPathFrom('http://example.invalid/keeper.ts', '/usr/local/lib/keeper.ts')).toBe('/usr/local/lib/keeper.ts');
+        expect(entryPathFrom('not-a-url', 'keeper.ts')).toBeNull();
     });
 });

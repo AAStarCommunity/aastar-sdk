@@ -315,7 +315,7 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(checkIntent('price-super', intent({ gas: 500_001n }), targets)).toBe(false);
     });
 
-    it('the gate expiring between check and broadcast cannot broadcast', async () => {
+    it('the gate expiring during the first-broadcast journal commit cannot broadcast', async () => {
         const h = harness();
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         await h.journal.init();
@@ -324,11 +324,27 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             gasLimit: 120_000n, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
         });
         h.setNonce(7n, 8n);
-        h.expireOnChainRead(2);
-        const settled = await h.sender.maintain();
+        const original = h.journal.commit.bind(h.journal);
+        let release: () => void = () => {};
+        const held = new Promise<void>((resolve) => { release = resolve; });
+        let waiting = false;
+        h.journal.commit = (async (next: Parameters<typeof h.journal.commit>[0]) => {
+            const count = next.inFlight?.broadcastOnce?.length ?? 0;
+            if (count > 0 && !waiting) {
+                waiting = true;
+                await held;
+            }
+            return original(next);
+        }) as typeof h.journal.commit;
+        const pending = h.sender.maintain();
+        const started = Date.now();
+        while (!waiting && Date.now() - started < 2_000) await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(waiting).toBe(true);
+        h.clock.now = 5_000;
+        release();
+        const settled = await pending;
         expect(settled.status).toBe('refused');
         expect(h.broadcasts).toEqual([]);
-        expect(h.chainReads()).toBeGreaterThanOrEqual(2);
     });
 
     it('exceeding the send ceiling closes all sends and alerts', async () => {
@@ -397,8 +413,10 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const again = await h.sender.maintain();
         expect(again.status).toBe('pending');
         expect(h.signed).toEqual([]);
-        expect(h.broadcasts).toEqual([raw]);
+        expect(h.broadcasts).toEqual([]);
+        expect(h.alerts).toContain('sender: above gas ceiling');
         expect(h.journal.inFlight()?.kind).toBe('price-paymaster');
+        expect(h.journal.inFlight()?.nonce).toBe(7);
     });
 
     it('a nonce jump outside the keeper alerts once and sends continue', async () => {
@@ -1175,6 +1193,111 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(line).toContain('--gas-price 263');
         expect(line).toContain('--priority-gas-price 13');
         expect(line).not.toMatch(/https?:/);
+    });
+
+    it('shell-quotes keystore and password paths that contain spaces and apostrophes', () => {
+        const keystorePath = "/tmp/keeper's keys/store";
+        const passwordFilePath = '/tmp/my pw/password';
+        const line = manualStallCommand({
+            chainId: CHAIN_ID, nonce: 7, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n,
+            keystorePath, passwordFilePath, signer: SIGNER,
+        });
+        expect(line).toContain(`--keystore '/tmp/keeper'"'"'s keys/store'`);
+        expect(line).toContain("--password-file '/tmp/my pw/password'");
+        expect(line).toContain(`'${SIGNER}'`);
+        expect(line).toContain('--rpc-url "$RPC_URL"');
+        expect(line).not.toContain('--keystore /tmp/keeper');
+    });
+
+    it('an overdue flight whose nonce is already mined is settled without a new stall latch', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        h.setNonce(8n, 8n);
+        h.clock.now = 1 + 600_000;
+        const settled = await h.sender.maintain();
+        expect(settled.status).toBe('consumed');
+        expect(h.journal.inFlight()).toBeNull();
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean };
+        expect(disk.stalled).toBe(false);
+        expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(false);
+    });
+
+    it('pending failure still settles and still clears a stall when latest is already past the nonce', async () => {
+        const settle = harness({ stallSec: 600 });
+        await plant(settle, { nonce: 7 });
+        settle.clock.now = 1 + 600_000;
+        settle.chain.getTransactionCount = async (_addr, tag) => {
+            if (tag === 'pending') throw new Error('pending-nonce-sentinel');
+            return 8n;
+        };
+        const consumed = await settle.sender.maintain();
+        expect(consumed.status).toBe('consumed');
+        expect(settle.alerts.join('\n')).not.toContain('pending-nonce-sentinel');
+        expect(settle.alerts.some((line) => line.includes('ALL sends closed'))).toBe(false);
+
+        const clear = harness({ stallSec: 600 });
+        await plant(clear, { nonce: 7 });
+        clear.setNonce(7n, 8n);
+        clear.clock.now = 1 + 600_000;
+        expect((await clear.sender.maintain()).status).toBe('refused');
+        clear.chain.getTransactionCount = async (_addr, tag) => {
+            if (tag === 'pending') throw new Error('pending-nonce-sentinel');
+            return 8n;
+        };
+        const cleared = await clear.sender.clearStall();
+        expect(cleared.status).toBe('cleared');
+        expect(clear.alerts.join('\n')).not.toContain('pending-nonce-sentinel');
+    });
+
+    it('a huge staleness threshold still alerts and persists the stall latch', async () => {
+        const h = harness({
+            stallSec: 600,
+            readStaleness: async () => ({ updatedAtSec: 0n, thresholdSec: 8_640_000_000_001n }),
+        });
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        const stalled = await h.sender.maintain();
+        expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        const alert = h.alerts.find((line) => line.includes('ALL sends closed')) ?? '';
+        expect(alert).toContain('staleness unreadable');
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number };
+        expect(disk.stalled).toBe(true);
+        expect(disk.stalledNonce).toBe(7);
+    });
+
+    it('the stall watchdog alerts while the journal barrier is failing and maintain is not called again', async () => {
+        const h = harness({ stallSec: 1, now: () => Date.now() });
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            return keccak256(raw);
+        };
+        const sent = await h.sender.send(h.job());
+        expect(sent.status).toBe('pending');
+        const { setDurabilityHooks } = await import('./journal.js');
+        setDurabilityHooks({
+            async write() { throw new Error('unused'); },
+            async fsyncFile() { throw new Error('unused'); },
+            async rename() { throw new Error('unused'); },
+            async link() { throw new Error('unused'); },
+            async fsyncDir() { throw new Error('barrier-sentinel'); },
+        });
+        try {
+            const deadline = Date.now() + 3_000;
+            while (Date.now() < deadline && !h.alerts.some((line) => line.includes('ALL sends closed'))) {
+                await new Promise((resolve) => setTimeout(resolve, 50));
+            }
+            expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+            expect(h.alerts.join('\n')).not.toContain('barrier-sentinel');
+            expect(h.broadcasts).toHaveLength(1);
+            setDurabilityHooks(null);
+            const again = await h.sender.send(h.job());
+            expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        } finally {
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
     });
 });
 

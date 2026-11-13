@@ -4,8 +4,7 @@
  * The RPC answers owner() the way SuperPaymaster 5.4.2 and Registry do. cast is a fake that must not be reached.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -112,7 +111,7 @@ function dummyCast(): { dir: string; cast: string } {
 
 async function expectRefuse(signer: Address, owners: { sp: Address; registry: Address }, text: string): Promise<void> {
     const { server, url } = await listen(owners);
-    const dir = mkdtempSync(join(tmpdir(), 'keeper-start-'));
+    const dir = trustedScratch('k-start');
     chmodSync(dir, 0o700);
     const pw = join(dir, 'password');
     const ks = join(dir, 'keystore');
@@ -171,7 +170,7 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
 
     it('refuses to start when --signer is the PaymasterV4 owner', async () => {
         const { server, url } = await listen({ sp: OTHER, registry: OTHER, paymaster: V4, paymasterOwner: SIGNER });
-        const dir = mkdtempSync(join(tmpdir(), 'keeper-start-'));
+        const dir = trustedScratch('k-start');
         chmodSync(dir, 0o700);
         const pw = join(dir, 'password');
         const ks = join(dir, 'keystore');
@@ -183,7 +182,7 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
         try {
             const child = spawn(process.execPath, [
                 '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
-                '--network', 'sepolia', '--no-logo', '--once',
+                '--network', 'sepolia', '--no-logo', '--once', '--disable-paymaster',
                 '--keystore', ks, '--password-file', pw, '--signer', SIGNER, '--max-fee-gwei', '1',
                 '--cast-bin', castLay.cast, '--journal', join(dir, 'journal.json'),
                 '--superpaymaster', SP, '--paymaster', V4, '--registry', REG,
@@ -218,7 +217,7 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
 
     it('exits 1 when the password file is not mode 0600', async () => {
         const { server, url } = await listen({ sp: OTHER, registry: OTHER });
-        const dir = mkdtempSync(join(tmpdir(), 'keeper-pw-'));
+        const dir = trustedScratch('k-pw');
         chmodSync(dir, 0o700);
         const pw = join(dir, 'password');
         const ks = join(dir, 'keystore');
@@ -255,7 +254,7 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
 
     it('exits 1 when the keeper lock is already held', async () => {
         const { server, url } = await listen({ sp: OTHER, registry: OTHER });
-        const dir = mkdtempSync(join(tmpdir(), 'keeper-lock-'));
+        const dir = trustedScratch('k-lock');
         chmodSync(dir, 0o700);
         const pw = join(dir, 'password');
         const ks = join(dir, 'keystore');
@@ -294,7 +293,7 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
 
     it('exits 1 when the journal directory barrier cannot be completed', async () => {
         const { server, url } = await listen({ sp: OTHER, registry: OTHER });
-        const dir = mkdtempSync(join(tmpdir(), 'keeper-barrier-'));
+        const dir = trustedScratch('k-barrier');
         chmodSync(dir, 0o700);
         const pw = join(dir, 'password');
         const ks = join(dir, 'keystore');

@@ -189,7 +189,7 @@ if (file) {
 const ANVIL_SP = getAddress('0xaC47e91215fb80462139756f43438402998E4A3a');
 const ANVIL_REG = getAddress('0xAD523115cd35a8d4E60B3C0953E0E0ac10418309');
 const ANVIL_FEED = getAddress('0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F');
-const V4_UNRESOLVED_ALERT = 'PaymasterV4 unresolved at startup; V4 price updates disabled until restart';
+const V4_OFF = 'PaymasterV4 not configured; V4 path off';
 
 /** Anvil factory. The first paymasterByOperator is startup. `later` is what any second call would return. */
 function anvilFactoryRpc(later: Address | null): { url: Promise<string>; factoryCalls: () => number } {
@@ -291,7 +291,7 @@ function keystore(dir: string): { keystore: string; password: string } {
 
 describe('live keeper loop', { timeout: 70_000 }, () => {
     it('holds the instance lock until a slow sign has finished writing', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const phase = join(root, 'phase.json');
         const clock = join(root, 'clock');
@@ -369,7 +369,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     }, 40_000);
 
     it('stops signing on privilege, keeps price through a read failure until the post-RPC deadline, then resumes', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const phase = join(root, 'phase.json');
         const clock = join(root, 'clock');
@@ -459,7 +459,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     }, 60_000);
 
     it('maintenance runs every tick without a new eligible update', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const phase = join(root, 'phase.json');
         const clock = join(root, 'clock');
@@ -525,7 +525,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     });
 
     it('ages the in-flight raw once on a keeper tick', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const phase = join(root, 'phase.json');
         const clock = join(root, 'clock');
@@ -578,7 +578,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     });
 
     it('the lock is not released before process exit', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const phase = join(root, 'phase.json');
         const clock = join(root, 'clock');
@@ -652,8 +652,8 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         await release();
     }, 40_000);
 
-    it('unresolved at startup never signs PaymasterV4, still signs SuperPaymaster, and alerts once', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+    it('an unconfigured PaymasterV4 stays off, still signs SuperPaymaster, and does not call the factory', async () => {
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const castLog = join(root, 'cast.log');
         writeFileSync(castLog, '');
@@ -678,8 +678,9 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
         });
         const log = readFileSync(castLog, 'utf8');
-        expect(out.split(V4_UNRESOLVED_ALERT).length - 1, out).toBe(1);
-        expect(out, out).toContain('paymaster=unresolved');
+        expect(out.split(V4_OFF).length - 1, out).toBe(1);
+        expect(out, out).toContain('paymaster=off');
+        expect(rpc.factoryCalls(), out).toBe(0);
         expect(out, out).not.toMatch(/kind=paymaster/);
         expect(log.split('SIGN').length - 1, out + log).toBe(1);
         expect(log.toLowerCase(), out + log).toContain(ANVIL_SP.toLowerCase());
@@ -687,7 +688,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     }, 40_000);
 
     it('a later factory answer during the run is never consulted', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const castLog = join(root, 'cast.log');
         writeFileSync(castLog, '');
@@ -713,7 +714,8 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
         });
         const log = readFileSync(castLog, 'utf8');
-        expect(rpc.factoryCalls(), out).toBe(1);
+        expect(rpc.factoryCalls(), out).toBe(0);
+        expect(out, out).toContain(V4_OFF);
         expect(log.toLowerCase(), out + log).not.toContain(later.toLowerCase());
         expect(log.split('SIGN').length - 1, out + log).toBe(1);
         expect(log.toLowerCase(), out + log).toContain(ANVIL_SP.toLowerCase());
@@ -721,7 +723,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
     }, 40_000);
 
     it('a broken SuperPaymaster read still signs a due PaymasterV4 update', async () => {
-        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        const root = trustedScratch('k-live');
         dirs.push(root);
         const castLog = join(root, 'cast.log');
         writeFileSync(castLog, '');

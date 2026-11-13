@@ -5,9 +5,7 @@
  * no .env.<network> file is reachable) with a fake `node` first on PATH that prints its argv and
  * exits. Nothing starts: keeper.ts is never executed. The script execs that node under `env -i`.
  *
- * Regression locked down (PR #425 review): a substring grep took --paymaster-missing-alert for
- * --paymaster, so the baked Sepolia V4 was silently dropped and the keeper refreshed a different
- * V4 — the outage this PR fixes, without an alert.
+ * A live invocation is refused. `--dry-run` still execs node. PaymasterV4 is not baked.
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
@@ -15,7 +13,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const BAKED_V4 = '0x2118e9a404C15F70B1D4f53b400c8a566A5ea4B6';
+const LIVE = 'live runs must start from the plist with absolute ProgramArguments; see docs/guide/keeper.md';
 const dir = mkdtempSync(join(tmpdir(), 'run-keeper-'));
 const bin = join(dir, 'bin');
 mkdirSync(bin);
@@ -63,32 +61,35 @@ const valuesOf = (argv: string[], flag: string) => argv.flatMap((a, i) => (a ===
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
 
 describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('--paymaster-missing-alert does not suppress the baked V4', () => {
-        const r = run(['sepolia', '--paymaster-missing-alert', '600']);
-        expect(r.status).toBe(0);
-        expect(valuesOf(r.argv, '--paymaster')).toEqual([BAKED_V4]);
-        expect(valuesOf(r.argv, '--paymaster-missing-alert')).toEqual(['600']);
+    it('a live run via the wrapper refuses and does not exec node', () => {
+        const live = run(['sepolia', '--once']);
+        expect(live.status).toBe(1);
+        expect(live.stderr).toContain(LIVE);
+        expect(live.argv).toEqual([]);
+        expect(live.envArgs).toEqual([]);
+        const main = spawnSync('bash', [join(dir, 'run-keeper.sh'), 'sepolia'], { cwd: dir, encoding: 'utf8' });
+        expect(main.status).toBe(1);
+        expect(main.stderr).toContain(LIVE);
     });
 
-    it('--paymaster-operator does not suppress the baked V4', () => {
-        const r = run(['sepolia', '--paymaster-operator', '0x00000000000000000000000000000000000000aa']);
-        expect(valuesOf(r.argv, '--paymaster')).toEqual([BAKED_V4]);
-    });
-
-    it('an explicit --paymaster replaces the baked one', () => {
+    it('dry-run does not bake a PaymasterV4 and still forwards an explicit one', () => {
+        const plain = run(['sepolia', '--dry-run', '--once'], { sign: false });
+        expect(plain.status, plain.stderr).toBe(0);
+        expect(valuesOf(plain.argv, '--paymaster')).toEqual([]);
         const mine = '0x00000000000000000000000000000000000000bb';
-        const r = run(['sepolia', '--paymaster', mine]);
-        expect(valuesOf(r.argv, '--paymaster')).toEqual([mine]);
+        const explicit = run(['sepolia', '--dry-run', '--paymaster', mine], { sign: false });
+        expect(explicit.status, explicit.stderr).toBe(0);
+        expect(valuesOf(explicit.argv, '--paymaster')).toEqual([mine]);
     });
 
-    it('an explicit --superpaymaster replaces the baked one', () => {
+    it('an explicit --superpaymaster is forwarded on a dry-run', () => {
         const mine = '0x00000000000000000000000000000000000000cc';
-        const r = run(['sepolia', '--superpaymaster', mine]);
+        const r = run(['sepolia', '--dry-run', '--superpaymaster', mine], { sign: false });
         expect(valuesOf(r.argv, '--superpaymaster')).toEqual([mine]);
     });
 
     it('a network with nothing baked starts with no address args (empty array under set -u)', () => {
-        const r = run(['op-mainnet', '--once']);
+        const r = run(['op-mainnet', '--dry-run', '--once'], { sign: false });
         expect(r.stderr).not.toMatch(/unbound variable/);
         expect(r.status).toBe(0);
         // The fake node really ran (not an early exit 0): it printed the keeper invocation.
@@ -100,11 +101,11 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(valuesOf(r.argv, '--superpaymaster')).toEqual([]);
     });
 
-    it('no keystore flags: refuses unless --dry-run is passed exactly', () => {
+    it('no keystore flags: a live run refuses; --dry-run is the only pass', () => {
         const missing = run(['sepolia', '--once'], { sign: false });
         expect(missing.status).toBe(1);
-        expect(missing.stderr).toMatch(/require --keystore/);
-        expect(run(['sepolia', '--once', '--keystore', '/tmp/ks'], { sign: false }).status).toBe(1);
+        expect(missing.stderr).toContain(LIVE);
+        expect(run(['sepolia', '--once', '--keystore', '/tmp/ks'], { sign: false }).stderr).toContain(LIVE);
         expect(run(['sepolia', '--once', '--dry-run-lookalike'], { sign: false }).status).toBe(1);
         expect(run(['sepolia', '--once', '--dry-run'], { sign: false }).status).toBe(0);
     });
@@ -112,7 +113,7 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
     it('PRIVATE_KEY in .env.sepolia is not read and KEEPER_PRIVATE_KEY is not exported', () => {
         const sentinel = 'not-a-real-key-sentinel';
         writeFileSync(join(dir, '.env.sepolia'), `PRIVATE_KEY=${sentinel}\n`);
-        const r = run(['sepolia', '--once']);
+        const r = run(['sepolia', '--dry-run', '--once'], { sign: false });
         expect(r.status).toBe(0);
         expect(r.stdout).not.toContain(sentinel);
         expect(r.envLines.join('\n')).not.toMatch(/KEEPER_PRIVATE_KEY|PRIVATE_KEY/);
@@ -140,7 +141,7 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(spawned).not.toContain(token);
         expect(spawned).not.toContain(url);
         expect(spawned).not.toContain('chat-sentinel');
-        expect(clean.envArgs[0]).toBe('-i');
+        expect(clean.envArgs).toEqual([]);
         expect(clean.argv.slice(0, 3)).toEqual(['--import', join(dir, 'node_modules', 'tsx', 'dist', 'loader.mjs'), 'scripts/keeper.ts']);
         expect(clean.argv).not.toContain('--external-ethusd-url');
         expect(clean.argv.join('\n')).not.toContain('ethusd-sentinel');
@@ -171,9 +172,9 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         mkdirSync(nodeBin);
         const node = join(nodeBin, 'node');
         writeFileSync(node, `#!/bin/sh
+trap 'echo TERM > "$HOME/got"; exit 0' TERM INT
 echo $$ > "$HOME/node.pid"
 printf '%s\\n' "$@" > "$HOME/argv.txt"
-trap 'echo TERM > "$HOME/got"; exit 0' TERM INT
 while true; do sleep 0.2; done
 `);
         chmodSync(node, 0o755);
@@ -231,5 +232,9 @@ while true; do sleep 0.2; done
         expect(mainOmitted.status, mainOmitted.stderr).toBe(0);
         expect(valuesOf(mainOmitted.argv, '--poll-interval')).toEqual(['180']);
         expect(valuesOf(mainOmitted.argv, '--volatility-threshold-bps')).toEqual(['150']);
+        const mainLive = main([]);
+        expect(mainLive.status).toBe(1);
+        expect(mainLive.stderr).toContain(LIVE);
+        expect(mainLive.argv).toEqual([]);
     });
 });

@@ -8,6 +8,7 @@ import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { Address, Hex } from 'viem';
+import { recheck, trustedPath, type PathPin } from './trustedExecutable.js';
 
 export type IntentKind = 'price-super' | 'price-paymaster';
 
@@ -197,10 +198,18 @@ async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'c
     return 'ok';
 }
 
-async function writeDurable(filePath: string, body: string, exclusive: boolean): Promise<void> {
+async function writeDurable(filePath: string, body: string, exclusive: boolean, pin: PathPin | null = null): Promise<void> {
     if (body.length === 0 || body.length > MAX_FILE_BYTES) throw new Error('journal: create failed');
     const dir = dirname(filePath);
-    await ensureDir(dir);
+    if (pin) {
+        try {
+            recheck(pin);
+        } catch {
+            throw new Error('journal: path substituted');
+        }
+    } else {
+        await ensureDir(dir);
+    }
     const target = join(dir, `.${basename(filePath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
     let fh: FileHandle;
     try {
@@ -512,27 +521,46 @@ export class Journal {
     private unsafe = false;
     /** Dir fsync failed after the new name was published. Replay stays closed until a barrier succeeds. */
     private needsBarrier = false;
+    /** Alarm-only copy. Set when a barrier read parses, and never used as a replay source. */
+    private alarm: { nonce: number; firstSentAt: number } | null = null;
     private readonly identity: JournalIdentity;
+    private readonly pin: PathPin | null;
 
-    constructor(readonly path: string, identity: JournalIdentity) {
+    constructor(readonly path: string, identity: JournalIdentity, pin?: PathPin | null) {
         if (typeof path !== 'string' || path.length === 0 || path.length > 4_096) {
             throw new Error('journal: path rejected');
         }
         if (!Number.isInteger(identity.chainId) || identity.chainId <= 0) throw new Error('journal: chainId rejected');
         if (!isAddress(identity.signer)) throw new Error('journal: signer rejected');
         this.identity = { chainId: identity.chainId, signer: identity.signer };
+        this.pin = pin ?? null;
+    }
+
+    /** Copy of the flight kept for the stall alarm. Null when the pinned path was substituted. */
+    alarmFlight(): { nonce: number; firstSentAt: number } | null {
+        if (!this.alarm) return null;
+        return { nonce: this.alarm.nonce, firstSentAt: this.alarm.firstSentAt };
     }
 
     /**
      * Re-opens the file on every call. A cached copy is not a successful read.
      * missing = no file yet. corrupt and unsafe stick. mismatch does not stick, so a replaced file can be read again.
      * barrier = the directory durability barrier has not succeeded. The bytes are not replayed.
+     * substituted = the pinned directory changed. The file is not read and the path is not recreated.
      */
-    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier'> {
+    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted'> {
         if (this.corrupt) return 'corrupt';
         if (this.unsafe) return 'unsafe';
-        if (!(await this.tryBarrier())) {
+        if (!this.pinHolds()) return 'substituted';
+        const barrierOk = await this.tryBarrier();
+        if (!this.pinHolds()) return 'substituted';
+        if (!barrierOk) {
             this.needsBarrier = true;
+            await this.captureAlarm();
+            if (!this.pinHolds()) {
+                this.alarm = null;
+                return 'substituted';
+            }
             return 'barrier';
         }
         this.needsBarrier = false;
@@ -553,6 +581,9 @@ export class Journal {
             return 'corrupt';
         }
         this.state = parsed;
+        this.alarm = parsed.inFlight
+            ? { nonce: parsed.inFlight.nonce, firstSentAt: parsed.inFlight.firstSentAt }
+            : null;
         return 'ok';
     }
 
@@ -624,7 +655,7 @@ export class Journal {
 
     private async publish(state: JournalState, exclusive: boolean): Promise<void> {
         try {
-            await writeDurable(this.path, serialize(state), exclusive);
+            await writeDurable(this.path, serialize(state), exclusive, this.pin);
         } catch (error) {
             if (error instanceof Error && error.message === 'journal: parent sync failed') this.needsBarrier = true;
             throw error;
@@ -632,14 +663,52 @@ export class Journal {
         this.needsBarrier = false;
     }
 
-    /** Re-run the directory barrier. A new process derives the same refusal when this fails. */
+    /** Re-run the directory barrier. A pinned directory is never recreated. */
     private async tryBarrier(): Promise<boolean> {
+        if (this.pin) {
+            if (!this.pinHolds()) return false;
+            try {
+                await durability.fsyncDir(this.pin.path);
+                return true;
+            } catch {
+                return false;
+            }
+        }
         try {
             await ensureDir(dirname(this.path));
             return true;
         } catch {
             return false;
         }
+    }
+
+    private pinHolds(): boolean {
+        if (!this.pin) return true;
+        try {
+            recheck(this.pin);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /** Parse nonce and firstSentAt for the alarm. Does not open the journal for replay. */
+    private async captureAlarm(): Promise<void> {
+        if (!this.pinHolds()) {
+            this.alarm = null;
+            return;
+        }
+        const read = await this.readText();
+        if (read.kind !== 'text') {
+            this.alarm = null;
+            return;
+        }
+        const parsed = parseState(read.text, this.identity);
+        if (!parsed || parsed === 'mismatch' || !parsed.inFlight) {
+            this.alarm = null;
+            return;
+        }
+        this.alarm = { nonce: parsed.inFlight.nonce, firstSentAt: parsed.inFlight.firstSentAt };
     }
 
     private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' } | { kind: 'text'; text: string }> {
@@ -661,6 +730,80 @@ export class Journal {
         } finally {
             await fh.close();
         }
+    }
+}
+
+const JOURNAL_TRUST_TOKENS = new Set([
+    'unreadable', 'owner', 'writable', 'sticky', 'directory', 'directory owner', 'directory writable',
+    'not a regular file', 'changed', 'kind', 'not absolute',
+]);
+
+function journalRefused(error: unknown): never {
+    const message = error instanceof Error ? error.message : '';
+    const mark = message.lastIndexOf(': ');
+    const token = mark >= 0 ? message.slice(mark + 2) : '';
+    throw new Error(`keeper: journal refused: ${JOURNAL_TRUST_TOKENS.has(token) ? token : 'unreadable'}`);
+}
+
+/**
+ * Pin the journal directory before a live run. Missing parents are created mode 0700 only
+ * after the nearest existing ancestor passes `trustedPath`. A later mismatch does not mkdir.
+ */
+export async function pinJournalDirectory(journalPath: string): Promise<PathPin> {
+    if (typeof journalPath !== 'string' || journalPath.length === 0 || journalPath.length > 4_096 || journalPath.includes('\0')) {
+        throw new Error('keeper: journal refused: unreadable');
+    }
+    const dir = dirname(resolve(journalPath));
+    const missing: string[] = [];
+    let cursor = dir;
+    let existing: string | null = null;
+    let hops = 0;
+    while (hops < 64) {
+        hops += 1;
+        let st: ReturnType<typeof lstatSync> | null = null;
+        try {
+            st = lstatSync(cursor);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('keeper: journal refused: unreadable');
+        }
+        if (st) {
+            if (!st.isDirectory() || st.isSymbolicLink()) throw new Error('keeper: journal refused: directory');
+            existing = cursor;
+            break;
+        }
+        missing.push(cursor);
+        const parent = dirname(cursor);
+        if (parent === cursor) break;
+        cursor = parent;
+    }
+    if (!existing) throw new Error('keeper: journal refused: unreadable');
+    let ancestor: PathPin;
+    try {
+        ancestor = trustedPath(existing, 'dir');
+    } catch (error) {
+        journalRefused(error);
+    }
+    for (const next of [...missing].reverse()) {
+        try {
+            recheck(ancestor);
+        } catch (error) {
+            journalRefused(error);
+        }
+        try {
+            await mkdir(next, { mode: 0o700 });
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw new Error('keeper: journal refused: unreadable');
+        }
+        try {
+            await chmod(next, 0o700);
+        } catch {
+            throw new Error('keeper: journal refused: unreadable');
+        }
+    }
+    try {
+        return trustedPath(dir, 'dir');
+    } catch (error) {
+        journalRefused(error);
     }
 }
 
@@ -728,11 +871,21 @@ async function closeServer(server: Server): Promise<void> {
  * Accepted sockets are destroyed immediately. The keeper process does not call the returned
  * release on shutdown: the kernel drops both sockets when the process exits.
  */
-export async function acquireKeeperLock(opts: { journalPath: string; chainId: number; signer: Address }): Promise<() => Promise<void>> {
+export async function acquireKeeperLock(opts: { journalPath: string; chainId: number; signer: Address; pin?: PathPin | null }): Promise<() => Promise<void>> {
     if (!Number.isInteger(opts.chainId) || opts.chainId <= 0) throw new Error('journal: chainId rejected');
     if (typeof opts.signer !== 'string' || opts.signer.length !== 42) throw new Error('journal: signer rejected');
-    await ensureJournalDir(opts.journalPath);
-    const parentReal = realpathSync(dirname(resolve(opts.journalPath)));
+    let parentReal: string;
+    if (opts.pin) {
+        try {
+            recheck(opts.pin);
+        } catch {
+            throw new Error('journal: path substituted');
+        }
+        parentReal = opts.pin.path;
+    } else {
+        await ensureJournalDir(opts.journalPath);
+        parentReal = realpathSync(dirname(resolve(opts.journalPath)));
+    }
     const fileKey = join(parentReal, basename(opts.journalPath));
     const signerServer = await listenLoopback(keeperLockPort(opts.chainId, opts.signer));
     let fileServer: Server;

@@ -151,18 +151,15 @@ async function runKeeper(rpc: string, extraArgs: string[], done: (out: string) =
 // to exit and for the pipes to drain; a per-test timeout overrides this default.
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 
-describe('keeper.ts main loop: V4 is resolved once at startup', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('unresolved at startup never sends a PaymasterV4 update and alerts once', async () => {
+describe('keeper.ts main loop: configured V4 is guarded at startup', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('unreadable PaymasterV4 bytecode refuses start and does not print the rpc error', async () => {
         const fake = await fakeRpc({ codeFails: true });
         cleanups.push(() => closeServer(fake.server));
-        const alert = 'PaymasterV4 unresolved at startup; V4 price updates disabled until restart';
-        const out = await runKeeper(fake.url, [], (o) => /TICK #2/.test(o));
-        expect(out.split(alert).length - 1).toBe(1);
-        expect(out).toMatch(/paymaster=unresolved/);
-        expect(out).toMatch(/super decision=/);
-        expect(out).not.toMatch(/kind=paymaster/);
+        const out = await runKeeper(fake.url, [], (o) => o.includes('keeper: paymaster bytecode unreadable'));
+        expect(out).toContain('keeper: paymaster bytecode unreadable');
         expect(out).not.toContain('header not found');
         expect(out).not.toContain('getBytecode');
+        expect(out).not.toMatch(/TICK #1/);
         expect(fake.codeCalls()).toBe(1);
     }, 60_000);
 
@@ -176,12 +173,12 @@ describe('keeper.ts main loop: V4 is resolved once at startup', { timeout: SPAWN
         expect(out.toLowerCase()).toMatch(new RegExp(`tick #1[\\s\\S]*action=sendtx kind=paymaster method=updateprice\\(\\) target=${V4.toLowerCase()}`));
     }, 60_000);
 
-    it('--disable-paymaster: V4 is never resolved', async () => {
+    it('--disable-paymaster still reads the configured V4 and sends no V4 update', async () => {
         const fake = await fakeRpc();
         cleanups.push(() => closeServer(fake.server));
         const out = await runKeeper(fake.url, ['--disable-paymaster'], (o) => /TICK #2/.test(o));
         expect(out).toMatch(/paymaster=disabled/);
-        expect(fake.codeCalls()).toBe(0);
+        expect(fake.codeCalls()).toBeGreaterThanOrEqual(1);
         expect(out).not.toMatch(/kind=paymaster/);
     }, 60_000);
 
