@@ -10,7 +10,9 @@ import { absoluteKeeperPath } from './keeper/cliPaths.js';
 import { createCastSigner, killCastChildren } from './keeper/castSigner.js';
 import { readDeploymentAddresses, type DeploymentAddresses } from './keeper/deploymentConfig.js';
 import { acquireKeeperLock, Journal, pinJournalDirectory } from './keeper/journal.js';
-import { exitAfterDrain, isCriticalAlert, retryCritical, trackAlert } from './keeper/exitAlerts.js';
+import { aclAllowsOthers } from './keeper/acl.js';
+import { criticalEventForGate, deliverCritical, exitAfterDrain, isCriticalEvent, resolveCritical, retryCritical, retryHeldCritical, trackAlert, type CriticalEvent } from './keeper/exitAlerts.js';
+import { rollupHealth } from './keeper/healthRollup.js';
 import { freshReadAlerts, noteTargetRead } from './keeper/readAlert.js';
 import { defaultMaxSendsPerHour, manualStallCommand, Sender, type MaintainResult, type SendResult, type SettlementEvent } from './keeper/sender.js';
 import { envFileRefusal, type ModeStat } from './keeper/startupGuards.js';
@@ -146,6 +148,9 @@ async function readKeeperEnvFile(filePath: string): Promise<Record<string, strin
         }
         const reason = envFileRefusal(modeStat(st), modeStat(parent), process.getuid?.());
         if (reason) throw new Error(reason);
+        if (aclAllowsOthers(filePath) || aclAllowsOthers(path.dirname(filePath))) {
+            throw new Error('keeper: env file refused: acl');
+        }
         if (st.size > 65_536) throw new Error('keeper: env file refused');
         const text = await fh.readFile({ encoding: 'utf8' });
         const parsed = parseKeeperEnv(text);
@@ -261,14 +266,28 @@ async function postTelegramOnce(text: string): Promise<boolean> {
     }
 }
 
-async function sendTelegramMessage(text: string): Promise<void> {
-    const critical = isCriticalAlert(text);
+async function sendTelegramMessage(text: string, event?: CriticalEvent): Promise<boolean> {
+    if (event && isCriticalEvent(event)) {
+        const work = deliverTelegram(text, event);
+        trackAlert(work);
+        return work;
+    }
     const work = (async () => {
-        const ok = await retryCritical(() => postTelegramOnce(text), critical, 10_000);
+        const ok = await postTelegramOnce(text);
         if (!ok) console.warn('[telegram] sendMessage failed');
+        return ok;
     })();
     trackAlert(work);
-    await work;
+    return work;
+}
+
+async function deliverTelegram(text: string, event: CriticalEvent): Promise<boolean> {
+    return deliverCritical({
+        event,
+        message: text,
+        now: Date.now(),
+        send: (message) => retryCritical(() => postTelegramOnce(message), true, 10_000),
+    });
 }
 
 async function finish(code: number): Promise<never> {
@@ -636,9 +655,9 @@ async function main() {
     let externalSkipAlerted = false;
     let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
 
-    const alertLine = (msg: string) => {
+    const alertLine = (msg: string): Promise<boolean> => {
         console.error(msg);
-        void sendTelegramMessage(`[keeper] ${msg}`);
+        return sendTelegramMessage(`[keeper] ${msg}`);
     };
     const readAlerts = freshReadAlerts();
 
@@ -762,6 +781,11 @@ async function main() {
         }
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress }, journalPin);
         const opened = await journal.load();
+        if (opened === 'deadline') {
+            console.error('keeper: journal progress deadline');
+            await sendTelegramMessage('[keeper] keeper: journal progress deadline');
+            await finish(1);
+        }
         if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe' || opened === 'substituted') {
             const reason = opened === 'mismatch'
                 ? 'sender: journal belongs to another signer'
@@ -791,7 +815,7 @@ async function main() {
         const decision = decideIdentityGate({ nowMs: openedAt, lastOkAt: 0, previousKey: '', verdict: identity });
         if (!identity.ok) {
             for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
-            await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`);
+            await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`, 'signer-refused');
             await finish(1);
         }
         console.log('signer-identity=ok');
@@ -980,6 +1004,7 @@ async function main() {
 
     const tick = async () => {
         sender?.tick();
+        await retryHeldCritical(Date.now(), (message) => postTelegramOnce(message));
         tickIndex += 1;
         console.log('');
         console.log(section(`TICK #${tickIndex} @ ${new Date().toISOString()}`));
@@ -1362,8 +1387,16 @@ async function main() {
             disablePaymaster ? 'disabled' : !paymaster ? 'off' : paymasterCacheOk === null ? 'unknown' : paymasterCacheOk ? '✅' : 'not-ok';
         console.log(`health superCache=${superHealth} paymasterCache=${paymasterHealth}`);
 
-        const superOk = disableSuperPaymaster ? true : superCacheOk;
-        const pmOk = disablePaymaster ? true : !paymaster ? false : Boolean(paymasterCacheOk);
+        const rolled = rollupHealth({
+            superDisabled: disableSuperPaymaster,
+            superCacheOk,
+            paymasterDisabled: disablePaymaster,
+            paymasterConfigured: Boolean(paymaster),
+            paymasterCacheOk,
+        });
+        const superOk = rolled.superOk;
+        const pmOk = rolled.paymasterOk;
+        const paymasterLabel = rolled.paymaster === 'ok' ? '✅ ok' : rolled.paymaster;
 
         const healthChanged =
             (lastSuperHealthOk !== null && lastSuperHealthOk !== superOk) || (lastPaymasterHealthOk !== null && lastPaymasterHealthOk !== pmOk);
@@ -1374,15 +1407,15 @@ async function main() {
             await sendTelegramMessage(
                 `[keeper] health change\nnetwork=${network}\n` +
                     `super=${disableSuperPaymaster ? 'disabled' : superOk ? '✅ ok' : 'not-ok'} remainingSec=${(validUntil > currentSec ? validUntil - currentSec : 0n).toString()}\n` +
-                    `paymaster=${disablePaymaster ? 'disabled' : !paymaster ? 'off' : pmOk ? '✅ ok' : 'not-ok'}\n` +
+                    `paymaster=${paymasterLabel}\n` +
                     `baseFee=${baseFeeInfo}`
             );
         }
 
-        if (telegramEnabled && currentSec - lastHealthNotifySec >= healthIntervalSec && superOk && pmOk) {
+        if (telegramEnabled && currentSec - lastHealthNotifySec >= healthIntervalSec && rolled.heartbeat) {
             lastHealthNotifySec = currentSec;
             await sendTelegramMessage(
-                `[keeper] ✅ health ok\nnetwork=${network}\n✅ super=ok\n✅ paymaster=ok\nbaseFee=${baseFeeInfo}`
+                `[keeper] ✅ health ok\nnetwork=${network}\n✅ super=ok\npaymaster=${paymasterLabel}\nbaseFee=${baseFeeInfo}`
             );
         }
     };
@@ -1402,8 +1435,12 @@ async function main() {
         sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
         if (decision.key !== 'open') console.error(`signer-identity: ${decision.key}`);
         if (!decision.price) sender.setPaymasterIdentity(false);
-        if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
+        const identityEvent = criticalEventForGate(decision.key);
+        if (decision.alert && identityEvent) await sendTelegramMessage(`[keeper] ${decision.alert}`, identityEvent);
+        else if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
         if (decision.key === 'open') {
+            resolveCritical('identity-expiry');
+            resolveCritical('signer-refused');
             nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
             const current = adoptedPaymaster();
             if (current) {

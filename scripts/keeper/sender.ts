@@ -17,6 +17,7 @@ import {
 import type { RawSigner, SignRequest } from './castSigner.js';
 import type { JournalAccount } from './journal.js';
 import { Journal, JOURNAL_HASH_CAP, type InFlight, type IntentKind } from './journal.js';
+import { CRITICAL_RETRY_MS, isCriticalEvent, type CriticalEvent } from './exitAlerts.js';
 import { replayRawAllowed } from './replayGuard.js';
 
 export const UPDATE_PRICE_DATA = encodeFunctionData({
@@ -143,6 +144,8 @@ const ALERT = {
 } as const;
 
 const HOUR_MS = 3_600_000;
+/** Counts against the hour until the first broadcast attempt stamps a real time. It never expires on its own. */
+const UNBROADCAST = Number.MAX_SAFE_INTEGER;
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -390,7 +393,8 @@ export class Sender {
     private readonly maxTipWei: bigint;
     private readonly maxSendsPerHour: number;
     private readonly stallSec: number;
-    private readonly alert: (msg: string) => void;
+    private readonly alert: (msg: string) => void | boolean | Promise<boolean | void>;
+    private readonly criticalPending = new Map<CriticalEvent, { key: string; message: string; last: number; inflight: boolean }>();
     private readonly now: () => number;
     private readonly paymaster: () => Address | null;
     private readonly superPaymaster: Address | null;
@@ -457,7 +461,7 @@ export class Sender {
         maxSendsPerHour: number;
         stallSec?: number;
         now?: () => number;
-        alert: (msg: string) => void;
+        alert: (msg: string) => void | boolean | Promise<boolean | void>;
         /** Clear a closed ceiling once the rolling hour has room again. */
         resetSendCeiling?: boolean;
         /** Cached updatedAt plus the on-chain staleness threshold, read when a stall is declared. */
@@ -544,6 +548,7 @@ export class Sender {
     tick(): void {
         this.receiptEpoch += 1;
         this.pumpReceipts();
+        this.flushCritical();
     }
 
     /** Price and pause scopes stay separate. Pause does not authorize a transaction. */
@@ -648,6 +653,7 @@ export class Sender {
         if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
         try {
             return await this.enqueue(async () => {
+                this.flushCritical();
                 if (this.accountDirty) await this.persistAccount();
                 return this.settle();
             });
@@ -707,10 +713,64 @@ export class Sender {
         return kind === 'price-super' || kind === 'price-paymaster';
     }
 
-    private alertOnce(key: string, message = key): void {
+    private alertOnce(key: string, message = key, event?: CriticalEvent): void {
+        if (event && isCriticalEvent(event)) {
+            const row = this.criticalPending.get(event);
+            if (!row) this.criticalPending.set(event, { key, message, last: -1, inflight: false });
+            this.flushCritical();
+            return;
+        }
         if (this.alerted.has(key)) return;
         this.alerted.add(key);
         this.alert(message);
+    }
+
+    /** Critical delivery is recorded only when `alert` returns true. Retries use the injected clock. */
+    private flushCritical(): void {
+        const now = this.safeNow();
+        for (const [event, row] of this.criticalPending) {
+            if (row.inflight) continue;
+            if (row.last >= 0 && now - row.last < CRITICAL_RETRY_MS) continue;
+            row.last = now;
+            row.inflight = true;
+            let result: unknown;
+            try {
+                result = this.alert(row.message);
+            } catch {
+                row.inflight = false;
+                continue;
+            }
+            const finish = (value: unknown) => {
+                row.inflight = false;
+                if (value === true && this.criticalPending.get(event) === row) {
+                    this.criticalPending.delete(event);
+                    this.alerted.add(row.key);
+                }
+            };
+            if (result !== null && result !== undefined && typeof (result as { then?: unknown }).then === 'function') {
+                void Promise.resolve(result).then(finish, () => {
+                    row.inflight = false;
+                });
+                continue;
+            }
+            finish(result);
+        }
+    }
+
+    private dropCritical(event: CriticalEvent): void {
+        this.criticalPending.delete(event);
+    }
+
+    private noteProgress(error: unknown): void {
+        if (error instanceof Error && error.message === 'journal: progress deadline') {
+            this.alertOnce('sender: journal progress deadline');
+        }
+    }
+
+    private async loadJournal(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted' | 'deadline'> {
+        const loaded = await this.journal.load();
+        if (loaded === 'deadline') this.alertOnce('sender: journal progress deadline');
+        return loaded;
     }
 
     private async seenChain(): Promise<'ok' | 'mismatch' | 'unreadable'> {
@@ -752,7 +812,7 @@ export class Sender {
     }
 
     private async openFlight(): Promise<InFlight | null | 'bad'> {
-        const loaded = await this.journal.load();
+        const loaded = await this.loadJournal();
         if (loaded === 'missing') return null;
         if (loaded !== 'ok') return 'bad';
         await this.hydrate();
@@ -765,11 +825,12 @@ export class Sender {
         if (loaded === 'corrupt') return REFUSED.corrupt;
         if (loaded === 'barrier') return 'sender: journal barrier incomplete';
         if (loaded === 'substituted') return 'sender: journal path substituted';
+        if (loaded === 'deadline') return 'sender: journal progress deadline';
         return REFUSED.refusedJournal;
     }
 
     private async settle(): Promise<MaintainResult> {
-        const loaded = await this.journal.load();
+        const loaded = await this.loadJournal();
         if (loaded === 'missing') return { status: 'idle' };
         if (loaded === 'barrier') {
             const alarm = this.journal.alarmFlight();
@@ -886,7 +947,7 @@ export class Sender {
                     this.noteFlight(null);
                     return this.consume(flight as InFlight, latest.latest);
                 }
-                const loaded = await this.journal.load();
+                const loaded = await this.loadJournal();
                 if (loaded === 'ok') {
                     await this.hydrate();
                     const open = this.journal.inFlight();
@@ -920,7 +981,7 @@ export class Sender {
         }
         const extra = text ?? 'price-staleness deadline: check on chain';
         const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
-        this.alertOnce(`stall:${nonce}`, message);
+        this.alertOnce(`stall:${nonce}`, message, 'stall');
     }
 
     private async stalenessText(): Promise<string> {
@@ -947,7 +1008,7 @@ export class Sender {
     }
 
     private async clearStallLocked(): Promise<{ status: 'cleared' | 'idle' | 'refused'; reason?: string }> {
-        const loaded = await this.journal.load();
+        const loaded = await this.loadJournal();
         if (loaded === 'missing') return { status: 'idle' };
         if (loaded !== 'ok') return { status: 'refused', reason: this.journalReason(loaded) };
         await this.hydrate();
@@ -970,6 +1031,8 @@ export class Sender {
             const snapshot: ReceiptSnapshot | null = flight
                 ? { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind }
                 : null;
+            const beforeStalled = this.stalled;
+            const beforeNonce = this.stalledNonce;
             try {
                 await this.journal.commit({
                     inFlight: null,
@@ -979,14 +1042,21 @@ export class Sender {
                     stalled: false,
                     stalledNonce: null,
                 });
-            } catch {
+            } catch (error) {
+                this.noteProgress(error);
                 return { status: 'refused', reason: REFUSED.journal };
+            }
+            if (this.stalled !== beforeStalled || this.stalledNonce !== beforeNonce) {
+                this.accountDirty = true;
+                if (!(await this.persistAccount())) return { status: 'refused', reason: REFUSED.journal };
+                return { status: 'refused', reason: REFUSED.stalled };
             }
             this.stalled = false;
             this.stalledNonce = null;
             this.lastLatest = latest.latest;
             this.noteFlight(null);
             this.accountDirty = false;
+            this.dropCritical('stall');
             if (snapshot) this.deferReceipt(snapshot);
             return { status: 'cleared' };
         }
@@ -1032,20 +1102,27 @@ export class Sender {
      */
     private async consume(flight: InFlight, latest?: bigint): Promise<MaintainResult> {
         const snapshot: ReceiptSnapshot = { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind };
+        const wroteStalled = this.stalled;
+        const wroteNonce = this.stalledNonce;
         try {
             await this.journal.commit({
                 inFlight: null,
                 sentAt: [...this.sentAt],
                 ceilingClosed: this.ceilingClosed,
                 lastLatest: latest ?? this.lastLatest,
-                stalled: this.stalled,
-                stalledNonce: this.stalledNonce,
+                stalled: wroteStalled,
+                stalledNonce: wroteNonce,
             });
-        } catch {
+        } catch (error) {
+            this.noteProgress(error);
             return { status: 'refused', reason: REFUSED.journal };
         }
-        this.accountDirty = false;
+        this.accountDirty = this.stalled !== wroteStalled || this.stalledNonce !== wroteNonce;
         this.noteFlight(null);
+        for (let attempt = 0; attempt < 2 && this.accountDirty; attempt += 1) {
+            if (!(await this.persistAccount())) return { status: 'refused', reason: REFUSED.journal };
+        }
+        if (this.accountDirty) return { status: 'refused', reason: REFUSED.journal };
         this.deferReceipt(snapshot);
         return { status: 'consumed', unseen: true, kind: flight.kind };
     }
@@ -1196,7 +1273,7 @@ export class Sender {
 
     /** Same raw. Free when this raw was already charged. A fee above the current ceiling is not sent. */
     private async rebroadcast(flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling' | 'above' | 'journal' | 'broadcast'> {
-        const loaded = await this.journal.load();
+        const loaded = await this.loadJournal();
         if (loaded !== 'ok') return 'refused';
         const current = this.journal.inFlight();
         if (!current) return 'refused';
@@ -1279,7 +1356,7 @@ export class Sender {
         if (beforeSign !== 'ok') return { status: 'refused', reason: beforeSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
         if (this.ceilingClosed || this.budgetExhausted()) {
             this.ceilingClosed = true;
-            this.alertOnce(ALERT.sendCeiling);
+            this.alertOnce(ALERT.sendCeiling, ALERT.sendCeiling, 'send-ceiling');
             if (!(await this.persistAccount())) return { status: 'refused', reason: REFUSED.journal };
             return { status: 'refused', reason: REFUSED.ceiling };
         }
@@ -1300,12 +1377,12 @@ export class Sender {
         const hash = keccak256(signed.raw);
         const entry: InFlight = {
             kind: job.kind,
-            nonce,
+            nonce: decoded.nonce,
             raws: [signed.raw],
             hashes: [hash],
-            gasLimit,
-            maxFeePerGas: fees.fee,
-            maxPriorityFeePerGas: fees.tip,
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
             attempts: 0,
             firstSentAt: this.safeNow(),
             broadcastOnce: [],
@@ -1313,13 +1390,13 @@ export class Sender {
         this.noteFlight(entry);
         if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (!(await replayRawAllowed(signed.raw, {
-            nonce,
+            nonce: decoded.nonce,
             kind: job.kind,
             to: decoded.to,
             data: decoded.data,
-            gasLimit,
-            maxFeePerGas: fees.fee,
-            maxPriorityFeePerGas: fees.tip,
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
         }, { chainId: this.chainId, signer: this.signerAddress }, () => true))) {
             if (!this.stalled) this.noteFlight(null);
             return { status: 'refused', reason: REFUSED.sign };
@@ -1337,7 +1414,8 @@ export class Sender {
         }
         try {
             await this.journal.writeInFlight(entry);
-        } catch {
+        } catch (error) {
+            this.noteProgress(error);
             if (!this.stalled) this.noteFlight(null);
             return { status: 'refused', reason: REFUSED.journal };
         }
@@ -1355,7 +1433,8 @@ export class Sender {
 
     /**
      * The fresh chain-id read is the last await before the synchronous gate check and the broadcast.
-     * A first broadcast commits the charge before that read. A raw is charged once.
+     * A first broadcast reserves a slot that does not expire until the attempt. The timestamp is
+     * written at or after that attempt. A raw is charged once.
      */
     private async broadcast(raw: Hex, flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling' | 'above' | 'journal' | 'broadcast'> {
         const decoded = await decodeRaw(raw, this.signerAddress);
@@ -1391,7 +1470,8 @@ export class Sender {
                     stalledNonce: wroteNonce,
                 });
                 this.accountDirty = this.stalled !== wroteStalled || this.stalledNonce !== wroteNonce;
-            } catch {
+            } catch (error) {
+                this.noteProgress(error);
                 this.hydrated = false;
                 this.accountDirty = true;
                 return 'journal';
@@ -1401,13 +1481,26 @@ export class Sender {
         if (this.stalled) return 'gate';
         if (chainOk !== 'ok') return 'chain';
         if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
+        let broadcastError = false;
         try {
             await this.chain.sendRawTransaction(raw);
         } catch {
+            broadcastError = true;
+        }
+        if (!(await this.anchorBroadcastCharge())) return 'journal';
+        if (broadcastError) {
             this.alertOnce(REFUSED.broadcast);
             return 'broadcast';
         }
         return 'ok';
+    }
+
+    /** Replace one unbroadcast reservation with the time after the attempt. */
+    private async anchorBroadcastCharge(): Promise<boolean> {
+        const idx = this.sentAt.indexOf(UNBROADCAST);
+        if (idx < 0) return true;
+        this.sentAt[idx] = this.safeNow();
+        return this.persistAccount();
     }
 
     private async hydrate(): Promise<void> {
@@ -1433,11 +1526,14 @@ export class Sender {
             reopen = true;
         }
         this.hydrated = true;
-        if (reopen) await this.persistAccount();
+        if (reopen) {
+            this.dropCritical('send-ceiling');
+            await this.persistAccount();
+        }
     }
 
     private async ensureJournal(): Promise<'ok' | string> {
-        const loaded = await this.journal.load();
+        const loaded = await this.loadJournal();
         if (loaded === 'missing') {
             try {
                 await this.journal.init();
@@ -1466,7 +1562,8 @@ export class Sender {
             });
             this.accountDirty = this.stalled !== wroteStalled || this.stalledNonce !== wroteNonce;
             return true;
-        } catch {
+        } catch (error) {
+            this.noteProgress(error);
             this.accountDirty = true;
             return false;
         }
@@ -1491,10 +1588,10 @@ export class Sender {
         this.pruneSends();
         if (this.sentAt.length >= this.maxSendsPerHour) {
             this.ceilingClosed = true;
-            this.alertOnce(ALERT.sendCeiling);
+            this.alertOnce(ALERT.sendCeiling, ALERT.sendCeiling, 'send-ceiling');
             return false;
         }
-        this.sentAt.push(this.safeNow());
+        this.sentAt.push(UNBROADCAST);
         return true;
     }
 
@@ -1589,7 +1686,7 @@ export class Sender {
         this.latchStall(snap.nonce);
         const extra = this.knownStaleness ?? 'price-staleness deadline: check on chain';
         const message = `in-flight nonce ${snap.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
-        this.alertOnce(`stall:${snap.nonce}`, message);
+        this.alertOnce(`stall:${snap.nonce}`, message, 'stall');
     }
 
     private async readNonces(): Promise<{ kind: 'ok'; latest: bigint; pending: bigint } | { kind: 'stop'; reason: string }> {

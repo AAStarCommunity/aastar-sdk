@@ -13,6 +13,8 @@ import {
     type Hex,
     type TransactionSerialized,
 } from 'viem';
+import { aclAllowsOthers } from './acl.js';
+import { keystoreRefusal, passwordRefusal, type NodeMeta } from './secretMode.js';
 import { pinCastBin, type PinnedExecutable } from './trustedExecutable.js';
 
 export interface SignRequest {
@@ -52,10 +54,6 @@ function hookCastExit(): void {
     });
 }
 
-function modeBits(mode: number): number {
-    return mode & 0o777;
-}
-
 function uid(): number {
     const id = process.getuid?.();
     if (id === undefined) throw new Error('secret file: process uid unavailable');
@@ -77,37 +75,42 @@ function openSecretStat(filePath: string, missing: string): Stats {
     }
 }
 
-/** Refuse to start unless the password file and its directory match the mode/owner rules. */
+function metaOf(st: Stats): NodeMeta {
+    return {
+        isFile: st.isFile(),
+        isDirectory: st.isDirectory(),
+        isSymbolicLink: st.isSymbolicLink(),
+        uid: st.uid,
+        mode: st.mode,
+    };
+}
+
+function parentStat(filePath: string, missing: string): Stats {
+    try {
+        return lstatSync(dirname(filePath));
+    } catch {
+        throw new Error(missing);
+    }
+}
+
+/** Refuse to start unless the password file, keystore, and their directories match the shared rules. */
 export function validateSecretFiles(keystorePath: string, passwordFilePath: string): void {
     const owner = uid();
     const pw = openSecretStat(passwordFilePath, 'secret file: password file is not a regular file');
-    if (!pw.isFile()) throw new Error('secret file: password file is not a regular file');
-    if (modeBits(pw.mode) !== 0o600) throw new Error('secret file: password file mode is not 0600');
-    if (pw.uid !== owner) throw new Error('secret file: password file owner is not the process uid');
-
-    let dir;
-    try {
-        dir = lstatSync(dirname(passwordFilePath));
-    } catch {
-        throw new Error('secret file: password directory mode is not 0700');
-    }
-    if (!dir.isDirectory() || dir.isSymbolicLink()) throw new Error('secret file: password directory mode is not 0700');
-    if (modeBits(dir.mode) !== 0o700) throw new Error('secret file: password directory mode is not 0700');
-    if (dir.uid !== owner) throw new Error('secret file: password directory owner is not the process uid');
+    const pwDir = parentStat(passwordFilePath, 'secret file: password directory mode is not 0700');
+    const pwReason = passwordRefusal(metaOf(pw), metaOf(pwDir), owner);
+    if (pwReason) throw new Error(pwReason);
 
     const ks = openSecretStat(keystorePath, 'secret file: keystore is not a regular file');
-    if (!ks.isFile()) throw new Error('secret file: keystore is not a regular file');
-    if (ks.uid !== owner) throw new Error('secret file: keystore owner is not the process uid');
-    if ((modeBits(ks.mode) & 0o022) !== 0) throw new Error('secret file: keystore is group or world writable');
-    let ksDir;
-    try {
-        ksDir = lstatSync(dirname(keystorePath));
-    } catch {
-        throw new Error('secret file: keystore directory is group or world writable');
+    const ksDir = parentStat(keystorePath, 'secret file: keystore directory is group or world writable');
+    const ksReason = keystoreRefusal(metaOf(ks), metaOf(ksDir), owner);
+    if (ksReason) throw new Error(ksReason);
+    if (
+        aclAllowsOthers(passwordFilePath) || aclAllowsOthers(dirname(passwordFilePath)) ||
+        aclAllowsOthers(keystorePath) || aclAllowsOthers(dirname(keystorePath))
+    ) {
+        throw new Error('secret file: acl rejected');
     }
-    if (!ksDir.isDirectory() || ksDir.isSymbolicLink()) throw new Error('secret file: keystore directory is group or world writable');
-    if (ksDir.uid !== owner) throw new Error('secret file: keystore directory owner is not the process uid');
-    if ((modeBits(ksDir.mode) & 0o022) !== 0) throw new Error('secret file: keystore directory is group or world writable');
 }
 
 function hexChars(value: string): boolean {

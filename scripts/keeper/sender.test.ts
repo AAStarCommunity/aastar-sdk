@@ -34,6 +34,7 @@ function harness(opts: {
     maxFeeWei?: bigint;
     maxTipWei?: bigint;
     stallSec?: number;
+    progressMs?: number;
     enabled?: { 'price-super': boolean; 'price-paymaster': boolean };
     paymaster?: () => Address | null;
     superPaymaster?: Address | null;
@@ -63,6 +64,10 @@ function harness(opts: {
     let signerData: Hex | null = null;
     let signerValue = 0n;
     let signerGas: bigint | null = null;
+    let signerNonce: number | null = null;
+    let signerFee: bigint | null = null;
+    let signerTip: bigint | null = null;
+    let deliver: (() => boolean | Promise<boolean>) | null = null;
     let signWait: Promise<void> | null = null;
     let releaseSign: () => void = () => {};
     let signEntered = false;
@@ -107,11 +112,14 @@ function harness(opts: {
             const to = signerTo ?? req.to;
             const data = signerData ?? req.data;
             const gas = signerGas ?? req.gasLimit;
+            const nonce = signerNonce ?? req.nonce;
+            const maxFeePerGas = signerFee ?? req.maxFeePerGas;
+            const maxPriorityFeePerGas = signerTip ?? req.maxPriorityFeePerGas;
             const raw = await signTransaction({
                 privateKey: KEY,
                 transaction: {
-                    type: 'eip1559', chainId: req.chainId, nonce: req.nonce, gas, maxFeePerGas: req.maxFeePerGas,
-                    maxPriorityFeePerGas: req.maxPriorityFeePerGas, to, value: signerValue, data,
+                    type: 'eip1559', chainId: req.chainId, nonce, gas, maxFeePerGas,
+                    maxPriorityFeePerGas, to, value: signerValue, data,
                 },
             });
             signed.push({
@@ -121,7 +129,7 @@ function harness(opts: {
             return raw;
         },
     };
-    const journal = new Journal(path, { chainId: CHAIN_ID, signer: SIGNER });
+    const journal = new Journal(path, { chainId: CHAIN_ID, signer: SIGNER }, null, opts.progressMs);
     const sender = new Sender({
         chain,
         signer,
@@ -137,7 +145,10 @@ function harness(opts: {
         stallSec: opts.stallSec,
         maxSendsPerHour: opts.maxSendsPerHour ?? 30,
         now: opts.now ?? (() => clock.now),
-        alert: (msg) => alerts.push(msg),
+        alert: (msg) => {
+            alerts.push(msg);
+            return deliver ? deliver() : undefined;
+        },
         resetSendCeiling: opts.resetSendCeiling,
         readStaleness: opts.readStaleness,
         manualStep: opts.manualStep,
@@ -154,12 +165,16 @@ function harness(opts: {
         setChainId(fn: () => Promise<number>) { chain.chainId = fn; },
         expireOnChainRead(n: number) { expireChainOnRead = n; },
         chainReads: () => chainReads,
-        tamperSigner(next: { to?: Address; data?: Hex; value?: bigint; gas?: bigint }) {
+        tamperSigner(next: { to?: Address; data?: Hex; value?: bigint; gas?: bigint; nonce?: number; fee?: bigint; tip?: bigint }) {
             signerTo = next.to ?? null;
             signerData = next.data ?? null;
             signerValue = next.value ?? 0n;
             signerGas = next.gas ?? null;
+            signerNonce = next.nonce ?? null;
+            signerFee = next.fee ?? null;
+            signerTip = next.tip ?? null;
         },
+        setDeliver(fn: (() => boolean | Promise<boolean>) | null) { deliver = fn; },
         holdReceipt(hash: Hex) { receipts.delete(hash.toLowerCase()); },
         throwReceipt(hash: Hex) { receipts.set(hash.toLowerCase(), 'throw'); },
         holdSign() {
@@ -186,7 +201,10 @@ function harness(opts: {
                 stallSec: over.stallSec ?? opts.stallSec,
                 maxSendsPerHour: over.maxSendsPerHour ?? opts.maxSendsPerHour ?? 30,
                 now: opts.now ?? (() => clock.now),
-                alert: (msg) => alerts.push(msg),
+                alert: (msg) => {
+            alerts.push(msg);
+            return deliver ? deliver() : undefined;
+        },
                 resetSendCeiling: over.resetSendCeiling,
                 readStaleness: opts.readStaleness,
                 manualStep: opts.manualStep,
@@ -1434,6 +1452,217 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             h.sender.stop();
         }
     });
+
+    it('keeps a stall latched during the consumption commit across restart until --clear-stall', async () => {
+        const h = harness({ stallSec: 1, now: () => Date.now() });
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
+        let arm = false;
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const { setDurabilityHooks } = await import('./journal.js');
+        const real = await import('node:fs/promises');
+        setDurabilityHooks({
+            async write(fh, body) {
+                if (arm && body.includes('"inFlight":null') && body.includes('"stalled":false')) {
+                    arm = false;
+                    await gate;
+                }
+                await fh.writeFile(body, 'utf8');
+            },
+            async fsyncFile(fh) { await fh.sync(); },
+            async rename(from, to) { await real.rename(from, to); },
+            async link(from, to) { await real.link(from, to); },
+            async fsyncDir(dirPath) {
+                const dh = await real.open(dirPath, 'r');
+                try { await dh.sync(); } finally { await dh.close(); }
+            },
+        });
+        try {
+            const sent = await h.sender.send(h.job());
+            expect(sent.status).toBe('pending');
+            arm = true;
+            const pending = h.sender.maintain();
+            const deadline = Date.now() + 4_000;
+            while (Date.now() < deadline && !h.alerts.some((line) => line.includes('ALL sends closed'))) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+            expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+            release();
+            await pending;
+            const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; inFlight: unknown };
+            expect(disk.stalled).toBe(true);
+            expect(disk.inFlight).toBeNull();
+            const restarted = h.reopen();
+            restarted.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
+            const still = await restarted.send(h.job());
+            expect(still).toEqual({ status: 'refused', reason: 'sender: stalled' });
+            const cleared = await restarted.clearStall();
+            expect(cleared.status).toBe('cleared');
+            const after = await restarted.send(h.job());
+            expect(after.status).toBe('pending');
+        } finally {
+            release();
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
+    });
+
+    it('anchors the hourly charge at the broadcast and keeps an unbroadcast reservation past an hour', async () => {
+        const h = harness({ maxSendsPerHour: 1, stallSec: 86_400 });
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
+        let bumpedCommit = false;
+        let reads = 0;
+        h.chain.chainId = async () => {
+            reads += 1;
+            if (reads === 3) h.clock.now += 10_000;
+            return CHAIN_ID;
+        };
+        const { setDurabilityHooks } = await import('./journal.js');
+        const real = await import('node:fs/promises');
+        setDurabilityHooks({
+            async write(fh, body) {
+                if (!bumpedCommit && body.includes('9007199254740991')) {
+                    bumpedCommit = true;
+                    h.clock.now += 10_000;
+                }
+                await fh.writeFile(body, 'utf8');
+            },
+            async fsyncFile(fh) { await fh.sync(); },
+            async rename(from, to) { await real.rename(from, to); },
+            async link(from, to) { await real.link(from, to); },
+            async fsyncDir(dirPath) {
+                const dh = await real.open(dirPath, 'r');
+                try { await dh.sync(); } finally { await dh.close(); }
+            },
+        });
+        try {
+            const first = await h.sender.send(h.job());
+            expect(first.status).toBe('pending');
+            const stampedBody = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[] };
+            expect(stampedBody.sentAt[0]).toBeGreaterThanOrEqual(21_000);
+            const stamped = stampedBody.sentAt[0] ?? 0;
+            await h.sender.maintain();
+            h.clock.now = stamped + 3_600_000 - 1;
+            const second = await h.sender.send(h.job());
+            expect(second).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
+            expect(h.broadcasts).toHaveLength(1);
+        } finally {
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
+
+        const held = harness({ maxSendsPerHour: 1, stallSec: 86_400 });
+        held.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
+        let heldReads = 0;
+        let failChain = true;
+        held.chain.chainId = async () => {
+            heldReads += 1;
+            if (failChain && heldReads >= 3) throw new Error('rpc down');
+            return CHAIN_ID;
+        };
+        const refused = await held.sender.send(held.job());
+        failChain = false;
+        expect(refused.status).toBe('refused');
+        expect(held.broadcasts).toEqual([]);
+        const reserved = JSON.parse(readFileSync(held.path, 'utf8')) as { sentAt: number[] };
+        expect(reserved.sentAt).toEqual([Number.MAX_SAFE_INTEGER]);
+        held.clock.now = 1_000 + 3_600_000 + 1;
+        held.setNonce(8n, 8n);
+        await held.sender.maintain();
+        const later = await held.sender.send(held.job());
+        expect(later).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
+        expect(held.broadcasts).toEqual([]);
+    });
+
+    it('retries an undelivered stall alert after five minutes and then stops once delivery succeeds', async () => {
+        const h = harness({ stallSec: 600 });
+        let up = false;
+        h.setDeliver(() => up);
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        const stalled = await h.sender.maintain();
+        expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        const stallLines = () => h.alerts.filter((line) => line.includes('ALL sends closed'));
+        expect(stallLines()).toHaveLength(1);
+        h.clock.now += 299_000;
+        h.sender.tick();
+        expect(stallLines()).toHaveLength(1);
+        h.clock.now += 1_000;
+        h.sender.tick();
+        expect(stallLines()).toHaveLength(2);
+        up = true;
+        h.clock.now += 300_000;
+        h.sender.tick();
+        expect(stallLines()).toHaveLength(3);
+        h.sender.tick();
+        expect(stallLines()).toHaveLength(3);
+    });
+
+    it('retries an undelivered send-ceiling alert on the same cadence', async () => {
+        const h = harness({ maxSendsPerHour: 1 });
+        let up = false;
+        h.setDeliver(() => up);
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
+        expect((await h.sender.send(h.job())).status).toBe('pending');
+        h.setNonce(8n, 8n);
+        await h.sender.maintain();
+        const closed = await h.sender.send(h.job());
+        expect(closed).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
+        const lines = () => h.alerts.filter((line) => line.includes('send ceiling exceeded'));
+        expect(lines()).toHaveLength(1);
+        h.clock.now += 300_000;
+        h.sender.tick();
+        expect(lines()).toHaveLength(2);
+        up = true;
+        h.clock.now += 300_000;
+        h.sender.tick();
+        expect(lines()).toHaveLength(3);
+        h.sender.tick();
+        expect(lines()).toHaveLength(3);
+    });
+
+    it('refuses a signed raw whose nonce, gas, max fee, or tip differs from the request', async () => {
+        const tampers: { nonce?: number; gas?: bigint; fee?: bigint; tip?: bigint }[] = [
+            { nonce: 8 },
+            { gas: 120_001n },
+            { fee: 311n },
+            { tip: 11n },
+        ];
+        for (const tamper of tampers) {
+            const h = harness();
+            h.tamperSigner(tamper);
+            const result = await h.sender.send(h.job());
+            expect(result).toEqual({ status: 'refused', reason: 'sender: sign failed' });
+            expect(h.broadcasts).toEqual([]);
+            expect(h.journal.inFlight()).toBeNull();
+        }
+    });
+
+    it('alerts and refuses when a journal fsync misses the progress deadline', async () => {
+        const h = harness({ progressMs: 40 });
+        const { setDurabilityHooks } = await import('./journal.js');
+        const real = await import('node:fs/promises');
+        setDurabilityHooks({
+            async write(fh, body) { await fh.writeFile(body, 'utf8'); },
+            async fsyncFile(fh) { await fh.sync(); },
+            async rename(from, to) { await real.rename(from, to); },
+            async link(from, to) { await real.link(from, to); },
+            async fsyncDir() { await new Promise(() => {}); },
+        });
+        try {
+            const started = Date.now();
+            const result = await h.sender.send(h.job());
+            expect(Date.now() - started).toBeLessThan(2_000);
+            expect(result).toEqual({ status: 'refused', reason: 'sender: journal progress deadline' });
+            expect(h.alerts).toContain('sender: journal progress deadline');
+            expect(JSON.stringify(result)).not.toContain('unused');
+            expect(h.broadcasts).toEqual([]);
+        } finally {
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
+    }, 2_000);
 });
 
 describe('authorizeSign is the signing gate on fees (#447 clestons M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {

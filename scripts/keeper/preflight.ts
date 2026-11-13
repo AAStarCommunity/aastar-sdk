@@ -4,11 +4,14 @@
  * The operator runs this with the pinned node before launchd loads the plist.
  * It stats paths and bind-tests lock ports. It does not read secret file contents.
  */
-import { lstatSync, opendirSync, realpathSync, type Dirent, type Stats } from 'node:fs';
+import { lstatSync, opendirSync, readlinkSync, realpathSync, type Dirent, type Stats } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { aclAllowsOthers } from './acl.js';
+import { envFileRefusal, type ModeStat } from './startupGuards.js';
 import { journalFileLockPort, keeperLockPort } from './journal.js';
+import { keystoreRefusal, passwordRefusal, type NodeMeta } from './secretMode.js';
 
 export const PREFLIGHT_BANNER = 'preflight guards against operator mistakes; it is not a security boundary';
 export const ENTRY_CAP = 300_000;
@@ -16,6 +19,7 @@ const PATH_MAX = 4_096;
 const NAME_MAX = 255;
 const ARG_MAX = 64;
 const HOPS_MAX = 64;
+const SYMLINK_HOPS = 40;
 
 const NETWORKS: Readonly<Record<string, number>> = Object.freeze({
     anvil: 31_337,
@@ -130,7 +134,17 @@ function trustedNode(st: Stats, uid: number): boolean {
     return (st.uid === uid || st.uid === 0) && (st.mode & 0o022) === 0;
 }
 
-function checkAncestors(report: Report, filePath: string, uid: number, label: string): boolean {
+type AclCache = Map<string, boolean>;
+
+function aclDenied(cache: AclCache, filePath: string): boolean {
+    const hit = cache.get(filePath);
+    if (hit !== undefined) return hit;
+    const denied = aclAllowsOthers(filePath);
+    cache.set(filePath, denied);
+    return denied;
+}
+
+function checkAncestors(report: Report, filePath: string, uid: number, label: string, cache: AclCache): boolean {
     let dir = dirname(filePath);
     const seen = new Set<string>();
     let hops = 0;
@@ -146,6 +160,10 @@ function checkAncestors(report: Report, filePath: string, uid: number, label: st
         }
         if (!st.isDirectory() || st.isSymbolicLink() || !trustedNode(st, uid)) {
             report.fail(label, 'ancestor');
+            return false;
+        }
+        if (aclDenied(cache, dir)) {
+            report.fail(label, 'acl');
             return false;
         }
         if (dir === '/') return true;
@@ -170,60 +188,92 @@ function statOf(abs: string): Stats | null {
     }
 }
 
-function considerFile(report: Report, walk: Walk, repo: string, abs: string, uid: number, mode: 'exact-0600' | 'file' | 'keystore'): void {
-    if (walk.capped) return;
-    const label = show(repo, abs);
-    const st = statOf(abs);
-    if (!st) {
-        report.fail(label, 'unreadable');
-        return;
-    }
-    if (st.isSymbolicLink()) {
-        let real: string;
-        try {
-            real = realpathSync(abs);
-        } catch {
-            report.fail(label, 'unreadable');
-            return;
-        }
-        const target = statOf(real);
-        if (!target) {
-            report.fail(label, 'unreadable');
-            return;
-        }
-        if (target.isDirectory()) {
-            walkDir(report, walk, repo, real, label, uid);
-            return;
-        }
-        judgeFile(report, target, uid, label, mode);
-        checkAncestors(report, real, uid, label);
-        return;
-    }
-    judgeFile(report, st, uid, label, mode);
-    checkAncestors(report, abs, uid, label);
+function metaOf(st: Stats): NodeMeta {
+    return {
+        isFile: st.isFile(),
+        isDirectory: st.isDirectory(),
+        isSymbolicLink: st.isSymbolicLink(),
+        uid: st.uid,
+        mode: st.mode,
+    };
 }
 
-function judgeFile(report: Report, st: Stats, uid: number, label: string, mode: 'exact-0600' | 'file' | 'keystore'): void {
+function modeStat(st: Stats): ModeStat {
+    return metaOf(st);
+}
+
+function readHop(linkPath: string): string | null {
+    let text: string;
+    try {
+        text = readlinkSync(linkPath);
+    } catch {
+        return null;
+    }
+    if (text.length === 0 || text.length > PATH_MAX || text.includes('\0')) return null;
+    if (isAbsolute(text)) return text;
+    return join(dirname(linkPath), text);
+}
+
+function considerFile(report: Report, walk: Walk, repo: string, abs: string, uid: number, mode: 'exact-0600' | 'file' | 'keystore' | 'env', cache: AclCache): void {
+    if (walk.capped) return;
+    const label = show(repo, abs);
+    if (!checkAncestors(report, abs, uid, label, cache)) return;
+    let current = abs;
+    const seen = new Set<string>();
+    for (let hop = 0; hop <= SYMLINK_HOPS; hop += 1) {
+        const st = statOf(current);
+        if (!st) {
+            report.fail(label, 'unreadable');
+            return;
+        }
+        if (aclDenied(cache, current)) {
+            report.fail(label, 'acl');
+            return;
+        }
+        if (st.isSymbolicLink()) {
+            if (mode === 'exact-0600' || mode === 'keystore' || mode === 'env') {
+                report.fail(label, 'not a regular file');
+                return;
+            }
+            if (hop === SYMLINK_HOPS || seen.has(current)) {
+                report.fail(label, 'symlink');
+                return;
+            }
+            seen.add(current);
+            const next = readHop(current);
+            if (!next || next.length > PATH_MAX) {
+                report.fail(label, 'unreadable');
+                return;
+            }
+            if (!checkAncestors(report, next, uid, label, cache)) return;
+            current = next;
+            continue;
+        }
+        if (st.isDirectory()) {
+            walkDir(report, walk, repo, current, label, uid, cache);
+            return;
+        }
+        judgeFile(report, st, uid, label, mode);
+        return;
+    }
+    report.fail(label, 'symlink');
+}
+
+function judgeFile(report: Report, st: Stats, uid: number, label: string, mode: 'exact-0600' | 'file' | 'keystore' | 'env'): void {
     if (!st.isFile() || st.isSymbolicLink()) {
         report.fail(label, 'not a regular file');
         return;
     }
-    if (mode === 'exact-0600') {
-        if (st.uid !== uid) {
-            report.fail(label, 'owner');
-            return;
-        }
-        if ((st.mode & 0o777) !== 0o600) {
-            report.fail(label, 'mode');
-            return;
-        }
-    } else if (mode === 'keystore') {
-        if (st.uid !== uid) {
-            report.fail(label, 'owner');
-            return;
-        }
-        if ((st.mode & 0o022) !== 0) {
-            report.fail(label, 'writable');
+    if (mode === 'exact-0600' || mode === 'keystore' || mode === 'env') {
+        const file = metaOf(st);
+        const dummyParent: NodeMeta = { isFile: false, isDirectory: true, isSymbolicLink: false, uid, mode: 0o40700 };
+        const reason = mode === 'keystore'
+            ? keystoreRefusal(file, dummyParent, uid)
+            : mode === 'env'
+                ? envFileRefusal(modeStat(st), { isFile: false, isDirectory: true, isSymbolicLink: false, uid, mode: 0o40700 }, uid)
+                : passwordRefusal(file, dummyParent, uid);
+        if (reason && (reason.includes('mode') || reason.includes('owner') || reason.includes('not a regular file'))) {
+            report.fail(label, reason.includes('owner') ? 'owner' : reason.includes('not a regular file') ? 'not a regular file' : 'mode');
             return;
         }
     } else if (!trustedNode(st, uid)) {
@@ -233,7 +283,7 @@ function judgeFile(report: Report, st: Stats, uid: number, label: string, mode: 
     report.pass(label);
 }
 
-function walkDir(report: Report, walk: Walk, repo: string, abs: string, label: string, uid: number): void {
+function walkDir(report: Report, walk: Walk, repo: string, abs: string, label: string, uid: number, cache: AclCache): void {
     if (walk.capped) return;
     const st = statOf(abs);
     if (!st || !st.isDirectory() || st.isSymbolicLink()) {
@@ -247,7 +297,11 @@ function walkDir(report: Report, walk: Walk, repo: string, abs: string, label: s
         report.fail(label, 'writable');
         return;
     }
-    if (!checkAncestors(report, abs, uid, label)) return;
+    if (aclDenied(cache, abs)) {
+        report.fail(label, 'acl');
+        return;
+    }
+    if (!checkAncestors(report, abs, uid, label, cache)) return;
     report.pass(label);
     let dir: ReturnType<typeof opendirSync>;
     try {
@@ -276,12 +330,23 @@ function walkDir(report: Report, walk: Walk, repo: string, abs: string, label: s
                 return;
             }
             const childLabel = label.startsWith('/') ? show(repo, child) : `${label}/${name}`;
-            if (entry.isSymbolicLink()) {
-                considerFile(report, walk, repo, child, uid, 'file');
+            if (name === '.git' && !entry.isSymbolicLink()) {
+                const git = statOf(child);
+                if (!git || !git.isDirectory() || git.isSymbolicLink()) {
+                    report.fail(childLabel, 'directory');
+                } else if (!trustedNode(git, uid)) {
+                    report.fail(childLabel, 'writable');
+                } else if (aclDenied(cache, child)) {
+                    report.fail(childLabel, 'acl');
+                } else {
+                    report.pass(childLabel);
+                }
+            } else if (entry.isSymbolicLink()) {
+                considerFile(report, walk, repo, child, uid, 'file', cache);
             } else if (entry.isDirectory()) {
-                walkDir(report, walk, repo, child, childLabel, uid);
+                walkDir(report, walk, repo, child, childLabel, uid, cache);
             } else if (entry.isFile()) {
-                considerFile(report, walk, repo, child, uid, 'file');
+                considerFile(report, walk, repo, child, uid, 'file', cache);
             } else {
                 report.fail(childLabel, 'not a regular file');
             }
@@ -316,24 +381,32 @@ function listenOnce(port: number): Promise<'free' | 'busy' | 'unreadable'> {
     });
 }
 
-function secretParent(report: Report, filePath: string, uid: number, label: string): void {
+function secretParent(report: Report, filePath: string, uid: number, label: string, kind: 'password' | 'keystore' | 'env', cache: AclCache): void {
     const parent = dirname(filePath);
     const st = statOf(parent);
+    const file = statOf(filePath);
     const shown = `${label} parent`;
-    if (!st || !st.isDirectory() || st.isSymbolicLink()) {
+    if (!st || !file) {
         report.fail(shown, 'parent');
         return;
     }
-    if (st.uid !== uid && st.uid !== 0) {
-        report.fail(shown, 'owner');
+    const reason = kind === 'password'
+        ? passwordRefusal(metaOf(file), metaOf(st), uid)
+        : kind === 'keystore'
+            ? keystoreRefusal(metaOf(file), metaOf(st), uid)
+            : envFileRefusal(modeStat(file), modeStat(st), uid);
+    if (reason) {
+        const why = reason.includes('owner') ? 'owner' : reason.includes('writable') || reason.includes('0700') || reason.includes('mode') ? 'writable' : 'parent';
+        if (reason.includes('directory') || reason.includes('parent')) report.fail(shown, why);
+        else report.fail(label, why);
         return;
     }
-    if ((st.mode & 0o022) !== 0) {
-        report.fail(shown, 'writable');
+    if (aclDenied(cache, parent) || aclDenied(cache, filePath)) {
+        report.fail(shown, 'acl');
         return;
     }
     report.pass(shown);
-    checkAncestors(report, parent, uid, shown);
+    checkAncestors(report, parent, uid, shown, cache);
 }
 
 /** Stat the configured paths and bind-test the lock ports. Exit code 0 only when every line is PASS. */
@@ -346,45 +419,64 @@ export async function runPreflight(config: PreflightConfig): Promise<PreflightRe
         return { code: 1, lines: report.lines };
     }
     const walk: Walk = { entries: 0, capped: false, seen: new Set<string>(), max: cfg.maxEntries };
+    const cache: AclCache = new Map();
 
-    considerFile(report, walk, cfg.repo, cfg.node, uid, 'file');
-    considerFile(report, walk, cfg.repo, cfg.castBin, uid, 'file');
+    considerFile(report, walk, cfg.repo, cfg.node, uid, 'file', cache);
+    considerFile(report, walk, cfg.repo, cfg.castBin, uid, 'file', cache);
 
     const repoSt = statOf(cfg.repo);
-    if (!repoSt || !repoSt.isDirectory() || repoSt.isSymbolicLink()) {
+    let repoReal = '';
+    if (!repoSt) {
         report.fail(show(cfg.repo, cfg.repo), 'directory');
-    } else {
-        let repoReal = cfg.repo;
+    } else if (repoSt.isSymbolicLink() || repoSt.isDirectory()) {
+        if (repoSt.isSymbolicLink()) considerFile(report, walk, cfg.repo, cfg.repo, uid, 'file', cache);
+        else walkDir(report, walk, cfg.repo, cfg.repo, cfg.repo, uid, cache);
         try {
             repoReal = realpathSync(cfg.repo);
         } catch {
             report.fail('repo', 'unreadable');
         }
+    } else {
+        report.fail(show(cfg.repo, cfg.repo), 'directory');
+    }
+    if (repoReal) {
         for (const rel of REQUIRED_FILES) {
-            considerFile(report, walk, repoReal, join(repoReal, rel), uid, 'file');
+            considerFile(report, walk, repoReal, join(repoReal, rel), uid, 'file', cache);
         }
-        considerFile(report, walk, repoReal, join(repoReal, `config.${cfg.network}.json`), uid, 'file');
-        considerFile(report, walk, repoReal, join(repoReal, 'scripts', 'keeper.ts'), uid, 'file');
-        walkDir(report, walk, repoReal, join(repoReal, 'scripts', 'keeper'), 'scripts/keeper', uid);
-        walkDir(report, walk, repoReal, join(repoReal, 'packages', 'core', 'src'), 'packages/core/src', uid);
-        walkDir(report, walk, repoReal, join(repoReal, 'node_modules'), 'node_modules', uid);
+        considerFile(report, walk, repoReal, join(repoReal, 'scripts', 'keeper.ts'), uid, 'file', cache);
+        const configName = `config.${cfg.network}.json`;
+        const configPath = join(repoReal, configName);
+        const configSt = statOf(configPath);
+        if (!configSt) {
+            const dirLabel = `${configName} directory`;
+            const dirSt = statOf(repoReal);
+            if (!dirSt || !dirSt.isDirectory() || dirSt.isSymbolicLink() || !trustedNode(dirSt, uid)) {
+                report.fail(dirLabel, 'directory');
+            } else if (aclDenied(cache, repoReal)) {
+                report.fail(dirLabel, 'acl');
+            } else if (checkAncestors(report, repoReal, uid, dirLabel, cache)) {
+                report.pass(dirLabel);
+            }
+        } else {
+            considerFile(report, walk, repoReal, configPath, uid, 'file', cache);
+        }
     }
 
     const journalSt = statOf(cfg.journalDir);
     if (!journalSt) {
         report.fail('journal-dir', 'missing');
     } else if (journalSt.isSymbolicLink()) {
-        considerFile(report, walk, cfg.repo, cfg.journalDir, uid, 'file');
+        considerFile(report, walk, cfg.repo, cfg.journalDir, uid, 'file', cache);
     } else {
-        walkDir(report, walk, cfg.repo, cfg.journalDir, 'journal-dir', uid);
+        walkDir(report, walk, cfg.repo, cfg.journalDir, 'journal-dir', uid, cache);
     }
 
-    considerFile(report, walk, cfg.repo, cfg.envFile, uid, 'exact-0600');
-    secretParent(report, cfg.envFile, uid, 'env-file');
-    considerFile(report, walk, cfg.repo, cfg.keystore, uid, 'keystore');
-    secretParent(report, cfg.keystore, uid, 'keystore');
-    considerFile(report, walk, cfg.repo, cfg.passwordFile, uid, 'exact-0600');
-    secretParent(report, cfg.passwordFile, uid, 'password-file');
+    considerFile(report, walk, cfg.repo, cfg.envFile, uid, 'env', cache);
+    secretParent(report, cfg.envFile, uid, 'env-file', 'env', cache);
+    considerFile(report, walk, cfg.repo, cfg.keystore, uid, 'keystore', cache);
+    secretParent(report, cfg.keystore, uid, 'keystore', 'keystore', cache);
+    considerFile(report, walk, cfg.repo, cfg.passwordFile, uid, 'exact-0600', cache);
+    secretParent(report, cfg.passwordFile, uid, 'password-file', 'password', cache);
 
     let journalReal: string | null = null;
     try {

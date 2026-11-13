@@ -47,6 +47,32 @@ function flight(over: Record<string, unknown> = {}) {
 }
 
 describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('rejects a progress deadline that is not a positive integer inside the cap', () => {
+        const path = join(dir(), 'journal.json');
+        const identity = { chainId: 11155111, signer: SIGNER };
+        expect(() => new Journal(path, identity, null, Number.NaN)).toThrow('journal: progress deadline rejected');
+        expect(() => new Journal(path, identity, null, 0)).toThrow('journal: progress deadline rejected');
+        expect(() => new Journal(path, identity, null, -1)).toThrow('journal: progress deadline rejected');
+        expect(() => new Journal(path, identity, null, 120_001)).toThrow('journal: progress deadline rejected');
+    });
+
+    it('load fails closed when the directory fsync never returns', async () => {
+        const path = join(dir(), 'journal.json');
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER }, null, 40);
+        setDurabilityHooks({
+            async write() { throw new Error('unused'); },
+            async fsyncFile() { throw new Error('unused'); },
+            async rename() { throw new Error('unused'); },
+            async link() { throw new Error('unused'); },
+            async fsyncDir() { await new Promise(() => {}); },
+        });
+        const started = Date.now();
+        const opened = await journal.load();
+        expect(opened).toBe('deadline');
+        expect(Date.now() - started).toBeLessThan(2_000);
+        expect(await journal.load()).toBe('deadline');
+    }, 2_000);
+
     it('stores one in-flight tx and drops hashes past the cap', async () => {
         const path = join(dir(), 'journal.json');
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });

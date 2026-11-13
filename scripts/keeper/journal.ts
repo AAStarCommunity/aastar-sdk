@@ -113,6 +113,29 @@ const realDurability: DurabilityHooks = {
 
 let durability: DurabilityHooks = realDurability;
 
+/** Bound on every journal fsync. A stuck filesystem await fails closed instead of hanging the process. */
+export const JOURNAL_PROGRESS_MS = 30_000;
+
+export function assertProgressMs(ms: number): number {
+    if (!Number.isInteger(ms) || ms <= 0 || ms > 120_000) throw new Error('journal: progress deadline rejected');
+    return ms;
+}
+
+function withProgress<T>(work: Promise<T>, ms: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('journal: progress deadline')), ms);
+        timer.unref?.();
+    });
+    return Promise.race([work, deadline]).finally(() => {
+        if (timer) clearTimeout(timer);
+    });
+}
+
+function isProgressDeadline(error: unknown): boolean {
+    return error instanceof Error && error.message === 'journal: progress deadline';
+}
+
 /** Test hook. Production uses the real filesystem. Pass null to restore it. */
 export function setDurabilityHooks(next: DurabilityHooks | null): void {
     durability = next ?? realDurability;
@@ -148,7 +171,7 @@ async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'c
     return 'ok';
 }
 
-async function writeDurable(filePath: string, body: string, exclusive: boolean, pin: PathPin | null = null): Promise<void> {
+async function writeDurable(filePath: string, body: string, exclusive: boolean, pin: PathPin | null = null, progressMs = JOURNAL_PROGRESS_MS): Promise<void> {
     if (body.length === 0 || body.length > MAX_FILE_BYTES) throw new Error('journal: create failed');
     const finalPath = pin ? join(pin.path, basename(filePath)) : filePath;
     const dir = dirname(finalPath);
@@ -160,8 +183,9 @@ async function writeDurable(filePath: string, body: string, exclusive: boolean, 
     const target = join(dir, `.${basename(finalPath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
     let fh: FileHandle;
     try {
-        fh = await open(target, OPEN_EXCL, 0o600);
-    } catch {
+        fh = await withProgress(open(target, OPEN_EXCL, 0o600), progressMs);
+    } catch (error) {
+        if (isProgressDeadline(error)) throw error;
         throw new Error('journal: create failed');
     }
     let published = false;
@@ -169,13 +193,13 @@ async function writeDurable(filePath: string, body: string, exclusive: boolean, 
         const kind = await rejectUnlessRegular(fh);
         if (kind !== 'ok') throw new Error('journal: create failed');
         await fh.chmod(0o600);
-        await durability.write(fh, body);
-        await durability.fsyncFile(fh);
+        await withProgress(durability.write(fh, body), progressMs);
+        await withProgress(durability.fsyncFile(fh), progressMs);
         await fh.close();
         fh = undefined as unknown as FileHandle;
         try {
-            if (exclusive) await durability.link(target, finalPath);
-            else await durability.rename(target, finalPath);
+            if (exclusive) await withProgress(durability.link(target, finalPath), progressMs);
+            else await withProgress(durability.rename(target, finalPath), progressMs);
             published = true;
         } catch (e) {
             const code = (e as NodeJS.ErrnoException).code;
@@ -191,8 +215,9 @@ async function writeDurable(filePath: string, body: string, exclusive: boolean, 
     }
     await unlink(target).catch(() => {});
     try {
-        await durability.fsyncDir(dir);
-    } catch {
+        await withProgress(durability.fsyncDir(dir), progressMs);
+    } catch (error) {
+        if (isProgressDeadline(error)) throw error;
         // The new name is visible. Replay stays closed until a later barrier succeeds.
         throw new Error('journal: parent sync failed');
     }
@@ -468,6 +493,9 @@ export class Journal {
     private unsafe = false;
     /** Dir fsync failed after the new name was published. Replay stays closed until a barrier succeeds. */
     private needsBarrier = false;
+    /** A journal await exceeded its deadline. Later loads stay closed. */
+    private progressFailed = false;
+    private readonly progressMs: number;
     /** Alarm-only copy. Set when a barrier read parses, and never used as a replay source. */
     private alarm: { nonce: number; firstSentAt: number } | null = null;
     private readonly identity: JournalIdentity;
@@ -475,7 +503,8 @@ export class Journal {
     /** Every read and write uses this path. A pin contributes its real directory, not the caller's string. */
     private readonly ioPath: string;
 
-    constructor(readonly path: string, identity: JournalIdentity, pin?: PathPin | null) {
+    constructor(readonly path: string, identity: JournalIdentity, pin?: PathPin | null, progressMs = JOURNAL_PROGRESS_MS) {
+        this.progressMs = assertProgressMs(progressMs);
         if (typeof path !== 'string' || path.length === 0 || path.length > 4_096 || path.includes('\0')) {
             throw new Error('journal: path rejected');
         }
@@ -500,15 +529,18 @@ export class Journal {
      * barrier = the directory durability barrier has not succeeded. The bytes are not replayed.
      * substituted = the pinned directory changed. The file is not read and the path is not recreated.
      */
-    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted'> {
+    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted' | 'deadline'> {
+        if (this.progressFailed) return 'deadline';
         if (this.corrupt) return 'corrupt';
         if (this.unsafe) return 'unsafe';
         if (!this.pinHolds()) return 'substituted';
         const barrierOk = await this.tryBarrier();
+        if (barrierOk === 'deadline') return 'deadline';
         if (!this.pinHolds()) return 'substituted';
         if (!barrierOk) {
             this.needsBarrier = true;
             await this.captureAlarm();
+            if (this.progressFailed) return 'deadline';
             if (!this.pinHolds()) {
                 this.alarm = null;
                 return 'substituted';
@@ -518,6 +550,7 @@ export class Journal {
         this.needsBarrier = false;
         const read = await this.readText();
         if (read.kind !== 'text') {
+            if (read.kind === 'deadline') return 'deadline';
             if (read.kind === 'missing') return 'missing';
             if (read.kind === 'corrupt') {
                 this.corrupt = true;
@@ -607,8 +640,9 @@ export class Journal {
 
     private async publish(state: JournalState, exclusive: boolean): Promise<void> {
         try {
-            await writeDurable(this.ioPath, serialize(state), exclusive, this.pin);
+            await writeDurable(this.ioPath, serialize(state), exclusive, this.pin, this.progressMs);
         } catch (error) {
+            if (isProgressDeadline(error)) this.progressFailed = true;
             if (error instanceof Error && error.message === 'journal: parent sync failed') this.needsBarrier = true;
             throw error;
         }
@@ -616,13 +650,18 @@ export class Journal {
     }
 
     /** Re-run the directory barrier. The directory is never created here. */
-    private async tryBarrier(): Promise<boolean> {
+    private async tryBarrier(): Promise<boolean | 'deadline'> {
+        if (this.progressFailed) return 'deadline';
         if (this.pin && !this.pinHolds()) return false;
         const dir = this.pin ? this.pin.path : dirname(this.ioPath);
         try {
-            await durability.fsyncDir(dir);
+            await withProgress(durability.fsyncDir(dir), this.progressMs);
             return true;
-        } catch {
+        } catch (error) {
+            if (isProgressDeadline(error)) {
+                this.progressFailed = true;
+                return 'deadline';
+            }
             return false;
         }
     }
@@ -651,11 +690,15 @@ export class Journal {
         this.alarm = { nonce: parsed.inFlight.nonce, firstSentAt: parsed.inFlight.firstSentAt };
     }
 
-    private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' } | { kind: 'text'; text: string }> {
+    private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' | 'deadline' } | { kind: 'text'; text: string }> {
         let fh: FileHandle;
         try {
-            fh = await open(this.ioPath, OPEN_READ);
+            fh = await withProgress(open(this.ioPath, OPEN_READ), this.progressMs);
         } catch (e) {
+            if (isProgressDeadline(e)) {
+                this.progressFailed = true;
+                return { kind: 'deadline' };
+            }
             const code = (e as NodeJS.ErrnoException).code;
             if (code === 'ENOENT') return { kind: 'missing' };
             return { kind: 'unsafe' };
@@ -663,9 +706,13 @@ export class Journal {
         try {
             const kind = await rejectUnlessRegular(fh);
             if (kind !== 'ok') return { kind };
-            const text = await fh.readFile({ encoding: 'utf8' });
+            const text = await withProgress(fh.readFile({ encoding: 'utf8' }), this.progressMs);
             return { kind: 'text', text };
-        } catch {
+        } catch (error) {
+            if (isProgressDeadline(error)) {
+                this.progressFailed = true;
+                return { kind: 'deadline' };
+            }
             return { kind: 'unsafe' };
         } finally {
             await fh.close();

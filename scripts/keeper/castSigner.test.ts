@@ -250,7 +250,7 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
     it('refuses a group-writable keystore and a group-writable keystore directory', () => {
         const lay = layout({ ks: 0o664 });
-        expect(() => validateSecretFiles(lay.ks, lay.pw)).toThrow('secret file: keystore is group or world writable');
+        expect(() => validateSecretFiles(lay.ks, lay.pw)).toThrow('secret file: keystore mode is not 0600');
         const root = mkdtempSync(join(tmpdir(), 'cast-ksdir-'));
         dirs.push(root);
         const pwDir = join(root, 'pw');
