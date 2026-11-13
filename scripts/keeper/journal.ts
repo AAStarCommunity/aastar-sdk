@@ -30,20 +30,18 @@ export interface InFlight {
     maxPriorityFeePerGas: bigint;
     attempts: number;
     firstSentAt: number;
-    /** Raw hashes whose first broadcast already took a send slot. Absent on a version-2 file. */
-    broadcastOnce?: Hex[];
 }
 
-/** Rolling-hour send budget persisted beside the in-flight tx. */
+/** Last observed mined nonce. The stall latch is a separate marker file, not this object. */
 export interface JournalAccount {
-    sentAt: number[];
-    ceilingClosed: boolean;
     /** Last observed mined nonce. Null until the first successful read. */
     lastLatest: bigint | null;
-    /** Human must clear a stall. A restart does not. */
-    stalled: boolean;
-    /** Nonce that stalled. Null when stalled is false. */
-    stalledNonce: number | null;
+}
+
+/** Old version-4 journals carried a stall. Startup turns it into a marker file. It is not written back. */
+export interface LegacyStall {
+    nonce: number;
+    firstSentAt: number;
 }
 
 export interface JournalIdentity {
@@ -55,7 +53,8 @@ interface JournalState extends JournalIdentity, JournalAccount {
     inFlight: InFlight | null;
 }
 
-const JOURNAL_VERSION = 4;
+const JOURNAL_VERSION = 5;
+const JOURNAL_VERSION_V4 = 4;
 const JOURNAL_VERSION_V3 = 3;
 const JOURNAL_VERSION_V2 = 2;
 const MAX_FILE_BYTES = 1_000_000;
@@ -67,12 +66,14 @@ export const JOURNAL_RAW_KEEP = 3;
 export const FEE_DIGIT_MAX = 78;
 const MAX_DATA_CHARS = 200_000;
 
-const ROOT_KEYS = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest', 'stalled', 'stalledNonce'];
+const ROOT_KEYS = ['version', 'chainId', 'signer', 'inFlight', 'lastLatest'];
+const ROOT_KEYS_V4 = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest', 'stalled', 'stalledNonce'];
 const ROOT_KEYS_V3 = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest'];
 const ROOT_KEYS_V2 = ['version', 'chainId', 'signer', 'inFlight'];
-const FLIGHT_KEYS = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt', 'broadcastOnce'];
+const FLIGHT_KEYS = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt'];
+const FLIGHT_KEYS_V4 = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt', 'broadcastOnce'];
 const FLIGHT_KEYS_V2 = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt'];
-/** sentAt entries kept on disk. The sender's hourly cap is far below this. */
+/** Old sentAt arrays are ignored. The cap still rejects a huge file before the values are walked. */
 const SENT_AT_CAP = 10_000;
 const KINDS = new Set<IntentKind>(['price-super', 'price-paymaster']);
 
@@ -136,6 +137,42 @@ function isProgressDeadline(error: unknown): boolean {
     return error instanceof Error && error.message === 'journal: progress deadline';
 }
 
+/** sysexits EX_SOFTWARE. launchd restarts the process; the kernel drops locks and fds. */
+export const JOURNAL_EXIT_CODE = 70;
+
+const FIXED_DEADLINE = 'journal: progress deadline';
+let deadlineAlert: (message: string) => void = () => {};
+let journalExit: (code: number) => never = (code) => process.exit(code);
+
+/** Sync only. The callback is not awaited. Pass null to restore the no-op alert. */
+export function setJournalDeadlineAlert(fn: ((message: string) => void) | null): void {
+    deadlineAlert = fn ?? (() => {});
+}
+
+/** Test hook. Production calls process.exit. */
+export function setJournalDeadlineExitForTest(fn: ((code: number) => never) | null): void {
+    journalExit = fn ?? ((code) => process.exit(code));
+}
+
+function dieDeadline(): never {
+    try {
+        deadlineAlert(FIXED_DEADLINE);
+    } catch {
+        // The alert must not replace the deadline, and its error is not forwarded.
+    }
+    journalExit(JOURNAL_EXIT_CODE);
+    throw new Error(FIXED_DEADLINE);
+}
+
+async function bounded<T>(work: Promise<T>, ms: number): Promise<T> {
+    try {
+        return await withProgress(work, ms);
+    } catch (error) {
+        if (isProgressDeadline(error)) dieDeadline();
+        throw error;
+    }
+}
+
 /** Test hook. Production uses the real filesystem. Pass null to restore it. */
 export function setDurabilityHooks(next: DurabilityHooks | null): void {
     durability = next ?? realDurability;
@@ -163,12 +200,20 @@ function directoryPinHolds(pin: PathPin): boolean {
     }
 }
 
-async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'corrupt'> {
-    const st = await fh.stat();
+async function rejectUnlessRegular(fh: FileHandle, progressMs: number): Promise<'ok' | 'unsafe' | 'corrupt'> {
+    const st = await bounded(fh.stat(), progressMs);
     const owner = process.getuid?.();
     if (!st.isFile() || owner === undefined || st.uid !== owner || (st.mode & 0o777) !== 0o600) return 'unsafe';
     if (st.size < 0 || st.size > MAX_FILE_BYTES) return 'corrupt';
     return 'ok';
+}
+
+async function closeBounded(fh: FileHandle, progressMs: number): Promise<void> {
+    await bounded(fh.close(), progressMs);
+}
+
+async function unlinkBounded(target: string, progressMs: number): Promise<void> {
+    await bounded(unlink(target), progressMs);
 }
 
 async function writeDurable(filePath: string, body: string, exclusive: boolean, pin: PathPin | null = null, progressMs = JOURNAL_PROGRESS_MS): Promise<void> {
@@ -181,43 +226,51 @@ async function writeDurable(filePath: string, body: string, exclusive: boolean, 
         assertExistingDir(dir);
     }
     const target = join(dir, `.${basename(finalPath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
-    let fh: FileHandle;
+    let fh: FileHandle | undefined;
     try {
-        fh = await withProgress(open(target, OPEN_EXCL, 0o600), progressMs);
+        fh = await bounded(open(target, OPEN_EXCL, 0o600), progressMs);
     } catch (error) {
-        if (isProgressDeadline(error)) throw error;
+        if (isProgressDeadline(error)) dieDeadline();
         throw new Error('journal: create failed');
     }
     let published = false;
     try {
-        const kind = await rejectUnlessRegular(fh);
+        const kind = await rejectUnlessRegular(fh, progressMs);
         if (kind !== 'ok') throw new Error('journal: create failed');
-        await fh.chmod(0o600);
-        await withProgress(durability.write(fh, body), progressMs);
-        await withProgress(durability.fsyncFile(fh), progressMs);
-        await fh.close();
-        fh = undefined as unknown as FileHandle;
+        await bounded(fh.chmod(0o600), progressMs);
+        await bounded(durability.write(fh, body), progressMs);
+        await bounded(durability.fsyncFile(fh), progressMs);
+        await closeBounded(fh, progressMs);
+        fh = undefined;
         try {
-            if (exclusive) await withProgress(durability.link(target, finalPath), progressMs);
-            else await withProgress(durability.rename(target, finalPath), progressMs);
+            if (exclusive) await bounded(durability.link(target, finalPath), progressMs);
+            else await bounded(durability.rename(target, finalPath), progressMs);
             published = true;
         } catch (e) {
+            if (isProgressDeadline(e)) dieDeadline();
             const code = (e as NodeJS.ErrnoException).code;
             if (exclusive && (code === 'EEXIST' || code === 'ELOOP')) throw new Error('journal: already exists');
             if (e instanceof Error && e.message.startsWith('journal:')) throw e;
             throw new Error('journal: create failed');
         }
     } catch (e) {
-        if (fh) await fh.close().catch(() => {});
-        if (!published) await unlink(target).catch(() => {});
+        if (isProgressDeadline(e)) dieDeadline();
+        if (fh) await closeBounded(fh, progressMs).catch((closeError) => {
+            if (isProgressDeadline(closeError)) dieDeadline();
+        });
+        if (!published) await unlinkBounded(target, progressMs).catch((unlinkError) => {
+            if (isProgressDeadline(unlinkError)) dieDeadline();
+        });
         if (e instanceof Error && e.message.startsWith('journal:')) throw e;
         throw new Error('journal: create failed');
     }
-    await unlink(target).catch(() => {});
+    await unlinkBounded(target, progressMs).catch((unlinkError) => {
+        if (isProgressDeadline(unlinkError)) dieDeadline();
+    });
     try {
         await withProgress(durability.fsyncDir(dir), progressMs);
     } catch (error) {
-        if (isProgressDeadline(error)) throw error;
+        if (isProgressDeadline(error)) dieDeadline();
         // The new name is visible. Replay stays closed until a later barrier succeeds.
         throw new Error('journal: parent sync failed');
     }
@@ -316,7 +369,7 @@ function parseLastLatest(value: unknown): bigint | null | 'bad' {
 function parseFlight(value: unknown, version: number): InFlight | null | 'bad' {
     if (value === null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return 'bad';
-    const keys = version === JOURNAL_VERSION_V2 ? FLIGHT_KEYS_V2 : FLIGHT_KEYS;
+    const keys = version === JOURNAL_VERSION_V2 ? FLIGHT_KEYS_V2 : version === JOURNAL_VERSION ? FLIGHT_KEYS : FLIGHT_KEYS_V4;
     if (!keysExact(value, keys)) return 'bad';
     const raw = value as Record<string, unknown>;
     if (typeof raw.kind !== 'string' || !KINDS.has(raw.kind as IntentKind)) return 'bad';
@@ -326,13 +379,15 @@ function parseFlight(value: unknown, version: number): InFlight | null | 'bad' {
     if (nonce === null || nonce < 0 || attempts === null || attempts < 0 || firstSentAt === null || firstSentAt < 0) return 'bad';
     const raws = parseHexList(raw.raws, JOURNAL_RAW_KEEP);
     const hashes = parseHexList(raw.hashes, JOURNAL_HASH_CAP, 32);
-    const broadcastOnce = version === JOURNAL_VERSION_V2
-        ? []
-        : parseHexList(raw.broadcastOnce, JOURNAL_HASH_CAP, 32, true);
+    // Older files carried broadcastOnce. It is checked so a corrupt list still refuses, then dropped.
+    if (version !== JOURNAL_VERSION_V2 && version !== JOURNAL_VERSION) {
+        const broadcastOnce = parseHexList(raw.broadcastOnce, JOURNAL_HASH_CAP, 32, true);
+        if (!broadcastOnce) return 'bad';
+    }
     const gasLimit = parseUint(raw.gasLimit);
     const maxFeePerGas = parseUint(raw.maxFeePerGas);
     const maxPriorityFeePerGas = parseUint(raw.maxPriorityFeePerGas);
-    if (!raws || !hashes || !broadcastOnce || gasLimit === null || maxFeePerGas === null || maxPriorityFeePerGas === null) return 'bad';
+    if (!raws || !hashes || gasLimit === null || maxFeePerGas === null || maxPriorityFeePerGas === null) return 'bad';
     return {
         kind: raw.kind as IntentKind,
         nonce,
@@ -343,11 +398,10 @@ function parseFlight(value: unknown, version: number): InFlight | null | 'bad' {
         maxPriorityFeePerGas,
         attempts,
         firstSentAt,
-        broadcastOnce,
     };
 }
 
-function parseState(text: string, identity: JournalIdentity): JournalState | 'mismatch' | null {
+function parseState(text: string, identity: JournalIdentity): { state: JournalState; legacy: LegacyStall | null } | 'mismatch' | null {
     if (text.length === 0 || text.length > MAX_FILE_BYTES) return null;
     let parsed: unknown;
     try {
@@ -358,39 +412,47 @@ function parseState(text: string, identity: JournalIdentity): JournalState | 'mi
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const root = parsed as Record<string, unknown>;
     const version = root.version;
-    if (version !== JOURNAL_VERSION && version !== JOURNAL_VERSION_V3 && version !== JOURNAL_VERSION_V2) return null;
-    const rootKeys = version === JOURNAL_VERSION ? ROOT_KEYS : version === JOURNAL_VERSION_V3 ? ROOT_KEYS_V3 : ROOT_KEYS_V2;
+    if (version !== JOURNAL_VERSION && version !== JOURNAL_VERSION_V4 && version !== JOURNAL_VERSION_V3 && version !== JOURNAL_VERSION_V2) return null;
+    const rootKeys = version === JOURNAL_VERSION
+        ? ROOT_KEYS
+        : version === JOURNAL_VERSION_V4
+            ? ROOT_KEYS_V4
+            : version === JOURNAL_VERSION_V3
+                ? ROOT_KEYS_V3
+                : ROOT_KEYS_V2;
     if (!keysExact(parsed, rootKeys)) return null;
     const chainId = parseSafeInt(root.chainId);
     if (chainId === null || chainId <= 0 || !isAddress(root.signer)) return null;
     if (chainId !== identity.chainId || root.signer.toLowerCase() !== identity.signer.toLowerCase()) return 'mismatch';
     const flight = parseFlight(root.inFlight, version);
     if (flight === 'bad') return null;
-    let sentAt: number[] = [];
-    let ceilingClosed = false;
     let lastLatest: bigint | null = null;
-    let stalled = false;
-    let stalledNonce: number | null = null;
-    if (version === JOURNAL_VERSION || version === JOURNAL_VERSION_V3) {
-        const parsedSent = parseSentAt(root.sentAt);
+    let legacy: LegacyStall | null = null;
+    if (version === JOURNAL_VERSION || version === JOURNAL_VERSION_V4 || version === JOURNAL_VERSION_V3) {
+        // sentAt and ceilingClosed are accepted on old files and ignored.
+        if (version !== JOURNAL_VERSION) {
+            const parsedSent = parseSentAt(root.sentAt);
+            if (!parsedSent || typeof root.ceilingClosed !== 'boolean') return null;
+        }
         const parsedLatest = parseLastLatest(root.lastLatest);
-        if (!parsedSent || parsedLatest === 'bad' || typeof root.ceilingClosed !== 'boolean') return null;
-        sentAt = parsedSent;
-        ceilingClosed = root.ceilingClosed;
+        if (parsedLatest === 'bad') return null;
         lastLatest = parsedLatest;
     }
-    if (version === JOURNAL_VERSION) {
+    if (version === JOURNAL_VERSION_V4) {
         if (typeof root.stalled !== 'boolean') return null;
-        stalled = root.stalled;
+        let stalledNonce: number | null = null;
         if (root.stalledNonce === null) stalledNonce = null;
         else {
             const parsedNonce = parseSafeInt(root.stalledNonce);
             if (parsedNonce === null || parsedNonce < 0) return null;
             stalledNonce = parsedNonce;
         }
-        if (stalled !== (stalledNonce !== null)) return null;
+        if (root.stalled !== (stalledNonce !== null)) return null;
+        if (root.stalled && stalledNonce !== null) {
+            legacy = { nonce: stalledNonce, firstSentAt: flight?.firstSentAt ?? 0 };
+        }
     }
-    return { chainId, signer: root.signer, inFlight: flight, sentAt, ceilingClosed, lastLatest, stalled, stalledNonce };
+    return { state: { chainId, signer: root.signer, inFlight: flight, lastLatest }, legacy };
 }
 
 function feeText(value: bigint): string {
@@ -414,9 +476,6 @@ function flightOut(flight: InFlight): Record<string, unknown> {
         maxPriorityFeePerGas: feeText(flight.maxPriorityFeePerGas),
         attempts: flight.attempts,
         firstSentAt: flight.firstSentAt,
-        broadcastOnce: (flight.broadcastOnce ?? []).length > JOURNAL_HASH_CAP
-            ? (flight.broadcastOnce ?? []).slice(-JOURNAL_HASH_CAP)
-            : (flight.broadcastOnce ?? []),
     };
 }
 
@@ -428,20 +487,7 @@ function serialize(state: JournalState): string {
         if (!Number.isSafeInteger(state.inFlight.attempts) || state.inFlight.attempts < 0) throw new Error('journal: in-flight rejected');
         if (!Number.isSafeInteger(state.inFlight.firstSentAt) || state.inFlight.firstSentAt < 0) throw new Error('journal: in-flight rejected');
     }
-    if (!Array.isArray(state.sentAt) || state.sentAt.length > SENT_AT_CAP) throw new Error('journal: account rejected');
-    for (const at of state.sentAt) {
-        if (!Number.isSafeInteger(at) || at < 0) throw new Error('journal: account rejected');
-    }
-    if (typeof state.ceilingClosed !== 'boolean') throw new Error('journal: account rejected');
     if (state.lastLatest !== null && (state.lastLatest < 0n || state.lastLatest.toString().length > FEE_DIGIT_MAX)) {
-        throw new Error('journal: account rejected');
-    }
-    if (typeof state.stalled !== 'boolean') throw new Error('journal: account rejected');
-    if (state.stalled) {
-        if (!Number.isSafeInteger(state.stalledNonce) || state.stalledNonce === null || state.stalledNonce < 0) {
-            throw new Error('journal: account rejected');
-        }
-    } else if (state.stalledNonce !== null) {
         throw new Error('journal: account rejected');
     }
     return JSON.stringify({
@@ -449,11 +495,7 @@ function serialize(state: JournalState): string {
         chainId: state.chainId,
         signer: state.signer,
         inFlight: state.inFlight ? flightOut(state.inFlight) : null,
-        sentAt: state.sentAt,
-        ceilingClosed: state.ceilingClosed,
         lastLatest: state.lastLatest === null ? null : state.lastLatest.toString(),
-        stalled: state.stalled,
-        stalledNonce: state.stalledNonce,
     });
 }
 
@@ -469,22 +511,15 @@ function copyFlight(flight: InFlight | null): InFlight | null {
         maxPriorityFeePerGas: flight.maxPriorityFeePerGas,
         attempts: flight.attempts,
         firstSentAt: flight.firstSentAt,
-        broadcastOnce: [...(flight.broadcastOnce ?? [])],
     };
 }
 
 function blankAccount(): JournalAccount {
-    return { sentAt: [], ceilingClosed: false, lastLatest: null, stalled: false, stalledNonce: null };
+    return { lastLatest: null };
 }
 
 function copyAccount(account: JournalAccount): JournalAccount {
-    return {
-        sentAt: [...account.sentAt],
-        ceilingClosed: account.ceilingClosed,
-        lastLatest: account.lastLatest,
-        stalled: account.stalled,
-        stalledNonce: account.stalledNonce,
-    };
+    return { lastLatest: account.lastLatest };
 }
 
 export class Journal {
@@ -493,11 +528,11 @@ export class Journal {
     private unsafe = false;
     /** Dir fsync failed after the new name was published. Replay stays closed until a barrier succeeds. */
     private needsBarrier = false;
-    /** A journal await exceeded its deadline. Later loads stay closed. */
-    private progressFailed = false;
     private readonly progressMs: number;
     /** Alarm-only copy. Set when a barrier read parses, and never used as a replay source. */
     private alarm: { nonce: number; firstSentAt: number } | null = null;
+    /** Version-4 stalled:true. Not part of the bytes this process writes. */
+    private legacy: LegacyStall | null = null;
     private readonly identity: JournalIdentity;
     private readonly pin: PathPin | null;
     /** Every read and write uses this path. A pin contributes its real directory, not the caller's string. */
@@ -529,18 +564,15 @@ export class Journal {
      * barrier = the directory durability barrier has not succeeded. The bytes are not replayed.
      * substituted = the pinned directory changed. The file is not read and the path is not recreated.
      */
-    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted' | 'deadline'> {
-        if (this.progressFailed) return 'deadline';
+    async load(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted'> {
         if (this.corrupt) return 'corrupt';
         if (this.unsafe) return 'unsafe';
         if (!this.pinHolds()) return 'substituted';
         const barrierOk = await this.tryBarrier();
-        if (barrierOk === 'deadline') return 'deadline';
         if (!this.pinHolds()) return 'substituted';
         if (!barrierOk) {
             this.needsBarrier = true;
             await this.captureAlarm();
-            if (this.progressFailed) return 'deadline';
             if (!this.pinHolds()) {
                 this.alarm = null;
                 return 'substituted';
@@ -550,7 +582,6 @@ export class Journal {
         this.needsBarrier = false;
         const read = await this.readText();
         if (read.kind !== 'text') {
-            if (read.kind === 'deadline') return 'deadline';
             if (read.kind === 'missing') return 'missing';
             if (read.kind === 'corrupt') {
                 this.corrupt = true;
@@ -565,11 +596,18 @@ export class Journal {
             this.corrupt = true;
             return 'corrupt';
         }
-        this.state = parsed;
-        this.alarm = parsed.inFlight
-            ? { nonce: parsed.inFlight.nonce, firstSentAt: parsed.inFlight.firstSentAt }
+        this.state = parsed.state;
+        this.legacy = parsed.legacy;
+        this.alarm = parsed.state.inFlight
+            ? { nonce: parsed.state.inFlight.nonce, firstSentAt: parsed.state.inFlight.firstSentAt }
             : null;
         return 'ok';
+    }
+
+    /** Stall carried by an old journal. Null after a version-5 load. */
+    legacyStall(): LegacyStall | null {
+        if (!this.legacy) return null;
+        return { nonce: this.legacy.nonce, firstSentAt: this.legacy.firstSentAt };
     }
 
     /** Persist an empty journal. Refuses a file that is already there. */
@@ -578,11 +616,7 @@ export class Journal {
         if (this.state) throw new Error('journal: already open');
         const next: JournalState = { ...this.identity, ...blankAccount(), inFlight: null };
         await this.publish(next, true);
-        this.state = {
-            ...next,
-            sentAt: [],
-            inFlight: null,
-        };
+        this.state = { ...next, inFlight: null };
     }
 
     /** Copy of the last successful load. Null when the file has no in-flight tx. */
@@ -609,19 +643,11 @@ export class Journal {
      */
     async commit(next: {
         inFlight?: InFlight | null;
-        sentAt?: number[];
-        ceilingClosed?: boolean;
         lastLatest?: bigint | null;
-        stalled?: boolean;
-        stalledNonce?: number | null;
     }): Promise<void> {
         if (!this.state || this.needsBarrier) throw new Error('journal: not open');
         const account = copyAccount(this.state);
-        if (next.sentAt !== undefined) account.sentAt = [...next.sentAt];
-        if (next.ceilingClosed !== undefined) account.ceilingClosed = next.ceilingClosed;
         if (next.lastLatest !== undefined) account.lastLatest = next.lastLatest;
-        if (next.stalled !== undefined) account.stalled = next.stalled;
-        if (next.stalledNonce !== undefined) account.stalledNonce = next.stalledNonce;
         const stored = next.inFlight === undefined ? copyFlight(this.state.inFlight) : copyFlight(next.inFlight);
         if (stored && stored.hashes.length > JOURNAL_HASH_CAP) {
             stored.hashes = stored.hashes.slice(stored.hashes.length - JOURNAL_HASH_CAP);
@@ -629,20 +655,15 @@ export class Journal {
         if (stored && stored.raws.length > JOURNAL_RAW_KEEP) {
             stored.raws = stored.raws.slice(stored.raws.length - JOURNAL_RAW_KEEP);
         }
-        const broadcastOnce = stored?.broadcastOnce ?? [];
-        if (stored && broadcastOnce.length > JOURNAL_HASH_CAP) {
-            stored.broadcastOnce = broadcastOnce.slice(broadcastOnce.length - JOURNAL_HASH_CAP);
-        }
         const body: JournalState = { ...this.identity, ...account, inFlight: stored };
         await this.publish(body, false);
-        this.state = { ...body, sentAt: [...account.sentAt], inFlight: copyFlight(stored) };
+        this.state = { ...body, inFlight: copyFlight(stored) };
     }
 
     private async publish(state: JournalState, exclusive: boolean): Promise<void> {
         try {
             await writeDurable(this.ioPath, serialize(state), exclusive, this.pin, this.progressMs);
         } catch (error) {
-            if (isProgressDeadline(error)) this.progressFailed = true;
             if (error instanceof Error && error.message === 'journal: parent sync failed') this.needsBarrier = true;
             throw error;
         }
@@ -650,18 +671,14 @@ export class Journal {
     }
 
     /** Re-run the directory barrier. The directory is never created here. */
-    private async tryBarrier(): Promise<boolean | 'deadline'> {
-        if (this.progressFailed) return 'deadline';
+    private async tryBarrier(): Promise<boolean> {
         if (this.pin && !this.pinHolds()) return false;
         const dir = this.pin ? this.pin.path : dirname(this.ioPath);
         try {
             await withProgress(durability.fsyncDir(dir), this.progressMs);
             return true;
         } catch (error) {
-            if (isProgressDeadline(error)) {
-                this.progressFailed = true;
-                return 'deadline';
-            }
+            if (isProgressDeadline(error)) dieDeadline();
             return false;
         }
     }
@@ -683,39 +700,36 @@ export class Journal {
             return;
         }
         const parsed = parseState(read.text, this.identity);
-        if (!parsed || parsed === 'mismatch' || !parsed.inFlight) {
+        if (!parsed || parsed === 'mismatch' || !parsed.state.inFlight) {
             this.alarm = null;
             return;
         }
-        this.alarm = { nonce: parsed.inFlight.nonce, firstSentAt: parsed.inFlight.firstSentAt };
+        this.legacy = parsed.legacy;
+        this.alarm = { nonce: parsed.state.inFlight.nonce, firstSentAt: parsed.state.inFlight.firstSentAt };
     }
 
-    private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' | 'deadline' } | { kind: 'text'; text: string }> {
-        let fh: FileHandle;
+    private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' } | { kind: 'text'; text: string }> {
+        let fh: FileHandle | undefined;
         try {
-            fh = await withProgress(open(this.ioPath, OPEN_READ), this.progressMs);
+            fh = await bounded(open(this.ioPath, OPEN_READ), this.progressMs);
         } catch (e) {
-            if (isProgressDeadline(e)) {
-                this.progressFailed = true;
-                return { kind: 'deadline' };
-            }
+            if (isProgressDeadline(e)) dieDeadline();
             const code = (e as NodeJS.ErrnoException).code;
             if (code === 'ENOENT') return { kind: 'missing' };
             return { kind: 'unsafe' };
         }
         try {
-            const kind = await rejectUnlessRegular(fh);
+            const kind = await rejectUnlessRegular(fh, this.progressMs);
             if (kind !== 'ok') return { kind };
-            const text = await withProgress(fh.readFile({ encoding: 'utf8' }), this.progressMs);
+            const text = await bounded(fh.readFile({ encoding: 'utf8' }), this.progressMs);
             return { kind: 'text', text };
         } catch (error) {
-            if (isProgressDeadline(error)) {
-                this.progressFailed = true;
-                return { kind: 'deadline' };
-            }
+            if (isProgressDeadline(error)) dieDeadline();
             return { kind: 'unsafe' };
         } finally {
-            await fh.close();
+            if (fh) await closeBounded(fh, this.progressMs).catch((closeError) => {
+                if (isProgressDeadline(closeError)) dieDeadline();
+            });
         }
     }
 }

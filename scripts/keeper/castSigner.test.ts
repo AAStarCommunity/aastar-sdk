@@ -83,6 +83,30 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(process.listenerCount('exit') - before).toBe(1);
     });
 
+    it('refuses spawn when authorization is false or throws', async () => {
+        const lay = layout();
+        const stamp = join(lay.dir, 'spawned');
+        const bin = script(`echo spawned > ${JSON.stringify(stamp)}\nexit 0`);
+        const refused = createCastSigner({
+            castBin: bin, keystorePath: lay.ks, passwordFilePath: lay.pw,
+            signerAddress: REQ.to, authorize: () => false,
+        });
+        await expect(refused.sign(REQ)).rejects.toThrow('cast signer: authorization refused');
+        expect(existsSync(stamp)).toBe(false);
+        const boom = createCastSigner({
+            castBin: bin, keystorePath: lay.ks, passwordFilePath: lay.pw,
+            signerAddress: REQ.to, authorize: () => { throw new Error('secret-acl-text'); },
+        });
+        try {
+            await boom.sign(REQ);
+            throw new Error('signed');
+        } catch (error) {
+            expect((error as Error).message).toBe('cast signer: authorization refused');
+            expect((error as Error).message).not.toContain('secret-acl-text');
+        }
+        expect(existsSync(stamp)).toBe(false);
+    });
+
     it('refuses mode 0644, directory 0755, and a symlink', () => {
         const loose = layout({ pw: 0o644 });
         expect(() => validateSecretFiles(loose.ks, loose.pw)).toThrow(/password file mode is not 0600/);

@@ -87,6 +87,17 @@ describe('shared secret metadata', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => 
         await agrees({ ksDir: 0o775 });
     });
 
+    it('rejects keystore modes 0644, 0640, and 0400', () => {
+        const uid = process.getuid?.() ?? 1;
+        const parent: NodeMeta = { isFile: false, isDirectory: true, isSymbolicLink: false, uid, mode: 0o40700 };
+        for (const mode of [0o100644, 0o100640, 0o100400]) {
+            const fileMeta: NodeMeta = { isFile: true, isDirectory: false, isSymbolicLink: false, uid, mode };
+            expect(keystoreRefusal(fileMeta, parent, uid)).toBe('secret file: keystore mode is not 0600');
+        }
+        const exact: NodeMeta = { isFile: true, isDirectory: false, isSymbolicLink: false, uid, mode: 0o100600 };
+        expect(keystoreRefusal(exact, parent, uid)).toBeNull();
+    });
+
     it('refuses a root-owned secret parent the same way the runtime uid check does', () => {
         const uid = process.getuid?.() ?? 1;
         const fileMeta: NodeMeta = { isFile: true, isDirectory: false, isSymbolicLink: false, uid, mode: 0o100600 };

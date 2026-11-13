@@ -5,7 +5,9 @@
 # See docs/guide/keeper.md. This script signs nothing.
 #
 #   ./run-keeper.sh sepolia --dry-run --once
-# Credential flags are refused. A dry-run that needs RPC starts from the absolute node command.
+# Credential flags are refused. This wrapper stays credential-free.
+# A dry-run that needs RPC is not this script:
+#   "$NODE" --import <abs loader> scripts/keeper.ts --dry-run --once --env-file <file>
 #
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

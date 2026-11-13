@@ -239,7 +239,7 @@ describe('preflight', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         if (!replaced || replaced === 'help') throw new Error('fixture args rejected');
         const hop = await runPreflight(replaced);
         expect(hop.code, hop.lines.join('\n')).toBe(1);
-        expect(hop.lines.some((line) => line.includes('ancestor') || line.includes('writable'))).toBe(true);
+        expect(hop.lines.some((line) => line.includes('symlink') || line.includes('ancestor') || line.includes('writable'))).toBe(true);
 
         const mid = join(outside, 'mid');
         const links = join(root, 'links');
@@ -255,8 +255,81 @@ describe('preflight', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
         chmodSync(mid, 0o755);
         const clean = await runPreflight(two);
-        expect(clean.code, clean.lines.join('\n')).toBe(0);
-        expect(clean.lines.every((line) => line.startsWith('PASS '))).toBe(true);
+        expect(clean.code, clean.lines.join('\n')).toBe(1);
+        expect(clean.lines.some((line) => line.includes('symlink'))).toBe(true);
+    });
+
+    it('rejects a cast symlink whose target is pivot/../cast-bin', async () => {
+        const { root } = layout();
+        const trusted = trustedScratch('cast-pivot');
+        const attacker = trustedScratch('cast-attacker');
+        dirs.push(trusted, attacker);
+        file(join(trusted, 'cast-bin'), 0o755, '#!/bin/sh\nexit 0\n');
+        mkdirSync(join(attacker, 'child'), { mode: 0o755 });
+        file(join(attacker, 'cast-bin'), 0o755, '#!/bin/sh\nexit 0\n');
+        symlinkSync(join(attacker, 'child'), join(trusted, 'pivot'));
+        symlinkSync('pivot/../cast-bin', join(trusted, 'cast'));
+        const parsed = parsePreflightArgs([
+            '--repo', root, '--node', join(root, 'bin', 'node'), '--cast-bin', join(trusted, 'cast'),
+            '--journal-dir', join(root, 'journal'), '--env-file', join(root, 'secrets', 'env'),
+            '--keystore', join(root, 'secrets', 'keystore'), '--password-file', join(root, 'secrets', 'password'),
+            '--network', 'sepolia', '--signer', SIGNER,
+        ]);
+        if (!parsed || parsed === 'help') throw new Error('fixture args rejected');
+        const report = await runPreflight(parsed);
+        expect(report.code, report.lines.join('\n')).toBe(1);
+        expect(report.lines.some((line) => line.startsWith('FAIL cast') && line.includes('symlink'))).toBe(true);
+    });
+
+    it('rejects a module file symlink that leaves the repo', async () => {
+        const { root, config } = layout();
+        const vendor = trustedScratch('vendor-mod');
+        dirs.push(vendor);
+        file(join(vendor, 'index.js'), 0o644);
+        file(join(vendor, 'helper.js'), 0o666);
+        symlinkSync(join(vendor, 'index.js'), join(root, 'node_modules', 'pkg', 'escaped.js'));
+        const report = await runPreflight(config);
+        expect(report.code, report.lines.join('\n')).toBe(1);
+        expect(report.lines.some((line) => line.includes('escaped.js') && line.includes('symlink'))).toBe(true);
+    });
+
+    it('accepts a pnpm link whose target stays inside the repo', async () => {
+        const { root, config } = layout();
+        rmSync(join(root, 'node_modules', 'pkg'), { recursive: true });
+        const dest = join(root, 'node_modules', '.pnpm', 'pkg@1.0.0', 'node_modules', 'pkg');
+        mkdirSync(dest, { recursive: true, mode: 0o755 });
+        file(join(dest, 'index.js'), 0o644);
+        symlinkSync(dest, join(root, 'node_modules', 'pkg'));
+        const report = await runPreflight(config);
+        expect(report.code, report.lines.join('\n')).toBe(0);
+        expect(report.lines.some((line) => line.includes('index.js') && line.startsWith('PASS '))).toBe(true);
+    });
+
+    it('rejects a directory and a mode 0644 file as node or cast', async () => {
+        const { root } = layout();
+        const nodeDir = join(root, 'bin', 'node-dir');
+        mkdirSync(nodeDir, { mode: 0o755 });
+        const loose = join(root, 'bin', 'cast-loose');
+        file(loose, 0o644, '#!/bin/sh\nexit 0\n');
+        const asDir = parsePreflightArgs([
+            '--repo', root, '--node', nodeDir, '--cast-bin', join(root, 'bin', 'cast'),
+            '--journal-dir', join(root, 'journal'), '--env-file', join(root, 'secrets', 'env'),
+            '--keystore', join(root, 'secrets', 'keystore'), '--password-file', join(root, 'secrets', 'password'),
+            '--network', 'sepolia', '--signer', SIGNER,
+        ]);
+        const asLoose = parsePreflightArgs([
+            '--repo', root, '--node', join(root, 'bin', 'node'), '--cast-bin', loose,
+            '--journal-dir', join(root, 'journal'), '--env-file', join(root, 'secrets', 'env'),
+            '--keystore', join(root, 'secrets', 'keystore'), '--password-file', join(root, 'secrets', 'password'),
+            '--network', 'sepolia', '--signer', SIGNER,
+        ]);
+        if (!asDir || asDir === 'help' || !asLoose || asLoose === 'help') throw new Error('fixture args rejected');
+        const dirReport = await runPreflight(asDir);
+        expect(dirReport.code, dirReport.lines.join('\n')).toBe(1);
+        expect(dirReport.lines.some((line) => line.includes('node-dir') && line.includes('not a regular file'))).toBe(true);
+        const looseReport = await runPreflight(asLoose);
+        expect(looseReport.code, looseReport.lines.join('\n')).toBe(1);
+        expect(looseReport.lines.some((line) => line.includes('cast-loose') && line.includes('executable'))).toBe(true);
     });
 
     it('walks the checkout, skips a trusted .git, and allows a missing deployment file', async () => {

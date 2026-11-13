@@ -307,7 +307,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--poll-interval', '30',
             '--keystore', 'keys/keystore', '--password-file', secrets.password, '--signer', SIGNER,
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--cast-bin', cast, '--journal', join(root, 'journal.json'),
             '--superpaymaster', SP, '--registry', REG,
         ], {
@@ -390,7 +390,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             // The injected clock jumps six hours. A 600s stall would latch sends closed after the nonce mines.
             '--stall-sec', '86400',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--cast-bin', cast, '--journal', join(root, 'journal.json'),
             '--superpaymaster', SP, '--registry', REG,
         ], {
@@ -503,7 +503,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--no-superpaymaster', '--poll-interval', '30',
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', journalPath,
             '--superpaymaster', SP, '--registry', REG,
@@ -557,7 +557,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--no-superpaymaster', '--poll-interval', '30',
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', journalPath,
             '--superpaymaster', SP, '--registry', REG,
@@ -665,7 +665,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'anvil', '--no-logo', '--once', '--poll-interval', '30',
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', join(root, 'journal.json'),
             '--superpaymaster', ANVIL_SP, '--registry', ANVIL_REG,
@@ -701,7 +701,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'anvil', '--no-logo', '--once', '--poll-interval', '30',
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', join(root, 'journal.json'),
             '--superpaymaster', ANVIL_SP, '--registry', ANVIL_REG,
@@ -793,7 +793,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once', '--poll-interval', '30',
-            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--max-fee-gwei', '100',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', join(root, 'journal.json'),
             '--superpaymaster', SP, '--paymaster', v4, '--registry', REG,

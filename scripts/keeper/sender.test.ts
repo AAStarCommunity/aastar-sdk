@@ -1,14 +1,14 @@
 /**
  * One sender, one in-flight nonce. Fakes stand in for the chain and for cast.
  */
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
 import { signTransaction } from 'viem/accounts';
 import { Journal, type InFlight } from './journal.js';
-import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, authorizeSign, bumpedFee, checkIntent, manualStallCommand, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
+import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, authorizeSign, bumpedFee, checkIntent, manualStallCommand, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead, type UpdatedAtRead } from './sender.js';
 
 const TO = '0x1111111111111111111111111111111111111111' as Address;
 const OTHER = '0x2222222222222222222222222222222222222222' as Address;
@@ -28,8 +28,11 @@ afterEach(() => {
     }
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
+function markerFile(journalPath: string): string {
+    return join(dirname(journalPath), 'sepolia.stalled');
+}
+
 function harness(opts: {
-    maxSendsPerHour?: number;
     maxGas?: bigint;
     maxFeeWei?: bigint;
     maxTipWei?: bigint;
@@ -39,7 +42,9 @@ function harness(opts: {
     paymaster?: () => Address | null;
     superPaymaster?: Address | null;
     now?: () => number;
-    resetSendCeiling?: boolean;
+    minUpdateIntervalSec?: number;
+    priceStalenessThresholdSec?: bigint;
+    readUpdatedAt?: (to: Address) => Promise<UpdatedAtRead>;
     readStaleness?: () => Promise<StalenessRead | 'unreadable'>;
     manualStep?: (nonce: number) => string;
     paymasterIdentity?: boolean;
@@ -143,13 +148,14 @@ function harness(opts: {
         maxFeeWei: opts.maxFeeWei ?? 1_000_000_000n,
         maxTipWei: opts.maxTipWei,
         stallSec: opts.stallSec,
-        maxSendsPerHour: opts.maxSendsPerHour ?? 30,
+        minUpdateIntervalSec: opts.minUpdateIntervalSec,
+        priceStalenessThresholdSec: opts.priceStalenessThresholdSec,
         now: opts.now ?? (() => clock.now),
         alert: (msg) => {
             alerts.push(msg);
             return deliver ? deliver() : undefined;
         },
-        resetSendCeiling: opts.resetSendCeiling,
+        readUpdatedAt: opts.readUpdatedAt,
         readStaleness: opts.readStaleness,
         manualStep: opts.manualStep,
     });
@@ -185,7 +191,7 @@ function harness(opts: {
                 release() { signWait = null; releaseSign(); },
             };
         },
-        reopen(over: { resetSendCeiling?: boolean; maxSendsPerHour?: number; maxFeeWei?: bigint; stallSec?: number } = {}) {
+        reopen(over: { maxFeeWei?: bigint; stallSec?: number; minUpdateIntervalSec?: number; priceStalenessThresholdSec?: bigint } = {}) {
             const next = new Sender({
                 chain,
                 signer,
@@ -199,18 +205,19 @@ function harness(opts: {
                 maxFeeWei: over.maxFeeWei ?? opts.maxFeeWei ?? 1_000_000_000n,
                 maxTipWei: opts.maxTipWei,
                 stallSec: over.stallSec ?? opts.stallSec,
-                maxSendsPerHour: over.maxSendsPerHour ?? opts.maxSendsPerHour ?? 30,
+                minUpdateIntervalSec: over.minUpdateIntervalSec ?? opts.minUpdateIntervalSec,
+                priceStalenessThresholdSec: over.priceStalenessThresholdSec ?? opts.priceStalenessThresholdSec,
                 now: opts.now ?? (() => clock.now),
                 alert: (msg) => {
-            alerts.push(msg);
-            return deliver ? deliver() : undefined;
-        },
-                resetSendCeiling: over.resetSendCeiling,
+                    alerts.push(msg);
+                    return deliver ? deliver() : undefined;
+                },
+                readUpdatedAt: opts.readUpdatedAt,
                 readStaleness: opts.readStaleness,
                 manualStep: opts.manualStep,
             });
             next.setPaymasterIdentity(opts.paymasterIdentity !== false);
-            next.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
+            next.setGate({ price: true, pause: true, reason: '', validUntil: clock.now + 3_600_000 });
             return next;
         },
         plant(raw: Hex, included: boolean) {
@@ -346,13 +353,12 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         let release: () => void = () => {};
         const held = new Promise<void>((resolve) => { release = resolve; });
         let waiting = false;
-        h.journal.commit = (async (next: Parameters<typeof h.journal.commit>[0]) => {
-            const count = next.inFlight?.broadcastOnce?.length ?? 0;
-            if (count > 0 && !waiting) {
+        h.journal.commit = (async (...args: Parameters<typeof h.journal.commit>) => {
+            if (!waiting) {
                 waiting = true;
                 await held;
             }
-            return original(next);
+            return original(...args);
         }) as typeof h.journal.commit;
         const pending = h.sender.maintain();
         const started = Date.now();
@@ -365,25 +371,27 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(h.broadcasts).toEqual([]);
     });
 
-    it('exceeding the send ceiling closes all sends and alerts', async () => {
-        const h = harness({ maxSendsPerHour: 2 });
-        h.chain.sendRawTransaction = async (raw) => {
-            h.broadcasts.push(raw);
-            h.setNonce(h.broadcasts.length === 1 ? 8n : 9n, h.broadcasts.length === 1 ? 8n : 9n);
-            return keccak256(raw);
-        };
-        const first = await h.sender.send(h.job());
-        const second = await h.sender.send(h.job('price-paymaster', OTHER));
-        const third = await h.sender.send(h.job());
-        expect(first.status).toBe('pending');
-        expect(second.status).toBe('pending');
-        expect(third).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        expect(h.alerts).toContain('send ceiling exceeded — all sends closed');
-        h.setNonce(10n, 10n);
-        const again = await h.sender.send(h.job('price-paymaster', OTHER));
-        expect(again).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        expect(h.broadcasts).toHaveLength(2);
-        expect(h.alerts.filter((a) => a === 'send ceiling exceeded — all sends closed')).toHaveLength(1);
+    it('no price tx is signed while on-chain updatedAt is fresh', async () => {
+        const h = harness({
+            minUpdateIntervalSec: 3_600,
+            priceStalenessThresholdSec: 7_200n,
+            readUpdatedAt: async (to) => ({ to, updatedAtSec: BigInt(Math.floor(h.clock.now / 1000)) }),
+        });
+        h.clock.now = 10_000_000;
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: h.clock.now + 60_000 });
+        const result = await h.sender.send(h.job());
+        expect(result).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(h.signed).toEqual([]);
+        expect(h.broadcasts).toEqual([]);
+        const again = await h.sender.send(h.job());
+        expect(again).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(h.alerts.filter((line) => line === 'sender: price cache refused')).toHaveLength(1);
+        const wrong = harness({
+            readUpdatedAt: async () => ({ to: OTHER, updatedAtSec: 0n }),
+        });
+        const mismatched = await wrong.sender.send(wrong.job());
+        expect(mismatched).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(wrong.signed).toEqual([]);
     });
 
     it('an unresolved PaymasterV4 signs nothing for price-paymaster', async () => {
@@ -591,27 +599,33 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const journal = new Journal(join(dir, 'j.json'), { chainId: 1, signer: SIGNER });
         expect(() => new Sender({
             chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
-            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 0n, maxSendsPerHour: 1, alert: () => {},
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 0n, alert: () => {},
         })).toThrow('sender: maxFeeWei invalid');
         expect(() => new Sender({
             chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
-            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 0, alert: () => {},
-        })).toThrow('sender: maxSendsPerHour invalid');
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, minUpdateIntervalSec: 0, alert: () => {},
+        })).toThrow('sender: minUpdateIntervalSec invalid');
         expect(() => new Sender({
             chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
-            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
-            resetSendCeiling: 'yes' as unknown as boolean,
-        })).toThrow('sender: resetSendCeiling invalid');
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, minUpdateIntervalSec: Number.NaN, alert: () => {},
+        })).toThrow('sender: minUpdateIntervalSec invalid');
         expect(() => new Sender({
             chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
-            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, priceStalenessThresholdSec: 1n, alert: () => {},
+        })).toThrow('sender: priceStalenessThresholdSec invalid');
+        expect(() => new Sender({
+            chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, alert: () => {},
             stallSec: Number.NaN,
         })).toThrow('sender: stallSec invalid');
         expect(() => new Sender({
             chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
-            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, alert: () => {},
             stallSec: -1,
         })).toThrow('sender: stallSec invalid');
+        let called = false;
+        chain.chainId = async () => { called = true; return 1; };
+        expect(called).toBe(false);
     });
 });
 
@@ -748,10 +762,10 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(alert).toContain('in-flight nonce 7 not included after 600s');
         expect(alert).toContain('SuperPaymaster price goes stale at 2023-11-14T23:23:20.000Z');
         expect(alert).toMatch(/in \d+ min/);
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number; inFlight: { nonce: number } };
-        expect(disk.stalled).toBe(true);
-        expect(disk.stalledNonce).toBe(7);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled?: boolean; inFlight: { nonce: number } };
+        expect(disk.stalled).toBeUndefined();
         expect(disk.inFlight.nonce).toBe(7);
+        expect(JSON.parse(readFileSync(markerFile(h.path), 'utf8'))).toMatchObject({ nonce: 7 });
         const restarted = h.reopen();
         const still = await restarted.send(h.job());
         expect(still).toEqual({ status: 'refused', reason: 'sender: stalled' });
@@ -766,13 +780,12 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(after.status).toBe('pending');
     });
 
-    it('charges the first broadcast of a raw whose chain-id read failed, then keeps the ceiling across a restart', async () => {
-        const h = harness({ maxSendsPerHour: 1 });
+    it('a failed chain-id read before broadcast journals the raw and does not echo the rpc error', async () => {
+        const h = harness();
         let failBroadcastChain = true;
         let reads = 0;
         h.chain.chainId = async () => {
             reads += 1;
-            // The post-sign chain read is the second call and must pass. The broadcast read is the third.
             if (failBroadcastChain && reads >= 3) throw new Error('rpc path /tmp/secret');
             return CHAIN_ID;
         };
@@ -784,44 +797,14 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(first.status).toBe('refused');
         expect(h.broadcasts).toEqual([]);
         expect(JSON.stringify(first)).not.toContain('secret');
-        const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; ceilingClosed: boolean; inFlight: { broadcastOnce: string[] } };
-        expect(body.sentAt).toHaveLength(1);
-        expect(body.ceilingClosed).toBe(false);
-        expect(body.inFlight.broadcastOnce).toHaveLength(1);
+        const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt?: unknown; ceilingClosed?: unknown; inFlight: { raws: string[] } };
+        expect(body.sentAt).toBeUndefined();
+        expect(body.ceilingClosed).toBeUndefined();
+        expect(body.inFlight.raws).toHaveLength(1);
         failBroadcastChain = false;
         const replayed = await h.sender.maintain();
         expect(replayed.status).toBe('pending');
         expect(h.broadcasts).toHaveLength(1);
-        const charged = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; ceilingClosed: boolean; inFlight: { broadcastOnce: string[] } };
-        expect(charged.sentAt).toHaveLength(1);
-        expect(charged.inFlight.broadcastOnce).toHaveLength(1);
-        const again = await h.sender.maintain();
-        expect(again.status).toBe('pending');
-        expect(h.broadcasts).toHaveLength(2);
-        const free = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; ceilingClosed: boolean };
-        expect(free.sentAt).toHaveLength(1);
-        expect(free.ceilingClosed).toBe(false);
-        h.setNonce(8n, 8n);
-        await h.sender.maintain();
-        const second = await h.sender.send(h.job());
-        expect(second).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        expect(h.broadcasts).toHaveLength(2);
-        const closed = h.reopen();
-        const restarted = await closed.send(h.job());
-        expect(restarted).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        const earlySender = h.reopen({ resetSendCeiling: true });
-        const early = await earlySender.send(h.job());
-        expect(early).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        const held = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; ceilingClosed: boolean };
-        expect(held.sentAt.length).toBeGreaterThan(0);
-        expect(held.ceilingClosed).toBe(true);
-        h.clock.now = 1_000 + 3_600_000 + 1;
-        h.setNonce(9n, 9n);
-        const opened = h.reopen({ resetSendCeiling: true });
-        const allowed = await opened.send(h.job());
-        expect(allowed.status).toBe('pending');
-        const room = JSON.parse(readFileSync(h.path, 'utf8')) as { ceilingClosed: boolean };
-        expect(room.ceilingClosed).toBe(false);
     });
 
     it('rebroadcasts the same raw when the base fee rises', async () => {
@@ -1012,9 +995,10 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
         expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
         expect(h.alerts.join('\n')).not.toContain('pending-nonce-sentinel');
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; inFlight: { nonce: number } | null };
-        expect(disk.stalled).toBe(true);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled?: boolean; inFlight: { nonce: number } | null };
+        expect(disk.stalled).toBeUndefined();
         expect(disk.inFlight?.nonce).toBe(7);
+        expect(JSON.parse(readFileSync(markerFile(h.path), 'utf8')).nonce).toBe(7);
         const again = await h.sender.send(h.job());
         expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });
         expect(h.signed).toEqual([]);
@@ -1056,35 +1040,36 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const mined = await h.sender.maintain();
         expect(mined).toEqual({ status: 'refused', reason: 'sender: stalled' });
         expect(h.journal.inFlight()).toBeNull();
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number };
-        expect(disk.stalled).toBe(true);
-        expect(disk.stalledNonce).toBe(7);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled?: boolean };
+        expect(disk.stalled).toBeUndefined();
+        expect(JSON.parse(readFileSync(markerFile(h.path), 'utf8')).nonce).toBe(7);
+        const before = h.alerts.length;
         const restarted = h.reopen();
         expect(await restarted.send(h.job())).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.alerts.slice(before).some((line) => line.includes('ALL sends closed'))).toBe(true);
         const cleared = await restarted.clearStall();
         expect(cleared.status).toBe('cleared');
         expect((await restarted.send(h.job())).status).toBe('pending');
     });
 
-    it('an exhausted hourly budget is closed before a new signature', async () => {
-        const h = harness({ maxSendsPerHour: 1 });
-        h.chain.sendRawTransaction = async (raw) => {
-            h.broadcasts.push(raw);
-            return keccak256(raw);
-        };
-        expect((await h.sender.send(h.job())).status).toBe('pending');
-        expect((await h.sender.maintain()).status).toBe('pending');
-        expect(h.signed).toHaveLength(1);
-        expect(h.broadcasts).toHaveLength(2);
-        h.setNonce(8n, 8n);
-        expect((await h.sender.maintain()).status).toBe('consumed');
-        const second = await h.sender.send(h.job());
-        expect(second).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        expect(h.signed).toHaveLength(1);
-        expect(h.journal.inFlight()).toBeNull();
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { ceilingClosed: boolean; inFlight: unknown };
-        expect(disk.ceilingClosed).toBe(true);
-        expect(disk.inFlight).toBeNull();
+    it('a failed updatedAt read signs nothing', async () => {
+        const thrown = harness({
+            readUpdatedAt: async () => { throw new Error('rpc secret /tmp/keystore'); },
+        });
+        const refused = await thrown.sender.send(thrown.job());
+        expect(refused).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(thrown.signed).toEqual([]);
+        expect(thrown.broadcasts).toEqual([]);
+        expect(JSON.stringify(refused) + thrown.alerts.join('\n')).not.toContain('keystore');
+        const again = await thrown.sender.send(thrown.job());
+        expect(again).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(thrown.alerts.filter((line) => line === 'sender: price cache refused')).toHaveLength(1);
+
+        const malformed = harness({
+            readUpdatedAt: async () => 'unreadable',
+        });
+        expect(await malformed.sender.send(malformed.job())).toEqual({ status: 'refused', reason: 'sender: price cache refused' });
+        expect(malformed.signed).toEqual([]);
     });
 
     it('two consumed nonces each settle, including when lookups overlap', async () => {
@@ -1235,8 +1220,9 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const settled = await h.sender.maintain();
         expect(settled.status).toBe('consumed');
         expect(h.journal.inFlight()).toBeNull();
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean };
-        expect(disk.stalled).toBe(false);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled?: boolean };
+        expect(disk.stalled).toBeUndefined();
+        expect(existsSync(markerFile(h.path))).toBe(false);
         expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(false);
     });
 
@@ -1289,9 +1275,9 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
         const alert = h.alerts.find((line) => line.includes('ALL sends closed')) ?? '';
         expect(alert).toContain('staleness unreadable');
-        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number };
-        expect(disk.stalled).toBe(true);
-        expect(disk.stalledNonce).toBe(7);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled?: boolean };
+        expect(disk.stalled).toBeUndefined();
+        expect(JSON.parse(readFileSync(markerFile(h.path), 'utf8')).nonce).toBe(7);
     });
 
     it('the stall watchdog alerts while the journal barrier is failing and maintain is not called again', async () => {
@@ -1418,9 +1404,10 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(result).toEqual({ status: 'refused', reason: 'sender: chain id mismatch' });
         expect(JSON.stringify(result)).not.toContain('999');
         expect(h.broadcasts).toEqual([]);
-        const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; inFlight: { broadcastOnce: string[] } };
-        expect(body.sentAt).toHaveLength(1);
-        expect(body.inFlight.broadcastOnce).toHaveLength(1);
+        const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt?: unknown; inFlight: { raws: string[]; broadcastOnce?: unknown } };
+        expect(body.sentAt).toBeUndefined();
+        expect(body.inFlight.broadcastOnce).toBeUndefined();
+        expect(body.inFlight.raws).toHaveLength(1);
     });
 
     it('armFlight alerts an overdue flight at startup even when load returns barrier', async () => {
@@ -1453,17 +1440,18 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         }
     });
 
-    it('keeps a stall latched during the consumption commit across restart until --clear-stall', async () => {
+    it('the watchdog fires during a consumption commit, the follow-up fails, process restarts → still latched', async () => {
         const h = harness({ stallSec: 1, now: () => Date.now() });
         h.sender.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
         let arm = false;
+        let failDir = false;
         let release!: () => void;
         const gate = new Promise<void>((resolve) => { release = resolve; });
         const { setDurabilityHooks } = await import('./journal.js');
         const real = await import('node:fs/promises');
         setDurabilityHooks({
             async write(fh, body) {
-                if (arm && body.includes('"inFlight":null') && body.includes('"stalled":false')) {
+                if (arm && body.includes('"inFlight":null')) {
                     arm = false;
                     await gate;
                 }
@@ -1473,6 +1461,7 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             async rename(from, to) { await real.rename(from, to); },
             async link(from, to) { await real.link(from, to); },
             async fsyncDir(dirPath) {
+                if (failDir) throw new Error('follow-up-sentinel');
                 const dh = await real.open(dirPath, 'r');
                 try { await dh.sync(); } finally { await dh.close(); }
             },
@@ -1480,26 +1469,28 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         try {
             const sent = await h.sender.send(h.job());
             expect(sent.status).toBe('pending');
+            h.setNonce(8n, 8n);
             arm = true;
             const pending = h.sender.maintain();
+            const marker = markerFile(h.path);
             const deadline = Date.now() + 4_000;
-            while (Date.now() < deadline && !h.alerts.some((line) => line.includes('ALL sends closed'))) {
+            while (Date.now() < deadline && !existsSync(marker)) {
                 await new Promise((resolve) => setTimeout(resolve, 20));
             }
-            expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+            expect(existsSync(marker)).toBe(true);
+            const kept = readFileSync(marker, 'utf8');
+            failDir = true;
             release();
             await pending;
-            const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; inFlight: unknown };
-            expect(disk.stalled).toBe(true);
-            expect(disk.inFlight).toBeNull();
+            expect(readFileSync(marker, 'utf8')).toBe(kept);
+            expect(readFileSync(h.path, 'utf8')).not.toContain('"stalled"');
+            setDurabilityHooks(null);
             const restarted = h.reopen();
             restarted.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
             const still = await restarted.send(h.job());
             expect(still).toEqual({ status: 'refused', reason: 'sender: stalled' });
-            const cleared = await restarted.clearStall();
-            expect(cleared.status).toBe('cleared');
-            const after = await restarted.send(h.job());
-            expect(after.status).toBe('pending');
+            expect(readFileSync(marker, 'utf8')).toBe(kept);
+            expect(h.signed).toHaveLength(1);
         } finally {
             release();
             setDurabilityHooks(null);
@@ -1507,71 +1498,76 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         }
     });
 
-    it('anchors the hourly charge at the broadcast and keeps an unbroadcast reservation past an hour', async () => {
-        const h = harness({ maxSendsPerHour: 1, stallSec: 86_400 });
-        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
-        let bumpedCommit = false;
-        let reads = 0;
-        h.chain.chainId = async () => {
-            reads += 1;
-            if (reads === 3) h.clock.now += 10_000;
-            return CHAIN_ID;
-        };
-        const { setDurabilityHooks } = await import('./journal.js');
-        const real = await import('node:fs/promises');
-        setDurabilityHooks({
-            async write(fh, body) {
-                if (!bumpedCommit && body.includes('9007199254740991')) {
-                    bumpedCommit = true;
-                    h.clock.now += 10_000;
-                }
-                await fh.writeFile(body, 'utf8');
-            },
-            async fsyncFile(fh) { await fh.sync(); },
-            async rename(from, to) { await real.rename(from, to); },
-            async link(from, to) { await real.link(from, to); },
-            async fsyncDir(dirPath) {
-                const dh = await real.open(dirPath, 'r');
-                try { await dh.sync(); } finally { await dh.close(); }
-            },
-        });
-        try {
-            const first = await h.sender.send(h.job());
-            expect(first.status).toBe('pending');
-            const stampedBody = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[] };
-            expect(stampedBody.sentAt[0]).toBeGreaterThanOrEqual(21_000);
-            const stamped = stampedBody.sentAt[0] ?? 0;
-            await h.sender.maintain();
-            h.clock.now = stamped + 3_600_000 - 1;
-            const second = await h.sender.send(h.job());
-            expect(second).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-            expect(h.broadcasts).toHaveLength(1);
-        } finally {
-            setDurabilityHooks(null);
-            h.sender.stop();
-        }
+    it('only --clear-stall removes the marker', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        expect((await h.sender.maintain()).status).toBe('refused');
+        const marker = markerFile(h.path);
+        const kept = readFileSync(marker, 'utf8');
+        expect(JSON.parse(kept).nonce).toBe(7);
+        expect((await h.sender.send(h.job())).status).toBe('refused');
+        expect(readFileSync(marker, 'utf8')).toBe(kept);
+        const restarted = h.reopen();
+        expect((await restarted.send(h.job())).status).toBe('refused');
+        expect(readFileSync(marker, 'utf8')).toBe(kept);
+        h.setNonce(8n, 8n);
+        expect((await restarted.clearStall()).status).toBe('cleared');
+        expect(existsSync(marker)).toBe(false);
+        expect((await restarted.send(h.job())).status).toBe('pending');
+    });
 
-        const held = harness({ maxSendsPerHour: 1, stallSec: 86_400 });
-        held.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
-        let heldReads = 0;
-        let failChain = true;
-        held.chain.chainId = async () => {
-            heldReads += 1;
-            if (failChain && heldReads >= 3) throw new Error('rpc down');
-            return CHAIN_ID;
+    it('an unreadable marker latches', async () => {
+        const h = harness();
+        await h.journal.init();
+        const marker = markerFile(h.path);
+        writeFileSync(marker, '{not-json');
+        chmodSync(marker, 0o600);
+        const bad = h.reopen();
+        expect(await bad.send(h.job())).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(h.signed).toEqual([]);
+        expect((await bad.clearStall()).status).toBe('refused');
+        expect(existsSync(marker)).toBe(true);
+
+        const loose = harness();
+        await loose.journal.init();
+        const looseMarker = markerFile(loose.path);
+        writeFileSync(looseMarker, JSON.stringify({ nonce: 1, firstSentAt: 0 }));
+        chmodSync(looseMarker, 0o644);
+        const opened = loose.reopen();
+        expect(await opened.send(loose.job())).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        expect(loose.signed).toEqual([]);
+    });
+
+    it('10 rapid restarts produce at most one price tx per min-update-interval', async () => {
+        let updatedAt = 0n;
+        let nonce = 7n;
+        const h = harness({
+            minUpdateIntervalSec: 3_600,
+            priceStalenessThresholdSec: 7_200n,
+            stallSec: 86_400,
+            readUpdatedAt: async (to) => ({ to, updatedAtSec: updatedAt }),
+        });
+        h.clock.now = 4_000_000_000_000;
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: h.clock.now + 60_000 });
+        h.setNonce(nonce, nonce);
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            updatedAt = BigInt(Math.floor(h.clock.now / 1000));
+            nonce += 1n;
+            h.setNonce(nonce, nonce);
+            return keccak256(raw);
         };
-        const refused = await held.sender.send(held.job());
-        failChain = false;
-        expect(refused.status).toBe('refused');
-        expect(held.broadcasts).toEqual([]);
-        const reserved = JSON.parse(readFileSync(held.path, 'utf8')) as { sentAt: number[] };
-        expect(reserved.sentAt).toEqual([Number.MAX_SAFE_INTEGER]);
-        held.clock.now = 1_000 + 3_600_000 + 1;
-        held.setNonce(8n, 8n);
-        await held.sender.maintain();
-        const later = await held.sender.send(held.job());
-        expect(later).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        expect(held.broadcasts).toEqual([]);
+        expect((await h.sender.send(h.job())).status).toBe('pending');
+        expect(h.signed).toHaveLength(1);
+        for (let i = 0; i < 9; i++) {
+            const next = h.reopen({ minUpdateIntervalSec: 3_600, priceStalenessThresholdSec: 7_200n });
+            const result = await next.send(h.job());
+            expect(result.status).toBe('refused');
+            expect(h.signed).toHaveLength(1);
+        }
+        expect(h.broadcasts).toHaveLength(1);
     });
 
     it('retries an undelivered stall alert after five minutes and then stops once delivery succeeds', async () => {
@@ -1597,29 +1593,8 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(stallLines()).toHaveLength(3);
         h.sender.tick();
         expect(stallLines()).toHaveLength(3);
-    });
-
-    it('retries an undelivered send-ceiling alert on the same cadence', async () => {
-        const h = harness({ maxSendsPerHour: 1 });
-        let up = false;
-        h.setDeliver(() => up);
-        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
-        expect((await h.sender.send(h.job())).status).toBe('pending');
-        h.setNonce(8n, 8n);
         await h.sender.maintain();
-        const closed = await h.sender.send(h.job());
-        expect(closed).toEqual({ status: 'refused', reason: 'sender: send ceiling' });
-        const lines = () => h.alerts.filter((line) => line.includes('send ceiling exceeded'));
-        expect(lines()).toHaveLength(1);
-        h.clock.now += 300_000;
-        h.sender.tick();
-        expect(lines()).toHaveLength(2);
-        up = true;
-        h.clock.now += 300_000;
-        h.sender.tick();
-        expect(lines()).toHaveLength(3);
-        h.sender.tick();
-        expect(lines()).toHaveLength(3);
+        expect(stallLines()).toHaveLength(3);
     });
 
     it('refuses a signed raw whose nonce, gas, max fee, or tip differs from the request', async () => {
@@ -1641,8 +1616,11 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
     it('alerts and refuses when a journal fsync misses the progress deadline', async () => {
         const h = harness({ progressMs: 40 });
-        const { setDurabilityHooks } = await import('./journal.js');
+        const { setDurabilityHooks, setJournalDeadlineExitForTest } = await import('./journal.js');
         const real = await import('node:fs/promises');
+        setJournalDeadlineExitForTest(() => {
+            throw new Error('journal: progress deadline');
+        });
         setDurabilityHooks({
             async write(fh, body) { await fh.writeFile(body, 'utf8'); },
             async fsyncFile(fh) { await fh.sync(); },
@@ -1654,11 +1632,12 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             const started = Date.now();
             const result = await h.sender.send(h.job());
             expect(Date.now() - started).toBeLessThan(2_000);
-            expect(result).toEqual({ status: 'refused', reason: 'sender: journal progress deadline' });
+            expect(result).toEqual({ status: 'refused', reason: 'sender: send failed' });
             expect(h.alerts).toContain('sender: journal progress deadline');
             expect(JSON.stringify(result)).not.toContain('unused');
             expect(h.broadcasts).toEqual([]);
         } finally {
+            setJournalDeadlineExitForTest(null);
             setDurabilityHooks(null);
             h.sender.stop();
         }

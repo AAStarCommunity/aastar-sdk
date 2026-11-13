@@ -11,7 +11,7 @@ import { connect } from 'node:net';
 import { createServer } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Address, Hex } from 'viem';
-import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, pinJournalDirectory, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
+import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, journalFileLockPort, pinJournalDirectory, setDurabilityHooks, setJournalDeadlineAlert, setJournalDeadlineExitForTest, JOURNAL_EXIT_CODE, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
 import { trustedScratch } from './trustScratch.js';
 
 const SIGNER = '0x3333333333333333333333333333333333333333' as Address;
@@ -21,6 +21,8 @@ const SPAWN_VERDICT_TIMEOUT_MS = 180_000;
 const dirs: string[] = [];
 afterEach(() => {
     setDurabilityHooks(null);
+    setJournalDeadlineAlert(null);
+    setJournalDeadlineExitForTest(null);
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
@@ -59,6 +61,13 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('load fails closed when the directory fsync never returns', async () => {
         const path = join(dir(), 'journal.json');
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER }, null, 40);
+        let code = 0;
+        let alerted = false;
+        setJournalDeadlineAlert(() => { alerted = true; });
+        setJournalDeadlineExitForTest((next) => {
+            code = next;
+            throw new Error('journal: progress deadline');
+        });
         setDurabilityHooks({
             async write() { throw new Error('unused'); },
             async fsyncFile() { throw new Error('unused'); },
@@ -67,11 +76,63 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             async fsyncDir() { await new Promise(() => {}); },
         });
         const started = Date.now();
-        const opened = await journal.load();
-        expect(opened).toBe('deadline');
-        expect(Date.now() - started).toBeLessThan(2_000);
-        expect(await journal.load()).toBe('deadline');
+        await expect(journal.load()).rejects.toThrow('journal: progress deadline');
+        expect(Date.now() - started).toBeLessThan(500);
+        expect(code).toBe(JOURNAL_EXIT_CODE);
+        expect(alerted).toBe(true);
+        await expect(journal.load()).rejects.toThrow('journal: progress deadline');
     }, 2_000);
+
+    it('a hanging close after a timed-out write exits non-zero within the deadline', async () => {
+        const root = dir();
+        const path = join(root, 'journal.json');
+        const alert = join(root, 'alert');
+        const tsx = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
+        if (!existsSync(tsx)) throw new Error('tsx loader missing');
+        const script = join(root, 'deadline.ts');
+        const journalMod = join(process.cwd(), 'scripts/keeper/journal.ts');
+        writeFileSync(script, `
+import * as fsp from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+const hang = () => new Promise(() => { setInterval(() => {}, 1_000); });
+const realOpen = fsp.open.bind(fsp);
+fsp.open = async (...args) => {
+  const fh = await realOpen(...args);
+  fh.close = () => hang();
+  return fh;
+};
+async function main() {
+  const keeper = await import(${JSON.stringify(journalMod)});
+  keeper.setDurabilityHooks({
+    async write() { await hang(); },
+    async fsyncFile() { await hang(); },
+    async rename() {},
+    async link() {},
+    async fsyncDir() { await hang(); },
+  });
+  keeper.setJournalDeadlineAlert(() => { writeFileSync(${JSON.stringify(alert)}, 'journal: progress deadline'); });
+  const journal = new keeper.Journal(${JSON.stringify(path)}, { chainId: 11155111, signer: ${JSON.stringify(SIGNER)} }, null, 80);
+  await journal.init();
+}
+main();
+`);
+        const child = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, script], {
+            cwd: root,
+            env: { PATH: process.env.PATH ?? '', HOME: root },
+        });
+        let err = '';
+        let out = '';
+        child.stderr.on('data', (chunk) => { err += chunk.toString(); });
+        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+        const started = Date.now();
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 1_000);
+            child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        expect(code, `${err}\n${out}`).toBe(JOURNAL_EXIT_CODE);
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(readFileSync(alert, 'utf8')).toBe('journal: progress deadline');
+    }, 5_000);
 
     it('stores one in-flight tx and drops hashes past the cap', async () => {
         const path = join(dir(), 'journal.json');
@@ -90,7 +151,7 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             firstSentAt: 1,
         });
         const body = JSON.parse(readFileSync(path, 'utf8')) as { version: number; inFlight: { hashes: string[]; raws: string[] } };
-        expect(body.version).toBe(4);
+        expect(body.version).toBe(5);
         expect(body.inFlight.hashes).toHaveLength(JOURNAL_HASH_CAP);
         expect(body.inFlight.hashes[0]).toBe(hashes[6]);
         expect(body.inFlight.raws).toHaveLength(3);
@@ -406,8 +467,19 @@ describe('journal durability', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         chmodSync(path, 0o600);
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
         expect(await journal.load()).toBe('ok');
-        expect(journal.account()).toEqual({ sentAt: [], ceilingClosed: false, lastLatest: null, stalled: false, stalledNonce: null });
-        expect(journal.inFlight()?.broadcastOnce).toEqual([]);
+        expect(journal.account()).toEqual({ lastLatest: null });
+        expect(journal.inFlight()?.nonce).toBe(4);
+        expect(journal.legacyStall()).toBeNull();
+        const v4 = join(dir(), 'v4.json');
+        writeFileSync(v4, JSON.stringify({
+            version: 4, chainId: 11155111, signer: SIGNER, inFlight: flight({ broadcastOnce: [] }),
+            sentAt: [1], ceilingClosed: true, lastLatest: null, stalled: true, stalledNonce: 4,
+        }));
+        chmodSync(v4, 0o600);
+        const oldLatch = new Journal(v4, { chainId: 11155111, signer: SIGNER });
+        expect(await oldLatch.load()).toBe('ok');
+        expect(oldLatch.legacyStall()).toEqual({ nonce: 4, firstSentAt: 1 });
+        expect(oldLatch.account()).toEqual({ lastLatest: null });
     });
 });
 

@@ -173,6 +173,8 @@ export function createCastSigner(opts: {
     passwordFilePath: string;
     signerAddress: Address;
     timeoutMs?: number;
+    /** Called synchronously after credential and executable checks, immediately before spawn. */
+    authorize?: () => boolean;
 }): RawSigner {
     if (typeof opts.castBin !== 'string' || opts.castBin.length === 0 || opts.castBin.length > 4_096) {
         throw new Error('cast signer: cast bin rejected');
@@ -180,6 +182,9 @@ export function createCastSigner(opts: {
     const timeoutMs = opts.timeoutMs ?? 30_000;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120_000) {
         throw new Error('cast signer: timeout rejected');
+    }
+    if (opts.authorize !== undefined && typeof opts.authorize !== 'function') {
+        throw new Error('cast signer: authorize rejected');
     }
     const pinned: PinnedExecutable = pinCastBin(opts.castBin);
     const spawnPath = pinned.path;
@@ -215,6 +220,15 @@ export function createCastSigner(opts: {
                 recheck();
             } catch {
                 throw new Error('cast signer: executable refused');
+            }
+            if (opts.authorize) {
+                let allowed = false;
+                try {
+                    allowed = opts.authorize() === true;
+                } catch {
+                    allowed = false;
+                }
+                if (!allowed) throw new Error('cast signer: authorization refused');
             }
             const raw = await new Promise<Hex>((resolve, reject) => {
                 const child = spawn(spawnPath, args, {
