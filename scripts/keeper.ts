@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, formatGwei, http, isAddress, parseAbi, type Address } from 'viem';
+import { createPublicClient, encodeFunctionData, formatGwei, http, isAddress, parseAbi, type Address, type Hex } from 'viem';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -12,10 +12,12 @@ import { createCastSigner } from './keeper/castSigner.js';
 import { acquireKeeperLock, Journal, resyncJournal } from './keeper/journal.js';
 import { Sender, type SendResult } from './keeper/sender.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
-import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
+import { assertRegistryStart, assertStartBlock, loadPauseConfigFile, pauseRoundAlert, runPauseRound, verifySpDeployment, type PauseDutyConfig } from './keeper/pauseDuty.js';
+import { adaptChainIO, adaptPauseChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
 import { decideIdentityGate } from './keeper/identityGate.js';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
+import { decideRoleCatchUp, syncRoleLogs, type RoleCatchUpMarks } from './keeper/roleLogs.js';
 import { ignoredSecretWarning, pinScrubbedSecrets, scrubSecretEnv } from './keeper/secretEnv.js';
 import { runKeeperStep } from './keeper/keeperStep.js';
 
@@ -153,14 +155,18 @@ function usage(): string {
         '   --poll-interval <sec>       check interval (e.g. 180)',
         '   --safety-margin <sec>       refresh before expiry (e.g. 600)',
         '   --dry-run                   print actions without sending tx',
-        '   --once                      run one tick then exit',
+        '   --once                      run one tick then exit; a pause round runs immediately',
         '   --resync-journal            realign the journal to the chain nonce, then exit',
+        '   --role-sync-slice-calls <n> getLogs calls per tick while role inventory catches up (default 8)',
         '   --keystore <path>           encrypted keystore (required unless --dry-run)',
         '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
         '   --signer <address>          address cast must recover (required unless --dry-run)',
         '   --cast-bin <path>           cast binary (default: cast)',
         '   --journal <path>            nonce journal (default: ~/.aastar-keeper/<network>.journal.json)',
         '   --registry <address>        registry used for signer identity',
+        '   --pause-config <path>       v5.5.0-rc.8 pause-duty config; omit to disable',
+        '   --pause-interval-sec <n>    pause round interval, minimum 600 (default 3600)',
+        '   --pause-offset-sec <n>      delay before the first pause round (default 1800, ignored with --once)',
         '   --low-balance-wei <n>       signer balance alert threshold',
         '   --no-superpaymaster         disable SuperPaymaster updates',
         '   --no-paymaster              disable PaymasterV4 updates',
@@ -193,6 +199,19 @@ function shortUsage(): string {
         `health: --health-interval 1800 (telegram periodic ok status)`,
         `anomaly: --external-ethusd-url <url> --volatility-threshold-bps 150 (1.50%)`
     ].join('\n');
+}
+
+function parseWhole(raw: string | undefined, fallback: bigint, label: string, min: bigint): bigint {
+    const text = raw ?? '';
+    const body = text.length === 0 ? fallback.toString() : text;
+    if (body.length === 0 || body.length > 18) throw new Error(`keeper: ${label} invalid`);
+    for (let i = 0; i < body.length; i++) {
+        const c = body.charCodeAt(i);
+        if (c < 48 || c > 57) throw new Error(`keeper: ${label} invalid`);
+    }
+    const n = BigInt(body);
+    if (n < min) throw new Error(`keeper: ${label} invalid`);
+    return n;
 }
 
 function parseWeiFlag(raw: string | undefined, fallback: bigint): bigint {
@@ -231,9 +250,6 @@ async function main() {
     if (hasFlag(args, '--mode') || hasFlag(args, '--cast-account')) {
         throw new Error('keeper: --mode and --cast-account were removed; use --keystore --password-file --signer');
     }
-    for (const gone of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
-        if (hasFlag(args, gone)) throw new Error(`keeper: ${gone} is not part of the price keeper`);
-    }
     const dryRun = hasFlag(args, '--dry-run');
     const keystorePath = getArgValue(args, '--keystore');
     const passwordFilePath = getArgValue(args, '--password-file');
@@ -246,6 +262,9 @@ async function main() {
     }
     const journalPath = getArgValue(args, '--journal')
         || path.join(os.homedir(), '.aastar-keeper', `${network}.journal.json`);
+    const pauseConfigPath = getArgValue(args, '--pause-config');
+    const pauseIntervalSec = parseWhole(requireArgValue(args, '--pause-interval-sec'), 3600n, '--pause-interval-sec', 600n);
+    const pauseOffsetSec = parseWhole(requireArgValue(args, '--pause-offset-sec'), 1800n, '--pause-offset-sec', 0n);
     const registryFlagRaw = requireArgValue(args, '--registry');
     const registryFlag = registryFlagRaw
         ? (isAddress(registryFlagRaw) ? registryFlagRaw as Address : null)
@@ -255,6 +274,9 @@ async function main() {
         getArgValue(args, '--low-balance-wei'),
         network === 'sepolia' ? LOW_BALANCE_SEPOLIA : LOW_BALANCE_OTHER,
     );
+    let pauseConfig: PauseDutyConfig | null = null;
+    let pauseDisabledReason = 'no --pause-config';
+    if (pauseConfigPath) pauseConfig = loadPauseConfigFile(pauseConfigPath);
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
@@ -265,6 +287,8 @@ async function main() {
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
     const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
     const once = hasFlag(args, '--once');
+    const roleSyncSliceCalls = parseWhole(requireArgValue(args, '--role-sync-slice-calls'), 8n, '--role-sync-slice-calls', 1n);
+    if (roleSyncSliceCalls > 100n) throw new Error('keeper: --role-sync-slice-calls invalid');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
@@ -359,7 +383,7 @@ async function main() {
     }
 
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
-    const registryForIdentity = registryFlag ?? (canonical?.registry as Address | undefined);
+    const registryForIdentity = pauseConfig?.registry ?? registryFlag ?? (canonical?.registry as Address | undefined);
     if (!dryRun && signerAddress && (!registryForIdentity || !isAddress(registryForIdentity))) {
         throw new Error(`signer identity: ${network} has no registry address; pass --registry <address>`);
     }
@@ -416,6 +440,7 @@ async function main() {
     console.log(`priceFeed=${priceFeed}`);
     console.log(`signing=${dryRun ? 'dry-run' : 'keystore'}`);
     console.log(`signer=${signerAddress ?? 'none'}`);
+    console.log(`pauseDuty=${pauseConfig ? `enabled ${pauseConfig.spRelease}` : `disabled (${pauseDisabledReason})`}`);
     console.log(`pollIntervalSec=${pollIntervalSec.toString()}`);
     console.log(`safetyMarginSec=${safetyMarginSec.toString()}`);
     console.log(`healthIntervalSec=${healthIntervalSec.toString()}`);
@@ -460,7 +485,8 @@ async function main() {
     console.log('dm: message bot /start first');
     console.log('group/channel: add bot and allow posting');
 
-    const headChain = adaptHeadChain(publicClient);
+    const pauseChain = adaptPauseChain(publicClient);
+    const pauseStatePath = `${journalPath}.pause-state.json`;
     let sender: Sender | null = null;
 
     const updatesTodayByPaymaster = new Map<string, number>();
@@ -476,9 +502,23 @@ async function main() {
 
     const countedTx = new Set<string>();
     const refusedReasons = new Set<string>();
+    const pauseReasonAlert = { key: '' };
+    let nextPauseAt = once && pauseConfig ? Date.now() : Date.now() + Number(pauseOffsetSec) * 1000;
     let nextIdentityAt = 0;
     let lastIdentityOkAt = 0;
     let identityGateKey = '';
+    let priceOpen = true;
+    let pauseOpen = true;
+    /** Pause send uses the gate from the start of the tick, before this tick's role slice. */
+    let pauseAtTickStart = true;
+    /** RoleConfigured inventory is behind. Pause stays closed; this is not an identity read failure. */
+    let inventoryCatchingUp = false;
+    let roleCatchUpArmed = false;
+    let identityBlocksPause = false;
+    let roleCatchUpStartedAt = 0;
+    let roleMarks: RoleCatchUpMarks = { started: false, completed: false, overdue: false, failAlerted: false };
+    /** Set once a slice has reached the head. Later identity checks include these ids. */
+    let settledRoleIds: Hex[] | null = null;
     let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
 
     const alertLine = (msg: string) => {
@@ -490,23 +530,133 @@ async function main() {
         return { ok: false, kind: 'read-failed', problems };
     }
 
+    function applyScopes(price: boolean, pause: boolean, reason: string): void {
+        priceOpen = price;
+        pauseOpen = pause;
+        if (sender) sender.setGate({ price, pause, reason });
+    }
+
+    async function emitGate(text: string): Promise<void> {
+        console.error(text);
+        await sendTelegramMessage(`[keeper] ${text}`);
+    }
+
+    /** Pinned-role privilege only. RoleConfigured logs are not read here. */
     async function evaluateIdentity(): Promise<IdentityResult> {
         if (!signerAddress) return readFailed(['signer missing']);
-        const head = await headChain.latestHeader();
+        const head = await pauseChain.latestHeader();
         if (!head) return readFailed(['latest block unavailable']);
-        const sp = superPaymaster as Address;
-        const registryAddr = registryFlag ?? (canonical?.registry as Address | undefined);
+        const sp = (pauseConfig?.superPaymaster ?? superPaymaster) as Address;
+        const registryAddr = (pauseConfig?.registry ?? registryFlag ?? (canonical?.registry as Address | undefined));
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
+        let deploymentProblem: string | undefined;
+        if (pauseConfig) {
+            const deployment = await verifySpDeployment(pauseChain, pauseConfig, head.hash);
+            if (deployment) deploymentProblem = deployment;
+        }
         return checkSignerIdentity({
-            chain: asIdentityChain(headChain),
+            chain: asIdentityChain(pauseChain),
             blockHash: head.hash,
             signer: signerAddress,
             sp,
             registry: registryAddr,
             deployers: [DEPLOYER_ADDRESS],
+            pauseDutyEnabled: Boolean(pauseConfig),
+            roleLogs: settledRoleIds === null ? null : settledRoleIds.map((roleId) => ({ roleId })),
+            deploymentProblem,
         });
+    }
+
+    /**
+     * One bounded RoleConfigured slice. Incomplete inventory keeps pause closed and price open.
+     * Returns 'privileged' when a finished scan finds a role the direct reads did not cover.
+     */
+    async function advanceRoleCatchUp(nowMs: number): Promise<'ok' | 'privileged'> {
+        if (!pauseConfig || !signerAddress || !roleCatchUpArmed || identityBlocksPause) return 'ok';
+        const head = await pauseChain.latestHeader();
+        const finalized = head ? await pauseChain.finalizedBlock() : null;
+        let slice: 'incomplete' | 'complete' | 'failed' = 'failed';
+        let unpinnedPrivilege = false;
+        let privilege: IdentityResult | null = null;
+        if (!head || finalized === null) {
+            slice = 'failed';
+        } else {
+            const synced = await syncRoleLogs({
+                chain: pauseChain,
+                statePath: `${journalPath}.role-state.json`,
+                chainId: config.chain.id,
+                registry: pauseConfig.registry,
+                registryStartBlock: pauseConfig.registryStartBlock,
+                head: head.number,
+                finalized,
+                maxCalls: Number(roleSyncSliceCalls),
+            });
+            if (synced.ok) {
+                slice = 'complete';
+                settledRoleIds = synced.roleIds;
+                const again = await checkSignerIdentity({
+                    chain: asIdentityChain(pauseChain),
+                    blockHash: head.hash,
+                    signer: signerAddress,
+                    sp: pauseConfig.superPaymaster,
+                    registry: pauseConfig.registry,
+                    deployers: [DEPLOYER_ADDRESS],
+                    pauseDutyEnabled: true,
+                    roleLogs: synced.roleIds.map((roleId) => ({ roleId })),
+                });
+                if (!again.ok && again.kind === 'privileged') {
+                    unpinnedPrivilege = true;
+                    privilege = again;
+                } else if (!again.ok) {
+                    const decision = decideIdentityGate({
+                        nowMs,
+                        lastOkAt: lastIdentityOkAt,
+                        previousKey: identityGateKey,
+                        verdict: again,
+                    });
+                    lastIdentityOkAt = decision.lastOkAt;
+                    identityGateKey = decision.key;
+                    applyScopes(decision.price, decision.pause, decision.reason);
+                    identityBlocksPause = !decision.pause;
+                    inventoryCatchingUp = false;
+                    for (const problem of again.problems) console.error(`signer-identity: ${problem}`);
+                    if (decision.alert) await emitGate(decision.alert);
+                    return 'ok';
+                }
+            } else if (synced.reason === 'role logs incomplete') {
+                slice = 'incomplete';
+            }
+        }
+        const decided = decideRoleCatchUp({
+            nowMs,
+            startedAt: roleCatchUpStartedAt,
+            slice,
+            unpinnedPrivilege,
+            previous: roleMarks,
+        });
+        roleMarks = decided.marks;
+        if (decided.alert) await emitGate(decided.alert);
+        if (decided.closeAll && privilege && !privilege.ok) {
+            const decision = decideIdentityGate({
+                nowMs,
+                lastOkAt: lastIdentityOkAt,
+                previousKey: identityGateKey,
+                verdict: privilege,
+            });
+            lastIdentityOkAt = decision.lastOkAt;
+            identityGateKey = decision.key;
+            applyScopes(decision.price, decision.pause, decision.reason);
+            identityBlocksPause = true;
+            inventoryCatchingUp = false;
+            for (const problem of privilege.problems) console.error(`signer-identity: ${problem}`);
+            if (decision.alert) await emitGate(decision.alert);
+            return 'privileged';
+        }
+        applyScopes(decided.price, decided.pause, decided.reason);
+        inventoryCatchingUp = decided.price && !decided.pause;
+        return 'ok';
     }
 
     async function maybeAlertLowBalance(): Promise<void> {
@@ -531,6 +681,15 @@ async function main() {
     const refreshAlerted = new Set<string>();
     try {
     if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
+        if (pauseConfig) {
+            const head = await pauseChain.latestHeader();
+            if (!head) {
+                console.error('pause-config: head unavailable');
+                process.exit(1);
+            }
+            assertStartBlock(pauseConfig, head.number);
+            assertRegistryStart(pauseConfig, head.number);
+        }
         releaseLock = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
         const opened = await journal.load();
@@ -559,12 +718,26 @@ async function main() {
             process.exit(1);
         }
         console.log('signer-identity=ok');
-        if (sender) {
-            const openedAt = Date.now();
-            sender.setGate({ price: true, pause: true, reason: '' });
-            nextIdentityAt = scheduledIdentityAt(openedAt);
-            lastIdentityOkAt = openedAt;
-            identityGateKey = 'open';
+        const openedAt = Date.now();
+        nextIdentityAt = scheduledIdentityAt(openedAt);
+        lastIdentityOkAt = openedAt;
+        identityGateKey = 'open';
+        if (pauseConfig) {
+            roleCatchUpArmed = true;
+            roleCatchUpStartedAt = openedAt;
+            const boot = decideRoleCatchUp({
+                nowMs: openedAt,
+                startedAt: openedAt,
+                slice: 'pending',
+                unpinnedPrivilege: false,
+                previous: roleMarks,
+            });
+            roleMarks = boot.marks;
+            inventoryCatchingUp = true;
+            applyScopes(boot.price, boot.pause, boot.reason);
+            if (boot.alert) await emitGate(boot.alert);
+        } else if (sender) {
+            applyScopes(true, true, '');
         }
     }
 
@@ -864,6 +1037,7 @@ async function main() {
             }
 
             if (dryRun) {
+                if (!priceOpen) return;
                 console.log(`action=sendTx kind=super method=updatePrice() target=${superPaymaster} (dry-run)`);
                 return;
             }
@@ -960,6 +1134,7 @@ async function main() {
             }
 
             if (dryRun) {
+                if (!priceOpen) return;
                 console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster} (dry-run)`);
                 return;
             }
@@ -1002,42 +1177,112 @@ async function main() {
     };
 
     async function refreshIdentity(): Promise<boolean> {
-        if (!sender) return true;
+        pauseAtTickStart = pauseOpen;
         const nowMs = Date.now();
-        if (!identityDue(nowMs, nextIdentityAt, sender.gateOpen())) return true;
-        const identity = await evaluateIdentity();
-        const decision = decideIdentityGate({
-            nowMs,
-            lastOkAt: lastIdentityOkAt,
-            previousKey: identityGateKey,
-            verdict: identity,
-        });
-        lastIdentityOkAt = decision.lastOkAt;
-        identityGateKey = decision.key;
-        sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason });
-        if (!identity.ok) {
-            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+        if (sender && identityDue(nowMs, nextIdentityAt, inventoryCatchingUp || sender.gateOpen())) {
+            const identity = await evaluateIdentity();
+            const decision = decideIdentityGate({
+                nowMs,
+                lastOkAt: lastIdentityOkAt,
+                previousKey: identityGateKey,
+                verdict: identity,
+            });
+            lastIdentityOkAt = decision.lastOkAt;
+            identityGateKey = decision.key;
+            applyScopes(decision.price, decision.pause, decision.reason);
+            identityBlocksPause = !identity.ok;
+            if (!identity.ok) inventoryCatchingUp = false;
+            if (!identity.ok) {
+                for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+            }
+            if (decision.alert) await emitGate(decision.alert);
+            if (identity.ok) nextIdentityAt = scheduledIdentityAt(nowMs);
         }
-        if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
-        if (identity.ok) nextIdentityAt = scheduledIdentityAt(nowMs);
-        return decision.pause;
+        const caught = await advanceRoleCatchUp(nowMs);
+        if (caught === 'privileged') return false;
+        // Catch-up closes the pause gate without counting as "signer identity refused".
+        if (inventoryCatchingUp) return true;
+        return pauseOpen;
+    }
+
+    const pauseIntervalMs = Number(pauseIntervalSec) * 1000;
+
+    async function runDuePause(): Promise<void> {
+        if (!pauseConfig) return;
+        if (!pauseAtTickStart) return;
+        try {
+            const result = await runPauseRound({
+                chain: pauseChain,
+                config: pauseConfig,
+                chainId: config.chain.id,
+                signer: signerAddress ?? undefined,
+                sender: sender ?? undefined,
+                dryRun,
+                statePath: pauseStatePath,
+                nowMs: Date.now(),
+                alert: alertLine,
+                log: (line) => console.log(line),
+            });
+            if (result.kind === 'sp-mismatch') {
+                if (sender) {
+                    const decision = decideIdentityGate({
+                        nowMs: Date.now(),
+                        lastOkAt: lastIdentityOkAt,
+                        previousKey: identityGateKey,
+                        verdict: { ok: false, kind: 'sp-mismatch', problems: [result.problem] },
+                    });
+                    lastIdentityOkAt = decision.lastOkAt;
+                    identityGateKey = decision.key;
+                    sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason });
+                    if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
+                }
+                console.log(`pause-round=FAILED reasons=${result.problem} notes=${result.notes.join('; ')}`);
+                const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: [result.problem] });
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+            } else if (result.kind === 'failed') {
+                console.log(`pause-round=FAILED reasons=${result.reasons.join('; ')} notes=${result.notes.join('; ')}`);
+                const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: result.reasons });
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+            } else {
+                const reported = pauseRoundAlert(pauseReasonAlert.key, 'ok');
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+                console.log(
+                    `pause-round=ok checked=${result.checked} understaked=${result.understaked.length} sent=${result.sent.length} notes=${result.notes.join('; ')}`
+                );
+            }
+        } catch {
+            console.log('pause-round=FAILED reasons=pause round rejected');
+            const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: ['pause round rejected'] });
+            pauseReasonAlert.key = reported.key;
+            if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+        }
+        nextPauseAt = Date.now() + pauseIntervalMs;
     }
 
     for (;;) {
         try {
-            // Price keeper: no pause round. The step still takes the pause hooks; they never run.
+            const pauseDue = Boolean(pauseConfig) && Date.now() >= nextPauseAt;
             await runKeeperStep({
                 refreshIdentity,
                 tick,
-                pauseDue: false,
+                pauseDue,
                 network,
                 alerted: refreshAlerted,
                 alert: async (msg) => {
                     console.error(msg);
                     await sendTelegramMessage(`[keeper] ${msg}`);
                 },
-                onPause: async () => {},
-                onPauseSkipped: async () => {},
+                onPause: runDuePause,
+                onPauseSkipped: async (reason) => {
+                    console.log(`pause-round=FAILED reasons=${reason}`);
+                    const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: [reason] });
+                    pauseReasonAlert.key = reported.key;
+                    if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+                    nextPauseAt = Date.now() + pauseIntervalMs;
+                },
             });
         } catch (e: unknown) {
             const report = loopErrorReport(network, e, 'error');

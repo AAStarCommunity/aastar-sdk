@@ -10,12 +10,14 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import { encodeFunctionResult, getAddress, parseAbi, toFunctionSelector } from 'viem';
+import { encodeEventTopics, encodeFunctionResult, getAddress, keccak256, pad, parseAbi, toFunctionSelector, type Hex } from 'viem';
+import { ROLE_TOPIC } from './roleLogs';
+import { REGISTRY_PAUSE_ABI, SUPER_PAYMASTER_PAUSE_ABI } from './spPausePin';
 
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
 // The keeper runs IN this node process via the repo's pinned tsx loader — not through the tsx
@@ -110,6 +112,97 @@ afterEach(async () => {
 
 function closeServer(server: Server): Promise<void> {
     return new Promise((r) => { server.closeAllConnections?.(); server.close(() => r()); });
+}
+
+/** Pause-config chain whose RoleConfigured span is `head` blocks. Direct privilege reads stay clean. */
+async function inventoryRpc(opts: { head: bigint; operator?: ReturnType<typeof getAddress>; unpinnedRole?: Hex }): Promise<{ server: Server; url: string; pausePath: string; journalPath: string }> {
+    const code = '0x6080' as Hex;
+    const impl = getAddress('0x0000000000000000000000000000000000000a11');
+    const registry = getAddress('0x0000000000000000000000000000000000000b22');
+    const codeHash = keccak256(code);
+    const headHex = `0x${opts.head.toString(16)}`;
+    const operatorTopic = encodeEventTopics({ abi: SUPER_PAYMASTER_PAUSE_ABI, eventName: 'OperatorConfigured' })[0];
+    const hasRoleSel = toFunctionSelector('function hasRole(bytes32,address)');
+    const roleSel = toFunctionSelector('function getRoleConfig(bytes32)');
+    const registrySel = toFunctionSelector('function REGISTRY()');
+    const dir = mkdtempSync(join(tmpdir(), 'keeper-inventory-'));
+    cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+    const pausePath = join(dir, 'pause.json');
+    const journalPath = join(dir, 'journal.json');
+    writeFileSync(pausePath, JSON.stringify({
+        superPaymaster: getAddress(SP),
+        registry,
+        startBlock: 1,
+        registryStartBlock: 1,
+        implementation: impl,
+        implementationCodeHash: codeHash,
+        proxyCodeHash: codeHash,
+        spRelease: 'v5.5.0-rc.8',
+    }));
+    const server = createServer((req, res) => {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+            const msg = JSON.parse(body);
+            const now = BigInt(Math.floor(Date.now() / 1000));
+            const one = (m: { id: unknown; method: string; params?: unknown[] }) => {
+                const params = m.params ?? [];
+                if (m.method === 'eth_chainId') return { jsonrpc: '2.0', id: m.id, result: '0xaa36a7' };
+                if (m.method === 'eth_blockNumber') return { jsonrpc: '2.0', id: m.id, result: headHex };
+                if (m.method === 'eth_getBlockByNumber') {
+                    return { jsonrpc: '2.0', id: m.id, result: { number: headHex, hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now.toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
+                }
+                if (m.method === 'eth_getCode') return { jsonrpc: '2.0', id: m.id, result: code };
+                if (m.method === 'eth_getStorageAt') return { jsonrpc: '2.0', id: m.id, result: pad(impl, { size: 32 }) };
+                if (m.method === 'eth_getBalance') return { jsonrpc: '2.0', id: m.id, result: '0x' + (10n ** 18n).toString(16) };
+                if (m.method === 'eth_getLogs') {
+                    const filter = (params[0] ?? {}) as { address?: string; topics?: string[]; fromBlock?: string; toBlock?: string };
+                    const topic = String(filter.topics?.[0] ?? '').toLowerCase();
+                    const from = BigInt(filter.fromBlock ?? '0x0');
+                    const to = BigInt(filter.toBlock ?? '0x0');
+                    const rows: { address: string; topics: string[]; blockNumber: string; removed: boolean }[] = [];
+                    if (opts.operator && topic === operatorTopic.toLowerCase() && from <= 0x10n && to >= 0x10n) {
+                        rows.push({ address: getAddress(SP), topics: [operatorTopic, pad(opts.operator, { size: 32 })], blockNumber: '0x10', removed: false });
+                    }
+                    if (opts.unpinnedRole && topic === ROLE_TOPIC.toLowerCase() && from <= 0x10n && to >= 0x10n) {
+                        rows.push({ address: registry, topics: [ROLE_TOPIC, opts.unpinnedRole], blockNumber: '0x10', removed: false });
+                    }
+                    return { jsonrpc: '2.0', id: m.id, result: rows };
+                }
+                if (m.method === 'eth_call') {
+                    const tx = params[0] as { to?: string; data?: string };
+                    const data = String(tx.data ?? '');
+                    const sig = data.slice(0, 10).toLowerCase();
+                    const to = String(tx.to ?? '').toLowerCase();
+                    let result = '0x' + '00'.repeat(32);
+                    if (sig === OWNER_SEL) result = encodeFunctionResult({ abi: parseAbi(['function owner() view returns (address)']), functionName: 'owner', result: OWNER });
+                    else if (sig === registrySel) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'REGISTRY', result: registry });
+                    else if (sig === hasRoleSel) {
+                        const role = `0x${data.slice(10, 74).toLowerCase()}`;
+                        const who = data.slice(74).toLowerCase();
+                        const unpinned = opts.unpinnedRole?.toLowerCase();
+                        const held = unpinned !== undefined && role === unpinned && who.endsWith(SIGNER.slice(2).toLowerCase());
+                        result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'hasRole', result: held });
+                    } else if (sig === roleSel) {
+                        result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getRoleConfig', result: { minStake: 1000n, ticketPrice: 0n, slashThreshold: 0, slashBase: 0, slashInc: 0, slashMax: 0, exitFeePercent: 0, isActive: true, minExitFee: 0n, description: 'role', owner: OWNER, roleLockDuration: 0n } });
+                    } else if (sig === sel('function latestRoundData()')) result = encodeFunctionResult({ abi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, now, now, 1n] });
+                    else if (sig === sel('function decimals()')) result = encodeFunctionResult({ abi, functionName: 'decimals', result: 8 });
+                    else if (sig === sel('function priceStalenessThreshold()')) result = encodeFunctionResult({ abi, functionName: 'priceStalenessThreshold', result: 3600n });
+                    else if (sig === sel('function ethUsdPriceFeed()')) result = encodeFunctionResult({ abi, functionName: 'ethUsdPriceFeed', result: FEED });
+                    else if (sig === sel('function cachedPrice()') && to === SP) result = encodeFunctionResult({ abi: spCache, functionName: 'cachedPrice', result: [3000n * 10n ** 8n, now, 1n, 8] });
+                    else if (sig === sel('function cachedPrice()') && to === V4) result = encodeFunctionResult({ abi: v4Cache, functionName: 'cachedPrice', result: [0n, 0] });
+                    else if (sig === toFunctionSelector('function operators(address)')) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'operators', result: [0n, true, false, opts.operator ?? OWNER, 0, 0, opts.operator ?? OWNER, 0n, 0n] });
+                    else if (sig === toFunctionSelector('function getEffectiveStake(address,bytes32)')) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getEffectiveStake', result: 1n });
+                    return { jsonrpc: '2.0', id: m.id, result };
+                }
+                return { jsonrpc: '2.0', id: m.id, error: { code: -32601, message: `fake: unexpected ${m.method}` } };
+            };
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg)));
+        });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, pausePath, journalPath };
 }
 
 /**
@@ -211,5 +304,146 @@ describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refre
         const out = await runKeeper(fake.url, ['--signer', SIGNER, '--registry', REGISTRY, '--once'], (o) => o.includes('balance read failed') || /TICK #2/.test(o));
         expect(out).toContain('balance read failed');
         expect(out).not.toContain('low signer balance');
+    }, 60_000);
+
+    it('dry-run with --pause-config logs the pause it would send', async () => {
+        const code = '0x6080' as Hex;
+        const impl = getAddress('0x0000000000000000000000000000000000000a11');
+        const registry = getAddress('0x0000000000000000000000000000000000000b22');
+        const operator = getAddress('0x0000000000000000000000000000000000000c33');
+        const codeHash = keccak256(code);
+        const topic0 = encodeEventTopics({ abi: SUPER_PAYMASTER_PAUSE_ABI, eventName: 'OperatorConfigured' })[0];
+        const pauseDir = mkdtempSync(join(tmpdir(), 'keeper-pause-cfg-'));
+        cleanups.push(() => rmSync(pauseDir, { recursive: true, force: true }));
+        const pausePath = join(pauseDir, 'pause.json');
+        const journalPath = join(pauseDir, 'journal.json');
+        writeFileSync(pausePath, JSON.stringify({
+            superPaymaster: getAddress(SP),
+            registry,
+            startBlock: 1,
+            registryStartBlock: 1,
+            implementation: impl,
+            implementationCodeHash: codeHash,
+            proxyCodeHash: codeHash,
+            spRelease: 'v5.5.0-rc.8',
+        }));
+        const registrySel = toFunctionSelector('function REGISTRY()');
+        const operatorsSel = toFunctionSelector('function operators(address)');
+        const hasRoleSel = toFunctionSelector('function hasRole(bytes32,address)');
+        const roleSel = toFunctionSelector('function getRoleConfig(bytes32)');
+        const stakeSel = toFunctionSelector('function getEffectiveStake(address,bytes32)');
+        const methods: string[] = [];
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => (body += c));
+            req.on('end', () => {
+                const msg = JSON.parse(body);
+                const now = BigInt(Math.floor(Date.now() / 1000));
+                const one = (m: { id: unknown; method: string; params?: unknown[] }) => {
+                    methods.push(m.method);
+                    const params = m.params ?? [];
+                    if (m.method === 'eth_chainId') return { jsonrpc: '2.0', id: m.id, result: '0xaa36a7' };
+                    if (m.method === 'eth_blockNumber') return { jsonrpc: '2.0', id: m.id, result: '0x100' };
+                    if (m.method === 'eth_getBlockByNumber') {
+                        return { jsonrpc: '2.0', id: m.id, result: { number: '0x100', hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now.toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
+                    }
+                    if (m.method === 'eth_getCode') return { jsonrpc: '2.0', id: m.id, result: code };
+                    if (m.method === 'eth_getStorageAt') return { jsonrpc: '2.0', id: m.id, result: pad(impl, { size: 32 }) };
+                    if (m.method === 'eth_getLogs') {
+                        return { jsonrpc: '2.0', id: m.id, result: [{ address: getAddress(SP), topics: [topic0, pad(operator, { size: 32 })], blockNumber: '0x10', removed: false }] };
+                    }
+                    if (m.method === 'eth_call') {
+                        const tx = params[0] as { to?: string; data?: string };
+                        const data = String(tx.data ?? '').slice(0, 10).toLowerCase();
+                        const to = String(tx.to ?? '').toLowerCase();
+                        let result = '0x' + '00'.repeat(32);
+                        if (data === registrySel) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'REGISTRY', result: registry });
+                        else if (data === operatorsSel) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'operators', result: [0n, true, false, operator, 0, 0, operator, 0n, 0n] });
+                        else if (data === hasRoleSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'hasRole', result: false });
+                        else if (data === roleSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getRoleConfig', result: { minStake: 1000n, ticketPrice: 0n, slashThreshold: 0, slashBase: 0, slashInc: 0, slashMax: 0, exitFeePercent: 0, isActive: true, minExitFee: 0n, description: 'role', owner: operator, roleLockDuration: 0n } });
+                        else if (data === stakeSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getEffectiveStake', result: 1n });
+                        else if (data === sel('function latestRoundData()')) result = encodeFunctionResult({ abi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, now, now, 1n] });
+                        else if (data === sel('function decimals()')) result = encodeFunctionResult({ abi, functionName: 'decimals', result: 8 });
+                        else if (data === sel('function priceStalenessThreshold()')) result = encodeFunctionResult({ abi, functionName: 'priceStalenessThreshold', result: 3600n });
+                        else if (data === sel('function ethUsdPriceFeed()')) result = encodeFunctionResult({ abi, functionName: 'ethUsdPriceFeed', result: FEED });
+                        else if (data === sel('function cachedPrice()') && to === SP) result = encodeFunctionResult({ abi: spCache, functionName: 'cachedPrice', result: [3000n * 10n ** 8n, now, 1n, 8] });
+                        else if (data === sel('function cachedPrice()') && to === V4) result = encodeFunctionResult({ abi: v4Cache, functionName: 'cachedPrice', result: [0n, 0] });
+                        return { jsonrpc: '2.0', id: m.id, result };
+                    }
+                    return { jsonrpc: '2.0', id: m.id, error: { code: -32601, message: `fake: unexpected ${m.method}` } };
+                };
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg)));
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        cleanups.push(() => closeServer(server));
+        const rpc = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        const would = `action=sendTx kind=pause method=pauseUnderstakedOperator(address) target=${getAddress(SP)} operator=${operator} (dry-run)`;
+        const out = await runKeeper(rpc, ['--once', '--pause-config', pausePath, '--pause-offset-sec', '86400', '--journal', journalPath], (o) => o.includes('pause-round=ok') || o.includes('pause-round=FAILED'));
+        expect(out).toContain(would);
+        expect(out).toContain('pause-round=ok');
+        expect(out).not.toMatch(/nothing understaked/);
+        expect(methods).toContain('eth_getLogs');
+        expect(existsSync(`${journalPath}.pause-state.json`)).toBe(false);
+    }, 60_000);
+
+    it('price sends during role catch-up', async () => {
+        const head = 100_000n;
+        const built = await inventoryRpc({ head });
+        cleanups.push(() => closeServer(built.server));
+        const updateLine = `action=sendTx kind=paymaster method=updatePrice() target=${V4}`;
+        const out = await runKeeper(built.url, [
+            '--signer', SIGNER,
+            '--pause-config', built.pausePath,
+            '--pause-offset-sec', '0',
+            '--role-sync-slice-calls', '1',
+            '--journal', built.journalPath,
+        ], (o) => o.toLowerCase().includes(updateLine.toLowerCase()));
+        expect(out).toContain('signer-identity=ok');
+        expect(out).toContain('role inventory catching up');
+        expect(out.toLowerCase()).toContain(updateLine.toLowerCase());
+        expect(out).not.toContain('role inventory caught up');
+        expect(out).not.toContain('kind=pause');
+    }, 60_000);
+
+    it('pause does not send before catch-up completes', async () => {
+        const head = 15_000n;
+        const operator = getAddress('0x0000000000000000000000000000000000000c33');
+        const built = await inventoryRpc({ head, operator });
+        cleanups.push(() => closeServer(built.server));
+        const would = `action=sendTx kind=pause method=pauseUnderstakedOperator(address) target=${getAddress(SP)} operator=${operator} (dry-run)`;
+        const out = await runKeeper(built.url, [
+            '--signer', SIGNER,
+            '--pause-config', built.pausePath,
+            '--pause-offset-sec', '0',
+            '--role-sync-slice-calls', '1',
+            '--journal', built.journalPath,
+        ], (o) => o.includes(would));
+        const caughtAt = out.indexOf('role inventory caught up');
+        const pauseAt = out.indexOf(would);
+        expect(caughtAt, out).toBeGreaterThanOrEqual(0);
+        expect(pauseAt, out).toBeGreaterThan(caughtAt);
+        expect(out).toContain('role inventory catching up');
+    }, 60_000);
+
+    it('an unpinned role held by the signer found at the end of catch-up closes everything', async () => {
+        const operator = getAddress('0x0000000000000000000000000000000000000c33');
+        const unpinned = ('0x' + 'ab'.repeat(32)) as Hex;
+        const built = await inventoryRpc({ head: 0x100n, operator, unpinnedRole: unpinned });
+        cleanups.push(() => closeServer(built.server));
+        const would = `action=sendTx kind=pause method=pauseUnderstakedOperator(address) target=${getAddress(SP)} operator=${operator} (dry-run)`;
+        const out = await runKeeper(built.url, [
+            '--signer', SIGNER,
+            '--once',
+            '--pause-config', built.pausePath,
+            '--pause-offset-sec', '0',
+            '--role-sync-slice-calls', '1',
+            '--journal', built.journalPath,
+        ], (o) => o.includes('signer holds a role') || o.includes('pause-round=ok') || o.includes(would));
+        expect(out).toContain('signer holds a role');
+        expect(out).toContain('price updates have also stopped');
+        expect(out).not.toContain(would);
+        expect(out).not.toContain('kind=paymaster method=updatePrice');
     }, 60_000);
 });

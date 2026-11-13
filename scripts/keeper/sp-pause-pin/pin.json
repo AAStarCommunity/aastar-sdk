@@ -1,0 +1,10 @@
+{
+  "repo": "AAStarCommunity/SuperPaymaster",
+  "commit": "dac5f378f52dca4daacdb3121f995eb22c5ce255",
+  "note": "SP main (pauseUnderstakedOperator is in no tag yet). DSR e64768ab B3: re-pin to the v5.5.0-rc.8 tag commit before deploy.",
+  "files": [
+    { "path": "abis/SuperPaymaster.full.json", "blobSha": "944d4dc3c0cb6896398cd592e9f063d1af099312", "local": "upstream/SuperPaymaster.full.json" },
+    { "path": "abis/Registry.json", "blobSha": "3563bbb24c3bbc62751fa67bb4b4584e8ca763fc", "local": "upstream/Registry.json" },
+    { "path": "contracts/src/interfaces/v3/IRegistry.sol", "blobSha": "cd7088db04e7b2486e6fb33475d355a8691edf3d", "local": "upstream/IRegistry.sol" }
+  ]
+}

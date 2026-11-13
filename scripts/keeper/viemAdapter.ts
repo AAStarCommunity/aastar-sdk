@@ -2,17 +2,13 @@
  * Adapts a viem PublicClient to the keeper's chain interfaces.
  * State reads pin the block by hash (EIP-1898 requireCanonical). Errors stay inside the adapter.
  */
-import { type Address, type Hex, type PublicClient } from 'viem';
+import { toHex, type Address, type Hex, type PublicClient } from 'viem';
 import { explainHex } from './hex.js';
 import type { ChainIO, ChainReceipt } from './sender.js';
+import type { PauseCall, PauseChain, PauseLog } from './pauseDuty.js';
 import type { IdentityChain } from './signerGuard.js';
 
-export interface HeadChain {
-    latestHeader(): Promise<{ number: bigint; hash: Hex } | null>;
-    call(tx: { to: Address; data: Hex; blockHash?: Hex }): Promise<{ ok: true; data: Hex } | { ok: false; data?: Hex; reason: string }>;
-}
-
-export function asIdentityChain(chain: HeadChain): IdentityChain {
+export function asIdentityChain(chain: PauseChain): IdentityChain {
     return {
         async call({ to, data, blockHash }) {
             const out = await chain.call({ to, data, blockHash });
@@ -21,6 +17,8 @@ export function asIdentityChain(chain: HeadChain): IdentityChain {
         },
     };
 }
+
+const MAX_LOGS = 2_000;
 
 type Client = Pick<PublicClient, 'getBlock' | 'getTransactionCount' | 'getBalance' | 'estimateGas' | 'estimateMaxPriorityFeePerGas' | 'sendRawTransaction' | 'getTransactionReceipt' | 'request'>;
 
@@ -41,6 +39,17 @@ function revertDataOf(error: unknown): Hex | undefined {
         cur = (cur as { cause?: unknown }).cause;
     }
     return undefined;
+}
+
+function qty(value: unknown): bigint | null {
+    if (typeof value === 'bigint' && value >= 0n) return value;
+    if (typeof value !== 'string' || value.length < 3 || value.length > 66) return null;
+    if (value.charCodeAt(0) !== 48 || value.charCodeAt(1) !== 120) return null;
+    try {
+        return BigInt(value);
+    } catch {
+        return null;
+    }
 }
 
 export function adaptChainIO(client: Client, opts: { tipWei?: bigint } = {}): ChainIO {
@@ -120,7 +129,7 @@ export function adaptChainIO(client: Client, opts: { tipWei?: bigint } = {}): Ch
     };
 }
 
-export function adaptHeadChain(client: Client): HeadChain {
+export function adaptPauseChain(client: Client): PauseChain {
     return {
         async latestHeader() {
             try {
@@ -131,18 +140,91 @@ export function adaptHeadChain(client: Client): HeadChain {
                 return null;
             }
         },
-        async call(tx) {
-            const block = tx.blockHash ? atHash(tx.blockHash) : 'latest';
+        async blockByNumber(n) {
+            try {
+                const block = await client.getBlock({ blockNumber: n });
+                if (!block.hash) return null;
+                return { hash: block.hash };
+            } catch {
+                return null;
+            }
+        },
+        async finalizedBlock() {
+            try {
+                const block = await client.getBlock({ blockTag: 'finalized' });
+                if (typeof block.number !== 'bigint') return null;
+                return block.number;
+            } catch {
+                return null;
+            }
+        },
+        async getCode(addr, blockHash) {
+            try {
+                const code = await client.request({ method: 'eth_getCode', params: [addr, atHash(blockHash)] });
+                return explainHex(code, 200_000);
+            } catch {
+                return { ok: false as const, reason: 'unavailable' };
+            }
+        },
+        async getStorageAt(addr, slot, blockHash) {
+            try {
+                const word = await client.request({ method: 'eth_getStorageAt', params: [addr, slot, atHash(blockHash)] });
+                return explainHex(word, 66);
+            } catch {
+                return { ok: false as const, reason: 'unavailable' };
+            }
+        },
+        async call(tx: PauseCall) {
+            const block = tx.at === 'latest' || !tx.blockHash ? 'latest' : atHash(tx.blockHash);
             try {
                 const data = await client.request({
                     method: 'eth_call',
-                    params: [{ to: tx.to, data: tx.data }, block],
+                    params: [{ to: tx.to, data: tx.data, from: tx.from }, block],
                 });
                 const parsed = explainHex(data, 200_000);
                 if (!parsed.ok) return { ok: false as const, reason: parsed.reason };
                 return { ok: true as const, data: parsed.data };
             } catch (error) {
                 return { ok: false as const, data: revertDataOf(error), reason: 'unavailable' };
+            }
+        },
+        async getLogs(q) {
+            try {
+                const raw = await client.request({
+                    method: 'eth_getLogs',
+                    params: [{
+                        address: q.address,
+                        topics: [q.topic0],
+                        fromBlock: toHex(q.fromBlock),
+                        toBlock: toHex(q.toBlock),
+                    }],
+                });
+                if (!Array.isArray(raw) || raw.length > MAX_LOGS) return null;
+                const logs: PauseLog[] = [];
+                for (const item of raw) {
+                    if (!item || typeof item !== 'object') return null;
+                    const row = item as { address?: unknown; topics?: unknown; blockNumber?: unknown; removed?: unknown };
+                    const address = hexData(row.address, 42);
+                    if (!address || !Array.isArray(row.topics) || row.topics.length > 8) return null;
+                    const topics: Hex[] = [];
+                    for (const topic of row.topics) {
+                        const hex = hexData(topic, 66);
+                        if (!hex) return null;
+                        topics.push(hex);
+                        if (topics.length > 4) return null;
+                    }
+                    const blockNumber = qty(row.blockNumber);
+                    if (blockNumber === null) return null;
+                    logs.push({
+                        address: address as Address,
+                        topics,
+                        blockNumber,
+                        removed: row.removed === true,
+                    });
+                }
+                return logs;
+            } catch {
+                return null;
             }
         },
     };
