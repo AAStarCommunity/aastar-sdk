@@ -4,6 +4,7 @@ import {
     assertProviderName, header, isHexData, isWord, pagedLogs, quantity, requireAddress, responseLimits,
     snapshotReceipts, type BlockHeader, type RawLog, type RawRpc,
 } from './rpc.js';
+import { isolatedClone } from './isolated.js';
 import {
     ScopeChangedError,
     StoreConflictError,
@@ -118,7 +119,7 @@ function safeInt(n: number, min: number): boolean {
 
 function keyOf(log: Norm): string {
     return [
-        log.blockHash, log.logIndex, log.txHash, log.address, log.topics.join(','), log.data,
+        log.blockNumber, log.blockHash, log.logIndex, log.txHash, log.address, log.topics.join(','), log.data,
         log.removed ? '1' : '0',
     ].join('|').toLowerCase();
 }
@@ -187,13 +188,13 @@ function covers(contract: WatchedContract, address: Address, block: number): boo
 function callDecode(
     contract: WatchedContract, input: RawLog, address: Address, block: number,
 ): { ok: true; value: DecodedAction | 'ignore' | null; log: RawLog } | { ok: false; reason: string } {
-    const log = structuredClone(input);
+    const log = isolatedClone(input);
     const failed = { ok: false as const, reason: `decoder threw for ${address} at block ${block}` };
     try {
-        const produced = contract.decode(structuredClone(log));
+        const produced = contract.decode(isolatedClone(log));
         if (produced === null || produced === 'ignore') return { ok: true, value: produced, log };
         if (typeof produced !== 'object') return failed;
-        return { ok: true, value: structuredClone(produced), log };
+        return { ok: true, value: isolatedClone(produced), log };
     } catch {
         return failed;
     }
@@ -336,10 +337,10 @@ async function judge(
 ): Promise<{ ok: true; attribution: unknown } | { ok: false; reason: string }> {
     if (!attributor) return { ok: false, reason: 'no attributor' };
     try {
-        const result = await attributor.attribute(structuredClone(action));
+        const result = await attributor.attribute(isolatedClone(action));
         if (typeof result !== 'object' || result === null) return { ok: false, reason: 'attributor failed' };
         if (result.ok === true) {
-            const attribution = result.attribution === undefined ? undefined : structuredClone(result.attribution);
+            const attribution = result.attribution === undefined ? undefined : isolatedClone(result.attribution);
             return { ok: true, attribution };
         }
         return { ok: false, reason: safeReason(result.reason) };
@@ -696,7 +697,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const scope = watchScope(watched, startBlock, chainId);
     let snap: StoreSnapshot;
     try {
-        snap = structuredClone(await store.snapshot());
+        snap = isolatedClone(await store.snapshot());
     } catch (error) {
         storeFailure('snapshot', error);
     }
@@ -912,7 +913,7 @@ async function finish(
         resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
     };
     try {
-        await store.commit(structuredClone(payload));
+        await store.commit(isolatedClone(payload));
     } catch (error) {
         storeFailure('commit', error);
     }

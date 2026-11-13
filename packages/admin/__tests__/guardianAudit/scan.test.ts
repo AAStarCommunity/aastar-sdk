@@ -2065,3 +2065,73 @@ describe('eth_chainId read failures are INCOMPLETE, only a real mismatch throws 
         await expect(run(a, other)).rejects.toThrow(/chain id mismatch/);
     });
 });
+
+describe('Codex review @ff82ba6a (#445) (unit, not acceptance)', () => {
+    it('M1: providers that disagree only on a log blockNumber are INCOMPLETE, on either side', async () => {
+        for (const side of ['a', 'b'] as const) {
+            const nodes = pair(3);
+            addBoth(nodes.a, nodes.b, 2, TOPIC);
+            const log = nodes[side].blocks.get(2)!.logs[0] as unknown as Record<string, unknown>;
+            log.blockNumber = numberToHex(3);
+            const store = memoryStore();
+            expectIncomplete(await run(nodes.a, nodes.b, store), new RegExp(`providers disagree on logs of ${getAddress(ADDR)}`));
+            expect(await store.getCheckpoint()).toBeNull();
+        }
+    });
+
+    it('M2: a payload getter that commits reentrantly makes the outer commit conflict and cannot erase the inner row', async () => {
+        const store = memoryStore();
+        const scope = `0x${'11'.repeat(32)}` as Hex;
+        const inner = row(1, 0);
+        let fired = false;
+        const outerRow = row(1, 1);
+        const hostile = {
+            ...outerRow,
+            get reason() {
+                if (!fired) {
+                    fired = true;
+                    void store.commit({ expectedRevision: 0, scope, next: { block: 9, hash: bhash(9) }, attributed: [], unresolved: [inner], resolve: [] });
+                }
+                return 'outer';
+            },
+        };
+        await expect(store.commit({
+            expectedRevision: 0, scope, next: { block: 1, hash: bhash(1) }, attributed: [], unresolved: [hostile as UnresolvedAction], resolve: [],
+        })).rejects.toBeInstanceOf(StoreConflictError);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(await store.getCheckpoint()).toEqual({ block: 9, hash: bhash(9) });
+        expect((await store.listUnresolved()).map((r) => r.id)).toEqual([inner.id]);
+    });
+
+    it('M3: shared memory is refused at the store boundary and from a decoder', async () => {
+        const SAB = (globalThis as { SharedArrayBuffer?: typeof SharedArrayBuffer }).SharedArrayBuffer;
+        if (!SAB) return;
+        const store = memoryStore();
+        const scope = `0x${'11'.repeat(32)}` as Hex;
+        const shared = new Uint8Array(new SAB(1));
+        const bad = { ...row(1, 0), decoded: { kind: 'guardian-added', bytes: shared } } as unknown as UnresolvedAction;
+        await expect(store.commit({ expectedRevision: 0, scope, next: null, attributed: [], unresolved: [bad], resolve: [] }))
+            .rejects.toThrow(/shared memory/);
+        expect((await store.snapshot()).revision).toBe(0);
+
+        const { a, b } = pair(3);
+        addBoth(a, b, 2, TOPIC);
+        const result = await run(a, b, memoryStore(), {
+            watched: [watched({ decode: () => ({ kind: 'guardian-added', bytes: new Uint8Array(new SAB(1)) }) })],
+        });
+        expectIncomplete(result, /decoder threw/);
+    });
+
+    it('L1: one provider whose receipts alone are off-root is INCOMPLETE, on either side', async () => {
+        for (const side of ['a', 'b'] as const) {
+            const nodes = pair(3);
+            addBoth(nodes.a, nodes.b, 2, TOPIC);
+            const receipts = structuredClone(nodes[side].blocks.get(2)!.receipts) as Record<string, unknown>[];
+            receipts[0].cumulativeGasUsed = numberToHex(BigInt(receipts[0].cumulativeGasUsed as string) + 1n);
+            nodes[side].receiptsOverride = receipts;
+            const store = memoryStore();
+            expectIncomplete(await run(nodes.a, nodes.b, store), /receipts do not match receiptsRoot at block 2/);
+            expect(await store.getCheckpoint()).toBeNull();
+        }
+    });
+});

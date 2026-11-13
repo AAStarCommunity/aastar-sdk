@@ -1,4 +1,5 @@
 import type { Address, Hex } from 'viem';
+import { isolatedClone } from './isolated.js';
 import type { RawLog } from './rpc.js';
 
 export interface Checkpoint { block: number; hash: Hex }
@@ -99,7 +100,7 @@ export function unresolvedId(blockHash: string, logIndex: number): string {
 }
 
 function copy<T>(value: T): T {
-    return structuredClone(value);
+    return isolatedClone(value);
 }
 
 /**
@@ -135,7 +136,10 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
         },
         async listUnresolved() { return [...open.values()].map((item) => copy(item)); },
         async listAttributed() { return [...attributed.values()].map((item) => copy(item)); },
-        async commit(change) {
+        async commit(input) {
+            // Materialize the whole payload first: caller getters run here, so a reentrant commit
+            // lands before the revision check below and this one then conflicts (#445 Codex M2).
+            const change = copy(input);
             if (change.expectedRevision !== revision) throw new StoreConflictError();
             const nextScope = change.scope.toLowerCase() as Hex;
             if (scope !== null && nextScope !== scope) throw new ScopeChangedError();

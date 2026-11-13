@@ -20,6 +20,7 @@
  * crash failure. The concurrency cell runs both commits on one store instance.
  */
 import type { Address, Hex } from 'viem';
+import { isolatedClone } from './isolated.js';
 import {
     ScopeChangedError,
     StoreConflictError,
@@ -153,7 +154,7 @@ function sameSnapshot(a: StoreSnapshot, b: StoreSnapshot): boolean {
 }
 
 function frozen<T>(value: T): T {
-    return structuredClone(value);
+    return isolatedClone(value);
 }
 
 /** Change every leaf of a returned value. Arrays are pushed after their current items are walked. */
