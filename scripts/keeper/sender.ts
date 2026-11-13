@@ -326,7 +326,9 @@ async function decodeRaw(raw: Hex, signer: Address): Promise<Decoded | null> {
     const accessEmpty = !tx.accessList || tx.accessList.length === 0;
     if (!accessEmpty) return null;
     if (tx.chainId === undefined || tx.nonce === undefined || tx.gas === undefined) return null;
-    if (tx.maxFeePerGas === undefined || tx.maxPriorityFeePerGas === undefined) return null;
+    // viem parses a zero fee field of a type-2 tx as undefined; it means 0 (#447 clestons M1').
+    const maxFeePerGas = tx.maxFeePerGas ?? 0n;
+    const maxPriorityFeePerGas = tx.maxPriorityFeePerGas ?? 0n;
     return {
         to: tx.to,
         data: (tx.data ?? '0x') as Hex,
@@ -334,8 +336,8 @@ async function decodeRaw(raw: Hex, signer: Address): Promise<Decoded | null> {
         gas: tx.gas,
         chainId: tx.chainId,
         nonce: tx.nonce,
-        maxFeePerGas: tx.maxFeePerGas,
-        maxPriorityFeePerGas: tx.maxPriorityFeePerGas,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         from,
     };
 }

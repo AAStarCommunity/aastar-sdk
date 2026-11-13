@@ -299,4 +299,17 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             await expect(signer.sign(REQ), JSON.stringify(transaction.type) + String(transaction.value)).rejects.toThrow('cast signer: signed fields mismatch');
         }
     });
+
+    it('accepts a zero priority fee (viem parses it as undefined) (#447 clestons M1\')', async () => {
+        const key = ('0x' + 'ab'.repeat(32)) as Hex;
+        const account = privateKeyToAccount(key);
+        const zeroTip = { ...REQ, maxPriorityFeePerGas: 0n };
+        const raw = await signTransaction({
+            privateKey: key,
+            transaction: { type: 'eip1559', chainId: zeroTip.chainId, nonce: zeroTip.nonce, gas: zeroTip.gasLimit, maxFeePerGas: zeroTip.maxFeePerGas, maxPriorityFeePerGas: 0n, to: zeroTip.to, data: zeroTip.data, value: 0n },
+        });
+        const lay = layout();
+        const signer = createCastSigner({ castBin: script(`printf '%s' '${raw}'`), keystorePath: lay.ks, passwordFilePath: lay.pw, signerAddress: account.address });
+        await expect(signer.sign(zeroTip)).resolves.toBe(raw);
+    });
 });

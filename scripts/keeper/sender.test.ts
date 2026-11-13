@@ -265,6 +265,15 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(rb.status === 'pending' || rb.status === 'blocked' || rb.status === 'refused').toBe(true);
     });
 
+    it('a zero priority fee quote signs and broadcasts (#447 clestons M1\')', async () => {
+        const h = harness();
+        h.setFees(100n, 0n);
+        const result = await h.sender.send(h.job());
+        expect(result.status).toBe('pending');
+        expect(h.signed.map((s) => s.maxPriorityFeePerGas)).toEqual([0n]);
+        expect(h.broadcasts).toHaveLength(1);
+    });
+
     it('a closed identity gate does not sign or broadcast', async () => {
         const h = harness();
         h.sender.setGate({ price: false, pause: false, reason: 'closed', validUntil: 5_000 });

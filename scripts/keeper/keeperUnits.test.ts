@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { identityDue, scheduledIdentityAt } from './identitySchedule';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './priceConfirm';
@@ -18,10 +18,16 @@ import type { ChainReceipt } from './sender';
 import { trustedScratch } from './trustScratch.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
-const SAFE_CAST = realpathSync(process.execPath);
+// A fake cast in a trusted scratch dir: process.execPath is not always trusted (CI's tool cache can be
+// group-writable), and trustedExecutable() rightly refuses that (#447 clestons B1').
+const SAFE_CAST_DIR = trustedScratch('units-cast');
+const SAFE_CAST = join(SAFE_CAST_DIR, 'cast');
+writeFileSync(SAFE_CAST, '#!/bin/sh\nexit 0\n');
+chmodSync(SAFE_CAST, 0o755);
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
 const TSX_LOADER = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
 const dirs: string[] = [];
+afterAll(() => rmSync(SAFE_CAST_DIR, { recursive: true, force: true }), SPAWN_VERDICT_TIMEOUT_MS);
 afterEach(() => {
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }, SPAWN_VERDICT_TIMEOUT_MS);

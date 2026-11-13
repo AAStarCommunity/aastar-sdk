@@ -151,8 +151,8 @@ async function verifyRaw(raw: Hex, req: SignRequest, signerAddress: Address): Pr
         tx.nonce === req.nonce &&
         tx.chainId === req.chainId &&
         tx.gas === req.gasLimit &&
-        tx.maxFeePerGas === req.maxFeePerGas &&
-        tx.maxPriorityFeePerGas === req.maxPriorityFeePerGas &&
+        (tx.maxFeePerGas ?? 0n) === req.maxFeePerGas &&
+        (tx.maxPriorityFeePerGas ?? 0n) === req.maxPriorityFeePerGas &&
         value === 0n &&
         (!tx.accessList || tx.accessList.length === 0);
     if (!same) throw new Error('cast signer: signed fields mismatch');

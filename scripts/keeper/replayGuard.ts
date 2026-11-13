@@ -61,7 +61,7 @@ export async function replayRawAllowed(
     if (norm(from) !== norm(identity.signer)) return false;
     if (tx.chainId !== identity.chainId || tx.nonce !== entry.nonce) return false;
     if (norm(tx.to) !== norm(entry.to) || data !== norm(entry.data) || gas !== entry.gasLimit) return false;
-    if (tx.maxFeePerGas !== entry.maxFeePerGas || tx.maxPriorityFeePerGas !== entry.maxPriorityFeePerGas) return false;
+    if ((tx.maxFeePerGas ?? 0n) !== entry.maxFeePerGas || (tx.maxPriorityFeePerGas ?? 0n) !== entry.maxPriorityFeePerGas) return false;
     try {
         return intent(entry.kind, { to: tx.to, data: (tx.data ?? '0x') as Hex, gas }) === true;
     } catch {
