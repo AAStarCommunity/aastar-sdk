@@ -21,12 +21,3 @@ export function envFileRefusal(file: ModeStat, parent: ModeStat, uid: number | u
     if ((parent.mode & 0o022) !== 0) return 'keeper: env file refused: parent writable';
     return null;
 }
-
-/** Target after one realpath. Root (uid 0) or the process uid. Not group or world writable. */
-export function castBinRefusal(target: ModeStat, uid: number | undefined): string | null {
-    if (!target.isFile || target.isSymbolicLink) return 'keeper: cast bin refused: not a regular file';
-    if (uid === undefined) return 'keeper: cast bin refused: owner';
-    if (target.uid !== uid && target.uid !== 0) return 'keeper: cast bin refused: owner';
-    if ((target.mode & 0o022) !== 0) return 'keeper: cast bin refused: writable';
-    return null;
-}

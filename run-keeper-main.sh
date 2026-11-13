@@ -1,7 +1,6 @@
 #!/bin/bash
-# Flag checks live in run-keeper.sh. Pass --env-file for RPC_URL and Telegram. Do not export those names.
-# This wrapper is dry-run only. A live run starts from the launchd plist.
-# The public ETH/USD URL is the keeper default. Put KEEPER_ETHUSD_URL in --env-file to override it.
+# Flag checks live in run-keeper.sh. This wrapper is dry-run only and refuses credential flags.
+# A live run starts from the launchd plist. Do not export secret names.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 has_arg() {
@@ -19,4 +18,4 @@ has_arg --safety-margin "$@" || EXTRA+=(--safety-margin 600)
 has_arg --health-interval "$@" || EXTRA+=(--health-interval 1800)
 has_arg --volatility-threshold-bps "$@" || EXTRA+=(--volatility-threshold-bps 150)
 has_arg --volatility-cooldown "$@" || EXTRA+=(--volatility-cooldown 600)
-exec ./run-keeper.sh op-mainnet "${EXTRA[@]}" "$@"
+exec /bin/bash ./run-keeper.sh op-mainnet "${EXTRA[@]}" "$@"

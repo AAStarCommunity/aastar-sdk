@@ -2,7 +2,7 @@
  * Single in-flight journal: durability, file checks, and the process-lifetime lock.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { link, open, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -117,12 +117,15 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(await new Journal(bad, { chainId: 11155111, signer: SIGNER }).load()).toBe('corrupt');
     });
 
-    it('creates a fresh journal directory before the lock and refuses a second chain signer', async () => {
+    it('refuses a lock when the journal directory is missing and does not create it', async () => {
         const root = dir();
         const path = join(root, 'fresh', 'nested', 'journal.json');
+        await expect(acquireKeeperLock({ journalPath: path, chainId: 11155111, signer: SIGNER })).rejects.toThrow('journal directory must exist; run preflight');
+        expect(existsSync(join(root, 'fresh'))).toBe(false);
+        mkdirSync(join(root, 'fresh', 'nested'), { recursive: true, mode: 0o700 });
         const release = await acquireKeeperLock({ journalPath: path, chainId: 11155111, signer: SIGNER });
-        expect(statSync(join(root, 'fresh')).mode & 0o777).toBe(0o700);
         const otherPath = join(root, 'elsewhere', 'journal.json');
+        mkdirSync(join(root, 'elsewhere'), { mode: 0o700 });
         await expect(acquireKeeperLock({ journalPath: otherPath, chainId: 11155111, signer: SIGNER })).rejects.toThrow('journal: lock held');
         await release();
         const again = await acquireKeeperLock({ journalPath: path, chainId: 11155111, signer: SIGNER });
@@ -218,9 +221,11 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         // cannot live under TMPDIR. The lock holder above does not pin and stays on tmpdir.
         const liveRoot = trustedScratch('journal-once');
         dirs.push(liveRoot);
+        mkdirSync(join(liveRoot, 'once'), { mode: 0o700 });
         const journalPath = join(liveRoot, 'once', 'journal.json');
         const tsx = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
         if (!existsSync(tsx)) throw new Error('tsx loader missing');
+        mkdirSync(join(root, 'held'), { mode: 0o700 });
         const holdScript = join(root, 'hold.ts');
         writeFileSync(holdScript, `import { acquireKeeperLock } from ${JSON.stringify(join(process.cwd(), 'scripts/keeper/journal.ts'))};\nasync function main() {\n  await acquireKeeperLock({ journalPath: ${JSON.stringify(join(root, 'held', 'journal.json'))}, chainId: 11155111, signer: ${JSON.stringify(holder)} });\n  console.log('held');\n  setInterval(() => {}, 1000);\n}\nmain();\n`);
         const child = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, holdScript], { cwd: root, env: { PATH: process.env.PATH ?? '', HOME: root } });
@@ -400,18 +405,40 @@ describe('pinned journal directory', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =
         expect(readFileSync(join(aside, 'journal.json'), 'utf8').length).toBeGreaterThan(0);
     });
 
-    it('refuses a sticky ancestor and does not print the path', async () => {
-        const root = trustedScratch('jsticky');
+    it('refuses a missing directory and does not print the path or create it', () => {
+        const root = trustedScratch('jmissing');
         dirs.push(root);
-        const sticky = join(root, 'password-sentinel');
-        mkdirSync(sticky, { mode: 0o1755 });
-        chmodSync(sticky, 0o1755);
-        await expect(pinJournalDirectory(join(sticky, 'journal.json'))).rejects.toThrow(/^keeper: journal refused: sticky$/);
+        const missing = join(root, 'password-sentinel', 'journal.json');
+        expect(() => pinJournalDirectory(missing)).toThrow(/^journal directory must exist; run preflight$/);
         try {
-            await pinJournalDirectory(join(sticky, 'journal.json'));
+            pinJournalDirectory(missing);
         } catch (error) {
             expect(String(error)).not.toContain('password-sentinel');
         }
+        expect(existsSync(join(root, 'password-sentinel'))).toBe(false);
+    });
+
+    it('keeps writing the pinned directory after the original path is retargeted', async () => {
+        const root = trustedScratch('jh5');
+        dirs.push(root);
+        const realA = join(root, 'a');
+        const realB = join(root, 'b');
+        mkdirSync(realA, { mode: 0o700 });
+        mkdirSync(realB, { mode: 0o700 });
+        const link = join(root, 'link');
+        symlinkSync(realA, link);
+        const via = join(link, 'journal.json');
+        const pin = pinJournalDirectory(via);
+        expect(pin.path).toBe(realpathSync(realA));
+        const journal = new Journal(via, { chainId: 11155111, signer: SIGNER }, pin);
+        await journal.init();
+        expect(existsSync(join(realA, 'journal.json'))).toBe(true);
+        rmSync(link);
+        symlinkSync(realB, link);
+        await journal.writeInFlight(null);
+        expect(existsSync(join(realB, 'journal.json'))).toBe(false);
+        expect(existsSync(join(realA, 'journal.json'))).toBe(true);
+        expect(await journal.load()).toBe('ok');
     });
 });
 

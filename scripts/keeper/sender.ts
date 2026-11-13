@@ -439,6 +439,8 @@ export class Sender {
     /** In-memory flight. Stall timing does not re-read the journal. */
     private flightSnap: { nonce: number; firstSentAt: number } | null = null;
     private stallTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Formatted staleness line, only after a read that already finished. The watchdog does not fetch one. */
+    private knownStaleness: string | null = null;
 
     constructor(opts: {
         chain: ChainIO;
@@ -561,6 +563,26 @@ export class Sender {
     setPaymasterIdentity(cleared: boolean): void {
         if (typeof cleared !== 'boolean') throw new Error('sender: paymaster identity rejected');
         this.paymasterIdentity = cleared;
+    }
+
+    /**
+     * Arm supervision for a flight already on disk. An overdue flight latches and alerts
+     * before this returns, so a startup exit cannot drop the deadline warning.
+     */
+    armFlight(snap: { nonce: number; firstSentAt: number } | null): void {
+        if (!snap) {
+            this.noteFlight(null);
+            return;
+        }
+        if (!Number.isSafeInteger(snap.nonce) || snap.nonce < 0) return;
+        if (!Number.isSafeInteger(snap.firstSentAt) || snap.firstSentAt < 0) return;
+        this.noteFlight({ nonce: snap.nonce, firstSentAt: snap.firstSentAt }, true);
+    }
+
+    /** A journal that already says stalled closes sends before the first tick. */
+    restoreStall(nonce: number | null): void {
+        if (nonce === null || !Number.isSafeInteger(nonce) || nonce < 0) return;
+        this.latchStall(nonce);
     }
 
     /** True only when both scopes are open and the decision has not expired. */
@@ -778,11 +800,11 @@ export class Sender {
         this.noteFlight(flight);
         const overdue = this.stallDue(flight);
         if (this.stalled) {
-            await this.emitStall(flight.nonce);
+            await this.alertStall(flight.nonce);
             if ((await this.seenChain()) === 'ok') {
                 const latest = await this.readLatest();
-                if (latest.kind === 'ok') {
-                    this.noteNonce(latest.latest, latest.latest, flight);
+                if (this.stalled && latest.kind === 'ok') {
+                    this.noteLatest(latest.latest, flight);
                     if (latest.latest > BigInt(flight.nonce)) {
                         await this.consume(flight, latest.latest);
                         return { status: 'refused', reason: REFUSED.stalled };
@@ -794,17 +816,20 @@ export class Sender {
         }
         if (overdue) return this.declareStall(flight, true);
         const chain = await this.seenChain();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (chain !== 'ok') {
             const reason = chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead;
             this.alertOnce(reason);
             return { status: 'refused', reason };
         }
-        const nonces = await this.readNonces();
-        if (nonces.kind !== 'ok') return { status: 'refused', reason: nonces.reason };
-        if (!(await this.rememberNonce(nonces.latest, nonces.pending, flight))) {
+        const latest = await this.readLatest();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (latest.kind !== 'ok') return { status: 'refused', reason: latest.reason };
+        if (!(await this.rememberLatest(latest.latest, flight))) {
             return { status: 'refused', reason: REFUSED.journal };
         }
-        if (nonces.latest > BigInt(flight.nonce)) return this.consume(flight, nonces.latest);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (latest.latest > BigInt(flight.nonce)) return this.consume(flight, latest.latest);
         const sent = await this.rebroadcast(flight);
         if (sent === 'above') return this.pendingOf(flight);
         if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
@@ -826,21 +851,37 @@ export class Sender {
     }
 
     /** In-memory latch first. A failed journal write does not clear it. */
-    private rememberStall(nonce: number): void {
+    private latchStall(nonce: number): void {
         if (this.stalled) return;
         this.stalled = true;
         this.stalledNonce = nonce;
         this.accountDirty = true;
     }
 
+    private noteLatest(latest: bigint, flight: InFlight | null): boolean {
+        const unexplained = flight
+            ? latest > BigInt(flight.nonce) + 1n
+            : this.lastLatest !== null && latest > this.lastLatest;
+        if (unexplained) this.alertOnce(ALERT.foreign);
+        const changed = this.lastLatest !== latest;
+        this.lastLatest = latest;
+        return changed;
+    }
+
+    private async rememberLatest(latest: bigint, flight: InFlight | null): Promise<boolean> {
+        const changed = this.noteLatest(latest, flight);
+        if (!changed && !this.accountDirty) return true;
+        return this.persistAccount();
+    }
+
     /**
-     * A new overdue flight whose latest nonce is already past it is settled with no latch.
-     * `keepFlight` is true when the caller still holds the journal flight for consume.
+     * Latest only. A mined nonce is settled with no new latch. Pending is not read.
+     * The latch is set before the staleness read and before the journal write.
      */
     private async declareStall(flight: InFlight | { nonce: number; firstSentAt: number }, keepFlight: boolean): Promise<MaintainResult> {
         if (!this.stalled && (await this.seenChain()) === 'ok') {
             const latest = await this.readLatest();
-            if (latest.kind === 'ok' && latest.latest > BigInt(flight.nonce)) {
+            if (!this.stalled && latest.kind === 'ok' && latest.latest > BigInt(flight.nonce)) {
                 if (keepFlight) {
                     this.noteFlight(null);
                     return this.consume(flight as InFlight, latest.latest);
@@ -849,30 +890,36 @@ export class Sender {
                 if (loaded === 'ok') {
                     await this.hydrate();
                     const open = this.journal.inFlight();
-                    if (open && open.nonce === flight.nonce) {
+                    if (open && open.nonce === flight.nonce && !this.stalled) {
                         this.noteFlight(null);
                         return this.consume(open, latest.latest);
                     }
                 }
-                this.noteFlight(null);
-                return { status: 'idle' };
+                if (!this.stalled) {
+                    this.noteFlight(null);
+                    return { status: 'idle' };
+                }
             }
         }
-        this.rememberStall(flight.nonce);
-        await this.emitStall(flight.nonce);
+        this.latchStall(flight.nonce);
+        await this.alertStall(flight.nonce);
         if (this.accountDirty) await this.persistAccount();
         return { status: 'refused', reason: REFUSED.stalled };
     }
 
-    private async emitStall(nonce: number): Promise<void> {
-        let text = 'staleness unreadable';
-        try {
-            text = await this.stalenessText();
-        } catch {
-            text = 'staleness unreadable';
+    /** Latch is already set. Alert before any persistence. A hanging write must not swallow this. */
+    private async alertStall(nonce: number): Promise<void> {
+        let text = this.knownStaleness;
+        if (!text) {
+            try {
+                text = await this.stalenessText();
+            } catch {
+                text = null;
+            }
+            if (text) this.knownStaleness = text;
         }
-        if (this.accountDirty) await this.persistAccount();
-        const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${text}`;
+        const extra = text ?? 'price-staleness deadline: check on chain';
+        const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
         this.alertOnce(`stall:${nonce}`, message);
     }
 
@@ -974,9 +1021,9 @@ export class Sender {
             if (changed || this.accountDirty) await this.persistAccount();
             return;
         }
-        const nonces = await this.readNonces();
-        if (nonces.kind !== 'ok') return;
-        await this.rememberNonce(nonces.latest, nonces.pending, flight);
+        const latest = await this.readLatest();
+        if (latest.kind !== 'ok') return;
+        await this.rememberLatest(latest.latest, flight);
     }
 
     /**
@@ -1239,6 +1286,7 @@ export class Sender {
         if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (!this.allows(job.kind)) return this.refuseGate();
         const signed = await this.signOf(request);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (!signed.ok) {
             this.alertOnce(signed.reason);
             return { status: 'refused', reason: signed.reason };
@@ -1262,6 +1310,8 @@ export class Sender {
             firstSentAt: this.safeNow(),
             broadcastOnce: [],
         };
+        this.noteFlight(entry);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         if (!(await replayRawAllowed(signed.raw, {
             nonce,
             kind: job.kind,
@@ -1271,17 +1321,27 @@ export class Sender {
             maxFeePerGas: fees.fee,
             maxPriorityFeePerGas: fees.tip,
         }, { chainId: this.chainId, signer: this.signerAddress }, () => true))) {
+            if (!this.stalled) this.noteFlight(null);
             return { status: 'refused', reason: REFUSED.sign };
         }
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         const afterSign = await this.seenChain();
-        if (afterSign !== 'ok') return { status: 'refused', reason: afterSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
-        if (!this.allows(job.kind)) return this.refuseGate();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (afterSign !== 'ok') {
+            this.noteFlight(null);
+            return { status: 'refused', reason: afterSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        }
+        if (!this.allows(job.kind)) {
+            this.noteFlight(null);
+            return this.refuseGate();
+        }
         try {
             await this.journal.writeInFlight(entry);
         } catch {
+            if (!this.stalled) this.noteFlight(null);
             return { status: 'refused', reason: REFUSED.journal };
         }
-        this.noteFlight(entry);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
         const sent = await this.broadcast(signed.raw, entry);
         if (sent === 'gate') return this.refuseGate();
         if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
@@ -1294,15 +1354,12 @@ export class Sender {
     }
 
     /**
-     * Last awaited prerequisite is the journal write of a first broadcast, or the chain-id read for a repeat.
-     * The gate check after that await is synchronous. A raw is charged once, on its first broadcast.
+     * The fresh chain-id read is the last await before the synchronous gate check and the broadcast.
+     * A first broadcast commits the charge before that read. A raw is charged once.
      */
     private async broadcast(raw: Hex, flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'ceiling' | 'above' | 'journal' | 'broadcast'> {
-        const chainOk = await this.seenChain();
-        if (chainOk !== 'ok') return 'chain';
-        if (this.stalled) return 'gate';
-        if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
         const decoded = await decodeRaw(raw, this.signerAddress);
+        if (this.stalled) return 'gate';
         if (!decoded || decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) {
             return 'refused';
         }
@@ -1310,11 +1367,11 @@ export class Sender {
             this.alertOnce(ALERT.aboveFee);
             return 'above';
         }
-        if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
         const hash = keccak256(raw);
         const already = flight.broadcastOnce ?? [];
         const counted = already.some((item) => norm(item) === norm(hash));
         if (!counted) {
+            if (this.stalled) return 'gate';
             if (!this.takeSendSlot()) {
                 if (!(await this.persistAccount())) return 'journal';
                 return 'ceiling';
@@ -1322,23 +1379,28 @@ export class Sender {
             const broadcastOnce = [...already, hash];
             while (broadcastOnce.length > JOURNAL_HASH_CAP) broadcastOnce.shift();
             const next = { ...flight, broadcastOnce };
+            const wroteStalled = this.stalled;
+            const wroteNonce = this.stalledNonce;
             try {
                 await this.journal.commit({
                     inFlight: next,
                     sentAt: [...this.sentAt],
                     ceilingClosed: this.ceilingClosed,
                     lastLatest: this.lastLatest,
-                    stalled: this.stalled,
-                    stalledNonce: this.stalledNonce,
+                    stalled: wroteStalled,
+                    stalledNonce: wroteNonce,
                 });
-                this.accountDirty = false;
+                this.accountDirty = this.stalled !== wroteStalled || this.stalledNonce !== wroteNonce;
             } catch {
                 this.hydrated = false;
                 this.accountDirty = true;
                 return 'journal';
             }
-            if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
         }
+        const chainOk = await this.seenChain();
+        if (this.stalled) return 'gate';
+        if (chainOk !== 'ok') return 'chain';
+        if (!this.allows(flight.kind)) return this.ceilingClosed ? 'ceiling' : 'gate';
         try {
             await this.chain.sendRawTransaction(raw);
         } catch {
@@ -1392,15 +1454,17 @@ export class Sender {
     }
 
     private async persistAccount(): Promise<boolean> {
+        const wroteStalled = this.stalled;
+        const wroteNonce = this.stalledNonce;
         try {
             await this.journal.commit({
                 sentAt: [...this.sentAt],
                 ceilingClosed: this.ceilingClosed,
                 lastLatest: this.lastLatest,
-                stalled: this.stalled,
-                stalledNonce: this.stalledNonce,
+                stalled: wroteStalled,
+                stalledNonce: wroteNonce,
             });
-            this.accountDirty = false;
+            this.accountDirty = this.stalled !== wroteStalled || this.stalledNonce !== wroteNonce;
             return true;
         } catch {
             this.accountDirty = true;
@@ -1466,7 +1530,7 @@ export class Sender {
         }
     }
 
-    private noteFlight(snap: { nonce: number; firstSentAt: number } | null): void {
+    private noteFlight(snap: { nonce: number; firstSentAt: number } | null, immediate = false): void {
         if (!snap) {
             this.flightSnap = null;
             this.clearStallTimer();
@@ -1477,7 +1541,7 @@ export class Sender {
             && this.flightSnap.nonce === next.nonce
             && this.flightSnap.firstSentAt === next.firstSentAt;
         this.flightSnap = next;
-        if (!same) this.armWatchdog(next);
+        if (!same) this.armWatchdog(next, immediate);
     }
 
     private clearStallTimer(): void {
@@ -1485,34 +1549,47 @@ export class Sender {
         this.stallTimer = null;
     }
 
-    /** Wall-clock delay from the same clock `stallDue` uses. Re-armed per flight. Does not keep the process alive. */
-    private armWatchdog(snap: { nonce: number; firstSentAt: number }): void {
+    /**
+     * Wall-clock delay from the same clock `stallDue` uses. The callback latches on its own.
+     * It does not enter the sender queue and it does not keep the process alive.
+     * An already-overdue flight is latched here only when `immediate` is set (startup).
+     * A maintain pass that is already overdue settles latest first, in `declareStall`.
+     */
+    private armWatchdog(snap: { nonce: number; firstSentAt: number }, immediate = false): void {
         this.clearStallTimer();
         const dueAt = snap.firstSentAt + this.stallSec * 1000;
-        let delay = dueAt - this.safeNow();
-        if (!Number.isFinite(delay) || delay < 0) delay = 0;
+        const delay = dueAt - this.safeNow();
+        if (!Number.isFinite(delay)) return;
+        if (delay <= 0) {
+            if (immediate) this.fireWatchdog(snap);
+            return;
+        }
         const maxDelay = 2_147_483_647;
         const wait = delay > maxDelay ? maxDelay : delay;
         const timer = setTimeout(() => {
             this.stallTimer = null;
             if (wait === maxDelay && this.safeNow() < dueAt) {
-                this.armWatchdog(snap);
+                this.armWatchdog(snap, false);
                 return;
             }
-            void this.enqueue(() => this.watchdogLocked(snap)).catch(() => {});
+            this.fireWatchdog(snap);
         }, wait);
         timer.unref?.();
         this.stallTimer = timer;
     }
 
-    private async watchdogLocked(snap: { nonce: number; firstSentAt: number }): Promise<void> {
+    /** Synchronous. No chain read, no journal write, no queue. */
+    private fireWatchdog(snap: { nonce: number; firstSentAt: number }): void {
         if (this.stopping) return;
         if (!this.flightSnap || this.flightSnap.nonce !== snap.nonce || this.flightSnap.firstSentAt !== snap.firstSentAt) return;
         if (!this.stallDueSnap(snap) && !this.stalled) {
-            this.armWatchdog(snap);
+            this.armWatchdog(snap, false);
             return;
         }
-        await this.declareStall(snap, false);
+        this.latchStall(snap.nonce);
+        const extra = this.knownStaleness ?? 'price-staleness deadline: check on chain';
+        const message = `in-flight nonce ${snap.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
+        this.alertOnce(`stall:${snap.nonce}`, message);
     }
 
     private async readNonces(): Promise<{ kind: 'ok'; latest: bigint; pending: bigint } | { kind: 'stop'; reason: string }> {

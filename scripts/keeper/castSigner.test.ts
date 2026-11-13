@@ -4,10 +4,27 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, constants, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const io = vi.hoisted(() => ({ opens: [] as { path: string; flags: number }[], reads: [] as string[] }));
+
+vi.mock('node:fs', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('node:fs')>();
+    return {
+        ...actual,
+        openSync(path: Parameters<typeof actual.openSync>[0], flags: Parameters<typeof actual.openSync>[1]) {
+            io.opens.push({ path: String(path), flags: typeof flags === 'number' ? flags : 0 });
+            return actual.openSync(path, flags);
+        },
+        readFileSync(...args: Parameters<typeof actual.readFileSync>) {
+            io.reads.push(String(args[0]));
+            return actual.readFileSync(...args);
+        },
+    };
+});
 import { getAddress, type Address, type Hex, type TransactionSerializable } from 'viem';
 import { privateKeyToAccount, signTransaction } from 'viem/accounts';
 import { createCastSigner, validateSecretFiles, type SignRequest } from './castSigner';
@@ -163,13 +180,11 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('SKIP when KEEPER_CAST_BIN is unset and cast is not on PATH; otherwise a throwaway mktx recovers', async () => {
         const fromEnv = process.env.KEEPER_CAST_BIN;
         const foundry = join(homedir(), '.foundry', 'bin', 'cast');
-        const onPath = !fromEnv && spawnSync('cast', ['--version'], { encoding: 'utf8' }).status === 0;
-        const pinned = fromEnv || (existsSync(foundry) ? foundry : '');
-        if (!pinned && !onPath) {
-            console.log('SKIP real cast: KEEPER_CAST_BIN unset and cast is not on PATH');
+        const bin = (fromEnv && fromEnv.startsWith('/')) ? fromEnv : (existsSync(foundry) ? foundry : '');
+        if (!bin.startsWith('/')) {
+            console.log('SKIP real cast: set KEEPER_CAST_BIN to an absolute cast');
             return;
         }
-        const bin = pinned || 'cast';
         const dir = mkdtempSync(join(tmpdir(), 'cast-real-'));
         dirs.push(dir);
         chmodSync(dir, 0o700);
@@ -251,6 +266,23 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         chmodSync(pw, 0o600);
         chmodSync(ks, 0o600);
         expect(() => validateSecretFiles(ks, pw)).toThrow('secret file: keystore directory is group or world writable');
+    });
+
+    it('opens the keystore and password with O_NOFOLLOW|O_NONBLOCK and does not read bytes', () => {
+        const lay = layout();
+        io.opens.length = 0;
+        io.reads.length = 0;
+        validateSecretFiles(lay.ks, lay.pw);
+        const paths = io.opens.map((call) => call.path);
+        expect(paths).toContain(lay.ks);
+        expect(paths).toContain(lay.pw);
+        for (const call of io.opens) {
+            if (call.path !== lay.ks && call.path !== lay.pw) continue;
+            expect(call.flags & constants.O_NOFOLLOW).toBe(constants.O_NOFOLLOW);
+            expect(call.flags & constants.O_NONBLOCK).toBe(constants.O_NONBLOCK);
+        }
+        expect(io.reads).not.toContain(lay.ks);
+        expect(io.reads).not.toContain(lay.pw);
     });
 
     it('signs in a fresh empty 0700 directory', async () => {

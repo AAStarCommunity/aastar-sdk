@@ -136,15 +136,12 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         const file = join(dir, 'keeper.env');
         writeFileSync(file, `RPC_URL=${url}\nTELEGRAM_BOT_TOKEN=${token}\nTELEGRAM_CHAT_ID=chat-sentinel\n`);
         const clean = run(['sepolia', '--once', '--dry-run', '--env-file', file], { sign: false });
-        expect(clean.status, clean.stderr).toBe(0);
-        const spawned = [...clean.envArgs, ...clean.argv, ...clean.envLines].join('\n');
-        expect(spawned).not.toContain(token);
-        expect(spawned).not.toContain(url);
-        expect(spawned).not.toContain('chat-sentinel');
-        expect(clean.envArgs).toEqual([]);
-        expect(clean.argv.slice(0, 3)).toEqual(['--import', join(dir, 'node_modules', 'tsx', 'dist', 'loader.mjs'), 'scripts/keeper.ts']);
-        expect(clean.argv).not.toContain('--external-ethusd-url');
-        expect(clean.argv.join('\n')).not.toContain('ethusd-sentinel');
+        expect(clean.status, clean.stderr).toBe(1);
+        expect(clean.stderr).toContain('a dry-run cannot take --keystore, --password-file, --env-file, or --signer');
+        expect(clean.stdout).not.toContain(token);
+        expect(clean.stdout).not.toContain(url);
+        expect(clean.stdout).not.toContain(file);
+        expect(clean.argv).toEqual([]);
 
         const priced = run(['sepolia', '--once', '--dry-run'], {
             sign: false,
@@ -184,10 +181,12 @@ while true; do sleep 0.2; done
         });
         const pidFile = join(home, 'node.pid');
         const started = Date.now();
-        while (!existsSync(pidFile) && Date.now() - started < 5_000) {
+        let nodePid = 0;
+        while (nodePid <= 0 && Date.now() - started < 5_000) {
+            if (existsSync(pidFile)) nodePid = Number(readFileSync(pidFile, 'utf8').trim());
+            if (nodePid > 0) break;
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
-        const nodePid = Number(readFileSync(pidFile, 'utf8').trim());
         expect(nodePid).toBe(child.pid);
         child.kill('SIGTERM');
         const code = await new Promise<number | null>((resolve) => {
@@ -236,5 +235,24 @@ while true; do sleep 0.2; done
         expect(mainLive.status).toBe(1);
         expect(mainLive.stderr).toContain(LIVE);
         expect(mainLive.argv).toEqual([]);
+    });
+
+    it('a dry-run refuses credential flags and does not forward them', () => {
+        const cred = 'error: a dry-run cannot take --keystore, --password-file, --env-file, or --signer';
+        for (const flag of ['--keystore', '--password-file', '--env-file', '--signer']) {
+            const refused = run(['sepolia', '--dry-run', '--once', flag, '/tmp/sentinel-value'], { sign: false });
+            expect(refused.status, refused.stderr).toBe(1);
+            expect(refused.stderr).toContain(cred);
+            expect(refused.stderr).not.toContain('sentinel-value');
+            expect(refused.argv).toEqual([]);
+            const eq = run(['sepolia', '--dry-run', `${flag}=/tmp/sentinel-value`], { sign: false });
+            expect(eq.status).toBe(1);
+            expect(eq.stderr).toContain(cred);
+            expect(eq.stderr).not.toContain('sentinel-value');
+            expect(eq.argv).toEqual([]);
+        }
+        const live = run(['sepolia', '--keystore', '/tmp/ks'], { sign: false });
+        expect(live.stderr).toContain(LIVE);
+        expect(live.stderr).not.toContain(cred);
     });
 });

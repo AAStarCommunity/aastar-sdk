@@ -18,8 +18,8 @@ import type { ChainReceipt } from './sender';
 import { trustedScratch } from './trustScratch.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
-// A fake cast in a trusted scratch dir: process.execPath is not always trusted (CI's tool cache can be
-// group-writable), and trustedExecutable() rightly refuses that (#447 clestons B1').
+// A fake cast lives under the home directory so a dry-run can pass an absolute --cast-bin.
+// The keeper pins its device and inode only. Mode is not a refusal.
 const SAFE_CAST_DIR = trustedScratch('units-cast');
 const SAFE_CAST = join(SAFE_CAST_DIR, 'cast');
 writeFileSync(SAFE_CAST, '#!/bin/sh\nexit 0\n');
@@ -474,16 +474,16 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         writeFileSync(looseBin, '#!/bin/sh\nexit 0\n');
         chmodSync(looseBin, 0o777);
         const writable = await run(castDir, ['--cast-bin', looseBin]);
-        expect(writable.code, writable.out).toBe(1);
-        expect(writable.out).toContain('keeper: cast bin refused: writable');
+        expect(writable.code, writable.out).toBe(0);
+        expect(writable.out).toContain('probe secrets=absent');
+        expect(writable.out).not.toContain('keeper: cast bin refused');
         const target = join(castDir, 'cast-target');
         writeFileSync(target, '#!/bin/sh\nexit 0\n');
         chmodSync(target, 0o777);
         const viaLink = join(castDir, 'cast-link');
         symlinkSync(target, viaLink);
         const followed = await run(castDir, ['--cast-bin', viaLink]);
-        expect(followed.code, followed.out).toBe(1);
-        expect(followed.out).toContain('keeper: cast bin refused: writable');
+        expect(followed.code, followed.out).toBe(0);
         expect(followed.out).not.toContain(viaLink);
     });
 

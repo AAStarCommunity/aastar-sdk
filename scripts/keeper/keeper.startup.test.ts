@@ -303,7 +303,8 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
         chmodSync(ks, 0o600);
         const journalDir = join(dir, 'closed');
         mkdirSync(journalDir, { mode: 0o700 });
-        chmodSync(journalDir, 0o000);
+        // Execute-only: realpath still resolves, and opening the directory for the barrier fsync fails.
+        chmodSync(journalDir, 0o100);
         const castLay = dummyCast();
         try {
             const child = spawn(process.execPath, [
@@ -328,6 +329,154 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
             chmodSync(journalDir, 0o700);
             await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
             rmSync(castLay.dir, { recursive: true, force: true });
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
+
+    it('alerts an overdue flight at startup when load returns barrier', async () => {
+        const { server, url } = await listen({ sp: OTHER, registry: OTHER });
+        const dir = trustedScratch('k-barrier-alarm');
+        chmodSync(dir, 0o700);
+        const pw = join(dir, 'password');
+        const ks = join(dir, 'keystore');
+        writeFileSync(pw, 'not-a-real-password\n');
+        writeFileSync(ks, '{}\n');
+        chmodSync(pw, 0o600);
+        chmodSync(ks, 0o600);
+        const journalDir = join(dir, 'closed');
+        mkdirSync(journalDir, { mode: 0o700 });
+        const hash = `0x${'ab'.repeat(32)}`;
+        const journal = {
+            version: 4,
+            chainId: 11155111,
+            signer: SIGNER,
+            inFlight: {
+                kind: 'price-super',
+                nonce: 7,
+                raws: ['0x02'],
+                hashes: [hash],
+                gasLimit: '21000',
+                maxFeePerGas: '1',
+                maxPriorityFeePerGas: '1',
+                attempts: 1,
+                firstSentAt: 0,
+                broadcastOnce: [],
+            },
+            sentAt: [],
+            ceilingClosed: false,
+            lastLatest: null,
+            stalled: false,
+            stalledNonce: null,
+        };
+        const journalPath = join(journalDir, 'journal.json');
+        writeFileSync(journalPath, `${JSON.stringify(journal)}\n`);
+        chmodSync(journalPath, 0o600);
+        // Execute-only: the file stays readable by name, and the directory barrier fsync fails.
+        chmodSync(journalDir, 0o100);
+        const castLay = dummyCast();
+        try {
+            const child = spawn(process.execPath, [
+                '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+                '--network', 'sepolia', '--no-logo', '--once',
+                '--no-superpaymaster', '--disable-paymaster',
+                '--keystore', ks, '--password-file', pw, '--signer', SIGNER, '--max-fee-gwei', '1',
+                '--cast-bin', castLay.cast,
+                '--journal', journalPath,
+                '--superpaymaster', SP, '--registry', REG,
+            ], { cwd: dir, env: { PATH: process.env.PATH ?? '', HOME: dir, RPC_URL: url } });
+            let out = '';
+            child.stdout.on('data', (d) => { out += d.toString(); });
+            child.stderr.on('data', (d) => { out += d.toString(); });
+            const status = await new Promise<number | null>((resolve) => {
+                const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+                child.once('close', (code) => { clearTimeout(timer); resolve(code); });
+            });
+            expect(status, out).toBe(1);
+            expect(out).toContain('sender: journal barrier incomplete');
+            expect(out).toContain('ALL sends closed');
+            expect(out).toContain('price-staleness deadline: check on chain');
+        } finally {
+            chmodSync(journalDir, 0o700);
+            await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
+            rmSync(castLay.dir, { recursive: true, force: true });
+            rmSync(dir, { recursive: true, force: true });
+        }
+    }, 30_000);
+
+    it('alerts the first oracle, superpaymaster and paymaster read failure and drops provider text', async () => {
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => { body += c; });
+            req.on('end', () => {
+                const msg = JSON.parse(body);
+                const one = (m: { id: unknown; method: string }) => {
+                    if (m.method === 'eth_chainId') return { jsonrpc: '2.0', id: m.id, result: '0x7a69' };
+                    if (m.method === 'eth_getCode') return { jsonrpc: '2.0', id: m.id, result: '0x60806040' };
+                    if (m.method === 'eth_blockNumber') return { jsonrpc: '2.0', id: m.id, result: '0x1' };
+                    if (m.method === 'eth_getBlockByNumber') {
+                        return {
+                            jsonrpc: '2.0',
+                            id: m.id,
+                            result: {
+                                number: '0x1',
+                                hash: `0x${'11'.repeat(32)}`,
+                                parentHash: `0x${'22'.repeat(32)}`,
+                                timestamp: '0x1',
+                                baseFeePerGas: '0x1',
+                                gasLimit: '0x1c9c380',
+                                gasUsed: '0x0',
+                                transactions: [],
+                                uncles: [],
+                                logsBloom: `0x${'00'.repeat(256)}`,
+                                miner: `0x${'00'.repeat(20)}`,
+                                difficulty: '0x0',
+                                extraData: '0x',
+                                nonce: '0x0000000000000000',
+                                mixHash: `0x${'00'.repeat(32)}`,
+                                sha3Uncles: `0x${'00'.repeat(32)}`,
+                                stateRoot: `0x${'00'.repeat(32)}`,
+                                receiptsRoot: `0x${'00'.repeat(32)}`,
+                                transactionsRoot: `0x${'00'.repeat(32)}`,
+                                size: '0x0',
+                                totalDifficulty: '0x0',
+                            },
+                        };
+                    }
+                    return { jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'provider-sentinel-text' } };
+                };
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg)));
+            });
+        });
+        const url = await new Promise<string>((resolve) => {
+            server.listen(0, '127.0.0.1', () => {
+                resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+            });
+        });
+        const dir = trustedScratch('k-read-alert');
+        chmodSync(dir, 0o700);
+        const paymaster = getAddress('0x5555555555555555555555555555555555555555');
+        try {
+            const child = spawn(process.execPath, [
+                '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+                '--network', 'anvil', '--dry-run', '--once', '--no-logo',
+                '--paymaster', paymaster,
+            ], { cwd: dir, env: { PATH: process.env.PATH ?? '', HOME: dir, RPC_URL: url } });
+            let out = '';
+            child.stdout.on('data', (d) => { out += d.toString(); });
+            child.stderr.on('data', (d) => { out += d.toString(); });
+            const status = await new Promise<number | null>((resolve) => {
+                const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+                child.once('close', (code) => { clearTimeout(timer); resolve(code); });
+            });
+            expect(status, out).toBe(2);
+            expect(out).toContain('keeper: oracle read failed');
+            expect(out).toContain('keeper: superpaymaster read failed');
+            expect(out).toContain('keeper: paymaster read failed');
+            expect(out).not.toContain('provider-sentinel-text');
+            expect(out.split('keeper: oracle read failed').length - 1).toBe(1);
+        } finally {
+            await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
             rmSync(dir, { recursive: true, force: true });
         }
     }, 30_000);

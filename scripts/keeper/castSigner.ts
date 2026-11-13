@@ -3,7 +3,7 @@
  * Stderr from cast is never copied into an error: it can contain paths.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { chmodSync, lstatSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, closeSync, constants, fstatSync, lstatSync, mkdtempSync, openSync, rmSync, type Stats } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -13,7 +13,7 @@ import {
     type Hex,
     type TransactionSerialized,
 } from 'viem';
-import { trustedExecutable, type PinnedExecutable } from './trustedExecutable.js';
+import { pinCastBin, type PinnedExecutable } from './trustedExecutable.js';
 
 export interface SignRequest {
     to: Address;
@@ -62,16 +62,26 @@ function uid(): number {
     return id;
 }
 
+/** Open with O_NOFOLLOW|O_NONBLOCK, fstat, and close. The bytes are not read. */
+function openSecretStat(filePath: string, missing: string): Stats {
+    let fd: number;
+    try {
+        fd = openSync(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    } catch {
+        throw new Error(missing);
+    }
+    try {
+        return fstatSync(fd);
+    } finally {
+        try { closeSync(fd); } catch { /* the descriptor is already gone */ }
+    }
+}
+
 /** Refuse to start unless the password file and its directory match the mode/owner rules. */
 export function validateSecretFiles(keystorePath: string, passwordFilePath: string): void {
     const owner = uid();
-    let pw;
-    try {
-        pw = lstatSync(passwordFilePath);
-    } catch {
-        throw new Error('secret file: password file is not a regular file');
-    }
-    if (!pw.isFile() || pw.isSymbolicLink()) throw new Error('secret file: password file is not a regular file');
+    const pw = openSecretStat(passwordFilePath, 'secret file: password file is not a regular file');
+    if (!pw.isFile()) throw new Error('secret file: password file is not a regular file');
     if (modeBits(pw.mode) !== 0o600) throw new Error('secret file: password file mode is not 0600');
     if (pw.uid !== owner) throw new Error('secret file: password file owner is not the process uid');
 
@@ -85,13 +95,8 @@ export function validateSecretFiles(keystorePath: string, passwordFilePath: stri
     if (modeBits(dir.mode) !== 0o700) throw new Error('secret file: password directory mode is not 0700');
     if (dir.uid !== owner) throw new Error('secret file: password directory owner is not the process uid');
 
-    let ks;
-    try {
-        ks = lstatSync(keystorePath);
-    } catch {
-        throw new Error('secret file: keystore is not a regular file');
-    }
-    if (!ks.isFile() || ks.isSymbolicLink()) throw new Error('secret file: keystore is not a regular file');
+    const ks = openSecretStat(keystorePath, 'secret file: keystore is not a regular file');
+    if (!ks.isFile()) throw new Error('secret file: keystore is not a regular file');
     if (ks.uid !== owner) throw new Error('secret file: keystore owner is not the process uid');
     if ((modeBits(ks.mode) & 0o022) !== 0) throw new Error('secret file: keystore is group or world writable');
     let ksDir;
@@ -173,7 +178,7 @@ export function createCastSigner(opts: {
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 120_000) {
         throw new Error('cast signer: timeout rejected');
     }
-    const pinned: PinnedExecutable = trustedExecutable(opts.castBin);
+    const pinned: PinnedExecutable = pinCastBin(opts.castBin);
     const spawnPath = pinned.path;
     const recheck = pinned.recheck;
     validateSecretFiles(opts.keystorePath, opts.passwordFilePath);

@@ -2,13 +2,19 @@
  * Single in-flight nonce journal. History, pruning and foreign-nonce markers are not stored.
  * A file that fails validation refuses sends. It is never replaced with an empty journal.
  */
-import { chmod, link, mkdir, open, rename, unlink, type FileHandle } from 'node:fs/promises';
+import { link, open, rename, unlink, type FileHandle } from 'node:fs/promises';
 import { createHash, randomBytes } from 'node:crypto';
 import { constants, lstatSync, realpathSync } from 'node:fs';
 import { createServer, type Server, type Socket } from 'node:net';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import type { Address, Hex } from 'viem';
-import { recheck, trustedPath, type PathPin } from './trustedExecutable.js';
+
+/** Device and inode of a journal directory that already existed at startup. */
+export interface PathPin {
+    readonly path: string;
+    readonly dev: number;
+    readonly ino: number;
+}
 
 export type IntentKind = 'price-super' | 'price-paymaster';
 
@@ -125,69 +131,13 @@ function assertExistingDir(dir: string): void {
     if ((existing.mode & 0o022) !== 0) throw new Error('journal: parent is group or world writable');
 }
 
-/** Create missing parents and fsync each parent after its new child exists. */
-export async function ensureJournalDir(journalPath: string): Promise<void> {
-    if (typeof journalPath !== 'string' || journalPath.length === 0) throw new Error('journal: path rejected');
-    await ensureDir(dirname(journalPath));
-}
-
-async function fsyncDirOrThrow(dir: string): Promise<void> {
+function directoryPinHolds(pin: PathPin): boolean {
     try {
-        await durability.fsyncDir(dir);
-    } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code === 'EPERM' && dir === resolve('/')) return;
-        throw new Error('journal: parent sync failed');
+        const st = lstatSync(pin.path);
+        return st.isDirectory() && !st.isSymbolicLink() && st.dev === pin.dev && st.ino === pin.ino;
+    } catch {
+        return false;
     }
-}
-
-/**
- * Create missing parents, then fsync the journal directory and every ancestor up to
- * and including the first directory that existed before this call, plus that directory's
- * parent. The parent holds the directory entry a previous crash can lose.
- */
-async function ensureDir(dir: string): Promise<void> {
-    const abs = resolve(dir);
-    const missing: string[] = [];
-    let cursor = abs;
-    let existing: string | null = null;
-    while (cursor !== dirname(cursor)) {
-        let st: ReturnType<typeof lstatSync> | null = null;
-        try {
-            st = lstatSync(cursor);
-        } catch (e) {
-            if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('journal: parent unreadable');
-        }
-        if (st) {
-            if (!st.isDirectory() || st.isSymbolicLink()) throw new Error('journal: parent is not a directory');
-            existing = cursor;
-            break;
-        }
-        missing.push(cursor);
-        cursor = dirname(cursor);
-    }
-    if (!existing) throw new Error('journal: parent unreadable');
-    if (missing.length === 0) {
-        assertExistingDir(abs);
-    } else {
-        let parent = existing;
-        for (const next of missing.reverse()) {
-            await mkdir(next, { mode: 0o700 });
-            await fsyncDirOrThrow(parent);
-            await chmod(next, 0o700);
-            parent = next;
-        }
-    }
-    let walk = abs;
-    for (;;) {
-        await fsyncDirOrThrow(walk);
-        if (walk === existing) break;
-        const parent = dirname(walk);
-        if (parent === walk) break;
-        walk = parent;
-    }
-    const holder = dirname(existing);
-    if (holder !== existing) await fsyncDirOrThrow(holder);
 }
 
 async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'corrupt'> {
@@ -200,17 +150,14 @@ async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'c
 
 async function writeDurable(filePath: string, body: string, exclusive: boolean, pin: PathPin | null = null): Promise<void> {
     if (body.length === 0 || body.length > MAX_FILE_BYTES) throw new Error('journal: create failed');
-    const dir = dirname(filePath);
+    const finalPath = pin ? join(pin.path, basename(filePath)) : filePath;
+    const dir = dirname(finalPath);
     if (pin) {
-        try {
-            recheck(pin);
-        } catch {
-            throw new Error('journal: path substituted');
-        }
+        if (!directoryPinHolds(pin)) throw new Error('journal: path substituted');
     } else {
-        await ensureDir(dir);
+        assertExistingDir(dir);
     }
-    const target = join(dir, `.${basename(filePath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
+    const target = join(dir, `.${basename(finalPath)}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`);
     let fh: FileHandle;
     try {
         fh = await open(target, OPEN_EXCL, 0o600);
@@ -227,8 +174,8 @@ async function writeDurable(filePath: string, body: string, exclusive: boolean, 
         await fh.close();
         fh = undefined as unknown as FileHandle;
         try {
-            if (exclusive) await durability.link(target, filePath);
-            else await durability.rename(target, filePath);
+            if (exclusive) await durability.link(target, finalPath);
+            else await durability.rename(target, finalPath);
             published = true;
         } catch (e) {
             const code = (e as NodeJS.ErrnoException).code;
@@ -525,15 +472,20 @@ export class Journal {
     private alarm: { nonce: number; firstSentAt: number } | null = null;
     private readonly identity: JournalIdentity;
     private readonly pin: PathPin | null;
+    /** Every read and write uses this path. A pin contributes its real directory, not the caller's string. */
+    private readonly ioPath: string;
 
     constructor(readonly path: string, identity: JournalIdentity, pin?: PathPin | null) {
-        if (typeof path !== 'string' || path.length === 0 || path.length > 4_096) {
+        if (typeof path !== 'string' || path.length === 0 || path.length > 4_096 || path.includes('\0')) {
             throw new Error('journal: path rejected');
         }
         if (!Number.isInteger(identity.chainId) || identity.chainId <= 0) throw new Error('journal: chainId rejected');
         if (!isAddress(identity.signer)) throw new Error('journal: signer rejected');
         this.identity = { chainId: identity.chainId, signer: identity.signer };
         this.pin = pin ?? null;
+        const base = basename(path);
+        if (base.length === 0 || base === '.' || base === '..' || base.length > 255) throw new Error('journal: path rejected');
+        this.ioPath = this.pin ? join(this.pin.path, base) : path;
     }
 
     /** Copy of the flight kept for the stall alarm. Null when the pinned path was substituted. */
@@ -655,7 +607,7 @@ export class Journal {
 
     private async publish(state: JournalState, exclusive: boolean): Promise<void> {
         try {
-            await writeDurable(this.path, serialize(state), exclusive, this.pin);
+            await writeDurable(this.ioPath, serialize(state), exclusive, this.pin);
         } catch (error) {
             if (error instanceof Error && error.message === 'journal: parent sync failed') this.needsBarrier = true;
             throw error;
@@ -663,19 +615,12 @@ export class Journal {
         this.needsBarrier = false;
     }
 
-    /** Re-run the directory barrier. A pinned directory is never recreated. */
+    /** Re-run the directory barrier. The directory is never created here. */
     private async tryBarrier(): Promise<boolean> {
-        if (this.pin) {
-            if (!this.pinHolds()) return false;
-            try {
-                await durability.fsyncDir(this.pin.path);
-                return true;
-            } catch {
-                return false;
-            }
-        }
+        if (this.pin && !this.pinHolds()) return false;
+        const dir = this.pin ? this.pin.path : dirname(this.ioPath);
         try {
-            await ensureDir(dirname(this.path));
+            await durability.fsyncDir(dir);
             return true;
         } catch {
             return false;
@@ -684,12 +629,7 @@ export class Journal {
 
     private pinHolds(): boolean {
         if (!this.pin) return true;
-        try {
-            recheck(this.pin);
-            return true;
-        } catch {
-            return false;
-        }
+        return directoryPinHolds(this.pin);
     }
 
     /** Parse nonce and firstSentAt for the alarm. Does not open the journal for replay. */
@@ -714,7 +654,7 @@ export class Journal {
     private async readText(): Promise<{ kind: 'missing' | 'unsafe' | 'corrupt' } | { kind: 'text'; text: string }> {
         let fh: FileHandle;
         try {
-            fh = await open(this.path, OPEN_READ);
+            fh = await open(this.ioPath, OPEN_READ);
         } catch (e) {
             const code = (e as NodeJS.ErrnoException).code;
             if (code === 'ENOENT') return { kind: 'missing' };
@@ -733,78 +673,44 @@ export class Journal {
     }
 }
 
-const JOURNAL_TRUST_TOKENS = new Set([
-    'unreadable', 'owner', 'writable', 'sticky', 'directory', 'directory owner', 'directory writable',
-    'not a regular file', 'changed', 'kind', 'not absolute',
-]);
-
-function journalRefused(error: unknown): never {
-    const message = error instanceof Error ? error.message : '';
-    const mark = message.lastIndexOf(': ');
-    const token = mark >= 0 ? message.slice(mark + 2) : '';
-    throw new Error(`keeper: journal refused: ${JOURNAL_TRUST_TOKENS.has(token) ? token : 'unreadable'}`);
-}
-
 /**
- * Pin the journal directory before a live run. Missing parents are created mode 0700 only
- * after the nearest existing ancestor passes `trustedPath`. A later mismatch does not mkdir.
+ * Pin the directory that already contains `--journal`. Missing directories are not created.
+ * Later I/O uses `join(pin.path, basename)`. This pin is mix-up protection for the directory
+ * inode. Ownership and mode belong to the operator preflight.
  */
-export async function pinJournalDirectory(journalPath: string): Promise<PathPin> {
+export function pinJournalDirectory(journalPath: string): PathPin {
     if (typeof journalPath !== 'string' || journalPath.length === 0 || journalPath.length > 4_096 || journalPath.includes('\0')) {
         throw new Error('keeper: journal refused: unreadable');
     }
+    if (!isAbsolute(journalPath)) throw new Error('keeper: journal refused: not absolute');
     const dir = dirname(resolve(journalPath));
-    const missing: string[] = [];
-    let cursor = dir;
-    let existing: string | null = null;
-    let hops = 0;
-    while (hops < 64) {
-        hops += 1;
-        let st: ReturnType<typeof lstatSync> | null = null;
-        try {
-            st = lstatSync(cursor);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('keeper: journal refused: unreadable');
-        }
-        if (st) {
-            if (!st.isDirectory() || st.isSymbolicLink()) throw new Error('keeper: journal refused: directory');
-            existing = cursor;
-            break;
-        }
-        missing.push(cursor);
-        const parent = dirname(cursor);
-        if (parent === cursor) break;
-        cursor = parent;
-    }
-    if (!existing) throw new Error('keeper: journal refused: unreadable');
-    let ancestor: PathPin;
+    let listed: ReturnType<typeof lstatSync> | null = null;
     try {
-        ancestor = trustedPath(existing, 'dir');
+        listed = lstatSync(dir);
     } catch (error) {
-        journalRefused(error);
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error('journal directory must exist; run preflight');
+        }
+        throw new Error('keeper: journal refused: unreadable');
     }
-    for (const next of [...missing].reverse()) {
-        try {
-            recheck(ancestor);
-        } catch (error) {
-            journalRefused(error);
-        }
-        try {
-            await mkdir(next, { mode: 0o700 });
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw new Error('keeper: journal refused: unreadable');
-        }
-        try {
-            await chmod(next, 0o700);
-        } catch {
-            throw new Error('keeper: journal refused: unreadable');
-        }
-    }
+    if (!listed.isDirectory() && !listed.isSymbolicLink()) throw new Error('keeper: journal refused: directory');
+    let real: string;
     try {
-        return trustedPath(dir, 'dir');
+        real = realpathSync(dir);
     } catch (error) {
-        journalRefused(error);
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error('journal directory must exist; run preflight');
+        }
+        throw new Error('keeper: journal refused: unreadable');
     }
+    let st: ReturnType<typeof lstatSync>;
+    try {
+        st = lstatSync(real);
+    } catch {
+        throw new Error('keeper: journal refused: unreadable');
+    }
+    if (!st.isDirectory() || st.isSymbolicLink()) throw new Error('keeper: journal refused: directory');
+    return Object.freeze({ path: real, dev: st.dev, ino: st.ino });
 }
 
 const heldLocks = new Set<Server>();
@@ -876,15 +782,25 @@ export async function acquireKeeperLock(opts: { journalPath: string; chainId: nu
     if (typeof opts.signer !== 'string' || opts.signer.length !== 42) throw new Error('journal: signer rejected');
     let parentReal: string;
     if (opts.pin) {
-        try {
-            recheck(opts.pin);
-        } catch {
-            throw new Error('journal: path substituted');
-        }
+        if (!directoryPinHolds(opts.pin)) throw new Error('journal: path substituted');
         parentReal = opts.pin.path;
     } else {
-        await ensureJournalDir(opts.journalPath);
-        parentReal = realpathSync(dirname(resolve(opts.journalPath)));
+        const parent = dirname(resolve(opts.journalPath));
+        let listed: ReturnType<typeof lstatSync> | null = null;
+        try {
+            listed = lstatSync(parent);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                throw new Error('journal directory must exist; run preflight');
+            }
+            throw new Error('journal: parent unreadable');
+        }
+        if (!listed.isDirectory() && !listed.isSymbolicLink()) throw new Error('journal: parent is not a directory');
+        try {
+            parentReal = realpathSync(parent);
+        } catch {
+            throw new Error('journal directory must exist; run preflight');
+        }
     }
     const fileKey = join(parentReal, basename(opts.journalPath));
     const signerServer = await listenLoopback(keeperLockPort(opts.chainId, opts.signer));

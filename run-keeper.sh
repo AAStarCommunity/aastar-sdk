@@ -4,7 +4,8 @@
 # A live run starts from the launchd plist with absolute ProgramArguments.
 # See docs/guide/keeper.md. This script signs nothing.
 #
-#   ./run-keeper.sh sepolia --dry-run --once --env-file ~/.aastar-keeper/keeper.env
+#   ./run-keeper.sh sepolia --dry-run --once
+# Credential flags are refused. A dry-run that needs RPC starts from the absolute node command.
 #
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,6 +22,14 @@ if ! has_arg --dry-run "$@"; then
   echo "live runs must start from the plist with absolute ProgramArguments; see docs/guide/keeper.md" >&2
   exit 1
 fi
+for a in "$@"; do
+  case "$a" in
+    --keystore|--password-file|--env-file|--signer|--keystore=*|--password-file=*|--env-file=*|--signer=*)
+      echo "error: a dry-run cannot take --keystore, --password-file, --env-file, or --signer" >&2
+      exit 1
+      ;;
+  esac
+done
 
 NETWORK="${1:-sepolia}"
 [ $# -gt 0 ] && shift || true

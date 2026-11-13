@@ -20,6 +20,14 @@ export function trackAlert(work: Promise<unknown>): void {
     });
 }
 
+/**
+ * Await the drain, then call `exit`. A hanging critical send blocks `exit` until the drain returns.
+ */
+export async function exitAfterDrain(exit: (code: number) => void, code: number, timeoutMs = 10_000): Promise<void> {
+    await drainAlerts(timeoutMs);
+    exit(code);
+}
+
 /** Wait until every tracked send settles, or until `timeoutMs` elapses. */
 export async function drainAlerts(timeoutMs = 10_000): Promise<void> {
     const budget = Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 60_000 ? timeoutMs : 10_000;

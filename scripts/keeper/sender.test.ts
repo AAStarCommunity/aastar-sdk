@@ -767,9 +767,9 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(h.broadcasts).toEqual([]);
         expect(JSON.stringify(first)).not.toContain('secret');
         const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; ceilingClosed: boolean; inFlight: { broadcastOnce: string[] } };
-        expect(body.sentAt).toEqual([]);
+        expect(body.sentAt).toHaveLength(1);
         expect(body.ceilingClosed).toBe(false);
-        expect(body.inFlight.broadcastOnce).toEqual([]);
+        expect(body.inFlight.broadcastOnce).toHaveLength(1);
         failBroadcastChain = false;
         const replayed = await h.sender.maintain();
         expect(replayed.status).toBe('pending');
@@ -1223,6 +1223,16 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     });
 
     it('pending failure still settles and still clears a stall when latest is already past the nonce', async () => {
+        const fresh = harness({ stallSec: 600 });
+        await plant(fresh, { nonce: 7 });
+        fresh.chain.getTransactionCount = async (_addr, tag) => {
+            if (tag === 'pending') throw new Error('pending-nonce-sentinel');
+            return 8n;
+        };
+        const beforeDeadline = await fresh.sender.maintain();
+        expect(beforeDeadline.status).toBe('consumed');
+        expect(fresh.alerts.join('\n')).not.toContain('pending-nonce-sentinel');
+
         const settle = harness({ stallSec: 600 });
         await plant(settle, { nonce: 7 });
         settle.clock.now = 1 + 600_000;
@@ -1291,6 +1301,131 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
             expect(h.alerts.join('\n')).not.toContain('barrier-sentinel');
             expect(h.broadcasts).toHaveLength(1);
+            setDurabilityHooks(null);
+            const again = await h.sender.send(h.job());
+            expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        } finally {
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
+    });
+
+    it('a blocked journal write across the stall deadline latches and refuses the resumed broadcast', async () => {
+        const h = harness({ stallSec: 1, now: () => Date.now() });
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        const { setDurabilityHooks } = await import('./journal.js');
+        const real = await import('node:fs/promises');
+        setDurabilityHooks({
+            async write(fh, body) {
+                if (body.includes('"raws"')) await gate;
+                await fh.writeFile(body, 'utf8');
+            },
+            async fsyncFile(fh) { await fh.sync(); },
+            async rename(from, to) { await real.rename(from, to); },
+            async link(from, to) { await real.link(from, to); },
+            async fsyncDir(dirPath) {
+                const dh = await real.open(dirPath, 'r');
+                try { await dh.sync(); } finally { await dh.close(); }
+            },
+        });
+        try {
+            const pending = h.sender.send(h.job());
+            const deadline = Date.now() + 3_000;
+            while (Date.now() < deadline && !h.alerts.some((line) => line.includes('price-staleness deadline: check on chain'))) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+            expect(h.alerts.some((line) => line.includes('ALL sends closed') && line.includes('price-staleness deadline: check on chain'))).toBe(true);
+            expect(h.broadcasts).toEqual([]);
+            release();
+            const result = await pending;
+            expect(result.status).toBe('refused');
+            expect(h.broadcasts).toEqual([]);
+        } finally {
+            release();
+            setDurabilityHooks(null);
+            h.sender.stop();
+        }
+    });
+
+    it('a hanging chain read across the stall deadline refuses the broadcast', async () => {
+        const h = harness({ stallSec: 1, now: () => Date.now() });
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: Date.now() + 60_000 });
+        let reads = 0;
+        let release!: () => void;
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        h.chain.chainId = async () => {
+            reads += 1;
+            if (reads >= 3) await gate;
+            return CHAIN_ID;
+        };
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            return keccak256(raw);
+        };
+        try {
+            const pending = h.sender.send(h.job());
+            const started = Date.now();
+            while (reads < 3 && Date.now() - started < 2_000) await new Promise((resolve) => setTimeout(resolve, 10));
+            expect(reads).toBeGreaterThanOrEqual(3);
+            const deadline = Date.now() + 3_000;
+            while (Date.now() < deadline && !h.alerts.some((line) => line.includes('price-staleness deadline: check on chain'))) {
+                await new Promise((resolve) => setTimeout(resolve, 20));
+            }
+            expect(h.broadcasts).toEqual([]);
+            expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+            release();
+            const result = await pending;
+            expect(result.status).toBe('refused');
+            expect(h.broadcasts).toEqual([]);
+        } finally {
+            release();
+            h.sender.stop();
+        }
+    });
+
+    it('a chain id that changes after the first-broadcast commit is not broadcast', async () => {
+        const h = harness();
+        let reads = 0;
+        h.chain.chainId = async () => {
+            reads += 1;
+            return reads >= 3 ? 999 : CHAIN_ID;
+        };
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            return keccak256(raw);
+        };
+        const result = await h.sender.send(h.job());
+        expect(result).toEqual({ status: 'refused', reason: 'sender: chain id mismatch' });
+        expect(JSON.stringify(result)).not.toContain('999');
+        expect(h.broadcasts).toEqual([]);
+        const body = JSON.parse(readFileSync(h.path, 'utf8')) as { sentAt: number[]; inFlight: { broadcastOnce: string[] } };
+        expect(body.sentAt).toHaveLength(1);
+        expect(body.inFlight.broadcastOnce).toHaveLength(1);
+    });
+
+    it('armFlight alerts an overdue flight at startup even when load returns barrier', async () => {
+        const h = harness({ stallSec: 600 });
+        await plant(h, { nonce: 7 });
+        const { Journal, setDurabilityHooks } = await import('./journal.js');
+        const real = await import('node:fs/promises');
+        setDurabilityHooks({
+            async write(fh, body) { await fh.writeFile(body, 'utf8'); },
+            async fsyncFile(fh) { await fh.sync(); },
+            async rename(from, to) { await real.rename(from, to); },
+            async link(from, to) { await real.link(from, to); },
+            async fsyncDir() { throw new Error('barrier-sentinel'); },
+        });
+        try {
+            const journal = new Journal(h.path, { chainId: CHAIN_ID, signer: SIGNER });
+            expect(await journal.load()).toBe('barrier');
+            const alarm = journal.alarmFlight();
+            expect(alarm?.nonce).toBe(7);
+            h.clock.now = 1 + 600_000;
+            h.sender.armFlight(alarm);
+            expect(h.alerts.some((line) => line.includes('ALL sends closed'))).toBe(true);
+            expect(h.alerts.join('\n')).not.toContain('barrier-sentinel');
             setDurabilityHooks(null);
             const again = await h.sender.send(h.job());
             expect(again).toEqual({ status: 'refused', reason: 'sender: stalled' });

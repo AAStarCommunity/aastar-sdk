@@ -1,10 +1,8 @@
 /**
  * Pending Telegram sends must be drained, and critical alerts retried, before exit.
- * keeper.ts is read as text: importing it runs main().
  */
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
-import { drainAlerts, isCriticalAlert, retryCritical, trackAlert } from './exitAlerts.js';
+import { drainAlerts, exitAfterDrain, isCriticalAlert, retryCritical, trackAlert } from './exitAlerts.js';
 
 let releaseHang: (() => void) | null = null;
 
@@ -68,10 +66,16 @@ describe('exit alerts', () => {
         expect(isCriticalAlert('x'.repeat(8_193))).toBe(false);
     });
 
-    it('keeper.ts tracks alerts, names critical ones, and drains before exit', () => {
-        const src = readFileSync(new URL('../keeper.ts', import.meta.url), 'utf8');
-        expect(src).toContain('trackAlert(');
-        expect(src).toContain('isCriticalAlert(');
-        expect(src).toContain('drainAlerts(');
+    it('exit waits for a hanging alert and then calls the exit callback', async () => {
+        let release!: () => void;
+        const hung = new Promise<void>((resolve) => { release = resolve; });
+        trackAlert(hung);
+        let exited: number | null = null;
+        const pending = exitAfterDrain((code) => { exited = code; }, 7, 2_000);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(exited).toBeNull();
+        release();
+        await pending;
+        expect(exited).toBe(7);
     });
 });

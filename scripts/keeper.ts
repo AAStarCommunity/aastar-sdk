@@ -10,11 +10,11 @@ import { absoluteKeeperPath } from './keeper/cliPaths.js';
 import { createCastSigner, killCastChildren } from './keeper/castSigner.js';
 import { readDeploymentAddresses, type DeploymentAddresses } from './keeper/deploymentConfig.js';
 import { acquireKeeperLock, Journal, pinJournalDirectory } from './keeper/journal.js';
-import { drainAlerts, isCriticalAlert, retryCritical, trackAlert } from './keeper/exitAlerts.js';
+import { exitAfterDrain, isCriticalAlert, retryCritical, trackAlert } from './keeper/exitAlerts.js';
+import { freshReadAlerts, noteTargetRead } from './keeper/readAlert.js';
 import { defaultMaxSendsPerHour, manualStallCommand, Sender, type MaintainResult, type SendResult, type SettlementEvent } from './keeper/sender.js';
 import { envFileRefusal, type ModeStat } from './keeper/startupGuards.js';
-import { verifyModuleTree } from './keeper/moduleTree.js';
-import { entryPathFrom, loaderPathFromArgv, trustedExecutable, trustedPath, type PathPin } from './keeper/trustedExecutable.js';
+import { pinCastBin } from './keeper/trustedExecutable.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
 import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
@@ -90,7 +90,7 @@ const VALUE_FLAGS = new Set([
     '--stall-sec', '--max-gas',
     '--max-sends-per-hour', '--poll-interval', '--safety-margin', '--max-updates-per-day',
     '--max-base-fee-gwei', '--health-interval', '--volatility-threshold-bps', '--volatility-cooldown',
-    '--chainlink-stale-sec', '--external-ethusd-url', '--max-module-entries',
+    '--chainlink-stale-sec', '--external-ethusd-url',
 ]);
 
 /** Reject unknown tokens and `--name=value`. The message names the option and never prints a value. */
@@ -157,45 +157,14 @@ async function readKeeperEnvFile(filePath: string): Promise<Record<string, strin
 }
 
 /**
- * Pin cast once, including the default PATH name. The returned path is absolute.
- * Spawn uses that path. PATH is not consulted again.
+ * Pin an absolute cast path. PATH is not searched. The pin is mix-up protection
+ * (device and inode), not a trust boundary. Ownership and mode belong to preflight.
  */
-function resolveCastBin(chosen: string | undefined, source: 'cli' | 'env' | 'default'): string {
-    if (source !== 'default') {
-        if (chosen === undefined || chosen.length === 0 || chosen.length > 4_096 || !path.isAbsolute(chosen)) {
-            throw new Error('keeper: cast bin refused: not absolute');
-        }
+function resolveCastBin(chosen: string | undefined): string {
+    if (chosen === undefined || chosen.length === 0 || chosen.length > 4_096 || chosen.includes('\0') || !path.isAbsolute(chosen)) {
+        throw new Error('keeper: cast bin refused: not absolute');
     }
-    return trustedExecutable(source === 'default' || chosen === undefined ? 'cast' : chosen).path;
-}
-
-const TRUST_TOKENS = new Set([
-    'unreadable', 'owner', 'writable', 'sticky', 'directory', 'directory owner', 'directory writable',
-    'not a regular file', 'changed', 'kind', 'not absolute',
-]);
-
-/** Name the path class. The reason token is from the trust check. The path is not printed. */
-function pinClass(target: string, kind: 'file' | 'dir', label: string): PathPin {
-    try {
-        return trustedPath(target, kind);
-    } catch (error) {
-        const message = error instanceof Error ? error.message : '';
-        const mark = message.lastIndexOf(': ');
-        const token = mark >= 0 ? message.slice(mark + 2) : '';
-        throw new Error(`keeper: ${label} refused: ${TRUST_TOKENS.has(token) ? token : 'unreadable'}`);
-    }
-}
-
-/** Live runs pin node, the tsx loader, this file, and cast before any RPC call. */
-function pinLiveExecutables(castBin: string): void {
-    pinClass(process.execPath, 'file', 'node');
-    const loader = loaderPathFromArgv(process.execArgv);
-    if (!loader) throw new Error('keeper: loader refused: unreadable');
-    pinClass(loader, 'file', 'loader');
-    const entry = entryPathFrom(import.meta.url, process.argv[1]);
-    if (!entry) throw new Error('keeper: entry refused: unreadable');
-    pinClass(entry, 'file', 'entry');
-    pinClass(castBin, 'file', 'cast');
+    return pinCastBin(chosen).path;
 }
 
 /** Flag wins. Otherwise the first present env key. The error names the flag or the key, never the value. */
@@ -303,8 +272,8 @@ async function sendTelegramMessage(text: string): Promise<void> {
 }
 
 async function finish(code: number): Promise<never> {
-    await drainAlerts(10_000);
-    process.exit(code);
+    await exitAfterDrain((status) => process.exit(status), code, 10_000);
+    throw new Error('keeper: exit failed');
 }
 
 async function sleepMs(ms: number): Promise<void> {
@@ -364,7 +333,7 @@ function usage(): string {
         '   --keystore <path>           encrypted keystore (required unless --dry-run)',
         '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
         '   --signer <address>          address cast must recover (required unless --dry-run)',
-        '   --cast-bin <path>           cast binary (default: cast)',
+        '   --cast-bin <path>           absolute cast binary (required for a live run)',
         '   --journal <path>            nonce journal (default: ~/.aastar-keeper/<network>.journal.json)',
         '   --env-file <path>           explicit env file; only allowlisted keys are accepted',
         '   --registry <address>        registry used for signer identity',
@@ -378,7 +347,6 @@ function usage(): string {
         '   --stall-sec <n>             in-flight stall window (default 600)',
         '   --clear-stall               one-shot after a human replacement is mined',
         '   --max-gas <n>               gas limit ceiling for updatePrice (default 500000)',
-        '   --max-module-entries <n>    node_modules walk cap for a live run (default 300000)',
         '   --max-sends-per-hour <n>    signed broadcasts per rolling hour; the ceiling is persisted',
         '   --reset-send-ceiling        reopen a closed ceiling once the rolling hour has room',
         '   --price-feed <address>      Chainlink ETH/USD feed override',
@@ -500,16 +468,6 @@ async function main() {
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
 
-    const maxModuleEntries = parseBoundedInt(
-        getArgValue(args, '--max-module-entries'),
-        300_000,
-        1,
-        300_000,
-        '--max-module-entries',
-    );
-    // Before the env file, the keystore, the password file, or cast. Dry-run signs nothing and skips this.
-    if (!dryRun) verifyModuleTree(REPO_ROOT, { maxEntries: maxModuleEntries });
-
     const secretNames = secretEnvNames(process.env);
     if (secretNames.length > 0) {
         for (const name of secretNames) console.error(`keeper: secret env refused: ${name}`);
@@ -530,8 +488,7 @@ async function main() {
             ? 'env'
             : 'default';
     const castChosen = castSource === 'cli' ? castBinArg : castSource === 'env' ? castFromEnv : undefined;
-    const castBin = (!dryRun || castSource !== 'default') ? resolveCastBin(castChosen, castSource) : 'cast';
-    if (!dryRun) pinLiveExecutables(castBin);
+    const castBin = (!dryRun || castSource !== 'default') ? resolveCastBin(castChosen) : 'cast';
     const healthIntervalSec = BigInt(parseFlagOrEnv(args, '--health-interval', ['KEEPER_HEALTH_INTERVAL_SEC'], 1800, 0, 31_536_000));
     const volatilityThresholdBps = BigInt(parseFlagOrEnv(args, '--volatility-threshold-bps', ['KEEPER_VOLATILITY_THRESHOLD_BPS'], 0, 0, 1_000_000));
     const volatilityCooldownSec = BigInt(parseFlagOrEnv(args, '--volatility-cooldown', ['KEEPER_VOLATILITY_COOLDOWN_SEC'], 600, 0, 31_536_000));
@@ -683,6 +640,7 @@ async function main() {
         console.error(msg);
         void sendTelegramMessage(`[keeper] ${msg}`);
     };
+    const readAlerts = freshReadAlerts();
 
     function readFailed(problems: string[]): IdentityResult {
         return { ok: false, kind: 'read-failed', problems };
@@ -735,32 +693,12 @@ async function main() {
     let stopping = false;
     let sleepTimer: ReturnType<typeof setTimeout> | null = null;
     const refreshAlerted = new Set<string>();
-    if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
-        if (!journalPin) throw new Error('keeper: journal refused: unreadable');
-        try {
-            await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress, pin: journalPin });
-        } catch (error) {
-            if (error instanceof Error && error.message === 'journal: parent sync failed') {
-                console.error('sender: journal barrier incomplete');
-                await finish(1);
-            }
-            throw error;
-        }
-        const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress }, journalPin);
-        const opened = await journal.load();
-        if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe' || opened === 'barrier' || opened === 'substituted') {
-            const reason = opened === 'mismatch'
-                ? 'sender: journal belongs to another signer'
-                : opened === 'unsafe' ? 'sender: journal unsafe'
-                : opened === 'barrier' ? 'sender: journal barrier incomplete'
-                : opened === 'substituted' ? 'sender: journal path substituted'
-                : 'sender: journal corrupt';
-            console.error(reason);
-            await sendTelegramMessage(`[keeper] ${reason}`);
-            await finish(1);
+    const buildSender = (journal: Journal): Sender => {
+        if (!keystorePath || !passwordFilePath || !signerAddress) {
+            throw new Error('keeper: live runs require --keystore, --password-file and --signer');
         }
         if (maxFeeWei === null) throw new Error('keeper: --max-fee-gwei is required for a live run');
-        sender = new Sender({
+        return new Sender({
             chain: adaptChainIO(publicClient),
             signer: createCastSigner({ castBin, keystorePath, passwordFilePath, signerAddress }),
             journal,
@@ -810,7 +748,42 @@ async function main() {
             }),
             alert: alertLine,
         });
+    };
+    if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
+        if (!journalPin) throw new Error('keeper: journal refused: unreadable');
+        try {
+            await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress, pin: journalPin });
+        } catch (error) {
+            if (error instanceof Error && error.message === 'journal: parent sync failed') {
+                console.error('sender: journal barrier incomplete');
+                await finish(1);
+            }
+            throw error;
+        }
+        const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress }, journalPin);
+        const opened = await journal.load();
+        if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe' || opened === 'substituted') {
+            const reason = opened === 'mismatch'
+                ? 'sender: journal belongs to another signer'
+                : opened === 'unsafe' ? 'sender: journal unsafe'
+                : opened === 'substituted' ? 'sender: journal path substituted'
+                : 'sender: journal corrupt';
+            console.error(reason);
+            await sendTelegramMessage(`[keeper] ${reason}`);
+            await finish(1);
+        }
+        sender = buildSender(journal);
         sender.setPaymasterIdentity(false);
+        if (opened === 'barrier') {
+            sender.armFlight(journal.alarmFlight());
+            console.error('sender: journal barrier incomplete');
+            await sendTelegramMessage('[keeper] sender: journal barrier incomplete');
+            await finish(1);
+        }
+        const flight = journal.inFlight();
+        sender.armFlight(flight ? { nonce: flight.nonce, firstSentAt: flight.firstSentAt } : null);
+        const account = journal.account();
+        if (account.stalled) sender.restoreStall(account.stalledNonce);
     }
     if (signerAddress) {
         const identity = await evaluateIdentity();
@@ -1057,8 +1030,8 @@ async function main() {
                 chainlinkOk = true;
             } catch {
                 operationalFailure = true;
-                console.error('keeper: chainlink read failed');
             }
+            noteTargetRead(readAlerts, 'oracle', chainlinkOk, alertLine);
         }
 
         let cachedUpdatedAt = 0n;
@@ -1087,8 +1060,8 @@ async function main() {
                 superLoaded = true;
             } catch {
                 operationalFailure = true;
-                console.error('keeper: superpaymaster read failed');
             }
+            noteTargetRead(readAlerts, 'superpaymaster', superLoaded, alertLine);
         }
 
         const deadline = validUntil > safetyMarginSec ? validUntil - safetyMarginSec : 0n;
@@ -1256,11 +1229,14 @@ async function main() {
             await broadcastUpdate(superPaymaster, 'super', SUPERPAYMASTER_ABI, { before: cachedUpdatedAt, expected: chainlinkUpdatedAt });
         };
 
-        const refreshPaymaster = async () => {
-            if (disablePaymaster) return;
-            if (!paymaster) return; // V4 not configured; the path stays off until restart
+        const refreshPaymaster = async (): Promise<boolean> => {
+            if (disablePaymaster) return true;
+            if (!paymaster) return true; // V4 not configured; the path stays off until restart
 
             let pmPriceFeed = priceFeed;
+            let pmChainlinkUpdatedAt: bigint;
+            let pmCache: unknown;
+            let pmThresholdSec: bigint;
             try {
                 const f = (await publicClient.readContract({
                     address: paymaster,
@@ -1268,14 +1244,30 @@ async function main() {
                     functionName: 'ethUsdPriceFeed'
                 })) as `0x${string}`;
                 if (f && f.toLowerCase() !== ZERO_ADDRESS) pmPriceFeed = f;
-            } catch {}
-
-            const pmChainlink = await publicClient.readContract({
-                address: pmPriceFeed,
-                abi: CHAINLINK_ABI,
-                functionName: 'latestRoundData'
-            });
-            const pmChainlinkUpdatedAt = pmChainlink[3] as bigint;
+                const pmChainlink = await publicClient.readContract({
+                    address: pmPriceFeed,
+                    abi: CHAINLINK_ABI,
+                    functionName: 'latestRoundData'
+                });
+                pmChainlinkUpdatedAt = pmChainlink[3] as bigint;
+                const [cache, threshold] = await Promise.all([
+                    publicClient.readContract({
+                        address: paymaster,
+                        abi: PAYMASTER_V4_ABI,
+                        functionName: 'cachedPrice'
+                    }),
+                    publicClient.readContract({
+                        address: paymaster,
+                        abi: PAYMASTER_V4_ABI,
+                        functionName: 'priceStalenessThreshold'
+                    })
+                ]);
+                pmCache = cache;
+                pmThresholdSec = threshold as bigint;
+            } catch {
+                operationalFailure = true;
+                return false;
+            }
             const pmChainlinkAge = pmChainlinkUpdatedAt > 0n ? currentSec - pmChainlinkUpdatedAt : 0n;
             if (
                 chainlinkStaleSec > 0n &&
@@ -1292,21 +1284,7 @@ async function main() {
                 );
             }
 
-            const [pmCache, pmThreshold] = await Promise.all([
-                publicClient.readContract({
-                    address: paymaster,
-                    abi: PAYMASTER_V4_ABI,
-                    functionName: 'cachedPrice'
-                }),
-                publicClient.readContract({
-                    address: paymaster,
-                    abi: PAYMASTER_V4_ABI,
-                    functionName: 'priceStalenessThreshold'
-                })
-            ]);
-
             const pmCachedUpdatedAt = (pmCache as any)?.updatedAt !== undefined ? (pmCache as any).updatedAt : (pmCache as any)[1];
-            const pmThresholdSec = pmThreshold as bigint;
 
             const pmValidUntil = BigInt(pmCachedUpdatedAt) + pmThresholdSec;
             const pmDeadline = pmValidUntil > safetyMarginSec ? pmValidUntil - safetyMarginSec : 0n;
@@ -1331,25 +1309,26 @@ async function main() {
                     `cache.updatedAt=${formatTs(BigInt(pmCachedUpdatedAt))} chainlink.updatedAt=${formatTs(pmChainlinkUpdatedAt)} baseFee=${baseFeeInfo}`
             );
 
-            if (!shouldUpdate) return;
+            if (!shouldUpdate) return true;
             if (!baseFeeOk && currentSec + 180n < pmValidUntil) {
                 console.log(`skip paymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeWei === null ? '' : (maxBaseFeeWei / 1_000_000_000n).toString()})`);
-                return;
+                return true;
             }
 
             const updatesToday = updatesTodayByPaymaster.get(paymaster) || 0;
             if (updatesToday >= maxUpdatesPerDay) {
                 console.log(`skip paymaster update: reached maxUpdatesPerDay=${maxUpdatesPerDay}`);
-                return;
+                return true;
             }
 
             if (dryRun) {
                 console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster} (dry-run)`);
-                return;
+                return true;
             }
 
             console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster}`);
             await broadcastUpdate(paymaster, 'paymaster', PAYMASTER_V4_ABI, { before: BigInt(pmCachedUpdatedAt), expected: pmChainlinkUpdatedAt });
+            return true;
         };
 
         applyStartupTargetSet();
@@ -1361,12 +1340,14 @@ async function main() {
                 console.error('keeper: superpaymaster read failed');
             }
         }
+        let paymasterReadsOk = true;
         try {
-            await refreshPaymaster();
+            paymasterReadsOk = await refreshPaymaster();
         } catch {
             operationalFailure = true;
-            console.error('keeper: paymaster read failed');
+            paymasterReadsOk = false;
         }
+        if (!disablePaymaster && paymaster) noteTargetRead(readAlerts, 'paymaster', paymasterReadsOk, alertLine);
         if (sender) {
             try {
                 await sender.flushReceipt();
