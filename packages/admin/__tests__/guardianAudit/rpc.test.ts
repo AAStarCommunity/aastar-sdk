@@ -90,6 +90,27 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         expect(calls).toBeLessThan(responseLimits.ancestry + 1);
     });
 
+    it('caps the data + topics bytes of one eth_getLogs answer and of all pages of one range (#445 M2)', async () => {
+        // 60000 data bytes per log; the shared string keeps the test cheap. 500 logs = 30 MB fit the 32 MiB budget,
+        // 600 logs = 36 MB do not, while both stay far under the 16384 log count cap.
+        const data = '0x' + 'ab'.repeat(60_000);
+        const topic = `0x${'cc'.repeat(32)}`;
+        const logs = (n: number) => Array.from({ length: n }, () => ({ address: ADDR, data, topics: [topic] }));
+        expect(600).toBeLessThan(responseLimits.logs);
+        await expect(rawGetLogs(rpc(() => logs(500)), { address: ADDR, fromBlock: 1, toBlock: 1 })).resolves.toHaveLength(500);
+        await expect(rawGetLogs(rpc(() => logs(600)), { address: ADDR, fromBlock: 1, toBlock: 1 })).rejects.toThrow(/^stub: response too large$/);
+
+        // Across pages: 100 logs (6 MB) per one-block page; the sixth page crosses 32 MiB.
+        let pages = 0;
+        const node = rpc(() => {
+            pages += 1;
+            return logs(100);
+        });
+        await expect(pagedLogs(node, ADDR, 0, 9, 1)).rejects.toThrow(/^stub: response too large$/);
+        expect(pages).toBe(6);
+        await expect(pagedLogs(rpc(() => logs(100)), ADDR, 0, 4, 1)).resolves.toHaveLength(500);
+    });
+
     it('rejects a zero page and inverted bounds before any request', async () => {
         const node = rpc(() => []);
         await expect(pagedLogs(node, ADDR, 1, 4, 0)).rejects.toThrow(/page must be >= 1/);

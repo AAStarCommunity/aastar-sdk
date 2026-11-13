@@ -45,6 +45,8 @@ export const responseLimits = {
     receiptPayload: 1_048_576,
     /** Those same bytes summed across one block. */
     blockPayload: 32 * 1_048_576,
+    /** data + topics bytes of one `eth_getLogs` answer, and of all pages of one `pagedLogs` call (#445 M2). */
+    logsPayload: 32 * 1_048_576,
 } as const;
 
 const WORD_LEN = 66;
@@ -107,6 +109,19 @@ function clipStr(v: unknown, max: number): unknown {
 function hexByteLen(v: unknown): number {
     if (typeof v !== 'string' || v.length < 2 || v.charCodeAt(0) !== 48 || v.charCodeAt(1) !== 120) return 0;
     return (v.length - 2) >> 1;
+}
+
+/** data + topics bytes of one raw log, from string lengths only. The topics count is checked before they are read. */
+function logPayloadBytes(item: unknown): number {
+    if (typeof item !== 'object' || item === null) return 0;
+    const o = item as Record<string, unknown>;
+    let bytes = hexByteLen(o.data);
+    const topics = o.topics;
+    if (Array.isArray(topics)) {
+        if (topics.length > responseLimits.topics) return Infinity;
+        for (let k = 0; k < topics.length; k++) bytes += hexByteLen(topics[k]);
+    }
+    return bytes;
 }
 
 /**
@@ -287,6 +302,11 @@ export async function rawGetLogs(rpc: RawRpc, filter: LogFilter): Promise<unknow
     const r = await ask(opened, 'eth_getLogs', [body]);
     if (!Array.isArray(r)) throw new Error(`${opened.name}: eth_getLogs answer is not an array`);
     if (r.length > responseLimits.logs) throw new Error(`${opened.name}: response too large`);
+    let bytes = 0;
+    for (let i = 0; i < r.length; i++) {
+        bytes += logPayloadBytes(r[i]);
+        if (bytes > responseLimits.logsPayload) throw new Error(`${opened.name}: response too large`);
+    }
     const out: unknown[] = [];
     for (let i = 0; i < r.length; i++) out.push(snapshotLog(r[i]));
     return out;
@@ -302,6 +322,7 @@ export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to:
     if (to - from > responseLimits.ancestry) throw new Error('log range is too large');
     if (!safeBound(page, 1)) throw new Error('page must be >= 1');
     const out: unknown[] = [];
+    let bytes = 0;
     let a = from;
     let size = page;
     while (a <= to) {
@@ -319,6 +340,10 @@ export async function pagedLogs(rpc: RawRpc, address: Address, from: number, to:
             continue;
         }
         if (out.length + pageLogs.length > responseLimits.logs) throw new Error(`${opened.name}: response too large`);
+        for (const log of pageLogs) {
+            bytes += logPayloadBytes(log);
+            if (bytes > responseLimits.logsPayload) throw new Error(`${opened.name}: response too large`);
+        }
         for (const log of pageLogs) out.push(log);
         a = b + 1;
         size = page;
