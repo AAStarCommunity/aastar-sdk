@@ -246,44 +246,6 @@ describe('cast signer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(statSync(cwd).mode & 0o777).toBe(0o700);
     });
 
-    it('accepts a cancel shape only when the request is a cancel', async () => {
-        const key = ('0x' + 'ab'.repeat(32)) as Hex;
-        const account = privateKeyToAccount(key);
-        const transaction: TransactionSerializable = {
-            type: 'eip1559',
-            chainId: 11155111,
-            nonce: 4,
-            gas: 21_000n,
-            maxFeePerGas: 200n,
-            maxPriorityFeePerGas: 10n,
-            to: account.address,
-            data: '0x',
-            value: 0n,
-        };
-        const raw = await signTransaction({ privateKey: key, transaction });
-        const lay = layout();
-        const bin = script(lay.dir, `printf '%s' '${raw}'`);
-        const signer = createCastSigner({
-            castBin: bin,
-            keystorePath: lay.ks,
-            passwordFilePath: lay.pw,
-            signerAddress: account.address,
-        });
-        const cancelReq: SignRequest = {
-            to: account.address,
-            data: '0x',
-            nonce: 4,
-            gasLimit: 21_000n,
-            maxFeePerGas: 200n,
-            maxPriorityFeePerGas: 10n,
-            chainId: 11155111,
-            cancel: true,
-        };
-        await expect(signer.sign(cancelReq)).resolves.toBe(raw);
-        const plain: SignRequest = { ...cancelReq, cancel: false };
-        await expect(signer.sign(plain)).rejects.toThrow('cast signer: signed fields mismatch');
-    });
-
     it('refuses a correctly signed transaction whose fields do not match the request', async () => {
         const key = ('0x' + 'ab'.repeat(32)) as Hex;
         const account = privateKeyToAccount(key);

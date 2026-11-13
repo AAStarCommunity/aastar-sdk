@@ -4,10 +4,15 @@
 # The public ETH/USD URL is the keeper default. Put KEEPER_ETHUSD_URL in --env-file to override it.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec ./run-keeper.sh op-mainnet \
-  --poll-interval 180 \
-  --safety-margin 600 \
-  --health-interval 1800 \
-  --volatility-threshold-bps 150 \
-  --volatility-cooldown 600 \
-  "$@"
+has_arg() {
+  local want="$1" a; shift
+  for a in "$@"; do [ "$a" = "$want" ] && return 0; done
+  return 1
+}
+EXTRA=()
+has_arg --poll-interval "$@" || EXTRA+=(--poll-interval 180)
+has_arg --safety-margin "$@" || EXTRA+=(--safety-margin 600)
+has_arg --health-interval "$@" || EXTRA+=(--health-interval 1800)
+has_arg --volatility-threshold-bps "$@" || EXTRA+=(--volatility-threshold-bps 150)
+has_arg --volatility-cooldown "$@" || EXTRA+=(--volatility-cooldown 600)
+exec ./run-keeper.sh op-mainnet "${EXTRA[@]}" "$@"

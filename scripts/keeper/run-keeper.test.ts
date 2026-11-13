@@ -190,4 +190,34 @@ while true; do sleep 0.2; done
         expect(argv).not.toContain('pnpm');
         rmSync(home, { recursive: true, force: true });
     });
+
+    it('adds cadence defaults only when the caller omitted them', () => {
+        const explicit = run(['sepolia', '--dry-run', '--poll-interval', '3600', '--volatility-threshold-bps', '0'], { sign: false });
+        expect(explicit.status, explicit.stderr).toBe(0);
+        expect(valuesOf(explicit.argv, '--poll-interval')).toEqual(['3600']);
+        expect(valuesOf(explicit.argv, '--volatility-threshold-bps')).toEqual(['0']);
+        const omitted = run(['sepolia', '--dry-run'], { sign: false });
+        expect(omitted.status, omitted.stderr).toBe(0);
+        expect(valuesOf(omitted.argv, '--poll-interval')).toEqual(['180']);
+        expect(valuesOf(omitted.argv, '--volatility-threshold-bps')).toEqual(['150']);
+
+        copyFileSync(join(process.cwd(), 'run-keeper-main.sh'), join(dir, 'run-keeper-main.sh'));
+        const main = (args: string[]) => {
+            const r = spawnSync('bash', [join(dir, 'run-keeper-main.sh'), ...args], {
+                cwd: dir,
+                encoding: 'utf8',
+                env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir },
+            });
+            const lines = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: ') && !l.startsWith('ENV_') && !l.startsWith('ENVARG '));
+            return { status: r.status, stderr: r.stderr, argv: lines };
+        };
+        const mainExplicit = main(['--dry-run', '--poll-interval', '3600', '--volatility-threshold-bps', '0']);
+        expect(mainExplicit.status, mainExplicit.stderr).toBe(0);
+        expect(valuesOf(mainExplicit.argv, '--poll-interval')).toEqual(['3600']);
+        expect(valuesOf(mainExplicit.argv, '--volatility-threshold-bps')).toEqual(['0']);
+        const mainOmitted = main(['--dry-run']);
+        expect(mainOmitted.status, mainOmitted.stderr).toBe(0);
+        expect(valuesOf(mainOmitted.argv, '--poll-interval')).toEqual(['180']);
+        expect(valuesOf(mainOmitted.argv, '--volatility-threshold-bps')).toEqual(['150']);
+    });
 });

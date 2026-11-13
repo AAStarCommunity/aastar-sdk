@@ -396,9 +396,10 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             maxFeePerGas: 2_000_000_000n,
             maxPriorityFeePerGas: 1_000_000_000n,
             attempts: 0,
-            firstSentAt: 1,
+            firstSentAt: Date.now(),
         });
-        const url = await listen({ phaseFile: phase, clockFile: clock, onSend: () => {} });
+        let sends = 0;
+        const url = await listen({ phaseFile: phase, clockFile: clock, onSend: () => { sends += 1; } });
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--no-superpaymaster', '--poll-interval', '30',
@@ -416,11 +417,11 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         });
         const log = readFileSync(castLog, 'utf8');
         expect(code, out + log).toBe(0);
-        expect(log, out).toContain('SIGN');
-        expect(log.toLowerCase()).toContain(SIGNER.toLowerCase());
-        expect(log).toContain('0x');
+        expect(log, out).not.toContain('SIGN');
+        expect(sends, out).toBe(1);
         const aged = JSON.parse(readFileSync(journalPath, 'utf8')) as { inFlight: { attempts: number; kind: string } | null };
-        expect(aged.inFlight?.kind).toBe('cancel');
+        expect(aged.inFlight?.kind).toBe('price-super');
+        expect(aged.inFlight?.attempts).toBe(0);
     });
 
     it('ages the in-flight raw once on a keeper tick', async () => {
@@ -449,12 +450,13 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         await journal.writeInFlight({
             kind: 'price-super', nonce: 0, raws: [planted], hashes: [keccak256(planted)],
             gasLimit: 120_000n, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
-            attempts: 0, firstSentAt: 1,
+            attempts: 0, firstSentAt: Date.now(),
         });
-        const url = await listen({ phaseFile: phase, clockFile: clock, onSend: () => {}, holdCount: true });
+        let sends = 0;
+        const url = await listen({ phaseFile: phase, clockFile: clock, onSend: () => { sends += 1; }, holdCount: true });
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX).href, KEEPER,
-            '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--poll-interval', '30',
+            '--network', 'sepolia', '--no-logo', '--once', '--no-paymaster', '--no-superpaymaster', '--poll-interval', '30',
             '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
             '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
             '--cast-bin', cast, '--journal', journalPath,
@@ -467,9 +469,11 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 25_000);
             child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
         });
-        const body = JSON.parse(readFileSync(journalPath, 'utf8')) as { inFlight: { attempts: number } | null };
+        const body = JSON.parse(readFileSync(journalPath, 'utf8')) as { inFlight: { attempts: number; kind: string } | null };
         expect(code, out).toBe(0);
-        expect(body.inFlight?.attempts).toBe(1);
+        expect(sends, out).toBe(1);
+        expect(body.inFlight?.attempts).toBe(0);
+        expect(body.inFlight?.kind).toBe('price-super');
         expect(readFileSync(castLog, 'utf8')).not.toContain('SIGN');
     });
 
@@ -496,7 +500,7 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
             '--superpaymaster', SP, '--registry', REG,
         ], {
             cwd: root,
-            env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url, KEEPER_DRAIN_MS: '400' },
+            env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url, KEEPER_DRAIN_MS: '3000' },
         });
         let out = '';
         child.stdout.on('data', (chunk) => { out += chunk.toString(); });
@@ -546,5 +550,201 @@ describe('live keeper loop', { timeout: 70_000 }, () => {
         expect(code, out).toBe(0);
         const release = await acquireKeeperLock({ journalPath: join(root, 'journal.json'), chainId: 11155111, signer: SIGNER });
         await release();
+    }, 40_000);
+
+    it('a PaymasterV4 owner discovered after startup does not sign price-paymaster', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        dirs.push(root);
+        const castLog = join(root, 'cast.log');
+        writeFileSync(castLog, '');
+        const cast = join(root, 'cast.mjs');
+        writeCast(cast, castLog, 0);
+        const secrets = keystore(root);
+        const factory = getAddress('0xaC9fCBA56E42d5960f813B9D0387F3D3bC003338');
+        const sp = getAddress('0xaC47e91215fb80462139756f43438402998E4A3a');
+        const registry = getAddress('0xAD523115cd35a8d4E60B3C0953E0E0ac10418309');
+        const feed = getAddress('0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F');
+        const operator = getAddress('0xb5600060e6de5E11D3636731964218E53caadf0E');
+        const v4 = getAddress('0x2222222222222222222222222222222222222222');
+        const ownerAbi = parseAbi(['function owner() view returns (address)']);
+        const byOpAbi = parseAbi(['function paymasterByOperator(address) view returns (address)']);
+        const opByAbi = parseAbi(['function getOperatorByPaymaster(address) view returns (address)']);
+        const v4CacheAbi = parseAbi(['function cachedPrice() view returns (uint208, uint48)']);
+        const thresholdAbi = parseAbi(['function priceStalenessThreshold() view returns (uint256)']);
+        const feedAbi = parseAbi(['function ethUsdPriceFeed() view returns (address)']);
+        const roundAbi = parseAbi(['function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)']);
+        const decAbi = parseAbi(['function decimals() view returns (uint8)']);
+        const ownerSel = toFunctionSelector('function owner()');
+        const byOpSel = toFunctionSelector('function paymasterByOperator(address)');
+        const opBySel = toFunctionSelector('function getOperatorByPaymaster(address)');
+        const cacheSel = toFunctionSelector('function cachedPrice()');
+        const thresholdSel = toFunctionSelector('function priceStalenessThreshold()');
+        const feedSel = toFunctionSelector('function ethUsdPriceFeed()');
+        const roundSel = toFunctionSelector('function latestRoundData()');
+        const decSel = toFunctionSelector('function decimals()');
+        let derived = 0;
+        let v4OwnerCalls = 0;
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (chunk) => { body += chunk; });
+            req.on('end', () => {
+                const parsed = JSON.parse(body) as { id: unknown; method: string; params?: unknown[] };
+                let result: unknown = '0x0';
+                let error: { code: number; message: string } | null = null;
+                if (parsed.method === 'eth_chainId') result = '0x7a69';
+                else if (parsed.method === 'eth_blockNumber') result = '0x10';
+                else if (parsed.method === 'eth_getBlockByNumber' || parsed.method === 'eth_getBlockByHash') result = block();
+                else if (parsed.method === 'eth_getBalance') result = '0x' + (10n ** 18n).toString(16);
+                else if (parsed.method === 'eth_getCode') result = '0x6080';
+                else if (parsed.method === 'eth_getTransactionCount') result = '0x0';
+                else if (parsed.method === 'eth_estimateGas') result = '0x186a0';
+                else if (parsed.method === 'eth_maxPriorityFeePerGas' || parsed.method === 'eth_gasPrice') result = '0x3b9aca00';
+                else if (parsed.method === 'eth_call') {
+                    const tx = (parsed.params?.[0] && typeof parsed.params[0] === 'object') ? parsed.params[0] as { to?: string; data?: string } : {};
+                    const data = String(tx.data ?? '').slice(0, 10).toLowerCase();
+                    const to = String(tx.to ?? '').toLowerCase();
+                    if (data === byOpSel) {
+                        derived += 1;
+                        const found = derived === 1 ? '0x0000000000000000000000000000000000000000' : v4;
+                        result = encodeFunctionResult({ abi: byOpAbi, functionName: 'paymasterByOperator', result: getAddress(found) });
+                    } else if (data === opBySel) {
+                        result = encodeFunctionResult({ abi: opByAbi, functionName: 'getOperatorByPaymaster', result: operator });
+                    } else if (data === ownerSel) {
+                        const who = to === v4.toLowerCase() ? SIGNER : OWNER;
+                        if (to === v4.toLowerCase()) v4OwnerCalls += 1;
+                        result = encodeFunctionResult({ abi: ownerAbi, functionName: 'owner', result: who });
+                    } else if (data === cacheSel && to === v4.toLowerCase()) {
+                        result = encodeFunctionResult({ abi: v4CacheAbi, functionName: 'cachedPrice', result: [1n, 0] });
+                    } else if (data === thresholdSel) {
+                        result = encodeFunctionResult({ abi: thresholdAbi, functionName: 'priceStalenessThreshold', result: 3600n });
+                    } else if (data === feedSel) {
+                        result = encodeFunctionResult({ abi: feedAbi, functionName: 'ethUsdPriceFeed', result: feed });
+                    } else if (data === roundSel) {
+                        result = encodeFunctionResult({ abi: roundAbi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, 1n, 1_700_000_000n, 1n] });
+                    } else if (data === decSel) {
+                        result = encodeFunctionResult({ abi: decAbi, functionName: 'decimals', result: 8 });
+                    } else error = { code: 3, message: 'fake: unexpected call' };
+                } else error = { code: -32601, message: 'fake: unexpected method' };
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(error ? { jsonrpc: '2.0', id: parsed.id, error } : { jsonrpc: '2.0', id: parsed.id, result }));
+            });
+        });
+        servers.push(server);
+        const url = await new Promise<string>((resolve) => {
+            server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`));
+        });
+        const child = spawn(process.execPath, [
+            '--import', pathToFileURL(TSX).href, KEEPER,
+            '--network', 'anvil', '--no-logo', '--once', '--no-superpaymaster', '--poll-interval', '30',
+            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
+            '--cast-bin', cast, '--journal', join(root, 'journal.json'),
+        ], { cwd: root, env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url } });
+        let out = '';
+        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 25_000);
+            child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        const log = readFileSync(castLog, 'utf8');
+        expect(out, out).toContain('signer-identity=ok');
+        expect(v4OwnerCalls, out).toBeGreaterThan(0);
+        expect(out).toContain('signer equals paymaster owner');
+        expect(log, out + log).not.toContain('SIGN');
+        expect(code, out + log).toBe(2);
+        expect(factory.toLowerCase()).not.toBe(sp.toLowerCase());
+        expect(registry.toLowerCase()).not.toBe(v4.toLowerCase());
+    }, 40_000);
+
+    it('a broken SuperPaymaster read still signs a due PaymasterV4 update', async () => {
+        const root = mkdtempSync(join(tmpdir(), 'keeper-live-'));
+        dirs.push(root);
+        const castLog = join(root, 'cast.log');
+        writeFileSync(castLog, '');
+        const cast = join(root, 'cast.mjs');
+        writeCast(cast, castLog, 0);
+        const secrets = keystore(root);
+        const v4 = getAddress('0xf3948753ff21D33f6A5f516621FFF245B23efa0e');
+        const ownerAbi = parseAbi(['function owner() view returns (address)']);
+        const v4CacheAbi = parseAbi(['function cachedPrice() view returns (uint208, uint48)']);
+        const spCacheAbi = parseAbi(['function cachedPrice() view returns (int256, uint256, uint80, uint8)']);
+        const thresholdAbi = parseAbi(['function priceStalenessThreshold() view returns (uint256)']);
+        const feedAbi = parseAbi(['function ethUsdPriceFeed() view returns (address)']);
+        const roundAbi = parseAbi(['function latestRoundData() view returns (uint80, int256, uint256, uint256, uint80)']);
+        const decAbi = parseAbi(['function decimals() view returns (uint8)']);
+        const ownerSel = toFunctionSelector('function owner()');
+        const cacheSel = toFunctionSelector('function cachedPrice()');
+        const thresholdSel = toFunctionSelector('function priceStalenessThreshold()');
+        const feedSel = toFunctionSelector('function ethUsdPriceFeed()');
+        const roundSel = toFunctionSelector('function latestRoundData()');
+        const decSel = toFunctionSelector('function decimals()');
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (chunk) => { body += chunk; });
+            req.on('end', () => {
+                const parsed = JSON.parse(body) as { id: unknown; method: string; params?: unknown[] };
+                let result: unknown = '0x0';
+                let error: { code: number; message: string } | null = null;
+                if (parsed.method === 'eth_chainId') result = '0xaa36a7';
+                else if (parsed.method === 'eth_blockNumber') result = '0x10';
+                else if (parsed.method === 'eth_getBlockByNumber' || parsed.method === 'eth_getBlockByHash') result = block();
+                else if (parsed.method === 'eth_getBalance') result = '0x' + (10n ** 18n).toString(16);
+                else if (parsed.method === 'eth_getCode') result = '0x6080';
+                else if (parsed.method === 'eth_getTransactionCount') result = '0x0';
+                else if (parsed.method === 'eth_estimateGas') result = '0x186a0';
+                else if (parsed.method === 'eth_maxPriorityFeePerGas' || parsed.method === 'eth_gasPrice') result = '0x3b9aca00';
+                else if (parsed.method === 'eth_sendRawTransaction') result = '0x' + 'ab'.repeat(32);
+                else if (parsed.method === 'eth_call') {
+                    const tx = (parsed.params?.[0] && typeof parsed.params[0] === 'object') ? parsed.params[0] as { to?: string; data?: string } : {};
+                    const data = String(tx.data ?? '').slice(0, 10).toLowerCase();
+                    const to = String(tx.to ?? '').toLowerCase();
+                    if (to === SP.toLowerCase() && (data === cacheSel || data === thresholdSel)) {
+                        error = { code: -32000, message: 'fake: SuperPaymaster read failing' };
+                    } else if (data === ownerSel) {
+                        result = encodeFunctionResult({ abi: ownerAbi, functionName: 'owner', result: OWNER });
+                    } else if (data === cacheSel && to === v4.toLowerCase()) {
+                        result = encodeFunctionResult({ abi: v4CacheAbi, functionName: 'cachedPrice', result: [1n, 0] });
+                    } else if (data === cacheSel) {
+                        result = encodeFunctionResult({ abi: spCacheAbi, functionName: 'cachedPrice', result: [3000n * 10n ** 8n, 0n, 1n, 8] });
+                    } else if (data === thresholdSel) {
+                        result = encodeFunctionResult({ abi: thresholdAbi, functionName: 'priceStalenessThreshold', result: 3600n });
+                    } else if (data === feedSel) {
+                        result = encodeFunctionResult({ abi: feedAbi, functionName: 'ethUsdPriceFeed', result: FEED });
+                    } else if (data === roundSel) {
+                        result = encodeFunctionResult({ abi: roundAbi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, 1n, BigInt(Math.floor(Date.now() / 1000)), 1n] });
+                    } else if (data === decSel) {
+                        result = encodeFunctionResult({ abi: decAbi, functionName: 'decimals', result: 8 });
+                    } else error = { code: 3, message: 'fake: unexpected call' };
+                } else error = { code: -32601, message: 'fake: unexpected method' };
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(error ? { jsonrpc: '2.0', id: parsed.id, error } : { jsonrpc: '2.0', id: parsed.id, result }));
+            });
+        });
+        servers.push(server);
+        const url = await new Promise<string>((resolve) => {
+            server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}`));
+        });
+        const child = spawn(process.execPath, [
+            '--import', pathToFileURL(TSX).href, KEEPER,
+            '--network', 'sepolia', '--no-logo', '--once', '--poll-interval', '30',
+            '--max-fee-gwei', '100', '--max-sends-per-hour', '1000',
+            '--keystore', secrets.keystore, '--password-file', secrets.password, '--signer', SIGNER,
+            '--cast-bin', cast, '--journal', join(root, 'journal.json'),
+            '--superpaymaster', SP, '--paymaster', v4, '--registry', REG,
+        ], { cwd: root, env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url } });
+        let out = '';
+        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 25_000);
+            child.once('exit', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        const log = readFileSync(castLog, 'utf8');
+        expect(out).toContain('keeper: superpaymaster read failed');
+        expect(out).not.toContain('fake: SuperPaymaster read failing');
+        expect(log, out + log).toContain('SIGN');
+        expect(log.toLowerCase()).toContain(v4.toLowerCase());
+        expect(code, out + log).toBe(2);
     }, 40_000);
 });

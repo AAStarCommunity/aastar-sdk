@@ -63,7 +63,7 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             firstSentAt: 1,
         });
         const body = JSON.parse(readFileSync(path, 'utf8')) as { version: number; inFlight: { hashes: string[]; raws: string[] } };
-        expect(body.version).toBe(3);
+        expect(body.version).toBe(4);
         expect(body.inFlight.hashes).toHaveLength(JOURNAL_HASH_CAP);
         expect(body.inFlight.hashes[0]).toBe(hashes[6]);
         expect(body.inFlight.raws).toHaveLength(3);
@@ -98,13 +98,13 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const ok = 10n ** BigInt(FEE_DIGIT_MAX - 1);
         expect(ok.toString().length).toBe(FEE_DIGIT_MAX);
         await journal.writeInFlight({
-            kind: 'cancel', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
+            kind: 'price-super', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
             gasLimit: 21_000n, maxFeePerGas: ok, maxPriorityFeePerGas: 1n, attempts: 0, firstSentAt: 1,
         });
         expect(await new Journal(path, { chainId: 11155111, signer: SIGNER }).load()).toBe('ok');
         const tooBig = 10n ** BigInt(FEE_DIGIT_MAX);
         await expect(journal.writeInFlight({
-            kind: 'cancel', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
+            kind: 'price-super', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
             gasLimit: 21_000n, maxFeePerGas: tooBig, maxPriorityFeePerGas: 1n, attempts: 0, firstSentAt: 1,
         })).rejects.toThrow('journal: fee rejected');
         const bad = join(dir(), 'wide.json');
@@ -317,7 +317,19 @@ describe('journal durability', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
 
     it('a failed directory barrier after publish refuses replay until a later barrier succeeds', async () => {
         const path = join(dir(), 'journal.json');
-        setDurabilityHooks(hooks('dir'));
+        let published = false;
+        const base = hooks('none');
+        setDurabilityHooks({
+            ...base,
+            async link(from, to) {
+                await base.link(from, to);
+                published = true;
+            },
+            async fsyncDir(dirPath) {
+                if (published) throw new Error('injected dir');
+                await base.fsyncDir(dirPath);
+            },
+        });
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
         await expect(journal.init()).rejects.toThrow('journal: parent sync failed');
         expect(existsSync(path)).toBe(true);
@@ -353,7 +365,7 @@ describe('journal durability', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         chmodSync(path, 0o600);
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
         expect(await journal.load()).toBe('ok');
-        expect(journal.account()).toEqual({ sentAt: [], ceilingClosed: false, lastLatest: null });
+        expect(journal.account()).toEqual({ sentAt: [], ceilingClosed: false, lastLatest: null, stalled: false, stalledNonce: null });
         expect(journal.inFlight()?.broadcastOnce).toEqual([]);
     });
 });

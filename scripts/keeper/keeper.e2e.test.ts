@@ -76,6 +76,7 @@ async function fakeRpc(opts: { spBroken?: boolean; balanceWei?: bigint; balanceF
                 calls.push({ to, data });
                 if (data === OWNER_SEL && to === SP) return { result: encodeFunctionResult({ abi: parseAbi(['function owner() view returns (address)']), functionName: 'owner', result: getAddress(spOwner) }) };
                 if (data === OWNER_SEL && to === REGISTRY.toLowerCase()) return { result: encodeFunctionResult({ abi: parseAbi(['function owner() view returns (address)']), functionName: 'owner', result: getAddress(registryOwner) }) };
+                if (data === OWNER_SEL) return { result: encodeFunctionResult({ abi: parseAbi(['function owner() view returns (address)']), functionName: 'owner', result: OWNER }) };
                 if (data === sel('function latestRoundData()')) return { result: encodeFunctionResult({ abi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, now(), now(), 1n] }) };
                 if (data === sel('function decimals()')) return { result: encodeFunctionResult({ abi, functionName: 'decimals', result: 8 }) };
                 if (data === sel('function priceStalenessThreshold()')) return { result: encodeFunctionResult({ abi, functionName: 'priceStalenessThreshold', result: 3600n }) };
@@ -170,9 +171,11 @@ describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refre
         // Codex review: resolution used to sit after the SP reads, so an SP failure skipped it.
         const fake = await fakeRpc({ spBroken: true });
         cleanups.push(() => closeServer(fake.server));
-        const out = await runKeeper(fake.url, [], (o) => new RegExp(`paymaster resolved=${V4}`, 'i').test(o) || /TICK #4/.test(o));
-        expect(out).toMatch(/SuperPaymaster read failing/);
+        const updateLine = `action=sendtx kind=paymaster method=updateprice() target=${V4}`;
+        const out = await runKeeper(fake.url, [], (o) => o.toLowerCase().includes(updateLine) || /TICK #4/.test(o));
+        expect(out).toMatch(/keeper: superpaymaster read failed/);
         expect(out.toLowerCase()).toMatch(new RegExp(`tick #2[\\s\\S]*paymaster resolved=${V4}`));
+        expect(out.toLowerCase()).toMatch(new RegExp(`tick #2[\\s\\S]*action=sendtx kind=paymaster method=updateprice\\(\\) target=${V4.toLowerCase()}`));
     }, 60_000);
 
     it('--disable-paymaster: V4 is never resolved', async () => {

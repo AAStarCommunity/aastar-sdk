@@ -11,7 +11,8 @@ import { absoluteKeeperPath } from './keeper/cliPaths.js';
 import { createCastSigner, killCastChildren } from './keeper/castSigner.js';
 import { readDeploymentAddresses, type DeploymentAddresses } from './keeper/deploymentConfig.js';
 import { acquireKeeperLock, Journal } from './keeper/journal.js';
-import { defaultMaxSendsPerHour, Sender, type MaintainResult, type SendResult } from './keeper/sender.js';
+import { defaultMaxSendsPerHour, Sender, type MaintainResult, type SendResult, type SettlementEvent } from './keeper/sender.js';
+import { castBinRefusal, envFileRefusal, type ModeStat } from './keeper/startupGuards.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
 import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
@@ -80,6 +81,7 @@ function hasFlag(args: string[], key: string): boolean {
 
 const BOOLEAN_FLAGS = new Set([
     '--help', '-h', '--dry-run', '--once', '--logo', '--no-logo', '--probe-env', '--reset-send-ceiling',
+    '--clear-stall',
     '--no-superpaymaster', '--disable-superpaymaster', '--no-paymaster', '--disable-paymaster',
     '--mode', '--cast-account',
     '--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec', '--resync-journal',
@@ -87,25 +89,28 @@ const BOOLEAN_FLAGS = new Set([
 
 const VALUE_FLAGS = new Set([
     '--network', '--keystore', '--password-file', '--signer', '--cast-bin', '--journal', '--env-file', '--registry',
-    '--low-balance-wei', '--superpaymaster', '--paymaster', '--price-feed', '--max-fee-gwei', '--max-gas',
+    '--low-balance-wei', '--superpaymaster', '--paymaster', '--price-feed', '--max-fee-gwei', '--max-tip-gwei',
+    '--stall-sec', '--max-gas',
     '--max-sends-per-hour', '--paymaster-operator', '--poll-interval', '--safety-margin', '--max-updates-per-day',
     '--max-base-fee-gwei', '--health-interval', '--volatility-threshold-bps', '--volatility-cooldown',
     '--chainlink-stale-sec', '--external-ethusd-url', '--paymaster-missing-alert',
 ]);
 
-/** Reject unknown tokens and `--name=value` before any default is applied. The token is named; values are not. */
+/** Reject unknown tokens and `--name=value`. The message names the option and never prints a value. */
 function rejectUnknownArgs(args: string[]): void {
     for (let i = 0; i < args.length; i++) {
         const token = args[i] ?? '';
-        const shown = token.length > 80 ? token.slice(0, 80) : token;
-        if (!shown.startsWith('-') || shown.includes('=')) throw new Error(`keeper: unrecognized option ${shown}`);
-        if (VALUE_FLAGS.has(shown)) {
+        if (!token.startsWith('-')) throw new Error('keeper: unrecognized argument');
+        const eq = token.indexOf('=');
+        const name = (eq >= 0 ? token.slice(0, eq) : token).slice(0, 80);
+        if (eq >= 0 || name.length === 0) throw new Error(`keeper: unrecognized option ${name}`);
+        if (VALUE_FLAGS.has(name)) {
             const next = args[i + 1];
-            if (next === undefined || next.startsWith('--')) throw new Error(`keeper: ${shown} requires a value`);
+            if (next === undefined || next.startsWith('--')) throw new Error(`keeper: ${name} requires a value`);
             i += 1;
             continue;
         }
-        if (!BOOLEAN_FLAGS.has(shown)) throw new Error(`keeper: unrecognized option ${shown}`);
+        if (!BOOLEAN_FLAGS.has(name)) throw new Error(`keeper: unrecognized option ${name}`);
     }
 }
 
@@ -115,16 +120,36 @@ function flagPath(args: string[], key: string): string | undefined {
     return absoluteKeeperPath(process.cwd(), raw);
 }
 
+function modeStat(st: fs.Stats): ModeStat {
+    return {
+        isFile: st.isFile(),
+        isDirectory: st.isDirectory(),
+        isSymbolicLink: st.isSymbolicLink(),
+        uid: st.uid,
+        mode: st.mode,
+    };
+}
+
 async function readKeeperEnvFile(filePath: string): Promise<Record<string, string>> {
     let fh: fs.promises.FileHandle;
     try {
         fh = await fs.promises.open(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
-    } catch {
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'ELOOP') throw new Error('keeper: env file refused: not a regular file');
         throw new Error('keeper: env file refused');
     }
     try {
         const st = await fh.stat();
-        if (!st.isFile() || st.size > 65_536) throw new Error('keeper: env file refused');
+        let parent: fs.Stats;
+        try {
+            parent = await fs.promises.lstat(path.dirname(filePath));
+        } catch {
+            throw new Error('keeper: env file refused: parent');
+        }
+        const reason = envFileRefusal(modeStat(st), modeStat(parent), process.getuid?.());
+        if (reason) throw new Error(reason);
+        if (st.size > 65_536) throw new Error('keeper: env file refused');
         const text = await fh.readFile({ encoding: 'utf8' });
         const parsed = parseKeeperEnv(text);
         if (!parsed.ok) throw new Error(`keeper: env file key refused: ${parsed.key}`);
@@ -132,6 +157,29 @@ async function readKeeperEnvFile(filePath: string): Promise<Record<string, strin
     } finally {
         await fh.close();
     }
+}
+
+/** Flag or env-file cast path. Default PATH `cast` is not stat-checked. */
+async function resolveCastBin(chosen: string | undefined, source: 'cli' | 'env' | 'default'): Promise<string> {
+    if (source === 'default' || chosen === undefined) return 'cast';
+    if (chosen.length === 0 || chosen.length > 4_096 || !path.isAbsolute(chosen)) {
+        throw new Error('keeper: cast bin refused: not absolute');
+    }
+    let resolved: string;
+    try {
+        resolved = await fs.promises.realpath(chosen);
+    } catch {
+        throw new Error('keeper: cast bin refused: unreadable');
+    }
+    let st: fs.Stats;
+    try {
+        st = await fs.promises.lstat(resolved);
+    } catch {
+        throw new Error('keeper: cast bin refused: unreadable');
+    }
+    const reason = castBinRefusal(modeStat(st), process.getuid?.());
+    if (reason) throw new Error(reason);
+    return resolved;
 }
 
 function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number, label: string): number {
@@ -232,7 +280,7 @@ function assertTelegramConfigValid(): void {
     const ok = /^-?\d+$/.test(chatId) || chatId.startsWith('@');
     if (!ok) {
         throw new Error(
-            `Telegram config invalid: TELEGRAM_CHAT_ID must be a numeric chat id (e.g. 123456789 or -100123...) or start with @ (e.g. @MyChannel). Got: ${chatId}`
+            'Telegram config invalid: TELEGRAM_CHAT_ID must be a numeric chat id (e.g. 123456789 or -100123...) or start with @ (e.g. @MyChannel)'
         );
     }
 }
@@ -283,6 +331,9 @@ function usage(): string {
         '   --max-updates-per-day <n>   per-target limit (default 24)',
         '   --max-base-fee-gwei <n>     skip updates if base fee too high',
         '   --max-fee-gwei <n>          fee ceiling for a live run (required, 1..10000)',
+        '   --max-tip-gwei <n>          priority fee cap (default 2, 0 allowed)',
+        '   --stall-sec <n>             in-flight stall window (default 600)',
+        '   --clear-stall               one-shot after a human replacement is mined',
         '   --max-gas <n>               gas limit ceiling for updatePrice (default 500000)',
         '   --max-sends-per-hour <n>    signed broadcasts per rolling hour; the ceiling is persisted',
         '   --reset-send-ceiling        reopen a closed ceiling once the rolling hour has room',
@@ -368,6 +419,9 @@ async function main() {
         throw new Error('keeper: live runs require --keystore, --password-file and --signer');
     }
     const maxFeeWei = parseMaxFeeWei(getArgValue(args, '--max-fee-gwei'), !dryRun && Boolean(keystorePath));
+    const maxTipWei = BigInt(parseBoundedInt(getArgValue(args, '--max-tip-gwei'), 2, 0, 10_000, '--max-tip-gwei')) * 1_000_000_000n;
+    const stallSec = parseBoundedInt(getArgValue(args, '--stall-sec'), 600, 1, 86_400, '--stall-sec');
+    const clearStall = hasFlag(args, '--clear-stall');
     const maxGas = BigInt(parseBoundedInt(getArgValue(args, '--max-gas'), 500_000, 21_000, 30_000_000, '--max-gas'));
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     if (pollIntervalSec <= 0n || pollIntervalSec > 86_400n) throw new Error('keeper: --poll-interval invalid');
@@ -415,12 +469,13 @@ async function main() {
     }
     assertTelegramConfigValid();
     const castFromEnv = process.env.KEEPER_CAST_BIN;
-    const castBin = castBinArg !== undefined
-        ? absoluteKeeperPath(process.cwd(), castBinArg)
+    const castSource: 'cli' | 'env' | 'default' = castBinArg !== undefined
+        ? 'cli'
         : typeof castFromEnv === 'string' && castFromEnv.length > 0
-            ? absoluteKeeperPath(process.cwd(), castFromEnv)
-            : 'cast';
-    const castSource = castBinArg !== undefined ? 'cli' : typeof castFromEnv === 'string' && castFromEnv.length > 0 ? 'env' : 'default';
+            ? 'env'
+            : 'default';
+    const castChosen = castSource === 'cli' ? castBinArg : castSource === 'env' ? castFromEnv : undefined;
+    const castBin = await resolveCastBin(castChosen, castSource);
     const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
     const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
     const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
@@ -563,7 +618,7 @@ async function main() {
     console.log(`telegram=${telegramEnabled ? 'enabled' : 'disabled'}`);
     console.log(`bot=${TELEGRAM_BOT_USERNAME}`);
     console.log(`TELEGRAM_BOT_TOKEN=${process.env.TELEGRAM_BOT_TOKEN ? 'set' : 'not-set'}`);
-    console.log(`TELEGRAM_CHAT_ID=${process.env.TELEGRAM_CHAT_ID ? process.env.TELEGRAM_CHAT_ID : 'not-set'}`);
+    console.log(`TELEGRAM_CHAT_ID=${process.env.TELEGRAM_CHAT_ID ? 'set' : 'not-set'}`);
     console.log('dm: message bot /start first');
     console.log('group/channel: add bot and allow posting');
 
@@ -586,6 +641,10 @@ async function main() {
     let nextIdentityAt = 0;
     let lastIdentityOkAt = 0;
     let identityGateKey = '';
+    /** Lowercase PaymasterV4 included in the last successful identity check. Null means none. */
+    let coveredPaymaster: string | null = null;
+    let operationalFailure = false;
+    let externalSkipAlerted = false;
     let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
 
     const alertLine = (msg: string) => {
@@ -606,7 +665,9 @@ async function main() {
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
-        const paymasterForGuard = !disablePaymaster && paymaster && isAddress(paymaster) ? paymaster : null;
+        const resolved = paymaster && isAddress(paymaster) ? paymaster : null;
+        const configured = paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null;
+        const paymasterForGuard = resolved ?? configured;
         return checkSignerIdentity({
             chain: asIdentityChain(headChain),
             blockHash: head.hash,
@@ -640,7 +701,15 @@ async function main() {
     let sleepTimer: ReturnType<typeof setTimeout> | null = null;
     const refreshAlerted = new Set<string>();
     if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
-        await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
+        try {
+            await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
+        } catch (error) {
+            if (error instanceof Error && error.message === 'journal: parent sync failed') {
+                console.error('sender: journal barrier incomplete');
+                process.exit(1);
+            }
+            throw error;
+        }
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
         const opened = await journal.load();
         if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe' || opened === 'barrier') {
@@ -660,19 +729,48 @@ async function main() {
             journal,
             signerAddress,
             chainId: config.chain.id,
-            // A disabled kind blocks new sends. The address stays so an in-flight raw can still be checked and cancelled.
+            // Updates can be disabled. The configured address stays so an already-signed raw can be rebroadcast.
             superPaymaster: superPaymaster && isAddress(superPaymaster) ? superPaymaster : null,
-            paymaster: () => (!paymaster || !isAddress(paymaster) ? null : paymaster),
+            paymaster: () => {
+                if (paymaster && isAddress(paymaster)) return paymaster;
+                if (paymasterCandidate && isAddress(paymasterCandidate)) return paymasterCandidate;
+                return null;
+            },
             enabledKinds: {
                 'price-super': !disableSuperPaymaster,
                 'price-paymaster': !disablePaymaster,
             },
             maxGas,
             maxFeeWei,
+            maxTipWei,
+            stallSec,
             maxSendsPerHour,
             resetSendCeiling,
+            readStaleness: async () => {
+                if (disableSuperPaymaster || !superPaymaster || !isAddress(superPaymaster)) return 'unreadable';
+                try {
+                    const cache = await publicClient.readContract({
+                        address: superPaymaster,
+                        abi: SUPERPAYMASTER_ABI,
+                        functionName: 'cachedPrice',
+                    });
+                    const threshold = await publicClient.readContract({
+                        address: superPaymaster,
+                        abi: SUPERPAYMASTER_ABI,
+                        functionName: 'priceStalenessThreshold',
+                    });
+                    const updatedAt = (cache as readonly unknown[])[1];
+                    if (typeof updatedAt !== 'bigint' || typeof threshold !== 'bigint') return 'unreadable';
+                    return { updatedAtSec: updatedAt, thresholdSec: threshold };
+                } catch {
+                    return 'unreadable';
+                }
+            },
+            manualStep: (nonce) =>
+                `cast send --nonce ${nonce} --keystore ${keystorePath} --password-file ${passwordFilePath} ${signerAddress} --value 0`,
             alert: alertLine,
         });
+        sender.setPaymasterIdentity(false);
     }
     if (signerAddress) {
         const identity = await evaluateIdentity();
@@ -689,7 +787,25 @@ async function main() {
             nextIdentityAt = scheduledIdentityAt(openedAt);
             lastIdentityOkAt = decision.lastOkAt;
             identityGateKey = decision.key;
+            const checked = (paymaster && isAddress(paymaster) ? paymaster : null)
+                ?? (paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null);
+            if (checked) {
+                coveredPaymaster = checked.toLowerCase();
+                sender.setPaymasterIdentity(true);
+            } else {
+                sender.setPaymasterIdentity(false);
+            }
         }
+    }
+
+    if (clearStall) {
+        if (!sender) {
+            console.error('keeper: --clear-stall requires a live signer');
+            process.exit(2);
+        }
+        const cleared = await sender.clearStall();
+        if (cleared.status === 'refused') process.exit(2);
+        process.exit(0);
     }
 
     const onExit = async (signal: string) => {
@@ -764,23 +880,112 @@ async function main() {
 
     const fetchExternalEthUsd = async (): Promise<{ price: bigint; decimals: number } | null> => {
         if (!externalEthUsdUrl) return null;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 5_000);
         try {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 5000);
             const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!res.ok) return null;
-            const json = await res.json();
+            if (!res.ok || !res.body) return null;
+            const reader = res.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let total = 0;
+            for (;;) {
+                const step = await reader.read();
+                if (step.done) break;
+                const value = step.value;
+                if (!value) continue;
+                total += value.byteLength;
+                if (total > 65_536) {
+                    await reader.cancel().catch(() => {});
+                    ctrl.abort();
+                    return null;
+                }
+                chunks.push(value);
+            }
+            let n = 0;
+            for (const chunk of chunks) n += chunk.byteLength;
+            const body = new Uint8Array(n);
+            let offset = 0;
+            for (const chunk of chunks) {
+                body.set(chunk, offset);
+                offset += chunk.byteLength;
+            }
+            const text = new TextDecoder('utf-8', { fatal: false }).decode(body);
+            if (text.length === 0 || text.length > 65_536) return null;
+            let json: unknown;
+            try {
+                json = JSON.parse(text);
+            } catch {
+                return null;
+            }
             const s = extractPriceString(json);
-            if (!s) return null;
+            if (!s || s.length > 64) return null;
             const decimals = 8;
             const price = parseDecimalToFixed(s, decimals);
             if (price === null || price <= 0n) return null;
             return { price, decimals };
         } catch {
             return null;
+        } finally {
+            clearTimeout(timer);
         }
     };
+
+    function logSettlement(ev: SettlementEvent): void {
+        if (ev.outcome === 'unavailable') {
+            console.log('nonce consumed, receipt unavailable');
+            alertLine('nonce consumed, receipt unavailable');
+            return;
+        }
+        const confirmed = ev.outcome === 'receipt' ? 'receipt' : 'reverted';
+        const tx = ev.hash ?? 'unknown';
+        console.log(`confirmed: ${confirmed} kind=${ev.kind} tx=${tx}`);
+        void sendTelegramMessage(
+            `[keeper] in-flight settled\nnetwork=${network}\nkind=${ev.kind}\ntx=${tx}\nconfirmed=${confirmed}`
+        );
+    }
+
+    async function syncPaymasterIdentity(): Promise<void> {
+        if (!sender || !signerAddress) return;
+        const current = paymaster && isAddress(paymaster) ? paymaster : null;
+        const key = current ? current.toLowerCase() : null;
+        if (key !== null && key === coveredPaymaster) {
+            sender.setPaymasterIdentity(true);
+            return;
+        }
+        sender.setPaymasterIdentity(false);
+        if (!key) return;
+        let identity: IdentityResult;
+        try {
+            identity = await evaluateIdentity();
+        } catch {
+            operationalFailure = true;
+            console.error('keeper: paymaster identity failed');
+            return;
+        }
+        if (!identity.ok) {
+            operationalFailure = true;
+            const decision = decideIdentityGate({
+                nowMs: Date.now(),
+                lastOkAt: lastIdentityOkAt,
+                previousKey: identityGateKey,
+                verdict: identity,
+            });
+            sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
+            lastIdentityOkAt = decision.lastOkAt;
+            identityGateKey = decision.key;
+            coveredPaymaster = null;
+            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+            if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
+            return;
+        }
+        coveredPaymaster = key;
+        sender.setPaymasterIdentity(true);
+        const decision = decideIdentityGate({ nowMs: Date.now(), lastOkAt: 0, previousKey: '', verdict: identity });
+        sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
+        lastIdentityOkAt = decision.lastOkAt;
+        identityGateKey = decision.key;
+        nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
+    }
 
     const tick = async () => {
         sender?.tick();
@@ -796,17 +1001,9 @@ async function main() {
             } catch {
                 settled = { status: 'refused', reason: 'sender: send failed' };
             }
-            if (settled.status === 'consumed' && settled.receipt && settled.hash) {
-                const confirmed = settled.receipt.status === 'success' ? 'receipt' : 'reverted';
-                console.log(`confirmed: ${confirmed} kind=${settled.kind ?? 'price'} tx=${settled.hash}`);
-                await sendTelegramMessage(
-                    `[keeper] in-flight settled\nnetwork=${network}\nkind=${settled.kind ?? 'price'}\ntx=${settled.hash}\nconfirmed=${confirmed}`
-                );
-            } else if (settled.status === 'consumed' && settled.unseen) {
-                console.log('nonce consumed (not by a tx we can see)');
-                alertLine('nonce consumed (not by a tx we can see)');
-            } else if (settled.status === 'refused' && settled.reason) {
-                console.log(`refused: kind=maintain reason=${settled.reason}`);
+            if (settled.status === 'refused') {
+                operationalFailure = true;
+                if (settled.reason) console.log(`refused: kind=maintain reason=${settled.reason}`);
             }
         }
 
@@ -820,53 +1017,85 @@ async function main() {
         // below must not stop V4 from being re-resolved, nor its not-found alert from being
         // evaluated (see scripts/keeper/paymasterResolver.ts).
         if (!disablePaymaster) {
-            paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
-                network,
-                candidateLabel: paymasterCandidate || 'derive-from-factory',
-                operator: paymasterOperator,
-                log: (line) => console.log(line),
-                notify: sendTelegramMessage,
-            });
+            try {
+                paymaster = await paymasterTickStep(paymasterTracker, currentSec, {
+                    network,
+                    candidateLabel: paymasterCandidate || 'derive-from-factory',
+                    operator: paymasterOperator,
+                    log: (line) => console.log(line),
+                    notify: sendTelegramMessage,
+                });
+            } catch {
+                operationalFailure = true;
+                console.error('keeper: paymaster resolution failed');
+            }
         }
 
-        const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
-        const baseFeePerGas = (latestBlock as any).baseFeePerGas as bigint | undefined;
+        let baseFeePerGas: bigint | undefined;
+        try {
+            const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
+            baseFeePerGas = (latestBlock as { baseFeePerGas?: bigint }).baseFeePerGas;
+        } catch {
+            operationalFailure = true;
+            console.error('keeper: block read failed');
+        }
         const baseFeeOk =
             !maxBaseFeeGwei ||
             (baseFeePerGas !== undefined && baseFeePerGas <= BigInt(Math.floor(Number(maxBaseFeeGwei) * 1e9)));
-
-        const chainlink = await publicClient.readContract({
-            address: priceFeed,
-            abi: CHAINLINK_ABI,
-            functionName: 'latestRoundData'
-        });
-        const chainlinkUpdatedAt = chainlink[3] as bigint;
-
-        const [cache, threshold] = await Promise.all([
-            publicClient.readContract({
-                address: superPaymaster,
-                abi: SUPERPAYMASTER_ABI,
-                functionName: 'cachedPrice'
-            }),
-            publicClient.readContract({
-                address: superPaymaster,
-                abi: SUPERPAYMASTER_ABI,
-                functionName: 'priceStalenessThreshold'
-            })
-        ]);
-
-        const cachedUpdatedAt = cache[1] as bigint;
-        const thresholdSec = threshold as bigint;
-
-        const validUntil = cachedUpdatedAt + thresholdSec;
-        const deadline = validUntil > safetyMarginSec ? validUntil - safetyMarginSec : 0n;
-        const chainlinkAge = chainlinkUpdatedAt > 0n ? currentSec - chainlinkUpdatedAt : 0n;
-
         const baseFeeInfo = baseFeePerGas !== undefined ? `${formatGwei(baseFeePerGas)} gwei` : 'n/a';
 
-        const superCacheOk = cachedUpdatedAt > 0n && validUntil > currentSec;
+        let chainlinkUpdatedAt = 0n;
+        let superAnswer = 0n;
+        let chainlinkOk = false;
+        if (!disableSuperPaymaster || volatilityThresholdBps > 0n) {
+            try {
+                const chainlink = await publicClient.readContract({
+                    address: priceFeed,
+                    abi: CHAINLINK_ABI,
+                    functionName: 'latestRoundData'
+                });
+                chainlinkUpdatedAt = chainlink[3] as bigint;
+                superAnswer = chainlink[1] as bigint;
+                chainlinkOk = true;
+            } catch {
+                operationalFailure = true;
+                console.error('keeper: chainlink read failed');
+            }
+        }
+
+        let cachedUpdatedAt = 0n;
+        let thresholdSec = 0n;
+        let validUntil = 0n;
+        let superCacheOk = false;
+        let superLoaded = false;
+        if (!disableSuperPaymaster) {
+            try {
+                const [cache, threshold] = await Promise.all([
+                    publicClient.readContract({
+                        address: superPaymaster,
+                        abi: SUPERPAYMASTER_ABI,
+                        functionName: 'cachedPrice'
+                    }),
+                    publicClient.readContract({
+                        address: superPaymaster,
+                        abi: SUPERPAYMASTER_ABI,
+                        functionName: 'priceStalenessThreshold'
+                    })
+                ]);
+                cachedUpdatedAt = cache[1] as bigint;
+                thresholdSec = threshold as bigint;
+                validUntil = cachedUpdatedAt + thresholdSec;
+                superCacheOk = cachedUpdatedAt > 0n && validUntil > currentSec;
+                superLoaded = true;
+            } catch {
+                operationalFailure = true;
+                console.error('keeper: superpaymaster read failed');
+            }
+        }
+
+        const deadline = validUntil > safetyMarginSec ? validUntil - safetyMarginSec : 0n;
+        const chainlinkAge = chainlinkUpdatedAt > 0n ? currentSec - chainlinkUpdatedAt : 0n;
         let paymasterCacheOk: boolean | null = null;
-        const superAnswer = chainlink[1] as bigint;
 
         if (chainlinkStaleSec > 0n && chainlinkAge >= chainlinkStaleSec && currentSec - lastChainlinkStaleAlertSec >= volatilityCooldownSec) {
             lastChainlinkStaleAlertSec = currentSec;
@@ -879,7 +1108,12 @@ async function main() {
 
         if (volatilityThresholdBps > 0n && externalEthUsdUrl) {
             const ext = await fetchExternalEthUsd();
-            if (ext) {
+            if (!ext) {
+                if (!externalSkipAlerted) {
+                    externalSkipAlerted = true;
+                    console.warn('keeper: external price skipped');
+                }
+            } else if (chainlinkOk) {
                 if (lastExternalEthUsd !== null) {
                     const moveBps = toBpsChange(lastExternalEthUsd, ext.price);
                     if (
@@ -936,12 +1170,14 @@ async function main() {
             try {
                 result = await sender.send({ kind: sendKind, to: target, data });
             } catch {
-                console.error('sender: send failed');
+                operationalFailure = true;
+                console.error('sender: sign failed');
                 await sendTelegramMessage(`[keeper] send failed\nnetwork=${network}\nkind=${kind}`);
                 return;
             }
             const report = describePriceSend(result);
             if (report.kind === 'refused') {
+                operationalFailure = true;
                 console.log(`refused: kind=${kind} reason=${report.reason}`);
                 if (noteRefusal(refusedReasons, report.reason)) {
                     await sendTelegramMessage(`[keeper] send refused\nnetwork=${network}\nkind=${kind}\nreason=${report.reason}`);
@@ -982,7 +1218,7 @@ async function main() {
         };
 
         const refreshSuper = async () => {
-            if (disableSuperPaymaster) return;
+            if (disableSuperPaymaster || !superLoaded) return;
             const shouldUpdate =
                 cachedUpdatedAt === 0n ||
                 (currentSec >= deadline && chainlinkUpdatedAt > cachedUpdatedAt && chainlinkUpdatedAt + thresholdSec >= currentSec);
@@ -1118,8 +1354,29 @@ async function main() {
             await broadcastUpdate(paymaster, 'paymaster', PAYMASTER_V4_ABI, { before: BigInt(pmCachedUpdatedAt), expected: pmChainlinkUpdatedAt });
         };
 
-        await refreshSuper();
-        await refreshPaymaster();
+        if (superLoaded) {
+            try {
+                await refreshSuper();
+            } catch {
+                operationalFailure = true;
+                console.error('keeper: superpaymaster read failed');
+            }
+        }
+        try {
+            if (!disablePaymaster) await syncPaymasterIdentity();
+            await refreshPaymaster();
+        } catch {
+            operationalFailure = true;
+            console.error('keeper: paymaster read failed');
+        }
+        if (sender) {
+            try {
+                await sender.flushReceipt();
+            } catch {
+                operationalFailure = true;
+            }
+            for (const ev of sender.drainSettlements()) logSettlement(ev);
+        }
 
         const superHealth = disableSuperPaymaster ? 'disabled' : superCacheOk ? '✅' : 'not-ok';
         const paymasterHealth =
@@ -1164,11 +1421,18 @@ async function main() {
         lastIdentityOkAt = decision.lastOkAt;
         identityGateKey = decision.key;
         sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason, validUntil: decision.validUntil });
-        if (decision.key !== 'open') {
-            console.error(`signer-identity: ${decision.key}`);
-        }
+        if (decision.key !== 'open') console.error(`signer-identity: ${decision.key}`);
+        if (!decision.price) sender.setPaymasterIdentity(false);
         if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
-        if (decision.key === 'open') nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
+        if (decision.key === 'open') {
+            nextIdentityAt = scheduledIdentityAt(decision.lastOkAt);
+            const current = (paymaster && isAddress(paymaster) ? paymaster : null)
+                ?? (paymasterCandidate && isAddress(paymasterCandidate) ? paymasterCandidate : null);
+            if (current) {
+                coveredPaymaster = current.toLowerCase();
+                sender.setPaymasterIdentity(true);
+            }
+        }
         return decision.pause;
     }
 
@@ -1190,6 +1454,7 @@ async function main() {
                 onPauseSkipped: async () => {},
             });
         } catch (e: unknown) {
+            operationalFailure = true;
             const report = loopErrorReport(network, e, 'error');
             console.error(`[${new Date().toISOString()}] error: ${report.stderr}`);
             try {
@@ -1205,7 +1470,7 @@ async function main() {
         });
         if (stopping) break;
     }
-    process.exit(0);
+    process.exit(once && operationalFailure && !stopping ? 2 : 0);
 }
 
 main().catch(async (e) => {

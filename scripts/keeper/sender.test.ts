@@ -1,15 +1,14 @@
 /**
  * One sender, one in-flight nonce. Fakes stand in for the chain and for cast.
  */
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { encodeFunctionData, getAddress, keccak256, parseAbi, parseTransaction, type Address, type Hex } from 'viem';
+import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
 import { signTransaction } from 'viem/accounts';
 import { Journal, type InFlight } from './journal.js';
-import { UPDATE_PRICE_DATA, bumpFee, checkIntent, replacementFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest } from './sender.js';
-import { CANCEL_GAS, createCastSigner } from './castSigner.js';
+import { FEE_BASE_MULTIPLIER, UPDATE_PRICE_DATA, checkIntent, signingFees, Sender, type ChainIO, type ChainReceipt, type IntentTx, type SendRequest, type StalenessRead } from './sender.js';
 
 const TO = '0x1111111111111111111111111111111111111111' as Address;
 const OTHER = '0x2222222222222222222222222222222222222222' as Address;
@@ -30,15 +29,19 @@ afterEach(() => {
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
 function harness(opts: {
-    bumpAfterTicks?: number;
     maxSendsPerHour?: number;
     maxGas?: bigint;
     maxFeeWei?: bigint;
+    maxTipWei?: bigint;
+    stallSec?: number;
     enabled?: { 'price-super': boolean; 'price-paymaster': boolean };
     paymaster?: () => Address | null;
     superPaymaster?: Address | null;
     now?: () => number;
     resetSendCeiling?: boolean;
+    readStaleness?: () => Promise<StalenessRead | 'unreadable'>;
+    manualStep?: (nonce: number) => string;
+    paymasterIdentity?: boolean;
 } = {}) {
     const dir = mkdtempSync(join(tmpdir(), 'keeper-sender-'));
     dirs.push(dir);
@@ -130,14 +133,16 @@ function harness(opts: {
         enabledKinds: opts.enabled,
         maxGas: opts.maxGas,
         maxFeeWei: opts.maxFeeWei ?? 1_000_000_000n,
+        maxTipWei: opts.maxTipWei,
+        stallSec: opts.stallSec,
         maxSendsPerHour: opts.maxSendsPerHour ?? 30,
-        bumpAfterTicks: opts.bumpAfterTicks ?? 3,
         now: opts.now ?? (() => clock.now),
-        receiptWaitMs: 50,
-        pollIntervalMs: 1,
         alert: (msg) => alerts.push(msg),
         resetSendCeiling: opts.resetSendCeiling,
+        readStaleness: opts.readStaleness,
+        manualStep: opts.manualStep,
     });
+    sender.setPaymasterIdentity(opts.paymasterIdentity !== false);
     sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000 });
     const job = (kind: SendRequest['kind'] = 'price-super', to: Address = TO, data: Hex = UPDATE_PRICE_DATA): SendRequest => ({ kind, to, data });
     return {
@@ -165,7 +170,7 @@ function harness(opts: {
                 release() { signWait = null; releaseSign(); },
             };
         },
-        reopen(over: { resetSendCeiling?: boolean; maxSendsPerHour?: number; maxFeeWei?: bigint; bumpAfterTicks?: number } = {}) {
+        reopen(over: { resetSendCeiling?: boolean; maxSendsPerHour?: number; maxFeeWei?: bigint; stallSec?: number } = {}) {
             const next = new Sender({
                 chain,
                 signer,
@@ -177,14 +182,16 @@ function harness(opts: {
                 enabledKinds: opts.enabled,
                 maxGas: opts.maxGas,
                 maxFeeWei: over.maxFeeWei ?? opts.maxFeeWei ?? 1_000_000_000n,
+                maxTipWei: opts.maxTipWei,
+                stallSec: over.stallSec ?? opts.stallSec,
                 maxSendsPerHour: over.maxSendsPerHour ?? opts.maxSendsPerHour ?? 30,
-                bumpAfterTicks: over.bumpAfterTicks ?? opts.bumpAfterTicks ?? 3,
                 now: opts.now ?? (() => clock.now),
-                receiptWaitMs: 50,
-                pollIntervalMs: 1,
                 alert: (msg) => alerts.push(msg),
                 resetSendCeiling: over.resetSendCeiling,
+                readStaleness: opts.readStaleness,
+                manualStep: opts.manualStep,
             });
+            next.setPaymasterIdentity(opts.paymasterIdentity !== false);
             next.setGate({ price: true, pause: true, reason: '', validUntil: 5_000_000_000 });
             return next;
         },
@@ -300,7 +307,7 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     });
 
     it('the gate expiring between check and broadcast cannot broadcast', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         await h.journal.init();
         await h.journal.writeInFlight({
@@ -345,8 +352,8 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(h.alerts.some((a) => a.includes('unresolved'))).toBe(true);
     });
 
-    it('maintenance runs every tick without a new eligible update', async () => {
-        const h = harness({ bumpAfterTicks: 1, enabled: { 'price-super': false, 'price-paymaster': true } });
+    it('maintenance rebroadcasts a disabled price-super raw and does not sign', async () => {
+        const h = harness({ enabled: { 'price-super': false, 'price-paymaster': true } });
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         await h.journal.init();
         await h.journal.writeInFlight({
@@ -358,33 +365,31 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             h.broadcasts.push(rawTx);
             return keccak256(rawTx);
         };
-        const cancelled = await h.sender.maintain();
-        expect(cancelled.status).toBe('pending');
-        expect(h.signed[0]?.cancel).toBe(true);
-        expect(h.signed[0]?.to).toBe(SIGNER);
-        expect(h.signed[0]?.data).toBe('0x');
-        expect(h.signed[0]?.gasLimit).toBe(CANCEL_GAS);
+        const again = await h.sender.maintain();
+        expect(again.status).toBe('pending');
+        expect(h.signed).toEqual([]);
+        expect(h.broadcasts).toEqual([raw]);
+        expect(h.journal.inFlight()?.kind).toBe('price-super');
+    });
 
-        const under = harness({ bumpAfterTicks: 1 });
-        const priced = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 4, maxFee: 50n, tip: 1n });
-        await under.journal.init();
-        await under.journal.writeInFlight({
-            kind: 'price-super', nonce: 4, raws: [priced], hashes: [keccak256(priced)],
-            gasLimit: 120_000n, maxFeePerGas: 50n, maxPriorityFeePerGas: 1n, attempts: 0, firstSentAt: 1,
+    it('rebroadcasts a disabled price-paymaster raw above the current max gas and does not sign', async () => {
+        const h = harness({ maxGas: 21_000n, enabled: { 'price-super': true, 'price-paymaster': false } });
+        const raw = await signedRaw({ to: OTHER, data: UPDATE_PRICE_DATA, nonce: 7, gas: 120_000n });
+        await h.journal.init();
+        await h.journal.writeInFlight({
+            kind: 'price-paymaster', nonce: 7, raws: [raw], hashes: [keccak256(raw)],
+            gasLimit: 120_000n, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
         });
-        under.setNonce(4n, 5n);
-        under.setFees(1_000n, 20n);
-        under.chain.sendRawTransaction = async (rawTx) => {
-            under.broadcasts.push(rawTx);
+        h.setNonce(7n, 8n);
+        h.chain.sendRawTransaction = async (rawTx) => {
+            h.broadcasts.push(rawTx);
             return keccak256(rawTx);
         };
-        under.sender.tick();
-        await under.sender.maintain();
-        expect(under.signed).toHaveLength(1);
-        expect(under.signed[0]?.maxFeePerGas).toBeGreaterThan(50n);
-        expect(under.signed[0]?.nonce).toBe(4);
-        const floor = 2n * 1_000n + 20n;
-        expect(under.signed[0]!.maxFeePerGas >= bumpFee(50n, floor)).toBe(true);
+        const again = await h.sender.maintain();
+        expect(again.status).toBe('pending');
+        expect(h.signed).toEqual([]);
+        expect(h.broadcasts).toEqual([raw]);
+        expect(h.journal.inFlight()?.kind).toBe('price-paymaster');
     });
 
     it('a nonce jump outside the keeper alerts once and sends continue', async () => {
@@ -405,7 +410,7 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     });
 
     it('replay refuses a journal whose fees do not match the latest raw', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7, maxFee: 210n, tip: 10n });
         await h.journal.init();
         await h.journal.writeInFlight({
@@ -444,7 +449,7 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     });
 
     it('mutates the consumed receipt the chain returned; the snapshot stays', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         const hash = keccak256(raw);
         await h.journal.init();
@@ -459,12 +464,17 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         h.chain.getTransactionReceipt = async () => planted;
         const settled = await h.sender.maintain();
         expect(settled.status).toBe('consumed');
+        expect(h.journal.inFlight()).toBeNull();
+        await h.sender.flushReceipt();
         planted.gasUsed = 99n;
         planted.status = 'reverted';
         planted.transactionHash = ('0x' + '11'.repeat(32)) as Hex;
-        expect(settled.receipt?.gasUsed).toBe(10n);
-        expect(settled.receipt?.status).toBe('success');
-        expect(settled.receipt?.transactionHash).toBe(hash);
+        const events = h.sender.drainSettlements();
+        expect(events[0]?.receipt?.gasUsed).toBe(10n);
+        expect(events[0]?.receipt?.status).toBe('success');
+        expect(events[0]?.receipt?.transactionHash).toBe(hash);
+        events[0]!.receipt!.gasUsed = 1n;
+        expect(h.sender.drainSettlements()).toEqual([]);
     });
 
     it('writes the raw before broadcast and does not take a second nonce when broadcast throws', async () => {
@@ -476,14 +486,16 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         };
         const result = await h.sender.send(h.job());
         expect(onDisk).toBe(true);
-        expect(result.status).toBe('pending');
+        expect(result).toEqual({ status: 'refused', reason: 'sender: broadcast failed' });
+        expect(h.alerts).toContain('sender: broadcast failed');
+        expect(h.journal.inFlight()?.raws[0]).toBeTruthy();
         const again = await h.sender.maintain();
-        expect(again.status === 'pending' || again.status === 'refused').toBe(true);
+        expect(again.status).toBe('refused');
         expect(h.signed).toHaveLength(1);
     });
 
     it('a receipt read failure does not close sends', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         await h.journal.init();
         await h.journal.writeInFlight({
@@ -493,10 +505,13 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         h.setNonce(8n, 8n);
         h.throwReceipt(keccak256(raw));
         const settled = await h.sender.maintain();
-        expect(settled.status).toBe('pending');
-        expect(h.alerts.some((a) => a.includes('foreign'))).toBe(false);
+        expect(settled.status).toBe('consumed');
+        expect(h.journal.inFlight()).toBeNull();
+        await h.sender.flushReceipt();
+        expect(h.sender.drainSettlements()[0]?.outcome).toBe('unavailable');
+        expect(h.alerts).toContain('nonce consumed, receipt unavailable');
         const next = await h.sender.send(h.job());
-        expect(next.status === 'pending' || next.status === 'blocked').toBe(true);
+        expect(next.status).toBe('pending');
     });
 
     it('refuses a chain id mismatch without echoing the rpc value', async () => {
@@ -537,22 +552,34 @@ describe('Sender', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
             resetSendCeiling: 'yes' as unknown as boolean,
         })).toThrow('sender: resetSendCeiling invalid');
+        expect(() => new Sender({
+            chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
+            stallSec: Number.NaN,
+        })).toThrow('sender: stallSec invalid');
+        expect(() => new Sender({
+            chain, signer: { async sign() { return '0x' as Hex; } }, journal, signerAddress: SIGNER, chainId: 1,
+            superPaymaster: TO, paymaster: () => OTHER, maxFeeWei: 1n, maxSendsPerHour: 1, alert: () => {},
+            stallSec: -1,
+        })).toThrow('sender: stallSec invalid');
     });
 });
 
 describe('checkIntent', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('accepts only the three alpha shapes', () => {
+    it('accepts only the two alpha price intents', () => {
         expect(checkIntent('price-super', intent(), targets)).toBe(true);
         expect(checkIntent('price-paymaster', intent({ to: OTHER }), targets)).toBe(true);
-        expect(checkIntent('cancel', intent({ to: SIGNER, data: '0x', gas: 21_000n }), targets)).toBe(true);
+        expect(checkIntent('cancel', intent({ to: SIGNER, data: '0x', gas: 21_000n }), targets)).toBe(false);
         expect(checkIntent('price-paymaster', intent({ to: OTHER }), { ...targets, paymaster: null })).toBe(false);
         expect(checkIntent('price-super', intent(), { ...targets, superPaymaster: null })).toBe(false);
+        expect(checkIntent('price-super', intent({ gas: 9_000_000n }), targets, { enforceMaxGas: false })).toBe(true);
     });
 
-    it('builds the max-fee floor from the bumped tip', () => {
-        const fees = replacementFees(210n, 10n, { baseFee: 200n, tip: 1n }, 1_000_000_000n);
-        expect(fees).toEqual({ fee: 413n, tip: 13n });
-        expect(bumpFee(10n, 1n)).toBe(13n);
+    it('signs at k * baseFee + tip and clamps to the ceiling', () => {
+        const fees = signingFees({ baseFee: 200n, tip: 10n }, 1_000_000_000n, 2n);
+        expect(fees).toEqual({ fee: FEE_BASE_MULTIPLIER * 200n + 2n, tip: 2n });
+        const capped = signingFees({ baseFee: 100n, tip: 90n }, 120n, 80n);
+        expect(capped).toEqual({ fee: 120n, tip: 80n });
     });
 });
 
@@ -580,7 +607,7 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     }
 
     it('refuses to sign a replacement when journal gasLimit disagrees with the raw', async () => {
-        const h = harness({ bumpAfterTicks: 1, maxGas: 500_000n });
+        const h = harness({ maxGas: 500_000n });
         const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7, gas: 120_000n });
         await h.journal.init();
         await h.journal.writeInFlight({
@@ -595,82 +622,102 @@ describe('sender alpha R4', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(h.broadcasts).toEqual([]);
     });
 
-    it('bumps a cancel through createCastSigner and keeps the cancel shape', async () => {
-        const h = harness({ bumpAfterTicks: 1 });
-        const pw = join(h.path, '..', 'password');
-        const ks = join(h.path, '..', 'keystore');
-        writeFileSync(pw, 'not-a-real-password\n');
-        writeFileSync(ks, '{}\n');
-        chmodSync(pw, 0o600);
-        chmodSync(ks, 0o600);
-        const bin = join(h.path, '..', 'cast.mjs');
-        const viemAccounts = join(process.cwd(), 'node_modules', 'viem', '_esm', 'accounts', 'index.js');
-        writeFileSync(bin, `#!/usr/bin/env node
-import { signTransaction } from ${JSON.stringify(viemAccounts)};
-const argv = process.argv.slice(2);
-const flag = (name) => argv[argv.indexOf(name) + 1];
-const raw = await signTransaction({
-  privateKey: ${JSON.stringify(KEY)},
-  transaction: {
-    type: 'eip1559',
-    chainId: Number(flag('--chain')),
-    nonce: Number(flag('--nonce')),
-    gas: BigInt(flag('--gas-limit')),
-    maxFeePerGas: BigInt(flag('--gas-price')),
-    maxPriorityFeePerGas: BigInt(flag('--priority-gas-price')),
-    to: argv[argv.length - 2],
-    data: argv[argv.length - 1],
-    value: 0n,
-  },
-});
-process.stdout.write(raw + '\\n');
-`);
-        chmodSync(bin, 0o755);
-        const cast = createCastSigner({ castBin: bin, keystorePath: ks, passwordFilePath: pw, signerAddress: SIGNER });
-        const sender = new Sender({
-            chain: h.chain,
-            signer: cast,
-            journal: h.journal,
-            signerAddress: SIGNER,
-            chainId: CHAIN_ID,
-            superPaymaster: TO,
-            paymaster: () => OTHER,
-            maxFeeWei: 1_000_000_000n,
-            maxSendsPerHour: 30,
-            bumpAfterTicks: 1,
-            now: () => h.clock.now,
-            receiptWaitMs: 50,
-            pollIntervalMs: 1,
-            alert: (msg) => h.alerts.push(msg),
-        });
-        sender.setGate({ price: true, pause: true, reason: '', validUntil: 5_000 });
-        const raw = await signedRaw({ to: SIGNER, data: '0x', nonce: 7, gas: CANCEL_GAS, maxFee: 210n, tip: 10n });
+    it('no replacement or cancel is ever signed', async () => {
+        const h = harness();
+        h.sender.setGate({ price: true, pause: true, reason: '', validUntil: 1_000_000_000 });
+        h.chain.sendRawTransaction = async (raw) => {
+            h.broadcasts.push(raw);
+            return keccak256(raw);
+        };
+        const first = await h.sender.send(h.job());
+        expect(first.status).toBe('pending');
+        expect(h.signed).toHaveLength(1);
+        for (let i = 0; i < 6; i++) {
+            h.setFees(BigInt(100 + i * 500), BigInt(10 + i));
+            h.clock.now += 1_000;
+            h.sender.tick();
+            const again = await h.sender.maintain();
+            expect(again.status).toBe('pending');
+        }
+        expect(h.signed).toHaveLength(1);
+        expect(h.broadcasts.length).toBeGreaterThan(1);
+        expect(new Set(h.broadcasts).size).toBe(1);
+    });
+
+    it('a done nonce is cleared before the receipt lookup, and a hanging receipt lookup does not delay the next send', async () => {
+        const h = harness();
+        const raw = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 7 });
         await h.journal.init();
         await h.journal.writeInFlight({
-            kind: 'cancel', nonce: 7, raws: [raw], hashes: [keccak256(raw)],
-            gasLimit: CANCEL_GAS, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
+            kind: 'price-super', nonce: 7, raws: [raw], hashes: [keccak256(raw)],
+            gasLimit: 120_000n, maxFeePerGas: 210n, maxPriorityFeePerGas: 10n, attempts: 0, firstSentAt: 1,
         });
-        h.setNonce(7n, 8n);
-        h.setFees(200n, 1n);
+        let entered = false;
+        let clearedFirst = false;
+        let release: () => void = () => {};
+        const gate = new Promise<void>((resolve) => { release = resolve; });
+        h.chain.getTransactionReceipt = async () => {
+            entered = true;
+            clearedFirst = h.journal.inFlight() === null;
+            await gate;
+            return null;
+        };
+        h.setNonce(8n, 8n);
+        const started = Date.now();
+        const settled = await h.sender.maintain();
+        expect(settled.status).toBe('consumed');
+        expect(h.journal.inFlight()).toBeNull();
         h.chain.sendRawTransaction = async (rawTx) => {
             h.broadcasts.push(rawTx);
             return keccak256(rawTx);
         };
-        sender.tick();
-        const settled = await sender.maintain();
-        expect(settled.status).toBe('pending');
-        expect(h.broadcasts.length).toBeGreaterThan(0);
-        const tx = parseTransaction(h.broadcasts[h.broadcasts.length - 1]!);
-        expect(tx.to?.toLowerCase()).toBe(SIGNER.toLowerCase());
-        expect(tx.data ?? '0x').toBe('0x');
-        expect(tx.gas).toBe(CANCEL_GAS);
-        expect(tx.maxFeePerGas).toBe(413n);
-        expect(tx.maxPriorityFeePerGas).toBe(13n);
-        expect(h.journal.inFlight()?.kind).toBe('cancel');
+        const next = await h.sender.send(h.job());
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(next.status).toBe('pending');
+        expect(h.signed[0]?.nonce).toBe(8);
+        const lookupWait = Date.now();
+        while (!entered && Date.now() - lookupWait < 500) await new Promise((resolve) => setTimeout(resolve, 5));
+        expect(entered).toBe(true);
+        expect(clearedFirst).toBe(true);
+        release();
+    });
+
+    it('a stalled in-flight closes all sends, names the staleness deadline, persists across restart, and --clear-stall only works once latest > nonce', async () => {
+        const h = harness({
+            stallSec: 600,
+            readStaleness: async () => ({ updatedAtSec: 1_700_000_000n, thresholdSec: 4_200n }),
+            manualStep: (nonce) => `cast send --nonce ${nonce} --keystore /tmp/ks --password-file /tmp/pw ${SIGNER} --value 0`,
+        });
+        await plant(h, { nonce: 7 });
+        h.setNonce(7n, 8n);
+        h.clock.now = 1 + 600_000;
+        const stalled = await h.sender.maintain();
+        expect(stalled).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        const alert = h.alerts.find((line) => line.includes('ALL sends closed'));
+        expect(alert).toBeTruthy();
+        expect(alert).toContain('in-flight nonce 7 not included after 600s');
+        expect(alert).toContain('SuperPaymaster price goes stale at 2023-11-14T23:23:20.000Z');
+        expect(alert).toMatch(/in \d+ min/);
+        const disk = JSON.parse(readFileSync(h.path, 'utf8')) as { stalled: boolean; stalledNonce: number; inFlight: { nonce: number } };
+        expect(disk.stalled).toBe(true);
+        expect(disk.stalledNonce).toBe(7);
+        expect(disk.inFlight.nonce).toBe(7);
+        const restarted = h.reopen();
+        const still = await restarted.send(h.job());
+        expect(still).toEqual({ status: 'refused', reason: 'sender: stalled' });
+        const early = await restarted.clearStall();
+        expect(early.status).toBe('refused');
+        expect(h.alerts.some((line) => line.includes('stall clear refused') && line.includes('cast send --nonce 7'))).toBe(true);
+        expect(h.signed).toEqual([]);
+        h.setNonce(8n, 8n);
+        const cleared = await restarted.clearStall();
+        expect(cleared.status).toBe('cleared');
+        const after = await restarted.send(h.job());
+        expect(after.status).toBe('pending');
     });
 
     it('charges the first broadcast of a raw whose chain-id read failed, then keeps the ceiling across a restart', async () => {
-        const h = harness({ maxSendsPerHour: 1, bumpAfterTicks: 100 });
+        const h = harness({ maxSendsPerHour: 1 });
         let failBroadcastChain = true;
         let reads = 0;
         h.chain.chainId = async () => {
@@ -726,23 +773,23 @@ process.stdout.write(raw + '\\n');
         expect(room.ceilingClosed).toBe(false);
     });
 
-    it('signs the bumped tip inside the max-fee floor', async () => {
-        const h = harness({ bumpAfterTicks: 1 });
-        await plant(h, { nonce: 7, maxFee: 210n, tip: 10n });
+    it('rebroadcasts the same raw when the base fee rises', async () => {
+        const h = harness();
+        const raw = await plant(h, { nonce: 7, maxFee: 210n, tip: 10n });
         h.setNonce(7n, 8n);
         h.setFees(200n, 1n);
-        h.chain.sendRawTransaction = async (raw) => {
-            h.broadcasts.push(raw);
-            return keccak256(raw);
+        h.chain.sendRawTransaction = async (rawTx) => {
+            h.broadcasts.push(rawTx);
+            return keccak256(rawTx);
         };
         h.sender.tick();
         await h.sender.maintain();
-        expect(h.signed[0]?.maxPriorityFeePerGas).toBe(13n);
-        expect(h.signed[0]?.maxFeePerGas).toBe(413n);
+        expect(h.signed).toEqual([]);
+        expect(h.broadcasts).toEqual([raw]);
     });
 
     it('does not rebroadcast above the current ceiling and does not journal a cancel that cannot outbid', async () => {
-        const above = harness({ maxFeeWei: 100n, bumpAfterTicks: 100 });
+        const above = harness({ maxFeeWei: 100n });
         await plant(above, { nonce: 7, maxFee: 210n, tip: 10n });
         above.setNonce(7n, 8n);
         above.chain.sendRawTransaction = async (raw) => {
@@ -752,13 +799,12 @@ process.stdout.write(raw + '\\n');
         const held = await above.sender.maintain();
         expect(held.status).toBe('pending');
         expect(above.broadcasts).toEqual([]);
-        expect(above.alerts).toContain('in-flight above current fee ceiling — cancel required');
+        expect(above.alerts).toContain('sender: above fee ceiling');
         expect(above.journal.inFlight()?.kind).toBe('price-super');
         expect(above.signed).toEqual([]);
 
         const stuck = harness({
             maxFeeWei: 210n,
-            bumpAfterTicks: 100,
             enabled: { 'price-super': false, 'price-paymaster': true },
         });
         await plant(stuck, { nonce: 4, maxFee: 210n, tip: 10n });
@@ -770,19 +816,19 @@ process.stdout.write(raw + '\\n');
         };
         const kept = await stuck.sender.maintain();
         expect(kept.status).toBe('pending');
-        expect(stuck.alerts).toContain('in-flight at fee ceiling; cannot replace or cancel');
         expect(stuck.journal.inFlight()?.kind).toBe('price-super');
         expect(stuck.signed).toEqual([]);
-        expect(stuck.broadcasts).toHaveLength(1);
+        expect(stuck.broadcasts).toEqual([stuck.journal.inFlight()!.raws[0]]);
     });
 
     it('keeps servicing a later nonce while an earlier receipt stays unreadable', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         const raw7 = await plant(h, { nonce: 7 });
         h.setNonce(8n, 8n);
         h.throwReceipt(keccak256(raw7));
         const first = await h.sender.maintain();
-        expect(first.status).toBe('pending');
+        expect(first.status).toBe('consumed');
+        await h.sender.flushReceipt();
         expect(h.journal.inFlight()).toBeNull();
         const raw8 = await signedRaw({ to: TO, data: UPDATE_PRICE_DATA, nonce: 8 });
         await h.journal.writeInFlight({
@@ -800,14 +846,14 @@ process.stdout.write(raw + '\\n');
         h.setNonce(9n, 9n);
         h.throwReceipt(keccak256(raw8));
         const consumed = await h.sender.maintain();
-        expect(consumed.status).toBe('pending');
+        expect(consumed.status).toBe('consumed');
         const next = await h.sender.send(h.job());
         expect(next.status).toBe('pending');
         expect(h.signed[h.signed.length - 1]?.nonce).toBe(9);
     });
 
-    it('clears an in-flight nonce when a lower nonce is empty, for both gap routes', async () => {
-        const foreign = harness({ bumpAfterTicks: 2 });
+    it('does not clear or re-sign when a lower nonce is empty', async () => {
+        const foreign = harness();
         foreign.setNonce(7n, 8n);
         foreign.chain.sendRawTransaction = async (raw) => {
             foreign.broadcasts.push(raw);
@@ -817,65 +863,11 @@ process.stdout.write(raw + '\\n');
         expect(signed8.status).toBe('pending');
         expect(foreign.signed[0]?.nonce).toBe(8);
         foreign.setNonce(7n, 7n);
-        foreign.sender.tick();
+        await foreign.sender.maintain();
         await foreign.sender.maintain();
         expect(foreign.journal.inFlight()?.nonce).toBe(8);
-        foreign.sender.tick();
-        const cleared = await foreign.sender.maintain();
-        expect(cleared.status).toBe('idle');
-        expect(foreign.journal.inFlight()).toBeNull();
-        expect(foreign.alerts).toContain('nonce gap below in-flight 8; re-signing at latest');
-        const resigned = await foreign.sender.send(foreign.job());
-        expect(resigned.status).toBe('pending');
-        expect(foreign.signed[foreign.signed.length - 1]?.nonce).toBe(7);
-
-        const reorg = harness({ bumpAfterTicks: 2 });
-        reorg.chain.sendRawTransaction = async (raw) => {
-            reorg.broadcasts.push(raw);
-            return keccak256(raw);
-        };
-        const mined = await reorg.sender.send(reorg.job());
-        expect(mined.status).toBe('pending');
-        reorg.setNonce(8n, 8n);
-        const gone = await reorg.sender.maintain();
-        expect(gone.status === 'consumed' || gone.status === 'pending').toBe(true);
-        expect(reorg.journal.inFlight()).toBeNull();
-        const signedNext = await reorg.sender.send(reorg.job());
-        expect(signedNext.status).toBe('pending');
-        expect(reorg.signed[reorg.signed.length - 1]?.nonce).toBe(8);
-        reorg.setNonce(7n, 7n);
-        reorg.sender.tick();
-        await reorg.sender.maintain();
-        reorg.sender.tick();
-        const repaired = await reorg.sender.maintain();
-        expect(repaired.status).toBe('idle');
-        expect(reorg.alerts).toContain('nonce gap below in-flight 8; re-signing at latest');
-        const atLatest = await reorg.sender.send(reorg.job());
-        expect(atLatest.status).toBe('pending');
-        expect(reorg.signed[reorg.signed.length - 1]?.nonce).toBe(7);
-    });
-
-    it('ages a replacement once per tick and resets the age after a bump', async () => {
-        const h = harness({ bumpAfterTicks: 2 });
-        await plant(h, { nonce: 7 });
-        h.setNonce(7n, 8n);
-        h.chain.sendRawTransaction = async (raw) => {
-            h.broadcasts.push(raw);
-            return keccak256(raw);
-        };
-        h.sender.tick();
-        await h.sender.maintain();
-        await h.sender.maintain();
-        expect(h.signed).toEqual([]);
-        expect(h.journal.inFlight()?.attempts).toBe(1);
-        h.sender.tick();
-        await h.sender.maintain();
-        expect(h.signed).toHaveLength(1);
-        expect(h.journal.inFlight()?.attempts).toBe(0);
-        h.sender.tick();
-        await h.sender.maintain();
-        expect(h.signed).toHaveLength(1);
-        expect(h.journal.inFlight()?.attempts).toBe(1);
+        expect(foreign.signed).toHaveLength(1);
+        expect(foreign.alerts.some((line) => line.includes('re-signing'))).toBe(false);
     });
 
     it('discards a raw when the gate closes during signing', async () => {
@@ -898,7 +890,7 @@ process.stdout.write(raw + '\\n');
         expect((await closed.sender.send(closed.job())).status).toBe('refused');
         expect(closed.signed).toEqual([]);
 
-        const expired = harness({ bumpAfterTicks: 1 });
+        const expired = harness();
         expired.sender.setGate({ price: true, pause: true, reason: '', validUntil: 1 });
         expect((await expired.sender.send(expired.job())).status).toBe('refused');
         await plant(expired, { nonce: 7 });
@@ -908,7 +900,7 @@ process.stdout.write(raw + '\\n');
         expect(expired.signed).toEqual([]);
         expect(expired.broadcasts).toEqual([]);
 
-        const cancel = harness({ bumpAfterTicks: 100, enabled: { 'price-super': false, 'price-paymaster': true } });
+        const cancel = harness({ enabled: { 'price-super': false, 'price-paymaster': true } });
         cancel.sender.setGate({ price: false, pause: true, reason: 'closed', validUntil: 5_000 });
         await plant(cancel, { nonce: 3 });
         cancel.setNonce(3n, 4n);
@@ -936,7 +928,7 @@ process.stdout.write(raw + '\\n');
     });
 
     it('does not broadcast a journal whose directory barrier has not succeeded', async () => {
-        const h = harness({ bumpAfterTicks: 100 });
+        const h = harness();
         await plant(h, { nonce: 7 });
         h.setNonce(7n, 8n);
         const { setDurabilityHooks } = await import('./journal.js');
@@ -950,7 +942,7 @@ process.stdout.write(raw + '\\n');
         try {
             const settled = await h.sender.maintain();
             expect(settled.status).toBe('refused');
-            expect(settled.reason).toBe('sender: journal refused');
+            expect(settled.reason).toBe('sender: journal barrier incomplete');
             expect(h.broadcasts).toEqual([]);
         } finally {
             setDurabilityHooks(null);

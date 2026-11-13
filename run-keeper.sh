@@ -91,14 +91,17 @@ if [ ! -f "$LOADER" ]; then
   echo "error: pinned tsx loader missing" >&2
   exit 1
 fi
+# Defaults only when the caller did not pass the flag. The parser keeps the first occurrence.
+DEFAULT_ARGS=()
+has_arg --poll-interval "$@" || DEFAULT_ARGS+=(--poll-interval "${KEEPER_POLL_INTERVAL:-180}")
+has_arg --safety-margin "$@" || DEFAULT_ARGS+=(--safety-margin "${KEEPER_SAFETY_MARGIN:-600}")
+has_arg --health-interval "$@" || DEFAULT_ARGS+=(--health-interval "${KEEPER_HEALTH_INTERVAL:-1800}")
+has_arg --volatility-threshold-bps "$@" || DEFAULT_ARGS+=(--volatility-threshold-bps "${KEEPER_VOL_BPS:-150}")
+has_arg --volatility-cooldown "$@" || DEFAULT_ARGS+=(--volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}")
 echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
 exec env -i PATH="${PATH:-/usr/bin:/bin}" HOME="${HOME:-}" "$NODE" --import "$LOADER" scripts/keeper.ts \
   --network "$NETWORK" \
   ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
-  --poll-interval "${KEEPER_POLL_INTERVAL:-180}" \
-  --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" \
-  --health-interval "${KEEPER_HEALTH_INTERVAL:-1800}" \
-  --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" \
-  --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" \
+  ${DEFAULT_ARGS[@]+"${DEFAULT_ARGS[@]}"} \
   -- \
   "$@"

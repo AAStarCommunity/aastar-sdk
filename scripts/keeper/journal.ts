@@ -9,7 +9,7 @@ import { createServer, type Server, type Socket } from 'node:net';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { Address, Hex } from 'viem';
 
-export type IntentKind = 'price-super' | 'price-paymaster' | 'cancel';
+export type IntentKind = 'price-super' | 'price-paymaster';
 
 export interface InFlight {
     kind: IntentKind;
@@ -33,6 +33,10 @@ export interface JournalAccount {
     ceilingClosed: boolean;
     /** Last observed mined nonce. Null until the first successful read. */
     lastLatest: bigint | null;
+    /** Human must clear a stall. A restart does not. */
+    stalled: boolean;
+    /** Nonce that stalled. Null when stalled is false. */
+    stalledNonce: number | null;
 }
 
 export interface JournalIdentity {
@@ -44,7 +48,8 @@ interface JournalState extends JournalIdentity, JournalAccount {
     inFlight: InFlight | null;
 }
 
-const JOURNAL_VERSION = 3;
+const JOURNAL_VERSION = 4;
+const JOURNAL_VERSION_V3 = 3;
 const JOURNAL_VERSION_V2 = 2;
 const MAX_FILE_BYTES = 1_000_000;
 /** Hashes kept for the one in-flight nonce. Older ones are dropped, not refused. */
@@ -55,13 +60,14 @@ export const JOURNAL_RAW_KEEP = 3;
 export const FEE_DIGIT_MAX = 78;
 const MAX_DATA_CHARS = 200_000;
 
-const ROOT_KEYS = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest'];
+const ROOT_KEYS = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest', 'stalled', 'stalledNonce'];
+const ROOT_KEYS_V3 = ['version', 'chainId', 'signer', 'inFlight', 'sentAt', 'ceilingClosed', 'lastLatest'];
 const ROOT_KEYS_V2 = ['version', 'chainId', 'signer', 'inFlight'];
 const FLIGHT_KEYS = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt', 'broadcastOnce'];
 const FLIGHT_KEYS_V2 = ['kind', 'nonce', 'raws', 'hashes', 'gasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'attempts', 'firstSentAt'];
 /** sentAt entries kept on disk. The sender's hourly cap is far below this. */
 const SENT_AT_CAP = 10_000;
-const KINDS = new Set<IntentKind>(['price-super', 'price-paymaster', 'cancel']);
+const KINDS = new Set<IntentKind>(['price-super', 'price-paymaster']);
 
 const OPEN_READ = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 const OPEN_EXCL = constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW | constants.O_NONBLOCK | constants.O_WRONLY;
@@ -124,6 +130,21 @@ export async function ensureJournalDir(journalPath: string): Promise<void> {
     await ensureDir(dirname(journalPath));
 }
 
+async function fsyncDirOrThrow(dir: string): Promise<void> {
+    try {
+        await durability.fsyncDir(dir);
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'EPERM' && dir === resolve('/')) return;
+        throw new Error('journal: parent sync failed');
+    }
+}
+
+/**
+ * Create missing parents, then fsync the journal directory and every ancestor up to
+ * and including the first directory that existed before this call, plus that directory's
+ * parent. The parent holds the directory entry a previous crash can lose.
+ */
 async function ensureDir(dir: string): Promise<void> {
     const abs = resolve(dir);
     const missing: string[] = [];
@@ -147,21 +168,25 @@ async function ensureDir(dir: string): Promise<void> {
     if (!existing) throw new Error('journal: parent unreadable');
     if (missing.length === 0) {
         assertExistingDir(abs);
-        return;
-    }
-    let parent = existing;
-    for (const next of missing.reverse()) {
-        await mkdir(next, { mode: 0o700 });
-        try {
-            await durability.fsyncDir(parent);
-        } catch (error) {
-            const code = (error as NodeJS.ErrnoException).code;
-            if (code === 'EPERM' && parent === resolve('/')) continue;
-            throw new Error('journal: parent sync failed');
+    } else {
+        let parent = existing;
+        for (const next of missing.reverse()) {
+            await mkdir(next, { mode: 0o700 });
+            await fsyncDirOrThrow(parent);
+            await chmod(next, 0o700);
+            parent = next;
         }
-        await chmod(next, 0o700);
-        parent = next;
     }
+    let walk = abs;
+    for (;;) {
+        await fsyncDirOrThrow(walk);
+        if (walk === existing) break;
+        const parent = dirname(walk);
+        if (parent === walk) break;
+        walk = parent;
+    }
+    const holder = dirname(existing);
+    if (holder !== existing) await fsyncDirOrThrow(holder);
 }
 
 async function rejectUnlessRegular(fh: FileHandle): Promise<'ok' | 'unsafe' | 'corrupt'> {
@@ -310,7 +335,7 @@ function parseLastLatest(value: unknown): bigint | null | 'bad' {
 function parseFlight(value: unknown, version: number): InFlight | null | 'bad' {
     if (value === null) return null;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return 'bad';
-    const keys = version === JOURNAL_VERSION ? FLIGHT_KEYS : FLIGHT_KEYS_V2;
+    const keys = version === JOURNAL_VERSION_V2 ? FLIGHT_KEYS_V2 : FLIGHT_KEYS;
     if (!keysExact(value, keys)) return 'bad';
     const raw = value as Record<string, unknown>;
     if (typeof raw.kind !== 'string' || !KINDS.has(raw.kind as IntentKind)) return 'bad';
@@ -320,9 +345,9 @@ function parseFlight(value: unknown, version: number): InFlight | null | 'bad' {
     if (nonce === null || nonce < 0 || attempts === null || attempts < 0 || firstSentAt === null || firstSentAt < 0) return 'bad';
     const raws = parseHexList(raw.raws, JOURNAL_RAW_KEEP);
     const hashes = parseHexList(raw.hashes, JOURNAL_HASH_CAP, 32);
-    const broadcastOnce = version === JOURNAL_VERSION
-        ? parseHexList(raw.broadcastOnce, JOURNAL_HASH_CAP, 32, true)
-        : [];
+    const broadcastOnce = version === JOURNAL_VERSION_V2
+        ? []
+        : parseHexList(raw.broadcastOnce, JOURNAL_HASH_CAP, 32, true);
     const gasLimit = parseUint(raw.gasLimit);
     const maxFeePerGas = parseUint(raw.maxFeePerGas);
     const maxPriorityFeePerGas = parseUint(raw.maxPriorityFeePerGas);
@@ -352,8 +377,9 @@ function parseState(text: string, identity: JournalIdentity): JournalState | 'mi
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const root = parsed as Record<string, unknown>;
     const version = root.version;
-    if (version !== JOURNAL_VERSION && version !== JOURNAL_VERSION_V2) return null;
-    if (!keysExact(parsed, version === JOURNAL_VERSION ? ROOT_KEYS : ROOT_KEYS_V2)) return null;
+    if (version !== JOURNAL_VERSION && version !== JOURNAL_VERSION_V3 && version !== JOURNAL_VERSION_V2) return null;
+    const rootKeys = version === JOURNAL_VERSION ? ROOT_KEYS : version === JOURNAL_VERSION_V3 ? ROOT_KEYS_V3 : ROOT_KEYS_V2;
+    if (!keysExact(parsed, rootKeys)) return null;
     const chainId = parseSafeInt(root.chainId);
     if (chainId === null || chainId <= 0 || !isAddress(root.signer)) return null;
     if (chainId !== identity.chainId || root.signer.toLowerCase() !== identity.signer.toLowerCase()) return 'mismatch';
@@ -362,7 +388,9 @@ function parseState(text: string, identity: JournalIdentity): JournalState | 'mi
     let sentAt: number[] = [];
     let ceilingClosed = false;
     let lastLatest: bigint | null = null;
-    if (version === JOURNAL_VERSION) {
+    let stalled = false;
+    let stalledNonce: number | null = null;
+    if (version === JOURNAL_VERSION || version === JOURNAL_VERSION_V3) {
         const parsedSent = parseSentAt(root.sentAt);
         const parsedLatest = parseLastLatest(root.lastLatest);
         if (!parsedSent || parsedLatest === 'bad' || typeof root.ceilingClosed !== 'boolean') return null;
@@ -370,7 +398,18 @@ function parseState(text: string, identity: JournalIdentity): JournalState | 'mi
         ceilingClosed = root.ceilingClosed;
         lastLatest = parsedLatest;
     }
-    return { chainId, signer: root.signer, inFlight: flight, sentAt, ceilingClosed, lastLatest };
+    if (version === JOURNAL_VERSION) {
+        if (typeof root.stalled !== 'boolean') return null;
+        stalled = root.stalled;
+        if (root.stalledNonce === null) stalledNonce = null;
+        else {
+            const parsedNonce = parseSafeInt(root.stalledNonce);
+            if (parsedNonce === null || parsedNonce < 0) return null;
+            stalledNonce = parsedNonce;
+        }
+        if (stalled !== (stalledNonce !== null)) return null;
+    }
+    return { chainId, signer: root.signer, inFlight: flight, sentAt, ceilingClosed, lastLatest, stalled, stalledNonce };
 }
 
 function feeText(value: bigint): string {
@@ -416,6 +455,14 @@ function serialize(state: JournalState): string {
     if (state.lastLatest !== null && (state.lastLatest < 0n || state.lastLatest.toString().length > FEE_DIGIT_MAX)) {
         throw new Error('journal: account rejected');
     }
+    if (typeof state.stalled !== 'boolean') throw new Error('journal: account rejected');
+    if (state.stalled) {
+        if (!Number.isSafeInteger(state.stalledNonce) || state.stalledNonce === null || state.stalledNonce < 0) {
+            throw new Error('journal: account rejected');
+        }
+    } else if (state.stalledNonce !== null) {
+        throw new Error('journal: account rejected');
+    }
     return JSON.stringify({
         version: JOURNAL_VERSION,
         chainId: state.chainId,
@@ -424,6 +471,8 @@ function serialize(state: JournalState): string {
         sentAt: state.sentAt,
         ceilingClosed: state.ceilingClosed,
         lastLatest: state.lastLatest === null ? null : state.lastLatest.toString(),
+        stalled: state.stalled,
+        stalledNonce: state.stalledNonce,
     });
 }
 
@@ -444,7 +493,7 @@ function copyFlight(flight: InFlight | null): InFlight | null {
 }
 
 function blankAccount(): JournalAccount {
-    return { sentAt: [], ceilingClosed: false, lastLatest: null };
+    return { sentAt: [], ceilingClosed: false, lastLatest: null, stalled: false, stalledNonce: null };
 }
 
 function copyAccount(account: JournalAccount): JournalAccount {
@@ -452,6 +501,8 @@ function copyAccount(account: JournalAccount): JournalAccount {
         sentAt: [...account.sentAt],
         ceilingClosed: account.ceilingClosed,
         lastLatest: account.lastLatest,
+        stalled: account.stalled,
+        stalledNonce: account.stalledNonce,
     };
 }
 
@@ -540,12 +591,21 @@ export class Journal {
      * One durable write of the in-flight tx and the send budget.
      * A failed directory barrier leaves the file in place and refuses replay.
      */
-    async commit(next: { inFlight?: InFlight | null; sentAt?: number[]; ceilingClosed?: boolean; lastLatest?: bigint | null }): Promise<void> {
+    async commit(next: {
+        inFlight?: InFlight | null;
+        sentAt?: number[];
+        ceilingClosed?: boolean;
+        lastLatest?: bigint | null;
+        stalled?: boolean;
+        stalledNonce?: number | null;
+    }): Promise<void> {
         if (!this.state || this.needsBarrier) throw new Error('journal: not open');
         const account = copyAccount(this.state);
         if (next.sentAt !== undefined) account.sentAt = [...next.sentAt];
         if (next.ceilingClosed !== undefined) account.ceilingClosed = next.ceilingClosed;
         if (next.lastLatest !== undefined) account.lastLatest = next.lastLatest;
+        if (next.stalled !== undefined) account.stalled = next.stalled;
+        if (next.stalledNonce !== undefined) account.stalledNonce = next.stalledNonce;
         const stored = next.inFlight === undefined ? copyFlight(this.state.inFlight) : copyFlight(next.inFlight);
         if (stored && stored.hashes.length > JOURNAL_HASH_CAP) {
             stored.hashes = stored.hashes.slice(stored.hashes.length - JOURNAL_HASH_CAP);
@@ -575,7 +635,7 @@ export class Journal {
     /** Re-run the directory barrier. A new process derives the same refusal when this fails. */
     private async tryBarrier(): Promise<boolean> {
         try {
-            await durability.fsyncDir(dirname(this.path));
+            await ensureDir(dirname(this.path));
             return true;
         } catch {
             return false;

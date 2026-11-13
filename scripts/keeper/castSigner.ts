@@ -14,8 +14,6 @@ import {
     type TransactionSerialized,
 } from 'viem';
 
-export const CANCEL_GAS = 21_000n;
-
 export interface SignRequest {
     to: Address;
     data: Hex;
@@ -24,8 +22,6 @@ export interface SignRequest {
     maxFeePerGas: bigint;
     maxPriorityFeePerGas: bigint;
     chainId: number;
-    /** Self-transfer that frees a gated nonce. The signed bytes must be the cancel shape. */
-    cancel?: boolean;
 }
 
 export interface RawSigner {
@@ -147,13 +143,6 @@ async function verifyRaw(raw: Hex, req: SignRequest, signerAddress: Address): Pr
     }
     const data = (tx.data ?? '0x').toLowerCase();
     const value = tx.value ?? 0n;
-    const cancelShape =
-        tx.to?.toLowerCase() === signerAddress.toLowerCase() &&
-        data === '0x' &&
-        value === 0n &&
-        tx.gas === CANCEL_GAS;
-    if (req.cancel === true && !cancelShape) throw new Error('cast signer: signed fields mismatch');
-    if (req.cancel !== true && cancelShape) throw new Error('cast signer: signed fields mismatch');
     const same =
         tx.type === 'eip1559' &&
         tx.to?.toLowerCase() === req.to.toLowerCase() &&
@@ -196,12 +185,6 @@ export function createCastSigner(opts: {
             if (!Number.isSafeInteger(req.chainId) || req.chainId <= 0) throw new Error('cast signer: request rejected');
             if (req.gasLimit <= 0n || req.maxFeePerGas < req.maxPriorityFeePerGas || req.maxPriorityFeePerGas < 0n) {
                 throw new Error('cast signer: request rejected');
-            }
-            if (req.cancel === true) {
-                const data = req.data.toLowerCase();
-                if (req.to.toLowerCase() !== signerAddress.toLowerCase() || data !== '0x' || req.gasLimit !== CANCEL_GAS) {
-                    throw new Error('cast signer: request rejected');
-                }
             }
             const args = [
                 'mktx',
