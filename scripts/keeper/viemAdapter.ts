@@ -92,8 +92,10 @@ export function adaptChainIO(client: Client, opts: { tipWei?: bigint } = {}): Ch
                     blockNumber,
                     transactionHash: txHash,
                 };
-            } catch {
-                return null;
+            } catch (error) {
+                const name = error instanceof Error ? error.name : '';
+                if (name.includes('NotFound')) return null;
+                throw new Error('sender: receipt unreadable');
             }
         },
         async chainId() {

@@ -24,7 +24,12 @@ writeFileSync(
     join(bin, 'pnpm'),
     '#!/bin/sh\nenv | grep -E \'^(KEEPER_PRIVATE_KEY|PRIVATE_KEY|RPC_URL|UNLISTED)=\' | sed \'s/^/ENV_/\'\nfor a in "$@"; do printf "%s\\n" "$a"; done\n',
 );
+writeFileSync(
+    join(bin, 'env'),
+    '#!/bin/sh\nfor a in "$@"; do printf "ENVARG %s\\n" "$a"; done\nexec /usr/bin/env "$@"\n',
+);
 chmodSync(join(bin, 'pnpm'), 0o755);
+chmodSync(join(bin, 'env'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
 const SIGN = ['--keystore', '/tmp/ks', '--password-file', '/tmp/pw', '--signer', '0x0000000000000000000000000000000000000001'];
@@ -38,8 +43,9 @@ function run(args: string[], opts: { sign?: boolean; env?: NodeJS.ProcessEnv } =
     });
     const lines = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: '));
     const envLines = lines.filter((l) => l.startsWith('ENV_'));
-    const argv = lines.filter((l) => !l.startsWith('ENV_'));
-    return { status: r.status, stderr: r.stderr, stdout: r.stdout, argv, envLines };
+    const envArgs = lines.filter((l) => l.startsWith('ENVARG ')).map((l) => l.slice('ENVARG '.length));
+    const argv = lines.filter((l) => !l.startsWith('ENV_') && !l.startsWith('ENVARG '));
+    return { status: r.status, stderr: r.stderr, stdout: r.stdout, argv, envLines, envArgs };
 }
 
 /** Every value passed for `flag`, in order. */
@@ -103,22 +109,28 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(r.argv).not.toContain(sentinel);
     });
 
-    it('resync needs only --signer, and inherited secrets are not passed to node', () => {
-        const signer = '0x0000000000000000000000000000000000000001';
-        const ok = run(['sepolia', '--resync-journal', '--signer', signer], { sign: false });
-        expect(ok.status, ok.stderr).toBe(0);
-        expect(ok.argv).toContain('--resync-journal');
-        expect(ok.argv).not.toContain('--keystore');
-        const missing = run(['sepolia', '--resync-journal'], { sign: false });
-        expect(missing.status).toBe(1);
-        expect(missing.stderr).toMatch(/requires --signer/);
-        const forwarded = run(['sepolia', '--once', '--dry-run'], {
+    it('no wrapper-spawned process has a secret on argv', () => {
+        const token = 'telegram-token-sentinel';
+        const url = 'http://rpc-sentinel.example/secret';
+        const leaked = run(['sepolia', '--once', '--dry-run'], {
             sign: false,
-            env: { PRIVATE_KEY: 'sentinel-secret', RPC_URL: 'http://127.0.0.1:9', UNLISTED: 'nope' },
+            env: { RPC_URL: url, TELEGRAM_BOT_TOKEN: token, TELEGRAM_CHAT_ID: 'chat-sentinel' },
         });
-        expect(forwarded.status, forwarded.stderr).toBe(0);
-        expect(forwarded.stdout).not.toContain('sentinel-secret');
-        expect(forwarded.envLines.some((line) => line.startsWith('ENV_RPC_URL='))).toBe(true);
-        expect(forwarded.envLines.join('\n')).not.toContain('UNLISTED');
+        expect(leaked.status, leaked.stderr).toBe(1);
+        expect(leaked.stderr).toMatch(/put it in --env-file/);
+        expect(leaked.stdout).not.toContain(token);
+        expect(leaked.stdout).not.toContain(url);
+        expect(leaked.envArgs).toEqual([]);
+
+        const file = join(dir, 'keeper.env');
+        writeFileSync(file, `RPC_URL=${url}\nTELEGRAM_BOT_TOKEN=${token}\nTELEGRAM_CHAT_ID=chat-sentinel\n`);
+        const clean = run(['sepolia', '--once', '--dry-run', '--env-file', file], { sign: false });
+        expect(clean.status, clean.stderr).toBe(0);
+        const spawned = [...clean.envArgs, ...clean.argv, ...clean.envLines].join('\n');
+        expect(spawned).not.toContain(token);
+        expect(spawned).not.toContain(url);
+        expect(spawned).not.toContain('chat-sentinel');
+        expect(clean.envArgs[0]).toBe('-i');
+        expect(clean.argv.slice(0, 5)).toEqual(['exec', 'tsx', 'scripts/keeper.ts', '--network', 'sepolia']);
     });
 });

@@ -115,7 +115,7 @@ async function expectRefuse(signer: Address, owners: { sp: Address; registry: Ad
             '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
             '--network', 'sepolia', '--no-logo', '--once',
             '--no-superpaymaster', '--disable-paymaster',
-            '--keystore', ks, '--password-file', pw, '--signer', signer,
+            '--keystore', ks, '--password-file', pw, '--signer', signer, '--max-fee-gwei', '1',
             '--cast-bin', cast, '--journal', join(dir, 'journal.json'),
             '--superpaymaster', SP, '--registry', REG,
         ], {

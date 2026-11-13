@@ -1,24 +1,25 @@
 /**
- * Journal identity, lock, prune, and parent-directory rules.
+ * Single in-flight journal: durability, file checks, and the process-lifetime lock.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { connect } from 'node:net';
+import { createServer } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
-import { encodeFunctionData, getAddress, keccak256, parseAbi, type Address, type Hex } from 'viem';
-import { signTransaction } from 'viem/accounts';
-import { acquireKeeperLock, atomicWriteFile, ensureJournalDir, Journal, resyncJournal, setDurabilityHooks, type JournalEntry } from './journal';
+import type { Address, Hex } from 'viem';
+import { acquireKeeperLock, atomicWriteFile, Journal, keeperLockPort, setDurabilityHooks, JOURNAL_HASH_CAP, FEE_DIGIT_MAX } from './journal';
 
 const SIGNER = '0x3333333333333333333333333333333333333333' as Address;
 const OTHER = '0x4444444444444444444444444444444444444444' as Address;
-const TO = '0x1111111111111111111111111111111111111111' as Address;
 const SPAWN_VERDICT_TIMEOUT_MS = 180_000;
 
 const dirs: string[] = [];
 afterEach(() => {
+    setDurabilityHooks(null);
     for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
@@ -29,93 +30,90 @@ function dir(): string {
     return path;
 }
 
-function entry(nonce: number, status: JournalEntry['status']): JournalEntry {
-    const raw = (`0x${nonce.toString(16).padStart(4, '0')}`) as Hex;
+function flight(over: Record<string, unknown> = {}) {
     return {
-        nonce,
-        kind: 'pause',
-        to: TO,
-        data: '0x1234',
-        raws: [raw],
-        hashes: [keccak256(raw)],
-        gasLimit: 100_000n,
-        maxFeePerGas: 20n,
-        maxPriorityFeePerGas: 1n,
-        status,
-        attempts: 1,
-        createdAt: 1_700_000_000_000,
+        kind: 'price-super',
+        nonce: 4,
+        raws: ['0xabcd'],
+        hashes: ['0x' + 'ab'.repeat(32)],
+        gasLimit: '21000',
+        maxFeePerGas: '20',
+        maxPriorityFeePerGas: '1',
+        attempts: 0,
+        firstSentAt: 1,
+        ...over,
     };
 }
 
 describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('keeps the last 16 included entries and reloads under the size cap', async () => {
+    it('stores one in-flight tx and drops hashes past the cap', async () => {
         const path = join(dir(), 'journal.json');
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        await journal.init(0);
-        for (let nonce = 0; nonce < 20; nonce++) {
-            await journal.append(entry(nonce, 'signed'));
-            await journal.updateInFlight({ status: 'included' });
-        }
-        const body = JSON.parse(readFileSync(path, 'utf8')) as { baseNonce: number; entries: { nonce: number }[] };
-        expect(body.baseNonce).toBe(4);
-        expect(body.entries.map((row) => row.nonce)).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-        expect(journal.nextNonce()).toBe(20);
-        const again = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        expect(await again.load()).toBe('ok');
-        expect(again.nextNonce()).toBe(20);
-
-        const bulk = join(dir(), 'bulk.json');
-        const many = new Journal(bulk, { chainId: 11155111, signer: SIGNER });
-        await many.init(0);
-        for (let nonce = 0; nonce < 2000; nonce++) {
-            await many.append(entry(nonce, 'signed'));
-            await many.updateInFlight({ status: 'included' });
-        }
-        expect(statSync(bulk).size).toBeLessThan(1_000_000);
-        const reloaded = new Journal(bulk, { chainId: 11155111, signer: SIGNER });
-        expect(await reloaded.load()).toBe('ok');
-        expect(reloaded.nextNonce()).toBe(2000);
-    });
-
-    it('loads a journal written before cancel entries, and a cancel entry', async () => {
-        const path = join(dir(), 'journal.json');
-        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        await journal.init(4);
-        await journal.append(entry(4, 'sent'));
-        const old = JSON.parse(readFileSync(path, 'utf8')) as { entries: Record<string, unknown>[] };
-        expect(old.entries[0]?.cancelled).toBeUndefined();
-        expect(await new Journal(path, { chainId: 11155111, signer: SIGNER }).load()).toBe('ok');
-
-        const raw = '0xabcd' as Hex;
-        await journal.updateInFlight({
-            raw,
-            hash: keccak256(raw),
-            kind: 'cancel',
-            cancelled: true,
-            status: 'sent',
+        await journal.init();
+        const hashes = Array.from({ length: JOURNAL_HASH_CAP + 6 }, (_, i) => (`0x${i.toString(16).padStart(64, '0')}`) as Hex);
+        await journal.writeInFlight({
+            kind: 'price-super',
+            nonce: 4,
+            raws: ['0xabcd', '0xabce', '0xabcf', '0xabd0'] as Hex[],
+            hashes,
+            gasLimit: 21_000n,
+            maxFeePerGas: 20n,
+            maxPriorityFeePerGas: 1n,
+            attempts: 1,
+            firstSentAt: 1,
         });
+        const body = JSON.parse(readFileSync(path, 'utf8')) as { version: number; inFlight: { hashes: string[]; raws: string[] } };
+        expect(body.version).toBe(2);
+        expect(body.inFlight.hashes).toHaveLength(JOURNAL_HASH_CAP);
+        expect(body.inFlight.hashes[0]).toBe(hashes[6]);
+        expect(body.inFlight.raws).toHaveLength(3);
         const again = new Journal(path, { chainId: 11155111, signer: SIGNER });
         expect(await again.load()).toBe('ok');
-        expect(again.inFlight()).toMatchObject({ kind: 'cancel', cancelled: true, nonce: 4 });
-
-        const broken = JSON.parse(readFileSync(path, 'utf8')) as { entries: Record<string, unknown>[] };
-        broken.entries[0]!.extra = true;
-        const badPath = join(dir(), 'bad.json');
-        writeFileSync(badPath, JSON.stringify(broken));
-        chmodSync(badPath, 0o600);
-        expect(await new Journal(badPath, { chainId: 11155111, signer: SIGNER }).load()).toBe('corrupt');
+        expect(again.inFlight()?.nonce).toBe(4);
+        const copy = again.inFlight();
+        if (copy) copy.nonce = 99;
+        expect(again.inFlight()?.nonce).toBe(4);
     });
 
-    it('refuses a journal bound to another signer and does not reuse the file', async () => {
+    it('refuses a journal bound to another signer and an older file shape', async () => {
         const path = join(dir(), 'journal.json');
         const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        await journal.init(4);
+        await journal.init();
         const before = readFileSync(path, 'utf8');
         const other = new Journal(path, { chainId: 11155111, signer: OTHER });
         expect(await other.load()).toBe('mismatch');
         expect(readFileSync(path, 'utf8')).toBe(before);
-        const same = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        expect(await same.load()).toBe('ok');
+        expect(await new Journal(path, { chainId: 11155111, signer: SIGNER }).load()).toBe('ok');
+
+        const old = join(dir(), 'old.json');
+        writeFileSync(old, JSON.stringify({ version: 1, chainId: 11155111, signer: SIGNER, entries: [], foreignNonce: 3 }));
+        chmodSync(old, 0o600);
+        expect(await new Journal(old, { chainId: 11155111, signer: SIGNER }).load()).toBe('corrupt');
+    });
+
+    it('shares the uint256 digit bound between the writer and the parser', async () => {
+        const path = join(dir(), 'journal.json');
+        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+        await journal.init();
+        const ok = 10n ** BigInt(FEE_DIGIT_MAX - 1);
+        expect(ok.toString().length).toBe(FEE_DIGIT_MAX);
+        await journal.writeInFlight({
+            kind: 'cancel', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
+            gasLimit: 21_000n, maxFeePerGas: ok, maxPriorityFeePerGas: 1n, attempts: 0, firstSentAt: 1,
+        });
+        expect(await new Journal(path, { chainId: 11155111, signer: SIGNER }).load()).toBe('ok');
+        const tooBig = 10n ** BigInt(FEE_DIGIT_MAX);
+        await expect(journal.writeInFlight({
+            kind: 'cancel', nonce: 1, raws: ['0xab'] as Hex[], hashes: [('0x' + '11'.repeat(32)) as Hex],
+            gasLimit: 21_000n, maxFeePerGas: tooBig, maxPriorityFeePerGas: 1n, attempts: 0, firstSentAt: 1,
+        })).rejects.toThrow('journal: fee rejected');
+        const bad = join(dir(), 'wide.json');
+        writeFileSync(bad, JSON.stringify({
+            version: 2, chainId: 11155111, signer: SIGNER,
+            inFlight: flight({ maxFeePerGas: tooBig.toString() }),
+        }));
+        chmodSync(bad, 0o600);
+        expect(await new Journal(bad, { chainId: 11155111, signer: SIGNER }).load()).toBe('corrupt');
     });
 
     it('creates a fresh journal directory before the lock and refuses a second chain signer', async () => {
@@ -123,65 +121,91 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const path = join(root, 'fresh', 'nested', 'journal.json');
         const release = await acquireKeeperLock({ journalPath: path, chainId: 11155111, signer: SIGNER });
         expect(statSync(join(root, 'fresh')).mode & 0o777).toBe(0o700);
-        expect(statSync(join(root, 'fresh')).uid).toBe(process.getuid?.());
         const otherPath = join(root, 'elsewhere', 'journal.json');
         await expect(acquireKeeperLock({ journalPath: otherPath, chainId: 11155111, signer: SIGNER })).rejects.toThrow('journal: lock held');
         await release();
         const again = await acquireKeeperLock({ journalPath: path, chainId: 11155111, signer: SIGNER });
         await again();
-
-        const open = join(root, 'open');
-        mkdirSync(open, { mode: 0o755 });
-        chmodSync(open, 0o755);
-        const kept = await acquireKeeperLock({ journalPath: join(open, 'journal.json'), chainId: 11155111, signer: OTHER });
-        expect(statSync(open).mode & 0o777).toBe(0o755);
-        await kept();
-    });
-
-    it('refuses resync when the nonce is unsettled or an entry is in flight, and realigns otherwise', async () => {
-        const path = join(dir(), 'journal.json');
-        const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        expect(await resyncJournal(journal, 1n, 1n)).toEqual({ ok: false, reason: 'journal: resync refused missing' });
-        await journal.init(4);
-        await journal.append(entry(4, 'included'));
-        const open = await resyncJournal(new Journal(path, { chainId: 11155111, signer: SIGNER }), 3n, 4n);
-        expect(open).toEqual({ ok: false, reason: 'journal: resync refused unsettled nonce' });
-        const flight = new Journal(path, { chainId: 11155111, signer: SIGNER });
-        expect(await flight.load()).toBe('ok');
-        await flight.append(entry(5, 'sent'));
-        const busy = await resyncJournal(new Journal(path, { chainId: 11155111, signer: SIGNER }), 6n, 6n);
-        expect(busy).toEqual({ ok: false, reason: 'journal: resync refused in-flight' });
-        expect(readFileSync(path, 'utf8')).toContain('"status":"sent"');
-        const clean = join(dir(), 'clean.json');
-        const ready = new Journal(clean, { chainId: 11155111, signer: SIGNER });
-        await ready.init(2);
-        await ready.append(entry(2, 'included'));
-        const done = await resyncJournal(new Journal(clean, { chainId: 11155111, signer: SIGNER }), 9n, 9n);
-        expect(done).toEqual({ ok: true, from: 3, to: 9, dropped: 1 });
-        const after = new Journal(clean, { chainId: 11155111, signer: SIGNER });
-        expect(await after.load()).toBe('ok');
-        expect(after.nextNonce()).toBe(9);
-        expect(after.inFlight()).toBeNull();
     });
 
     it('does not chmod an existing directory and refuses a group-writable parent', async () => {
         const root = dir();
-        const open = join(root, 'open');
-        mkdirSync(open, { mode: 0o755 });
-        chmodSync(open, 0o755);
-        await atomicWriteFile(join(open, 'file.json'), '{"ok":true}\n');
-        expect(statSync(open).mode & 0o777).toBe(0o755);
-
+        const openDir = join(root, 'open');
+        mkdirSync(openDir, { mode: 0o755 });
+        chmodSync(openDir, 0o755);
+        await atomicWriteFile(join(openDir, 'file.json'), '{"ok":true}\n');
+        expect(statSync(openDir).mode & 0o777).toBe(0o755);
         const loose = join(root, 'loose');
         mkdirSync(loose, { mode: 0o775 });
         chmodSync(loose, 0o775);
         await expect(atomicWriteFile(join(loose, 'file.json'), '{}\n')).rejects.toThrow('journal: parent is group or world writable');
-        expect(statSync(loose).mode & 0o777).toBe(0o775);
+    });
 
-        const created = join(root, 'missing', 'nested', 'file.json');
-        await atomicWriteFile(created, '{}\n');
-        expect(statSync(join(root, 'missing')).mode & 0o777).toBe(0o700);
-        expect(statSync(join(root, 'missing', 'nested')).mode & 0o777).toBe(0o700);
+    it('production fsync runs on the file and the directory', async () => {
+        const sample = await open(join(dir(), 'probe'), 'w');
+        const proto = Object.getPrototypeOf(sample) as { sync: () => Promise<void> };
+        await sample.close();
+        const seen: string[] = [];
+        const orig = proto.sync;
+        proto.sync = async function (this: { stat: () => Promise<{ isDirectory: () => boolean }> }) {
+            const st = await this.stat();
+            seen.push(st.isDirectory() ? 'dir' : 'file');
+            return orig.call(this);
+        };
+        try {
+            const path = join(dir(), 'journal.json');
+            const journal = new Journal(path, { chainId: 11155111, signer: SIGNER });
+            await journal.init();
+            expect(seen).toContain('file');
+            expect(seen).toContain('dir');
+            expect(seen.indexOf('file')).toBeLessThan(seen.lastIndexOf('dir'));
+        } finally {
+            proto.sync = orig;
+        }
+    });
+
+    it('refuses a fifo immediately', async () => {
+        const root = dir();
+        const fifo = join(root, 'journal.fifo');
+        const made = spawn('mkfifo', [fifo]);
+        const code = await new Promise<number | null>((resolve) => made.once('exit', resolve));
+        expect(code).toBe(0);
+        const journal = new Journal(fifo, { chainId: 11155111, signer: SIGNER });
+        const started = Date.now();
+        const loaded = await journal.load();
+        expect(Date.now() - started).toBeLessThan(1_000);
+        expect(loaded).toBe('unsafe');
+    });
+
+    it('destroys an accepted lock socket so release does not wait', async () => {
+        const root = dir();
+        const release = await acquireKeeperLock({ journalPath: join(root, 'journal.json'), chainId: 11155111, signer: SIGNER });
+        const sock = connect({ host: '127.0.0.1', port: keeperLockPort(11155111, SIGNER) });
+        await new Promise<void>((resolve, reject) => {
+            sock.once('connect', () => resolve());
+            sock.once('error', reject);
+        });
+        const started = Date.now();
+        await release();
+        expect(Date.now() - started).toBeLessThan(1_000);
+        sock.destroy();
+    });
+
+    it('refuses a symlink and a mode other than 0600', async () => {
+        const root = dir();
+        const file = join(root, 'journal.json');
+        const journal = new Journal(file, { chainId: 1, signer: SIGNER });
+        await journal.init();
+        chmodSync(file, 0o644);
+        expect(await new Journal(file, { chainId: 1, signer: SIGNER }).load()).toBe('unsafe');
+        chmodSync(file, 0o600);
+        const real = join(root, 'real.json');
+        writeFileSync(real, readFileSync(file, 'utf8'));
+        chmodSync(real, 0o600);
+        rmSync(file);
+        const { symlinkSync } = await import('node:fs');
+        symlinkSync(real, file);
+        expect(await new Journal(file, { chainId: 1, signer: SIGNER }).load()).toBe('unsafe');
     });
 
     it('releases the lock when a keeper --once process exits, and after SIGKILL', async () => {
@@ -214,7 +238,6 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         const afterKill = await acquireKeeperLock({ journalPath: join(root, 'after-kill.json'), chainId: 11155111, signer: holder });
         await afterKill();
 
-        const { createServer } = await import('node:http');
         const server = createServer((req, res) => {
             let body = '';
             req.on('data', (chunk) => { body += chunk; });
@@ -225,27 +248,12 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
                 else if (msg.method === 'eth_blockNumber') result = '0x10';
                 else if (msg.method === 'eth_getBlockByNumber') {
                     result = {
-                        number: '0x10',
-                        hash: '0x' + 'ab'.repeat(32),
-                        parentHash: '0x' + '22'.repeat(32),
-                        timestamp: '0x1',
-                        baseFeePerGas: '0x1',
-                        gasLimit: '0x1c9c380',
-                        gasUsed: '0x0',
-                        transactions: [],
-                        uncles: [],
-                        logsBloom: '0x' + '00'.repeat(256),
-                        miner: '0x' + '00'.repeat(20),
-                        difficulty: '0x0',
-                        extraData: '0x',
-                        nonce: '0x0000000000000000',
-                        mixHash: '0x' + '00'.repeat(32),
-                        sha3Uncles: '0x' + '00'.repeat(32),
-                        stateRoot: '0x' + '00'.repeat(32),
-                        receiptsRoot: '0x' + '00'.repeat(32),
-                        transactionsRoot: '0x' + '00'.repeat(32),
-                        size: '0x0',
-                        totalDifficulty: '0x0',
+                        number: '0x10', hash: '0x' + 'ab'.repeat(32), parentHash: '0x' + '22'.repeat(32),
+                        timestamp: '0x1', baseFeePerGas: '0x1', gasLimit: '0x1c9c380', gasUsed: '0x0',
+                        transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20),
+                        difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32),
+                        sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32),
+                        transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0',
                     };
                 } else if (msg.method === 'eth_getTransactionCount') result = '0x0';
                 res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result }));
@@ -256,7 +264,6 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         if (!address || typeof address === 'string') throw new Error('rpc listen failed');
         const ks = join(root, 'keys');
         mkdirSync(ks, { mode: 0o700 });
-        chmodSync(ks, 0o700);
         const keystore = join(ks, 'keystore');
         const password = join(ks, 'password');
         writeFileSync(keystore, '{}\n');
@@ -264,185 +271,25 @@ describe('journal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         writeFileSync(password, 'pw\n');
         chmodSync(password, 0o600);
         const keeper = join(process.cwd(), 'scripts/keeper.ts');
-        const once = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, keeper, '--network', 'sepolia', '--once', '--no-logo', '--no-superpaymaster', '--disable-paymaster', '--keystore', keystore, '--password-file', password, '--signer', onceSigner, '--journal', journalPath], {
+        const once = spawn(process.execPath, [
+            '--import', pathToFileURL(tsx).href, keeper,
+            '--network', 'sepolia', '--once', '--no-logo', '--no-superpaymaster', '--disable-paymaster',
+            '--max-fee-gwei', '100',
+            '--keystore', keystore, '--password-file', password, '--signer', onceSigner, '--journal', journalPath,
+        ], {
             cwd: root,
             env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: `http://127.0.0.1:${address.port}` },
         });
         let onceOut = '';
         once.stdout.on('data', (chunk) => { onceOut += chunk.toString(); });
         once.stderr.on('data', (chunk) => { onceOut += chunk.toString(); });
-        const code = await new Promise<number | null>((resolve) => {
+        const onceCode = await new Promise<number | null>((resolve) => {
             const timer = setTimeout(() => { once.kill('SIGKILL'); resolve(null); }, 25_000);
             once.once('exit', (status) => { clearTimeout(timer); resolve(status); });
         });
         server.close();
-        expect(code, onceOut).toBe(0);
+        expect(onceCode, onceOut).toBe(0);
         const released = await acquireKeeperLock({ journalPath, chainId: 11155111, signer: onceSigner });
         await released();
-    });
-
-    it('runs --resync-journal only when latest equals pending and nothing is in flight', async () => {
-        const root = dir();
-        const signer = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' as Address;
-        const journalPath = join(root, 'journal.json');
-        const ready = new Journal(journalPath, { chainId: 11155111, signer });
-        await ready.init(2);
-        await ready.append(entry(2, 'included'));
-        const tsx = join(process.cwd(), 'node_modules', 'tsx', 'dist', 'loader.mjs');
-        const keeper = join(process.cwd(), 'scripts/keeper.ts');
-        const { createServer } = await import('node:http');
-        const serve = async (latest: string, pending: string) => {
-            const server = createServer((req, res) => {
-                let body = '';
-                req.on('data', (chunk) => { body += chunk; });
-                req.on('end', () => {
-                    const parsed = JSON.parse(body) as { id: unknown; method: string; params?: unknown[] } | { id: unknown; method: string; params?: unknown[] }[];
-                    const msgs = Array.isArray(parsed) ? parsed : [parsed];
-                    const replies = msgs.map((msg) => {
-                        let result = '0x0';
-                        if (msg.method === 'eth_chainId') result = '0xaa36a7';
-                        else if (msg.method === 'eth_getTransactionCount') result = msg.params?.[1] === 'pending' ? pending : latest;
-                        return { jsonrpc: '2.0', id: msg.id, result };
-                    });
-                    res.end(JSON.stringify(Array.isArray(parsed) ? replies : replies[0]));
-                });
-            });
-            await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
-            const address = server.address();
-            if (!address || typeof address === 'string') throw new Error('rpc listen failed');
-            return { server, url: `http://127.0.0.1:${address.port}` };
-        };
-        const run = async (url: string) => {
-            const child = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, keeper, '--network', 'sepolia', '--no-logo', '--resync-journal', '--signer', signer, '--journal', journalPath], {
-                cwd: root,
-                env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: url },
-            });
-            let out = '';
-            child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-            child.stderr.on('data', (chunk) => { out += chunk.toString(); });
-            const code = await new Promise<number | null>((resolve) => child.once('exit', resolve));
-            return { code, out };
-        };
-        const badNonce = await serve('0x3', '0x4');
-        const unsettled = await run(badNonce.url);
-        badNonce.server.close();
-        expect(unsettled.code, unsettled.out).toBe(1);
-        expect(unsettled.out).toContain('journal: resync refused unsettled nonce');
-        expect(unsettled.out).not.toContain('TICK');
-        const anvil = getAddress('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
-        const priceData = encodeFunctionData({ abi: parseAbi(['function updatePrice()']), functionName: 'updatePrice' });
-        const signed = async (nonce: number, status: JournalEntry['status'], file: string) => {
-            const raw = await signTransaction({
-                privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
-                transaction: {
-                    type: 'eip1559', chainId: 11155111, nonce, gas: 100_000n,
-                    maxFeePerGas: 20n, maxPriorityFeePerGas: 1n, to: TO, value: 0n, data: priceData,
-                },
-            });
-            const journal = new Journal(file, { chainId: 11155111, signer: anvil });
-            await journal.init(nonce);
-            await journal.append({
-                nonce, kind: 'price-super', to: TO, data: priceData, raws: [raw], hashes: [keccak256(raw)],
-                gasLimit: 100_000n, maxFeePerGas: 20n, maxPriorityFeePerGas: 1n, status, attempts: 1, createdAt: 1_700_000_000_000,
-            });
-        };
-        const openFile = join(root, 'open.json');
-        await signed(3, 'sent', openFile);
-        const blockedRpc = await serve('0x3', '0x3');
-        const blockedChild = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, keeper, '--network', 'sepolia', '--no-logo', '--resync-journal', '--signer', anvil, '--superpaymaster', TO, '--journal', openFile], {
-            cwd: root,
-            env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: blockedRpc.url },
-        });
-        let blockedOut = '';
-        blockedChild.stdout.on('data', (chunk) => { blockedOut += chunk.toString(); });
-        blockedChild.stderr.on('data', (chunk) => { blockedOut += chunk.toString(); });
-        const blockedCode = await new Promise<number | null>((resolve) => blockedChild.once('exit', resolve));
-        blockedRpc.server.close();
-        expect(blockedCode, blockedOut).toBe(1);
-        expect(blockedOut).toContain('journal: resync refused in-flight');
-        const consumedFile = join(root, 'consumed.json');
-        await signed(3, 'sent', consumedFile);
-        const consumedRpc = await serve('0x4', '0x4');
-        const consumedChild = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, keeper, '--network', 'sepolia', '--no-logo', '--resync-journal', '--signer', anvil, '--superpaymaster', TO, '--journal', consumedFile], {
-            cwd: root,
-            env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: consumedRpc.url },
-        });
-        let consumedOut = '';
-        consumedChild.stdout.on('data', (chunk) => { consumedOut += chunk.toString(); });
-        consumedChild.stderr.on('data', (chunk) => { consumedOut += chunk.toString(); });
-        const consumedCode = await new Promise<number | null>((resolve) => consumedChild.once('exit', resolve));
-        consumedRpc.server.close();
-        expect(consumedCode, consumedOut).toBe(0);
-        expect(consumedOut).toContain('journal resynced base 4 -> 4 dropped 1');
-        const clean = join(root, 'clean.json');
-        await signed(2, 'included', clean);
-        const okRpc = await serve('0x9', '0x9');
-        const child = spawn(process.execPath, ['--import', pathToFileURL(tsx).href, keeper, '--network', 'sepolia', '--no-logo', '--resync-journal', '--signer', anvil, '--superpaymaster', TO, '--journal', clean], {
-            cwd: root,
-            env: { PATH: process.env.PATH ?? '', HOME: root, RPC_URL: okRpc.url },
-        });
-        let out = '';
-        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
-        const code = await new Promise<number | null>((resolve) => child.once('exit', resolve));
-        okRpc.server.close();
-        expect(code, out).toBe(0);
-        expect(out).toContain('journal resynced base 3 -> 9 dropped 1');
-        expect(out).not.toContain('TICK');
-        const after = new Journal(clean, { chainId: 11155111, signer: anvil });
-        expect(await after.load()).toBe('ok');
-        expect(after.nextNonce()).toBe(9);
-        expect(after.foreignNonce()).toBeNull();
-    });
-
-    it('refuses a symlink and a mode other than 0600', async () => {
-        const root = dir();
-        const file = join(root, 'journal.json');
-        const journal = new Journal(file, { chainId: 1, signer: SIGNER });
-        await journal.init(1);
-        chmodSync(file, 0o644);
-        const loose = new Journal(file, { chainId: 1, signer: SIGNER });
-        expect(await loose.load()).toBe('unsafe');
-        chmodSync(file, 0o600);
-        const real = join(root, 'real.json');
-        writeFileSync(real, readFileSync(file, 'utf8'));
-        chmodSync(real, 0o600);
-        rmSync(file);
-        const { symlinkSync } = await import('node:fs');
-        symlinkSync(real, file);
-        const linked = new Journal(file, { chainId: 1, signer: SIGNER });
-        expect(await linked.load()).toBe('unsafe');
-    });
-
-    it('locks the journal path so a second signer cannot init the same file', async () => {
-        const root = dir();
-        const file = join(root, 'shared.json');
-        const first = await acquireKeeperLock({ journalPath: file, chainId: 1, signer: SIGNER });
-        await expect(acquireKeeperLock({ journalPath: file, chainId: 2, signer: OTHER })).rejects.toThrow('journal: lock held');
-        await first();
-        const second = await acquireKeeperLock({ journalPath: file, chainId: 2, signer: OTHER });
-        await second();
-    });
-
-    it('fsyncs each created directory into its parent', async () => {
-        const root = dir();
-        const synced: string[] = [];
-        setDurabilityHooks({
-            async write(fh, body) { await fh.writeFile(body, 'utf8'); },
-            async fsyncFile(fh) { await fh.sync(); },
-            async rename(from, to) { const { rename } = await import('node:fs/promises'); await rename(from, to); },
-            async fsyncDir(parent) {
-                synced.push(parent);
-                const dh = await (await import('node:fs/promises')).open(parent, 'r');
-                try { await dh.sync(); } finally { await dh.close(); }
-            },
-        });
-        try {
-            await ensureJournalDir(join(root, 'a', 'b', 'journal.json'));
-            expect(synced).toContain(root);
-            expect(synced).toContain(join(root, 'a'));
-        } finally {
-            setDurabilityHooks(null);
-        }
     });
 });

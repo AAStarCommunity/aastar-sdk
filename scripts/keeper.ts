@@ -4,20 +4,23 @@ import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
 import { noteBalance, type BalanceClock } from './keeper/balanceAlert.js';
 import { absoluteKeeperPath } from './keeper/cliPaths.js';
 import { createCastSigner, killCastChildren } from './keeper/castSigner.js';
-import { acquireKeeperLock, Journal, resyncJournal } from './keeper/journal.js';
-import { reconcileLoaded, Sender, type SendResult } from './keeper/sender.js';
+import { readDeploymentAddresses, type DeploymentAddresses } from './keeper/deploymentConfig.js';
+import { acquireKeeperLock, Journal } from './keeper/journal.js';
+import { defaultMaxSendsPerHour, Sender, type MaintainResult, type SendResult } from './keeper/sender.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
 import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
 import { decideIdentityGate, gateAfterIdentityRead } from './keeper/identityGate.js';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
 import { KEEPER_ENV_ALLOW, parseKeeperEnv, secretEnvNames } from './keeper/secretEnv.js';
-import type { ReplayIntent } from './keeper/replayGuard.js';
 import { runKeeperStep } from './keeper/keeperStep.js';
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 type NetworkName = 'anvil' | 'sepolia' | 'op-sepolia' | 'op-mainnet' | 'mainnet';
 
@@ -84,7 +87,7 @@ function flagPath(args: string[], key: string): string | undefined {
 async function readKeeperEnvFile(filePath: string): Promise<Record<string, string>> {
     let fh: fs.promises.FileHandle;
     try {
-        fh = await fs.promises.open(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+        fh = await fs.promises.open(filePath, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     } catch {
         throw new Error('keeper: env file refused');
     }
@@ -100,21 +103,39 @@ async function readKeeperEnvFile(filePath: string): Promise<Record<string, strin
     }
 }
 
-function priceIntent(signer: Address, superPaymaster: string, paymaster: () => string | null): ReplayIntent {
-    const call = encodeFunctionData({ abi: SUPERPAYMASTER_ABI, functionName: 'updatePrice' }).toLowerCase();
-    return (kind, decoded) => {
-        const to = decoded.to.toLowerCase();
-        const data = decoded.data.toLowerCase();
-        if (kind === 'price-super') return superPaymaster.length > 0 && to === superPaymaster.toLowerCase() && data === call;
-        if (kind === 'price-paymaster') {
-            // A null PaymasterV4 cannot prove a mismatch. Replay stays allowed; a new send is refused upstream.
-            const pm = paymaster();
-            if (!pm) return true;
-            return to === pm.toLowerCase() && data === call;
-        }
-        if (kind === 'cancel') return to === signer.toLowerCase() && data === '0x' && decoded.gas === 21_000n;
-        return false;
-    };
+function parseBoundedInt(raw: string | undefined, fallback: number, min: number, max: number, label: string): number {
+    if (raw === undefined) return fallback;
+    if (raw.length === 0 || raw.length > 8) throw new Error(`keeper: ${label} invalid`);
+    let n = 0;
+    for (let i = 0; i < raw.length; i++) {
+        const c = raw.charCodeAt(i);
+        if (c < 48 || c > 57) throw new Error(`keeper: ${label} invalid`);
+        n = n * 10 + (c - 48);
+    }
+    if (!Number.isInteger(n) || n < min || n > max) throw new Error(`keeper: ${label} invalid`);
+    return n;
+}
+
+/** Live runs must name a fee ceiling. 1..10000 gwei. */
+function parseMaxFeeWei(raw: string | undefined, required: boolean): bigint | null {
+    if (raw === undefined) {
+        if (required) throw new Error('keeper: --max-fee-gwei is required for a live run');
+        return null;
+    }
+    const gwei = parseBoundedInt(raw, 0, 1, 10_000, '--max-fee-gwei');
+    return BigInt(gwei) * 1_000_000_000n;
+}
+
+function drainBudgetMs(): number {
+    const raw = process.env.KEEPER_DRAIN_MS;
+    if (raw === undefined || raw.length === 0) return 120_000;
+    return parseBoundedInt(raw, 120_000, 1, 120_000, 'KEEPER_DRAIN_MS');
+}
+
+function pickAddr(flag: string | undefined, canonicalValue: unknown, deployedValue: string | undefined): `0x${string}` | undefined {
+    const chosen = flag || (typeof canonicalValue === 'string' ? canonicalValue : '') || deployedValue || '';
+    if (!chosen || !isAddress(chosen)) return undefined;
+    return chosen as `0x${string}`;
 }
 
 async function requireMatchingChain(client: PublicClient, expected: number): Promise<void> {
@@ -218,7 +239,6 @@ function usage(): string {
         '   --safety-margin <sec>       refresh before expiry (e.g. 600)',
         '   --dry-run                   print actions without sending tx',
         '   --once                      run one tick then exit',
-        '   --resync-journal            realign the journal to the chain nonce, then exit',
         '   --keystore <path>           encrypted keystore (required unless --dry-run)',
         '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
         '   --signer <address>          address cast must recover (required unless --dry-run)',
@@ -231,6 +251,10 @@ function usage(): string {
         '   --no-paymaster              disable PaymasterV4 updates',
         '   --max-updates-per-day <n>   per-target limit (default 24)',
         '   --max-base-fee-gwei <n>     skip updates if base fee too high',
+        '   --max-fee-gwei <n>          fee ceiling for a live run (required, 1..10000)',
+        '   --max-gas <n>               gas limit ceiling for updatePrice (default 500000)',
+        '   --max-sends-per-hour <n>    signed broadcasts per rolling hour, then all sends stay closed until restart',
+        '   --price-feed <address>      Chainlink ETH/USD feed override',
         '',
         'Telegram notifications (optional):',
         '   - Set env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID',
@@ -299,20 +323,29 @@ async function main() {
     if (hasFlag(args, '--mode') || hasFlag(args, '--cast-account')) {
         throw new Error('keeper: --mode and --cast-account were removed; use --keystore --password-file --signer');
     }
-    for (const gone of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
+    for (const gone of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec', '--resync-journal']) {
         if (hasFlag(args, gone)) throw new Error(`keeper: ${gone} is not part of the price keeper`);
     }
     const dryRun = hasFlag(args, '--dry-run');
     const keystorePath = flagPath(args, '--keystore');
     const passwordFilePath = flagPath(args, '--password-file');
-    const signerAddress = parseSignerFlag(getArgValue(args, '--signer'), !dryRun && !hasFlag(args, '--resync-journal') ? true : Boolean(getArgValue(args, '--signer')));
+    const signerAddress = parseSignerFlag(getArgValue(args, '--signer'), !dryRun ? true : Boolean(getArgValue(args, '--signer')));
     const castBinArg = getArgValue(args, '--cast-bin');
     const castBin = castBinArg === undefined ? 'cast' : absoluteKeeperPath(process.cwd(), castBinArg);
-    const resync = hasFlag(args, '--resync-journal');
-    if (resync && !signerAddress) throw new Error('keeper: --resync-journal requires --signer');
-    if (!dryRun && !resync && (!keystorePath || !passwordFilePath || !signerAddress)) {
+    if (!dryRun && (!keystorePath || !passwordFilePath || !signerAddress)) {
         throw new Error('keeper: live runs require --keystore, --password-file and --signer');
     }
+    const maxFeeWei = parseMaxFeeWei(getArgValue(args, '--max-fee-gwei'), !dryRun && Boolean(keystorePath));
+    const maxGas = BigInt(parseBoundedInt(getArgValue(args, '--max-gas'), 500_000, 21_000, 30_000_000, '--max-gas'));
+    const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
+    if (pollIntervalSec <= 0n || pollIntervalSec > 86_400n) throw new Error('keeper: --poll-interval invalid');
+    const maxSendsPerHour = parseBoundedInt(
+        getArgValue(args, '--max-sends-per-hour'),
+        defaultMaxSendsPerHour(Number(pollIntervalSec)),
+        1,
+        10_000,
+        '--max-sends-per-hour',
+    );
     const journalArg = getArgValue(args, '--journal');
     const journalPath = journalArg === undefined
         ? path.join(os.homedir(), '.aastar-keeper', `${network}.journal.json`)
@@ -327,7 +360,6 @@ async function main() {
         getArgValue(args, '--low-balance-wei'),
         network === 'sepolia' ? LOW_BALANCE_SEPOLIA : LOW_BALANCE_OTHER,
     );
-    const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
@@ -384,76 +416,25 @@ async function main() {
         contracts: canonicalFallback,
     };
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
-
-    if (resync) {
-        if (!signerAddress) throw new Error('keeper: --resync-journal requires --signer');
-        await requireMatchingChain(publicClient, config.chain.id);
-        let releaseResync: (() => Promise<void>) | null = null;
-        try {
-            releaseResync = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
-            const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
-            const chainIo = adaptChainIO(publicClient);
-            const latestRaw = await publicClient.getTransactionCount({ address: signerAddress, blockTag: 'latest' });
-            const pendingRaw = await publicClient.getTransactionCount({ address: signerAddress, blockTag: 'pending' });
-            const asNonce = (value: unknown): bigint => {
-                if (typeof value === 'bigint') return value;
-                if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return BigInt(value);
-                return -1n;
-            };
-            const latestNonce = asNonce(latestRaw);
-            const pendingNonce = asNonce(pendingRaw);
-            if (latestNonce !== pendingNonce) {
-                const unsettled = await resyncJournal(journal, latestNonce, pendingNonce);
-                const reason = unsettled.ok ? 'journal: resync refused unsettled nonce' : unsettled.reason;
-                console.error(reason);
-                await sendTelegramMessage(`[keeper] ${reason}`);
-                throw new Error(reason);
-            }
-            const spForIntent = (getArgValue(args, '--superpaymaster') || canonicalFallback.superPaymaster || '') as Address;
-            const pmForIntent = (getArgValue(args, '--paymaster') || canonicalFallback.paymasterV4 || '') as Address;
-            const report = await reconcileLoaded({
-                chain: chainIo,
-                journal,
-                chainId: config.chain.id,
-                signerAddress,
-                intent: priceIntent(signerAddress, spForIntent, () => pmForIntent || null),
-            });
-            const consumed = report.consumedOpen && report.reason === 'sender: foreign nonce';
-            if (!report.ok && !consumed) {
-                const reason = report.reason ?? 'sender: send failed';
-                console.error(reason);
-                await sendTelegramMessage(`[keeper] ${reason}`);
-                throw new Error(reason);
-            }
-            const result = await resyncJournal(journal, latestNonce, pendingNonce, { consumedOpen: consumed });
-            if (!result.ok) {
-                console.error(result.reason);
-                await sendTelegramMessage(`[keeper] ${result.reason}`);
-                throw new Error(result.reason);
-            }
-            const line = `journal resynced base ${result.from} -> ${result.to} dropped ${result.dropped}`;
-            console.log(line);
-            await sendTelegramMessage(`[keeper] ${line}`);
-        } finally {
-            if (releaseResync) await releaseResync();
-        }
-        return;
-    }
+    const deployed: DeploymentAddresses = await readDeploymentAddresses(path.join(REPO_ROOT, `config.${network}.json`));
+    const priceFeedFlag = getArgValue(args, '--price-feed');
+    if (priceFeedFlag !== undefined && !isAddress(priceFeedFlag)) throw new Error('keeper: --price-feed invalid');
 
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
-    const registryForIdentity = registryFlag ?? (canonical?.registry as Address | undefined);
-    if (!dryRun && signerAddress && (!registryForIdentity || !isAddress(registryForIdentity))) {
+    const registryForIdentity = pickAddr(registryFlag ?? undefined, canonical?.registry, deployed.registry);
+    if (!dryRun && signerAddress && !registryForIdentity) {
         throw new Error(`signer identity: ${network} has no registry address; pass --registry <address>`);
     }
     await requireMatchingChain(publicClient, config.chain.id);
-    const superPaymasterDefault = (canonical?.superPaymaster || config.contracts?.superPaymaster) as `0x${string}`;
-    const priceFeed = (canonical?.priceFeed || config.contracts.priceFeed) as `0x${string}`;
-    const superPaymaster = (getArgValue(args, '--superpaymaster') || superPaymasterDefault) as `0x${string}`;
+    const superPaymaster = pickAddr(getArgValue(args, '--superpaymaster'), canonical?.superPaymaster, deployed.superPaymaster);
+    const priceFeed = pickAddr(priceFeedFlag, canonical?.priceFeed, deployed.priceFeed);
+    if (!priceFeed) throw new Error('keeper: priceFeed unresolved');
+    if (!superPaymaster) throw new Error('keeper: superPaymaster unresolved');
 
-    const paymasterFactory = (canonical?.paymasterFactory || config.contracts.paymasterFactory) as `0x${string}`;
+    const paymasterFactory = pickAddr(undefined, canonical?.paymasterFactory, deployed.paymasterFactory) ?? ZERO_ADDRESS;
     const paymasterFromArgs = getArgValue(args, '--paymaster') as `0x${string}` | undefined;
     const paymasterFromCanonical = canonical?.paymasterV4 as `0x${string}` | undefined;
-    const paymasterFromConfig = config.contracts.paymasterV4 as `0x${string}` | undefined;
+    const paymasterFromConfig = deployed.paymasterV4;
     const paymasterOperatorFromArgs = getArgValue(args, '--paymaster-operator') as `0x${string}` | undefined;
     const paymasterOperator =
         (paymasterOperatorFromArgs ||
@@ -609,13 +590,12 @@ async function main() {
         else alertLine(noted.alert);
     }
 
-    let releaseLock: (() => Promise<void>) | null = null;
     let stopping = false;
     let sleepTimer: ReturnType<typeof setTimeout> | null = null;
     const refreshAlerted = new Set<string>();
     try {
     if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
-        releaseLock = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
+        await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
         const opened = await journal.load();
         if (opened === 'corrupt' || opened === 'mismatch' || opened === 'unsafe') {
@@ -624,22 +604,24 @@ async function main() {
                 : opened === 'unsafe' ? 'sender: journal unsafe' : 'sender: journal corrupt';
             console.error(reason);
             await sendTelegramMessage(`[keeper] ${reason}`);
-            await releaseLock();
-            releaseLock = null;
             process.exit(1);
         }
+        if (maxFeeWei === null) throw new Error('keeper: --max-fee-gwei is required for a live run');
         sender = new Sender({
             chain: adaptChainIO(publicClient),
             signer: createCastSigner({ castBin, keystorePath, passwordFilePath, signerAddress }),
             journal,
             signerAddress,
             chainId: config.chain.id,
-            intent: priceIntent(signerAddress, superPaymaster, () => paymaster),
+            superPaymaster: !disableSuperPaymaster && superPaymaster && isAddress(superPaymaster) ? superPaymaster : null,
+            paymaster: () => (disablePaymaster || !paymaster || !isAddress(paymaster) ? null : paymaster),
             enabledKinds: {
                 'price-super': !disableSuperPaymaster,
                 'price-paymaster': !disablePaymaster,
-                pause: false,
             },
+            maxGas,
+            maxFeeWei,
+            maxSendsPerHour,
             alert: alertLine,
         });
     }
@@ -650,8 +632,6 @@ async function main() {
         if (!identity.ok) {
             for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
             await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`);
-            if (releaseLock) await releaseLock();
-            releaseLock = null;
             process.exit(1);
         }
         console.log('signer-identity=ok');
@@ -668,14 +648,8 @@ async function main() {
         stopping = true;
         if (sleepTimer) clearTimeout(sleepTimer);
         sender?.stop();
-        if (sender) await sender.drain(120_000);
+        if (sender) await sender.drain(drainBudgetMs());
         killCastChildren();
-        if (sender) await sender.drain(120_000);
-        if (releaseLock) {
-            const release = releaseLock;
-            releaseLock = null;
-            await release();
-        }
         await sendTelegramMessage(
             `[keeper] stopped (${signal})\nnetwork=${network}\n` +
                 `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
@@ -765,6 +739,26 @@ async function main() {
         console.log(section(`TICK #${tickIndex} @ ${new Date().toISOString()}`));
         const currentSec = nowSec();
         await maybeAlertLowBalance();
+        if (sender && !stopping) {
+            let settled: MaintainResult = { status: 'idle' };
+            try {
+                settled = await sender.maintain();
+            } catch {
+                settled = { status: 'refused', reason: 'sender: send failed' };
+            }
+            if (settled.status === 'consumed' && settled.receipt && settled.hash) {
+                const confirmed = settled.receipt.status === 'success' ? 'receipt' : 'reverted';
+                console.log(`confirmed: ${confirmed} kind=${settled.kind ?? 'price'} tx=${settled.hash}`);
+                await sendTelegramMessage(
+                    `[keeper] in-flight settled\nnetwork=${network}\nkind=${settled.kind ?? 'price'}\ntx=${settled.hash}\nconfirmed=${confirmed}`
+                );
+            } else if (settled.status === 'consumed' && settled.unseen) {
+                console.log('nonce consumed (not by a tx we can see)');
+                alertLine('nonce consumed (not by a tx we can see)');
+            } else if (settled.status === 'refused' && settled.reason) {
+                console.log(`refused: kind=maintain reason=${settled.reason}`);
+            }
+        }
 
         if (currentSec - dayStartSec >= 86400n) {
             updatesTodayByPaymaster.clear();
@@ -1162,7 +1156,7 @@ async function main() {
         if (stopping) break;
     }
     } finally {
-        if (!stopping && releaseLock) await releaseLock();
+        if (!stopping) process.exit(0);
     }
 }
 

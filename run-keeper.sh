@@ -53,19 +53,20 @@ case "$NETWORK" in
     ;;
 esac
 
-# Signing: an encrypted keystore. This script does not source .env files and does not pass inherited secrets.
-# --resync-journal only needs --signer. Live runs still need the keystore.
-if has_arg --resync-journal "$@"; then
-  if ! has_arg --signer "$@"; then
-    echo "error: --resync-journal requires --signer" >&2
-    exit 1
-  fi
-elif ! has_arg --dry-run "$@"; then
+# Signing: an encrypted keystore. This script does not source .env files.
+# Secrets stay in --env-file. They are never placed on argv, including the argv of env.
+if ! has_arg --dry-run "$@"; then
   if ! has_arg --keystore "$@" || ! has_arg --password-file "$@" || ! has_arg --signer "$@"; then
     echo "error: live runs require --keystore, --password-file and --signer (or pass --dry-run)" >&2
     exit 1
   fi
 fi
+for secret_name in RPC_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+  if [ -n "${!secret_name-}" ]; then
+    echo "error: ${secret_name} is set in the environment; put it in --env-file and unset it before launching" >&2
+    exit 1
+  fi
+done
 
 CAST_ARGS=()
 if [ -n "${KEEPER_CAST_BIN:-}" ] && ! has_arg --cast-bin "$@"; then
@@ -85,26 +86,9 @@ fi
 EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT}"
 
 # ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
-# env -i drops inherited secrets. Only PATH, HOME, and the keeper allowlist are forwarded.
+# env -i starts from PATH and HOME only. Node reads RPC_URL and Telegram from --env-file, not from argv.
 echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
-launch_env=( "PATH=${PATH:-/usr/bin:/bin}" "HOME=${HOME:-}" )
-pass_if_set() {
-  local k="$1" v
-  eval "v=\${$k-}"
-  if [ -n "$v" ]; then
-    launch_env+=( "${k}=${v}" )
-  fi
-}
-for k in \
-  RPC_URL BUNDLER_URL TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID OFFICIAL_OPERATOR EXTERNAL_ETHUSD_URL \
-  KEEPER_HEALTH_INTERVAL_SEC KEEPER_VOLATILITY_THRESHOLD_BPS KEEPER_VOLATILITY_COOLDOWN_SEC \
-  KEEPER_CHAINLINK_STALE_SEC KEEPER_PAYMASTER_MISSING_ALERT_SEC KEEPER_POLL_INTERVAL \
-  KEEPER_SAFETY_MARGIN KEEPER_HEALTH_INTERVAL KEEPER_VOL_BPS KEEPER_VOL_COOLDOWN \
-  KEEPER_ETHUSD_URL KEEPER_CAST_BIN
-do
-  pass_if_set "$k"
-done
-exec env -i "${launch_env[@]}" pnpm exec tsx scripts/keeper.ts \
+exec env -i PATH="${PATH:-/usr/bin:/bin}" HOME="${HOME:-}" pnpm exec tsx scripts/keeper.ts \
   --network "$NETWORK" \
   ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
   --external-ethusd-url "$EXT_URL" \
@@ -114,4 +98,5 @@ exec env -i "${launch_env[@]}" pnpm exec tsx scripts/keeper.ts \
   --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" \
   --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" \
   ${CAST_ARGS[@]+"${CAST_ARGS[@]}"} \
+  -- \
   "$@"

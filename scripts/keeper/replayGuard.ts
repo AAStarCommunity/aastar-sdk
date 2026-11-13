@@ -8,7 +8,7 @@ import {
     type Hex,
     type TransactionSerialized,
 } from 'viem';
-import type { JournalKind } from './journal.js';
+import type { IntentKind } from './journal.js';
 
 export interface ReplayIdentity {
     chainId: number;
@@ -17,13 +17,15 @@ export interface ReplayIdentity {
 
 export interface ReplayEntry {
     nonce: number;
-    kind: JournalKind;
+    kind: IntentKind;
     to: Hex;
     data: Hex;
     gasLimit: bigint;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
 }
 
-export type ReplayIntent = (kind: JournalKind, decoded: { to: Address; data: Hex; gas: bigint }) => boolean;
+export type ReplayIntent = (kind: IntentKind, decoded: { to: Address; data: Hex; gas: bigint }) => boolean;
 
 function norm(value: string): string {
     return value.toLowerCase();
@@ -59,6 +61,7 @@ export async function replayRawAllowed(
     if (norm(from) !== norm(identity.signer)) return false;
     if (tx.chainId !== identity.chainId || tx.nonce !== entry.nonce) return false;
     if (norm(tx.to) !== norm(entry.to) || data !== norm(entry.data) || gas !== entry.gasLimit) return false;
+    if (tx.maxFeePerGas !== entry.maxFeePerGas || tx.maxPriorityFeePerGas !== entry.maxPriorityFeePerGas) return false;
     try {
         return intent(entry.kind, { to: tx.to, data: (tx.data ?? '0x') as Hex, gas }) === true;
     } catch {

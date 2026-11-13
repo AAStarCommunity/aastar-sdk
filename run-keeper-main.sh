@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Flag checks and the env -i allowlist live in run-keeper.sh. Pass --keystore, --password-file and --signer, or --dry-run.
+# Flag checks live in run-keeper.sh. Pass --env-file for RPC_URL and Telegram. Do not export those names.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 exec ./run-keeper.sh op-mainnet \

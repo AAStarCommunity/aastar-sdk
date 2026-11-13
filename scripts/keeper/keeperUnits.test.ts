@@ -2,10 +2,12 @@
  * Pure decisions for identity scheduling, price confirmation, and env scrub.
  */
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { identityDue, scheduledIdentityAt } from './identitySchedule';
@@ -141,7 +143,7 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             const code = await new Promise<number | null>((resolve) => child.once('close', resolve));
             return { code, out };
         };
-        for (const flag of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
+        for (const flag of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec', '--resync-journal']) {
             const rejected = await run([flag, '1']);
             expect(rejected.code, rejected.out).toBe(1);
             expect(rejected.out).toContain(`keeper: ${flag} is not part of the price keeper`);
@@ -158,11 +160,64 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             '--keystore', join(cwd, 'ks'),
             '--password-file', join(cwd, 'pw'),
             '--signer', '0x1111111111111111111111111111111111111111',
+            '--max-fee-gwei', '1',
             '--once',
             '--no-superpaymaster',
             '--disable-paymaster',
         ], { RPC_URL: 'http://127.0.0.1:1' }, 'anvil', false);
         expect(noRegistry.code, noRegistry.out).toBe(1);
-        expect(noRegistry.out).toContain('signer identity: anvil has no registry address; pass --registry <address>');
+        expect(noRegistry.out).toContain('keeper: chain id unreadable');
+    });
+
+    it('anvil config path resolves priceFeed from config.anvil.json', async () => {
+        if (!existsSync(TSX_LOADER)) throw new Error('tsx loader missing');
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (chunk) => { body += chunk; });
+            req.on('end', () => {
+                const parsed = JSON.parse(body) as { id: unknown; method: string };
+                const result = parsed.method === 'eth_chainId' ? '0x7a69' : '0x0';
+                res.end(JSON.stringify({ jsonrpc: '2.0', id: parsed.id, result }));
+            });
+        });
+        await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
+        const address = server.address() as AddressInfo;
+        const cwd = mkdtempSync(join(tmpdir(), 'keeper-anvil-'));
+        dirs.push(cwd);
+        const fifo = join(cwd, 'env.fifo');
+        const made = spawn('mkfifo', [fifo]);
+        expect(await new Promise<number | null>((resolve) => made.once('exit', resolve))).toBe(0);
+        const child = spawn(process.execPath, [
+            '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
+            '--network', 'anvil', '--dry-run', '--once', '--no-logo', '--disable-paymaster', '--no-superpaymaster',
+        ], {
+            cwd,
+            env: { PATH: process.env.PATH ?? '', HOME: cwd, RPC_URL: `http://127.0.0.1:${address.port}` },
+        });
+        let out = '';
+        child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { out += chunk.toString(); });
+        const code = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(null); }, 20_000);
+            child.once('close', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        server.close();
+        expect(out, `code=${code}`).toContain('priceFeed=0x5D42EBdBBa61412295D7b0302d6F50aC449Ddb4F');
+
+        const started = Date.now();
+        const fifoChild = spawn(process.execPath, [
+            '--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--',
+            '--network', 'sepolia', '--dry-run', '--once', '--no-logo', '--env-file', fifo,
+        ], { cwd, env: { PATH: process.env.PATH ?? '', HOME: cwd } });
+        let fifoOut = '';
+        fifoChild.stdout.on('data', (chunk) => { fifoOut += chunk.toString(); });
+        fifoChild.stderr.on('data', (chunk) => { fifoOut += chunk.toString(); });
+        const fifoCode = await new Promise<number | null>((resolve) => {
+            const timer = setTimeout(() => { fifoChild.kill('SIGKILL'); resolve(null); }, 15_000);
+            fifoChild.once('close', (status) => { clearTimeout(timer); resolve(status); });
+        });
+        expect(Date.now() - started, fifoOut).toBeLessThan(10_000);
+        expect(fifoCode, fifoOut).toBe(1);
+        expect(fifoOut).toContain('keeper: env file refused');
     });
 });
