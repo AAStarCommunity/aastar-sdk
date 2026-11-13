@@ -1,5 +1,5 @@
 /**
- * Pure decisions for identity scheduling, price confirmation, and env scrub.
+ * Pure decisions for identity scheduling, price confirmation, env scrub, and the pin check.
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync } from 'node:fs';
 import { identityDue, scheduledIdentityAt } from './identitySchedule';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './priceConfirm';
+import { pinCheckDecision } from './pinCheck';
 import { scrubSecretEnv } from './secretEnv';
 import type { ChainReceipt } from './sender';
 
@@ -57,6 +58,13 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(report.telegram).toBe('[keeper] fatal\nnetwork=sepolia\nclass=Error');
         expect(report.stderr).toBe('boom <url>');
         expect(report.telegram).not.toContain('http');
+    });
+
+    it('skips the pin check only before the first blob and fails a later gh error', () => {
+        expect(pinCheckDecision('unready', [])).toEqual({ exitCode: 0, lines: ['SKIP'] });
+        expect(pinCheckDecision('ready', ['match', 'error']).exitCode).toBe(1);
+        expect(pinCheckDecision('ready', ['match', 'match'])).toEqual({ exitCode: 0, lines: ['CHECKED', 'CHECKED', 'CHECKED 2'] });
+        expect(pinCheckDecision('ready', []).exitCode).toBe(1);
     });
 
     it('scrubs secret env names and the keeper probe no longer has them', async () => {
@@ -108,7 +116,7 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(out).not.toContain('keeper-sentinel');
     });
 
-    it('rejects pause-duty flags and a registry-less network', async () => {
+    it('rejects a pause flag with no value, a short interval, a partial pause config, and a registry-less network', async () => {
         if (!existsSync(TSX_LOADER)) throw new Error('tsx loader missing');
         const run = async (args: string[], env: NodeJS.ProcessEnv = {}, network = 'sepolia', dryRun = true) => {
             const cwd = mkdtempSync(join(tmpdir(), 'keeper-flags-'));
@@ -123,11 +131,18 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             const code = await new Promise<number | null>((resolve) => child.once('close', resolve));
             return { code, out };
         };
-        for (const flag of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
-            const rejected = await run([flag, '1']);
-            expect(rejected.code, rejected.out).toBe(1);
-            expect(rejected.out).toContain(`keeper: ${flag} is not part of the price keeper`);
-        }
+        const missingRole = await run(['--role-sync-budget-sec']);
+        expect(missingRole.code, missingRole.out).toBe(1);
+        expect(missingRole.out).toContain('keeper: --role-sync-budget-sec requires a value');
+        const missingInterval = await run(['--pause-interval-sec']);
+        expect(missingInterval.code, missingInterval.out).toBe(1);
+        expect(missingInterval.out).toContain('keeper: --pause-interval-sec requires a value');
+        const flagAsValue = await run(['--pause-offset-sec', '--once']);
+        expect(flagAsValue.code, flagAsValue.out).toBe(1);
+        expect(flagAsValue.out).toContain('keeper: --pause-offset-sec requires a value');
+        const short = await run(['--pause-interval-sec', '599']);
+        expect(short.code, short.out).toBe(1);
+        expect(short.out).toContain('keeper: --pause-interval-sec invalid');
         const badRegistry = await run(['--registry']);
         expect(badRegistry.code, badRegistry.out).toBe(1);
         expect(badRegistry.out).toContain('keeper: --registry requires a value');
@@ -146,5 +161,10 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         ], { RPC_URL: 'http://127.0.0.1:1' }, 'anvil', false);
         expect(noRegistry.code, noRegistry.out).toBe(1);
         expect(noRegistry.out).toContain('signer identity: anvil has no registry address; pass --registry <address>');
+        writeFileSync(join(cwd, 'pause.json'), '{"superPaymaster":"0x1111111111111111111111111111111111111111"}\n');
+        const partial = await run(['--pause-config', join(cwd, 'pause.json')]);
+        expect(partial.code, partial.out).toBe(1);
+        expect(partial.out).toContain('pause-config: partial');
+        expect(partial.out).not.toContain('pauseDuty=disabled');
     });
 });

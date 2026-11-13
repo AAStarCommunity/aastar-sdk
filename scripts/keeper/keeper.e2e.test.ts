@@ -10,12 +10,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import { encodeFunctionResult, getAddress, parseAbi, toFunctionSelector } from 'viem';
+import { encodeEventTopics, encodeFunctionResult, getAddress, keccak256, pad, parseAbi, toFunctionSelector, type Hex } from 'viem';
+import { REGISTRY_PAUSE_ABI, SUPER_PAYMASTER_PAUSE_ABI } from './spPausePin';
 
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
 // The keeper runs IN this node process via the repo's pinned tsx loader — not through the tsx
@@ -211,5 +212,87 @@ describe('keeper.ts main loop: a boot-time V4 failure is retried and V4 is refre
         const out = await runKeeper(fake.url, ['--signer', SIGNER, '--registry', REGISTRY, '--once'], (o) => o.includes('balance read failed') || /TICK #2/.test(o));
         expect(out).toContain('balance read failed');
         expect(out).not.toContain('low signer balance');
+    }, 60_000);
+
+    it('dry-run with --pause-config logs the pause it would send', async () => {
+        const code = '0x6080' as Hex;
+        const impl = getAddress('0x0000000000000000000000000000000000000a11');
+        const registry = getAddress('0x0000000000000000000000000000000000000b22');
+        const operator = getAddress('0x0000000000000000000000000000000000000c33');
+        const codeHash = keccak256(code);
+        const topic0 = encodeEventTopics({ abi: SUPER_PAYMASTER_PAUSE_ABI, eventName: 'OperatorConfigured' })[0];
+        const pauseDir = mkdtempSync(join(tmpdir(), 'keeper-pause-cfg-'));
+        cleanups.push(() => rmSync(pauseDir, { recursive: true, force: true }));
+        const pausePath = join(pauseDir, 'pause.json');
+        const journalPath = join(pauseDir, 'journal.json');
+        writeFileSync(pausePath, JSON.stringify({
+            superPaymaster: getAddress(SP),
+            registry,
+            startBlock: 1,
+            registryStartBlock: 1,
+            implementation: impl,
+            implementationCodeHash: codeHash,
+            proxyCodeHash: codeHash,
+            spRelease: 'v5.5.0-rc.8',
+        }));
+        const registrySel = toFunctionSelector('function REGISTRY()');
+        const operatorsSel = toFunctionSelector('function operators(address)');
+        const hasRoleSel = toFunctionSelector('function hasRole(bytes32,address)');
+        const roleSel = toFunctionSelector('function getRoleConfig(bytes32)');
+        const stakeSel = toFunctionSelector('function getEffectiveStake(address,bytes32)');
+        const methods: string[] = [];
+        const server = createServer((req, res) => {
+            let body = '';
+            req.on('data', (c) => (body += c));
+            req.on('end', () => {
+                const msg = JSON.parse(body);
+                const now = BigInt(Math.floor(Date.now() / 1000));
+                const one = (m: { id: unknown; method: string; params?: unknown[] }) => {
+                    methods.push(m.method);
+                    const params = m.params ?? [];
+                    if (m.method === 'eth_chainId') return { jsonrpc: '2.0', id: m.id, result: '0xaa36a7' };
+                    if (m.method === 'eth_blockNumber') return { jsonrpc: '2.0', id: m.id, result: '0x100' };
+                    if (m.method === 'eth_getBlockByNumber') {
+                        return { jsonrpc: '2.0', id: m.id, result: { number: '0x100', hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now.toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
+                    }
+                    if (m.method === 'eth_getCode') return { jsonrpc: '2.0', id: m.id, result: code };
+                    if (m.method === 'eth_getStorageAt') return { jsonrpc: '2.0', id: m.id, result: pad(impl, { size: 32 }) };
+                    if (m.method === 'eth_getLogs') {
+                        return { jsonrpc: '2.0', id: m.id, result: [{ address: getAddress(SP), topics: [topic0, pad(operator, { size: 32 })], blockNumber: '0x10', removed: false }] };
+                    }
+                    if (m.method === 'eth_call') {
+                        const tx = params[0] as { to?: string; data?: string };
+                        const data = String(tx.data ?? '').slice(0, 10).toLowerCase();
+                        const to = String(tx.to ?? '').toLowerCase();
+                        let result = '0x' + '00'.repeat(32);
+                        if (data === registrySel) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'REGISTRY', result: registry });
+                        else if (data === operatorsSel) result = encodeFunctionResult({ abi: SUPER_PAYMASTER_PAUSE_ABI, functionName: 'operators', result: [0n, true, false, operator, 0, 0, operator, 0n, 0n] });
+                        else if (data === hasRoleSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'hasRole', result: false });
+                        else if (data === roleSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getRoleConfig', result: { minStake: 1000n, ticketPrice: 0n, slashThreshold: 0, slashBase: 0, slashInc: 0, slashMax: 0, exitFeePercent: 0, isActive: true, minExitFee: 0n, description: 'role', owner: operator, roleLockDuration: 0n } });
+                        else if (data === stakeSel) result = encodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getEffectiveStake', result: 1n });
+                        else if (data === sel('function latestRoundData()')) result = encodeFunctionResult({ abi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, now, now, 1n] });
+                        else if (data === sel('function decimals()')) result = encodeFunctionResult({ abi, functionName: 'decimals', result: 8 });
+                        else if (data === sel('function priceStalenessThreshold()')) result = encodeFunctionResult({ abi, functionName: 'priceStalenessThreshold', result: 3600n });
+                        else if (data === sel('function ethUsdPriceFeed()')) result = encodeFunctionResult({ abi, functionName: 'ethUsdPriceFeed', result: FEED });
+                        else if (data === sel('function cachedPrice()') && to === SP) result = encodeFunctionResult({ abi: spCache, functionName: 'cachedPrice', result: [3000n * 10n ** 8n, now, 1n, 8] });
+                        else if (data === sel('function cachedPrice()') && to === V4) result = encodeFunctionResult({ abi: v4Cache, functionName: 'cachedPrice', result: [0n, 0] });
+                        return { jsonrpc: '2.0', id: m.id, result };
+                    }
+                    return { jsonrpc: '2.0', id: m.id, error: { code: -32601, message: `fake: unexpected ${m.method}` } };
+                };
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg)));
+            });
+        });
+        await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+        cleanups.push(() => closeServer(server));
+        const rpc = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+        const would = `action=sendTx kind=pause method=pauseUnderstakedOperator(address) target=${getAddress(SP)} operator=${operator} (dry-run)`;
+        const out = await runKeeper(rpc, ['--once', '--pause-config', pausePath, '--pause-offset-sec', '86400', '--journal', journalPath], (o) => o.includes('pause-round=ok') || o.includes('pause-round=FAILED'));
+        expect(out).toContain(would);
+        expect(out).toContain('pause-round=ok');
+        expect(out).not.toMatch(/nothing understaked/);
+        expect(methods).toContain('eth_getLogs');
+        expect(existsSync(`${journalPath}.pause-state.json`)).toBe(false);
     }, 60_000);
 });

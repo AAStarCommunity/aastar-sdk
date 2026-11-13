@@ -1,4 +1,4 @@
-import { createPublicClient, encodeFunctionData, formatGwei, http, isAddress, parseAbi, type Address } from 'viem';
+import { createPublicClient, encodeFunctionData, formatGwei, http, isAddress, parseAbi, type Address, type Hex } from 'viem';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -12,10 +12,12 @@ import { createCastSigner } from './keeper/castSigner.js';
 import { acquireKeeperLock, Journal, resyncJournal } from './keeper/journal.js';
 import { Sender, type SendResult } from './keeper/sender.js';
 import { checkSignerIdentity, DEPLOYER_ADDRESS, type IdentityResult } from './keeper/signerGuard.js';
-import { adaptChainIO, adaptHeadChain, asIdentityChain } from './keeper/viemAdapter.js';
+import { assertRegistryStart, assertStartBlock, loadPauseConfigFile, pauseRoundAlert, runPauseRound, verifySpDeployment, type PauseDutyConfig } from './keeper/pauseDuty.js';
+import { adaptChainIO, adaptPauseChain, asIdentityChain } from './keeper/viemAdapter.js';
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
 import { decideIdentityGate } from './keeper/identityGate.js';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
+import { catchUpRoleLogs, syncRoleLogs } from './keeper/roleLogs.js';
 import { ignoredSecretWarning, pinScrubbedSecrets, scrubSecretEnv } from './keeper/secretEnv.js';
 import { runKeeperStep } from './keeper/keeperStep.js';
 
@@ -153,14 +155,18 @@ function usage(): string {
         '   --poll-interval <sec>       check interval (e.g. 180)',
         '   --safety-margin <sec>       refresh before expiry (e.g. 600)',
         '   --dry-run                   print actions without sending tx',
-        '   --once                      run one tick then exit',
+        '   --once                      run one tick then exit; a pause round runs immediately',
         '   --resync-journal            realign the journal to the chain nonce, then exit',
+        '   --role-sync-budget-sec <n>  startup role-log catch-up budget (default 900)',
         '   --keystore <path>           encrypted keystore (required unless --dry-run)',
         '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
         '   --signer <address>          address cast must recover (required unless --dry-run)',
         '   --cast-bin <path>           cast binary (default: cast)',
         '   --journal <path>            nonce journal (default: ~/.aastar-keeper/<network>.journal.json)',
         '   --registry <address>        registry used for signer identity',
+        '   --pause-config <path>       v5.5.0-rc.8 pause-duty config; omit to disable',
+        '   --pause-interval-sec <n>    pause round interval, minimum 600 (default 3600)',
+        '   --pause-offset-sec <n>      delay before the first pause round (default 1800, ignored with --once)',
         '   --low-balance-wei <n>       signer balance alert threshold',
         '   --no-superpaymaster         disable SuperPaymaster updates',
         '   --no-paymaster              disable PaymasterV4 updates',
@@ -193,6 +199,19 @@ function shortUsage(): string {
         `health: --health-interval 1800 (telegram periodic ok status)`,
         `anomaly: --external-ethusd-url <url> --volatility-threshold-bps 150 (1.50%)`
     ].join('\n');
+}
+
+function parseWhole(raw: string | undefined, fallback: bigint, label: string, min: bigint): bigint {
+    const text = raw ?? '';
+    const body = text.length === 0 ? fallback.toString() : text;
+    if (body.length === 0 || body.length > 18) throw new Error(`keeper: ${label} invalid`);
+    for (let i = 0; i < body.length; i++) {
+        const c = body.charCodeAt(i);
+        if (c < 48 || c > 57) throw new Error(`keeper: ${label} invalid`);
+    }
+    const n = BigInt(body);
+    if (n < min) throw new Error(`keeper: ${label} invalid`);
+    return n;
 }
 
 function parseWeiFlag(raw: string | undefined, fallback: bigint): bigint {
@@ -231,9 +250,6 @@ async function main() {
     if (hasFlag(args, '--mode') || hasFlag(args, '--cast-account')) {
         throw new Error('keeper: --mode and --cast-account were removed; use --keystore --password-file --signer');
     }
-    for (const gone of ['--pause-config', '--pause-interval-sec', '--pause-offset-sec', '--role-sync-budget-sec']) {
-        if (hasFlag(args, gone)) throw new Error(`keeper: ${gone} is not part of the price keeper`);
-    }
     const dryRun = hasFlag(args, '--dry-run');
     const keystorePath = getArgValue(args, '--keystore');
     const passwordFilePath = getArgValue(args, '--password-file');
@@ -246,6 +262,9 @@ async function main() {
     }
     const journalPath = getArgValue(args, '--journal')
         || path.join(os.homedir(), '.aastar-keeper', `${network}.journal.json`);
+    const pauseConfigPath = getArgValue(args, '--pause-config');
+    const pauseIntervalSec = parseWhole(requireArgValue(args, '--pause-interval-sec'), 3600n, '--pause-interval-sec', 600n);
+    const pauseOffsetSec = parseWhole(requireArgValue(args, '--pause-offset-sec'), 1800n, '--pause-offset-sec', 0n);
     const registryFlagRaw = requireArgValue(args, '--registry');
     const registryFlag = registryFlagRaw
         ? (isAddress(registryFlagRaw) ? registryFlagRaw as Address : null)
@@ -255,6 +274,9 @@ async function main() {
         getArgValue(args, '--low-balance-wei'),
         network === 'sepolia' ? LOW_BALANCE_SEPOLIA : LOW_BALANCE_OTHER,
     );
+    let pauseConfig: PauseDutyConfig | null = null;
+    let pauseDisabledReason = 'no --pause-config';
+    if (pauseConfigPath) pauseConfig = loadPauseConfigFile(pauseConfigPath);
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
@@ -265,6 +287,7 @@ async function main() {
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
     const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
     const once = hasFlag(args, '--once');
+    const roleSyncBudgetSec = parseWhole(requireArgValue(args, '--role-sync-budget-sec'), 900n, '--role-sync-budget-sec', 1n);
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
@@ -359,7 +382,7 @@ async function main() {
     }
 
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
-    const registryForIdentity = registryFlag ?? (canonical?.registry as Address | undefined);
+    const registryForIdentity = pauseConfig?.registry ?? registryFlag ?? (canonical?.registry as Address | undefined);
     if (!dryRun && signerAddress && (!registryForIdentity || !isAddress(registryForIdentity))) {
         throw new Error(`signer identity: ${network} has no registry address; pass --registry <address>`);
     }
@@ -416,6 +439,7 @@ async function main() {
     console.log(`priceFeed=${priceFeed}`);
     console.log(`signing=${dryRun ? 'dry-run' : 'keystore'}`);
     console.log(`signer=${signerAddress ?? 'none'}`);
+    console.log(`pauseDuty=${pauseConfig ? `enabled ${pauseConfig.spRelease}` : `disabled (${pauseDisabledReason})`}`);
     console.log(`pollIntervalSec=${pollIntervalSec.toString()}`);
     console.log(`safetyMarginSec=${safetyMarginSec.toString()}`);
     console.log(`healthIntervalSec=${healthIntervalSec.toString()}`);
@@ -460,7 +484,8 @@ async function main() {
     console.log('dm: message bot /start first');
     console.log('group/channel: add bot and allow posting');
 
-    const headChain = adaptHeadChain(publicClient);
+    const pauseChain = adaptPauseChain(publicClient);
+    const pauseStatePath = `${journalPath}.pause-state.json`;
     let sender: Sender | null = null;
 
     const updatesTodayByPaymaster = new Map<string, number>();
@@ -476,6 +501,8 @@ async function main() {
 
     const countedTx = new Set<string>();
     const refusedReasons = new Set<string>();
+    const pauseReasonAlert = { key: '' };
+    let nextPauseAt = once && pauseConfig ? Date.now() : Date.now() + Number(pauseOffsetSec) * 1000;
     let nextIdentityAt = 0;
     let lastIdentityOkAt = 0;
     let identityGateKey = '';
@@ -490,22 +517,56 @@ async function main() {
         return { ok: false, kind: 'read-failed', problems };
     }
 
-    async function evaluateIdentity(): Promise<IdentityResult> {
+    async function evaluateIdentity(startup: boolean): Promise<IdentityResult> {
         if (!signerAddress) return readFailed(['signer missing']);
-        const head = await headChain.latestHeader();
+        const head = await pauseChain.latestHeader();
         if (!head) return readFailed(['latest block unavailable']);
-        const sp = superPaymaster as Address;
-        const registryAddr = registryFlag ?? (canonical?.registry as Address | undefined);
+        const sp = (pauseConfig?.superPaymaster ?? superPaymaster) as Address;
+        const registryAddr = (pauseConfig?.registry ?? registryFlag ?? (canonical?.registry as Address | undefined));
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
+        let roleLogs: { roleId: Hex }[] | null = null;
+        let deploymentProblem: string | undefined;
+        if (pauseConfig) {
+            const deployment = await verifySpDeployment(pauseChain, pauseConfig, head.hash);
+            if (deployment) {
+                deploymentProblem = deployment;
+            } else {
+                if (pauseConfig.registryStartBlock > head.number) return readFailed(['role logs missing']);
+                const finalized = await pauseChain.finalizedBlock();
+                if (finalized === null) return readFailed(['role logs missing']);
+                const roleOpts = {
+                    chain: pauseChain,
+                    statePath: `${journalPath}.role-state.json`,
+                    chainId: config.chain.id,
+                    registry: registryAddr,
+                    registryStartBlock: pauseConfig.registryStartBlock,
+                    head: head.number,
+                    finalized,
+                };
+                const synced = startup
+                    ? await catchUpRoleLogs({
+                        ...roleOpts,
+                        budgetMs: Number(roleSyncBudgetSec) * 1000,
+                        now: () => Date.now(),
+                        log: (line) => console.log(line),
+                    })
+                    : await syncRoleLogs(roleOpts);
+                if (!synced.ok) return readFailed([synced.reason]);
+                roleLogs = synced.roleIds.map((roleId) => ({ roleId }));
+            }
+        }
         return checkSignerIdentity({
-            chain: asIdentityChain(headChain),
+            chain: asIdentityChain(pauseChain),
             blockHash: head.hash,
             signer: signerAddress,
             sp,
             registry: registryAddr,
             deployers: [DEPLOYER_ADDRESS],
+            pauseDutyEnabled: Boolean(pauseConfig),
+            roleLogs,
+            deploymentProblem,
         });
     }
 
@@ -531,6 +592,15 @@ async function main() {
     const refreshAlerted = new Set<string>();
     try {
     if (!dryRun && signerAddress && keystorePath && passwordFilePath) {
+        if (pauseConfig) {
+            const head = await pauseChain.latestHeader();
+            if (!head) {
+                console.error('pause-config: head unavailable');
+                process.exit(1);
+            }
+            assertStartBlock(pauseConfig, head.number);
+            assertRegistryStart(pauseConfig, head.number);
+        }
         releaseLock = await acquireKeeperLock({ journalPath, chainId: config.chain.id, signer: signerAddress });
         const journal = new Journal(journalPath, { chainId: config.chain.id, signer: signerAddress });
         const opened = await journal.load();
@@ -551,7 +621,7 @@ async function main() {
         });
     }
     if (signerAddress) {
-        const identity = await evaluateIdentity();
+        const identity = await evaluateIdentity(true);
         if (!identity.ok) {
             for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
             await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`);
@@ -1005,7 +1075,7 @@ async function main() {
         if (!sender) return true;
         const nowMs = Date.now();
         if (!identityDue(nowMs, nextIdentityAt, sender.gateOpen())) return true;
-        const identity = await evaluateIdentity();
+        const identity = await evaluateIdentity(false);
         const decision = decideIdentityGate({
             nowMs,
             lastOkAt: lastIdentityOkAt,
@@ -1023,21 +1093,83 @@ async function main() {
         return decision.pause;
     }
 
+    const pauseIntervalMs = Number(pauseIntervalSec) * 1000;
+
+    async function runDuePause(): Promise<void> {
+        if (!pauseConfig) return;
+        try {
+            const result = await runPauseRound({
+                chain: pauseChain,
+                config: pauseConfig,
+                chainId: config.chain.id,
+                signer: signerAddress ?? undefined,
+                sender: sender ?? undefined,
+                dryRun,
+                statePath: pauseStatePath,
+                nowMs: Date.now(),
+                alert: alertLine,
+                log: (line) => console.log(line),
+            });
+            if (result.kind === 'sp-mismatch') {
+                if (sender) {
+                    const decision = decideIdentityGate({
+                        nowMs: Date.now(),
+                        lastOkAt: lastIdentityOkAt,
+                        previousKey: identityGateKey,
+                        verdict: { ok: false, kind: 'sp-mismatch', problems: [result.problem] },
+                    });
+                    lastIdentityOkAt = decision.lastOkAt;
+                    identityGateKey = decision.key;
+                    sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason });
+                    if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
+                }
+                console.log(`pause-round=FAILED reasons=${result.problem} notes=${result.notes.join('; ')}`);
+                const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: [result.problem] });
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+            } else if (result.kind === 'failed') {
+                console.log(`pause-round=FAILED reasons=${result.reasons.join('; ')} notes=${result.notes.join('; ')}`);
+                const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: result.reasons });
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+            } else {
+                const reported = pauseRoundAlert(pauseReasonAlert.key, 'ok');
+                pauseReasonAlert.key = reported.key;
+                if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+                console.log(
+                    `pause-round=ok checked=${result.checked} understaked=${result.understaked.length} sent=${result.sent.length} notes=${result.notes.join('; ')}`
+                );
+            }
+        } catch {
+            console.log('pause-round=FAILED reasons=pause round rejected');
+            const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: ['pause round rejected'] });
+            pauseReasonAlert.key = reported.key;
+            if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+        }
+        nextPauseAt = Date.now() + pauseIntervalMs;
+    }
+
     for (;;) {
         try {
-            // Price keeper: no pause round. The step still takes the pause hooks; they never run.
+            const pauseDue = Boolean(pauseConfig) && Date.now() >= nextPauseAt;
             await runKeeperStep({
                 refreshIdentity,
                 tick,
-                pauseDue: false,
+                pauseDue,
                 network,
                 alerted: refreshAlerted,
                 alert: async (msg) => {
                     console.error(msg);
                     await sendTelegramMessage(`[keeper] ${msg}`);
                 },
-                onPause: async () => {},
-                onPauseSkipped: async () => {},
+                onPause: runDuePause,
+                onPauseSkipped: async (reason) => {
+                    console.log(`pause-round=FAILED reasons=${reason}`);
+                    const reported = pauseRoundAlert(pauseReasonAlert.key, { reasons: [reason] });
+                    pauseReasonAlert.key = reported.key;
+                    if (reported.alert) await sendTelegramMessage(`[keeper] ${reported.alert}`);
+                    nextPauseAt = Date.now() + pauseIntervalMs;
+                },
             });
         } catch (e: unknown) {
             const report = loopErrorReport(network, e, 'error');
