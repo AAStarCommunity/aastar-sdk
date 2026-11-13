@@ -2122,6 +2122,47 @@ describe('Codex review @ff82ba6a (#445) (unit, not acceptance)', () => {
         expectIncomplete(result, /decoder threw/);
     });
 
+    it('M3 (R2): only plain data crosses the store, decoder and attributor boundaries', async () => {
+        const SAB = (globalThis as { SharedArrayBuffer?: typeof SharedArrayBuffer }).SharedArrayBuffer;
+        const hostile: [string, () => unknown][] = [
+            ['Error.cause over shared bytes', () => new Error('proof', { cause: SAB ? new Uint8Array(new SAB(1)) : new Uint8Array(1) })],
+            ['a plain Error', () => new Error('x')],
+            ['a Map', () => new Map([['k', 1]])],
+            ['a Date', () => new Date(0)],
+            ['a Uint16Array', () => new Uint16Array(1)],
+        ];
+        const W = (globalThis as { WebAssembly?: typeof WebAssembly }).WebAssembly;
+        if (W) hostile.push(['shared WebAssembly.Memory', () => new W.Memory({ initial: 1, maximum: 1, shared: true })]);
+        const scope = `0x${'11'.repeat(32)}` as Hex;
+        for (const [name, make] of hostile) {
+            const store = memoryStore();
+            const bad = { ...row(1, 0), decoded: { kind: 'guardian-added', extra: make() } } as unknown as UnresolvedAction;
+            await expect(store.commit({ expectedRevision: 0, scope, next: null, attributed: [], unresolved: [bad], resolve: [] }), name)
+                .rejects.toThrow(/plain data|shared memory/);
+            expect((await store.snapshot()).revision, name).toBe(0);
+
+            const viaDecoder = pair(3);
+            addBoth(viaDecoder.a, viaDecoder.b, 2, TOPIC);
+            const decoded = await run(viaDecoder.a, viaDecoder.b, memoryStore(), {
+                watched: [watched({ decode: () => ({ kind: 'guardian-added', extra: make() }) })],
+            });
+            expectIncomplete(decoded, /decoder threw/);
+
+            const viaAttributor = pair(3);
+            addBoth(viaAttributor.a, viaAttributor.b, 2, TOPIC);
+            const target = memoryStore();
+            const attributed = await run(viaAttributor.a, viaAttributor.b, target, {
+                attributor: { attribute: async () => ({ ok: true, attribution: { proof: make() } }) },
+            });
+            expect(attributed.state, name).not.toBe('COMPLETE');
+            for (const r of await target.listAttributed()) expect(JSON.stringify(Object.keys(r))).not.toContain('proof');
+        }
+        // A plain Uint8Array still works.
+        const fine = memoryStore();
+        await fine.commit({ expectedRevision: 0, scope, next: null, attributed: [], unresolved: [{ ...row(1, 0), decoded: { kind: 'guardian-added', bytes: new Uint8Array([7]) } } as unknown as UnresolvedAction], resolve: [] });
+        expect((await fine.listUnresolved())[0].decoded).toEqual({ kind: 'guardian-added', bytes: new Uint8Array([7]) });
+    });
+
     it('L1: one provider whose receipts alone are off-root is INCOMPLETE, on either side', async () => {
         for (const side of ['a', 'b'] as const) {
             const nodes = pair(3);

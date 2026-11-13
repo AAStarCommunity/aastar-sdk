@@ -1,39 +1,40 @@
 /**
- * structuredClone that refuses shared memory. structuredClone keeps a SharedArrayBuffer (and views
- * over one) pointing at the same backing store, so a "copy" would still alias the caller (#445 Codex M3).
+ * structuredClone restricted to plain data. A clone must not alias the caller (#445 Codex M3, R2):
+ * structuredClone keeps SharedArrayBuffer and shared WebAssembly.Memory pointing at the same storage,
+ * and preserves containers (Error.cause, Map, ...) whose contents a key walk can miss. So instead of
+ * hunting shared types, only these are accepted after cloning: primitives (including bigint), plain
+ * objects, arrays, and Uint8Array over a non-shared ArrayBuffer. Anything else throws.
  */
 export function isolatedClone<T>(value: T): T {
     const out = structuredClone(value);
-    assertNoSharedMemory(out);
+    assertPlainData(out);
     return out;
 }
 
-const SAB: (new (n: number) => unknown) | undefined = (globalThis as { SharedArrayBuffer?: new (n: number) => unknown }).SharedArrayBuffer;
-
-function isShared(v: unknown): boolean {
-    if (SAB === undefined) return false;
-    if (v instanceof SAB) return true;
-    return ArrayBuffer.isView(v) && v.buffer instanceof SAB;
-}
-
-function assertNoSharedMemory(root: unknown): void {
+function assertPlainData(root: unknown): void {
     const seen = new Set<object>();
     const stack: unknown[] = [root];
     while (stack.length > 0) {
         const v = stack.pop();
-        if (typeof v !== 'object' || v === null) continue;
+        if (v === null || typeof v !== 'object') {
+            if (typeof v === 'function' || typeof v === 'symbol') throw new TypeError('only plain data is allowed');
+            continue;
+        }
         if (seen.has(v)) continue;
         seen.add(v);
-        if (isShared(v)) throw new TypeError('shared memory is not allowed');
-        if (ArrayBuffer.isView(v) || v instanceof ArrayBuffer) continue;
-        if (v instanceof Map) {
-            for (const [k, item] of v) stack.push(k, item);
+        const proto = Object.getPrototypeOf(v);
+        if (proto === Uint8Array.prototype) {
+            if (Object.getPrototypeOf((v as Uint8Array).buffer) !== ArrayBuffer.prototype) {
+                throw new TypeError('shared memory is not allowed');
+            }
             continue;
         }
-        if (v instanceof Set) {
-            for (const item of v) stack.push(item);
-            continue;
+        if (proto !== Object.prototype && proto !== null && proto !== Array.prototype) {
+            throw new TypeError('only plain data is allowed');
         }
-        for (const key of Object.keys(v)) stack.push((v as Record<string, unknown>)[key]);
+        for (const key of Reflect.ownKeys(v)) {
+            if (typeof key === 'symbol') throw new TypeError('only plain data is allowed');
+            stack.push((v as Record<string, unknown>)[key]);
+        }
     }
 }
