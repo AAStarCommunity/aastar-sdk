@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hexToBytes, keccak256, type Hex } from 'viem';
 import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc, trieRoot } from '../../src/guardianAudit/trie';
+import { responseLimits } from '../../src/guardianAudit/rpc';
 import fixture from './fixtures/sepolia-block-receipts.json';
 import fixture135 from './fixtures/sepolia-receipts-135.json';
 import fixtureFailed from './fixtures/sepolia-receipts-failed.json';
@@ -270,10 +271,11 @@ describe('real OP Mainnet receipt trie (DSR: mainnet is the deploy target) (unit
 });
 
 describe('receiptsRootFromRpc refuses an over-budget block itself (#445 N3) (unit, not acceptance)', () => {
-    it('a block whose receipts exceed the per-block byte budget returns null before encoding', () => {
-        // 40 receipts x 900 KiB of log data = ~35 MiB > the 32 MiB block budget, while each receipt stays under
-        // its own 1 MiB cap. A control block of the same receipts below the block budget must still produce a root,
-        // so a null here is the block budget and not some other rejection.
+    // The over-budget block returns before encoding; the control only has to show the receipt shape is accepted,
+    // so it uses 2 receipts. A 30-receipt control encoded ~28 MiB and took 16 s on CI (timed out at 5 s).
+    it('a block whose receipts exceed the per-block byte budget returns null before encoding', { timeout: 30_000 }, () => {
+        // 40 receipts x ~960 KiB of log data = ~37 MiB > the 32 MiB block budget, while each receipt stays under
+        // its own 1 MiB cap.
         const base: any = fixture.receipts.find((r: any) => Array.isArray(r.logs) && r.logs.length > 0);
         // Each log's data stays under the 64 KiB per-string cap; 15 logs make ~960 KiB per receipt.
         const data = '0x' + 'ab'.repeat(64 * 1024 - 64);
@@ -281,7 +283,14 @@ describe('receiptsRootFromRpc refuses an over-budget block itself (#445 N3) (uni
             ...base, transactionIndex: '0x' + i.toString(16),
             logs: Array.from({ length: 15 }, (_, j) => ({ ...base.logs[0], data, topics: [], logIndex: '0x' + (i * 15 + j).toString(16) })),
         }));
-        expect(receiptsRootFromRpc(make(30))).toMatch(/^0x[0-9a-f]{64}$/);
+        // Control: the same receipt shape encodes to a root.
+        expect(receiptsRootFromRpc(make(2))).toMatch(/^0x[0-9a-f]{64}$/);
+        // Every other aggregate cap is far from tripping at 40, so only the block byte budget can reject it.
+        expect(40).toBeLessThan(responseLimits.receipts);
+        expect(40 * 15).toBeLessThan(responseLimits.logs);
+        const logBytes = (data.length - 2) / 2;
+        expect(40 * 15 * logBytes).toBeGreaterThan(responseLimits.blockPayload);
+        expect(15 * logBytes).toBeLessThan(responseLimits.receiptPayload);
         expect(receiptsRootFromRpc(make(40))).toBeNull();
     });
 });
