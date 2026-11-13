@@ -131,9 +131,12 @@ describe('keeper pure decisions', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
             const code = await new Promise<number | null>((resolve) => child.once('close', resolve));
             return { code, out };
         };
-        const missingRole = await run(['--role-sync-budget-sec']);
+        const missingRole = await run(['--role-sync-slice-calls']);
         expect(missingRole.code, missingRole.out).toBe(1);
-        expect(missingRole.out).toContain('keeper: --role-sync-budget-sec requires a value');
+        expect(missingRole.out).toContain('keeper: --role-sync-slice-calls requires a value');
+        const zeroSlice = await run(['--role-sync-slice-calls', '0']);
+        expect(zeroSlice.code, zeroSlice.out).toBe(1);
+        expect(zeroSlice.out).toContain('keeper: --role-sync-slice-calls invalid');
         const missingInterval = await run(['--pause-interval-sec']);
         expect(missingInterval.code, missingInterval.out).toBe(1);
         expect(missingInterval.out).toContain('keeper: --pause-interval-sec requires a value');

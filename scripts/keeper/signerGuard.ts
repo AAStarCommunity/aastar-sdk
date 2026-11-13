@@ -181,13 +181,17 @@ export async function checkSignerIdentity(input: {
         return { ok: true };
     }
 
-    let copiedRoles: Hex[] | null = null;
-    if (!Array.isArray(input.roleLogs)) return bad([...problems, 'role logs missing']);
-    if (input.roleLogs.length > MAX_ROLE_LOGS) return bad([...problems, 'role logs unbounded']);
-    copiedRoles = [];
-    for (const log of input.roleLogs) {
-        if (!log || !isBytes32(log.roleId)) return bad([...problems, 'role log malformed']);
-        copiedRoles.push(log.roleId.toLowerCase() as Hex);
+    // Role logs are optional. Startup and the hourly check read every pinned role
+    // directly. Logs are passed only after a catch-up slice completes, to see roles
+    // outside that pin.
+    const copiedRoles: Hex[] = [];
+    if (input.roleLogs != null) {
+        if (!Array.isArray(input.roleLogs)) return bad([...problems, 'role logs missing']);
+        if (input.roleLogs.length > MAX_ROLE_LOGS) return bad([...problems, 'role logs unbounded']);
+        for (const log of input.roleLogs) {
+            if (!log || !isBytes32(log.roleId)) return bad([...problems, 'role log malformed']);
+            copiedRoles.push(log.roleId.toLowerCase() as Hex);
+        }
     }
 
     const pendingSp = await readAddress(input.chain, sp, 'pendingOwner', blockHash, 'SP.pendingOwner', problems);
@@ -203,49 +207,53 @@ export async function checkSignerIdentity(input: {
 
     const pinned = new Set<string>();
     for (const id of Object.values(PINNED_ROLES)) pinned.add(id.toLowerCase());
+    const extraIds: Hex[] = [];
     const seen = new Set<string>();
-    for (const id of copiedRoles ?? []) {
+    for (const id of copiedRoles) {
+        if (seen.has(id)) continue;
         seen.add(id);
-        if (!pinned.has(id)) problems.push('configured role is not in the pinned set');
+        if (!pinned.has(id)) {
+            problems.push('configured role is not in the pinned set');
+            extraIds.push(id);
+        }
     }
 
-    const idsToCheck: Hex[] = [];
-    for (const id of Object.values(PINNED_ROLES)) idsToCheck.push(id);
-    for (const id of seen) {
-        if (!idsToCheck.some((have) => have.toLowerCase() === id)) idsToCheck.push(id as Hex);
-    }
-    for (const id of idsToCheck) {
+    const readHasRole = async (id: Hex): Promise<void> => {
         const data = encodeFunctionData({
             abi: REGISTRY_PAUSE_ABI,
             functionName: 'hasRole',
             args: [id, signer],
         });
         const raw = await readRaw(input.chain, registry, data, blockHash, 'Registry.hasRole', problems);
-        if (!raw) continue;
+        if (!raw) return;
         const holds = decodeBool(raw);
         if (holds === null) {
             problems.push('read failed: Registry.hasRole');
-            continue;
+            return;
         }
         if (holds) problems.push('signer holds a role');
-    }
-
-    for (const id of Object.values(PINNED_ROLES)) {
+    };
+    const readRoleOwner = async (id: Hex): Promise<void> => {
         const data = encodeFunctionData({ abi: REGISTRY_PAUSE_ABI, functionName: 'getRoleConfig', args: [id] });
         const raw = await readRaw(input.chain, registry, data, blockHash, 'Registry.getRoleConfig', problems);
-        if (!raw) continue;
+        if (!raw) return;
         try {
             const decoded = decodeFunctionResult({ abi: REGISTRY_PAUSE_ABI, functionName: 'getRoleConfig', data: raw });
             const owner = Array.isArray(decoded) ? decoded[10] : (decoded as { owner?: unknown }).owner;
             if (typeof owner !== 'string' || !isAddress(owner)) {
                 problems.push('read failed: Registry.getRoleConfig');
-                continue;
+                return;
             }
             if (norm(owner) === norm(signer)) problems.push('signer owns a role config');
         } catch {
             problems.push('read failed: Registry.getRoleConfig');
         }
-    }
+    };
+
+    for (const id of Object.values(PINNED_ROLES)) await readHasRole(id);
+    for (const id of extraIds) await readHasRole(id);
+    for (const id of Object.values(PINNED_ROLES)) await readRoleOwner(id);
+    for (const id of extraIds) await readRoleOwner(id);
 
     const repData = encodeFunctionData({ abi: REGISTRY_PAUSE_ABI, functionName: 'isReputationSource', args: [signer] });
     const repRaw = await readRaw(input.chain, registry, repData, blockHash, 'Registry.isReputationSource', problems);

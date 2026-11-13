@@ -170,14 +170,23 @@ describe('signer identity', () => {
         if (!regOwner.ok) expect(regOwner.problems).toContain('signer equals registry owner');
     });
 
-    it('missing role logs are not ok, and a role outside the pin is not ok', async () => {
-        const missing = await check({ pauseDutyEnabled: true, roleLogs: null });
-        expect(missing.ok).toBe(false);
-        if (!missing.ok) expect(missing.problems).toContain('role logs missing');
+    it('pinned role reads do not need role logs, and a role outside the pin is not ok', async () => {
+        const direct = await check({ pauseDutyEnabled: true, roleLogs: null });
+        expect(direct).toEqual({ ok: true });
         const foreign = ('0x' + 'ab'.repeat(32)) as Hex;
         const extra = await check({ pauseDutyEnabled: true, roleLogs: [{ roleId: foreign }] });
         expect(extra.ok).toBe(false);
-        if (!extra.ok) expect(extra.problems).toContain('configured role is not in the pinned set');
+        if (!extra.ok) {
+            expect(extra.kind).toBe('privileged');
+            expect(extra.problems).toContain('configured role is not in the pinned set');
+        }
+        const owned = await check({
+            pauseDutyEnabled: true,
+            roleLogs: [{ roleId: foreign }],
+            chain: chain({ owners: { roleOwner: SIGNER } }),
+        });
+        expect(owned.ok).toBe(false);
+        if (!owned.ok) expect(owned.problems).toContain('signer owns a role config');
     });
 
     it('pending owners, bls aggregators, a role-config owner and a reputation source are refused', async () => {

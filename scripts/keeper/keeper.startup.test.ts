@@ -174,12 +174,18 @@ describe('keeper startup identity', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
         await expectPauseRefuse(CODE, 'signer holds a role');
     }, 60_000);
 
+    it('startup refuses a role-holding signer from direct reads, before any log scan', async () => {
+        const seen = await expectPauseRefuse(CODE, 'signer holds a role', undefined, 'throw');
+        expect(seen.logCalls).toBe(0);
+    }, 60_000);
+
     it('a superpaymaster codehash mismatch closes the gate before the role read', async () => {
         await expectPauseRefuse('0x6002', 'superpaymaster codehash mismatch', 'signer holds a role');
     }, 60_000);
 });
 
-function listenPause(code: Hex): Promise<{ server: Server; url: string }> {
+function listenPause(code: Hex, logs: 'ok' | 'throw' = 'ok'): Promise<{ server: Server; url: string; logCalls: () => number }> {
+    let logCalls = 0;
     const server = createServer((req, res) => {
         let body = '';
         req.on('data', (c) => (body += c));
@@ -226,7 +232,13 @@ function listenPause(code: Hex): Promise<{ server: Server; url: string }> {
                 } else if (method === 'eth_call' && data.slice(0, 10).toLowerCase() === HAS_ROLE) {
                     result = '0x' + '0'.repeat(63) + '1';
                 }
-                if (method === 'eth_getLogs') return { jsonrpc: '2.0', id: m.id, result: [] };
+                if (method === 'eth_getLogs') {
+                    logCalls += 1;
+                    if (logs === 'throw') {
+                        return { jsonrpc: '2.0', id: m.id, error: { code: -32000, message: 'getLogs called before signer refusal' } };
+                    }
+                    return { jsonrpc: '2.0', id: m.id, result: [] };
+                }
                 return { jsonrpc: '2.0', id: m.id, result };
             };
             res.setHeader('content-type', 'application/json');
@@ -235,13 +247,13 @@ function listenPause(code: Hex): Promise<{ server: Server; url: string }> {
     });
     return new Promise((resolve) => {
         server.listen(0, '127.0.0.1', () => {
-            resolve({ server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` });
+            resolve({ server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, logCalls: () => logCalls });
         });
     });
 }
 
-async function expectPauseRefuse(code: Hex, text: string, absent?: string): Promise<void> {
-    const { server, url } = await listenPause(code);
+async function expectPauseRefuse(code: Hex, text: string, absent?: string, logs: 'ok' | 'throw' = 'ok'): Promise<{ logCalls: number }> {
+    const { server, url, logCalls } = await listenPause(code, logs);
     const dir = mkdtempSync(join(tmpdir(), 'keeper-start-'));
     chmodSync(dir, 0o700);
     const pw = join(dir, 'password');
@@ -264,6 +276,7 @@ async function expectPauseRefuse(code: Hex, text: string, absent?: string): Prom
     const cast = join(dir, 'cast');
     writeFileSync(cast, '#!/bin/sh\nexit 1\n');
     chmodSync(cast, 0o755);
+    let seen = 0;
     try {
         const child = spawn(process.execPath, [
             '--import', pathToFileURL(TSX_LOADER).href, KEEPER,
@@ -295,8 +308,10 @@ async function expectPauseRefuse(code: Hex, text: string, absent?: string): Prom
         expect(out).toContain(text);
         if (absent) expect(out).not.toContain(absent);
         expect(out).not.toContain('signer-identity=ok');
+        seen = logCalls();
     } finally {
         await new Promise<void>((resolve) => { server.closeAllConnections?.(); server.close(() => resolve()); });
         rmSync(dir, { recursive: true, force: true });
     }
+    return { logCalls: seen };
 }

@@ -17,7 +17,7 @@ import { adaptChainIO, adaptPauseChain, asIdentityChain } from './keeper/viemAda
 import { identityDue, scheduledIdentityAt } from './keeper/identitySchedule.js';
 import { decideIdentityGate } from './keeper/identityGate.js';
 import { cacheConfirms, describePriceSend, loopErrorReport, noteRefusal } from './keeper/priceConfirm.js';
-import { catchUpRoleLogs, syncRoleLogs } from './keeper/roleLogs.js';
+import { decideRoleCatchUp, syncRoleLogs, type RoleCatchUpMarks } from './keeper/roleLogs.js';
 import { ignoredSecretWarning, pinScrubbedSecrets, scrubSecretEnv } from './keeper/secretEnv.js';
 import { runKeeperStep } from './keeper/keeperStep.js';
 
@@ -157,7 +157,7 @@ function usage(): string {
         '   --dry-run                   print actions without sending tx',
         '   --once                      run one tick then exit; a pause round runs immediately',
         '   --resync-journal            realign the journal to the chain nonce, then exit',
-        '   --role-sync-budget-sec <n>  startup role-log catch-up budget (default 900)',
+        '   --role-sync-slice-calls <n> getLogs calls per tick while role inventory catches up (default 8)',
         '   --keystore <path>           encrypted keystore (required unless --dry-run)',
         '   --password-file <path>      keystore password file, mode 0600 (required unless --dry-run)',
         '   --signer <address>          address cast must recover (required unless --dry-run)',
@@ -287,7 +287,8 @@ async function main() {
     const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
     const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
     const once = hasFlag(args, '--once');
-    const roleSyncBudgetSec = parseWhole(requireArgValue(args, '--role-sync-budget-sec'), 900n, '--role-sync-budget-sec', 1n);
+    const roleSyncSliceCalls = parseWhole(requireArgValue(args, '--role-sync-slice-calls'), 8n, '--role-sync-slice-calls', 1n);
+    if (roleSyncSliceCalls > 100n) throw new Error('keeper: --role-sync-slice-calls invalid');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
     const disableSuperPaymaster = hasFlag(args, '--no-superpaymaster') || hasFlag(args, '--disable-superpaymaster');
     const disablePaymaster = hasFlag(args, '--no-paymaster') || hasFlag(args, '--disable-paymaster');
@@ -506,6 +507,18 @@ async function main() {
     let nextIdentityAt = 0;
     let lastIdentityOkAt = 0;
     let identityGateKey = '';
+    let priceOpen = true;
+    let pauseOpen = true;
+    /** Pause send uses the gate from the start of the tick, before this tick's role slice. */
+    let pauseAtTickStart = true;
+    /** RoleConfigured inventory is behind. Pause stays closed; this is not an identity read failure. */
+    let inventoryCatchingUp = false;
+    let roleCatchUpArmed = false;
+    let identityBlocksPause = false;
+    let roleCatchUpStartedAt = 0;
+    let roleMarks: RoleCatchUpMarks = { started: false, completed: false, overdue: false, failAlerted: false };
+    /** Set once a slice has reached the head. Later identity checks include these ids. */
+    let settledRoleIds: Hex[] | null = null;
     let balanceClock: BalanceClock = { nextCheckAt: 0, lastLowAt: 0, lastFailAt: 0 };
 
     const alertLine = (msg: string) => {
@@ -517,7 +530,19 @@ async function main() {
         return { ok: false, kind: 'read-failed', problems };
     }
 
-    async function evaluateIdentity(startup: boolean): Promise<IdentityResult> {
+    function applyScopes(price: boolean, pause: boolean, reason: string): void {
+        priceOpen = price;
+        pauseOpen = pause;
+        if (sender) sender.setGate({ price, pause, reason });
+    }
+
+    async function emitGate(text: string): Promise<void> {
+        console.error(text);
+        await sendTelegramMessage(`[keeper] ${text}`);
+    }
+
+    /** Pinned-role privilege only. RoleConfigured logs are not read here. */
+    async function evaluateIdentity(): Promise<IdentityResult> {
         if (!signerAddress) return readFailed(['signer missing']);
         const head = await pauseChain.latestHeader();
         if (!head) return readFailed(['latest block unavailable']);
@@ -526,36 +551,10 @@ async function main() {
         if (!isAddress(sp) || !registryAddr || !isAddress(registryAddr)) {
             return readFailed([`signer identity: ${network} has no registry address; pass --registry <address>`]);
         }
-        let roleLogs: { roleId: Hex }[] | null = null;
         let deploymentProblem: string | undefined;
         if (pauseConfig) {
             const deployment = await verifySpDeployment(pauseChain, pauseConfig, head.hash);
-            if (deployment) {
-                deploymentProblem = deployment;
-            } else {
-                if (pauseConfig.registryStartBlock > head.number) return readFailed(['role logs missing']);
-                const finalized = await pauseChain.finalizedBlock();
-                if (finalized === null) return readFailed(['role logs missing']);
-                const roleOpts = {
-                    chain: pauseChain,
-                    statePath: `${journalPath}.role-state.json`,
-                    chainId: config.chain.id,
-                    registry: registryAddr,
-                    registryStartBlock: pauseConfig.registryStartBlock,
-                    head: head.number,
-                    finalized,
-                };
-                const synced = startup
-                    ? await catchUpRoleLogs({
-                        ...roleOpts,
-                        budgetMs: Number(roleSyncBudgetSec) * 1000,
-                        now: () => Date.now(),
-                        log: (line) => console.log(line),
-                    })
-                    : await syncRoleLogs(roleOpts);
-                if (!synced.ok) return readFailed([synced.reason]);
-                roleLogs = synced.roleIds.map((roleId) => ({ roleId }));
-            }
+            if (deployment) deploymentProblem = deployment;
         }
         return checkSignerIdentity({
             chain: asIdentityChain(pauseChain),
@@ -565,9 +564,99 @@ async function main() {
             registry: registryAddr,
             deployers: [DEPLOYER_ADDRESS],
             pauseDutyEnabled: Boolean(pauseConfig),
-            roleLogs,
+            roleLogs: settledRoleIds === null ? null : settledRoleIds.map((roleId) => ({ roleId })),
             deploymentProblem,
         });
+    }
+
+    /**
+     * One bounded RoleConfigured slice. Incomplete inventory keeps pause closed and price open.
+     * Returns 'privileged' when a finished scan finds a role the direct reads did not cover.
+     */
+    async function advanceRoleCatchUp(nowMs: number): Promise<'ok' | 'privileged'> {
+        if (!pauseConfig || !signerAddress || !roleCatchUpArmed || identityBlocksPause) return 'ok';
+        const head = await pauseChain.latestHeader();
+        const finalized = head ? await pauseChain.finalizedBlock() : null;
+        let slice: 'incomplete' | 'complete' | 'failed' = 'failed';
+        let unpinnedPrivilege = false;
+        let privilege: IdentityResult | null = null;
+        if (!head || finalized === null) {
+            slice = 'failed';
+        } else {
+            const synced = await syncRoleLogs({
+                chain: pauseChain,
+                statePath: `${journalPath}.role-state.json`,
+                chainId: config.chain.id,
+                registry: pauseConfig.registry,
+                registryStartBlock: pauseConfig.registryStartBlock,
+                head: head.number,
+                finalized,
+                maxCalls: Number(roleSyncSliceCalls),
+            });
+            if (synced.ok) {
+                slice = 'complete';
+                settledRoleIds = synced.roleIds;
+                const again = await checkSignerIdentity({
+                    chain: asIdentityChain(pauseChain),
+                    blockHash: head.hash,
+                    signer: signerAddress,
+                    sp: pauseConfig.superPaymaster,
+                    registry: pauseConfig.registry,
+                    deployers: [DEPLOYER_ADDRESS],
+                    pauseDutyEnabled: true,
+                    roleLogs: synced.roleIds.map((roleId) => ({ roleId })),
+                });
+                if (!again.ok && again.kind === 'privileged') {
+                    unpinnedPrivilege = true;
+                    privilege = again;
+                } else if (!again.ok) {
+                    const decision = decideIdentityGate({
+                        nowMs,
+                        lastOkAt: lastIdentityOkAt,
+                        previousKey: identityGateKey,
+                        verdict: again,
+                    });
+                    lastIdentityOkAt = decision.lastOkAt;
+                    identityGateKey = decision.key;
+                    applyScopes(decision.price, decision.pause, decision.reason);
+                    identityBlocksPause = !decision.pause;
+                    inventoryCatchingUp = false;
+                    for (const problem of again.problems) console.error(`signer-identity: ${problem}`);
+                    if (decision.alert) await emitGate(decision.alert);
+                    return 'ok';
+                }
+            } else if (synced.reason === 'role logs incomplete') {
+                slice = 'incomplete';
+            }
+        }
+        const decided = decideRoleCatchUp({
+            nowMs,
+            startedAt: roleCatchUpStartedAt,
+            slice,
+            unpinnedPrivilege,
+            previous: roleMarks,
+        });
+        roleMarks = decided.marks;
+        if (decided.alert) await emitGate(decided.alert);
+        if (decided.closeAll && privilege && !privilege.ok) {
+            const decision = decideIdentityGate({
+                nowMs,
+                lastOkAt: lastIdentityOkAt,
+                previousKey: identityGateKey,
+                verdict: privilege,
+            });
+            lastIdentityOkAt = decision.lastOkAt;
+            identityGateKey = decision.key;
+            applyScopes(decision.price, decision.pause, decision.reason);
+            identityBlocksPause = true;
+            inventoryCatchingUp = false;
+            for (const problem of privilege.problems) console.error(`signer-identity: ${problem}`);
+            if (decision.alert) await emitGate(decision.alert);
+            return 'privileged';
+        }
+        applyScopes(decided.price, decided.pause, decided.reason);
+        inventoryCatchingUp = decided.price && !decided.pause;
+        return 'ok';
     }
 
     async function maybeAlertLowBalance(): Promise<void> {
@@ -621,7 +710,7 @@ async function main() {
         });
     }
     if (signerAddress) {
-        const identity = await evaluateIdentity(true);
+        const identity = await evaluateIdentity();
         if (!identity.ok) {
             for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
             await sendTelegramMessage(`[keeper] signer identity refused\n${identity.problems.join('\n')}`);
@@ -629,12 +718,26 @@ async function main() {
             process.exit(1);
         }
         console.log('signer-identity=ok');
-        if (sender) {
-            const openedAt = Date.now();
-            sender.setGate({ price: true, pause: true, reason: '' });
-            nextIdentityAt = scheduledIdentityAt(openedAt);
-            lastIdentityOkAt = openedAt;
-            identityGateKey = 'open';
+        const openedAt = Date.now();
+        nextIdentityAt = scheduledIdentityAt(openedAt);
+        lastIdentityOkAt = openedAt;
+        identityGateKey = 'open';
+        if (pauseConfig) {
+            roleCatchUpArmed = true;
+            roleCatchUpStartedAt = openedAt;
+            const boot = decideRoleCatchUp({
+                nowMs: openedAt,
+                startedAt: openedAt,
+                slice: 'pending',
+                unpinnedPrivilege: false,
+                previous: roleMarks,
+            });
+            roleMarks = boot.marks;
+            inventoryCatchingUp = true;
+            applyScopes(boot.price, boot.pause, boot.reason);
+            if (boot.alert) await emitGate(boot.alert);
+        } else if (sender) {
+            applyScopes(true, true, '');
         }
     }
 
@@ -934,6 +1037,7 @@ async function main() {
             }
 
             if (dryRun) {
+                if (!priceOpen) return;
                 console.log(`action=sendTx kind=super method=updatePrice() target=${superPaymaster} (dry-run)`);
                 return;
             }
@@ -1030,6 +1134,7 @@ async function main() {
             }
 
             if (dryRun) {
+                if (!priceOpen) return;
                 console.log(`action=sendTx kind=paymaster method=updatePrice() target=${paymaster} (dry-run)`);
                 return;
             }
@@ -1072,31 +1177,39 @@ async function main() {
     };
 
     async function refreshIdentity(): Promise<boolean> {
-        if (!sender) return true;
+        pauseAtTickStart = pauseOpen;
         const nowMs = Date.now();
-        if (!identityDue(nowMs, nextIdentityAt, sender.gateOpen())) return true;
-        const identity = await evaluateIdentity(false);
-        const decision = decideIdentityGate({
-            nowMs,
-            lastOkAt: lastIdentityOkAt,
-            previousKey: identityGateKey,
-            verdict: identity,
-        });
-        lastIdentityOkAt = decision.lastOkAt;
-        identityGateKey = decision.key;
-        sender.setGate({ price: decision.price, pause: decision.pause, reason: decision.reason });
-        if (!identity.ok) {
-            for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+        if (sender && identityDue(nowMs, nextIdentityAt, inventoryCatchingUp || sender.gateOpen())) {
+            const identity = await evaluateIdentity();
+            const decision = decideIdentityGate({
+                nowMs,
+                lastOkAt: lastIdentityOkAt,
+                previousKey: identityGateKey,
+                verdict: identity,
+            });
+            lastIdentityOkAt = decision.lastOkAt;
+            identityGateKey = decision.key;
+            applyScopes(decision.price, decision.pause, decision.reason);
+            identityBlocksPause = !identity.ok;
+            if (!identity.ok) inventoryCatchingUp = false;
+            if (!identity.ok) {
+                for (const problem of identity.problems) console.error(`signer-identity: ${problem}`);
+            }
+            if (decision.alert) await emitGate(decision.alert);
+            if (identity.ok) nextIdentityAt = scheduledIdentityAt(nowMs);
         }
-        if (decision.alert) await sendTelegramMessage(`[keeper] ${decision.alert}`);
-        if (identity.ok) nextIdentityAt = scheduledIdentityAt(nowMs);
-        return decision.pause;
+        const caught = await advanceRoleCatchUp(nowMs);
+        if (caught === 'privileged') return false;
+        // Catch-up closes the pause gate without counting as "signer identity refused".
+        if (inventoryCatchingUp) return true;
+        return pauseOpen;
     }
 
     const pauseIntervalMs = Number(pauseIntervalSec) * 1000;
 
     async function runDuePause(): Promise<void> {
         if (!pauseConfig) return;
+        if (!pauseAtTickStart) return;
         try {
             const result = await runPauseRound({
                 chain: pauseChain,

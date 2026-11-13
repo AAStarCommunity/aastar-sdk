@@ -208,34 +208,92 @@ export async function syncRoleLogs(opts: {
     return { ok: true, roleIds: roleIds.map((id) => ({ roleId: id })).map((row) => row.roleId) };
 }
 
+/** Pause stays closed for this reason while RoleConfigured logs are still behind. Not a failed identity read. */
+export const ROLE_INVENTORY_CATCHING_UP = 'role inventory catching up';
+export const ROLE_INVENTORY_CAUGHT_UP = 'role inventory caught up';
+export const ROLE_CATCHUP_OVERDUE = 'role inventory catch-up still incomplete after 24h';
+export const ROLE_SLICE_FAILED = 'role log slice failed';
+export const ROLE_CATCHUP_OVERDUE_MS = 24 * 60 * 60 * 1000;
+
+export interface RoleCatchUpMarks {
+    started: boolean;
+    completed: boolean;
+    overdue: boolean;
+    failAlerted: boolean;
+}
+
+export interface RoleCatchUpDecision {
+    price: boolean;
+    pause: boolean;
+    reason: string;
+    alert: string | null;
+    marks: RoleCatchUpMarks;
+    /** A finished scan saw a privilege the pinned direct reads do not cover. */
+    closeAll: boolean;
+}
+
 /**
- * Startup keeps scanning until the cursor is caught up or the time budget is spent.
- * Hourly checks call syncRoleLogs once and keep that per-check budget.
+ * Catch-up state for one tick. The clock is injected.
+ * Incomplete inventory closes pause only. Price stays open, including past 24 hours.
+ * A failed slice is retried next tick; the failure alert is not repeated until a slice succeeds.
  */
-export async function catchUpRoleLogs(opts: {
-    chain: PauseChain;
-    statePath: string;
-    chainId: number;
-    registry: Address;
-    registryStartBlock: bigint;
-    head: bigint;
-    finalized: bigint;
-    maxCalls?: number;
-    budgetMs: number;
-    now?: () => number;
-    log?: (line: string) => void;
-}): Promise<{ ok: true; roleIds: Hex[] } | { ok: false; reason: string }> {
-    const now = opts.now ?? Date.now;
-    const log = opts.log ?? (() => {});
-    const start = now();
-    if (!Number.isSafeInteger(opts.budgetMs) || opts.budgetMs <= 0) return { ok: false, reason: 'role logs missing' };
-    let round = 0;
-    for (;;) {
-        round += 1;
-        const synced = await syncRoleLogs(opts);
-        log(`role-sync round=${round} ${synced.ok ? 'complete' : synced.reason}`);
-        if (synced.ok || synced.reason !== 'role logs incomplete') return synced;
-        if (now() - start >= opts.budgetMs) return synced;
-        if (round >= 10_000) return synced;
+export function decideRoleCatchUp(input: {
+    nowMs: number;
+    startedAt: number;
+    slice: 'pending' | 'incomplete' | 'complete' | 'failed';
+    unpinnedPrivilege: boolean;
+    previous: RoleCatchUpMarks;
+}): RoleCatchUpDecision {
+    const prev = input.previous;
+    const marks: RoleCatchUpMarks = {
+        started: prev.started,
+        completed: prev.completed,
+        overdue: prev.overdue,
+        failAlerted: prev.failAlerted,
+    };
+    const alerts: string[] = [];
+    if (!marks.started) {
+        marks.started = true;
+        alerts.push(ROLE_INVENTORY_CATCHING_UP);
     }
+    const complete = input.slice === 'complete';
+    if (input.slice === 'failed') {
+        if (!marks.failAlerted) {
+            marks.failAlerted = true;
+            alerts.push(ROLE_SLICE_FAILED);
+        }
+    } else if (input.slice !== 'pending') {
+        marks.failAlerted = false;
+    }
+    let price = true;
+    let pause = false;
+    let reason: string = ROLE_INVENTORY_CATCHING_UP;
+    let closeAll = false;
+    if (complete && input.unpinnedPrivilege) {
+        closeAll = true;
+        price = false;
+        pause = false;
+        reason = 'sender: gate closed';
+        if (!marks.completed) {
+            marks.completed = true;
+            alerts.push(ROLE_INVENTORY_CAUGHT_UP);
+        }
+    } else if (complete) {
+        pause = true;
+        reason = '';
+        if (!marks.completed) {
+            marks.completed = true;
+            alerts.push(ROLE_INVENTORY_CAUGHT_UP);
+        }
+    } else if (
+        Number.isSafeInteger(input.nowMs)
+        && Number.isSafeInteger(input.startedAt)
+        && input.nowMs >= input.startedAt
+        && input.nowMs - input.startedAt >= ROLE_CATCHUP_OVERDUE_MS
+        && !marks.overdue
+    ) {
+        marks.overdue = true;
+        alerts.push(ROLE_CATCHUP_OVERDUE);
+    }
+    return { price, pause, reason, alert: alerts.length ? alerts.join('\n') : null, marks, closeAll };
 }

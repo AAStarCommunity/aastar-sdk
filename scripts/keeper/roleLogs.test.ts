@@ -7,7 +7,16 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getAddress, type Address, type Hex } from 'viem';
 import type { PauseChain, PauseLog } from './pauseDuty';
-import { ROLE_SYNC_CHUNK, ROLE_SYNC_MAX_CALLS, ROLE_TOPIC, catchUpRoleLogs, syncRoleLogs, validRoleLog } from './roleLogs';
+import {
+    ROLE_CATCHUP_OVERDUE_MS,
+    ROLE_SYNC_CHUNK,
+    ROLE_SYNC_MAX_CALLS,
+    ROLE_TOPIC,
+    decideRoleCatchUp,
+    syncRoleLogs,
+    validRoleLog,
+    type RoleCatchUpMarks,
+} from './roleLogs';
 
 const REG = getAddress('0x2222222222222222222222222222222222222222');
 const OTHER = getAddress('0x3333333333333333333333333333333333333333');
@@ -100,33 +109,52 @@ describe('role logs', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(saved.roleIds).not.toContain(tail);
     });
 
-    it('a startup catch-up finishes a backlog ten times the per-check budget', async () => {
+    it('one slice does not finish a backlog ten times the per-tick budget', async () => {
         const root = mkdtempSync(join(tmpdir(), 'role-logs-'));
         dirs.push(root);
         const finalized = ROLE_SYNC_CHUNK * BigInt(ROLE_SYNC_MAX_CALLS) * 10n - 1n;
-        const clock = 1_700_000_000_000;
-        const one = await syncRoleLogs({
+        const statePath = join(root, 'slice.json');
+        const opts = {
             chain: chain([]),
-            statePath: join(root, 'one.json'),
+            statePath,
             chainId: 11155111,
             registry: REG,
             registryStartBlock: 0n,
             head: finalized,
             finalized,
-        });
+            maxCalls: ROLE_SYNC_MAX_CALLS,
+        };
+        const one = await syncRoleLogs(opts);
         expect(one).toEqual({ ok: false, reason: 'role logs incomplete' });
-        const caught = await catchUpRoleLogs({
-            chain: chain([]),
-            statePath: join(root, 'catch.json'),
-            chainId: 11155111,
-            registry: REG,
-            registryStartBlock: 0n,
-            head: finalized,
-            finalized,
-            budgetMs: 15 * 60 * 1000,
-            now: () => clock,
+        let synced = one;
+        for (let i = 0; i < 20 && !synced.ok; i++) synced = await syncRoleLogs(opts);
+        expect(synced.ok).toBe(true);
+    });
+
+    it('a catch-up still incomplete after 24 h alerts once and price keeps running', () => {
+        const startedAt = 1_700_000_000_000;
+        const previous: RoleCatchUpMarks = { started: true, completed: false, overdue: false, failAlerted: false };
+        const first = decideRoleCatchUp({
+            nowMs: startedAt + ROLE_CATCHUP_OVERDUE_MS,
+            startedAt,
+            slice: 'incomplete',
+            unpinnedPrivilege: false,
+            previous,
         });
-        expect(caught.ok).toBe(true);
+        expect(first.alert).toContain('role inventory catch-up still incomplete after 24h');
+        expect(first.price).toBe(true);
+        expect(first.pause).toBe(false);
+        expect(first.reason).toBe('role inventory catching up');
+        const second = decideRoleCatchUp({
+            nowMs: startedAt + ROLE_CATCHUP_OVERDUE_MS + 60_000,
+            startedAt,
+            slice: 'incomplete',
+            unpinnedPrivilege: false,
+            previous: first.marks,
+        });
+        expect(second.alert).toBeNull();
+        expect(second.price).toBe(true);
+        expect(second.pause).toBe(false);
     });
 
     it('halves a rejected role-log range down to one block', async () => {
