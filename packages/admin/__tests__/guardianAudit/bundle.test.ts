@@ -51,7 +51,7 @@ function action(over: Partial<FoundAction> & Pick<FoundAction, 'blockNumber' | '
         kind: over.kind,
         decoded,
         log: over.log ?? logOf(over.blockNumber, over.txHash, over.logIndex, address, blockHash),
-        attribution: 'attribution' in over ? over.attribution : { tag: 'test' },
+        attribution: 'attribution' in over ? over.attribution : { attributionSource: 'dual:alchemy+quicknode' },
     };
 }
 
@@ -156,7 +156,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(first.bundle.actions[0]?.verdict.rule).toBe('ownerRoute.events.GuardianSet');
         expect(first.bundle.actions[1]?.verdict.rule).toBe('bls.GENERIC.expected:superPaymaster.updatePriceDVT(int256,uint256,bytes,uint8)');
         expect(first.bundle.actions[1]?.attribution).toEqual({ who: SP, tag: 'bls' });
-        expect(first.bundle.actions[0]?.attribution).toEqual({ tag: 'test' });
+        expect(first.bundle.actions[0]?.attribution).toEqual({ attributionSource: 'dual' });
         expect('unattributed' in first.bundle).toBe(false);
     });
 
@@ -172,7 +172,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             providers: ['primary', 'secondary'],
             sdkVersion: '0.46.0-rc.2',
             generatedAt: '2026-11-12T00:00:00.000Z',
-            traceProviders: [],
+            traceProviders: ['alchemy', 'quicknode'],
         });
         expect(b.runMetadata.providers).toEqual(['alpha', 'beta']);
         const text = canonicalJson(a.bundle);
@@ -1391,6 +1391,76 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const shapedCheck = verifyEvidenceFile(shapedText, { bundle: published.bundle, digest: published.digest });
         expect(shapedCheck.ok).toBe(false);
         expect(shapedCheck.reasons).toContain('rerun digest differs from the file digest');
+    });
+
+    it('treats an untagged attribution like single-trace attribution', () => {
+        const timelock = '0x4444444444444444444444444444444444444444' as Address;
+        const timelockSig = 'execute(address,uint256,bytes)';
+        const timelockRule = `bls.GENERIC.expected:timelock.${timelockSig}`;
+        const rs = structuredClone(DEFAULT_RULESET);
+        rs.bls.GENERIC.expected.push({
+            target: 'timelock',
+            signature: timelockSig,
+            flag: false,
+            reason: 'timelock executed a scheduled call',
+        });
+        const factKinds: FactKindMap = {
+            ...DEFAULT_FACT_KINDS,
+            [timelockRule]: ['topLevel', 'receiptLogs'],
+        };
+        const sender = getAddress('0x1111111111111111111111111111111111111111');
+        const untagged = [
+            {},
+            {
+                transactionSender: sender,
+                immediateCaller: SP,
+                forwardingPath: [{ type: 'CALL', from: sender, to: SP, selector: '0xdeadbeef' }],
+                emitter: SP,
+            },
+            { tag: 'x' },
+        ];
+        for (const attribution of untagged) {
+            const owner = action({
+                blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution,
+            });
+            const direct = action({
+                blockNumber: 4,
+                logIndex: 1,
+                txHash: word('bb'),
+                kind: 'GENERIC',
+                address: timelock,
+                attribution,
+                decoded: { kind: 'GENERIC', callData: toFunctionSelector(timelockSig) },
+            });
+            const built = build({
+                result: complete([owner, direct], []),
+                ruleset: rs,
+                roles: { superPaymaster: SP, timelock },
+                factKinds,
+                classify: (found) => found.kind === 'GENERIC'
+                    ? { route: 'bls', kind: 'GENERIC', fields: { target: timelock, callData: toFunctionSelector(timelockSig) } }
+                    : { route: 'owner', event: 'GuardianSet' },
+            });
+            const byTx = new Map(built.bundle.actions.map((item) => [item.txHash, item.verdict]));
+            expect(byTx.get(word('aa'))).toEqual({
+                flagged: true,
+                reasons: ['single-trace attribution (unverified internal frame)'],
+                rule: 'ownerRoute.events.GuardianSet',
+            });
+            expect(byTx.get(word('bb'))).toEqual({
+                flagged: false,
+                reasons: ['timelock executed a scheduled call'],
+                rule: timelockRule,
+            });
+            const file = serializeEvidenceFile(built);
+            const check = verifyEvidenceFile(file, { bundle: built.bundle, digest: built.digest });
+            expect(check.ok).toBe(true);
+            const parsed = parseEvidenceFile(file);
+            const published = new Map(parsed.bundle.actions.map((item) => [item.txHash, item.verdict]));
+            expect(published.get(word('aa'))?.flagged).toBe(true);
+            expect(published.get(word('aa'))?.reasons).toEqual(['single-trace attribution (unverified internal frame)']);
+            expect(published.get(word('bb'))?.flagged).toBe(false);
+        }
     });
 
     it('exports a provider-name predicate and not the pattern', () => {

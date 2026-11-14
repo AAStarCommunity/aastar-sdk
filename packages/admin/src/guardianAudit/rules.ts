@@ -427,9 +427,10 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
 /**
  * Verdict for one record: `{ flagged, reasons, rule }`.
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
- * After the rule verdict, a `single` attribution whose rule uses `internalFrames` is forced
- * to `{ flagged: true, reasons: ['single-trace attribution (unverified internal frame)'] }`.
- * `dual` leaves the rule verdict. Fact kinds come from `options.factKinds` or {@link DEFAULT_FACT_KINDS}.
+ * After the rule verdict, only `dual` leaves the rule verdict in place. `single`, a missing
+ * `attributionSource`, and any other kind are forced when the rule uses `internalFrames`:
+ * `{ flagged: true, reasons: ['single-trace attribution (unverified internal frame)'] }`.
+ * Fact kinds come from `options.factKinds` or {@link DEFAULT_FACT_KINDS}.
  */
 export function evaluate(
     rs: Ruleset, roles: Record<string, string>, record: RuleRecord, options?: EvaluateOptions,
@@ -755,7 +756,9 @@ function readEvaluatePolicy(options: unknown): EvaluatePolicy {
 }
 
 function applySingleTrace(verdict: Verdict, policy: EvaluatePolicy): Verdict {
-    if (policy.kind !== 'single') return verdict;
+    // Only dual-verified attribution lifts the override. A missing or unrecognised attributionSource
+    // is treated like single, never as more trusted than single (#449 clestons M2').
+    if (policy.kind === 'dual') return verdict;
     const declared = Object.hasOwn(policy.factKinds, verdict.rule)
         ? policy.factKinds[verdict.rule]!
         : INTERNAL_FRAMES_ONLY;

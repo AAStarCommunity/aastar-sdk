@@ -11,6 +11,8 @@ import {
 const SP = '0x2222222222222222222222222222222222222222';
 const OTHER = '0x3333333333333333333333333333333333333333';
 const roles = { superPaymaster: getAddress(SP) };
+/** Dual lifts the single-trace override so these tests still see the rule's own verdict. */
+const DUAL = { attributionSource: 'dual:alchemy+quicknode' };
 const priceSig = 'updatePriceDVT(int256,uint256,bytes,uint8)';
 const priceSel = toFunctionSelector(priceSig);
 const priceCall = `${priceSel}${'ab'.repeat(16)}`;
@@ -77,12 +79,12 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
     });
 
     it('flags a listed owner event and an unlisted owner event', () => {
-        expect(evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: 'PriceUpdated' })).toEqual({
+        expect(evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: 'PriceUpdated' }, { attribution: DUAL })).toEqual({
             flagged: true,
             reasons: ['owner/guardian route: not BLS, no on-chain signer verification: PriceUpdated'],
             rule: 'ownerRoute.events.PriceUpdated',
         });
-        expect(evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: 'NotAnEvent' })).toEqual({
+        expect(evaluate(DEFAULT_RULESET, roles, { route: 'owner', event: 'NotAnEvent' }, { attribution: DUAL })).toEqual({
             flagged: true,
             reasons: ['unlisted SuperPaymaster event NotAnEvent'],
             rule: 'ownerRoute.unlisted',
@@ -98,7 +100,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: update.toUpperCase() as Hex,
             event: 'PriceUpdated',
             callEvents: ['PriceUpdated'],
-        });
+        }, { attribution: DUAL });
         expect(quiet).toEqual({
             flagged: false,
             reasons: ['permissionless call: caller recorded, not accused: updatePrice(): routine permissionless price refresh (Chainlink)'],
@@ -109,7 +111,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: update,
             event: 'PriceUpdated',
             callEvents: ['EmergencyPriceCancelled', 'PriceModeChanged'],
-        });
+        }, { attribution: DUAL });
         expect(also).toEqual({
             flagged: true,
             reasons: ['price mode changed via permissionless refresh (caller not accused): PriceModeChanged, EmergencyPriceCancelled'],
@@ -120,7 +122,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: toFunctionSelector('executeEmergencyPrice()'),
             event: 'EmergencyPriceExecuted',
             callEvents: ['EmergencyPriceExecuted'],
-        });
+        }, { attribution: DUAL });
         expect(emergency).toEqual({
             flagged: true,
             reasons: ['permissionless call: caller recorded, not accused: executeEmergencyPrice(): permissionless execution of an owner-queued emergency price (caller not accused)'],
@@ -131,7 +133,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: toFunctionSelector('pauseUnderstakedOperator(address)'),
             event: 'OperatorPaused',
             callEvents: ['OperatorPaused'],
-        });
+        }, { attribution: DUAL });
         expect(pause).toEqual({
             flagged: false,
             reasons: ['permissionless call: caller recorded, not accused: pauseUnderstakedOperator(address): permissionless pause of an understaked operator (routine; W3)'],
@@ -152,7 +154,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             { ...base, callEvents: ['OperatorSlashed'] },
             { route: 'public', selector: update },
         ];
-        const verdicts = cases.map((record) => evaluate(DEFAULT_RULESET, roles, record));
+        const verdicts = cases.map((record) => evaluate(DEFAULT_RULESET, roles, record, { attribution: DUAL }));
         expect(verdicts.map((verdict) => verdict.flagged)).toEqual([true, true, true, true]);
         expect(verdicts[0]).toEqual({
             flagged: true,
@@ -174,7 +176,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: toFunctionSelector('updatePrice()'),
             event: 'OperatorSlashed',
             callEvents: [],
-        })).toEqual({
+        }, { attribution: DUAL })).toEqual({
             flagged: true,
             reasons: ['public route event is not listed for this function'],
             rule: 'publicRoute.event',
@@ -194,7 +196,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
             selector: toFunctionSelector('updatePrice()'),
             event: names[0],
             callEvents: names,
-        });
+        }, { attribution: DUAL });
         expect(verdict).toEqual({
             flagged: true,
             reasons: ['verdict reason too long'],
@@ -204,12 +206,12 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
     });
 
     it('flags an unlisted public selector and an unattributed event', () => {
-        expect(evaluate(DEFAULT_RULESET, roles, { route: 'public', selector: '0xdeadbeef' })).toEqual({
+        expect(evaluate(DEFAULT_RULESET, roles, { route: 'public', selector: '0xdeadbeef' }, { attribution: DUAL })).toEqual({
             flagged: true,
             reasons: ['public route without a listed function'],
             rule: 'publicRoute.unlisted',
         });
-        expect(evaluate(DEFAULT_RULESET, roles, { route: 'unattributed', event: 'PriceUpdated' })).toEqual({
+        expect(evaluate(DEFAULT_RULESET, roles, { route: 'unattributed', event: 'PriceUpdated' }, { attribution: DUAL })).toEqual({
             flagged: true,
             reasons: ['SuperPaymaster event that a permissionless function can also emit, whose emitting call could not be determined after every retry (not attributed to anyone): PriceUpdated'],
             rule: 'publicRoute.unattributed',
@@ -689,10 +691,13 @@ describe('fact kinds and single-trace attribution', () => {
             attribution: { attributionSource: 'dual:alchemy+quicknode' },
             factKinds: kinds,
         });
-        expect(plain.flagged).toBe(false);
-        expect(plain.rule).toBe(RELAY_RULE);
-        expect(single).toEqual({ flagged: true, reasons: [SINGLE_TRACE_REASON], rule: RELAY_RULE });
-        expect(dual).toEqual(plain);
+        expect(plain).toEqual({ flagged: true, reasons: [SINGLE_TRACE_REASON], rule: RELAY_RULE });
+        expect(single).toEqual(plain);
+        expect(dual).toEqual({
+            flagged: false,
+            reasons: ['permissionless call: caller recorded, not accused: relay(bytes): forwarded public call'],
+            rule: RELAY_RULE,
+        });
         const mixed = evaluate(rs, roles, record, {
             attribution: { attributionSource: 'single' },
             factKinds: withFactKinds({ [RELAY_RULE]: ['topLevel', 'internalFrames'] }),
@@ -778,5 +783,33 @@ describe('fact kinds and single-trace attribution', () => {
         const dropped: FactKindMap = { ...DEFAULT_FACT_KINDS };
         delete (dropped as { 'bls.SLASH'?: readonly FactKind[] })['bls.SLASH'];
         expect(classifierRulesetSha256(DEFAULT_RULESET, dropped)).not.toBe(full);
+    });
+
+    it('treats an untagged attribution like single-trace attribution', () => {
+        const rs = timelockRuleset();
+        const sender = getAddress('0x1111111111111111111111111111111111111111');
+        const untagged = [
+            {},
+            {
+                transactionSender: sender,
+                immediateCaller: getAddress(SP),
+                forwardingPath: [{ type: 'CALL', from: sender, to: getAddress(SP), selector: '0xdeadbeef' }],
+                emitter: getAddress(SP),
+            },
+            { tag: 'x' },
+        ];
+        const owner: RuleRecord = { route: 'owner', event: 'GuardianSet' };
+        for (const attribution of untagged) {
+            expect(evaluate(rs, timelockRoles, owner, { attribution, factKinds: timelockKinds })).toEqual({
+                flagged: true,
+                reasons: [SINGLE_TRACE_REASON],
+                rule: 'ownerRoute.events.GuardianSet',
+            });
+            expect(evaluate(rs, timelockRoles, timelockRecord, { attribution, factKinds: timelockKinds })).toEqual({
+                flagged: false,
+                reasons: ['timelock executed a scheduled call'],
+                rule: TIMELOCK_RULE,
+            });
+        }
     });
 });
