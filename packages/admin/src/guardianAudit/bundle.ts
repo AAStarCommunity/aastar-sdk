@@ -1,7 +1,10 @@
 import { getAddress, sha256, stringToBytes, type Address, type Hex } from 'viem';
 import { canonicalDigest, canonicalJson, consumeCanonicalFailure, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES, snapshotPlain, type SnapshotBudget } from './canonical.js';
-import { SYMBOL_RE, evaluate, RULESET_SCHEMA, rulesetId, type RuleRecord, type Ruleset, type Verdict } from './rules.js';
-import { PROVIDER_NAME_RE, quantity } from './rpc.js';
+import {
+    DEFAULT_FACT_KINDS, SYMBOL_RE, classifierRulesetSha256, evaluate, RULESET_SCHEMA, rulesetId,
+    type FactKindMap, type RuleRecord, type Ruleset, type Verdict,
+} from './rules.js';
+import { isProviderName, quantity } from './rpc.js';
 import type { FoundAction, ScanResult } from './scan.js';
 
 /** Armed with a fixed string before `throw`. Catches read this, never the caught object. */
@@ -19,15 +22,28 @@ function raise(message: string): never {
  * identity sent to kms.aastar.io. `digest` is keccak256(canonicalJson(bundle)) and does not cover
  * run metadata.
  *
- * {@link RUN_METADATA_VARIABLE_FIELDS} — `generatedAt`, `providers`, `sdkVersion` — and only these,
- * may legitimately differ between two honest reruns over the same range and scope. Two honest files
- * may therefore have different sha256, but they MUST have the same `digest` and byte-identical
- * `canonicalJson(bundle)`. Any other difference means one of them is wrong.
+ * {@link RUN_METADATA_VARIABLE_FIELDS} — `generatedAt`, `providers`, `sdkVersion`, `traceProviders` —
+ * and only these, may legitimately differ between two honest reruns over the same range and scope.
+ * Two honest files may therefore have different sha256, but they MUST have the same `digest` and
+ * byte-identical `canonicalJson(bundle)`. Any other difference means one of them is wrong.
  *
- * The digested bundle is a function of the chain, the scope, the range, the ruleset, the roles, and
- * the chain data inside this range. Store history is not an input. An action of this range with no
- * attribution is UNATTRIBUTED. A later attribution of an earlier range is published by re-running
- * that earlier range, which produces its own bundle.
+ * A trace attribution is stored as the kind only: `attributionSource` is `single` or `dual`.
+ * The provider labels (`single:<name>`, `dual:<a>+<b>`) are copied into `runMetadata.traceProviders`
+ * (deduped, sorted) and are not part of the digest. Two honest reruns that used different trace
+ * providers therefore have the same bundle bytes.
+ *
+ * The digested bundle is a function of the chain, the scope, the range, the ruleset, the fact-kind
+ * map, the classifier name and version, the roles, and the chain data inside this range.
+ * Store history is not an input. An action of this range with no attribution is UNATTRIBUTED.
+ * A later attribution of an earlier range is published by re-running that earlier range, which
+ * produces its own bundle.
+ *
+ * `classifier` is `{ name, version, rulesetSha256 }` inside the bundle, so it is covered by `digest`.
+ * The caller supplies `name` and `version`. `rulesetSha256` is sha256 of the canonical JSON of the
+ * validated ruleset plus the resolved fact-kind map, computed here. A caller-supplied hash is rejected.
+ * `ruleset.digest` stays keccak256 of the ruleset alone. An honest rerun uses the same name, version,
+ * ruleset, and fact-kind map. The reference classifier is not in this package. It is published in PR-D.
+ * This identity does not embed classifier code.
  *
  * `verifyEvidenceFile` does three steps: (i) parse, which requires canonical bytes and a digest that
  * matches the bundle; (ii) the rerun's digest equals the file's digest and `canonicalJson(rerun.bundle)`
@@ -82,6 +98,14 @@ export interface EvidenceAction {
     verdict: Verdict;
 }
 
+/** Identity of the classifier that produced the verdicts. Inside the digested bundle. */
+export interface ClassifierIdentity {
+    name: string;
+    version: string;
+    /** sha256 of the canonical JSON of the ruleset plus the fact-kind map. Never caller-supplied. */
+    rulesetSha256: Hex;
+}
+
 export interface EvidenceBundle {
     schema: typeof EVIDENCE_SCHEMA;
     chainId: number;
@@ -89,6 +113,7 @@ export interface EvidenceBundle {
     range: { from: number; to: number };
     state: 'COMPLETE' | 'UNATTRIBUTED';
     ruleset: { schema: Ruleset['schema']; digest: Hex };
+    classifier: ClassifierIdentity;
     actions: EvidenceAction[];
     /** Present only when `state` is UNATTRIBUTED. Count of actions in this range with no attribution. */
     unattributed?: number;
@@ -99,10 +124,12 @@ export interface RunMetadata {
     providers: readonly [string, string];
     sdkVersion: string;
     generatedAt: string;
+    /** Trace provider labels from this run. Deduped and sorted. Not part of the digest. */
+    traceProviders: readonly string[];
 }
 
 /** The only fields that may differ between two honest reruns of one range and scope. */
-export const RUN_METADATA_VARIABLE_FIELDS = ['generatedAt', 'providers', 'sdkVersion'] as const;
+export const RUN_METADATA_VARIABLE_FIELDS = ['generatedAt', 'providers', 'sdkVersion', 'traceProviders'] as const;
 
 export const EVIDENCE_FILE_SCHEMA = 'aastar.guardian-audit.evidence-file.v1' as const;
 
@@ -129,6 +156,13 @@ export interface EvidenceInput {
     providers: readonly [string, string];
     sdkVersion: string;
     generatedAt?: string;
+    /** Caller-supplied identity. `rulesetSha256` is computed and must not be passed. */
+    classifier: { name: string; version: string };
+    /**
+     * Fact kinds for this run. Defaults to {@link DEFAULT_FACT_KINDS}.
+     * The same map is enforced by `evaluate` and covered by `classifier.rulesetSha256`.
+     */
+    factKinds?: FactKindMap;
 }
 
 function isRecord(v: unknown): v is Record<string, any> {
@@ -143,7 +177,9 @@ const DATA_RE = /^0x[0-9a-f]*$/;
 const SELECTOR_RE = /^0x[0-9a-f]{8}$/;
 
 const FILE_KEYS = ['schema', 'bundle', 'digest', 'runMetadata'] as const;
-const BUNDLE_KEYS = ['schema', 'chainId', 'scope', 'range', 'state', 'ruleset', 'actions'] as const;
+const BUNDLE_KEYS = ['schema', 'chainId', 'scope', 'range', 'state', 'ruleset', 'classifier', 'actions'] as const;
+const CLASSIFIER_KEYS = ['name', 'version', 'rulesetSha256'] as const;
+const CLASSIFIER_INPUT_KEYS = ['name', 'version'] as const;
 const RANGE_KEYS = ['from', 'to'] as const;
 const RULESET_KEYS = ['schema', 'digest'] as const;
 const ACTION_KEYS = ['blockNumber', 'blockHash', 'txHash', 'logIndex', 'address', 'kind', 'decoded', 'log', 'attribution', 'record', 'verdict'] as const;
@@ -189,14 +225,65 @@ const PUBLIC_REASONS = new Set<string>([
     'provider names must differ',
     'sdkVersion must be a string',
     'generatedAt must be a string',
+    'traceProviders invalid',
+    'evidence attribution kind is invalid',
+    'public route requires attribution',
+    'evidence block hash disagrees',
+    'classifier missing',
+    'classifier name is invalid',
+    'classifier version is invalid',
+    'classifier rulesetSha256 is invalid',
+    'classifier is invalid',
 ]);
 
-function assertLabel(name: string): void {
-    if (typeof name !== 'string' || name.length > 64 || !PROVIDER_NAME_RE.test(name)) raise('provider name is not a label');
+function assertLabel(name: unknown): void {
+    if (!isProviderName(name)) raise('provider name is not a label');
 }
 
 function boundedText(value: unknown, max: number): value is string {
     return typeof value === 'string' && value.length > 0 && value.length <= max && !value.includes('://') && !/[\r\n]/.test(value);
+}
+
+/** Letter first, then letters, digits, `.`, `_`, or `-`. Length is checked before the pattern. */
+const CLASSIFIER_NAME_RE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+/** `1.2.3` or `0.46.0-rc.2`. No `v` prefix and no leading zeros. Length is checked before the pattern. */
+const CLASSIFIER_VERSION_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+function classifierName(value: unknown): value is string {
+    if (typeof value !== 'string' || value.length < 1 || value.length > 64) return false;
+    if (value.includes('://') || /[\r\n]/.test(value)) return false;
+    return CLASSIFIER_NAME_RE.test(value);
+}
+
+function classifierVersion(value: unknown): value is string {
+    if (typeof value !== 'string' || value.length < 1 || value.length > 64) return false;
+    if (value.includes('://') || /[\r\n]/.test(value)) return false;
+    return CLASSIFIER_VERSION_RE.test(value);
+}
+
+/** `{ name, version }` only. A supplied `rulesetSha256` is an unknown key. */
+function assertClassifierInput(value: unknown): { name: string; version: string } {
+    if (value === undefined || value === null) raise('classifier missing');
+    if (!isRecord(value)) raise('classifier is invalid');
+    const keys = ownKeyList(value, CLASSIFIER_INPUT_KEYS.length, 'classifier is invalid');
+    if (keys.length !== CLASSIFIER_INPUT_KEYS.length) raise('classifier is invalid');
+    for (const key of keys) {
+        if (!(CLASSIFIER_INPUT_KEYS as readonly string[]).includes(key)) raise('classifier is invalid');
+    }
+    if (!classifierName(value.name)) raise('classifier name is invalid');
+    if (!classifierVersion(value.version)) raise('classifier version is invalid');
+    return { name: value.name, version: value.version };
+}
+
+function assertClassifierIdentity(value: unknown): void {
+    if (value === undefined || value === null) raise('classifier missing');
+    if (!isRecord(value)) raise('classifier is invalid');
+    exactKeys(value, CLASSIFIER_KEYS, 'classifier is invalid');
+    if (!classifierName(value.name)) raise('classifier name is invalid');
+    if (!classifierVersion(value.version)) raise('classifier version is invalid');
+    if (typeof value.rulesetSha256 !== 'string' || !HASH_RE.test(value.rulesetSha256)) {
+        raise('classifier rulesetSha256 is invalid');
+    }
 }
 
 function ownKeyList(obj: object, cap: number, message: string): string[] {
@@ -257,7 +344,82 @@ function assertRunMetadata(meta: unknown): RunMetadata {
     if (providers[0] === providers[1]) raise('provider names must differ');
     if (!boundedText(meta.sdkVersion, 64)) raise('sdkVersion must be a string');
     if (!boundedText(meta.generatedAt, 64)) raise('generatedAt must be a string');
-    return { providers: [providers[0], providers[1]], sdkVersion: meta.sdkVersion, generatedAt: meta.generatedAt };
+    const listed = meta.traceProviders;
+    if (!Array.isArray(listed) || listed.length > MAX_TRACE_PROVIDERS) raise('traceProviders invalid');
+    const traceProviders: string[] = [];
+    for (let i = 0; i < listed.length; i++) {
+        const name = listed[i];
+        if (!isProviderName(name)) raise('provider name is not a label');
+        const prev = traceProviders.length === 0 ? undefined : traceProviders[traceProviders.length - 1];
+        if (prev !== undefined && prev >= name) raise('traceProviders invalid');
+        traceProviders.push(name);
+    }
+    return {
+        providers: [providers[0], providers[1]],
+        sdkVersion: meta.sdkVersion,
+        generatedAt: meta.generatedAt,
+        traceProviders,
+    };
+}
+
+/** `dual:` + 64 + `+` + 64. Longer text is rejected before it is scanned. */
+const TRACE_SOURCE_MAX = 133;
+const MAX_TRACE_PROVIDERS = 64;
+
+/** First index of `needle`, or -1 when it is missing or repeated. `text` is already length-capped. */
+function boundedIndex(text: string, needle: string): number {
+    const at = text.indexOf(needle);
+    if (at < 0 || text.indexOf(needle, at + 1) >= 0) return -1;
+    return at;
+}
+
+/**
+ * `single`, `dual`, `single:<name>`, or `dual:<a>+<b>`.
+ * Names are checked with {@link isProviderName} only after the source length is capped.
+ */
+function traceKind(source: unknown): { kind: 'single' | 'dual'; names: readonly string[] } | null {
+    if (typeof source !== 'string' || source.length === 0 || source.length > TRACE_SOURCE_MAX) return null;
+    if (source === 'single' || source === 'dual') return { kind: source, names: [] };
+    const colon = boundedIndex(source, ':');
+    if (colon <= 0) return null;
+    const kind = source.slice(0, colon);
+    const rest = source.slice(colon + 1);
+    if (kind === 'single') {
+        if (!isProviderName(rest)) return null;
+        return { kind: 'single', names: [rest] };
+    }
+    if (kind === 'dual') {
+        const plus = boundedIndex(rest, '+');
+        if (plus <= 0) return null;
+        const left = rest.slice(0, plus);
+        const right = rest.slice(plus + 1);
+        if (!isProviderName(left) || !isProviderName(right) || left === right) return null;
+        return { kind: 'dual', names: [left, right] };
+    }
+    return null;
+}
+
+/** Digest keeps the kind. Names are collected for `runMetadata.traceProviders`. */
+function publishAttribution(attribution: unknown, names: Set<string>): unknown {
+    if (attribution === null) return null;
+    if (!isRecord(attribution)) raise('evidence action is invalid');
+    if (!Object.hasOwn(attribution, 'attributionSource')) return attribution;
+    const parsed = traceKind(attribution.attributionSource);
+    if (!parsed) raise('evidence attribution kind is invalid');
+    for (const name of parsed.names) {
+        if (names.has(name)) continue;
+        if (names.size >= MAX_TRACE_PROVIDERS) raise('traceProviders invalid');
+        names.add(name);
+    }
+    return { ...attribution, attributionSource: parsed.kind };
+}
+
+function assertPublishedAttribution(attribution: unknown): void {
+    if (attribution == null) return;
+    if (!isRecord(attribution)) raise('evidence action is invalid');
+    if (!Object.hasOwn(attribution, 'attributionSource')) return;
+    const source = attribution.attributionSource;
+    if (source !== 'single' && source !== 'dual') raise('evidence attribution kind is invalid');
 }
 
 function evidenceAddress(value: unknown): Address {
@@ -374,7 +536,21 @@ function assertRoleMap(roles: unknown): Record<string, string> {
  * One plain action, checked before any classifier runs.
  * `removed: true` is rejected here. The published log never carries `removed`.
  */
-function prepareAction(raw: unknown, range: { from: number; to: number }, identities: Set<string>): PreparedAction {
+function noteBlockHash(height: number, hash: Hex, heights: Map<number, Hex>): void {
+    const prior = heights.get(height);
+    if (prior === undefined) {
+        heights.set(height, hash);
+        return;
+    }
+    if (prior !== hash) raise('evidence block hash disagrees');
+}
+
+function prepareAction(
+    raw: unknown,
+    range: { from: number; to: number },
+    identities: Set<string>,
+    heights: Map<number, Hex>,
+): PreparedAction {
     const snapshot = raw;
     if (!isRecord(snapshot)) raise('evidence action is invalid');
     if (!isRecord(snapshot.log)) raise('evidence log is invalid');
@@ -392,6 +568,7 @@ function prepareAction(raw: unknown, range: { from: number; to: number }, identi
         raise('evidence action does not match its log');
     }
     if (blockNumber < range.from || blockNumber > range.to) raise('evidence action is outside the range');
+    noteBlockHash(blockNumber, blockHash, heights);
     const identity = `${blockHash}:${logIndex}`;
     if (identities.has(identity)) raise('evidence action is duplicated');
     identities.add(identity);
@@ -416,6 +593,8 @@ function classifyOne(
     ruleset: Ruleset,
     roles: Record<string, string>,
     budget: SnapshotBudget,
+    traceNames: Set<string>,
+    factKinds: FactKindMap,
 ): EvidenceAction {
     const arg = snapshotPlain(prepared.snapshot, budget);
     let raw: unknown;
@@ -427,6 +606,7 @@ function classifyOne(
     const record = snapshotPlain(raw, budget);
     normalizeClassifier(record, 0);
     assertRecord(record);
+    const attribution = publishAttribution(prepared.attribution, traceNames);
     return {
         blockNumber: prepared.blockNumber,
         blockHash: prepared.blockHash,
@@ -436,9 +616,9 @@ function classifyOne(
         kind: prepared.kind,
         decoded: prepared.decoded,
         log: prepared.log,
-        attribution: prepared.attribution,
+        attribution,
         record: record as RuleRecord,
-        verdict: evaluate(ruleset, roles, record as RuleRecord),
+        verdict: evaluate(ruleset, roles, record as RuleRecord, { attribution, factKinds }),
     };
 }
 
@@ -512,6 +692,7 @@ function assertAction(
     range: { from: number; to: number },
     requireAttribution: boolean,
     identities: Set<string>,
+    heights: Map<number, Hex>,
 ): EvidenceAction {
     if (!isRecord(action)) raise('evidence action is invalid');
     exactKeys(action, ACTION_KEYS, 'evidence action is invalid');
@@ -533,6 +714,7 @@ function assertAction(
     if (action.blockNumber < range.from || action.blockNumber > range.to) {
         raise('evidence action is outside the range');
     }
+    noteBlockHash(action.blockNumber, action.blockHash as Hex, heights);
     const identity = `${action.blockHash}:${action.logIndex}`;
     if (identities.has(identity)) raise('evidence action is duplicated');
     identities.add(identity);
@@ -541,6 +723,10 @@ function assertAction(
     }
     if (action.attribution !== null && !isRecord(action.attribution)) raise('evidence action is invalid');
     assertRecord(action.record);
+    if (action.attribution == null && isRecord(action.record) && action.record.route === 'public') {
+        raise('public route requires attribution');
+    }
+    assertPublishedAttribution(action.attribution);
     assertVerdict(action.verdict);
     return action as EvidenceAction;
 }
@@ -555,8 +741,10 @@ function assertPublished(bundle: EvidenceBundle): void {
     if (!isRecord(bundle)) raise('evidence bundle is invalid');
     if (bundle.schema !== EVIDENCE_SCHEMA) raise('evidence file: unknown schema');
     if (bundle.state !== 'COMPLETE' && bundle.state !== 'UNATTRIBUTED') raise('evidence state is invalid');
+    if (!Object.hasOwn(bundle, 'classifier')) raise('classifier missing');
     const top = bundle.state === 'UNATTRIBUTED' ? [...BUNDLE_KEYS, 'unattributed'] : BUNDLE_KEYS;
     exactKeys(bundle, top, 'evidence bundle is invalid');
+    assertClassifierIdentity(bundle.classifier);
     if (typeof bundle.chainId !== 'number' || !Number.isSafeInteger(bundle.chainId) || bundle.chainId <= 0) {
         raise('evidence chainId is invalid');
     }
@@ -564,7 +752,11 @@ function assertPublished(bundle: EvidenceBundle): void {
     const range = bundle.range;
     if (!isRecord(range)) raise('evidence range is invalid');
     exactKeys(range, RANGE_KEYS, 'evidence range is invalid');
-    if (!assertSafeCount(range.from) || !assertSafeCount(range.to)) raise('evidence range is invalid');
+    const rangeFrom = range.from;
+    const rangeTo = range.to;
+    if (!assertSafeCount(rangeFrom) || !assertSafeCount(rangeTo) || rangeFrom > rangeTo) {
+        raise('evidence range is invalid');
+    }
     if (!isRecord(bundle.ruleset)) raise('evidence bundle is invalid');
     exactKeys(bundle.ruleset, RULESET_KEYS, 'evidence bundle is invalid');
     if (bundle.ruleset.schema !== RULESET_SCHEMA || typeof bundle.ruleset.digest !== 'string' || !HASH_RE.test(bundle.ruleset.digest)) {
@@ -573,9 +765,10 @@ function assertPublished(bundle: EvidenceBundle): void {
     if (!Array.isArray(bundle.actions) || bundle.actions.length > 100_000) raise('evidence actions missing');
     const requireAttribution = bundle.state === 'COMPLETE';
     const identities = new Set<string>();
+    const heights = new Map<number, Hex>();
     let missing = 0;
     for (const action of bundle.actions) {
-        const published = assertAction(action, range as { from: number; to: number }, requireAttribution, identities);
+        const published = assertAction(action, { from: rangeFrom, to: rangeTo }, requireAttribution, identities, heights);
         if (published.attribution == null) missing += 1;
     }
     assertSorted(bundle.actions as EvidenceAction[]);
@@ -613,7 +806,7 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
     const from = result.from;
     const to = result.to;
     if (typeof from !== 'number' || typeof to !== 'number'
-        || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < 0) {
+        || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < 0 || from > to) {
         raise('evidence range is invalid');
     }
     const actions = result.actions;
@@ -625,24 +818,35 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
     const classify = snap.classify;
     if (typeof classify !== 'function') raise('classify is not a function');
     const generatedAtRaw = snap.generatedAt;
-    const runMetadata = assertRunMetadata({
+    const generatedAt = generatedAtRaw === undefined ? new Date().toISOString() : generatedAtRaw;
+    // Labels are checked before classify. Trace names are filled in after the actions are read.
+    assertRunMetadata({
         providers: snap.providers,
         sdkVersion: snap.sdkVersion,
-        generatedAt: generatedAtRaw === undefined ? new Date().toISOString() : generatedAtRaw,
+        generatedAt,
+        traceProviders: [],
     });
+    const classifier = assertClassifierInput(snap.classifier);
     const roles = assertRoleMap(snap.roles);
     const ruleset = snap.ruleset as Ruleset;
     const id = rulesetId(ruleset);
+    const factKinds: FactKindMap = snap.factKinds === undefined ? DEFAULT_FACT_KINDS : snap.factKinds as FactKindMap;
+    // Same map `evaluate` reads. A missing rule id is stored as internalFrames inside the hash.
+    const rulesetSha256 = classifierRulesetSha256(ruleset, factKinds);
     const range = { from, to };
     const identities = new Set<string>();
-    const prepared = actions.map((raw) => prepareAction(raw, range, identities));
+    const heights = new Map<number, Hex>();
+    const prepared = actions.map((raw) => prepareAction(raw, range, identities, heights));
     let missing = 0;
     for (const item of prepared) {
         if (item.attribution === null) missing += 1;
     }
     const publishedState = missing > 0 ? 'UNATTRIBUTED' : 'COMPLETE';
     const recordBudget: SnapshotBudget = { nodes: 0, bytes: 0 };
-    const packed = prepared.map((item) => classifyOne(item, classify as EvidenceInput['classify'], ruleset, roles, recordBudget));
+    const traceNames = new Set<string>();
+    const packed = prepared.map((item) => classifyOne(
+        item, classify as EvidenceInput['classify'], ruleset, roles, recordBudget, traceNames, factKinds,
+    ));
     packed.sort(byPosition);
     const bundle: EvidenceBundle = {
         schema: EVIDENCE_SCHEMA,
@@ -651,10 +855,18 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
         range,
         state: publishedState,
         ruleset: id,
+        classifier: { name: classifier.name, version: classifier.version, rulesetSha256 },
         actions: packed,
     };
     if (publishedState === 'UNATTRIBUTED') bundle.unattributed = missing;
     assertPublished(bundle);
+    const traceProviders = [...traceNames].sort();
+    const runMetadata = assertRunMetadata({
+        providers: snap.providers,
+        sdkVersion: snap.sdkVersion,
+        generatedAt,
+        traceProviders,
+    });
     return { bundle, digest: canonicalDigest(bundle), runMetadata };
 }
 
@@ -682,6 +894,15 @@ export function serializeEvidenceFile(parts: { bundle: EvidenceBundle; digest: H
     }
     assertPublished(snap.bundle as EvidenceBundle);
     const runMetadata = assertRunMetadata(snap.runMetadata);
+    let digestOfBundle: string;
+    try {
+        digestOfBundle = canonicalDigest(snap.bundle);
+    } catch {
+        const message = consumeCanonicalFailure();
+        if (message === 'canonical: output too large') raise('evidence file too large');
+        raise('evidence digest mismatch');
+    }
+    if (digestOfBundle !== snap.digest) raise('evidence digest mismatch');
     let body: string;
     try {
         body = canonicalJson({

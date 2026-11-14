@@ -8,9 +8,15 @@ import {
     verifyEvidenceBundle, verifyEvidenceFile, type EvidenceBundle, type RunMetadata,
 } from '../../src/guardianAudit/bundle';
 import * as rulesMod from '../../src/guardianAudit/rules';
-import { DEFAULT_RULESET, validateRuleset, rulesetId, type RuleRecord, type Ruleset } from '../../src/guardianAudit/rules';
+import {
+    DEFAULT_FACT_KINDS, DEFAULT_RULESET, classifierRulesetSha256, validateRuleset, rulesetId,
+    type FactKindMap, type RuleRecord, type Ruleset,
+} from '../../src/guardianAudit/rules';
 import type { DecodedAction, FoundAction, ScanResult } from '../../src/guardianAudit/scan';
 import type { RawLog } from '../../src/guardianAudit/rpc';
+import { isProviderName } from '../../src/guardianAudit';
+import * as guardianAudit from '../../src/guardianAudit';
+import * as rpcMod from '../../src/guardianAudit/rpc';
 
 const SP = '0x2222222222222222222222222222222222222222' as Address;
 const SCOPE = `0x${'ab'.repeat(32)}` as Hex;
@@ -92,7 +98,7 @@ function flipByte(hex: string): Hex {
 
 const baseActions = [
     action({ blockNumber: 5, logIndex: 1, txHash: word('bb'), blockHash: word('a2'), kind: 'GENERIC', attribution: { who: SP, tag: 'bls' } }),
-    action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), kind: 'owner' }),
+    action({ blockNumber: 5, logIndex: 2, txHash: word('aa'), blockHash: word('a2'), kind: 'owner' }),
     action({ blockNumber: 4, logIndex: 3, txHash: word('cc'), kind: 'owner', address: getAddress(SP) }),
 ];
 const basePrior = [
@@ -111,6 +117,7 @@ function build(over: Partial<Parameters<typeof buildEvidenceBundle>[0]> = {}) {
         providers: ['primary', 'secondary'],
         sdkVersion: '0.46.0-rc.2',
         generatedAt: '2026-11-12T00:00:00.000Z',
+        classifier: { name: 'auditClassifier', version: '1.0.0' },
         ...over,
     });
 }
@@ -143,12 +150,12 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(parsed.actions).toHaveLength(3);
         expect(parsed.ruleset.digest).toBe(rulesetId(DEFAULT_RULESET).digest);
         expect(first.bundle.actions.map((item) => item.txHash.toLowerCase())).toEqual([
-            word('cc'), word('aa'), word('bb'),
+            word('cc'), word('bb'), word('aa'),
         ]);
         expect('resolvedPrior' in first.bundle).toBe(false);
         expect(first.bundle.actions[0]?.verdict.rule).toBe('ownerRoute.events.GuardianSet');
-        expect(first.bundle.actions[2]?.verdict.rule).toBe('bls.GENERIC.expected:superPaymaster.updatePriceDVT(int256,uint256,bytes,uint8)');
-        expect(first.bundle.actions[2]?.attribution).toEqual({ who: SP, tag: 'bls' });
+        expect(first.bundle.actions[1]?.verdict.rule).toBe('bls.GENERIC.expected:superPaymaster.updatePriceDVT(int256,uint256,bytes,uint8)');
+        expect(first.bundle.actions[1]?.attribution).toEqual({ who: SP, tag: 'bls' });
         expect(first.bundle.actions[0]?.attribution).toEqual({ tag: 'test' });
         expect('unattributed' in first.bundle).toBe(false);
     });
@@ -165,6 +172,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             providers: ['primary', 'secondary'],
             sdkVersion: '0.46.0-rc.2',
             generatedAt: '2026-11-12T00:00:00.000Z',
+            traceProviders: [],
         });
         expect(b.runMetadata.providers).toEqual(['alpha', 'beta']);
         const text = canonicalJson(a.bundle);
@@ -244,7 +252,8 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         }
         const lying = JSON.parse(text) as { bundle: EvidenceBundle; digest: Hex; runMetadata: RunMetadata };
         lying.digest = flipByte(lying.digest);
-        const lyingText = serializeEvidenceFile(lying);
+        expect(() => serializeEvidenceFile(lying)).toThrow(/^evidence digest mismatch$/);
+        const lyingText = `${canonicalJson(lying)}\n`;
         expect(() => parseEvidenceFile(lyingText)).toThrow(/evidence digest mismatch/);
         const rejected = verifyEvidenceFile(pretty, { bundle: build().bundle, digest: build().digest });
         expect(rejected.ok).toBe(false);
@@ -284,13 +293,22 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
     });
 
     it('rejects a complete bundle that omits attribution, range, count, or chainId', () => {
-        const caughtUp = complete([], []);
+        const caughtUp = complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []);
         caughtUp.from = 10;
         caughtUp.to = 9;
-        const empty = build({ result: caughtUp });
-        expect(empty.bundle.state).toBe('COMPLETE');
-        expect(empty.bundle.actions).toEqual([]);
-        expect(empty.bundle.range).toEqual({ from: 10, to: 9 });
+        let rangeCalls = 0;
+        expect(() => build({
+            result: caughtUp,
+            classify: () => {
+                rangeCalls += 1;
+                return { route: 'owner', event: 'GuardianSet' };
+            },
+        })).toThrow(/^evidence range is invalid$/);
+        expect(rangeCalls).toBe(0);
+        const swapped = complete([], []);
+        swapped.from = 9;
+        swapped.to = 4;
+        expect(() => build({ result: swapped })).toThrow(/^evidence range is invalid$/);
 
         const bare = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         delete bare.attribution;
@@ -511,11 +529,22 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(a.bundle.actions[0]!.log).not.toHaveProperty('removed');
     });
 
-    it('orders equal positions by blockHash then txHash', () => {
+    it('rejects two block hashes at one height and rejects a duplicate log', () => {
         const laterHash = action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), blockHash: word('a2'), kind: 'owner' });
         const earlierHash = action({ blockNumber: 5, logIndex: 1, txHash: word('ff'), blockHash: word('a1'), kind: 'owner' });
-        const byHash = build({ result: complete([laterHash, earlierHash], []) });
-        expect(byHash.bundle.actions.map((item) => item.blockHash)).toEqual([word('a1'), word('a2')]);
+        let hashCalls = 0;
+        expect(() => build({
+            result: complete([laterHash, earlierHash], []),
+            classify: () => {
+                hashCalls += 1;
+                return { route: 'owner', event: 'GuardianSet' };
+            },
+        })).toThrow(/^evidence block hash disagrees$/);
+        expect(hashCalls).toBe(0);
+        const sameHash = action({ blockNumber: 5, logIndex: 2, txHash: word('ff'), blockHash: word('a1'), kind: 'owner' });
+        const agreed = build({ result: complete([earlierHash, sameHash], []) });
+        expect(agreed.bundle.actions.map((item) => item.logIndex)).toEqual([1, 2]);
+        expect(agreed.bundle.actions.every((item) => item.blockHash === word('a1'))).toBe(true);
         const aa = action({ blockNumber: 5, logIndex: 1, txHash: word('aa'), blockHash: word('b2'), kind: 'owner' });
         const cc = action({ blockNumber: 5, logIndex: 1, txHash: word('cc'), blockHash: word('b2'), kind: 'owner' });
         let calls = 0;
@@ -695,7 +724,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const selector = toFunctionSelector('updatePrice()');
         const built = build({
             result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []),
-            classify: () => ({ route: 'public', selector: selector.toUpperCase() }),
+            classify: () => ({ route: 'public', selector: selector.toUpperCase(), event: 'PriceUpdated' }),
         });
         expect(built.bundle.actions[0]!.record.selector).toBe(selector);
         expect(built.bundle.actions[0]!.verdict.rule).toBe('publicRoute.functions.updatePrice()');
@@ -943,5 +972,435 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
                 expect(text, name).not.toContain('secret');
             }
         }
+    });
+
+    it('refuses a public route whose attribution is null', () => {
+        const bare = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution: null });
+        const selector = toFunctionSelector('updatePrice()');
+        expect(() => build({
+            result: complete([bare], []),
+            classify: () => ({ route: 'public', selector, event: 'PriceUpdated' }),
+        })).toThrow(/^public route requires attribution$/);
+        const open = build({ result: complete([bare], []) });
+        expect(open.bundle.state).toBe('UNATTRIBUTED');
+        const forged = structuredClone(open.bundle);
+        forged.actions[0]!.record = { route: 'public', selector, event: 'PriceUpdated' };
+        forged.actions[0]!.verdict = {
+            flagged: false,
+            reasons: ['permissionless call'],
+            rule: 'publicRoute.functions.updatePrice()',
+        };
+        const text = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: forged,
+            digest: canonicalDigest(forged),
+            runMetadata: open.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(text)).toThrow(/^public route requires attribution$/);
+        const check = verifyEvidenceFile(text, { bundle: forged, digest: canonicalDigest(forged) });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('public route requires attribution');
+    });
+
+    it('keeps only the trace attribution kind inside the digest', () => {
+        const traced = (source: string) => action({
+            blockNumber: 4,
+            logIndex: 0,
+            txHash: word('aa'),
+            kind: 'owner',
+            attribution: { attributionSource: source, tag: 'kept' },
+        });
+        const alchemy = build({ result: complete([traced('single:alchemy')], []) });
+        const quicknode = build({ result: complete([traced('single:quicknode')], []) });
+        expect(alchemy.digest).toBe(quicknode.digest);
+        expect(canonicalJson(alchemy.bundle)).toBe(canonicalJson(quicknode.bundle));
+        expect(alchemy.bundle.actions[0]!.attribution).toEqual({ attributionSource: 'single', tag: 'kept' });
+        expect(alchemy.bundle.actions[0]!.verdict).toEqual({
+            flagged: true,
+            reasons: ['single-trace attribution (unverified internal frame)'],
+            rule: 'ownerRoute.events.GuardianSet',
+        });
+        expect(canonicalJson(alchemy.bundle)).not.toContain('alchemy');
+        expect(canonicalJson(quicknode.bundle)).not.toContain('quicknode');
+        expect(alchemy.runMetadata.traceProviders).toEqual(['alchemy']);
+        expect(quicknode.runMetadata.traceProviders).toEqual(['quicknode']);
+        expect(alchemy.runMetadata.providers).toEqual(quicknode.runMetadata.providers);
+        expect(alchemy.runMetadata.sdkVersion).toBe(quicknode.runMetadata.sdkVersion);
+        expect(alchemy.runMetadata.generatedAt).toBe(quicknode.runMetadata.generatedAt);
+        const fileA = serializeEvidenceFile(alchemy);
+        const fileB = serializeEvidenceFile(quicknode);
+        expect(fileA).not.toBe(fileB);
+        const parsedA = JSON.parse(fileA) as { bundle: unknown; digest: string; runMetadata: RunMetadata };
+        const parsedB = JSON.parse(fileB) as { bundle: unknown; digest: string; runMetadata: RunMetadata };
+        expect(parsedA.bundle).toEqual(parsedB.bundle);
+        expect(parsedA.digest).toBe(parsedB.digest);
+        expect(parsedA.runMetadata.traceProviders).toEqual(['alchemy']);
+        expect(parsedB.runMetadata.traceProviders).toEqual(['quicknode']);
+        expect(verifyEvidenceFile(fileA, { bundle: quicknode.bundle, digest: quicknode.digest }).ok).toBe(true);
+        const flipped = build({ result: complete([traced('dual:quicknode+alchemy')], []) });
+        const ordered = build({ result: complete([traced('dual:alchemy+quicknode')], []) });
+        expect(flipped.digest).toBe(ordered.digest);
+        expect(canonicalJson(flipped.bundle)).toBe(canonicalJson(ordered.bundle));
+        expect(flipped.runMetadata.traceProviders).toEqual(['alchemy', 'quicknode']);
+        expect(ordered.runMetadata.traceProviders).toEqual(['alchemy', 'quicknode']);
+        expect(flipped.bundle.actions[0]!.attribution).toEqual({ attributionSource: 'dual', tag: 'kept' });
+        expect(flipped.bundle.actions[0]!.verdict.flagged).toBe(true);
+        expect(flipped.bundle.actions[0]!.verdict.rule).toBe('ownerRoute.events.GuardianSet');
+        expect(flipped.bundle.actions[0]!.verdict.reasons).toEqual([
+            'owner/guardian route: not BLS, no on-chain signer verification: GuardianSet',
+        ]);
+        const caller = { attributionSource: 'single:alchemy', tag: 'kept' };
+        const found = action({
+            blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution: caller,
+        });
+        const aliased = build({ result: complete([found], []) });
+        caller.attributionSource = 'single:quicknode';
+        caller.tag = 'mutated';
+        expect(aliased.bundle.actions[0]!.attribution).toEqual({ attributionSource: 'single', tag: 'kept' });
+        expect(aliased.runMetadata.traceProviders).toEqual(['alchemy']);
+        const returned = aliased.runMetadata.traceProviders as string[];
+        returned.push('evil');
+        const again = build({ result: complete([traced('single:alchemy')], []) });
+        expect(again.runMetadata.traceProviders).toEqual(['alchemy']);
+        const bad = 'single:https://rpc.example/secret';
+        try {
+            build({ result: complete([traced(bad)], []) });
+            throw new Error('accepted a trace url');
+        } catch (e) {
+            expect((e as Error).message).toBe('evidence attribution kind is invalid');
+            expect((e as Error).message).not.toContain('http');
+            expect((e as Error).message).not.toContain('secret');
+        }
+        const published = alchemy;
+        const embedded = structuredClone(published.bundle);
+        (embedded.actions[0]!.attribution as { attributionSource: string }).attributionSource = 'single:alchemy';
+        const embeddedText = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: embedded,
+            digest: canonicalDigest(embedded),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(embeddedText)).toThrow(/^evidence attribution kind is invalid$/);
+        const unsorted = {
+            ...published.runMetadata,
+            traceProviders: ['quicknode', 'alchemy'],
+        };
+        expect(() => serializeEvidenceFile({
+            bundle: published.bundle,
+            digest: published.digest,
+            runMetadata: unsorted,
+        })).toThrow(/^traceProviders invalid$/);
+        const urlMeta = { ...published.runMetadata, traceProviders: ['https://rpc.example/secret'] };
+        try {
+            serializeEvidenceFile({ bundle: published.bundle, digest: published.digest, runMetadata: urlMeta });
+            throw new Error('accepted a trace url in metadata');
+        } catch (e) {
+            expect((e as Error).message).toBe('provider name is not a label');
+            expect((e as Error).message).not.toContain('http');
+        }
+    });
+
+    it('rejects an inverted range when the file is parsed', () => {
+        const published = build({ result: complete([], []) });
+        const inverted = structuredClone(published.bundle);
+        inverted.range = { from: 9, to: 4 };
+        const text = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: inverted,
+            digest: canonicalDigest(inverted),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(text)).toThrow(/^evidence range is invalid$/);
+        const check = verifyEvidenceFile(text, { bundle: inverted, digest: canonicalDigest(inverted) });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('evidence range is invalid');
+    });
+
+    it('rejects a second block hash at the same height when the file is parsed', () => {
+        const published = build();
+        const forged = structuredClone(published.bundle);
+        const twin = structuredClone(forged.actions[0]!);
+        twin.blockHash = word('a9');
+        twin.log.blockHash = word('a9');
+        twin.logIndex += 1;
+        twin.log.logIndex = twin.logIndex;
+        twin.txHash = word('ee');
+        twin.log.transactionHash = word('ee');
+        forged.actions.push(twin);
+        const text = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: forged,
+            digest: canonicalDigest(forged),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(text)).toThrow(/^evidence block hash disagrees$/);
+        const check = verifyEvidenceFile(text, { bundle: forged, digest: canonicalDigest(forged) });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('evidence block hash disagrees');
+    });
+
+    it('rejects an unattributed count that does not equal the missing actions', () => {
+        const bare = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution: null });
+        const built = build({ result: complete([bare], []) });
+        expect(built.bundle.unattributed).toBe(1);
+        const forged = structuredClone(built.bundle);
+        forged.unattributed = 2;
+        const text = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: forged,
+            digest: canonicalDigest(forged),
+            runMetadata: built.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(text)).toThrow(/^unattributed count does not match$/);
+        const check = verifyEvidenceFile(text, { bundle: forged, digest: canonicalDigest(forged) });
+        expect(check.ok).toBe(false);
+        expect(check.reasons).toContain('unattributed count does not match');
+    });
+
+    it('publishes a fixed reason when a custom ruleset would synthesize one past the cap', () => {
+        const rs = structuredClone(DEFAULT_RULESET);
+        const fn = rs.publicRoute.functions['updatePrice()']!;
+        const names = Array.from({ length: 64 }, (_, i) => `E${String(i).padStart(63, '0')}`);
+        fn.events = names;
+        fn.flag = false;
+        fn.flagIfCallAlsoEmits = names;
+        fn.alsoReason = 'A'.repeat(1024);
+        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
+        const record = {
+            route: 'public' as const,
+            selector: toFunctionSelector('updatePrice()'),
+            event: names[0],
+            callEvents: names,
+        };
+        const built = build({
+            ruleset: rs,
+            result: complete([found], []),
+            classify: () => record,
+        });
+        expect(built.bundle.actions[0]!.verdict).toEqual({
+            flagged: true,
+            reasons: ['verdict reason too long'],
+            rule: 'publicRoute.functions.updatePrice().also',
+        });
+        expect(() => serializeEvidenceFile(built)).not.toThrow();
+    });
+
+    it('enforces declared fact kinds for single-trace attribution inside the bundle', () => {
+        const timelock = '0x4444444444444444444444444444444444444444' as Address;
+        const timelockSig = 'execute(address,uint256,bytes)';
+        const timelockRule = `bls.GENERIC.expected:timelock.${timelockSig}`;
+        const relaySig = 'relay(bytes)';
+        const relayRule = `publicRoute.functions.${relaySig}`;
+        const rs = structuredClone(DEFAULT_RULESET);
+        rs.bls.GENERIC.expected.push({
+            target: 'timelock',
+            signature: timelockSig,
+            flag: false,
+            reason: 'timelock executed a scheduled call',
+        });
+        rs.publicRoute.functions[relaySig] = { events: ['Relayed'], flag: false, reason: 'forwarded public call' };
+        const factKinds: FactKindMap = {
+            ...DEFAULT_FACT_KINDS,
+            [timelockRule]: ['topLevel', 'receiptLogs'],
+            [relayRule]: ['internalFrames'],
+        };
+        const roles = { superPaymaster: SP, timelock };
+        const timelockAction = action({
+            blockNumber: 4,
+            logIndex: 0,
+            txHash: word('aa'),
+            kind: 'GENERIC',
+            address: timelock,
+            attribution: {
+                attributionSource: 'single:alchemy',
+                forwardingPath: [SP, timelock],
+            },
+            decoded: { kind: 'GENERIC', callData: toFunctionSelector(timelockSig) },
+        });
+        const relayAction = action({
+            blockNumber: 4,
+            logIndex: 1,
+            txHash: word('bb'),
+            kind: 'owner',
+            attribution: { attributionSource: 'single' },
+        });
+        const dualRelay = action({
+            blockNumber: 4,
+            logIndex: 2,
+            txHash: word('cc'),
+            kind: 'owner',
+            attribution: { attributionSource: 'dual:alchemy+quicknode' },
+        });
+        const built = build({
+            result: complete([timelockAction, relayAction, dualRelay], []),
+            ruleset: rs,
+            roles,
+            factKinds,
+            classify: (found) => {
+                if (found.txHash === word('aa')) {
+                    return {
+                        route: 'bls',
+                        kind: 'GENERIC',
+                        fields: { target: timelock, callData: toFunctionSelector(timelockSig) },
+                    };
+                }
+                return { route: 'public', selector: toFunctionSelector(relaySig), event: 'Relayed' };
+            },
+        });
+        const byTx = new Map(built.bundle.actions.map((item) => [item.txHash, item.verdict]));
+        expect(byTx.get(word('aa'))).toEqual({
+            flagged: false,
+            reasons: ['timelock executed a scheduled call'],
+            rule: timelockRule,
+        });
+        expect(byTx.get(word('bb'))).toEqual({
+            flagged: true,
+            reasons: ['single-trace attribution (unverified internal frame)'],
+            rule: relayRule,
+        });
+        expect(byTx.get(word('cc'))?.flagged).toBe(false);
+        expect(byTx.get(word('cc'))?.rule).toBe(relayRule);
+    });
+
+    it('puts classifier name, version, and rulesetSha256 inside the digested bundle', () => {
+        const built = build({ result: complete([], []) });
+        expect(built.bundle.classifier).toEqual({
+            name: 'auditClassifier',
+            version: '1.0.0',
+            rulesetSha256: classifierRulesetSha256(DEFAULT_RULESET, DEFAULT_FACT_KINDS),
+        });
+        expect(canonicalJson(built.bundle)).toContain(built.bundle.classifier.rulesetSha256);
+        expect(canonicalJson(built.bundle)).not.toContain('rulesetSha256 is');
+        const named = build({ result: complete([], []), classifier: { name: 'otherClassifier', version: '0.46.0-rc.2' } });
+        expect(named.digest).not.toBe(built.digest);
+        expect(named.bundle.classifier.version).toBe('0.46.0-rc.2');
+        expect(named.bundle.classifier.rulesetSha256).toBe(built.bundle.classifier.rulesetSha256);
+        const caller = { name: 'auditClassifier', version: '1.0.0' };
+        const aliased = build({ result: complete([], []), classifier: caller });
+        caller.name = 'mutatedName';
+        caller.version = '9.9.9';
+        expect(aliased.bundle.classifier.name).toBe('auditClassifier');
+        expect(aliased.bundle.classifier.version).toBe('1.0.0');
+        const file = serializeEvidenceFile(built);
+        expect(verifyEvidenceFile(file, { bundle: built.bundle, digest: built.digest }).ok).toBe(true);
+        const stripped = structuredClone(built.bundle) as unknown as Record<string, unknown>;
+        delete stripped.classifier;
+        const strippedText = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: stripped,
+            digest: canonicalDigest(stripped),
+            runMetadata: built.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(strippedText)).toThrow(/^classifier missing$/);
+        const missing = verifyEvidenceFile(strippedText, { bundle: built.bundle, digest: built.digest });
+        expect(missing.ok).toBe(false);
+        expect(missing.reasons).toContain('classifier missing');
+    });
+
+    it('changes the bundle digest when the ruleset or the fact-kind map changes', () => {
+        const base = build({ result: complete([], []) });
+        const rs = structuredClone(DEFAULT_RULESET);
+        rs.comment = 'different ruleset text';
+        const otherRules = build({ result: complete([], []), ruleset: rs });
+        expect(otherRules.bundle.ruleset.digest).not.toBe(base.bundle.ruleset.digest);
+        expect(otherRules.bundle.classifier.rulesetSha256).not.toBe(base.bundle.classifier.rulesetSha256);
+        expect(otherRules.digest).not.toBe(base.digest);
+        const swapped: FactKindMap = { ...DEFAULT_FACT_KINDS, 'bls.SLASH': ['internalFrames'] };
+        const otherMap = build({ result: complete([], []), factKinds: swapped });
+        expect(otherMap.bundle.ruleset.digest).toBe(base.bundle.ruleset.digest);
+        expect(otherMap.bundle.classifier.rulesetSha256).not.toBe(base.bundle.classifier.rulesetSha256);
+        expect(otherMap.digest).not.toBe(base.digest);
+        const rerun = verifyEvidenceFile(serializeEvidenceFile(base), { bundle: otherMap.bundle, digest: otherMap.digest });
+        expect(rerun.ok).toBe(false);
+        expect(rerun.reasons).toContain('rerun digest differs from the file digest');
+        const map = { ...DEFAULT_FACT_KINDS };
+        const snap = build({ result: complete([], []), factKinds: map });
+        map['bls.SLASH'] = ['internalFrames'];
+        expect(snap.bundle.classifier.rulesetSha256).toBe(base.bundle.classifier.rulesetSha256);
+    });
+
+    it('rejects a classifier that is missing, ill-formed, or caller-supplied rulesetSha256', () => {
+        let calls = 0;
+        const count = () => {
+            calls += 1;
+            return { route: 'owner' as const, event: 'GuardianSet' };
+        };
+        const url = 'https://classifier.example/secret';
+        try {
+            build({
+                result: complete([], []),
+                classifier: { name: url, version: '1.0.0' },
+                classify: count,
+            });
+            throw new Error('accepted a classifier url');
+        } catch (error) {
+            expect((error as Error).message).toBe('classifier name is invalid');
+            expect((error as Error).message).not.toContain('secret');
+            expect((error as Error).message).not.toContain('http');
+        }
+        expect(calls).toBe(0);
+        expect(() => build({
+            result: complete([], []),
+            classifier: { name: 'auditClassifier', version: 'v1.0.0' },
+        })).toThrow(/^classifier version is invalid$/);
+        expect(() => build({
+            result: complete([], []),
+            classifier: { name: 'a'.repeat(65), version: '1.0.0' },
+        })).toThrow(/^classifier name is invalid$/);
+        const supplied = {
+            name: 'auditClassifier',
+            version: '1.0.0',
+            rulesetSha256: `0x${'ab'.repeat(32)}`,
+        };
+        expect(() => build({
+            result: complete([], []),
+            classifier: supplied as unknown as { name: string; version: string },
+        })).toThrow(/^classifier is invalid$/);
+        const published = build({ result: complete([], []) });
+        const badName = structuredClone(published.bundle);
+        badName.classifier = { ...badName.classifier, name: url };
+        const badNameText = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: badName,
+            digest: canonicalDigest(badName),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(badNameText)).toThrow(/^classifier name is invalid$/);
+        const nameCheck = verifyEvidenceFile(badNameText, { bundle: published.bundle, digest: published.digest });
+        expect(nameCheck.ok).toBe(false);
+        expect(nameCheck.reasons).toContain('classifier name is invalid');
+        expect(nameCheck.reasons.join(' ')).not.toContain('secret');
+        const badHash = structuredClone(published.bundle);
+        badHash.classifier = { ...badHash.classifier, rulesetSha256: 'not-a-hash' as typeof badHash.classifier.rulesetSha256 };
+        const badHashText = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: badHash,
+            digest: published.digest,
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(() => parseEvidenceFile(badHashText)).toThrow(/^classifier rulesetSha256 is invalid$/);
+        const shaped = structuredClone(published.bundle);
+        shaped.classifier = { ...shaped.classifier, rulesetSha256: `0x${'cd'.repeat(32)}` };
+        const shapedText = `${canonicalJson({
+            schema: 'aastar.guardian-audit.evidence-file.v1',
+            bundle: shaped,
+            digest: canonicalDigest(shaped),
+            runMetadata: published.runMetadata,
+        })}\n`;
+        expect(parseEvidenceFile(shapedText).bundle.classifier.rulesetSha256).toBe(`0x${'cd'.repeat(32)}`);
+        const shapedCheck = verifyEvidenceFile(shapedText, { bundle: published.bundle, digest: published.digest });
+        expect(shapedCheck.ok).toBe(false);
+        expect(shapedCheck.reasons).toContain('rerun digest differs from the file digest');
+    });
+
+    it('exports a provider-name predicate and not the pattern', () => {
+        expect(guardianAudit).not.toHaveProperty('PROVIDER_NAME_RE');
+        expect(rpcMod).not.toHaveProperty('PROVIDER_NAME_RE');
+        expect(isProviderName('alchemy')).toBe(true);
+        expect(isProviderName('a.b_c-1')).toBe(true);
+        expect(isProviderName('https://rpc.example')).toBe(false);
+        expect(isProviderName('')).toBe(false);
+        expect(isProviderName('a'.repeat(65))).toBe(false);
+        expect(isProviderName(1)).toBe(false);
     });
 });

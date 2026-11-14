@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, keccak256, sha256, stringToBytes, toFunctionSelector, type Hex } from 'viem';
 import { canonicalJson } from '../../src/guardianAudit/canonical';
 import {
-    DEFAULT_RULESET, RULESET_SCHEMA, SYMBOL_RE, ambiguousEvents, evaluate, matchGeneric, rulesetId, validateRuleset, wantsPrice,
-    type RuleRecord,
+    DEFAULT_FACT_KINDS, DEFAULT_RULESET, FACT_KINDS, RULESET_SCHEMA, SYMBOL_RE, ambiguousEvents,
+    classifierRulesetSha256, evaluate, matchGeneric, rulesetId, rulesetRuleIds, validateRuleset, wantsPrice,
+    type FactKind, type FactKindMap, type RuleRecord, type Ruleset,
 } from '../../src/guardianAudit/rules';
 
 const SP = '0x2222222222222222222222222222222222222222';
@@ -95,6 +96,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         const quiet = evaluate(DEFAULT_RULESET, roles, {
             route: 'public',
             selector: update.toUpperCase() as Hex,
+            event: 'PriceUpdated',
             callEvents: ['PriceUpdated'],
         });
         expect(quiet).toEqual({
@@ -105,6 +107,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         const also = evaluate(DEFAULT_RULESET, roles, {
             route: 'public',
             selector: update,
+            event: 'PriceUpdated',
             callEvents: ['EmergencyPriceCancelled', 'PriceModeChanged'],
         });
         expect(also).toEqual({
@@ -115,6 +118,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         const emergency = evaluate(DEFAULT_RULESET, roles, {
             route: 'public',
             selector: toFunctionSelector('executeEmergencyPrice()'),
+            event: 'EmergencyPriceExecuted',
             callEvents: ['EmergencyPriceExecuted'],
         });
         expect(emergency).toEqual({
@@ -125,6 +129,7 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         const pause = evaluate(DEFAULT_RULESET, roles, {
             route: 'public',
             selector: toFunctionSelector('pauseUnderstakedOperator(address)'),
+            event: 'OperatorPaused',
             callEvents: ['OperatorPaused'],
         });
         expect(pause).toEqual({
@@ -136,6 +141,66 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         expect(() => wantsPrice(DEFAULT_RULESET, null as unknown as Record<string, string>, { route: 'invalid' } as RuleRecord)).toThrow(/^record: unknown route$/);
         expect(() => evaluate(DEFAULT_RULESET, null as unknown as Record<string, string>, { route: 'invalid' } as RuleRecord)).toThrow(/^record: unknown route$/);
         expect(wantsPrice(DEFAULT_RULESET, roles, { route: 'public', selector: toFunctionSelector('pauseUnderstakedOperator(address)') })).toBe(false);
+    });
+
+    it('flags updatePrice PriceModeChanged when callEvents omits that event', () => {
+        const update = toFunctionSelector('updatePrice()');
+        const base = { route: 'public' as const, selector: update, event: 'PriceModeChanged' };
+        const cases: Array<RuleRecord> = [
+            base,
+            { ...base, callEvents: [] },
+            { ...base, callEvents: ['OperatorSlashed'] },
+            { route: 'public', selector: update },
+        ];
+        const verdicts = cases.map((record) => evaluate(DEFAULT_RULESET, roles, record));
+        expect(verdicts.map((verdict) => verdict.flagged)).toEqual([true, true, true, true]);
+        expect(verdicts[0]).toEqual({
+            flagged: true,
+            reasons: ['price mode changed via permissionless refresh (caller not accused): PriceModeChanged'],
+            rule: 'publicRoute.functions.updatePrice().also',
+        });
+        expect(verdicts[1]).toEqual(verdicts[0]);
+        expect(verdicts[2]).toEqual(verdicts[0]);
+        expect(verdicts[3]).toEqual({
+            flagged: true,
+            reasons: ['public route event is not listed for this function'],
+            rule: 'publicRoute.event',
+        });
+    });
+
+    it('flags a public event the function does not emit', () => {
+        expect(evaluate(DEFAULT_RULESET, roles, {
+            route: 'public',
+            selector: toFunctionSelector('updatePrice()'),
+            event: 'OperatorSlashed',
+            callEvents: [],
+        })).toEqual({
+            flagged: true,
+            reasons: ['public route event is not listed for this function'],
+            rule: 'publicRoute.event',
+        });
+    });
+
+    it('replaces an over-long synthesized also-reason with a fixed reason', () => {
+        const rs = structuredClone(DEFAULT_RULESET);
+        const fn = rs.publicRoute.functions['updatePrice()']!;
+        const names = Array.from({ length: 64 }, (_, i) => `E${String(i).padStart(63, '0')}`);
+        fn.events = names;
+        fn.flag = false;
+        fn.flagIfCallAlsoEmits = names;
+        fn.alsoReason = 'A'.repeat(1024);
+        const verdict = evaluate(rs, roles, {
+            route: 'public',
+            selector: toFunctionSelector('updatePrice()'),
+            event: names[0],
+            callEvents: names,
+        });
+        expect(verdict).toEqual({
+            flagged: true,
+            reasons: ['verdict reason too long'],
+            rule: 'publicRoute.functions.updatePrice().also',
+        });
+        expect(verdict.reasons[0]).not.toContain('A'.repeat(32));
     });
 
     it('flags an unlisted public selector and an unattributed event', () => {
@@ -520,5 +585,198 @@ describe('guardian-audit ruleset (unit, not acceptance)', () => {
         const generic = structuredClone(DEFAULT_RULESET);
         generic.bls.GENERIC.expected[0]!.signature = '0xAB()';
         expect(() => validateRuleset(generic)).toThrow(/^ruleset: bad signature$/);
+    });
+});
+
+const SINGLE_TRACE_REASON = 'single-trace attribution (unverified internal frame)';
+const TIMELOCK = '0x4444444444444444444444444444444444444444';
+const TIMELOCK_SIG = 'execute(address,uint256,bytes)';
+const TIMELOCK_RULE = `bls.GENERIC.expected:timelock.${TIMELOCK_SIG}`;
+const RELAY_SIG = 'relay(bytes)';
+const RELAY_RULE = `publicRoute.functions.${RELAY_SIG}`;
+const BOUNCE_SIG = 'bounce(bytes)';
+const BOUNCE_RULE = `publicRoute.functions.${BOUNCE_SIG}`;
+
+function withFactKinds(extra: FactKindMap): FactKindMap {
+    return { ...DEFAULT_FACT_KINDS, ...extra };
+}
+
+function timelockRuleset(): Ruleset {
+    const rs = structuredClone(DEFAULT_RULESET);
+    rs.bls.GENERIC.expected.push({
+        target: 'timelock',
+        signature: TIMELOCK_SIG,
+        flag: false,
+        reason: 'timelock executed a scheduled call',
+    });
+    return rs;
+}
+
+function publicRuleset(sig: string, reason: string): Ruleset {
+    const rs = structuredClone(DEFAULT_RULESET);
+    const event = sig === RELAY_SIG ? 'Relayed' : 'Bounced';
+    rs.publicRoute.functions[sig] = { events: [event], flag: false, reason };
+    return rs;
+}
+
+describe('fact kinds and single-trace attribution', () => {
+    const timelockRoles = { superPaymaster: getAddress(SP), timelock: getAddress(TIMELOCK) };
+    const timelockRecord: RuleRecord = {
+        route: 'bls',
+        kind: 'GENERIC',
+        fields: { target: TIMELOCK, callData: toFunctionSelector(TIMELOCK_SIG) },
+    };
+    const timelockKinds = withFactKinds({ [TIMELOCK_RULE]: ['topLevel', 'receiptLogs'] });
+
+    it('declares fact kinds for every default rule id and leaves the ruleset bytes unchanged', () => {
+        expect(JSON.stringify(DEFAULT_RULESET)).not.toContain('factKinds');
+        expect(JSON.stringify(DEFAULT_RULESET)).not.toContain('internalFrames');
+        expect(Object.keys(DEFAULT_FACT_KINDS).sort()).toEqual([...rulesetRuleIds(DEFAULT_RULESET)].sort());
+        for (const kinds of Object.values(DEFAULT_FACT_KINDS)) {
+            expect(kinds.length).toBeGreaterThan(0);
+            const ordered = FACT_KINDS.filter((kind) => kinds.includes(kind));
+            expect(kinds).toEqual(ordered);
+        }
+        expect(Object.isFrozen(DEFAULT_FACT_KINDS)).toBe(true);
+    });
+
+    it('does not flag a direct top-level timelock call under single-trace attribution', () => {
+        const rs = timelockRuleset();
+        let hops = 0;
+        const attribution: Record<string, unknown> = { attributionSource: 'single' };
+        Object.defineProperty(attribution, 'forwardingPath', {
+            enumerable: true,
+            get() {
+                hops += 1;
+                return ['0x1111111111111111111111111111111111111111', TIMELOCK];
+            },
+        });
+        Object.defineProperty(attribution, 'immediateCaller', {
+            enumerable: true,
+            get() {
+                hops += 1;
+                return TIMELOCK;
+            },
+        });
+        const plain = evaluate(rs, timelockRoles, timelockRecord, { factKinds: timelockKinds });
+        const single = evaluate(rs, timelockRoles, timelockRecord, { attribution, factKinds: timelockKinds });
+        expect(hops).toBe(0);
+        expect(plain.flagged).toBe(false);
+        expect(plain.rule).toBe(TIMELOCK_RULE);
+        expect(plain.reasons).toEqual(['timelock executed a scheduled call']);
+        expect(single).toEqual(plain);
+        const mixed = evaluate(rs, timelockRoles, timelockRecord, {
+            attribution: { attributionSource: 'single:alchemy' },
+            factKinds: withFactKinds({ [TIMELOCK_RULE]: ['receiptLogs', 'topLevel'] }),
+        });
+        expect(mixed).toEqual(plain);
+    });
+
+    it('flags a forwarded-route rule under single-trace attribution and lifts it under dual', () => {
+        const rs = publicRuleset(RELAY_SIG, 'forwarded public call');
+        const kinds = withFactKinds({ [RELAY_RULE]: ['internalFrames'] });
+        const record: RuleRecord = {
+            route: 'public',
+            selector: toFunctionSelector(RELAY_SIG),
+            event: 'Relayed',
+        };
+        const plain = evaluate(rs, roles, record, { factKinds: kinds });
+        const single = evaluate(rs, roles, record, {
+            attribution: { attributionSource: 'single' },
+            factKinds: kinds,
+        });
+        const dual = evaluate(rs, roles, record, {
+            attribution: { attributionSource: 'dual:alchemy+quicknode' },
+            factKinds: kinds,
+        });
+        expect(plain.flagged).toBe(false);
+        expect(plain.rule).toBe(RELAY_RULE);
+        expect(single).toEqual({ flagged: true, reasons: [SINGLE_TRACE_REASON], rule: RELAY_RULE });
+        expect(dual).toEqual(plain);
+        const mixed = evaluate(rs, roles, record, {
+            attribution: { attributionSource: 'single' },
+            factKinds: withFactKinds({ [RELAY_RULE]: ['topLevel', 'internalFrames'] }),
+        });
+        expect(mixed.reasons).toEqual([SINGLE_TRACE_REASON]);
+    });
+
+    it('flags a forged intermediate frame under single-trace attribution when the rule id is undeclared', () => {
+        const rs = publicRuleset(BOUNCE_SIG, 'bounce');
+        const record: RuleRecord = {
+            route: 'public',
+            selector: toFunctionSelector(BOUNCE_SIG),
+            event: 'Bounced',
+        };
+        let hops = 0;
+        const attribution: Record<string, unknown> = { attributionSource: 'single:alchemy' };
+        Object.defineProperty(attribution, 'forwardingPath', {
+            enumerable: true,
+            get() {
+                hops += 1;
+                return [{ depth: 1, who: 'forged' }];
+            },
+        });
+        const single = evaluate(rs, roles, record, { attribution, factKinds: DEFAULT_FACT_KINDS });
+        const dual = evaluate(rs, roles, record, {
+            attribution: { attributionSource: 'dual' },
+            factKinds: DEFAULT_FACT_KINDS,
+        });
+        expect(hops).toBe(0);
+        expect(single).toEqual({ flagged: true, reasons: [SINGLE_TRACE_REASON], rule: BOUNCE_RULE });
+        expect(dual.flagged).toBe(false);
+        expect(dual.rule).toBe(BOUNCE_RULE);
+        expect(dual.reasons).toEqual([
+            'permissionless call: caller recorded, not accused: bounce(bytes): bounce',
+        ]);
+    });
+
+    it('rejects an invalid fact-kind map before it reads values past the cap', () => {
+        let reads = 0;
+        const map: Record<string, unknown> = {};
+        for (let i = 0; i < 257; i++) {
+            Object.defineProperty(map, `k${i}`, {
+                enumerable: true,
+                get() {
+                    reads += 1;
+                    return ['topLevel'];
+                },
+            });
+        }
+        expect(() => evaluate(DEFAULT_RULESET, roles, bls('SLASH'), { factKinds: map as FactKindMap })).toThrow(/^fact kind map is too large$/);
+        expect(reads).toBe(0);
+        const url = 'https://secret.example/fact';
+        expect(() => evaluate(DEFAULT_RULESET, roles, bls('SLASH'), {
+            factKinds: { [url]: ['topLevel'] },
+        })).toThrow(/^fact kind is invalid$/);
+        expect(() => classifierRulesetSha256(DEFAULT_RULESET, { 'bls.SLASH': [] as unknown as readonly FactKind[] })).toThrow(/^fact kind is invalid$/);
+        expect(() => classifierRulesetSha256(DEFAULT_RULESET, { 'bls.SLASH': ['nope'] as unknown as readonly FactKind[] })).toThrow(/^fact kind is invalid$/);
+        const long = `single:${'https://secret.example/'}${'a'.repeat(120)}`;
+        expect(long.length).toBeGreaterThan(133);
+        try {
+            evaluate(DEFAULT_RULESET, roles, bls('SLASH'), { attribution: { attributionSource: long } });
+            throw new Error('accepted a long attribution source');
+        } catch (error) {
+            expect((error as Error).message).toBe('attribution source is invalid');
+            expect((error as Error).message).not.toContain('secret');
+        }
+    });
+
+    it('hashes the ruleset together with the resolved fact-kind map', () => {
+        const full = classifierRulesetSha256(DEFAULT_RULESET);
+        expect(full).toBe(classifierRulesetSha256(DEFAULT_RULESET, DEFAULT_FACT_KINDS));
+        expect(full).toMatch(/^0x[0-9a-f]{64}$/);
+        const commented = structuredClone(DEFAULT_RULESET);
+        commented.comment = 'different ruleset text';
+        expect(classifierRulesetSha256(commented)).not.toBe(full);
+        const swapped: FactKindMap = { ...DEFAULT_FACT_KINDS, 'bls.SLASH': ['internalFrames'] };
+        expect(classifierRulesetSha256(DEFAULT_RULESET, swapped)).not.toBe(full);
+        const reordered = classifierRulesetSha256(DEFAULT_RULESET, {
+            ...DEFAULT_FACT_KINDS,
+            'bls.SLASH': ['receiptLogs', 'topLevel'],
+        });
+        expect(reordered).toBe(full);
+        const dropped: FactKindMap = { ...DEFAULT_FACT_KINDS };
+        delete (dropped as { 'bls.SLASH'?: readonly FactKind[] })['bls.SLASH'];
+        expect(classifierRulesetSha256(DEFAULT_RULESET, dropped)).not.toBe(full);
     });
 });
