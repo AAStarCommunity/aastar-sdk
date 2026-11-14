@@ -1,5 +1,6 @@
-import { getAddress, toFunctionSelector, type Hex } from 'viem';
-import { canonicalDigest, snapshotPlain } from './canonical.js';
+import { getAddress, sha256, stringToBytes, toFunctionSelector, type Hex } from 'viem';
+import { canonicalDigest, canonicalJson, snapshotPlain } from './canonical.js';
+import { isProviderName } from './rpc.js';
 
 /**
  * Pure rule evaluation. No I/O: the same record and ruleset always give the same verdict,
@@ -8,6 +9,15 @@ import { canonicalDigest, snapshotPlain } from './canonical.js';
  * (keccak256 of the signature, first 4 bytes), the same bytes as `ethers.id(sig).slice(0, 10)`.
  * Lookups of events, functions, BLS kinds, and roles use own properties only.
  * `validateRuleset` returns a deep-frozen null-prototype copy. `DEFAULT_RULESET` is frozen in place.
+ *
+ * Fact kinds are not fields of the ruleset. The DVT file bytes stay unchanged.
+ * {@link DEFAULT_FACT_KINDS} is the SDK-side declaration, keyed by rule id.
+ * `evaluate` reads that map. It does not infer kinds from frames, selectors, or rule text.
+ * A rule id missing from the map is treated as `internalFrames`.
+ *
+ * The reference classifier is not in this package. It is published in PR-D.
+ * Classifier identity is the caller-supplied name and version plus {@link classifierRulesetSha256}.
+ * That hash covers the ruleset and the fact-kind map. It does not embed classifier code.
  */
 export const RULESET_SCHEMA = 'aastar.guardian-audit.ruleset.v1' as const;
 
@@ -92,6 +102,24 @@ export interface Verdict {
     rule: string;
 }
 
+/** Closed set. Canonical order is the order of this array. */
+export const FACT_KINDS = ['topLevel', 'receiptLogs', 'internalFrames'] as const;
+export type FactKind = (typeof FACT_KINDS)[number];
+/** Rule id → the fact kinds that rule's route uses. Absent id means `internalFrames`. */
+export type FactKindMap = Readonly<Record<string, readonly FactKind[]>>;
+
+/**
+ * Optional policy inputs. Both are snapshotted as own data.
+ * `attribution` is read only at `attributionSource`. Frames on that object are not read.
+ */
+export interface EvaluateOptions {
+    attribution?: unknown;
+    factKinds?: FactKindMap;
+}
+
+/** Replaces the rule reason when a single trace is asked to vouch for an internal frame. */
+export const SINGLE_TRACE_INTERNAL_REASON = 'single-trace attribution (unverified internal frame)';
+
 function isRecord(v: unknown): v is Record<string, any> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
@@ -108,6 +136,13 @@ const PUBLIC_FN_KEYS = ['events', 'flag', 'reason', 'flagIfCallAlsoEmits', 'also
 
 const MAX_RULE_KEYS = 64;
 const MAX_REASON = 1024;
+/**
+ * `assertVerdict` rejects a reason longer than this, which would make `buildEvidenceBundle` throw.
+ * A synthesis that would pass the cap is replaced with {@link REASON_TOO_LONG} and flagged.
+ */
+const MAX_VERDICT_REASON = 4096;
+const REASON_TOO_LONG = 'verdict reason too long';
+const PUBLIC_EVENT_REASON = 'public route event is not listed for this function';
 const MAX_SOURCE = 256;
 /**
  * Every name rules compare with `===`, `includes`, or an own-property lookup.
@@ -392,8 +427,13 @@ export function ambiguousEvents(rs: Ruleset): Set<string> {
 /**
  * Verdict for one record: `{ flagged, reasons, rule }`.
  * `route` is `bls` (kind omitted when the message was not authenticated), `owner`, `public`, or `unattributed`.
+ * After the rule verdict, a `single` attribution whose rule uses `internalFrames` is forced
+ * to `{ flagged: true, reasons: ['single-trace attribution (unverified internal frame)'] }`.
+ * `dual` leaves the rule verdict. Fact kinds come from `options.factKinds` or {@link DEFAULT_FACT_KINDS}.
  */
-export function evaluate(rs: Ruleset, roles: Record<string, string>, record: RuleRecord): Verdict {
+export function evaluate(
+    rs: Ruleset, roles: Record<string, string>, record: RuleRecord, options?: EvaluateOptions,
+): Verdict {
     const budget = { nodes: 0, bytes: 0 };
     const snapRules = snapshotPlain(rs, budget);
     const snapRoles = snapshotPlain(roles, budget);
@@ -407,77 +447,94 @@ export function evaluate(rs: Ruleset, roles: Record<string, string>, record: Rul
     assertCallerRecord(rec);
     record = rec as RuleRecord;
     roles = roleMap;
+    const policy = readEvaluatePolicy(options);
+    const finish = (verdict: Verdict): Verdict => applySingleTrace(verdict, policy);
     if (record.route === 'public') {
         const pf = publicFunction(rules, record.selector);
         if (!pf) {
-            return {
+            return finish({
                 flagged: true,
                 reasons: ['public route without a listed function'],
                 rule: 'publicRoute.unlisted',
-            };
+            });
         }
         const [sig, f] = pf;
-        const callEvents = record.callEvents ?? [];
-        const also = (f.flagIfCallAlsoEmits ?? []).filter((e) => callEvents.includes(e));
-        if (also.length) {
-            return {
-                flagged: true,
-                reasons: [`${f.alsoReason}: ${also.join(', ')}`],
-                rule: `publicRoute.functions.${sig}.also`,
-            };
+        // The log's own event is part of the verdict. A caller-supplied callEvents list cannot
+        // stand in for it, and cannot hide an event this function does not emit.
+        if (typeof record.event !== 'string' || !f.events.includes(record.event)) {
+            return finish({ flagged: true, reasons: [PUBLIC_EVENT_REASON], rule: 'publicRoute.event' });
         }
-        return {
+        const callEvents = record.callEvents ?? [];
+        // The event itself always counts as emitted (DVT scan guard). Do not mutate `callEvents`.
+        const emitted = callEvents.includes(record.event) ? callEvents : [...callEvents, record.event];
+        const also = (f.flagIfCallAlsoEmits ?? []).filter((e) => emitted.includes(e));
+        if (also.length) {
+            const reason = `${f.alsoReason}: ${also.join(', ')}`;
+            if (reason.length > MAX_VERDICT_REASON) {
+                return finish({
+                    flagged: true,
+                    reasons: [REASON_TOO_LONG],
+                    rule: `publicRoute.functions.${sig}.also`,
+                });
+            }
+            return finish({
+                flagged: true,
+                reasons: [reason],
+                rule: `publicRoute.functions.${sig}.also`,
+            });
+        }
+        return finish({
             flagged: !!f.flag,
             reasons: [`${rules.publicRoute.label}: ${sig}: ${f.reason}`],
             rule: `publicRoute.functions.${sig}`,
-        };
+        });
     }
     if (record.route === 'unattributed') {
         if (typeof record.event !== 'string' || record.event.length === 0) throw new Error('record: event is not a short string');
         const u = rules.publicRoute.unattributed;
-        return {
+        return finish({
             flagged: !!u.flag,
             reasons: [`${u.reason}: ${record.event}`],
             rule: 'publicRoute.unattributed',
-        };
+        });
     }
     if (record.route === 'owner') {
         const event = typeof record.event === 'string' ? record.event : '';
         const r = ownValue(rules.ownerRoute.events, event);
         if (!isRecord(r)) {
-            return {
+            return finish({
                 flagged: true,
                 reasons: [`unlisted SuperPaymaster event ${event}`],
                 rule: 'ownerRoute.unlisted',
-            };
+            });
         }
-        return {
+        return finish({
             flagged: !!r.flag,
             reasons: [`${rules.ownerRoute.label}: ${event}`],
             rule: `ownerRoute.events.${event}`,
-        };
+        });
     }
     if (record.kind === undefined) {
         const r = rules.bls.UNRECOVERED;
-        return { flagged: !!r.flag, reasons: [r.reason], rule: 'bls.UNRECOVERED' };
+        return finish({ flagged: !!r.flag, reasons: [r.reason], rule: 'bls.UNRECOVERED' });
     }
     if (record.kind === 'GENERIC') {
         const e = matchGeneric(rules, roles, record.fields?.target, record.fields?.callData);
         if (e) {
-            return {
+            return finish({
                 flagged: !!e.flag,
                 reasons: [e.reason],
                 rule: `bls.GENERIC.expected:${e.target}.${e.signature}`,
-            };
+            });
         }
         const u = rules.bls.GENERIC.unexpected;
-        return { flagged: !!u.flag, reasons: [u.reason], rule: 'bls.GENERIC.unexpected' };
+        return finish({ flagged: !!u.flag, reasons: [u.reason], rule: 'bls.GENERIC.unexpected' });
     }
     const r = ownValue(rules.bls, record.kind);
     if (!isRecord(r) || typeof r.reason !== 'string') {
-        return { flagged: true, reasons: [`unknown kind ${record.kind}`], rule: 'bls.unknown' };
+        return finish({ flagged: true, reasons: [`unknown kind ${record.kind}`], rule: 'bls.unknown' });
     }
-    return { flagged: !!r.flag, reasons: [r.reason], rule: `bls.${record.kind}` };
+    return finish({ flagged: !!r.flag, reasons: [r.reason], rule: `bls.${record.kind}` });
 }
 
 /** Whether this record wants prices read before/after (price-update rules). */
@@ -602,3 +659,264 @@ export const DEFAULT_RULESET: Ruleset = {
     },
 };
 deepFreeze(DEFAULT_RULESET);
+
+const MAX_FACT_KEYS = 256;
+const MAX_FACT_KEY = 256;
+/** `dual:` + 64 + `+` + 64, matching the bundle cap. Longer text is rejected before it is scanned. */
+const ATTRIBUTION_SOURCE_MAX = 133;
+const INTERNAL_FRAMES_ONLY: readonly FactKind[] = Object.freeze(['internalFrames']);
+const TOP_AND_LOGS: readonly FactKind[] = Object.freeze(['topLevel', 'receiptLogs']);
+const LOGS_AND_FRAMES: readonly FactKind[] = Object.freeze(['receiptLogs', 'internalFrames']);
+const LOGS_ONLY: readonly FactKind[] = Object.freeze(['receiptLogs']);
+
+/**
+ * Fact kinds for every rule id {@link DEFAULT_RULESET} can emit from its declared entries.
+ * BLS verdicts use the authenticated top-level call and receipt logs.
+ * Public functions and owner events use the emitting call, which may be a non-root frame.
+ * `publicRoute.unattributed` is the receipt event whose emitting call was not found.
+ * Dynamic ids (`publicRoute.unlisted`, `publicRoute.event`, `ownerRoute.unlisted`, `bls.unknown`)
+ * are absent on purpose: a missing id fail-closes as `internalFrames`.
+ */
+export const DEFAULT_FACT_KINDS: FactKindMap = deepFreeze({
+    'bls.SLASH': TOP_AND_LOGS,
+    'bls.REPUTATION': TOP_AND_LOGS,
+    'bls.QUEUE': TOP_AND_LOGS,
+    'bls.UNRECOVERED': TOP_AND_LOGS,
+    'bls.GENERIC.unexpected': TOP_AND_LOGS,
+    'bls.GENERIC.expected:superPaymaster.updatePriceDVT(int256,uint256,bytes,uint8)': TOP_AND_LOGS,
+    'ownerRoute.events.PriceUpdated': LOGS_AND_FRAMES,
+    'ownerRoute.events.PriceModeChanged': LOGS_AND_FRAMES,
+    'ownerRoute.events.EmergencyPriceQueued': LOGS_AND_FRAMES,
+    'ownerRoute.events.EmergencyPriceExecuted': LOGS_AND_FRAMES,
+    'ownerRoute.events.EmergencyPriceCancelled': LOGS_AND_FRAMES,
+    'ownerRoute.events.SlashQueued': LOGS_AND_FRAMES,
+    'ownerRoute.events.SlashCancelled': LOGS_AND_FRAMES,
+    'ownerRoute.events.OperatorSlashed': LOGS_AND_FRAMES,
+    'ownerRoute.events.SlashExecutedWithProof': LOGS_AND_FRAMES,
+    'ownerRoute.events.OperatorPaused': LOGS_AND_FRAMES,
+    'ownerRoute.events.OperatorUnpaused': LOGS_AND_FRAMES,
+    'ownerRoute.events.GlobalPauseSet': LOGS_AND_FRAMES,
+    'ownerRoute.events.GuardianSet': LOGS_AND_FRAMES,
+    'ownerRoute.events.BLSAggregatorQueued': LOGS_AND_FRAMES,
+    'ownerRoute.events.BLSAggregatorUpdated': LOGS_AND_FRAMES,
+    'publicRoute.functions.updatePrice()': LOGS_AND_FRAMES,
+    'publicRoute.functions.updatePrice().also': LOGS_AND_FRAMES,
+    'publicRoute.functions.executeEmergencyPrice()': LOGS_AND_FRAMES,
+    'publicRoute.functions.pauseUnderstakedOperator(address)': LOGS_AND_FRAMES,
+    'publicRoute.unattributed': LOGS_ONLY,
+});
+
+/** Rule ids a validated ruleset can emit from its declared entries. Not the dynamic failure ids. */
+export function rulesetRuleIds(rs: Ruleset): string[] {
+    const rules = validateRuleset(rs);
+    const ids = ['bls.SLASH', 'bls.REPUTATION', 'bls.QUEUE', 'bls.UNRECOVERED', 'bls.GENERIC.unexpected'];
+    for (const expected of rules.bls.GENERIC.expected) {
+        ids.push(`bls.GENERIC.expected:${expected.target}.${expected.signature}`);
+    }
+    for (const event of ownKeys(rules.ownerRoute.events)) ids.push(`ownerRoute.events.${event}`);
+    for (const sig of ownKeys(rules.publicRoute.functions)) {
+        ids.push(`publicRoute.functions.${sig}`);
+        const entry = ownValue(rules.publicRoute.functions, sig);
+        if (isRecord(entry) && Array.isArray(entry.flagIfCallAlsoEmits) && entry.flagIfCallAlsoEmits.length > 0) {
+            ids.push(`publicRoute.functions.${sig}.also`);
+        }
+    }
+    ids.push('publicRoute.unattributed');
+    return ids;
+}
+
+/**
+ * sha256 of the canonical JSON of the validated ruleset plus the resolved fact-kind map.
+ * Every declared rule id is present. An id missing from `factKinds` is stored as `internalFrames`,
+ * which is the same policy `evaluate` applies. The caller does not supply this hash.
+ * The reference classifier is not hashed here; it ships in PR-D.
+ */
+export function classifierRulesetSha256(rs: Ruleset, factKinds?: FactKindMap): Hex {
+    const rules = validateRuleset(rs);
+    const declared = normalizeFactKindMap(factKinds === undefined ? DEFAULT_FACT_KINDS : factKinds);
+    return sha256(stringToBytes(canonicalJson({
+        factKinds: resolveFactKinds(rules, declared),
+        ruleset: rules,
+    })));
+}
+
+interface EvaluatePolicy {
+    kind: 'single' | 'dual' | null;
+    factKinds: Record<string, readonly FactKind[]>;
+}
+
+function readEvaluatePolicy(options: unknown): EvaluatePolicy {
+    const attribution = optionField(options, 'attribution');
+    const factKinds = optionField(options, 'factKinds');
+    return {
+        kind: attributionKind(attribution),
+        factKinds: normalizeFactKindMap(factKinds === undefined ? DEFAULT_FACT_KINDS : factKinds),
+    };
+}
+
+function applySingleTrace(verdict: Verdict, policy: EvaluatePolicy): Verdict {
+    if (policy.kind !== 'single') return verdict;
+    const declared = Object.hasOwn(policy.factKinds, verdict.rule)
+        ? policy.factKinds[verdict.rule]!
+        : INTERNAL_FRAMES_ONLY;
+    if (!declared.includes('internalFrames')) return verdict;
+    return { flagged: true, reasons: [SINGLE_TRACE_INTERNAL_REASON], rule: verdict.rule };
+}
+
+/** Own data fields of `options` only. `undefined` options yield `undefined` for both fields. */
+function optionField(options: unknown, key: 'attribution' | 'factKinds'): unknown {
+    if (options === undefined) return undefined;
+    if (!isRecord(options)) throw new Error('evaluate options are invalid');
+    let count = 0;
+    try {
+        for (const name in options) {
+            if (!Object.prototype.hasOwnProperty.call(options, name)) continue;
+            count += 1;
+            if (count > 8) throw new Error('evaluate options are invalid');
+            if (name !== 'attribution' && name !== 'factKinds') throw new Error('evaluate options are invalid');
+        }
+        if (!Object.prototype.hasOwnProperty.call(options, key)) return undefined;
+        const desc = Object.getOwnPropertyDescriptor(options, key);
+        if (desc === undefined) return undefined;
+        if (desc.get !== undefined) {
+            try {
+                return desc.get.call(options);
+            } catch {
+                throw new Error('evaluate options are invalid');
+            }
+        }
+        return desc.value;
+    } catch (error) {
+        if (error instanceof Error && error.message === 'evaluate options are invalid') throw error;
+        throw new Error('evaluate options are invalid');
+    }
+}
+
+/**
+ * Kind of `attribution.attributionSource`, or null when the object has no such own field.
+ * Other fields (`forwardingPath`, `immediateCaller`) are not read.
+ */
+function attributionKind(attribution: unknown): 'single' | 'dual' | null {
+    if (attribution === undefined || attribution === null) return null;
+    if (!isRecord(attribution)) throw new Error('attribution is invalid');
+    let source: unknown;
+    try {
+        if (!Object.prototype.hasOwnProperty.call(attribution, 'attributionSource')) return null;
+        const desc = Object.getOwnPropertyDescriptor(attribution, 'attributionSource');
+        if (desc === undefined) return null;
+        if (desc.get !== undefined) {
+            try {
+                source = desc.get.call(attribution);
+            } catch {
+                throw new Error('attribution source is invalid');
+            }
+        } else {
+            source = desc.value;
+        }
+    } catch (error) {
+        if (error instanceof Error && (error.message === 'attribution source is invalid' || error.message === 'attribution is invalid')) {
+            throw error;
+        }
+        throw new Error('attribution is invalid');
+    }
+    return parseAttributionKind(source);
+}
+
+function parseAttributionKind(source: unknown): 'single' | 'dual' {
+    if (typeof source !== 'string' || source.length === 0 || source.length > ATTRIBUTION_SOURCE_MAX) {
+        throw new Error('attribution source is invalid');
+    }
+    if (source === 'single' || source === 'dual') return source;
+    const colon = source.indexOf(':');
+    if (colon <= 0 || source.indexOf(':', colon + 1) !== -1) throw new Error('attribution source is invalid');
+    const kind = source.slice(0, colon);
+    const rest = source.slice(colon + 1);
+    if (kind === 'single') {
+        if (!isProviderName(rest)) throw new Error('attribution source is invalid');
+        return 'single';
+    }
+    if (kind !== 'dual') throw new Error('attribution source is invalid');
+    const plus = rest.indexOf('+');
+    if (plus <= 0 || rest.indexOf('+', plus + 1) !== -1) throw new Error('attribution source is invalid');
+    const left = rest.slice(0, plus);
+    const right = rest.slice(plus + 1);
+    if (!isProviderName(left) || !isProviderName(right) || left === right) {
+        throw new Error('attribution source is invalid');
+    }
+    return 'dual';
+}
+
+/**
+ * Copy `map` into a null-prototype object. Key count is capped before values are read.
+ * Kinds are rewritten in {@link FACT_KINDS} order. Empty, unknown, and duplicate kinds are rejected.
+ */
+function normalizeFactKindMap(map: unknown): Record<string, readonly FactKind[]> {
+    if (!isRecord(map)) throw new Error('fact kind map is invalid');
+    const keys: string[] = [];
+    try {
+        for (const key in map) {
+            if (!Object.prototype.hasOwnProperty.call(map, key)) continue;
+            keys.push(key);
+            if (keys.length > MAX_FACT_KEYS) throw new Error('fact kind map is too large');
+        }
+    } catch (error) {
+        if (error instanceof Error && error.message === 'fact kind map is too large') throw error;
+        throw new Error('fact kind map is invalid');
+    }
+    const out: Record<string, readonly FactKind[]> = Object.create(null);
+    for (const key of keys) {
+        if (key.length === 0 || key.length > MAX_FACT_KEY || key.includes('://') || /[\r\n]/.test(key)) {
+            throw new Error('fact kind is invalid');
+        }
+        let desc: PropertyDescriptor | undefined;
+        try {
+            desc = Object.getOwnPropertyDescriptor(map, key);
+        } catch {
+            throw new Error('fact kind is invalid');
+        }
+        if (desc === undefined || desc.get !== undefined || !('value' in desc)) throw new Error('fact kind is invalid');
+        const value = desc.value;
+        const seen = new Set<string>();
+        try {
+            if (!Array.isArray(value) || value.length === 0 || value.length > FACT_KINDS.length) {
+                throw new Error('fact kind is invalid');
+            }
+            for (const item of value) {
+                if (typeof item !== 'string' || !(FACT_KINDS as readonly string[]).includes(item) || seen.has(item)) {
+                    throw new Error('fact kind is invalid');
+                }
+                seen.add(item);
+            }
+        } catch (error) {
+            if (error instanceof Error && error.message === 'fact kind is invalid') throw error;
+            throw new Error('fact kind is invalid');
+        }
+        const ordered: FactKind[] = [];
+        for (const kind of FACT_KINDS) {
+            if (seen.has(kind)) ordered.push(kind);
+        }
+        Object.defineProperty(out, key, { value: ordered, enumerable: true, writable: true, configurable: true });
+    }
+    return out;
+}
+
+/** Declared ids filled in, missing ids stored as `internalFrames`, extra keys kept. */
+function resolveFactKinds(rules: Ruleset, declared: Record<string, readonly FactKind[]>): Record<string, readonly FactKind[]> {
+    const out: Record<string, readonly FactKind[]> = Object.create(null);
+    const ids = rulesetRuleIds(rules);
+    const known = new Set(ids);
+    for (const id of ids) {
+        const kinds = Object.hasOwn(declared, id) ? declared[id]! : INTERNAL_FRAMES_ONLY;
+        Object.defineProperty(out, id, { value: kinds, enumerable: true, writable: true, configurable: true });
+    }
+    for (const key of Object.keys(declared)) {
+        if (known.has(key)) continue;
+        Object.defineProperty(out, key, {
+            value: declared[key],
+            enumerable: true,
+            writable: true,
+            configurable: true,
+        });
+    }
+    return out;
+}

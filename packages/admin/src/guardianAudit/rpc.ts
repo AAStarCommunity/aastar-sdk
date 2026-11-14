@@ -3,12 +3,17 @@ import { getAddress, numberToHex, type Address, type Hex } from 'viem';
 /**
  * Provider `name` and evidence `runMetadata.providers` entries.
  * A short label: a letter or digit, then letters, digits, `.`, `_`, or `-`. A URL cannot match.
- * One pattern, shared by the scan and the evidence file.
+ * Module-private. Callers use {@link isProviderName}; a shared RegExp can be retargeted with `compile`.
  */
-export const PROVIDER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const PROVIDER_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
+/** True when `name` is a provider label. Length is checked before the pattern runs. */
+export function isProviderName(name: unknown): name is string {
+    return typeof name === 'string' && name.length >= 1 && name.length <= 64 && PROVIDER_NAME_RE.test(name);
+}
 
 /**
- * EIP-1193 transport. `name` must match {@link PROVIDER_NAME_RE}. It is a label for run metadata, never a URL.
+ * EIP-1193 transport. `name` must pass {@link isProviderName}. It is a label for run metadata, never a URL.
  * Request timeouts belong to the caller's transport. This scanner does not time out `request`.
  * viem: `{ name, request: client.request }`
  * ethers v6 (not imported): `{ name, request: ({ method, params }) => provider.send(method, params ?? []) }`
@@ -62,7 +67,6 @@ export const responseLimits = {
 const WORD_LEN = 66;
 const BLOOM_LEN = 514;
 const ADDR_LEN = 42;
-const PROVIDER_NAME = PROVIDER_NAME_RE;
 
 function hexOk(v: string): boolean {
     if (v.charCodeAt(0) !== 48 || v.charCodeAt(1) !== 120) return false;
@@ -76,9 +80,7 @@ function hexOk(v: string): boolean {
 
 /** A label safe to put in an error. The message does not echo `name`. */
 export function assertProviderName(name: unknown): asserts name is string {
-    if (typeof name !== 'string' || name.length < 1 || name.length > 64 || !PROVIDER_NAME.test(name)) {
-        throw new Error('provider name is not a safe label');
-    }
+    if (!isProviderName(name)) throw new Error('provider name is not a safe label');
 }
 
 export function quantity(v: unknown): number | null {

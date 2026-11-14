@@ -1,5 +1,5 @@
 export type { BlockHeader, LogFilter, RawLog, RawRpc } from './rpc.js';
-export { header, pagedLogs, PROVIDER_NAME_RE, rawGetLogs } from './rpc.js';
+export { header, isProviderName, pagedLogs, rawGetLogs } from './rpc.js';
 
 export type { BloomLog } from './bloom.js';
 export { bloomOf, mayContain, mayContainAddress, mayHaveLog } from './bloom.js';
@@ -24,14 +24,16 @@ export { traceAttributor } from './traceAttributor.js';
 export { canonicalDigest, canonicalJson } from './canonical.js';
 
 export type {
-    FlagReason, GenericExpected, OwnerEventRule, PublicFunctionRule, RuleRecord, Ruleset, RulesetSource, Verdict,
+    EvaluateOptions, FactKind, FactKindMap, FlagReason, GenericExpected, OwnerEventRule, PublicFunctionRule,
+    RuleRecord, Ruleset, RulesetSource, Verdict,
 } from './rules.js';
 export {
-    DEFAULT_RULESET, RULESET_SCHEMA, ambiguousEvents, evaluate, matchGeneric, publicFunction, rulesetId,
+    DEFAULT_FACT_KINDS, DEFAULT_RULESET, FACT_KINDS, RULESET_SCHEMA, SINGLE_TRACE_INTERNAL_REASON,
+    ambiguousEvents, classifierRulesetSha256, evaluate, matchGeneric, publicFunction, rulesetId, rulesetRuleIds,
     validateRuleset, wantsPrice,
 } from './rules.js';
 
-export type { EvidenceAction, EvidenceBundle, EvidenceFile, EvidenceFileCheck, EvidenceInput, RunMetadata } from './bundle.js';
+export type { ClassifierIdentity, EvidenceAction, EvidenceBundle, EvidenceFile, EvidenceFileCheck, EvidenceInput, RunMetadata } from './bundle.js';
 export {
     EVIDENCE_FILE_SCHEMA, EVIDENCE_SCHEMA, MAX_EVIDENCE_FILE_BYTES, RUN_METADATA_VARIABLE_FIELDS, buildEvidenceBundle, evidenceFileSha256,
     parseEvidenceFile, serializeEvidenceFile, verifyEvidenceBundle, verifyEvidenceFile,
