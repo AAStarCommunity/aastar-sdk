@@ -252,6 +252,10 @@ describe('guardian-audit route check (every classifier)', () => {
         const kind = structuredClone(built.bundle);
         (kind.actions[0]!.decoded as { kind: string }).kind = 'bls';
         expect(() => parseEvidenceFile(fileOf(kind, built.runMetadata))).toThrow(ROUTE_RE);
+        const owner = build([act(0, eventOf(GUARDIAN_SET), attributed(direct(SET_GUARDIAN)))]);
+        const ownerKind = structuredClone(owner.bundle);
+        (ownerKind.actions[0]!.decoded as { kind: string }).kind = 'bls';
+        expect(() => parseEvidenceFile(fileOf(ownerKind, owner.runMetadata))).toThrow(ROUTE_RE);
     });
 });
 

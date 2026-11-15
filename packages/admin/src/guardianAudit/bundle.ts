@@ -665,7 +665,7 @@ function classifyOne(
     normalizeClassifier(record, 0);
     assertRecord(record);
     if (!eventMatchesLog(prepared.decoded, prepared.log.topics, record)) raise(EVENT_MISMATCH);
-    assertRouteMatches(record as RuleRecord, prepared.decoded, expected);
+    assertRouteMatches(record as RuleRecord, expected);
     const attribution = publishAttribution(prepared.attribution, traceNames);
     return {
         blockNumber: prepared.blockNumber,
@@ -687,17 +687,14 @@ function decodedKind(decoded: unknown): unknown {
 }
 
 /**
- * The BLS route needs a `bls` decoded action. An event route needs an `event` decoded action and must
- * equal the record the bundle computes from the log and its attribution (`eventRecord`), whoever
- * classified it. Only the BLS route is the classifier's own choice.
+ * An event route must equal the record the bundle computes from the log and its attribution
+ * (`eventRecord`), whoever classified it. Only the BLS route is the classifier's own choice.
  */
-function assertRouteMatches(record: RuleRecord, decoded: unknown, expected: RuleRecord | null): void {
-    if (record.route === 'bls') {
-        if (decodedKind(decoded) !== 'bls') raise(ROUTE_MISMATCH);
-        return;
-    }
-    if (decodedKind(decoded) !== 'event' || expected === null) raise(ROUTE_MISMATCH);
-    if (canonicalJson(record) !== canonicalJson(expected)) raise(ROUTE_MISMATCH);
+function assertRouteMatches(record: RuleRecord, expected: RuleRecord | null): void {
+    // BLS pairing is checked by assertPublishedRoutes, which also runs on the built bundle.
+    if (record.route === 'bls') return;
+    // `expected` is null unless the decoded action is an `event` with a valid name.
+    if (expected === null || canonicalJson(record) !== canonicalJson(expected)) raise(ROUTE_MISMATCH);
 }
 
 /**
