@@ -11,6 +11,8 @@ export interface Checkpoint { block: number; hash: Hex }
  */
 export interface FinalizedAnchor { scope: Hex; block: number; hash: Hex }
 
+const ANCHOR_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
+
 /**
  * Thrown when `commit` sees a revision other than `expectedRevision`. Nothing is written.
  * The checkpoint value is not the concurrency token: caught-up commits leave it unchanged
@@ -169,7 +171,9 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
                 if (!Array.isArray(change.anchors)) throw new TypeError('anchors must be an array');
                 nextAnchors = change.anchors.map((item) => {
                     if (typeof item?.scope !== 'string' || item.scope.toLowerCase() !== nextScope) throw new ScopeChangedError();
-                    return { scope: nextScope, block: item.block, hash: item.hash };
+                    if (!Number.isSafeInteger(item.block) || item.block < 0) throw new TypeError('anchor block must be a safe non-negative integer');
+                    if (typeof item.hash !== 'string' || !ANCHOR_HASH_RE.test(item.hash)) throw new TypeError('anchor hash must be 32 bytes');
+                    return { scope: nextScope, block: item.block, hash: item.hash.toLowerCase() as Hex };
                 });
             }
             const nextOpen = new Map(open);

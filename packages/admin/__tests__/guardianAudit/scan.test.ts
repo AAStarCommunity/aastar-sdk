@@ -2437,6 +2437,26 @@ describe('FU-100 finalized anchor cache (unit, not acceptance)', () => {
         })).rejects.toThrow(ScopeChangedError);
         expect(await store.snapshot()).toEqual(before);
     });
+
+    it('memoryStore rejects a malformed anchor block or hash with the whole commit', async () => {
+        const store = memoryStore();
+        await save(store, null);
+        const scope = (await store.snapshot()).scope!;
+        const before = await store.snapshot();
+        const bad: [unknown, unknown, RegExp][] = [
+            [-1, bhash(3), /anchor block/], [1.5, bhash(3), /anchor block/], [2 ** 53, bhash(3), /anchor block/],
+            ['3', bhash(3), /anchor block/], [3, '0x1234', /anchor hash/], [3, `${bhash(3)}00`, /anchor hash/],
+            [3, `0x${'zz'.repeat(32)}`, /anchor hash/], [3, null, /anchor hash/],
+        ];
+        for (const [block, hash, why] of bad) {
+            await expect(save(store, { block: 3, hash: bhash(3) }, [], {
+                anchors: [{ scope, block: 3, hash: bhash(3) }, { scope, block, hash } as unknown as FinalizedAnchor],
+            }), String(block)).rejects.toThrow(why);
+            expect(await store.snapshot()).toEqual(before);
+        }
+        await save(store, null, [], { anchors: [{ scope, block: 3, hash: bhash(3).toUpperCase().replace('0X', '0x') as Hex }] });
+        expect((await store.snapshot()).anchors).toEqual([{ scope: scope.toLowerCase(), block: 3, hash: bhash(3).toLowerCase() }]);
+    });
 });
 
 const ZERO_BLOOM = `0x${'00'.repeat(256)}` as Hex;
