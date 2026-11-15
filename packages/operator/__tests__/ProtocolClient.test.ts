@@ -94,17 +94,12 @@ describe('ProtocolClient', () => {
   });
 
   describe('BLS Management', () => {
-      it('registerBLSKey should call registerBLSPublicKey', async () => {
-          await client.registerBLSKey('0x123456');
-          expect(mocks.mockAggregatorActions).toHaveBeenCalledWith(config.blsAggregatorAddress);
-          expect(mocks.mockAggregator.registerBLSPublicKey).toHaveBeenCalledWith(expect.objectContaining({
-              publicKey: '0x123456'
-          }));
-      });
-
-      it('should throw if blsAggregatorAddress missing', async () => {
+      // It used to pass against a mocked aggregator while the real call could never encode.
+      it('registerBLSKey throws and points to the DVTValidator route, sending nothing', async () => {
+          await expect(client.registerBLSKey('0x123456')).rejects.toThrow(/dvtActions\(dvtValidator\)\.registerBLSPublicKey/);
           client.blsAggregatorAddress = undefined;
-          await expect(client.registerBLSKey('0x12')).rejects.toThrow('BLS Aggregator address required');
+          await expect(client.registerBLSKey('0x12')).rejects.toThrow(/dvtActions/);
+          expect(mocks.mockAggregator.registerBLSPublicKey).not.toHaveBeenCalled();
       });
   });
 

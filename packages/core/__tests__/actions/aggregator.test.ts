@@ -16,15 +16,16 @@ describe('AggregatorActions', () => {
   });
 
   describe('registerBLSPublicKey', () => {
-    it('should register BLS key', async () => {
+    // It used to assert only that writeContract was called, which hid a call that could never encode.
+    it('throws instead of sending (use dvtActions().registerBLSPublicKey)', async () => {
       walletClient.writeContract.mockResolvedValue('0xhash');
       const actions = aggregatorActions(AGG_ADDRESS)(walletClient);
-      await actions.registerBLSPublicKey({
+      await expect(actions.registerBLSPublicKey({
         validator: VALIDATOR_ADDRESS,
         publicKey: '0x1234',
         account: walletClient.account
-      });
-      expect(walletClient.writeContract).toHaveBeenCalled();
+      })).rejects.toThrow(/dvtActions/);
+      expect(walletClient.writeContract).not.toHaveBeenCalled();
     });
   });
 

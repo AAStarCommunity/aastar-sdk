@@ -1,5 +1,6 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { DVTValidatorABI } from '../abis/index.js';
+import { BLSAggregatorV414DevABI, DVTValidatorABI, DVTValidatorV080DevABI } from '../abis/index.js';
+import type { BLSG1Point, BLSG2Point } from './aggregator.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
 
@@ -21,6 +22,21 @@ export type DVTActions = {
     /** Prune a validator entry (cleanup of a removed/stale validator). ABI: pruneValidator(address v). */
     pruneValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
     
+    /**
+     * Register a validator's BLS key through DVTValidator-0.8.0 (SP rc.8). From BLSAggregator-4.14.0 the
+     * aggregator accepts `registerBLSPublicKey` only from its current DVT, so this is the only working route.
+     * ABI: registerBLSPublicKey(address validator, BLS.G1Point key, uint8 slot, BLS.G2Point pop).
+     * - Owner of DVTValidator: may register any validator; `slot` is used as given.
+     * - Anyone else: only when `aggregator.permissionlessBLSRegistration()` is true and the sender is `validator`
+     *   (else PermissionlessRegistrationDisabled / UnauthorizedCaller), and the validator must hold ROLE_DVT with
+     *   the minimum stake and not be suspended. `slot` is ignored: the contract keeps an active key's slot or
+     *   takes the first free one (SlotOutOfRange when full).
+     * The ABI is a development pin (see `DVTValidatorV080DevABI`) until the rc.8 tag.
+     */
+    registerBLSPublicKey: (args: {
+        validator: Address, key: BLSG1Point, slot: number, pop: BLSG2Point, account?: Account | Address,
+    }) => Promise<Hash>;
+
     // BLS Aggregator Integration
     setBLSAggregator: (args: { aggregator: Address, account?: Account | Address }) => Promise<Hash>;
     BLS_AGGREGATOR: () => Promise<Address>;
@@ -34,6 +50,22 @@ export type DVTActions = {
     // Version
     version: () => Promise<string>;
 };
+
+const isWord = (v: unknown): boolean => typeof v === 'string' && /^0x[0-9a-fA-F]{64}$/.test(v);
+
+const errorKey = (item: any): string => `${item.name}(${(item.inputs ?? []).map((x: any) => x.type).join(',')})`;
+
+/**
+ * DVTValidator-0.8.0 plus the BLSAggregator-4.14.0 errors it does not declare. `registerBLSPublicKey` forwards to the
+ * aggregator, whose reverts (InvalidParameter(bytes32), InvalidThreshold, ...) bubble up unchanged; without these
+ * entries viem cannot name them.
+ */
+export const DVT_BLS_REGISTRATION_ABI: readonly any[] = (() => {
+    const own = DVTValidatorV080DevABI as any[];
+    const seen = new Set(own.filter((item) => item.type === 'error').map(errorKey));
+    const extra = (BLSAggregatorV414DevABI as any[]).filter((item) => item.type === 'error' && !seen.has(errorKey(item)));
+    return Object.freeze([...own, ...extra]);
+})();
 
 export const dvtActions = (address: Address) => (client: PublicClient | WalletClient): DVTActions => ({
     // Proposal Management
@@ -150,6 +182,31 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
             }) as Promise<boolean>;
         } catch (error) {
             throw AAStarError.fromViemError(error as Error, 'isValidator');
+        }
+    },
+
+    async registerBLSPublicKey({ validator, key, slot, pop, account }) {
+        try {
+            validateAddress(validator, 'validator');
+            if (!Number.isInteger(slot) || slot < 0 || slot > 255) {
+                throw new AAStarError(ErrorCode.INVALID_PARAMETER, 'slot must be an integer in [0, 255]');
+            }
+            const g1 = [key?.x_a, key?.x_b, key?.y_a, key?.y_b];
+            const g2 = [pop?.x_c0_a, pop?.x_c0_b, pop?.x_c1_a, pop?.x_c1_b, pop?.y_c0_a, pop?.y_c0_b, pop?.y_c1_a, pop?.y_c1_b];
+            if (![...g1, ...g2].every(isWord)) {
+                throw new AAStarError(ErrorCode.INVALID_PARAMETER, 'key and pop must be BLS.G1Point / BLS.G2Point with bytes32 fields');
+            }
+            return await (client as any).writeContract({
+                address,
+                abi: DVT_BLS_REGISTRATION_ABI,
+                functionName: 'registerBLSPublicKey',
+                args: [validator, key, slot, pop],
+                account: account as any,
+                chain: (client as any).chain
+            });
+        } catch (error) {
+            if (error instanceof AAStarError) throw error;
+            throw AAStarError.fromViemError(error as Error, 'registerBLSPublicKey');
         }
     },
 
