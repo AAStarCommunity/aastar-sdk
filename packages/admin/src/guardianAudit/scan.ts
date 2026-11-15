@@ -1,8 +1,9 @@
 import { getAddress, isAddress, keccak256, numberToHex, stringToHex, type Address, type Hex } from 'viem';
 import { mayContainAddress } from './bloom.js';
 import {
-    assertProviderName, header, isHexData, isWord, pagedLogs, quantity, requireAddress, responseLimits,
-    snapshotReceipts, type BlockHeader, type RawLog, type RawRpc,
+    DEFAULT_MAX_PROOF_GAS, MAX_PROOF_GAS_CEILING, assertProviderName, header, isHexData, isWord, pagedLogs, quantity,
+    receiptBudget, requireAddress, responseLimits, snapshotReceipts, type BlockHeader, type RawLog, type RawRpc,
+    type ReceiptBudget,
 } from './rpc.js';
 import { isolatedClone } from './isolated.js';
 import {
@@ -11,6 +12,7 @@ import {
     unresolvedId,
     type AttributedAction,
     type Checkpoint,
+    type FinalizedAnchor,
     type GuardianAuditStore,
     type StoreSnapshot,
     type UnresolvedAction,
@@ -67,10 +69,15 @@ export interface ScanRangeOptions {
     attributor?: Attributor;
     page?: number;
     /**
-     * Most blocks the parent-hash walk may cover from the scanned tip up to finalized.
-     * Default 100_000. See `scanRange` for the cost and the catch-up recovery.
+     * Most blocks one parent-hash walk may cover: from the scanned tip up to finalized or a stored anchor,
+     * or one step of a descent. Default 100_000. See `scanRange` for the cost and the anchor cache.
      */
     maxAnchorBlocks?: number;
+    /**
+     * Gas limit the receipt budget is derived from, at most. A block whose gasLimit is higher is budgeted
+     * as if it were this value. Default 100_000_000, at most 1_000_000_000. See `receiptBudget`.
+     */
+    maxProofGas?: number;
 }
 
 interface ScanStats {
@@ -87,7 +94,11 @@ interface ScanStats {
 export type ScanResult =
     | (ScanStats & { state: 'COMPLETE'; range?: { from: number; to: number; empty: true } })
     | (ScanStats & { state: 'UNATTRIBUTED'; unattributed: number; range?: { from: number; to: number; empty: true } })
-    | { state: 'INCOMPLETE'; reasons: string[]; from: number; to?: number };
+    | {
+        state: 'INCOMPLETE'; reasons: string[]; from: number; to?: number;
+        /** Set when this scan extended the anchor cache down to this block (a descent, FU-100). */
+        anchored?: number;
+    };
 
 export class FinalityConflictError extends Error {
     constructor(message: string) {
@@ -304,13 +315,16 @@ const HEADER_BATCH = 100;
 
 function assertConfig(
     startBlock: number, maxBlocks: number, page: number | undefined, watched: readonly WatchedContract[],
-    maxAnchorBlocks: number | undefined, chainId: number,
+    maxAnchorBlocks: number | undefined, chainId: number, maxProofGas: number | undefined,
 ): void {
     assertChainId(chainId);
     assertWatched(watched, startBlock);
     if (!safeInt(maxBlocks, 1) || maxBlocks > responseLimits.ancestry) throw new Error(`maxBlocks must be >= 1 and <= ${responseLimits.ancestry}`);
     if (page !== undefined && !safeInt(page, 1)) throw new Error('page must be >= 1');
     if (maxAnchorBlocks !== undefined && !safeInt(maxAnchorBlocks, 1)) throw new Error('maxAnchorBlocks must be >= 1');
+    if (maxProofGas !== undefined && (!safeInt(maxProofGas, 1) || maxProofGas > MAX_PROOF_GAS_CEILING)) {
+        throw new Error(`maxProofGas must be >= 1 and <= ${MAX_PROOF_GAS_CEILING}`);
+    }
 }
 
 /** Keep a short label. Anything else, including a credential, becomes a fixed reason. */
@@ -393,16 +407,23 @@ async function loadHeaders(rpc: RawRpc, from: number, to: number, limit: number)
     return out;
 }
 
-async function readReceipts(rpc: RawRpc, hash: Hex): Promise<unknown[] | string> {
+async function readReceipts(rpc: RawRpc, hash: Hex, budget: ReceiptBudget): Promise<unknown[] | 'too-large' | string> {
     try {
         const raw = await rpc.request({ method: 'eth_getBlockReceipts', params: [hash] });
-        const copied = snapshotReceipts(raw);
-        if (copied === 'too-large') return 'receipts too large';
+        const copied = snapshotReceipts(raw, budget);
+        if (copied === 'too-large') return copied;
         if (!copied) return `receipts read failed for ${rpc.name}`;
         return copied;
     } catch {
         return `receipts read failed for ${rpc.name}`;
     }
+}
+
+/** Says which bound a block exceeded, so a caller can tell a raisable limit from a broken gas rule. */
+function tooLarge(block: number, gasLimit: number | null, maxProofGas: number): string {
+    if (gasLimit === null) return `receipts exceed the fixed bound at block ${block}`;
+    if (gasLimit > maxProofGas) return `receipts exceed maxProofGas at block ${block}`;
+    return `receipts exceed the gas-derived bound at block ${block}`;
 }
 
 function asNorm(
@@ -427,13 +448,16 @@ function asNorm(
  * transactionHash is the receipt's transactionHash. It must be a 32-byte word and match
  * the other provider. receiptsRoot does not prove it.
  */
-function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; txs: string[] } | { error: string } {
+function deriveLogs(
+    raw: unknown[], block: number, hash: Hex, budget: ReceiptBudget, keep: ReadonlySet<Address>,
+): { logs: Norm[]; txs: string[]; removed: Address | null } | { error: string } {
     const badIndex = `receipt logIndex disagrees with receipt order at block ${block}`;
     const cannot = `cannot verify receipts at block ${block}`;
-    if (raw.length > responseLimits.receipts) return { error: cannot };
+    if (raw.length > budget.receipts) return { error: cannot };
     let cursor = 0;
     const logs: Norm[] = [];
     const txs: string[] = [];
+    let removed: Address | null = null;
     for (let i = 0; i < raw.length; i++) {
         const item = raw[i];
         if (typeof item !== 'object' || item === null) return { error: cannot };
@@ -450,13 +474,13 @@ function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; t
             return { error: `receipt blockHash disagrees at block ${block}` };
         }
         txs.push(txHash);
-        if (!Array.isArray(rec.logs) || rec.logs.length > responseLimits.logsPerReceipt) return { error: cannot };
+        if (!Array.isArray(rec.logs) || rec.logs.length > budget.logsPerReceipt) return { error: cannot };
         for (let j = 0; j < rec.logs.length; j++) {
             const entry = rec.logs[j];
             if (typeof entry !== 'object' || entry === null) return { error: cannot };
             const row = entry as Record<string, unknown>;
             if (typeof row.address !== 'string' || row.address.length !== 42 || !isAddress(row.address)) return { error: cannot };
-            if (!isHexData(row.data) || !Array.isArray(row.topics) || row.topics.length > responseLimits.topics || row.topics.some((t) => !isWord(t))) {
+            if (!isHexData(row.data, budget.dataChars) || !Array.isArray(row.topics) || row.topics.length > responseLimits.topics || row.topics.some((t) => !isWord(t))) {
                 return { error: cannot };
             }
             if (row.transactionHash !== undefined && (!isWord(row.transactionHash) || row.transactionHash.toLowerCase() !== txHash)) {
@@ -470,44 +494,51 @@ function deriveLogs(raw: unknown[], block: number, hash: Hex): { logs: Norm[]; t
             const blockHash = isWord(row.blockHash) ? row.blockHash.toLowerCase() : null;
             if (quantity(row.blockNumber) !== block) return { error: `receipt log blockNumber disagrees at block ${block}` };
             if (blockHash !== hash.toLowerCase()) return { error: `receipt log blockHash disagrees at block ${block}` };
+            const address = getAddress(row.address);
+            if (row.removed === true && removed === null) removed = address;
+            // Only watched logs are copied and compared. The rest are checked above and proven by receiptsRoot.
+            if (!keep.has(address)) continue;
             logs.push(asNorm(
-                getAddress(row.address),
+                address,
                 (row.topics as string[]).map((t) => t.toLowerCase() as Hex),
                 row.data.toLowerCase() as Hex,
                 block, hash.toLowerCase() as Hex, txHash, derived, row.removed === true,
             ));
         }
     }
-    return { logs, txs };
+    return { logs, txs, removed };
 }
 
-/** Both providers' receipts must encode to the agreed header receiptsRoot. */
+/**
+ * Both providers' receipts must encode to the agreed header receiptsRoot.
+ * `budget` comes from the agreed gasLimit. Returned logs are those of `keep` addresses only.
+ * A removed log of any address is an error, as is any disagreement on watched logs.
+ */
 async function prove(
     pa: RawRpc, pb: RawRpc, block: number, hash: Hex, root: Hex,
+    budget: ReceiptBudget, keep: ReadonlySet<Address>, oversize: string,
 ): Promise<{ logs: Norm[] } | { error: string }> {
-    const rawA = await readReceipts(pa, hash);
+    const rawA = await readReceipts(pa, hash, budget);
+    if (rawA === 'too-large') return { error: oversize };
     if (typeof rawA === 'string') return { error: rawA };
-    const rawB = await readReceipts(pb, hash);
+    const rawB = await readReceipts(pb, hash, budget);
+    if (rawB === 'too-large') return { error: oversize };
     if (typeof rawB === 'string') return { error: rawB };
-    const rootA = receiptsRootFromRpc(rawA);
-    const rootB = receiptsRootFromRpc(rawB);
+    const rootA = receiptsRootFromRpc(rawA, budget);
+    const rootB = receiptsRootFromRpc(rawB, budget);
     if (!rootA || !rootB) return { error: `cannot verify receipts at block ${block}` };
     const want = root.toLowerCase();
     if (rootA.toLowerCase() !== want || rootB.toLowerCase() !== want) {
         return { error: `receipts do not match receiptsRoot at block ${block}` };
     }
-    const logsA = deriveLogs(rawA, block, hash);
-    const logsB = deriveLogs(rawB, block, hash);
+    const logsA = deriveLogs(rawA, block, hash, budget, keep);
+    const logsB = deriveLogs(rawB, block, hash, budget, keep);
     if ('error' in logsA) return logsA;
     if ('error' in logsB) return logsB;
     if (logsA.txs.join() !== logsB.txs.join()) return { error: `providers disagree on transactionHash at block ${block}` };
-    if (!sameLogs(logsA.logs, logsB.logs)) {
-        const removed = logsA.logs.find((log) => log.removed) ?? logsB.logs.find((log) => log.removed);
-        if (removed) return { error: `removed log from ${removed.address} at block ${block}` };
-        return { error: `providers disagree on receipts at block ${block}` };
-    }
-    const agreed = logsA.logs.find((log) => log.removed);
-    if (agreed) return { error: `removed log from ${agreed.address} at block ${block}` };
+    const removed = logsA.removed ?? logsB.removed;
+    if (removed) return { error: `removed log from ${removed} at block ${block}` };
+    if (!sameLogs(logsA.logs, logsB.logs)) return { error: `providers disagree on receipts at block ${block}` };
     return { logs: logsA.logs };
 }
 
@@ -534,6 +565,228 @@ async function anchor(rpc: RawRpc, fin: BlockHeader, tip: Hex, to: number, maxAn
         return `finalized ancestry breaks at block ${fin.number} on ${rpc.name}`;
     }
     return null;
+}
+
+/** Anchors are recorded at heights divisible by this, plus the top (and the bottom of a descent). */
+const ANCHOR_STRIDE = 1024;
+/** Most anchors one store keeps. More are thinned evenly, keeping the lowest and the highest. */
+const MAX_ANCHORS = 1024;
+
+/**
+ * This scope's usable anchors, sorted by block. `null` when the store has no anchor cache.
+ * This rests on one premise: a block both providers proved finalized is treated as finalized from then on. A rollback of finalized is outside what this scan detects.
+ * Rows of another scope, malformed rows, and heights stored with two different hashes are ignored, never trusted.
+ */
+function readAnchors(snap: StoreSnapshot, scope: Hex): FinalizedAnchor[] | null {
+    const raw = snap.anchors;
+    if (!Array.isArray(raw)) return null;
+    const want = scope.toLowerCase();
+    const byBlock = new Map<number, Hex | null>();
+    for (let i = 0; i < raw.length; i++) {
+        const item = raw[i] as unknown;
+        if (typeof item !== 'object' || item === null) continue;
+        const row = item as Record<string, unknown>;
+        if (typeof row.scope !== 'string' || row.scope.toLowerCase() !== want) continue;
+        if (typeof row.block !== 'number' || !safeInt(row.block, 0) || !isWord(row.hash)) continue;
+        const hash = row.hash.toLowerCase() as Hex;
+        const seen = byBlock.get(row.block);
+        byBlock.set(row.block, seen === undefined || seen === hash ? hash : null);
+    }
+    const out: FinalizedAnchor[] = [];
+    for (const [block, hash] of byBlock) if (hash !== null) out.push({ scope: want as Hex, block, hash });
+    return out.sort((x, y) => x.block - y.block);
+}
+
+/**
+ * The anchor set to store: kept and newly verified anchors at or above `floor`, at most MAX_ANCHORS.
+ * A newly verified hash replaces a kept one at the same height.
+ */
+function nextAnchors(kept: readonly FinalizedAnchor[], found: readonly FinalizedAnchor[], floor: number): FinalizedAnchor[] {
+    const byBlock = new Map<number, FinalizedAnchor>();
+    for (const item of kept) if (item.block >= floor) byBlock.set(item.block, item);
+    for (const item of found) if (item.block >= floor) byBlock.set(item.block, item);
+    let rows = [...byBlock.values()].sort((x, y) => x.block - y.block);
+    while (rows.length > MAX_ANCHORS) rows = rows.filter((_, i) => i === 0 || i === rows.length - 1 || i % 2 === 0);
+    return rows.map((item) => ({ scope: item.scope, block: item.block, hash: item.hash }));
+}
+
+/**
+ * Anchors at heights in `[lo, hi]` divisible by ANCHOR_STRIDE, plus `hi` and, when asked, `lo`.
+ * Both providers must hold the header and agree on its hash. A disagreement records nothing.
+ */
+function recordAnchors(
+    scope: Hex, a: Map<number, BlockHeader>, b: Map<number, BlockHeader>, lo: number, hi: number, withLow: boolean,
+): FinalizedAnchor[] | string {
+    if (hi < lo) return [];
+    const heights = new Set<number>([hi]);
+    if (withLow) heights.add(lo);
+    for (let h = Math.ceil(lo / ANCHOR_STRIDE) * ANCHOR_STRIDE; h <= hi; h += ANCHOR_STRIDE) heights.add(h);
+    const out: FinalizedAnchor[] = [];
+    for (const h of [...heights].sort((x, y) => x - y)) {
+        const ha = a.get(h);
+        const hb = b.get(h);
+        if (!ha || !hb) continue;
+        if (ha.hash.toLowerCase() !== hb.hash.toLowerCase()) return `providers disagree on block hash at ${h}`;
+        out.push({ scope: scope.toLowerCase() as Hex, block: h, hash: ha.hash.toLowerCase() as Hex });
+    }
+    return out;
+}
+
+/**
+ * Headers `lo..top` of one provider, linked by parentHash. The header at `top` must carry `topHash`.
+ * When `top` is a stored anchor the walk stops there and does not reach the current finalized header.
+ * This rests on one premise: a block both providers proved finalized is treated as finalized from then on. A rollback of finalized is outside what this scan detects.
+ * `below` is the hash `lo` must point to, or null when `lo` is a free bottom (a descent).
+ * A top that differs from a stored anchor throws FinalityConflictError. A top that differs from
+ * the provider's finalized header is INCOMPLETE, as before.
+ */
+async function walkTo(
+    rpc: RawRpc, lo: number, top: number, topHash: Hex, below: Hex | null, limit: number, anchored: boolean,
+): Promise<Map<number, BlockHeader> | string> {
+    const headers = await loadHeaders(rpc, lo, top, limit);
+    if (typeof headers === 'string') return headers;
+    const topHeader = headers.get(top);
+    if (anchored && (!topHeader || topHeader.hash.toLowerCase() !== topHash.toLowerCase())) {
+        throw new FinalityConflictError(`stored anchor conflict at block ${top} on ${rpc.name}`);
+    }
+    let prev = below;
+    for (let n = lo; n <= top; n++) {
+        const item = headers.get(n);
+        if (!item || (prev !== null && item.parentHash.toLowerCase() !== prev.toLowerCase())) {
+            return `finalized ancestry breaks at block ${n} on ${rpc.name}`;
+        }
+        prev = item.hash;
+    }
+    if (prev === null || prev.toLowerCase() !== topHash.toLowerCase()) {
+        return `finalized ancestry breaks at block ${top} on ${rpc.name}`;
+    }
+    return headers;
+}
+
+type Reach =
+    | { ok: true; found: FinalizedAnchor[] }
+    | { ok: false; reasons: string[]; found: FinalizedAnchor[]; anchored?: number };
+
+interface ReachPlan {
+    low: number;
+    usable: FinalizedAnchor | undefined;
+    targets: { rpc: RawRpc; top: number; hash: Hex }[];
+    far: { rpc: RawRpc } | undefined;
+}
+
+/**
+ * Where the walk from `to` ends on each provider: the lowest stored anchor in `[to, min finalized]`,
+ * else that provider's own finalized header. `far` names a provider whose target is more than
+ * `maxAnchorBlocks` above `to`. No request.
+ */
+function planReach(
+    pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader, to: number,
+    maxAnchorBlocks: number, anchors: FinalizedAnchor[] | null,
+): ReachPlan {
+    const low = Math.min(finA.number, finB.number);
+    const usable = anchors?.find((item) => item.block >= to && item.block <= low);
+    const targets = [
+        { rpc: pa, top: usable ? usable.block : finA.number, hash: usable ? usable.hash : finA.hash },
+        { rpc: pb, top: usable ? usable.block : finB.number, hash: usable ? usable.hash : finB.hash },
+    ];
+    const far = targets.find((t) => t.top > to && t.top - to > maxAnchorBlocks);
+    return { low, usable, targets, far };
+}
+
+/**
+ * The target is out of reach. Without an anchor cache: INCOMPLETE with no fetch, as before FU-100.
+ * With one: link `maxAnchorBlocks` headers below each target to it and record anchors, the bottom included,
+ * where both providers agree. Always INCOMPLETE. Nothing here writes to the store.
+ */
+async function descend(
+    plan: ReachPlan & { far: { rpc: RawRpc } }, to: number, maxAnchorBlocks: number,
+    anchors: FinalizedAnchor[] | null, scope: Hex,
+): Promise<Extract<Reach, { ok: false }>> {
+    const reasons = [`finalized ancestry exceeds the bound on ${plan.far.rpc.name}`];
+    if (anchors === null) return { ok: false, reasons, found: [] };
+    const walked: Map<number, BlockHeader>[] = [];
+    for (const t of plan.targets) {
+        const lo = Math.max(to + 1, t.top - maxAnchorBlocks);
+        const got = await walkTo(t.rpc, lo, t.top, t.hash, null, maxAnchorBlocks, plan.usable !== undefined);
+        if (typeof got === 'string') return { ok: false, reasons: [got], found: [] };
+        walked.push(got);
+    }
+    const bottom = Math.max(plan.targets[0]!.top, plan.targets[1]!.top) - maxAnchorBlocks;
+    const found = recordAnchors(scope, walked[0]!, walked[1]!, Math.max(to + 1, bottom), plan.low, true);
+    if (typeof found === 'string') return { ok: false, reasons: [...reasons, found], found: [] };
+    if (found.length === 0) return { ok: false, reasons, found };
+    return { ok: false, reasons, found, anchored: found[0]!.block };
+}
+
+/**
+ * Prove the header `tip` at height `to` is an ancestor of finalized on both providers (FU-100).
+ * With an anchor cache, the walk stops at the lowest stored anchor in `[to, min finalized]`, and the
+ * anchor's height is reread on both providers: a different hash throws FinalityConflictError.
+ * A target out of reach goes to `descend`. Nothing here writes to the store.
+ */
+async function reach(
+    pa: RawRpc, pb: RawRpc, finA: BlockHeader, finB: BlockHeader, tip: Hex, to: number,
+    maxAnchorBlocks: number, anchors: FinalizedAnchor[] | null, scope: Hex,
+): Promise<Reach> {
+    const plan = planReach(pa, pb, finA, finB, to, maxAnchorBlocks, anchors);
+    const usable = plan.usable;
+    if (usable && usable.block === to) {
+        // `tip` is the header both providers agreed on at `to` (the per-block hash check in scanRange), so an
+        // equal anchor hash is the same check as rereading the anchor on both. There is no walk to the current
+        // finalized header: this rests on the anchor premise (a block both providers proved finalized is treated
+        // as finalized from then on; a rollback of finalized is outside what this scan detects). Codex #451.
+        if (usable.hash.toLowerCase() !== tip.toLowerCase()) {
+            throw new FinalityConflictError(`stored anchor conflict at block ${to}`);
+        }
+        return { ok: true, found: [] };
+    }
+    if (plan.far) return descend({ ...plan, far: plan.far }, to, maxAnchorBlocks, anchors, scope);
+    const walked: Map<number, BlockHeader>[] = [];
+    for (const t of plan.targets) {
+        if (t.top <= to) {
+            walked.push(new Map());
+            continue;
+        }
+        const got = await walkTo(t.rpc, to + 1, t.top, t.hash, tip, maxAnchorBlocks, usable !== undefined);
+        if (typeof got === 'string') return { ok: false, reasons: [got], found: [] };
+        walked.push(got);
+    }
+    const found = recordAnchors(scope, walked[0]!, walked[1]!, to + 1, usable ? usable.block : plan.low, false);
+    if (typeof found === 'string') return { ok: false, reasons: [found], found: [] };
+    return { ok: true, found };
+}
+
+/**
+ * Anchor-only commit after a descent: `next: null`, no rows. The cache is optional, so a failed write
+ * (a conflict included) is reported as a reason and the scan stays INCOMPLETE. The checkpoint never moves here.
+ */
+async function saveAnchors(
+    store: GuardianAuditStore, snap: StoreSnapshot, scope: Hex, rows: FinalizedAnchor[],
+): Promise<string | null> {
+    try {
+        await store.commit(isolatedClone({
+            expectedRevision: snap.revision, next: null, scope, attributed: [], unresolved: [], resolve: [], anchors: rows,
+        }));
+        return null;
+    } catch {
+        return 'anchor cache write failed';
+    }
+}
+
+/** INCOMPLETE from a failed reach. A descent first stores what it verified. */
+async function unreached(
+    got: Extract<Reach, { ok: false }>, store: GuardianAuditStore, snap: StoreSnapshot, scope: Hex,
+    anchors: FinalizedAnchor[] | null, floor: number, from: number, to: number,
+): Promise<ScanResult> {
+    const reasons = [...got.reasons];
+    if (anchors !== null && got.found.length > 0) {
+        const failed = await saveAnchors(store, snap, scope, nextAnchors(anchors, got.found, floor));
+        if (failed) reasons.push(failed);
+        else if (got.anchored !== undefined) {
+            return { state: 'INCOMPLETE', reasons, from, to, anchored: got.anchored };
+        }
+    }
+    return { state: 'INCOMPLETE', reasons, from, to };
 }
 
 /**
@@ -617,7 +870,8 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
 
 /**
  * Scan `(checkpoint, min(finalized A, finalized B)]`, at most `maxBlocks`.
- * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE writes nothing.
+ * COMPLETE / UNATTRIBUTED commit the checkpoint. INCOMPLETE never moves the checkpoint or writes rows;
+ * with an anchor cache, a descent stores its anchors (see below).
  *
  * Under the two-provider trust model (agreed headers are trusted; a block whose
  * agreed bloom excludes the watched address is not receipt-proven). receiptsRoot,
@@ -625,19 +879,23 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * parentHash reaches each provider's finalized header. The header hash itself is
  * not recomputed: several header fields are fork-dependent. Both providers may
  * share an upstream.
- * A clipped range (`to` below finalized) re-walks headers from `to + 1` through
- * finalized on every scan, on both providers. Headers walked per provider are about
- * `finalized - to`, in batches of 100. `maxAnchorBlocks` (default 100_000) caps that
- * walk. A larger gap is INCOMPLETE, the checkpoint stays, and the next scan walks
- * the same gap again. This scan does not cache anchor headers.
- * Recovery when `finalized - to > maxAnchorBlocks`: raise `maxAnchorBlocks` to at
- * least `finalized - to` for the catch-up run. Raising `maxBlocks` helps only within
- * its own cap of 4096 (`responseLimits.ancestry`): `to = min(finalized, from + maxBlocks - 1)`
- * and the walk fits when `to >= finalized - maxAnchorBlocks`, i.e. when
- * `finalized - maxAnchorBlocks - from + 1 <= 4096`; beyond that only `maxAnchorBlocks`
- * recovers. A keeper more than
- * 100_000 blocks behind (about 2.3 days on OP at a 2 second block time) does not
- * recover on the defaults.
+ * A clipped range (`to` below finalized) must link the tip by parentHash to finalized on both providers.
+ * Store without an anchor cache (`snapshot().anchors` undefined): the walk goes from `to + 1` to each
+ * provider's finalized header on every scan, `maxAnchorBlocks` (default 100_000) caps it, and a larger gap
+ * is INCOMPLETE with no fetch and no write. Recovery there is raising `maxAnchorBlocks` for the catch-up run.
+ * Store with the cache (FU-100): the walk stops at the lowest stored anchor in `[to, min finalized]`, and
+ * every successful walk records anchors every 1024 blocks plus its top, so a scan behind finalized walks
+ * about 1024 headers per provider. The anchor height is reread on both providers; a different hash throws
+ * FinalityConflictError. A target more than `maxAnchorBlocks` above `to` is a descent: `maxAnchorBlocks`
+ * headers below it are linked to it, their bottom is stored as an anchor in a commit with `next: null` and
+ * no rows, and the scan is INCOMPLETE with `anchored` set and without reading logs. A keeper any distance
+ * behind recovers in about `gap / maxAnchorBlocks` scans on the defaults. Anchors carry the store scope;
+ * rows of another scope, malformed rows, and rows above either finalized height are ignored.
+ * Anchor premise: a block both providers proved finalized is treated as finalized from then on. A rollback of
+ * finalized is outside what this scan detects: a walk that stops at an anchor does not reach the current
+ * finalized header, and an anchor at `to` is checked only against the agreed tip.
+ * Receipts are proven within a budget derived from the agreed header gasLimit (`receiptBudget`, FU-101),
+ * clamped by `maxProofGas`. A block over that budget is INCOMPLETE with a block-specific reason.
  * Request timeouts belong to the caller's transport. scanRange does not time out a request.
  * A fresh store whose `startBlock` is already past finalized still compares both
  * providers. Heights may differ. Header hashes must agree at the lower height.
@@ -647,7 +905,7 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * all-or-nothing: a stale revision throws StoreConflictError and writes nothing,
  * whether or not `next` moves the checkpoint. Two scans may run together. The one
  * that commits second fails, including a caught-up scan whose checkpoint does not change.
- * INCOMPLETE does not commit. The checkpoint value itself is not the concurrency token.
+ * INCOMPLETE commits only a descent's anchors. The checkpoint value itself is not the concurrency token.
  * A caught-up scan (`from > to`) still binds finalized to the checkpoint before it commits:
  * height must reach the checkpoint block, an equal height must carry its hash, and a
  * greater height must walk parentHash back to that block. A break commits nothing.
@@ -686,15 +944,18 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     const maxBlocks = opts.maxBlocks;
     const pageOption = opts.page;
     const anchorOption = opts.maxAnchorBlocks;
+    const proofGasOption = opts.maxProofGas;
     const chainId = opts.chainId;
     const store = opts.store;
     const attributor = freezeAttributor(opts.attributor);
     assertName(pa.name);
     assertName(pb.name);
-    assertConfig(startBlock, maxBlocks, pageOption, watched, anchorOption, chainId);
+    assertConfig(startBlock, maxBlocks, pageOption, watched, anchorOption, chainId, proofGasOption);
     const page = pageOption ?? 2000;
     const maxAnchorBlocks = anchorOption ?? DEFAULT_MAX_ANCHOR_BLOCKS;
+    const maxProofGas = proofGasOption ?? DEFAULT_MAX_PROOF_GAS;
     const scope = watchScope(watched, startBlock, chainId);
+    const keep = new Set(watched.map((contract) => getAddress(contract.address)));
     let snap: StoreSnapshot;
     try {
         snap = isolatedClone(await store.snapshot());
@@ -702,6 +963,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         storeFailure('snapshot', error);
     }
     if (snap.scope !== null && snap.scope.toLowerCase() !== scope.toLowerCase()) throw new ScopeChangedError();
+    const anchors = readAnchors(snap, scope);
     const [idA, idB] = await Promise.all([readChainId(pa), readChainId(pb)]);
     for (const id of [idA, idB]) if (typeof id === 'string') return { state: 'INCOMPLETE', reasons: [id], from: startBlock };
     if (idA !== chainId || idB !== chainId) throw new Error('chain id mismatch');
@@ -727,7 +989,15 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
             ? await bindFinalized(pa, pb, finA, finB, saved, maxAnchorBlocks)
             : await agreeFinalized(pa, pb, finA, finB);
         if (why) return bad(from, to, why);
-        return finish(watched, attributor, store, [], from, to, 0, 0, null, snap, scope, true);
+        const kept = anchors === null ? undefined : nextAnchors(anchors, [], saved ? saved.block : 0);
+        return finish(watched, attributor, store, [], from, to, 0, 0, null, snap, scope, true, kept);
+    }
+    // A target out of reach is known before any log read. Descend (or stop) now instead of after the scan.
+    const floor = saved ? saved.block : 0;
+    const early = planReach(pa, pb, finA, finB, to, maxAnchorBlocks, anchors);
+    if (early.far) {
+        const got = await descend({ ...early, far: early.far }, to, maxAnchorBlocks, anchors, scope);
+        return unreached(got, store, snap, scope, anchors, floor, from, to);
     }
 
     const buckets: Bucket[] = [];
@@ -776,6 +1046,7 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
         if (ha.receiptsRoot.toLowerCase() !== hb.receiptsRoot.toLowerCase()) {
             return bad(from, to, `providers disagree on receiptsRoot at block ${n}`);
         }
+        if (ha.gasLimit !== hb.gasLimit) return bad(from, to, `providers disagree on gasLimit at block ${n}`);
         const prevA = n === from ? (saved ? saved.hash : null) : headersA.get(n - 1)!.hash;
         const prevB = n === from ? (saved ? saved.hash : null) : headersB.get(n - 1)!.hash;
         if (prevA !== null && ha.parentHash.toLowerCase() !== prevA.toLowerCase()) {
@@ -792,7 +1063,10 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
                 || mayContainAddress(hb.logsBloom, bucket.address) === true;
             if (!may && have.length === 0) continue;
             if (!proved) {
-                const got = await prove(pa, pb, n, ha.hash, ha.receiptsRoot);
+                const budget = receiptBudget(ha.gasLimit, maxProofGas);
+                const got = await prove(
+                    pa, pb, n, ha.hash, ha.receiptsRoot, budget, keep, tooLarge(n, ha.gasLimit, maxProofGas),
+                );
                 if ('error' in got) return bad(from, to, got.error);
                 proved = got;
             }
@@ -836,10 +1110,8 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     if (againB.number === to && againB.hash.toLowerCase() !== tipB.hash.toLowerCase()) {
         return bad(from, to, `finalized hash moved at block ${to} on ${pb.name}`);
     }
-    const breakA = await anchor(pa, againA, tipHeader.hash, to, maxAnchorBlocks);
-    if (breakA) return bad(from, to, breakA);
-    const breakB = await anchor(pb, againB, tipB.hash, to, maxAnchorBlocks);
-    if (breakB) return bad(from, to, breakB);
+    const reached = await reach(pa, pb, againA, againB, tipHeader.hash, to, maxAnchorBlocks, anchors, scope);
+    if (!reached.ok) return unreached(reached, store, snap, scope, anchors, floor, from, to);
 
     const actions: FoundAction[] = [];
     let ignored = 0;
@@ -861,7 +1133,8 @@ export async function scanRange(opts: ScanRangeOptions): Promise<ScanResult> {
     }
     return finish(
         watched, attributor, store, actions, from, to, bloomFalsePositives, ignored,
-        tipHeader.hash.toLowerCase() as Hex, snap, scope,
+        tipHeader.hash.toLowerCase() as Hex, snap, scope, false,
+        anchors === null ? undefined : nextAnchors(anchors, reached.found, to),
     );
 }
 
@@ -869,7 +1142,7 @@ async function finish(
     watched: readonly WatchedContract[], attributor: Attributor | undefined, store: GuardianAuditStore,
     actions: FoundAction[], from: number, to: number,
     bloomFalsePositives: number, ignored: number, tip: Hex | null,
-    snap: StoreSnapshot, scope: Hex, emptyRange = false,
+    snap: StoreSnapshot, scope: Hex, emptyRange = false, anchors?: FinalizedAnchor[],
 ): Promise<ScanResult> {
     actions.sort((x, y) => x.blockNumber - y.blockNumber || x.logIndex - y.logIndex);
     const resolvedPrior: FoundAction[] = [];
@@ -911,6 +1184,7 @@ async function finish(
         attributed: accepted,
         unresolved: [...stale, ...fresh],
         resolve: resolvedPrior.map((action) => unresolvedId(action.blockHash, action.logIndex)),
+        ...(anchors !== undefined ? { anchors } : {}),
     };
     try {
         await store.commit(isolatedClone(payload));

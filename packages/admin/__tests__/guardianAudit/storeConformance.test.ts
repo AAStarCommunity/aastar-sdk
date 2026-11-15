@@ -9,6 +9,7 @@ import {
     type Checkpoint,
     type Commit,
     type ConformanceResult,
+    type FinalizedAnchor,
     type GuardianAuditStore,
     type StoreSnapshot,
     type StoreUnderTest,
@@ -30,9 +31,12 @@ const ISOLATION = [
     'isolation/moving', 'isolation/replacement/moving', 'isolation/caught-up', 'isolation/replacement/caught-up',
 ];
 
+const ANCHOR_ISOLATION = ['anchors/isolation/moving', 'anchors/isolation/caught-up'];
+
+/** Rows fail with `detail`. Anchor isolation cells fail with their own wording. */
 function failsEach(results: ConformanceResult[], names: string[], detail: string): void {
     expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual(names);
-    for (const name of names) fails(results, name, detail);
+    for (const name of names) if (!name.startsWith('anchors/')) fails(results, name, detail);
 }
 
 /** Accepts any expectedRevision by rewriting it to the live one. No fault hook. */
@@ -462,10 +466,15 @@ describe('guardian audit store conformance', () => {
             'isolation/moving', 'isolation/replacement/moving',
             'commit/caught-up', 'stale/caught-up', 'concurrent/caught-up', 'crash/caught-up', 'scope/caught-up', 'replacement/caught-up', 'idempotence/caught-up',
             'isolation/caught-up', 'isolation/replacement/caught-up',
+            'anchors/empty',
+            'anchors/commit/moving', 'anchors/stale/moving', 'anchors/scope/moving', 'anchors/crash/moving', 'anchors/isolation/moving',
+            'anchors/commit/caught-up', 'anchors/stale/caught-up', 'anchors/scope/caught-up', 'anchors/crash/caught-up',
+            'anchors/isolation/caught-up',
         ]);
-        expect(results.filter((item) => !item.name.startsWith('crash/')).every((item) => item.detail === undefined)).toBe(true);
-        expect(byName(results, 'crash/moving').detail).toBe('atomicity checked through the store\'s fault hook');
-        expect(byName(results, 'crash/caught-up').detail).toBe('atomicity checked through the store\'s fault hook');
+        expect(results.filter((item) => !item.name.includes('crash/')).every((item) => item.detail === undefined)).toBe(true);
+        for (const name of ['crash/moving', 'crash/caught-up', 'anchors/crash/moving', 'anchors/crash/caught-up']) {
+            expect(byName(results, name).detail).toBe('atomicity checked through the store\'s fault hook');
+        }
     });
 
     it('a non-atomic store that writes the checkpoint before the rows fails both crash checks', async () => {
@@ -476,10 +485,10 @@ describe('guardian audit store conformance', () => {
 
     it('a store with no fault hook skips both crash checks', async () => {
         const results = await runStoreConformance(() => ({ store: memoryStore() }));
-        for (const name of ['crash/moving', 'crash/caught-up']) {
+        for (const name of ['crash/moving', 'crash/caught-up', 'anchors/crash/moving', 'anchors/crash/caught-up']) {
             expect(byName(results, name)).toEqual({ name, status: 'skipped', detail: 'no fault hook' });
         }
-        expect(results.filter((item) => !item.name.startsWith('crash/')).every((item) => item.status === 'pass')).toBe(true);
+        expect(results.filter((item) => !item.name.includes('crash/')).every((item) => item.status === 'pass')).toBe(true);
     });
 
     it('ignoreRevision fails stale/moving and stale/caught-up', async () => {
@@ -490,7 +499,9 @@ describe('guardian audit store conformance', () => {
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
             'stale/moving', 'isolation/moving', 'isolation/replacement/moving',
             'stale/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
+            'anchors/stale/moving', 'anchors/isolation/moving', 'anchors/stale/caught-up', 'anchors/isolation/caught-up',
         ]);
+        fails(results, 'anchors/stale/moving', 'moving stale anchors were accepted');
     });
 
     it('partialCrash fails crash/moving and crash/caught-up', async () => {
@@ -499,8 +510,9 @@ describe('guardian audit store conformance', () => {
         fails(results, 'crash/caught-up', 'caught-up crash left a partial write');
         expect(byName(results, 'crash/moving').detail).not.toMatch(/disk\.example|user:pw|https:/);
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
-            'crash/moving', 'crash/caught-up',
+            'crash/moving', 'crash/caught-up', 'anchors/crash/moving', 'anchors/crash/caught-up',
         ]);
+        fails(results, 'anchors/crash/moving', 'moving crash left a partial anchor write');
     });
 
     it('ignoreCaughtUpRevision fails the caught-up stale and concurrent checks', async () => {
@@ -512,6 +524,7 @@ describe('guardian audit store conformance', () => {
         }
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
             'stale/caught-up', 'concurrent/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
+            'anchors/stale/caught-up', 'anchors/isolation/caught-up',
         ]);
     });
 
@@ -530,6 +543,7 @@ describe('guardian audit store conformance', () => {
         expect(results.filter((item) => item.status === 'fail').map((item) => item.name)).toEqual([
             'scope/moving', 'isolation/moving', 'isolation/replacement/moving',
             'scope/caught-up', 'isolation/caught-up', 'isolation/replacement/caught-up',
+            'anchors/isolation/moving', 'anchors/isolation/caught-up',
         ]);
     });
 
@@ -564,7 +578,7 @@ describe('guardian audit store conformance', () => {
 
     it('liveSnapshot fails isolation', async () => {
         const results = await runStoreConformance(liveSnapshot);
-        failsEach(results, ISOLATION, 'stored rows changed after mutation');
+        failsEach(results, [...ISOLATION, ...ANCHOR_ISOLATION], 'stored rows changed after mutation');
     });
 
     it('shallowReplace fails replacement/moving and replacement/caught-up', async () => {
@@ -681,6 +695,102 @@ describe('guardian audit store conformance', () => {
             };
             return { store };
         });
-        failsEach(results, ISOLATION, 'committed input changed stored rows');
+        failsEach(results, [...ISOLATION, ...ANCHOR_ISOLATION], 'committed input changed stored rows');
+    });
+
+    describe('anchor cache (FU-100)', () => {
+        /** memoryStore with one change to how anchors are handled. Rows and checkpoint behave as memoryStore. */
+        function anchorDefect(defect: 'no cache' | 'not an array' | 'drop' | 'clear on omit' | 'foreign scope' | 'partial crash' | 'live'): StoreUnderTest {
+            const inner = memoryStore({ faultHook: true });
+            let crashAt: number | null = null;
+            let live: FinalizedAnchor[] = [];
+            const store: GuardianAuditStore = {
+                getCheckpoint: () => inner.getCheckpoint(),
+                listUnresolved: () => inner.listUnresolved(),
+                listAttributed: () => inner.listAttributed(),
+                async snapshot() {
+                    const snap = await inner.snapshot();
+                    if (defect === 'no cache') delete snap.anchors;
+                    if (defect === 'not an array') (snap as { anchors?: unknown }).anchors = {};
+                    if (defect === 'drop') snap.anchors = [];
+                    if (defect === 'live') snap.anchors = live;
+                    return snap;
+                },
+                async commit(change) {
+                    if (defect === 'partial crash' && crashAt !== null) {
+                        const step = crashAt;
+                        crashAt = null;
+                        if (step >= 1 && change.anchors !== undefined) {
+                            const snap = await inner.snapshot();
+                            await inner.commit({
+                                expectedRevision: snap.revision, next: null, scope: change.scope,
+                                attributed: [], unresolved: [], resolve: [], anchors: change.anchors,
+                            });
+                        }
+                        throw new Error('https://user:pw@disk.example/anchors');
+                    }
+                    if (defect === 'clear on omit' && change.anchors === undefined) {
+                        await inner.commit({ ...change, anchors: [] });
+                        return;
+                    }
+                    if (defect === 'foreign scope' && change.anchors !== undefined) {
+                        await inner.commit({ ...change, anchors: change.anchors.map((row) => ({ ...row, scope: change.scope })) });
+                        return;
+                    }
+                    await inner.commit(change);
+                    if (defect === 'live') live = (await inner.snapshot()).anchors!;
+                },
+            };
+            if (defect === 'partial crash') {
+                return { store, commitSteps: () => 1, crashDuringNextCommit: (step) => { crashAt = step; } };
+            }
+            return { store, commitSteps: inner.commitSteps, crashDuringNextCommit: inner.crashDuringNextCommit };
+        }
+
+        const failing = (results: ConformanceResult[]) => results.filter((item) => item.status === 'fail').map((item) => item.name);
+
+        it('a store without the cache skips every anchor cell and passes the rest', async () => {
+            const results = await runStoreConformance(() => anchorDefect('no cache'));
+            const anchors = results.filter((item) => item.name.startsWith('anchors/'));
+            expect(anchors).toHaveLength(11);
+            for (const item of anchors) expect(item).toEqual({ name: item.name, status: 'skipped', detail: 'no anchor cache' });
+            expect(results.filter((item) => !item.name.startsWith('anchors/')).every((item) => item.status === 'pass')).toBe(true);
+        });
+
+        it('anchors that are not an array fail every anchor cell', async () => {
+            const results = await runStoreConformance(() => anchorDefect('not an array'));
+            fails(results, 'anchors/empty', 'fresh store anchors are not an empty array');
+            expect(results.filter((item) => item.name.startsWith('anchors/')).every((item) => item.status === 'fail')).toBe(true);
+        });
+
+        it('a store that drops anchors fails anchors/commit', async () => {
+            const results = await runStoreConformance(() => anchorDefect('drop'));
+            fails(results, 'anchors/commit/moving', 'moving anchors were not written with the commit');
+            fails(results, 'anchors/commit/caught-up', 'caught-up anchors were not written with the commit');
+        });
+
+        it('a store that clears anchors on a commit without them fails anchors/commit', async () => {
+            const results = await runStoreConformance(() => anchorDefect('clear on omit'));
+            fails(results, 'anchors/commit/moving', 'moving a commit without anchors changed them');
+            expect(failing(results)).toContain('anchors/commit/caught-up');
+        });
+
+        it('a store that accepts a foreign anchor scope fails anchors/scope', async () => {
+            const results = await runStoreConformance(() => anchorDefect('foreign scope'));
+            expect(failing(results)).toEqual(['anchors/scope/moving', 'anchors/scope/caught-up']);
+            fails(results, 'anchors/scope/moving', 'moving foreign anchor scope was accepted');
+        });
+
+        it('a store that writes anchors before a crash fails anchors/crash only', async () => {
+            const results = await runStoreConformance(() => anchorDefect('partial crash'));
+            expect(failing(results)).toEqual(['anchors/crash/moving', 'anchors/crash/caught-up']);
+            fails(results, 'anchors/crash/caught-up', 'caught-up crash left a partial anchor write');
+        });
+
+        it('a store that hands out its stored anchors fails anchors/isolation', async () => {
+            const results = await runStoreConformance(() => anchorDefect('live'));
+            expect(failing(results)).toEqual([...ISOLATION, ...ANCHOR_ISOLATION]);
+            fails(results, 'anchors/isolation/moving', 'moving stored anchors changed after mutation');
+        });
     });
 });

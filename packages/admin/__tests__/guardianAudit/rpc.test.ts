@@ -24,8 +24,12 @@ describe('guardian-audit transport (unit, not acceptance)', () => {
         const bloom = `0x${'cd'.repeat(256)}`;
         const node = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom }));
         const h = await header(node, 16);
-        expect(h).toEqual({ number: 16, hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom });
+        expect(h).toEqual({ number: 16, hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom, gasLimit: null });
         expect(node.calls[0]).toEqual(['eth_getBlockByNumber', ['0x10', false]]);
+        const gassed = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom, gasLimit: '0x1c9c380' }));
+        expect((await header(gassed, 16)).gasLimit).toBe(30_000_000);
+        const junk = rpc(() => ({ number: '0x10', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: bloom, gasLimit: 'lots' }));
+        expect((await header(junk, 16)).gasLimit).toBeNull();
 
         const short = rpc(() => ({ number: '0x1', hash: good, parentHash: parent, receiptsRoot: root, logsBloom: '0xabcd' }));
         expect((await header(short, 'finalized')).logsBloom).toBeNull();
