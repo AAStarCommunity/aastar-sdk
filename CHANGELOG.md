@@ -157,8 +157,14 @@ sent, so viem threw before anything reached the chain. Their unit tests only ass
 - `aggregatorActions().registerBLSPublicKey` and `ProtocolClient.registerBLSKey` passed a single hex key to
   `registerBLSPublicKey(address, BLS.G1Point, uint8, BLS.G2Point)`. They now throw without sending. From
   BLSAggregator-4.14.0 keys are registered only through DVTValidator: use `dvtActions(dvt).registerBLSPublicKey`.
-- `registryActions().setReputationSource`, `superPaymasterActions().updatePriceDVT`,
-  `x402Actions().settleX402Payment` and `x402Actions().settleX402PaymentDirect` (and so `X402Client.settle*`): see FU-106.
+- `registryActions().setReputationSource` sent `[source]` to `setReputationSource(address source, bool active)`.
+  Fixed: it now takes a required `active` (`false` revokes a source, as on committee rotation).
+- `superPaymasterActions().updatePriceDVT` sent three arguments; SP 5.4.2 and 5.5.x take a fourth,
+  `uint8 chainlinkRecovered`. Fixed: `chainlinkRecovered: 0 | 1` is now required (1 also exits the emergency price
+  mode, so the SDK does not choose it for you).
+- `x402Actions().settleX402Payment` and `settleX402PaymentDirect`, and so `X402Client.settle*`, never matched the
+  facilitator ABI (no `maxFee`; Direct also lacked `validBefore` and the signature). They now throw
+  `NOT_IMPLEMENTED` before encoding, until they are rebuilt (FU-106).
 
 A scan (`scripts/write-encodability/`) now encodes every exported write action against its ABI without mocking it.
 

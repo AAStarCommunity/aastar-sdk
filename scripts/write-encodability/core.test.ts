@@ -29,20 +29,21 @@ const OVERRIDES: Record<string, Record<string, unknown[]>> = {
 
 /**
  * Known not to encode on this branch. Each entry must still fail: fixing one without removing it here is red too.
- * Tracked in docs/agent/followups.md (FU-106).
+ * Empty since the rc.8 fixes; x402 settlement refuses instead (REFUSES_UNTIL_FIXED).
  */
-export const KNOWN_UNENCODABLE: Record<string, string> = {
-    'registryActions.setReputationSource': 'sends [source]; ABI is setReputationSource(address source, bool active)',
-    'superPaymasterActions.updatePriceDVT': 'sends 3 args; SP 5.4.2 ABI adds uint8 chainlinkRecovered',
-    'x402Actions.settleX402Payment': 'sends 8 args without maxFee; ABI takes (from,to,asset,amount,maxFee,validAfter,validBefore,salt,signature)',
-    'x402Actions.settleX402PaymentDirect': 'sends 5 args; ABI takes (from,to,asset,amount,maxFee,validBefore,nonce,signature)',
-};
+export const KNOWN_UNENCODABLE: Record<string, string> = {};
 
 /** Read-only methods that the neutral read value cannot drive. They are not writes (checked by source review). */
 const UNDRIVEN_READS = new Set([
     'registryActions.userRoles', 'paymasterActions.validatePaymasterUserOp', 'paymasterFactoryActions.calculateAddress',
     'aggregatorActions.guardianSlashCase',
 ]);
+
+/**
+ * Writes that refuse with NOT_IMPLEMENTED before encoding because their arguments never matched the ABI.
+ * Each must still refuse (a silent re-enable without a fix is red). Tracked as FU-106.
+ */
+const REFUSES_UNTIL_FIXED = ['x402Actions.settleX402Payment', 'x402Actions.settleX402PaymentDirect'];
 
 const TYPE_ALIASES = ['DVTActions', 'SBTActions', 'XPNTsFactoryActions', 'XPNTsTokenActions', 'GTokenActions', 'BLSAlgorithmActions', 'X402Actions'];
 
@@ -81,6 +82,11 @@ describe('every @aastar/core write action encodes against the ABI it sends (no m
         expect(writes.length).toBeGreaterThan(250);
         const failing = writes.filter((r) => r.outcome.kind === 'write' && r.outcome.calls.some((c) => !c.ok)).map(id).sort();
         expect(failing).toEqual(Object.keys(KNOWN_UNENCODABLE).sort());
+        const refusing = new Set(results.filter((r) => r.outcome.kind === 'not-implemented').map(id));
+        for (const name of REFUSES_UNTIL_FIXED) expect(refusing.has(name), `${name} must refuse until FU-106`).toBe(true);
+        for (const name of ['registryActions.setReputationSource', 'superPaymasterActions.updatePriceDVT']) {
+            expect(writes.map(id), `${name} must encode (fixed before the rc.8 tag)`).toContain(name);
+        }
         const undriven = results.filter((r) => r.outcome.kind === 'undriven').map(id).sort();
         expect(undriven).toEqual([...UNDRIVEN_READS].sort());
     }, 300_000);

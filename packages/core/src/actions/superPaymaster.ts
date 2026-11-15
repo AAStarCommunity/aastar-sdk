@@ -159,7 +159,13 @@ export type SuperPaymasterActions = {
     // Price Management
     setAPNTSPrice: (args: { newPrice: bigint, account?: Account | Address }) => Promise<Hash>;
     updatePrice: (args: { account?: Account | Address }) => Promise<Hash>;
-    updatePriceDVT: (args: { price: bigint, updatedAt: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * `updatePriceDVT(int256 price, uint256 updatedAt, bytes proof, uint8 chainlinkRecovered)` (SP 5.4.2 and 5.5.x).
+     * `chainlinkRecovered`: 0 = Chainlink still unavailable, price-only update; 1 = Chainlink has recovered, which also
+     * exits the emergency price mode. Required: the SDK does not pick it for the caller.
+     * Callable by the BLSAggregator (DVT consensus) or the SP owner (break-glass).
+     */
+    updatePriceDVT: (args: { price: bigint, updatedAt: bigint, proof: Hex, chainlinkRecovered: 0 | 1, account?: Account | Address }) => Promise<Hash>;
     
     // Global Config
     setProtocolFee: (args: { newFeeBPS: bigint, account?: Account | Address }) => Promise<Hash>;
@@ -693,20 +699,24 @@ export const superPaymasterActions = (address: Address) => (client: PublicClient
         }
     },
 
-    async updatePriceDVT({ price, updatedAt, proof, account }) {
+    async updatePriceDVT({ price, updatedAt, proof, chainlinkRecovered, account }) {
         try {
             validateRequired(price, 'price');
             validateRequired(updatedAt, 'updatedAt');
             validateRequired(proof, 'proof');
+            if (chainlinkRecovered !== 0 && chainlinkRecovered !== 1) {
+                throw new AAStarError(ErrorCode.INVALID_PARAMETER, 'chainlinkRecovered must be 0 or 1');
+            }
             return await (client as any).writeContract({
                 address,
                 abi: SuperPaymasterABI,
                 functionName: 'updatePriceDVT',
-                args: [price, updatedAt, proof],
+                args: [price, updatedAt, proof, chainlinkRecovered],
                 account: account as any,
                 chain: (client as any).chain
             });
         } catch (error) {
+            if (error instanceof AAStarError) throw error;
             throw AAStarError.fromViemError(error as Error, 'updatePriceDVT');
         }
     },

@@ -28,6 +28,8 @@ async function main() {
     
     const hash = await walletClient.writeContract({
         address: superPaymaster as `0x${string}`,
+        // Three arguments on purpose: OP Sepolia runs SuperPaymaster-3.2.2 (non-proxy; read back 2026-11-15), whose
+        // bytecode has only updatePriceDVT(int256,uint256,bytes) = 0x058ae10f. SP 5.4.2+ adds uint8 chainlinkRecovered.
         abi: parseAbi(['function updatePriceDVT(int256 price, uint256 updatedAt, bytes calldata proof) external']),
         functionName: 'updatePriceDVT',
         args: [price, BigInt(now), proof]

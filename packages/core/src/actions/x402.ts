@@ -1,7 +1,7 @@
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, keccak256, encodeAbiParameters, parseAbiParameters } from 'viem';
 import { X402FacilitatorABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateDeployedAddress } from '../validators/index.js';
-import { AAStarError } from '../errors/index.js';
+import { AAStarError, ErrorCode } from '../errors/index.js';
 
 /**
  * Computes the storage key for x402SettlementNonces[key].
@@ -45,11 +45,13 @@ export async function x402IsNonceUsed(
 
 export type X402Actions = {
     // Settlement
+    /** @deprecated Unavailable: throws NOT_IMPLEMENTED (arguments never matched the ABI; FU-106). */
     settleX402Payment: (args: {
         from: Address, to: Address, asset: Address, amount: bigint,
         validAfter: bigint, validBefore: bigint, nonce: Hex, signature: Hex,
         account?: Account | Address
     }) => Promise<Hex>;
+    /** @deprecated Unavailable: throws NOT_IMPLEMENTED (arguments never matched the ABI; FU-106). */
     settleX402PaymentDirect: (args: {
         from: Address, to: Address, asset: Address, amount: bigint, nonce: Hex,
         account?: Account | Address
@@ -76,39 +78,22 @@ export const x402Actions = (address: Address) => (client: PublicClient | WalletC
     validateDeployedAddress(address, 'X402Facilitator');
     return ({
     // --- Settlement ---
-    async settleX402Payment({ from, to, asset, amount, validAfter, validBefore, nonce, signature, account }) {
-        try {
-            validateAddress(from, 'from');
-            validateAddress(to, 'to');
-            validateAddress(asset, 'asset');
-            validateRequired(nonce, 'nonce');
-            validateRequired(signature, 'signature');
-            return await (client as any).writeContract({
-                address, abi: X402FacilitatorABI,
-                functionName: 'settleX402Payment',
-                args: [from, to, asset, amount, validAfter, validBefore, nonce, signature],
-                account: account as any, chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'settleX402Payment');
-        }
+    // Both settlement wrappers never matched the facilitator ABI (no maxFee; Direct also lacked validBefore and the
+    // signature), so viem could not encode them. Until they are rebuilt (FU-106) they refuse before encoding.
+    async settleX402Payment() {
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'settleX402Payment is unavailable: the SDK arguments never matched settleX402Payment(from, to, asset, amount, ' +
+            'maxFee, validAfter, validBefore, salt, signature). Tracked as FU-106.'
+        );
     },
 
-    async settleX402PaymentDirect({ from, to, asset, amount, nonce, account }) {
-        try {
-            validateAddress(from, 'from');
-            validateAddress(to, 'to');
-            validateAddress(asset, 'asset');
-            validateRequired(nonce, 'nonce');
-            return await (client as any).writeContract({
-                address, abi: X402FacilitatorABI,
-                functionName: 'settleX402PaymentDirect',
-                args: [from, to, asset, amount, nonce],
-                account: account as any, chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'settleX402PaymentDirect');
-        }
+    async settleX402PaymentDirect() {
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'settleX402PaymentDirect is unavailable: the SDK arguments never matched settleX402PaymentDirect(from, to, asset, ' +
+            'amount, maxFee, validBefore, nonce, signature). Tracked as FU-106.'
+        );
     },
 
     // --- View ---

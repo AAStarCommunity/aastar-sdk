@@ -110,6 +110,7 @@ const hPrice = await superPaymasterActions(superPM)(supplierClient).updatePriceD
     price: newPrice,
     updatedAt: timestamp,
     proof: signature,
+    chainlinkRecovered: 0, // 1 = Chainlink has recovered: also exits the emergency price mode
     account: supplierAcc
 });
 ```
