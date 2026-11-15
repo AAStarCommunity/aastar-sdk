@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] — rc.8 adaptation (in preparation, ships with the SP rc.8 tag)
+
+### Never worked before this release
+
+These exported write paths could not encode their own call: the arguments they built did not match the ABI they
+sent, so viem threw before anything reached the chain. Their unit tests only asserted that a mocked client was called.
+
+- `aggregatorActions().registerBLSPublicKey` and `ProtocolClient.registerBLSKey` passed a single hex key to
+  `registerBLSPublicKey(address, BLS.G1Point, uint8, BLS.G2Point)`. They now throw without sending. From
+  BLSAggregator-4.14.0 keys are registered only through DVTValidator: use `dvtActions(dvt).registerBLSPublicKey`.
+- `registryActions().setReputationSource`, `superPaymasterActions().updatePriceDVT`,
+  `x402Actions().settleX402Payment` and `x402Actions().settleX402PaymentDirect` (and so `X402Client.settle*`): see FU-106.
+
+A scan (`scripts/write-encodability/`) now encodes every exported write action against its ABI without mocking it.
+
 ## [0.46.0-rc.2] - 2026-09-05 — first INSTALLABLE release candidate
 
 **SDK Code Integrity Hash**: `b8953258d0572badc75680733df33af7fb4092d34d1de46288d25ce1ff9a3b6d`
