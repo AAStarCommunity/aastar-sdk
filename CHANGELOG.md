@@ -168,6 +168,12 @@ sent, so viem threw before anything reached the chain. Their unit tests only ass
 
 A scan (`scripts/write-encodability/`) now encodes every exported write action against its ABI without mocking it.
 
+### Documentation
+
+- `reputationActions().communityReputations` is documented as a raw value the protocol never reads: it plays no part
+  in credit tiers or sponsorship, and from rc.8 the validator quorum can write it without a proof. Do not display it
+  as reputation; use `calculateReputation` or the Registry's `globalReputation` (FU-108).
+
 ## [0.46.0-rc.2] - 2026-09-05 — first INSTALLABLE release candidate
 
 **SDK Code Integrity Hash**: `b8953258d0572badc75680733df33af7fb4092d34d1de46288d25ce1ff9a3b6d`

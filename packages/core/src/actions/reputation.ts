@@ -52,12 +52,21 @@ export type ReputationActions = {
     /**
      * @deprecated NOT available on-chain. `getCommunityScore` does not exist in the deployed
      * ReputationSystem ABI (calling it reverts). There is no aggregate per-community score
-     * getter — use {@link communityReputations} (per-user community score) or
-     * {@link calculateReputation} (returns `communityScore` for a given user) instead.
+     * getter — use {@link calculateReputation} (returns `communityScore` for a given user) instead.
+     * {@link communityReputations} is a raw value the protocol never reads; do not present it as reputation.
      * This method now throws a descriptive error rather than reverting on-chain.
      */
     getCommunityScore: (args: { community: Address }) => Promise<bigint>;
+    /**
+     * Raw getter for `ReputationSystem.communityReputations(community, user)`.
+     * NOT a reputation to show users. The protocol never reads this value on-chain: it plays no part in credit tiers
+     * or sponsorship decisions (in SP `contracts/src` it has one writer and no reader). From rc.8 the BLS aggregator
+     * is a reputation source, so the current validator quorum, at the generic path's minimum threshold, can write any
+     * community score without a proof. Read it only as an unverified raw value; for a user's standing use
+     * `calculateReputation(...)` or the Registry's `globalReputation(user)`.
+     */
     communityReputations: (args: { community: Address, user: Address }) => Promise<bigint>;
+    /** Writes the raw `communityReputations` entry. The protocol never reads it (see {@link communityReputations}). */
     setCommunityReputation: (args: { community: Address, user: Address, score: bigint, account?: Account | Address }) => Promise<Hash>;
     
     // NFT Boost
@@ -269,16 +278,16 @@ export const reputationActions = (address: Address) => (client: PublicClient | W
     /**
      * @deprecated `getCommunityScore` is absent from the deployed ReputationSystem ABI —
      * there is no aggregate per-community score getter. Throws instead of issuing a call
-     * that would revert on-chain. Use `communityReputations({ community, user })` for a
-     * per-user community score, or `calculateReputation(...)` and read `communityScore`.
+     * that would revert on-chain. Use `calculateReputation(...)` and read `communityScore`.
+     * (`communityReputations` is a raw value the protocol never reads; it is not a community score to display.)
      */
     async getCommunityScore({ community }) {
         validateAddress(community, 'community');
         throw new AAStarError(
             ErrorCode.NOT_IMPLEMENTED,
             'getCommunityScore is not available on-chain: the deployed ReputationSystem ABI ' +
-            'has no getCommunityScore function. Use communityReputations({ community, user }) ' +
-            'for a per-user community score, or calculateReputation(...) and read communityScore.'
+            'has no getCommunityScore function. Use calculateReputation(...) and read communityScore. ' +
+            '(communityReputations is a raw value the protocol never reads; do not display it as reputation.)'
         );
     },
 
