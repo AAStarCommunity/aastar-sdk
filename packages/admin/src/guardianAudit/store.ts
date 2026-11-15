@@ -8,6 +8,7 @@ export interface Checkpoint { block: number; hash: Hex }
  * A header both providers linked by parentHash to a header they reported as finalized (FU-100).
  * `scope` is the store scope of the scan that verified it. It hashes the chain id, so an anchor never
  * crosses chains or watch sets. A scan rereads the anchor height on both providers before it relies on it.
+ * This rests on one premise: a block both providers proved finalized is treated as finalized from then on. A rollback of finalized is outside what this scan detects.
  */
 export interface FinalizedAnchor { scope: Hex; block: number; hash: Hex }
 

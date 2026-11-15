@@ -33,6 +33,13 @@ every header is unbounded. Splitting the walk across runs without persisting it 
 or earlier. A disagreeing anchor throws. A store without anchor support (`snapshot().anchors` undefined) gets
 exactly the old behaviour: full walk, INCOMPLETE above the bound, no writes on INCOMPLETE.
 
+**Premise (every use of an anchor).** A block both providers proved finalized is treated as finalized from then on.
+A rollback of finalized is outside what this scan detects. A walk that stops at an anchor does not reach the current
+finalized header, and an anchor at exactly `to` is compared only with the tip both providers agreed on at `to`
+(Codex #451, rated Critical there; DSR's judgment and the record are linked from PR #451). A false COMPLETE through
+the cache needs finalized to be rolled back while both providers still serve the old block, or the store's anchor rows
+to be altered.
+
 ## FU-101: gas-derived receipt budget
 
 **Problem.** Fixed caps (1024 logs per receipt, 16384 per block, 1 MiB per receipt, 32 MiB per block, 64 KiB data)

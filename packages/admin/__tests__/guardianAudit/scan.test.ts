@@ -2319,6 +2319,17 @@ describe('FU-100 finalized anchor cache (unit, not acceptance)', () => {
         expect(await store.getCheckpoint()).toBeNull();
     });
 
+    it('is never COMPLETE when an anchor sits at the scanned tip and one provider serves another header there', async () => {
+        for (const side of ['a', 'b'] as const) {
+            const nodes = pair(30);
+            const store = memoryStore();
+            await save(store, null, [], { anchors: [{ scope: SCOPE, block: 1, hash: bhash(1) }] });
+            nodes[side].setHash(1, bhash(1, 'other'));
+            expectIncomplete(await run(nodes.a, nodes.b, store, { maxBlocks: 1 }), /providers disagree on block hash at 1/);
+            expect(await store.getCheckpoint()).toBeNull();
+        }
+    });
+
     it('throws when a descent starts from an anchor whose hash differs', async () => {
         const { a, b } = pair(30);
         const store = memoryStore();

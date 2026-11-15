@@ -574,6 +574,7 @@ const MAX_ANCHORS = 1024;
 
 /**
  * This scope's usable anchors, sorted by block. `null` when the store has no anchor cache.
+ * This rests on one premise: a block both providers proved finalized is treated as finalized from then on. A rollback of finalized is outside what this scan detects.
  * Rows of another scope, malformed rows, and heights stored with two different hashes are ignored, never trusted.
  */
 function readAnchors(snap: StoreSnapshot, scope: Hex): FinalizedAnchor[] | null {
@@ -633,6 +634,8 @@ function recordAnchors(
 
 /**
  * Headers `lo..top` of one provider, linked by parentHash. The header at `top` must carry `topHash`.
+ * When `top` is a stored anchor the walk stops there and does not reach the current finalized header.
+ * This rests on one premise: a block both providers proved finalized is treated as finalized from then on. A rollback of finalized is outside what this scan detects.
  * `below` is the hash `lo` must point to, or null when `lo` is a free bottom (a descent).
  * A top that differs from a stored anchor throws FinalityConflictError. A top that differs from
  * the provider's finalized header is INCOMPLETE, as before.
@@ -728,6 +731,10 @@ async function reach(
     const plan = planReach(pa, pb, finA, finB, to, maxAnchorBlocks, anchors);
     const usable = plan.usable;
     if (usable && usable.block === to) {
+        // `tip` is the header both providers agreed on at `to` (the per-block hash check in scanRange), so an
+        // equal anchor hash is the same check as rereading the anchor on both. There is no walk to the current
+        // finalized header: this rests on the anchor premise (a block both providers proved finalized is treated
+        // as finalized from then on; a rollback of finalized is outside what this scan detects). Codex #451.
         if (usable.hash.toLowerCase() !== tip.toLowerCase()) {
             throw new FinalityConflictError(`stored anchor conflict at block ${to}`);
         }
@@ -884,6 +891,9 @@ function storeFailure(stage: 'snapshot' | 'commit', error: unknown): never {
  * no rows, and the scan is INCOMPLETE with `anchored` set and without reading logs. A keeper any distance
  * behind recovers in about `gap / maxAnchorBlocks` scans on the defaults. Anchors carry the store scope;
  * rows of another scope, malformed rows, and rows above either finalized height are ignored.
+ * Anchor premise: a block both providers proved finalized is treated as finalized from then on. A rollback of
+ * finalized is outside what this scan detects: a walk that stops at an anchor does not reach the current
+ * finalized header, and an anchor at `to` is checked only against the agreed tip.
  * Receipts are proven within a budget derived from the agreed header gasLimit (`receiptBudget`, FU-101),
  * clamped by `maxProofGas`. A block over that budget is INCOMPLETE with a block-specific reason.
  * Request timeouts belong to the caller's transport. scanRange does not time out a request.
