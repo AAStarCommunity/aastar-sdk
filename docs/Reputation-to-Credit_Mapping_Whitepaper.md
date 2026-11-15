@@ -139,7 +139,9 @@ Registry 是整个系统的状态中心，存储了用户的全局声誉和信�
 | :--- | :--- | :--- | :--- |
 | **Rule** | `struct` | 社区定义的声誉获取规则 | `baseScore`, `activityBonus`, `maxBonus` |
 | **Community Rules** | `mapping` | 社区特有规则集 | `communityRules[community][ruleId] => Rule` |
-| **Score Cache** | `mapping` | 社区内局部声誉缓存 | `communityReputations[community][user] => uint256` |
+| **Score Cache** | `mapping` | 社区内局部分数（原始值，协议不读取，见下方说明） | `communityReputations[community][user] => uint256` |
+
+> **注意（2026-11-15，SP 核查 + DSR 裁定）**：协议在链上不读取 `communityReputations`，它不参与信用档位或赞助判断（SP `contracts/src` 内只有一处写入、没有读取方）。rc.8 起 BLS 聚合器是声誉源，当前验证者 quorum 以通用路径的最低门槛即可写入任意社区分数，且无需证明。不要把它当作声誉展示给用户。
 
 #### C. SuperPaymaster (Execution Layer)
 根据 Registry 的数据执行支付逻辑，并维护自身的风险控制状态。

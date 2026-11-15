@@ -168,10 +168,10 @@ export async function runL1Tests(config: NetworkConfig) {
     try {
         console.log('  Test: communityReputations()');
         const rep = reputationActions(config.contracts.reputation);
-        // Use communityReputations instead of getUserScore
+        // Raw getter smoke test only: the protocol never reads communityReputations, so this is not a reputation.
         const community = config.contracts.registry; // Use registry as test community
         const score = await rep(publicClient).communityReputations({ community, user: account.address });
-        console.log(`    Score: ${score.toString()}`);
+        console.log(`    Raw communityReputations value (not read by the protocol): ${score.toString()}`);
         console.log('    ✅ PASS\n');
         passedTests++;
     } catch (e) {
