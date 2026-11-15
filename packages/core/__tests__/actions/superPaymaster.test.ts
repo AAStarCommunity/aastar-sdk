@@ -58,8 +58,16 @@ describe('SuperPaymasterActions Exhaustive Coverage', () => {
       const act = superPaymasterActions(A)(w);
       await act.setAPNTSPrice({ newPrice: 100n, account: U });
       await act.updatePrice({ account: U });
-      await act.updatePriceDVT({ price: 100n, updatedAt: 123n, proof: '0x', account: U });
+      await act.updatePriceDVT({ price: 100n, updatedAt: 123n, proof: '0x', chainlinkRecovered: 1, account: U });
       expect(w.writeContract).toHaveBeenCalledTimes(3);
+      expect(w.writeContract.mock.calls[2][0]).toMatchObject({ functionName: 'updatePriceDVT', args: [100n, 123n, '0x', 1] });
+    });
+    it('updatePriceDVT requires chainlinkRecovered to be 0 or 1', async () => {
+      const act = superPaymasterActions(A)(w);
+      for (const bad of [undefined, 2, true]) {
+        await expect(act.updatePriceDVT({ price: 100n, updatedAt: 123n, proof: '0x', chainlinkRecovered: bad as any })).rejects.toThrow(/chainlinkRecovered must be 0 or 1/);
+      }
+      expect(w.writeContract).not.toHaveBeenCalled();
     });
     it('protocol config', async () => {
       w.writeContract.mockResolvedValue('0x');

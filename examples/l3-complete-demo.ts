@@ -278,6 +278,7 @@ async function main() {
             price: newPrice,
             updatedAt: timestamp,
             proof: signature,
+            chainlinkRecovered: 0,
             account: supplierAcc
         });
 

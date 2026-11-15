@@ -39,7 +39,12 @@ describe('RegistryActions Bulk Coverage', () => {
     it('setMySBT', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setMySBT({ sbt: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setSuperPaymaster', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setSuperPaymaster({ paymaster: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
     it('setStaking', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setStaking({ staking: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
-    it('setReputationSource', async () => { w.writeContract.mockResolvedValue('0x'); await registryActions(ADDR)(w).setReputationSource({ source: USER, account: USER }); expect(w.writeContract).toHaveBeenCalled(); });
+    it('setReputationSource sends (source, active)', async () => {
+      w.writeContract.mockResolvedValue('0x');
+      await registryActions(ADDR)(w).setReputationSource({ source: USER, active: false, account: USER });
+      expect(w.writeContract.mock.calls[0][0]).toMatchObject({ functionName: 'setReputationSource', args: [USER, false] });
+      await expect(registryActions(ADDR)(w).setReputationSource({ source: USER, active: undefined as any })).rejects.toThrow(/active must be a boolean/);
+    });
   });
 
   describe('Contract References (Getters)', () => {

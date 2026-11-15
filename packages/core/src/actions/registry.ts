@@ -225,7 +225,8 @@ export type RegistryActions = {
     setMySBT: (args: { sbt: Address, account?: Account | Address }) => Promise<Hash>;
     setSuperPaymaster: (args: { paymaster: Address, account?: Account | Address }) => Promise<Hash>;
     setStaking: (args: { staking: Address, account?: Account | Address }) => Promise<Hash>;
-    setReputationSource: (args: { source: Address, account?: Account | Address }) => Promise<Hash>;
+    /** `setReputationSource(address source, bool active)`: `active: false` revokes a source (e.g. an old DVT on committee rotation). */
+    setReputationSource: (args: { source: Address, active: boolean, account?: Account | Address }) => Promise<Hash>;
     
     blsAggregator: () => Promise<Address>;
     MYSBT: () => Promise<Address>;
@@ -837,18 +838,20 @@ export const registryActions = (address: Address) => (client: PublicClient | Wal
         }
     },
 
-    async setReputationSource({ source, account }) {
+    async setReputationSource({ source, active, account }) {
         try {
             validateAddress(source, 'source');
+            if (typeof active !== 'boolean') throw new AAStarError(ErrorCode.INVALID_PARAMETER, 'active must be a boolean');
             return await (client as any).writeContract({
                 address,
                 abi: RegistryABI,
                 functionName: 'setReputationSource',
-                args: [source],
+                args: [source, active],
                 account: account as any,
                 chain: (client as any).chain
             });
         } catch (error) {
+            if (error instanceof AAStarError) throw error;
             throw AAStarError.fromViemError(error as Error, 'setReputationSource');
         }
     },

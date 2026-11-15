@@ -138,7 +138,7 @@ async function main() {
                         } catch (e: any) {
                             const price = 300000000000n;
                             const updatedAt = BigInt(Math.floor(Date.now() / 1000));
-                            const hash = await superPaymasterWrite.updatePriceDVT({ price, updatedAt, proof: '0x', account: supplier });
+                            const hash = await superPaymasterWrite.updatePriceDVT({ price, updatedAt, proof: '0x', chainlinkRecovered: 0, account: supplier });
                             await publicClient.waitForTransactionReceipt({ hash });
                             console.log(`   ✅ Price cache refreshed via updatePriceDVT: ${hash}`);
                         }
