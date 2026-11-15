@@ -1,10 +1,14 @@
-export type { BlockHeader, LogFilter, RawLog, RawRpc } from './rpc.js';
-export { header, isProviderName, pagedLogs, rawGetLogs } from './rpc.js';
+export type { BlockHeader, LogFilter, RawLog, RawRpc, ReceiptBudget } from './rpc.js';
+export {
+    DEFAULT_MAX_PROOF_GAS, FIXED_RECEIPT_BUDGET, MAX_PROOF_GAS_CEILING, header, isProviderName, pagedLogs, rawGetLogs, receiptBudget,
+} from './rpc.js';
 
 export type { BloomLog } from './bloom.js';
 export { bloomOf, mayContain, mayContainAddress, mayHaveLog } from './bloom.js';
 
-export type { AttributedAction, Checkpoint, Commit, GuardianAuditStore, StoreSnapshot, UnresolvedAction } from './store.js';
+export type {
+    AttributedAction, Checkpoint, Commit, FinalizedAnchor, GuardianAuditStore, StoreSnapshot, UnresolvedAction,
+} from './store.js';
 export { CheckpointConflictError, ScopeChangedError, StoreConflictError, memoryStore, unresolvedId } from './store.js';
 
 export type { ConformanceResult, StoreUnderTest } from './storeConformance.js';

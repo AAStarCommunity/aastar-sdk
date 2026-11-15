@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hexToBytes, keccak256, type Hex } from 'viem';
 import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc, trieRoot } from '../../src/guardianAudit/trie';
-import { responseLimits } from '../../src/guardianAudit/rpc';
+import { FIXED_RECEIPT_BUDGET, responseLimits } from '../../src/guardianAudit/rpc';
 import fixture from './fixtures/sepolia-block-receipts.json';
 import fixture135 from './fixtures/sepolia-receipts-135.json';
 import fixtureFailed from './fixtures/sepolia-receipts-failed.json';
@@ -209,7 +209,10 @@ describe('guardian-audit receipts trie (unit, not acceptance)', () => {
         const value = new Uint8Array(1);
         expect(trieRoot([{ key, value }])).toMatch(/^0x[0-9a-f]{64}$/);
         expect(trieRoot([{ key: new Uint8Array(65), value }])).toBeNull();
-        expect(trieRoot([{ key, value: new Uint8Array(1_048_577) }])).toBeNull();
+        const cap = FIXED_RECEIPT_BUDGET.encodedReceipt;
+        expect(trieRoot([{ key, value: new Uint8Array(cap) }])).toMatch(/^0x[0-9a-f]{64}$/);
+        expect(trieRoot([{ key, value: new Uint8Array(cap + 1) }])).toBeNull();
+        expect(trieRoot([{ key, value: new Uint8Array(cap + 1) }], cap + 1)).toMatch(/^0x[0-9a-f]{64}$/);
         expect(trieRoot([{ key: '0x01' as unknown as Uint8Array, value }])).toBeNull();
         expect(trieRoot(null as unknown as { key: Uint8Array; value: Uint8Array }[])).toBeNull();
     });

@@ -45,6 +45,8 @@ export interface BlockHeader {
     receiptsRoot: Hex;
     /** 256 bytes, or null when missing or the wrong size. */
     logsBloom: Hex | null;
+    /** Block gas limit, or null when missing or not a bounded quantity. Sizes the receipt budget. */
+    gasLimit: number | null;
 }
 
 /** Hard caps checked before any walk, regex, or hash of an RPC value. */
@@ -63,6 +65,76 @@ export const responseLimits = {
     /** data + topics bytes of one `eth_getLogs` answer, and of all pages of one `pagedLogs` call (#445 M2). */
     logsPayload: 32 * 1_048_576,
 } as const;
+
+/**
+ * Caps for one block's receipts. One receipt may use the whole block budget when derived from gas.
+ * `dataChars` is the longest `data` string of one log, `0x` included.
+ * `encodedReceipt` is the longest consensus encoding of one receipt.
+ */
+export interface ReceiptBudget {
+    receipts: number;
+    logs: number;
+    logsPerReceipt: number;
+    receiptPayload: number;
+    blockPayload: number;
+    dataChars: number;
+    encodedReceipt: number;
+}
+
+/** The fixed caps used before FU-101. Also the budget when a header has no readable gasLimit. */
+export const FIXED_RECEIPT_BUDGET: ReceiptBudget = Object.freeze({
+    receipts: responseLimits.receipts,
+    logs: responseLimits.logs,
+    logsPerReceipt: responseLimits.logsPerReceipt,
+    receiptPayload: responseLimits.receiptPayload,
+    blockPayload: responseLimits.blockPayload,
+    dataChars: responseLimits.hex,
+    // Payload plus RLP overhead (see receiptBudget). It was 1 MiB, which refused a receipt whose payload fit.
+    encodedReceipt: responseLimits.receiptPayload + 64 * responseLimits.logsPerReceipt + 1024,
+});
+
+/** Default and largest `maxProofGas`. At the largest value the receipt count stays below the trie pair cap. */
+export const DEFAULT_MAX_PROOF_GAS = 100_000_000;
+export const MAX_PROOF_GAS_CEILING = 1_000_000_000;
+
+/** Gas floors from the EVM: LOG base and per topic, per data byte, and the intrinsic transaction cost. */
+const LOG_GAS = 375;
+const LOG_DATA_GAS = 8;
+const TX_GAS = 21_000;
+
+/**
+ * Budget that every valid block with this gas limit fits in (FU-101).
+ * Gas refunds return at most half of the gas a transaction consumed (a fifth since London), so execution
+ * gas consumed in one block is at most `2 * gasLimit`. A log consumes at least `375 + 375 * topics + 8 * bytes`,
+ * so a block holds at most `2G / 375` logs and `2G / 8` data and topic bytes (a topic byte costs more than a data byte).
+ * A transaction consumes at least 21000, so a block holds at most `2G / 21000` of them; one more covers an OP system
+ * transaction whose gas is not counted. Each bloom adds 256 bytes. `G` is clamped to `maxProofGas` to bound memory.
+ * Every field is at least the fixed cap, so a block that fit before still fits.
+ * The budget decides only whether a proof is attempted. The proof itself is the receiptsRoot match.
+ */
+export function receiptBudget(gasLimit: number | null, maxProofGas: number = DEFAULT_MAX_PROOF_GAS): ReceiptBudget {
+    if (gasLimit === null || !Number.isSafeInteger(gasLimit) || gasLimit < 0) return FIXED_RECEIPT_BUDGET;
+    if (!Number.isSafeInteger(maxProofGas) || maxProofGas < 1 || maxProofGas > MAX_PROOF_GAS_CEILING) {
+        throw new Error(`maxProofGas must be >= 1 and <= ${MAX_PROOF_GAS_CEILING}`);
+    }
+    const gas = 2 * Math.min(gasLimit, maxProofGas);
+    const logs = Math.floor(gas / LOG_GAS);
+    const bytes = Math.floor(gas / LOG_DATA_GAS);
+    const receipts = Math.floor(gas / TX_GAS) + 1;
+    const fixed = FIXED_RECEIPT_BUDGET;
+    const receiptPayload = Math.max(fixed.receiptPayload, bytes + 256);
+    const logsPerReceipt = Math.max(fixed.logsPerReceipt, logs);
+    return {
+        receipts: Math.max(fixed.receipts, receipts),
+        logs: Math.max(fixed.logs, logs),
+        logsPerReceipt,
+        receiptPayload,
+        blockPayload: Math.max(fixed.blockPayload, bytes + 256 * receipts),
+        dataChars: Math.max(fixed.dataChars, 2 + 2 * bytes),
+        // RLP overhead: at most 64 bytes per log and 1024 per receipt on top of its payload.
+        encodedReceipt: receiptPayload + 64 * logsPerReceipt + 1024,
+    };
+}
 
 const WORD_LEN = 66;
 const BLOOM_LEN = 514;
@@ -94,8 +166,8 @@ export function isWord(v: unknown): v is string {
     return typeof v === 'string' && v.length === WORD_LEN && hexOk(v);
 }
 
-export function isHexData(v: unknown): v is string {
-    return typeof v === 'string' && v.length >= 2 && v.length <= responseLimits.hex && ((v.length - 2) & 1) === 0 && hexOk(v);
+export function isHexData(v: unknown, maxChars: number = responseLimits.hex): v is string {
+    return typeof v === 'string' && v.length >= 2 && v.length <= maxChars && ((v.length - 2) & 1) === 0 && hexOk(v);
 }
 
 /** 20-byte hex address. The error does not echo the input. */
@@ -137,12 +209,12 @@ function logPayloadBytes(item: unknown): number {
 }
 
 /**
- * data, topics, and logsBloom bytes. `true` when one receipt exceeds 1 MiB or the block exceeds 32 MiB,
- * or when any array is longer than its count limit (checked before its elements are read).
- * Returns before encoding.
+ * data, topics, and logsBloom bytes. `true` when one receipt or the block exceeds its payload budget,
+ * when one data string is longer than the budget allows, or when any array is longer than its count limit
+ * (checked before its elements are read). Returns before encoding. Defaults to the fixed caps.
  */
-export function receiptPayloadTooLarge(raw: unknown[]): boolean {
-    if (raw.length > responseLimits.receipts) return true;
+export function receiptPayloadTooLarge(raw: unknown[], budget: ReceiptBudget = FIXED_RECEIPT_BUDGET): boolean {
+    if (raw.length > budget.receipts) return true;
     let total = 0;
     let logCount = 0;
     for (let i = 0; i < raw.length; i++) {
@@ -152,13 +224,14 @@ export function receiptPayloadTooLarge(raw: unknown[]): boolean {
         let bytes = hexByteLen(rec.logsBloom);
         const logs = rec.logs;
         if (Array.isArray(logs)) {
-            if (logs.length > responseLimits.logsPerReceipt) return true;
+            if (logs.length > budget.logsPerReceipt) return true;
             logCount += logs.length;
-            if (logCount > responseLimits.logs) return true;
+            if (logCount > budget.logs) return true;
             for (let j = 0; j < logs.length; j++) {
                 const log = logs[j];
                 if (typeof log === 'object' && log !== null) {
                     const row = log as Record<string, unknown>;
+                    if (typeof row.data === 'string' && row.data.length > budget.dataChars) return true;
                     bytes += hexByteLen(row.data);
                     const topics = row.topics;
                     if (Array.isArray(topics)) {
@@ -166,10 +239,10 @@ export function receiptPayloadTooLarge(raw: unknown[]): boolean {
                         for (let k = 0; k < topics.length; k++) bytes += hexByteLen(topics[k]);
                     }
                 }
-                if (bytes > responseLimits.receiptPayload) return true;
+                if (bytes > budget.receiptPayload) return true;
             }
         }
-        if (bytes > responseLimits.receiptPayload || total + bytes > responseLimits.blockPayload) return true;
+        if (bytes > budget.receiptPayload || total + bytes > budget.blockPayload) return true;
         total += bytes;
     }
     return false;
@@ -183,14 +256,14 @@ function snapshotTopics(v: unknown): unknown {
     return out;
 }
 
-/** Plain copy of one log. Oversized strings are replaced, not retained. */
-export function snapshotLog(item: unknown): unknown {
+/** Plain copy of one log. Oversized strings are replaced, not retained. `dataChars` caps `data`. */
+export function snapshotLog(item: unknown, dataChars: number = responseLimits.hex): unknown {
     if (typeof item !== 'object' || item === null) return item;
     const o = item as Record<string, unknown>;
     return {
         address: clipStr(o.address, ADDR_LEN),
         topics: snapshotTopics(o.topics),
-        data: clipStr(o.data, responseLimits.hex),
+        data: clipStr(o.data, dataChars),
         blockNumber: clipStr(o.blockNumber, responseLimits.quantity),
         blockHash: clipStr(o.blockHash, WORD_LEN),
         transactionHash: clipStr(o.transactionHash, WORD_LEN),
@@ -212,13 +285,13 @@ function snapshotDeposit(v: unknown): { ok: true; value?: string } | { ok: false
 }
 
 /**
- * Plain copy of a receipt list. `null` when the list is not a bounded array.
- * `'too-large'` when data, topics, and bloom exceed the payload budget.
- * The budget is checked before the copy. Does not read elements past the cap.
+ * Plain copy of a receipt list. `null` when the answer is not an array.
+ * `'too-large'` when a count or data, topics, and bloom exceed the budget.
+ * The budget is checked before the copy. Does not read elements past the cap. Defaults to the fixed caps.
  */
-export function snapshotReceipts(raw: unknown): unknown[] | 'too-large' | null {
-    if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
-    if (receiptPayloadTooLarge(raw)) return 'too-large';
+export function snapshotReceipts(raw: unknown, budget: ReceiptBudget = FIXED_RECEIPT_BUDGET): unknown[] | 'too-large' | null {
+    if (!Array.isArray(raw)) return null;
+    if (receiptPayloadTooLarge(raw, budget)) return 'too-large';
     const out: unknown[] = [];
     let logs = 0;
     for (let i = 0; i < raw.length; i++) {
@@ -230,11 +303,11 @@ export function snapshotReceipts(raw: unknown): unknown[] | 'too-large' | null {
         const rec = item as Record<string, unknown>;
         let copied: unknown = rec.logs;
         if (Array.isArray(rec.logs)) {
-            if (rec.logs.length > responseLimits.logsPerReceipt) return null;
+            if (rec.logs.length > budget.logsPerReceipt) return null;
             logs += rec.logs.length;
-            if (logs > responseLimits.logs) return null;
+            if (logs > budget.logs) return null;
             const rows: unknown[] = [];
-            for (let j = 0; j < rec.logs.length; j++) rows.push(snapshotLog(rec.logs[j]));
+            for (let j = 0; j < rec.logs.length; j++) rows.push(snapshotLog(rec.logs[j], budget.dataChars));
             copied = rows;
         }
         const depositNonce = snapshotDeposit(rec.depositNonce);
@@ -281,7 +354,9 @@ export async function header(rpc: RawRpc, tag: number | 'finalized'): Promise<Bl
     if (tag !== 'finalized' && !safeBound(tag, 0)) throw new Error('invalid block tag');
     const raw = await ask(opened, 'eth_getBlockByNumber', [typeof tag === 'number' ? numberToHex(tag) : tag, false]);
     if (raw == null || typeof raw !== 'object') throw new Error(`${opened.name}: block ${String(tag)} unavailable`);
-    const b = raw as { hash?: unknown; parentHash?: unknown; receiptsRoot?: unknown; number?: unknown; logsBloom?: unknown };
+    const b = raw as {
+        hash?: unknown; parentHash?: unknown; receiptsRoot?: unknown; number?: unknown; logsBloom?: unknown; gasLimit?: unknown;
+    };
     const number = quantity(b.number);
     const hash = typeof b.hash === 'string' && b.hash.length === WORD_LEN ? b.hash : '';
     if (!isWord(hash) || number === null) throw new Error(`${opened.name}: malformed block header`);
@@ -291,6 +366,7 @@ export async function header(rpc: RawRpc, tag: number | 'finalized'): Promise<Bl
     const logsBloom = typeof bloom === 'string' && bloom.length === BLOOM_LEN && hexOk(bloom) ? bloom as Hex : null;
     return {
         number, hash: hash as Hex, parentHash: b.parentHash as Hex, receiptsRoot: b.receiptsRoot as Hex, logsBloom,
+        gasLimit: quantity(b.gasLimit),
     };
 }
 

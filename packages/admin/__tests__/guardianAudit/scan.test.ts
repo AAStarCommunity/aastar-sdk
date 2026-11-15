@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { getAddress, keccak256, numberToHex, stringToHex, type Address, type Hex } from 'viem';
 import { bloomOf } from '../../src/guardianAudit/bloom';
 import { responseLimits } from '../../src/guardianAudit/rpc';
+import {
+    DEFAULT_MAX_PROOF_GAS, FIXED_RECEIPT_BUDGET, MAX_PROOF_GAS_CEILING, receiptBudget, type FinalizedAnchor,
+} from '../../src/guardianAudit';
 import { EMPTY_RECEIPTS_ROOT, receiptsRootFromRpc } from '../../src/guardianAudit/trie';
 import fixture from './fixtures/sepolia-block-receipts.json';
 import opSepolia from './fixtures/op-sepolia-block-receipts.json';
@@ -86,6 +89,8 @@ class Fake implements RawRpc {
     gate: Promise<void> | null = null;
     /** `eth_chainId`. Scans pass `chainId: 1` unless a test overrides it. */
     chainId = 1;
+    /** Header gasLimit. Omitted from headers while null. */
+    gasLimit: Hex | null = null;
     constructor(public name: string, public finalized: number) {}
 
     parentOf(n: number): Hex {
@@ -196,6 +201,7 @@ class Fake implements RawRpc {
                 parentHash: this.parentOf(n),
                 receiptsRoot: block.receiptsRoot,
                 logsBloom: block.bloom,
+                ...(this.gasLimit !== null ? { gasLimit: this.gasLimit } : {}),
             };
         }
         if (args.method === 'eth_getBlockReceipts') {
@@ -302,7 +308,29 @@ async function save(
         attributed: extra.attributed ?? [],
         unresolved,
         resolve: extra.resolve ?? [],
+        ...(extra.anchors !== undefined ? { anchors: extra.anchors } : {}),
     });
+}
+
+/** A store written before FU-100: no `anchors` in the snapshot, and commits never carry them. Counts commits. */
+function noAnchorCache(inner: GuardianAuditStore = memoryStore()): GuardianAuditStore & { commits: Commit[] } {
+    const commits: Commit[] = [];
+    return {
+        commits,
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        async snapshot() {
+            const snap = await inner.snapshot();
+            delete snap.anchors;
+            return snap;
+        },
+        async commit(change) {
+            commits.push(change);
+            const { anchors: _dropped, ...rest } = change;
+            await inner.commit(rest);
+        },
+    };
 }
 
 function expectIncomplete(result: ScanResult, pattern: RegExp): void {
@@ -1788,7 +1816,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
                 hide: new Set(), receipts: [], receiptsRoot: EMPTY_RECEIPTS_ROOT,
             });
         }
-        const result = await run(a, b, memoryStore(), { maxBlocks: 1, maxAnchorBlocks: 10 });
+        const result = await run(a, b, noAnchorCache(), { maxBlocks: 1, maxAnchorBlocks: 10 });
         expectIncomplete(result, /finalized ancestry exceeds the bound/);
         const tags = a.calls.filter((call) => call.method === 'eth_getBlockByNumber').map((call) => call.params[0]);
         expect(tags).not.toContain('0x2');
@@ -1911,7 +1939,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             providers: budgetProviders([{ ...(fatReceipt(0, data) as object), logs }]),
             watched: [watched()], store: memoryStore(), chainId: 1, startBlock: 1, maxBlocks: 1,
         });
-        expectIncomplete(result, /^receipts too large$/);
+        expectIncomplete(result, /^receipts exceed the fixed bound at block 1$/);
     });
 
     it('is INCOMPLETE when a block payload exceeds 32 MiB', async () => {
@@ -1922,7 +1950,7 @@ describe('guardian-audit completeness (unit, not acceptance)', () => {
             providers: budgetProviders(receipts),
             watched: [watched()], store: memoryStore(), chainId: 1, startBlock: 1, maxBlocks: 1,
         });
-        expectIncomplete(result, /^receipts too large$/);
+        expectIncomplete(result, /^receipts exceed the fixed bound at block 1$/);
     });
 
     it('stops a gap past maxAnchorBlocks and completes when the bound is raised', async () => {
@@ -2174,5 +2202,383 @@ describe('Codex review @ff82ba6a (#445) (unit, not acceptance)', () => {
             expectIncomplete(await run(nodes.a, nodes.b, store), /receipts do not match receiptsRoot at block 2/);
             expect(await store.getCheckpoint()).toBeNull();
         }
+    });
+});
+
+const SCOPE = watchScope([watched()], 1, 1);
+
+/** Numeric header heights one provider read since its calls were last cleared. */
+function headerReads(fake: Fake): number[] {
+    return fake.calls
+        .filter((call) => call.method === 'eth_getBlockByNumber' && call.params[0] !== 'finalized')
+        .map((call) => Number.parseInt(String(call.params[0]), 16));
+}
+
+/** Rewrites the snapshot's anchors. Commits go to the inner store unchanged. */
+function withAnchors(rows: unknown[], inner: GuardianAuditStore = memoryStore()): GuardianAuditStore {
+    return {
+        getCheckpoint: () => inner.getCheckpoint(),
+        listUnresolved: () => inner.listUnresolved(),
+        listAttributed: () => inner.listAttributed(),
+        async snapshot() {
+            const snap = await inner.snapshot();
+            return { ...snap, anchors: rows as FinalizedAnchor[] };
+        },
+        commit: (change) => inner.commit(change),
+    };
+}
+
+describe('FU-100 finalized anchor cache (unit, not acceptance)', () => {
+    it('a store without the cache keeps the old walk and writes nothing on INCOMPLETE', async () => {
+        const { a, b } = pair(30);
+        const store = noAnchorCache();
+        for (let i = 0; i < 2; i++) {
+            expectIncomplete(await run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 }), /finalized ancestry exceeds the bound on primary/);
+        }
+        expect(store.commits).toHaveLength(0);
+        expect(headerReads(a).some((n) => n > 1)).toBe(false);
+        const { a: c, b: d } = pair(3000);
+        const legacy = noAnchorCache();
+        expect(await run(c, d, legacy, { maxBlocks: 50 })).toMatchObject({ state: 'COMPLETE', to: 50 });
+        c.calls = [];
+        expect(await run(c, d, legacy, { maxBlocks: 50 })).toMatchObject({ state: 'COMPLETE', to: 100 });
+        expect(headerReads(c).filter((n) => n > 100)).toHaveLength(2900);
+        expect(legacy.commits.every((change) => !('anchors' in change))).toBe(true);
+    });
+
+    it('records verified anchors and walks only to the nearest one on the next scan', async () => {
+        const { a, b } = pair(3000);
+        const store = memoryStore();
+        expect(await run(a, b, store, { maxBlocks: 50 })).toMatchObject({ state: 'COMPLETE', to: 50 });
+        const first = await store.snapshot();
+        expect(first.anchors).toEqual([1024, 2048, 3000].map((block) => ({ scope: SCOPE, block, hash: bhash(block) })));
+        a.calls = [];
+        b.calls = [];
+        expect(await run(a, b, store, { maxBlocks: 50 })).toMatchObject({ state: 'COMPLETE', from: 51, to: 100 });
+        for (const node of [a, b]) {
+            const above = headerReads(node).filter((n) => n > 100);
+            expect(above).toHaveLength(924);
+            expect(Math.max(...above)).toBe(1024);
+        }
+        expect(await store.getCheckpoint()).toEqual({ block: 100, hash: bhash(100) });
+    });
+
+    it('recovers a gap past maxAnchorBlocks by descending, one bounded step per scan', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        const one = await run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 });
+        expectIncomplete(one, /finalized ancestry exceeds the bound on primary/);
+        expect(one).toMatchObject({ anchored: 20 });
+        expect(await store.getCheckpoint()).toBeNull();
+        expect(Math.min(...headerReads(a).filter((n) => n > 1))).toBe(20);
+        expect(a.calls.some((call) => call.method === 'eth_getLogs')).toBe(false);
+        const two = await run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 });
+        expect(two).toMatchObject({ state: 'INCOMPLETE', anchored: 10 });
+        expect(await store.getCheckpoint()).toBeNull();
+        const three = await run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 });
+        expect(three).toMatchObject({ state: 'COMPLETE', from: 1, to: 1 });
+        expect(await store.getCheckpoint()).toEqual({ block: 1, hash: bhash(1) });
+        expect((await store.snapshot()).anchors!.map((item) => item.block)).toEqual([10, 20, 30]);
+    });
+
+    it('descends when finalized moves out of reach during the scan', async () => {
+        const { a, b } = pair(5);
+        a.fill(40);
+        b.fill(40);
+        for (const node of [a, b]) {
+            const orig = node.request.bind(node);
+            let reads = 0;
+            node.request = async (args) => {
+                const out = await orig(args);
+                if (args.method === 'eth_getBlockByNumber' && args.params?.[0] === 'finalized' && ++reads === 1) node.finalized = 40;
+                return out;
+            };
+        }
+        const store = memoryStore();
+        const result = await run(a, b, store, { maxBlocks: 50, maxAnchorBlocks: 10 });
+        expect(result).toMatchObject({ state: 'INCOMPLETE', from: 1, to: 5, anchored: 30 });
+        expect(await store.getCheckpoint()).toBeNull();
+        expect((await store.snapshot()).anchors!.map((item) => item.block)).toEqual([30, 40]);
+    });
+
+    it('throws on a forged anchor and writes nothing', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        await save(store, null, [], { anchors: [{ scope: SCOPE, block: 20, hash: bhash(20, 'forged') }] });
+        const before = await store.snapshot();
+        await expect(run(a, b, store, { maxBlocks: 1 })).rejects.toThrow(FinalityConflictError);
+        await expect(run(a, b, store, { maxBlocks: 1 })).rejects.toThrow(/^stored anchor conflict at block 20 on primary$/);
+        expect(await store.snapshot()).toEqual(before);
+    });
+
+    it('throws on an anchor at the scanned tip whose hash differs', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        await save(store, null, [], { anchors: [{ scope: SCOPE, block: 1, hash: bhash(1, 'forged') }] });
+        await expect(run(a, b, store, { maxBlocks: 1 })).rejects.toThrow(/^stored anchor conflict at block 1$/);
+        expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('throws when a descent starts from an anchor whose hash differs', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        await save(store, null, [], { anchors: [{ scope: SCOPE, block: 25, hash: bhash(25, 'forged') }] });
+        await expect(run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 })).rejects.toThrow(/^stored anchor conflict at block 25 on primary$/);
+        expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('throws when the chain reorgs below a stored anchor', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        expect(await run(a, b, store, { maxBlocks: 1 })).toMatchObject({ state: 'COMPLETE', to: 1 });
+        expect((await store.snapshot()).anchors).toEqual([{ scope: SCOPE, block: 30, hash: bhash(30) }]);
+        a.setHash(30, bhash(30, 're'));
+        b.setHash(30, bhash(30, 're'));
+        await expect(run(a, b, store, { maxBlocks: 1 })).rejects.toThrow(FinalityConflictError);
+        expect(await store.getCheckpoint()).toEqual({ block: 1, hash: bhash(1) });
+    });
+
+    it('is INCOMPLETE when the walk to a stored anchor does not link', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        await save(store, null, [], { anchors: [{ scope: SCOPE, block: 20, hash: bhash(20) }] });
+        a.blocks.get(10)!.parent = bhash(9, 'other');
+        expectIncomplete(await run(a, b, store, { maxBlocks: 1 }), /^finalized ancestry breaks at block 10 on primary$/);
+        expect(await store.getCheckpoint()).toBeNull();
+    });
+
+    it('records no anchor where the providers disagree on a walked header', async () => {
+        const { a, b } = pair(30);
+        for (let n = 11; n <= 30; n++) {
+            b.setHash(n, bhash(n, 'fork'));
+            b.blocks.get(n)!.parent = n === 11 ? bhash(10) : bhash(n - 1, 'fork');
+        }
+        const store = memoryStore();
+        expectIncomplete(await run(a, b, store, { maxBlocks: 1 }), /^providers disagree on block hash at 30$/);
+        expect(await store.snapshot()).toMatchObject({ checkpoint: null, anchors: [] });
+    });
+
+    it('ignores anchors of another scope or chain and does not store them again', async () => {
+        const { a, b } = pair(30);
+        const inner = memoryStore();
+        const rows = [
+            { scope: watchScope([watched()], 1, 2), block: 20, hash: bhash(20, 'chain2') },
+            { scope: watchScope([watched({ generation: 'test-2' })], 1, 1), block: 25, hash: bhash(25, 'gen2') },
+        ];
+        const result = await run(a, b, withAnchors(rows, inner), { maxBlocks: 1 });
+        expect(result).toMatchObject({ state: 'COMPLETE', to: 1 });
+        expect(headerReads(a)).toContain(30);
+        expect((await inner.snapshot()).anchors).toEqual([{ scope: SCOPE, block: 30, hash: bhash(30) }]);
+    });
+
+    it('ignores stale anchors below the tip or above finalized, malformed rows, and a height with two hashes', async () => {
+        const { a, b } = pair(30);
+        const inner = memoryStore();
+        const rows = [
+            { scope: SCOPE, block: 0, hash: bhash(0, 'old') },
+            { scope: SCOPE, block: 31, hash: bhash(31, 'ahead') },
+            null, 'row', { scope: SCOPE, block: -1, hash: bhash(5) }, { scope: SCOPE, block: '20', hash: bhash(20) },
+            { scope: SCOPE, block: 1.5, hash: bhash(5) }, { scope: SCOPE, block: 22, hash: 'nope' },
+            { scope: SCOPE, block: 20, hash: bhash(20) }, { scope: SCOPE, block: 20, hash: bhash(20, 'twin') },
+        ];
+        const result = await run(a, b, withAnchors(rows, inner), { maxBlocks: 1 });
+        expect(result).toMatchObject({ state: 'COMPLETE', to: 1 });
+        expect(headerReads(a)).toContain(30);
+        expect((await inner.snapshot()).anchors).toEqual([
+            { scope: SCOPE, block: 30, hash: bhash(30) }, { scope: SCOPE, block: 31, hash: bhash(31, 'ahead') },
+        ]);
+    });
+
+    it('stays INCOMPLETE without throwing when the descent cannot be stored', async () => {
+        const { a, b } = pair(30);
+        const inner = memoryStore();
+        const store: GuardianAuditStore = {
+            ...inner,
+            snapshot: () => inner.snapshot(),
+            commit: async () => { throw new Error('https://user:pw@db.example/'); },
+        };
+        const result = await run(a, b, store, { maxBlocks: 1, maxAnchorBlocks: 10 });
+        expect(result).toEqual({
+            state: 'INCOMPLETE', from: 1, to: 1,
+            reasons: ['finalized ancestry exceeds the bound on primary', 'anchor cache write failed'],
+        });
+    });
+
+    it('keeps the anchor set bounded and drops anchors below the checkpoint', async () => {
+        const { a, b } = pair(1300);
+        const store = memoryStore();
+        const seeded = Array.from({ length: 1199 }, (_, i) => ({ scope: SCOPE, block: i + 2, hash: bhash(i + 2) }));
+        await save(store, null, [], { anchors: seeded });
+        a.calls = [];
+        expect(await run(a, b, store, { maxBlocks: 50 })).toMatchObject({ state: 'COMPLETE', to: 50 });
+        expect(headerReads(a).filter((n) => n > 50)).toHaveLength(0);
+        const kept = (await store.snapshot()).anchors!.map((item) => item.block);
+        expect(kept.length).toBeLessThanOrEqual(1024);
+        expect(kept[0]).toBe(50);
+        expect(kept[kept.length - 1]).toBe(1200);
+    });
+
+    it('a caught-up scan keeps anchors at or above the checkpoint only', async () => {
+        const { a, b } = pair(30);
+        const store = memoryStore();
+        await save(store, { block: 30, hash: bhash(30) }, [], {
+            anchors: [{ scope: SCOPE, block: 10, hash: bhash(10) }, { scope: SCOPE, block: 30, hash: bhash(30) }],
+        });
+        expect(await run(a, b, store)).toMatchObject({ state: 'COMPLETE', range: { empty: true } });
+        expect((await store.snapshot()).anchors).toEqual([{ scope: SCOPE, block: 30, hash: bhash(30) }]);
+    });
+
+    it('memoryStore rejects an anchor of another scope with the whole commit', async () => {
+        const store = memoryStore();
+        await save(store, null);
+        const before = await store.snapshot();
+        await expect(save(store, { block: 3, hash: bhash(3) }, [], {
+            anchors: [{ scope: watchScope([watched()], 1, 2), block: 3, hash: bhash(3) }],
+        })).rejects.toThrow(ScopeChangedError);
+        expect(await store.snapshot()).toEqual(before);
+    });
+});
+
+const ZERO_BLOOM = `0x${'00'.repeat(256)}` as Hex;
+
+function receiptOf(index: number, logs: { address: Address; topics: Hex[]; data: string; removed?: boolean }[], start = 0): unknown {
+    const txHash = tx(1, index);
+    return {
+        type: '0x2', status: '0x1', cumulativeGasUsed: '0x1', logsBloom: ZERO_BLOOM,
+        transactionIndex: numberToHex(index), transactionHash: txHash, blockNumber: '0x1', blockHash: bhash(1),
+        logs: logs.map((log, j) => ({
+            address: log.address, topics: log.topics, data: log.data, logIndex: numberToHex(start + j),
+            blockNumber: '0x1', blockHash: bhash(1), transactionHash: txHash, transactionIndex: numberToHex(index),
+            removed: log.removed === true,
+        })),
+    };
+}
+
+/** One block whose bloom contains ADDR. Its receiptsRoot is computed under the widest budget. */
+function gasProviders(receipts: unknown[], gasA: number | null, gasB: number | null = gasA): [RawRpc, RawRpc] {
+    const root = receiptsRootFromRpc(receipts, receiptBudget(MAX_PROOF_GAS_CEILING, MAX_PROOF_GAS_CEILING));
+    if (!root) throw new Error('fixture cannot be encoded');
+    const serve = (name: string, gas: number | null): RawRpc => ({
+        name,
+        async request({ method }) {
+            if (method === 'eth_chainId') return '0x1';
+            if (method === 'eth_getBlockByNumber') {
+                return {
+                    number: '0x1', hash: bhash(1), parentHash: bhash(0), receiptsRoot: root,
+                    logsBloom: bloomOf([{ address: ADDR, topics: [TOPIC] }]),
+                    ...(gas !== null ? { gasLimit: numberToHex(gas) } : {}),
+                };
+            }
+            if (method === 'eth_getBlockReceipts') return receipts;
+            if (method === 'eth_getLogs') return [];
+            throw new Error(`unexpected ${method}`);
+        },
+    });
+    return [serve('primary', gasA), serve('secondary', gasB)];
+}
+
+function scanGas(providers: [RawRpc, RawRpc], over: Record<string, unknown> = {}) {
+    return scanRange({
+        providers, watched: [watched()], store: memoryStore(), chainId: 1, startBlock: 1, maxBlocks: 1, ...over,
+    });
+}
+
+const noise = (count: number) => Array.from({ length: count }, () => ({ address: OTHER, topics: [] as Hex[], data: '0x' }));
+
+describe('FU-101 gas-derived receipt budget (unit, not acceptance)', () => {
+    it('derives each cap from the gas limit and never goes below the fixed caps', () => {
+        expect(receiptBudget(null)).toBe(FIXED_RECEIPT_BUDGET);
+        expect(receiptBudget(30_000_000)).toEqual({
+            receipts: 4096, logs: 160_000, logsPerReceipt: 160_000, receiptPayload: 7_500_256,
+            blockPayload: 32 * 1_048_576, dataChars: 15_000_002, encodedReceipt: 7_500_256 + 64 * 160_000 + 1024,
+        });
+        expect(receiptBudget(1)).toEqual(FIXED_RECEIPT_BUDGET);
+        expect(receiptBudget(500_000_000, 100_000_000)).toEqual(receiptBudget(100_000_000));
+        expect(receiptBudget(500_000_000)).toEqual(receiptBudget(DEFAULT_MAX_PROOF_GAS));
+        expect(receiptBudget(MAX_PROOF_GAS_CEILING, MAX_PROOF_GAS_CEILING).receipts).toBe(95_239);
+        for (const bad of [0, Number.NaN, 1.5, MAX_PROOF_GAS_CEILING + 1]) {
+            expect(() => receiptBudget(30_000_000, bad)).toThrow(/maxProofGas/);
+        }
+    });
+
+    it('verifies a bloom-colliding receipt with more than 1024 logs when the gas limit allows it', async () => {
+        const receipts = [receiptOf(0, noise(responseLimits.logsPerReceipt + 1))];
+        expect(await scanGas(gasProviders(receipts, 30_000_000))).toMatchObject({ state: 'COMPLETE', bloomFalsePositives: 1 });
+        expectIncomplete(await scanGas(gasProviders(receipts, null)), /^receipts exceed the fixed bound at block 1$/);
+    });
+
+    it('accepts logs exactly at the gas-derived bound and refuses one more', async () => {
+        const gas = 3_750_000;
+        expect(receiptBudget(gas).logsPerReceipt).toBe(20_000);
+        expect(await scanGas(gasProviders([receiptOf(0, noise(20_000))], gas))).toMatchObject({ state: 'COMPLETE' });
+        expectIncomplete(await scanGas(gasProviders([receiptOf(0, noise(20_001))], gas)), /^receipts exceed the gas-derived bound at block 1$/);
+    });
+
+    it('counts logs across receipts against the block bound', async () => {
+        const gas = 3_750_000;
+        const at = [receiptOf(0, noise(10_000)), receiptOf(1, noise(10_000), 10_000)];
+        expect(await scanGas(gasProviders(at, gas))).toMatchObject({ state: 'COMPLETE' });
+        const over = [receiptOf(0, noise(10_000)), receiptOf(1, noise(10_001), 10_000)];
+        expectIncomplete(await scanGas(gasProviders(over, gas)), /^receipts exceed the gas-derived bound at block 1$/);
+    });
+
+    it('accepts a receipt payload exactly at the bound and refuses one byte more', async () => {
+        const gas = 8_000_000;
+        expect(receiptBudget(gas).receiptPayload).toBe(2_000_256);
+        const big = (bytes: number) => ({ address: OTHER, topics: [] as Hex[], data: `0x${'ab'.repeat(bytes)}` });
+        const at = [receiptOf(0, [big(1_000_000), big(1_000_000)])];
+        expect(await scanGas(gasProviders(at, gas))).toMatchObject({ state: 'COMPLETE' });
+        const over = [receiptOf(0, [big(1_000_000), big(1_000_001)])];
+        expectIncomplete(await scanGas(gasProviders(over, gas)), /^receipts exceed the gas-derived bound at block 1$/);
+    });
+
+    it('names maxProofGas when the gas limit is above it, and raising it recovers', async () => {
+        const big = (bytes: number) => ({ address: OTHER, topics: [] as Hex[], data: `0x${'ab'.repeat(bytes)}` });
+        const receipts = [receiptOf(0, [big(1_000_000), big(1_000_000)])];
+        expectIncomplete(await scanGas(gasProviders(receipts, 8_000_000), { maxProofGas: 4_000_000 }), /^receipts exceed maxProofGas at block 1$/);
+        expect(await scanGas(gasProviders(receipts, 8_000_000), { maxProofGas: 8_000_000 })).toMatchObject({ state: 'COMPLETE' });
+    });
+
+    it('refuses one data string above the fixed cap before copying it', async () => {
+        const data = `0x${'ab'.repeat(70_000)}`;
+        expect(data.length).toBeGreaterThan(responseLimits.hex);
+        const receipts = [receiptOf(0, [{ address: OTHER, topics: [], data }])];
+        expectIncomplete(await scanGas(gasProviders(receipts, null)), /^receipts exceed the fixed bound at block 1$/);
+        expect(await scanGas(gasProviders(receipts, 30_000_000))).toMatchObject({ state: 'COMPLETE' });
+    });
+
+    it('encodes a receipt whose payload fits the fixed cap even though RLP overhead pushes it past 1 MiB', async () => {
+        const logs = Array.from({ length: 1024 }, () => ({ address: OTHER, topics: [] as Hex[], data: `0x${'ab'.repeat(1023)}` }));
+        const receipts = [receiptOf(0, logs)];
+        expect(await scanGas(gasProviders(receipts, null))).toMatchObject({ state: 'COMPLETE' });
+    });
+
+    it('is INCOMPLETE when the providers disagree on gasLimit', async () => {
+        const receipts = [receiptOf(0, noise(1))];
+        expectIncomplete(await scanGas(gasProviders(receipts, 30_000_000, 30_000_001)), /^providers disagree on gasLimit at block 1$/);
+        expectIncomplete(await scanGas(gasProviders(receipts, 30_000_000, null)), /^providers disagree on gasLimit at block 1$/);
+    });
+
+    it('still refuses a removed log of an unwatched address', async () => {
+        const receipts = [receiptOf(0, [{ address: OTHER, topics: [], data: '0x', removed: true }])];
+        expectIncomplete(await scanGas(gasProviders(receipts, 30_000_000)), new RegExp(`^removed log from ${getAddress(OTHER)} at block 1$`));
+    });
+
+    it('rejects an invalid maxProofGas before any request', async () => {
+        const { a, b } = pair(1);
+        for (const bad of [0, -1, 1.5, Number.NaN, MAX_PROOF_GAS_CEILING + 1]) {
+            await expect(run(a, b, memoryStore(), { maxProofGas: bad })).rejects.toThrow(/maxProofGas/);
+        }
+        expect(a.calls).toHaveLength(0);
+    });
+
+    it('uses the header gasLimit from both providers in a normal scan', async () => {
+        const { a, b } = pair(2);
+        a.gasLimit = numberToHex(30_000_000);
+        b.gasLimit = numberToHex(30_000_000);
+        addBoth(a, b, 2, TOPIC);
+        expect(await run(a, b, memoryStore(), { attributor: ok })).toMatchObject({ state: 'COMPLETE', count: 1 });
+        b.gasLimit = numberToHex(29_000_000);
+        expectIncomplete(await run(a, b, memoryStore(), { attributor: ok }), /^providers disagree on gasLimit at block 1$/);
     });
 });

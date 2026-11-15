@@ -1,5 +1,5 @@
 import { bytesToHex, concat, hexToBytes, keccak256, toRlp, type Hex } from 'viem';
-import { receiptPayloadTooLarge, responseLimits } from './rpc.js';
+import { FIXED_RECEIPT_BUDGET, receiptPayloadTooLarge, responseLimits, type ReceiptBudget } from './rpc.js';
 
 /** keccak256(rlp('')). Header receiptsRoot of a block with no receipts. */
 export const EMPTY_RECEIPTS_ROOT: Hex = keccak256(hexToBytes('0x80'));
@@ -130,15 +130,17 @@ function encode(node: Node): Uint8Array {
 
 const MAX_TRIE_PAIRS = 100_000;
 const MAX_TRIE_KEY_BYTES = 64;
-/** One encoded receipt. Checked before any byte of the value is walked. */
-const MAX_RECEIPT_BYTES = 1_048_576;
+/** One encoded receipt, by default. Checked before any byte of the value is walked. */
+const MAX_RECEIPT_BYTES = FIXED_RECEIPT_BUDGET.encodedReceipt;
 
 /**
  * Merkle Patricia root. The header stores keccak256 of the root node, always.
  * `null` when the input is not a bounded list of byte keys and values.
  * The length is checked before any element is read.
  */
-export function trieRoot(pairs: readonly { key: Uint8Array; value: Uint8Array }[]): Hex | null {
+export function trieRoot(
+    pairs: readonly { key: Uint8Array; value: Uint8Array }[], maxValueBytes: number = MAX_RECEIPT_BYTES,
+): Hex | null {
     if (!Array.isArray(pairs) || pairs.length > MAX_TRIE_PAIRS) return null;
     const bounded: { key: Uint8Array; value: Uint8Array }[] = [];
     for (let i = 0; i < pairs.length; i++) {
@@ -147,7 +149,7 @@ export function trieRoot(pairs: readonly { key: Uint8Array; value: Uint8Array }[
         const key = pair.key;
         const value = pair.value;
         if (!(key instanceof Uint8Array) || !(value instanceof Uint8Array)) return null;
-        if (key.length > MAX_TRIE_KEY_BYTES || value.length > MAX_RECEIPT_BYTES) return null;
+        if (key.length > MAX_TRIE_KEY_BYTES || value.length > maxValueBytes) return null;
         bounded.push({ key, value });
     }
     let node: Node | null = null;
@@ -212,10 +214,13 @@ function asHex(v: unknown, max: number = responseLimits.hex): Hex | null {
     return v as Hex;
 }
 
-/** Build the receipts trie from an `eth_getBlockReceipts` answer. `null` = cannot encode. Length is checked before any element is read. */
-export function receiptsRootFromRpc(raw: unknown): Hex | null {
-    if (!Array.isArray(raw) || raw.length > responseLimits.receipts) return null;
-    if (receiptPayloadTooLarge(raw)) return null;
+/**
+ * Build the receipts trie from an `eth_getBlockReceipts` answer. `null` = cannot encode.
+ * Length is checked before any element is read. Defaults to the fixed caps; the scanner passes the block's budget.
+ */
+export function receiptsRootFromRpc(raw: unknown, budget: ReceiptBudget = FIXED_RECEIPT_BUDGET): Hex | null {
+    if (!Array.isArray(raw) || raw.length > budget.receipts) return null;
+    if (receiptPayloadTooLarge(raw, budget)) return null;
     const pairs: { key: Uint8Array; value: Uint8Array }[] = [];
     const seen = new Set<number>();
     let logCount = 0;
@@ -231,16 +236,16 @@ export function receiptsRootFromRpc(raw: unknown): Hex | null {
         if (index === null || type === null || status === null || gas === null || !bloom) return null;
         if (status !== 0n && status !== 1n) return null;
         if (!Number.isSafeInteger(Number(index)) || seen.has(Number(index))) return null;
-        if (!Array.isArray(r.logs) || r.logs.length > responseLimits.logsPerReceipt) return null;
+        if (!Array.isArray(r.logs) || r.logs.length > budget.logsPerReceipt) return null;
         logCount += r.logs.length;
-        if (logCount > responseLimits.logs) return null;
+        if (logCount > budget.logs) return null;
         const logs: ConsensusLog[] = [];
         for (let j = 0; j < r.logs.length; j++) {
             const log = r.logs[j];
             if (typeof log !== 'object' || log === null) return null;
             const row = log as Record<string, unknown>;
             const address = asHex(row.address, 66);
-            const data = asHex(row.data);
+            const data = asHex(row.data, budget.dataChars);
             if (!address || !data || !Array.isArray(row.topics) || row.topics.length > responseLimits.topics) return null;
             const topics: Hex[] = [];
             for (let k = 0; k < row.topics.length; k++) {
@@ -268,5 +273,5 @@ export function receiptsRootFromRpc(raw: unknown): Hex | null {
         seen.add(Number(index));
         pairs.push(encoded);
     }
-    return trieRoot(pairs);
+    return trieRoot(pairs, budget.encodedReceipt);
 }

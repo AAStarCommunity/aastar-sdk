@@ -18,6 +18,11 @@
  * Without both hook methods the crash cells are `skipped` and the detail is
  * exactly "no fault hook". A non-atomic store that omits the hook reports no
  * crash failure. The concurrency cell runs both commits on one store instance.
+ *
+ * The anchor cache (FU-100) is optional. A store whose fresh snapshot has no `anchors` reports every
+ * `anchors/*` cell `skipped` with the detail "no anchor cache"; the scanner then never sends anchors.
+ * A store that returns `anchors` must pass them all: persist the replacement set atomically with the commit,
+ * keep it when a commit omits it, refuse it on a stale revision or a foreign anchor scope, and return copies.
  */
 import type { Address, Hex } from 'viem';
 import {
@@ -27,6 +32,7 @@ import {
     type AttributedAction,
     type Checkpoint,
     type Commit,
+    type FinalizedAnchor,
     type GuardianAuditStore,
     type StoreSnapshot,
     type UnresolvedAction,
@@ -59,6 +65,9 @@ const ALT = '0x2222222222222222222222222222222222222222' as Address;
 const ALT_WORD = `0x${'ef'.repeat(32)}` as Hex;
 const ALT_TOPIC = `0x${'12'.repeat(32)}` as Hex;
 const TIP: Checkpoint = { block: 4, hash: WORD };
+const ANCHOR_A: FinalizedAnchor = { scope: SCOPE, block: 7, hash: WORD };
+const ANCHOR_B: FinalizedAnchor = { scope: SCOPE, block: 8, hash: WORD2 };
+const ANCHOR_C: FinalizedAnchor = { scope: SCOPE, block: 12, hash: ALT_WORD };
 const MOVED: Checkpoint = { block: 9, hash: WORD2 };
 
 type Form = 'moving' | 'caught-up';
@@ -159,12 +168,28 @@ function sameRows(a: readonly unknown[], b: readonly unknown[]): boolean {
     return left.every((item, i) => same(item, right[i]));
 }
 
+/** Anchor sets match by block. A store without the cache counts as an empty set. */
+function sameAnchors(a: readonly unknown[] | undefined, b: readonly unknown[] | undefined): boolean {
+    if (!Array.isArray(a ?? []) || !Array.isArray(b ?? [])) return same(a, b);
+    const order = (x: unknown, y: unknown) => blockOf(x) - blockOf(y);
+    const left = [...(a ?? [])].sort(order);
+    const right = [...(b ?? [])].sort(order);
+    return left.length === right.length && left.every((item, i) => same(item, right[i]));
+}
+
+function blockOf(row: unknown): number {
+    if (typeof row !== 'object' || row === null || !('block' in row)) return -1;
+    const block = (row as { block: unknown }).block;
+    return typeof block === 'number' ? block : -1;
+}
+
 function sameSnapshot(a: StoreSnapshot, b: StoreSnapshot): boolean {
     return a.revision === b.revision
         && same(a.checkpoint, b.checkpoint)
         && same(a.scope, b.scope)
         && sameRows(a.unresolved, b.unresolved)
-        && sameRows(a.attributed, b.attributed);
+        && sameRows(a.attributed, b.attributed)
+        && sameAnchors(a.anchors, b.anchors);
 }
 
 /**
@@ -503,6 +528,121 @@ async function isolation(got: StoreUnderTest, form: Form, mode: 'apply' | 'repla
     }
 }
 
+/** Skip unless the fresh store has an anchor cache. A present value that is not an array is a failure. */
+async function requireAnchors(store: GuardianAuditStore): Promise<void> {
+    const anchors = (await store.snapshot()).anchors;
+    if (anchors === undefined) throw new Skip('no anchor cache');
+    if (!Array.isArray(anchors) || anchors.length !== 0) throw new Fault('fresh store anchors are not an empty array');
+}
+
+function anchored(form: Form, over: Partial<Commit> & Pick<Commit, 'expectedRevision'>): Commit {
+    return commit({
+        next: nextOf(form),
+        resolve: [unresolved(10, 'open-a').id],
+        unresolved: [unresolved(20)],
+        ...over,
+    });
+}
+
+async function anchorsEmpty(got: StoreUnderTest): Promise<void> {
+    await requireAnchors(got.store);
+}
+
+/** Replacement set, written with the rows; an omitted set is kept; a later set replaces it. */
+async function anchorCommitCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    await requireAnchors(store);
+    const seeded = await seed(store);
+    await store.commit(anchored(form, { expectedRevision: seeded.revision, anchors: [ANCHOR_A, ANCHOR_B] }));
+    const after = frozen(await store.snapshot());
+    const expected: StoreSnapshot = {
+        revision: seeded.revision + 1,
+        checkpoint: form === 'moving' ? { block: MOVED.block, hash: MOVED.hash } : { block: TIP.block, hash: TIP.hash },
+        scope: SCOPE,
+        unresolved: [unresolved(11, 'open-b'), unresolved(20)],
+        attributed: [attributed(12), attributed(13)],
+        anchors: [ANCHOR_A, ANCHOR_B],
+    };
+    if (!sameSnapshot(after, expected)) throw new Fault(`${form} anchors were not written with the commit`);
+    await store.commit(commit({ expectedRevision: after.revision, next: nextOf(form) }));
+    const kept = frozen(await store.snapshot());
+    if (!sameAnchors(kept.anchors, [ANCHOR_A, ANCHOR_B])) throw new Fault(`${form} a commit without anchors changed them`);
+    await store.commit(commit({ expectedRevision: kept.revision, next: nextOf(form), anchors: [ANCHOR_C] }));
+    if (!sameAnchors(frozen(await store.snapshot()).anchors, [ANCHOR_C])) throw new Fault(`${form} anchors were not replaced`);
+}
+
+async function anchorStaleCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    await requireAnchors(store);
+    const first = await seed(store);
+    await store.commit(commit({ expectedRevision: first.revision, anchors: [ANCHOR_A] }));
+    const seeded = frozen(await store.snapshot());
+    let threw = false;
+    try {
+        await store.commit(anchored(form, { expectedRevision: seeded.revision - 1, anchors: [ANCHOR_C] }));
+    } catch (error) {
+        threw = true;
+        if (!(error instanceof StoreConflictError)) throw new Fault(`${form} stale anchors threw the wrong error`);
+    }
+    if (!threw) throw new Fault(`${form} stale anchors were accepted`);
+    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} stale anchors changed the store`);
+}
+
+async function anchorScopeCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    await requireAnchors(store);
+    const seeded = await seed(store);
+    let threw = false;
+    try {
+        await store.commit(anchored(form, {
+            expectedRevision: seeded.revision, anchors: [ANCHOR_A, { ...ANCHOR_B, scope: OTHER_SCOPE }],
+        }));
+    } catch (error) {
+        threw = true;
+        if (!(error instanceof ScopeChangedError)) throw new Fault(`${form} foreign anchor scope threw the wrong error`);
+    }
+    if (!threw) throw new Fault(`${form} foreign anchor scope was accepted`);
+    if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} foreign anchor scope changed the store`);
+}
+
+async function anchorCrashCell(got: StoreUnderTest, form: Form): Promise<void> {
+    await requireAnchors(got.store);
+    if (!got.crashDuringNextCommit || !got.commitSteps) throw new Skip('no fault hook');
+    const steps = got.commitSteps();
+    if (!Number.isSafeInteger(steps) || steps < 1) throw new Fault(`${form} commitSteps is not a positive integer`);
+    const store = got.store;
+    const first = await seed(store);
+    await store.commit(commit({ expectedRevision: first.revision, anchors: [ANCHOR_A] }));
+    const seeded = frozen(await store.snapshot());
+    for (let step = 0; step <= steps; step++) {
+        got.crashDuringNextCommit(step);
+        let threw = false;
+        try {
+            await store.commit(anchored(form, { expectedRevision: seeded.revision, anchors: [ANCHOR_B, ANCHOR_C] }));
+        } catch {
+            threw = true;
+        }
+        if (!threw) throw new Fault(`${form} armed crash did not reject the commit`);
+        if (!sameSnapshot(frozen(await store.snapshot()), seeded)) throw new Fault(`${form} crash left a partial anchor write`);
+    }
+}
+
+/** Mutate the anchors in the payload before and after the commit settles, and the anchors a read returns. */
+async function anchorIsolationCell(got: StoreUnderTest, form: Form): Promise<void> {
+    const store = got.store;
+    await requireAnchors(store);
+    const seeded = await seed(store);
+    const change = anchored(form, { expectedRevision: seeded.revision, anchors: [{ ...ANCHOR_A }, { ...ANCHOR_B }] });
+    const pending = store.commit(change);
+    for (const row of change.anchors!) row.block += 100;
+    await pending;
+    if (!sameAnchors(frozen(await store.snapshot()).anchors, [ANCHOR_A, ANCHOR_B])) throw new Fault(`${form} committed anchors changed stored anchors`);
+    deepMutate(change);
+    const raw = await store.snapshot();
+    deepMutate(raw.anchors);
+    if (!sameAnchors(frozen(await store.snapshot()).anchors, [ANCHOR_A, ANCHOR_B])) throw new Fault(`${form} stored anchors changed after mutation`);
+}
+
 const FORMS: Form[] = ['moving', 'caught-up'];
 
 const CHECKS: [string, (got: StoreUnderTest) => Promise<void>][] = [
@@ -518,6 +658,14 @@ const CHECKS: [string, (got: StoreUnderTest) => Promise<void>][] = [
         [`isolation/${form}`, (got) => isolation(got, form, 'apply')],
         [`isolation/replacement/${form}`, (got) => isolation(got, form, 'replace')],
     ]),
+    ['anchors/empty', anchorsEmpty],
+    ...FORMS.flatMap((form): [string, (got: StoreUnderTest) => Promise<void>][] => [
+        [`anchors/commit/${form}`, (got) => anchorCommitCell(got, form)],
+        [`anchors/stale/${form}`, (got) => anchorStaleCell(got, form)],
+        [`anchors/scope/${form}`, (got) => anchorScopeCell(got, form)],
+        [`anchors/crash/${form}`, (got) => anchorCrashCell(got, form)],
+        [`anchors/isolation/${form}`, (got) => anchorIsolationCell(got, form)],
+    ]),
 ];
 
 /** Run every store rule. One fresh store per check. Never throws. */
@@ -528,7 +676,7 @@ export async function runStoreConformance(
     for (const [name, run] of CHECKS) {
         try {
             await run(await make());
-            results.push(name.startsWith('crash/')
+            results.push(name.startsWith('crash/') || name.startsWith('anchors/crash/')
                 ? { name, status: 'pass', detail: 'atomicity checked through the store\'s fault hook' }
                 : { name, status: 'pass' });
         } catch (error) {

@@ -5,6 +5,13 @@ import type { RawLog } from './rpc.js';
 export interface Checkpoint { block: number; hash: Hex }
 
 /**
+ * A header both providers linked by parentHash to a header they reported as finalized (FU-100).
+ * `scope` is the store scope of the scan that verified it. It hashes the chain id, so an anchor never
+ * crosses chains or watch sets. A scan rereads the anchor height on both providers before it relies on it.
+ */
+export interface FinalizedAnchor { scope: Hex; block: number; hash: Hex }
+
+/**
  * Thrown when `commit` sees a revision other than `expectedRevision`. Nothing is written.
  * The checkpoint value is not the concurrency token: caught-up commits leave it unchanged
  * and still advance the revision.
@@ -71,6 +78,12 @@ export interface Commit {
     attributed: AttributedAction[];
     unresolved: UnresolvedAction[];
     resolve: string[];
+    /**
+     * Optional anchor cache. Absent: anchors stay as they are. Present: the full replacement set,
+     * written in the same atomic write. An anchor whose scope is not `scope` rejects the whole commit
+     * with ScopeChangedError. The scanner sends it only to a store whose snapshot has `anchors`.
+     */
+    anchors?: FinalizedAnchor[];
 }
 
 /** One consistent read. `revision` is the token `commit` must echo. `scope` is null until the first commit. */
@@ -80,11 +93,17 @@ export interface StoreSnapshot {
     scope: Hex | null;
     unresolved: UnresolvedAction[];
     attributed: AttributedAction[];
+    /**
+     * Stored anchors, `[]` when there are none. Undefined means the store has no anchor cache:
+     * the scanner then walks to finalized on every scan, as before FU-100, and never writes on INCOMPLETE.
+     */
+    anchors?: FinalizedAnchor[];
 }
 
 /**
  * Injected persistence. Reads return copies; callbacks must not be able to mutate stored rows.
- * Row arrays have no required order. Compare them by id.
+ * Row arrays have no required order. Compare them by id. The anchor cache (`anchors` on the snapshot
+ * and the commit) is optional; see FinalizedAnchor and docs/agent/design/guardian-audit-d2-recovery.md.
  * Implementers run `runStoreConformance` (storeConformance.ts) against a fresh store and pass every check.
  */
 export interface GuardianAuditStore {
@@ -117,6 +136,7 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
     let checkpoint: Checkpoint | null = null;
     let open = new Map<string, UnresolvedAction>();
     let attributed = new Map<string, AttributedAction>();
+    let anchors: FinalizedAnchor[] = [];
     let crashAt: number | null = null;
     const store: GuardianAuditStore & {
         crashDuringNextCommit?: (step: number) => void;
@@ -129,6 +149,7 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
                 scope,
                 unresolved: [...open.values()].map((item) => copy(item)),
                 attributed: [...attributed.values()].map((item) => copy(item)),
+                anchors: anchors.map((item) => copy(item)),
             };
         },
         async getCheckpoint() {
@@ -143,6 +164,14 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
             if (change.expectedRevision !== revision) throw new StoreConflictError();
             const nextScope = change.scope.toLowerCase() as Hex;
             if (scope !== null && nextScope !== scope) throw new ScopeChangedError();
+            let nextAnchors = anchors;
+            if (change.anchors !== undefined) {
+                if (!Array.isArray(change.anchors)) throw new TypeError('anchors must be an array');
+                nextAnchors = change.anchors.map((item) => {
+                    if (typeof item?.scope !== 'string' || item.scope.toLowerCase() !== nextScope) throw new ScopeChangedError();
+                    return { scope: nextScope, block: item.block, hash: item.hash };
+                });
+            }
             const nextOpen = new Map(open);
             const nextAttributed = new Map(attributed);
             for (const item of change.attributed) {
@@ -160,6 +189,7 @@ export function memoryStore(options?: { faultHook?: boolean }): GuardianAuditSto
             }
             open = nextOpen;
             attributed = nextAttributed;
+            anchors = nextAnchors;
             if (change.next) checkpoint = { block: change.next.block, hash: change.next.hash };
             scope = nextScope;
             revision++;
