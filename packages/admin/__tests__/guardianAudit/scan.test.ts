@@ -2485,7 +2485,8 @@ function scanGas(providers: [RawRpc, RawRpc], over: Record<string, unknown> = {}
 
 const noise = (count: number) => Array.from({ length: count }, () => ({ address: OTHER, topics: [] as Hex[], data: '0x' }));
 
-describe('FU-101 gas-derived receipt budget (unit, not acceptance)', () => {
+// Large-payload cases: about 0.2-0.8 s each locally, several times that on CI runners (#451 B1).
+describe('FU-101 gas-derived receipt budget (unit, not acceptance)', { timeout: 30_000 }, () => {
     it('derives each cap from the gas limit and never goes below the fixed caps', () => {
         expect(receiptBudget(null)).toBe(FIXED_RECEIPT_BUDGET);
         expect(receiptBudget(30_000_000)).toEqual({
@@ -2523,20 +2524,22 @@ describe('FU-101 gas-derived receipt budget (unit, not acceptance)', () => {
     });
 
     it('accepts a receipt payload exactly at the bound and refuses one byte more', async () => {
-        const gas = 8_000_000;
-        expect(receiptBudget(gas).receiptPayload).toBe(2_000_256);
+        // Smallest gas whose derived payload bound is above the fixed 1 MiB cap, to keep the fixture small.
+        const gas = 4_200_000;
+        expect(receiptBudget(gas).receiptPayload).toBe(1_050_256);
+        expect(receiptBudget(gas).receiptPayload).toBeGreaterThan(FIXED_RECEIPT_BUDGET.receiptPayload);
         const big = (bytes: number) => ({ address: OTHER, topics: [] as Hex[], data: `0x${'ab'.repeat(bytes)}` });
-        const at = [receiptOf(0, [big(1_000_000), big(1_000_000)])];
+        const at = [receiptOf(0, [big(525_000), big(525_000)])];
         expect(await scanGas(gasProviders(at, gas))).toMatchObject({ state: 'COMPLETE' });
-        const over = [receiptOf(0, [big(1_000_000), big(1_000_001)])];
+        const over = [receiptOf(0, [big(525_000), big(525_001)])];
         expectIncomplete(await scanGas(gasProviders(over, gas)), /^receipts exceed the gas-derived bound at block 1$/);
     });
 
     it('names maxProofGas when the gas limit is above it, and raising it recovers', async () => {
         const big = (bytes: number) => ({ address: OTHER, topics: [] as Hex[], data: `0x${'ab'.repeat(bytes)}` });
-        const receipts = [receiptOf(0, [big(1_000_000), big(1_000_000)])];
-        expectIncomplete(await scanGas(gasProviders(receipts, 8_000_000), { maxProofGas: 4_000_000 }), /^receipts exceed maxProofGas at block 1$/);
-        expect(await scanGas(gasProviders(receipts, 8_000_000), { maxProofGas: 8_000_000 })).toMatchObject({ state: 'COMPLETE' });
+        const receipts = [receiptOf(0, [big(525_000), big(525_000)])];
+        expectIncomplete(await scanGas(gasProviders(receipts, 4_200_000), { maxProofGas: 4_000_000 }), /^receipts exceed maxProofGas at block 1$/);
+        expect(await scanGas(gasProviders(receipts, 4_200_000), { maxProofGas: 4_200_000 })).toMatchObject({ state: 'COMPLETE' });
     });
 
     it('refuses one data string above the fixed cap before copying it', async () => {
