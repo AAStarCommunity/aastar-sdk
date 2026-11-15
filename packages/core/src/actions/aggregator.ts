@@ -6,6 +6,11 @@ import { BLSHelpers } from '../crypto/blsSigner.js';
 
 /** A registered validator's on-chain BLS G1 public key point. */
 export type BLSG1Point = { x_a: Hex, x_b: Hex, y_a: Hex, y_b: Hex };
+/** BLS12-381 G2 point as `BLS.G2Point`: each Fp2 coordinate split into c0/c1, each 48-byte limb in two bytes32 words. */
+export type BLSG2Point = {
+    x_c0_a: Hex, x_c0_b: Hex, x_c1_a: Hex, x_c1_b: Hex,
+    y_c0_a: Hex, y_c0_b: Hex, y_c1_a: Hex, y_c1_b: Hex,
+};
 
 /** Lifecycle of a queued guardian-slash case (`guardianSlashCases(uint256).status`). */
 export enum GuardianSlashStatus {
@@ -106,6 +111,12 @@ export function encodeSetSlashThreshold(slashLevel: SlashLevel | number, thresho
 
 export type AggregatorActions = {
     // BLS Public Key Management
+    /**
+     * @deprecated Unusable. Throws {@link ErrorCode.NOT_IMPLEMENTED} without sending anything.
+     * The vendored ABI is `registerBLSPublicKey(address, BLS.G1Point, uint8, BLS.G2Point)`, so a single hex key never
+     * encoded. From BLSAggregator-4.14.0 (SP rc.8) the aggregator also rejects every caller except its current DVT
+     * (UnauthorizedCaller). Use `dvtActions(dvtValidator).registerBLSPublicKey` instead.
+     */
     registerBLSPublicKey: (args: { validator: Address, publicKey: Hex, account?: Account | Address }) => Promise<Hash>;
     /** @deprecated The deployed BLSAggregator ABI has no `blsPublicKeys` mapping getter — this wrapper now reads the ABI-confirmed `getBLSPublicKey` and projects out the slot. Prefer {@link getBLSPublicKey}. */
     blsPublicKeys: (args: { validator: Address }) => Promise<{ publicKey: Hex, isActive: boolean }>;
@@ -234,21 +245,15 @@ export type AggregatorActions = {
 
 export const aggregatorActions = (address: Address) => (client: PublicClient | WalletClient): AggregatorActions => ({
     // BLS Public Key Management
-    async registerBLSPublicKey({ validator, publicKey, account }) {
-        try {
-            validateAddress(validator, 'validator');
-            validateRequired(publicKey, 'publicKey');
-            return await (client as any).writeContract({
-                address,
-                abi: BLSAggregatorABI,
-                functionName: 'registerBLSPublicKey',
-                args: [validator, publicKey],
-                account: account as any,
-                chain: (client as any).chain
-            });
-        } catch (error) {
-            throw AAStarError.fromViemError(error as Error, 'registerBLSPublicKey');
-        }
+    async registerBLSPublicKey({ validator, publicKey }) {
+        validateAddress(validator, 'validator');
+        validateRequired(publicKey, 'publicKey');
+        throw new AAStarError(
+            ErrorCode.NOT_IMPLEMENTED,
+            'aggregatorActions.registerBLSPublicKey cannot work: the aggregator takes (address, G1Point, uint8, G2Point), ' +
+            'not a hex key, and from BLSAggregator-4.14.0 it accepts the call only from its current DVTValidator. ' +
+            'Use dvtActions(dvtValidator).registerBLSPublicKey({ validator, key, slot, pop }).'
+        );
     },
 
     async blsPublicKeys({ validator }) {

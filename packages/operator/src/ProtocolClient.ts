@@ -91,22 +91,17 @@ export class ProtocolClient extends BaseClient {
     // 2. 验证器管理 / BLS
     // ========================================
 
-    async registerBLSKey(publicKey: Hex, options?: TransactionOptions): Promise<Hash> {
-        try {
-            if (!this.blsAggregatorAddress) {
-                throw new Error('BLS Aggregator address required for this client');
-            }
-            // Aggregator actions now handle the type internally or via mapping
-            const agg = aggregatorActions(this.blsAggregatorAddress)(this.client);
-            
-            return await agg.registerBLSPublicKey({
-                validator: this.getAddress(),
-                publicKey,
-                account: options?.account
-            });
-        } catch (error) {
-            throw error;
-        }
+    /**
+     * @deprecated Unusable; throws without sending. A single hex key never matched the aggregator's
+     * `registerBLSPublicKey(address, BLS.G1Point, uint8, BLS.G2Point)`, and from BLSAggregator-4.14.0 (SP rc.8)
+     * the aggregator accepts that call only from its current DVTValidator.
+     * Use `dvtActions(dvtValidator).registerBLSPublicKey({ validator, key, slot, pop })` from `@aastar/core`.
+     */
+    async registerBLSKey(_publicKey: Hex, _options?: TransactionOptions): Promise<Hash> {
+        throw new Error(
+            'registerBLSKey cannot work: register through DVTValidator with ' +
+            'dvtActions(dvtValidator).registerBLSPublicKey({ validator, key, slot, pop }) from @aastar/core'
+        );
     }
 
     // ========================================

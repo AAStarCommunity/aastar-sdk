@@ -61,9 +61,15 @@ const KNOWN_CONTRACT_ERRORS: Record<string, (context: ErrorContext, args?: any[]
         return `Insufficient balance. Please ensure you have enough tokens.`;
     },
     
+    // `InvalidParameter(string)` on older contracts, `InvalidParameter(bytes32)` from BLSAggregator-4.14.0 (SP rc.8):
+    // the bytes32 form carries a left-aligned ASCII name such as "slashLevel".
     'InvalidParameter': (ctx, args) => {
-        const param = args?.[0] || 'unknown';
+        const param = parameterName(args?.[0]) || 'unknown';
         return `Invalid parameter: ${param}. Please check your input.`;
+    },
+
+    'InvalidThreshold': () => {
+        return 'Invalid threshold: it must be at least the minimum threshold and at most the validator count.';
     },
     
     'Unauthorized': (ctx) => {
@@ -75,6 +81,18 @@ const KNOWN_CONTRACT_ERRORS: Record<string, (context: ErrorContext, args?: any[]
         return `Account ${account} is not authorized to perform this operation. Only the contract owner can do this.`;
     }
 };
+
+/** A string argument as is; a bytes32 argument as its left-aligned printable ASCII, else as hex. */
+function parameterName(v: unknown): string | null {
+    if (typeof v !== 'string' || v === '') return null;
+    if (!/^0x[0-9a-fA-F]{64}$/.test(v)) return v;
+    const bytes = v.slice(2).match(/../g)!.map((b) => Number.parseInt(b, 16));
+    let end = bytes.length;
+    while (end > 0 && bytes[end - 1] === 0) end--;
+    const body = bytes.slice(0, end);
+    if (body.length === 0 || body.some((b) => b < 0x20 || b > 0x7e)) return v;
+    return String.fromCharCode(...body);
+}
 
 /**
  * 从错误对象中提取错误名称
