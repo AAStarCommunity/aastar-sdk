@@ -28,10 +28,13 @@ export type {
     RuleRecord, Ruleset, RulesetSource, Verdict,
 } from './rules.js';
 export {
-    DEFAULT_FACT_KINDS, DEFAULT_RULESET, FACT_KINDS, RULESET_SCHEMA, SINGLE_TRACE_INTERNAL_REASON,
+    DEFAULT_CLASSIFIER_RULESET_SHA256, DEFAULT_FACT_KINDS, DEFAULT_RULESET, FACT_KINDS, RULESET_SCHEMA, SINGLE_TRACE_INTERNAL_REASON,
     ambiguousEvents, classifierRulesetSha256, evaluate, matchGeneric, publicFunction, rulesetId, rulesetRuleIds,
     validateRuleset, wantsPrice,
 } from './rules.js';
+
+export type { ReferenceInput } from './reference.js';
+export { REFERENCE_CLASSIFIER, eventMatchesLog, referenceRecords } from './reference.js';
 
 export type { ClassifierIdentity, EvidenceAction, EvidenceBundle, EvidenceFile, EvidenceFileCheck, EvidenceInput, RunMetadata } from './bundle.js';
 export {
