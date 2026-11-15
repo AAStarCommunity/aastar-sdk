@@ -4,7 +4,7 @@ import {
     buildEvidenceBundle, parseEvidenceFile, serializeEvidenceFile, verifyEvidenceFile,
 } from '../../src/guardianAudit/bundle';
 import { canonicalDigest, canonicalJson } from '../../src/guardianAudit/canonical';
-import { EVENT_MISMATCH, REFERENCE_CLASSIFIER, eventMatchesLog } from '../../src/guardianAudit/reference';
+import { EVENT_MISMATCH, REFERENCE_CLASSIFIER, ROUTE_MISMATCH, eventMatchesLog } from '../../src/guardianAudit/reference';
 import {
     DEFAULT_CLASSIFIER_RULESET_SHA256, DEFAULT_RULESET, SINGLE_TRACE_INTERNAL_REASON, classifierRulesetSha256,
 } from '../../src/guardianAudit/rules';
@@ -20,6 +20,10 @@ const DUAL = 'dual:alchemy+quicknode';
 
 const UPDATE_PRICE = toFunctionSelector('updatePrice()');
 const SET_GUARDIAN = toFunctionSelector('setGuardian(address)');
+const PAUSE_OPERATOR = toFunctionSelector('pauseOperator(address)');
+const PAUSE_UNDERSTAKED = toFunctionSelector('pauseUnderstakedOperator(address)');
+const OPERATOR_PAUSED = 'OperatorPaused(address)';
+const OTHER = '0x7777777777777777777777777777777777777777' as Address;
 const PRICE_UPDATED = 'PriceUpdated(int256,uint256)';
 const PRICE_MODE = 'PriceModeChanged(uint8)';
 const GUARDIAN_SET = 'GuardianSet(address)';
@@ -173,6 +177,84 @@ describe('guardian-audit event check', () => {
     });
 });
 
+const CUSTOM = { name: 'custom', version: '1.0.0' };
+const ROUTE_RE = new RegExp(`^${ROUTE_MISMATCH}$`);
+
+function fileOf(bundle: unknown, runMetadata: unknown): string {
+    return `${canonicalJson({
+        schema: 'aastar.guardian-audit.evidence-file.v1',
+        bundle,
+        digest: canonicalDigest(bundle),
+        runMetadata,
+    })}\n`;
+}
+
+describe('guardian-audit route check (every classifier)', () => {
+    it('refuses a caller classify that calls an owner-only pause public', () => {
+        const a = act(0, eventOf(OPERATOR_PAUSED), attributed(direct(PAUSE_OPERATOR)));
+        expect(() => build([a], {
+            classify: () => ({ route: 'public', event: 'OperatorPaused', selector: PAUSE_UNDERSTAKED, callEvents: ['OperatorPaused'] }),
+            classifier: CUSTOM,
+        })).toThrow(ROUTE_RE);
+        const honest = build([a], {
+            classify: () => ({ route: 'owner', event: 'OperatorPaused', selector: PAUSE_OPERATOR }),
+            classifier: CUSTOM,
+        });
+        expect(honest.bundle.actions[0]!.verdict.flagged).toBe(true);
+    });
+
+    it('refuses a caller classify that drops an event the same call emitted', () => {
+        const path = direct(UPDATE_PRICE);
+        const actions = [act(2, eventOf(PRICE_UPDATED), attributed(path)), act(3, eventOf(PRICE_MODE), attributed(path))];
+        expect(() => build(actions, {
+            classify: (found) => ({
+                route: 'public', event: (found.decoded as { event: string }).event, selector: UPDATE_PRICE,
+                callEvents: [(found.decoded as { event: string }).event],
+            }),
+            classifier: CUSTOM,
+        })).toThrow(ROUTE_RE);
+    });
+
+    it('refuses a caller classify that moves an ambiguous event off the route its call decides', () => {
+        const a = act(0, eventOf(PRICE_UPDATED), attributed(direct(UPDATE_PRICE)));
+        for (const record of [
+            { route: 'owner' as const, event: 'PriceUpdated' },
+            { route: 'unattributed' as const, event: 'PriceUpdated' },
+            { route: 'public' as const, event: 'PriceUpdated', selector: UPDATE_PRICE, callEvents: ['PriceUpdated'], fields: { x: 1 } },
+        ]) {
+            expect(() => build([a], { classify: () => record, classifier: CUSTOM })).toThrow(ROUTE_RE);
+        }
+    });
+
+    it('pairs the BLS route with a bls decoded action and event routes with an event decoded action', () => {
+        const event = act(0, eventOf(GUARDIAN_SET), attributed(direct(SET_GUARDIAN)));
+        expect(() => build([event], {
+            classify: () => ({ route: 'bls', kind: 'REPUTATION' }),
+            classifier: CUSTOM,
+        })).toThrow(ROUTE_RE);
+        const bls = act(0, { kind: 'bls', event: 'GuardianSet', signature: GUARDIAN_SET }, attributed(direct(null)));
+        expect(() => build([bls], {
+            classify: () => ({ route: 'owner', event: 'GuardianSet' }),
+            classifier: CUSTOM,
+        })).toThrow(ROUTE_RE);
+    });
+
+    it('rejects a parsed public record whose selector or callEvents differ from its emitting call', () => {
+        const path = direct(UPDATE_PRICE);
+        const built = build([act(2, eventOf(PRICE_UPDATED), attributed(path)), act(3, eventOf(PRICE_MODE), attributed(path))]);
+        expect(() => parseEvidenceFile(fileOf(built.bundle, built.runMetadata))).not.toThrow();
+        const selector = structuredClone(built.bundle);
+        selector.actions[0]!.record.selector = toFunctionSelector('executeEmergencyPrice()');
+        expect(() => parseEvidenceFile(fileOf(selector, built.runMetadata))).toThrow(ROUTE_RE);
+        const dropped = structuredClone(built.bundle);
+        dropped.actions[0]!.record.callEvents = ['PriceUpdated'];
+        expect(() => parseEvidenceFile(fileOf(dropped, built.runMetadata))).toThrow(ROUTE_RE);
+        const kind = structuredClone(built.bundle);
+        (kind.actions[0]!.decoded as { kind: string }).kind = 'bls';
+        expect(() => parseEvidenceFile(fileOf(kind, built.runMetadata))).toThrow(ROUTE_RE);
+    });
+});
+
 describe('guardian-audit reference classifier', () => {
     it('uses the reference identity when classify is omitted', () => {
         const built = build([act(0, eventOf(GUARDIAN_SET), attributed(direct(SET_GUARDIAN)))]);
@@ -260,6 +342,17 @@ describe('guardian-audit reference classifier', () => {
         expect(built.bundle.state).toBe('UNATTRIBUTED');
     });
 
+    it('never routes a log of another contract or a missing emitter to the public route', () => {
+        const otherPath: Hop[] = [{ type: 'CALL', from: EOA, to: OTHER, selector: PAUSE_UNDERSTAKED }];
+        const other = act(0, eventOf(OPERATOR_PAUSED), { ...attributed(otherPath), emitter: OTHER }, { address: OTHER });
+        const { emitter: _drop, ...noEmitter } = attributed(direct(UPDATE_PRICE));
+        const unnamed = act(1, eventOf(PRICE_UPDATED), noEmitter);
+        const built = build([other, unnamed]);
+        expect(built.bundle.actions.map((a) => a.record.route)).toEqual(['unattributed', 'unattributed']);
+        const noRole = build([act(0, eventOf(PRICE_UPDATED), attributed(direct(UPDATE_PRICE)))], { roles: { entryPoint: ROLES.entryPoint } });
+        expect(noRole.bundle.actions[0]!.record.route).toBe('unattributed');
+    });
+
     it('routes an ambiguous event from a non-public SP call to the owner route with its selector', () => {
         const built = build([act(0, eventOf(PRICE_UPDATED), attributed(direct(SET_GUARDIAN)))]);
         expect(built.bundle.actions[0]!.record).toEqual({ route: 'owner', event: 'PriceUpdated', selector: SET_GUARDIAN });
@@ -310,11 +403,19 @@ describe('guardian-audit reference classifier', () => {
             act(4, eventOf(PRICE_UPDATED), null, { txHash: word('dd') }),
             act(5, { kind: 'bls' }, attributed(direct(null)), { txHash: word('ee') }),
             act(6, eventOf(PRICE_UPDATED), attributed(direct(UPDATE_PRICE)), { txHash: word('ff') }),
+            act(7, eventOf(OPERATOR_PAUSED), attributed(direct(PAUSE_UNDERSTAKED)), { txHash: word('ab') }),
+            act(8, eventOf(OPERATOR_PAUSED), attributed(direct(PAUSE_OPERATOR)), { txHash: word('ac') }),
+            act(9, eventOf(PRICE_UPDATED), attributed([{ type: 'CREATE', from: EOA, to: SP, selector: null }]), { txHash: word('ad') }),
+            act(10, eventOf(OPERATOR_PAUSED), { ...attributed([{ type: 'CALL', from: EOA, to: OTHER, selector: PAUSE_UNDERSTAKED }]), emitter: OTHER },
+                { txHash: word('ae'), address: OTHER }),
         ]);
         expect(REFERENCE_CLASSIFIER.version).toBe('1.0.0');
-        expect(built.bundle.actions.map((a) => a.verdict.flagged)).toEqual([true, true, true, true, true, false]);
+        expect(built.bundle.actions.map((a) => a.record.route)).toEqual([
+            'owner', 'public', 'public', 'unattributed', 'bls', 'public', 'public', 'owner', 'unattributed', 'unattributed',
+        ]);
+        expect(built.bundle.actions.map((a) => a.verdict.flagged)).toEqual([true, true, true, true, true, false, false, true, true, true]);
         expect(built.digest).toBe(GOLDEN);
     });
 });
 
-const GOLDEN = '0x4956663556ab0be72e266e7f4c00d76a907aeb496e81c9512bc2d50f68ceeccf' as Hex;
+const GOLDEN = '0xae07e06e25e896ffd2d407d60ae809b7c884eec24d2c33323efb491e04c0762f' as Hex;

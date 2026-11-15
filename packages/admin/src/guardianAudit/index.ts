@@ -33,8 +33,8 @@ export {
     validateRuleset, wantsPrice,
 } from './rules.js';
 
-export type { ReferenceInput } from './reference.js';
-export { REFERENCE_CLASSIFIER, eventMatchesLog, referenceRecords } from './reference.js';
+export type { FrameFact, ReferenceInput } from './reference.js';
+export { REFERENCE_CLASSIFIER, eventMatchesLog, eventRecord, frameFacts, referenceRecords } from './reference.js';
 
 export type { ClassifierIdentity, EvidenceAction, EvidenceBundle, EvidenceFile, EvidenceFileCheck, EvidenceInput, RunMetadata } from './bundle.js';
 export {

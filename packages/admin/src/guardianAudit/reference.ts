@@ -9,6 +9,7 @@ import { ambiguousEvents, publicFunction, SYMBOL_RE, type RuleRecord, type Rules
  * - An event no permissionless function emits is the owner route, whoever called (Codex #400-fix R3 H1).
  * - An ambiguous event is classified only by the SP call that emitted it, taken from the trace
  *   attribution. No usable frame means `unattributed`. The root tx selector is never used for it.
+ *   Only a log of `roles.superPaymaster` can be public; another address is `unattributed`.
  * - On the public route `callEvents` is the distinct events emitted by the same SP call, in log order.
  *   The SP call is identified by its forwarding path, so two sibling calls with the same path are
  *   merged. Merging only adds events, so it can add a flag and cannot remove one.
@@ -22,6 +23,7 @@ import { ambiguousEvents, publicFunction, SYMBOL_RE, type RuleRecord, type Rules
  * - SP / Registry event: `{ kind: 'event', event: <name>, signature: '<Name>(<types>)', ... }`.
  * - BLS aggregator action: `{ kind: 'bls', blsKind?: <name>, fields?: { ... } }`.
  * Any other shape throws, which `buildEvidenceBundle` reports as `classify failed`.
+ * The event-route records (`eventRecord`) are enforced on every classifier by the bundle.
  *
  * Identity: {@link REFERENCE_CLASSIFIER}. The name is reserved for this code. `buildEvidenceBundle`
  * rejects a caller-supplied `classify` that claims it. The version changes whenever the records this
@@ -41,6 +43,7 @@ const MAX_PATH = 1025;
 const MAX_CALL_EVENTS = 64;
 
 export const EVENT_MISMATCH = 'evidence record event does not match its log';
+export const ROUTE_MISMATCH = 'evidence record route does not match its log';
 
 function isRecord(v: unknown): v is Record<string, any> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -82,7 +85,7 @@ interface Frame {
 
 /**
  * The SP call that emitted the log: the last hop that is not a DELEGATECALL or CALLCODE. Its `to`
- * must be the log address, and `emitter`, when present, must equal it too. Null on any doubt.
+ * must be the log address, and `emitter` must be present and equal it too. Null on any doubt.
  */
 function emittingFrame(action: ReferenceInput): Frame | null {
     const a = action.attribution;
@@ -90,7 +93,7 @@ function emittingFrame(action: ReferenceInput): Frame | null {
     const path = a.forwardingPath;
     if (!Array.isArray(path) || path.length === 0 || path.length > MAX_PATH) return null;
     const address = action.address.toLowerCase();
-    if (a.emitter !== undefined && (typeof a.emitter !== 'string' || a.emitter.toLowerCase() !== address)) return null;
+    if (typeof a.emitter !== 'string' || a.emitter.toLowerCase() !== address) return null;
     const hops: string[] = [];
     for (const hop of path) {
         if (!isRecord(hop) || !HOP_TYPES.has(hop.type)) return null;
@@ -110,11 +113,6 @@ function emittingFrame(action: ReferenceInput): Frame | null {
     };
 }
 
-function eventName(decoded: Record<string, any>): string {
-    if (typeof decoded.event !== 'string' || !SYMBOL_RE.test(decoded.event)) throw new Error('reference: event');
-    return decoded.event;
-}
-
 /** One SP call: the tx and the forwarding path up to the call that entered SP. */
 function groupOf(action: ReferenceInput, frame: Frame): string {
     return `${action.txHash.toLowerCase()}|${frame.key}`;
@@ -125,21 +123,32 @@ function byLog(a: ReferenceInput, b: ReferenceInput): number {
     return a.logIndex - b.logIndex;
 }
 
+/** The SP call that emitted an event action, as the bundle computes it from the attribution. */
+export interface FrameFact {
+    selector: Hex | null;
+    /** Distinct events of the same SP call in this bundle, in log order. */
+    callEvents: string[];
+}
+
+function eventOrNull(decoded: unknown): string | null {
+    if (!isRecord(decoded) || decoded.kind !== 'event') return null;
+    return typeof decoded.event === 'string' && SYMBOL_RE.test(decoded.event) ? decoded.event : null;
+}
+
 /**
- * Records for every action, in input order. Throws on a decoded shape it does not know.
- * Deterministic in the actions: grouping is by tx and frame, and events are read in log order.
+ * Per action, in input order: the emitting SP call, or null when the action is not an event action
+ * or has no usable frame. Grouping is by tx and frame, read in log order, so it does not depend on
+ * action order. Throws only when one call emits more than 64 distinct events.
  */
-export function referenceRecords(actions: readonly ReferenceInput[], ruleset: Ruleset): RuleRecord[] {
-    const amb = ambiguousEvents(ruleset);
-    const frames = new Map<ReferenceInput, Frame | null>();
+export function frameFacts(actions: readonly ReferenceInput[]): (FrameFact | null)[] {
+    const frames = new Map<ReferenceInput, Frame>();
     const emitted = new Map<string, string[]>();
     for (const action of [...actions].sort(byLog)) {
-        const decoded = action.decoded;
-        if (!isRecord(decoded) || decoded.kind !== 'event') continue;
-        const event = eventName(decoded);
+        const event = eventOrNull(action.decoded);
+        if (event === null) continue;
         const frame = emittingFrame(action);
-        frames.set(action, frame);
         if (!frame) continue;
+        frames.set(action, frame);
         const group = groupOf(action, frame);
         const list = emitted.get(group) ?? [];
         if (!list.includes(event)) {
@@ -149,6 +158,47 @@ export function referenceRecords(actions: readonly ReferenceInput[], ruleset: Ru
         emitted.set(group, list);
     }
     return actions.map((action) => {
+        const frame = frames.get(action);
+        if (!frame) return null;
+        return { selector: frame.selector, callEvents: [...emitted.get(groupOf(action, frame))!] };
+    });
+}
+
+/**
+ * The event-route record for one event action. The bundle requires this exact record from every
+ * classifier, so a caller `classify` cannot pick the route, selector, or callEvents of an event.
+ * Public only for a log of `superPaymaster` whose emitting call has a listed public selector.
+ */
+export function eventRecord(
+    action: ReferenceInput, fact: FrameFact | null, ruleset: Ruleset, amb: Set<string>, superPaymaster: string | null,
+): RuleRecord | null {
+    const event = eventOrNull(action.decoded);
+    if (event === null) return null;
+    if (!amb.has(event)) return { route: 'owner', event };
+    if (!fact || fact.selector === null || superPaymaster === null || action.address.toLowerCase() !== superPaymaster) {
+        return { route: 'unattributed', event };
+    }
+    const pub = publicFunction(ruleset, fact.selector);
+    if (!pub) return { route: 'owner', event, selector: fact.selector };
+    return { route: 'public', event, selector: fact.selector, callEvents: [...fact.callEvents] };
+}
+
+/** `roles.superPaymaster`, lowercase, or null when absent or not an address. */
+export function superPaymasterOf(roles: Record<string, string>): string | null {
+    const sp = Object.hasOwn(roles, 'superPaymaster') ? roles.superPaymaster : undefined;
+    return typeof sp === 'string' && ADDR_RE.test(sp) ? sp.toLowerCase() : null;
+}
+
+/**
+ * Reference records for every action, in input order. Throws on a decoded shape it does not know.
+ */
+export function referenceRecords(
+    actions: readonly ReferenceInput[], ruleset: Ruleset, roles: Record<string, string>,
+): RuleRecord[] {
+    const amb = ambiguousEvents(ruleset);
+    const facts = frameFacts(actions);
+    const sp = superPaymasterOf(roles);
+    return actions.map((action, i) => {
         const decoded = action.decoded;
         if (!isRecord(decoded)) throw new Error('reference: decoded');
         if (decoded.kind === 'bls') {
@@ -163,14 +213,8 @@ export function referenceRecords(actions: readonly ReferenceInput[], ruleset: Ru
             }
             return rec;
         }
-        if (decoded.kind !== 'event') throw new Error('reference: decoded kind');
-        const event = eventName(decoded);
-        if (!amb.has(event)) return { route: 'owner', event };
-        const frame = frames.get(action) ?? null;
-        if (!frame || frame.selector === null) return { route: 'unattributed', event };
-        const pub = publicFunction(ruleset, frame.selector);
-        if (!pub) return { route: 'owner', event, selector: frame.selector };
-        const callEvents = emitted.get(groupOf(action, frame)) ?? [event];
-        return { route: 'public', event, selector: frame.selector, callEvents: [...callEvents] };
+        const rec = eventRecord(action, facts[i]!, ruleset, amb, sp);
+        if (rec === null) throw new Error('reference: decoded kind');
+        return rec;
     });
 }
