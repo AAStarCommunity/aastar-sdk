@@ -1,9 +1,13 @@
 import { getAddress, sha256, stringToBytes, type Address, type Hex } from 'viem';
 import { canonicalDigest, canonicalJson, consumeCanonicalFailure, exceedsUtf8Bytes, MAX_EVIDENCE_FILE_BYTES, snapshotPlain, type SnapshotBudget } from './canonical.js';
 import {
-    DEFAULT_FACT_KINDS, SYMBOL_RE, classifierRulesetSha256, evaluate, RULESET_SCHEMA, rulesetId,
+    DEFAULT_FACT_KINDS, SYMBOL_RE, ambiguousEvents, classifierRulesetSha256, evaluate, RULESET_SCHEMA, rulesetId,
     type FactKindMap, type RuleRecord, type Ruleset, type Verdict,
 } from './rules.js';
+import {
+    EVENT_MISMATCH, ROUTE_MISMATCH, eventMatchesLog, eventRecord, frameFacts, REFERENCE_CLASSIFIER, referenceRecords,
+    superPaymasterOf, type FrameFact,
+} from './reference.js';
 import { isProviderName, quantity } from './rpc.js';
 import type { FoundAction, ScanResult } from './scan.js';
 
@@ -32,6 +36,10 @@ function raise(message: string): never {
  * (deduped, sorted) and are not part of the digest. Two honest reruns that used different trace
  * providers therefore have the same bundle bytes.
  *
+ * `runMetadata` is self-reported by whoever wrote the file. `providers` and `traceProviders` say which
+ * providers the publisher claims to have used. Nothing here verifies that claim, and the digest does
+ * not cover it. The only checked trust input is the kind (`single` / `dual`) inside the digest.
+ *
  * The digested bundle is a function of the chain, the scope, the range, the ruleset, the fact-kind
  * map, the classifier name and version, the roles, and the chain data inside this range.
  * Store history is not an input. An action of this range with no attribution is UNATTRIBUTED.
@@ -42,8 +50,28 @@ function raise(message: string): never {
  * The caller supplies `name` and `version`. `rulesetSha256` is sha256 of the canonical JSON of the
  * validated ruleset plus the resolved fact-kind map, computed here. A caller-supplied hash is rejected.
  * `ruleset.digest` stays keccak256 of the ruleset alone. An honest rerun uses the same name, version,
- * ruleset, and fact-kind map. The reference classifier is not in this package. It is published in PR-D.
- * This identity does not embed classifier code.
+ * ruleset, and fact-kind map. This identity does not embed classifier code.
+ * With `classify` omitted the reference classifier (`reference.ts`) runs, and the identity is
+ * {@link REFERENCE_CLASSIFIER}. `buildEvidenceBundle` refuses a caller `classify` that claims that name.
+ * The name alone proves nothing about a file: anyone can write it into a bundle. A file is shown to be
+ * the reference output only by a rerun with the reference classifier that gives the same bytes.
+ *
+ * Event and route check (every classifier):
+ * - The BLS route needs `decoded.kind === 'bls'`. The owner, public, and unattributed routes need
+ *   `decoded.kind === 'event'`.
+ * - On those event routes `record.event` must equal `decoded.event` and the name in
+ *   `decoded.signature`, and `keccak256(decoded.signature)` must equal the log's `topics[0]`.
+ * - The whole event-route record must equal what the bundle computes from the log and its attribution
+ *   (`eventRecord`): route, selector, and callEvents are facts, not classifier choices. A caller
+ *   `classify` decides only BLS records.
+ * `parseEvidenceFile` repeats what it can without the ruleset and roles: the pairing, the event check,
+ * and that a public record names its emitting call's selector and events.
+ *
+ * `parseEvidenceFile` does not re-run the rules. A verdict, including `flagged: false`, is trusted only
+ * after a rerun gives the same bytes. Trace attribution is not verified either: `attributionSource` and
+ * `forwardingPath` are what the publisher's trace providers returned, and `dual` is the publisher's
+ * claim that two providers agreed. A consumer that only parses a file must not trust an unflagged
+ * public verdict.
  *
  * `verifyEvidenceFile` does three steps: (i) parse, which requires canonical bytes and a digest that
  * matches the bundle; (ii) the rerun's digest equals the file's digest and `canonicalJson(rerun.bundle)`
@@ -124,7 +152,7 @@ export interface RunMetadata {
     providers: readonly [string, string];
     sdkVersion: string;
     generatedAt: string;
-    /** Trace provider labels from this run. Deduped and sorted. Not part of the digest. */
+    /** Trace provider labels from this run. Deduped and sorted. Self-reported: not verified, not in the digest. */
     traceProviders: readonly string[];
 }
 
@@ -152,12 +180,20 @@ export interface EvidenceInput {
     chainId: number;
     ruleset: Ruleset;
     roles: Record<string, string>;
-    classify: (action: FoundAction) => RuleRecord;
+    /**
+     * Omit to use the reference classifier ({@link REFERENCE_CLASSIFIER}). A supplied function may
+     * not claim the reference name.
+     */
+    classify?: (action: FoundAction) => RuleRecord;
     providers: readonly [string, string];
     sdkVersion: string;
     generatedAt?: string;
-    /** Caller-supplied identity. `rulesetSha256` is computed and must not be passed. */
-    classifier: { name: string; version: string };
+    /**
+     * Identity of `classify`. Required with a caller-supplied `classify`. With the reference classifier
+     * it may be omitted, or must equal {@link REFERENCE_CLASSIFIER}. `rulesetSha256` is computed and
+     * must not be passed.
+     */
+    classifier?: { name: string; version: string };
     /**
      * Fact kinds for this run. Defaults to {@link DEFAULT_FACT_KINDS}.
      * The same map is enforced by `evaluate` and covered by `classifier.rulesetSha256`.
@@ -234,6 +270,9 @@ const PUBLIC_REASONS = new Set<string>([
     'classifier version is invalid',
     'classifier rulesetSha256 is invalid',
     'classifier is invalid',
+    'classifier name is reserved',
+    EVENT_MISMATCH,
+    ROUTE_MISMATCH,
 ]);
 
 function assertLabel(name: unknown): void {
@@ -273,6 +312,24 @@ function assertClassifierInput(value: unknown): { name: string; version: string 
     if (!classifierName(value.name)) raise('classifier name is invalid');
     if (!classifierVersion(value.version)) raise('classifier version is invalid');
     return { name: value.name, version: value.version };
+}
+
+/**
+ * No `classify`: the reference classifier, and the identity is {@link REFERENCE_CLASSIFIER}.
+ * A caller `classify` keeps its own identity, which may not be the reserved reference name.
+ */
+function resolveClassifier(classify: unknown, value: unknown): { name: string; version: string } {
+    if (classify === undefined) {
+        if (value === undefined) return { ...REFERENCE_CLASSIFIER };
+        const given = assertClassifierInput(value);
+        if (given.name !== REFERENCE_CLASSIFIER.name || given.version !== REFERENCE_CLASSIFIER.version) {
+            raise('classifier is invalid');
+        }
+        return given;
+    }
+    const given = assertClassifierInput(value);
+    if (given.name === REFERENCE_CLASSIFIER.name) raise('classifier name is reserved');
+    return given;
 }
 
 function assertClassifierIdentity(value: unknown): void {
@@ -589,7 +646,8 @@ function prepareAction(
 
 function classifyOne(
     prepared: PreparedAction,
-    classify: (action: FoundAction) => RuleRecord,
+    produce: (arg: unknown) => unknown,
+    expected: RuleRecord | null,
     ruleset: Ruleset,
     roles: Record<string, string>,
     budget: SnapshotBudget,
@@ -599,13 +657,15 @@ function classifyOne(
     const arg = snapshotPlain(prepared.snapshot, budget);
     let raw: unknown;
     try {
-        raw = classify(arg as FoundAction);
+        raw = produce(arg);
     } catch {
         raise('classify failed');
     }
     const record = snapshotPlain(raw, budget);
     normalizeClassifier(record, 0);
     assertRecord(record);
+    if (!eventMatchesLog(prepared.decoded, prepared.log.topics, record)) raise(EVENT_MISMATCH);
+    assertRouteMatches(record as RuleRecord, expected);
     const attribution = publishAttribution(prepared.attribution, traceNames);
     return {
         blockNumber: prepared.blockNumber,
@@ -620,6 +680,50 @@ function classifyOne(
         record: record as RuleRecord,
         verdict: evaluate(ruleset, roles, record as RuleRecord, { attribution, factKinds }),
     };
+}
+
+function decodedKind(decoded: unknown): unknown {
+    return isRecord(decoded) ? decoded.kind : undefined;
+}
+
+/**
+ * An event route must equal the record the bundle computes from the log and its attribution
+ * (`eventRecord`), whoever classified it. Only the BLS route is the classifier's own choice.
+ */
+function assertRouteMatches(record: RuleRecord, expected: RuleRecord | null): void {
+    // BLS pairing is checked by assertPublishedRoutes, which also runs on the built bundle.
+    if (record.route === 'bls') return;
+    // `expected` is null unless the decoded action is an `event` with a valid name.
+    if (expected === null || canonicalJson(record) !== canonicalJson(expected)) raise(ROUTE_MISMATCH);
+}
+
+/**
+ * Parse-time part of the same rule: route and decoded kind pair up, and a public record names the
+ * emitting call's selector and that call's events. Owner versus public needs the ruleset and roles,
+ * which the file does not carry; only a rerun checks that.
+ */
+function assertPublishedRoutes(actions: EvidenceAction[]): void {
+    let facts: (FrameFact | null)[];
+    try {
+        facts = frameFacts(actions);
+    } catch {
+        raise('evidence action is invalid');
+    }
+    actions.forEach((action, i) => {
+        const route = action.record.route;
+        const kind = decodedKind(action.decoded);
+        if (route === 'bls') {
+            if (kind !== 'bls') raise(ROUTE_MISMATCH);
+            return;
+        }
+        if (kind !== 'event') raise(ROUTE_MISMATCH);
+        if (route !== 'public') return;
+        const fact = facts[i];
+        if (!fact || fact.selector === null || fact.selector !== action.record.selector
+            || canonicalJson(fact.callEvents) !== canonicalJson(action.record.callEvents ?? [])) {
+            raise(ROUTE_MISMATCH);
+        }
+    });
 }
 
 function assertHash(value: unknown): void {
@@ -723,6 +827,7 @@ function assertAction(
     }
     if (action.attribution !== null && !isRecord(action.attribution)) raise('evidence action is invalid');
     assertRecord(action.record);
+    if (!eventMatchesLog(action.decoded, log.topics, action.record)) raise(EVENT_MISMATCH);
     if (action.attribution == null && isRecord(action.record) && action.record.route === 'public') {
         raise('public route requires attribution');
     }
@@ -772,6 +877,7 @@ function assertPublished(bundle: EvidenceBundle): void {
         if (published.attribution == null) missing += 1;
     }
     assertSorted(bundle.actions as EvidenceAction[]);
+    assertPublishedRoutes(bundle.actions as EvidenceAction[]);
     if (bundle.state === 'UNATTRIBUTED') {
         if (!assertSafeCount(bundle.unattributed)) raise('unattributed count missing');
         if (missing === 0 || bundle.unattributed !== missing) raise('unattributed count does not match');
@@ -816,7 +922,7 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
     const count = result.count;
     if (typeof count !== 'number' || count !== actionCount) raise('evidence count does not match actions');
     const classify = snap.classify;
-    if (typeof classify !== 'function') raise('classify is not a function');
+    if (classify !== undefined && typeof classify !== 'function') raise('classify is not a function');
     const generatedAtRaw = snap.generatedAt;
     const generatedAt = generatedAtRaw === undefined ? new Date().toISOString() : generatedAtRaw;
     // Labels are checked before classify. Trace names are filled in after the actions are read.
@@ -826,7 +932,7 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
         generatedAt,
         traceProviders: [],
     });
-    const classifier = assertClassifierInput(snap.classifier);
+    const classifier = resolveClassifier(classify, snap.classifier);
     const roles = assertRoleMap(snap.roles);
     const ruleset = snap.ruleset as Ruleset;
     const id = rulesetId(ruleset);
@@ -844,8 +950,23 @@ export function buildEvidenceBundle(input: EvidenceInput): { bundle: EvidenceBun
     const publishedState = missing > 0 ? 'UNATTRIBUTED' : 'COMPLETE';
     const recordBudget: SnapshotBudget = { nodes: 0, bytes: 0 };
     const traceNames = new Set<string>();
-    const packed = prepared.map((item) => classifyOne(
-        item, classify as EvidenceInput['classify'], ruleset, roles, recordBudget, traceNames, factKinds,
+    // The reference reads every action of the bundle at once, so its records are computed first.
+    // Its decoded shapes are data checked by `referenceRecords`; a throw there is `classify failed`.
+    let reference: RuleRecord[] | null = null;
+    let facts: (FrameFact | null)[];
+    try {
+        if (classify === undefined) reference = referenceRecords(prepared, ruleset, roles);
+        facts = frameFacts(prepared);
+    } catch {
+        raise('classify failed');
+    }
+    const amb = ambiguousEvents(ruleset);
+    const sp = superPaymasterOf(roles);
+    const packed = prepared.map((item, i) => classifyOne(
+        item,
+        reference === null ? (arg) => (classify as (action: FoundAction) => RuleRecord)(arg as FoundAction) : () => reference![i],
+        eventRecord(item, facts[i]!, ruleset, amb, sp),
+        ruleset, roles, recordBudget, traceNames, factKinds,
     ));
     packed.sort(byPosition);
     const bundle: EvidenceBundle = {

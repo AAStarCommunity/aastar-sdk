@@ -15,9 +15,9 @@ import { isProviderName } from './rpc.js';
  * `evaluate` reads that map. It does not infer kinds from frames, selectors, or rule text.
  * A rule id missing from the map is treated as `internalFrames`.
  *
- * The reference classifier is not in this package. It is published in PR-D.
- * Classifier identity is the caller-supplied name and version plus {@link classifierRulesetSha256}.
- * That hash covers the ruleset and the fact-kind map. It does not embed classifier code.
+ * Classifier identity is a name and version plus {@link classifierRulesetSha256}. That hash covers
+ * the ruleset and the fact-kind map. It does not embed classifier code. The reference classifier is
+ * `reference.ts`; its name is reserved, so a bundle that names it was classified by this SDK code.
  */
 export const RULESET_SCHEMA = 'aastar.guardian-audit.ruleset.v1' as const;
 
@@ -707,6 +707,16 @@ export const DEFAULT_FACT_KINDS: FactKindMap = deepFreeze({
     'publicRoute.unattributed': LOGS_ONLY,
 });
 
+/**
+ * Published value of `classifierRulesetSha256(DEFAULT_RULESET)` with {@link DEFAULT_FACT_KINDS}.
+ * Recipe, for anyone checking a bundle without this package: sha256 over the UTF-8 bytes of
+ * `canonicalJson({ factKinds, ruleset })`, where `ruleset` is the validated DEFAULT_RULESET and
+ * `factKinds` maps every rule id the ruleset declares to its kinds (absent ids as `["internalFrames"]`).
+ * A test recomputes it. Changing the ruleset or the map changes this value, and the test says so.
+ */
+export const DEFAULT_CLASSIFIER_RULESET_SHA256 =
+    '0x6a6b03756c0756c32026bc776e9aa9aed80a3f8c22cc7cdc5dc5c5e381baaa7b' as const;
+
 /** Rule ids a validated ruleset can emit from its declared entries. Not the dynamic failure ids. */
 export function rulesetRuleIds(rs: Ruleset): string[] {
     const rules = validateRuleset(rs);
@@ -730,7 +740,7 @@ export function rulesetRuleIds(rs: Ruleset): string[] {
  * sha256 of the canonical JSON of the validated ruleset plus the resolved fact-kind map.
  * Every declared rule id is present. An id missing from `factKinds` is stored as `internalFrames`,
  * which is the same policy `evaluate` applies. The caller does not supply this hash.
- * The reference classifier is not hashed here; it ships in PR-D.
+ * Classifier code is not hashed here. The reference classifier is pinned by its reserved name and version.
  */
 export function classifierRulesetSha256(rs: Ruleset, factKinds?: FactKindMap): Hex {
     const rules = validateRuleset(rs);

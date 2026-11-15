@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAddress, toFunctionSelector, type Address, type Hex } from 'viem';
+import { getAddress, keccak256, stringToBytes, toFunctionSelector, type Address, type Hex } from 'viem';
 import * as canonicalMod from '../../src/guardianAudit/canonical';
 import { canonicalDigest, canonicalJson } from '../../src/guardianAudit/canonical';
 import * as bundleMod from '../../src/guardianAudit/bundle';
@@ -26,10 +26,34 @@ function word(ch: string): Hex {
     return `0x${ch.repeat(64 / ch.length)}` as Hex;
 }
 
-function logOf(block: number, txHash: Hex, index: number, address: Address, blockHash: Hex = word('a1')): RawLog {
+const GUARDIAN_SET = 'GuardianSet(address)';
+const CALLER = '0x5555555555555555555555555555555555555555' as Address;
+
+/** A trace attribution whose emitting call is CALLER → SP with `signature`'s selector. */
+function spCall(signature: string, attributionSource = 'dual:alchemy+quicknode') {
+    return {
+        transactionSender: CALLER,
+        immediateCaller: CALLER,
+        forwardingPath: [{ type: 'CALL', from: CALLER, to: SP, selector: toFunctionSelector(signature) }],
+        emitter: SP,
+        attributionSource,
+    };
+}
+const PRICE_UPDATED = 'PriceUpdated(int256,uint256)';
+
+function topicOf(signature: string): Hex {
+    return keccak256(stringToBytes(signature));
+}
+
+/** An SP event action's decoded shape: the name and the signature that hashes to topics[0]. */
+function eventDecoded(signature: string, extra: Record<string, unknown> = {}): DecodedAction {
+    return { kind: 'event', event: signature.slice(0, signature.indexOf('(')), signature, ...extra };
+}
+
+function logOf(block: number, txHash: Hex, index: number, address: Address, blockHash: Hex = word('a1'), topic0: Hex = word('11')): RawLog {
     return {
         address,
-        topics: [word('11')],
+        topics: [topic0],
         data: '0x',
         blockNumber: `0x${block.toString(16)}` as Hex,
         blockHash,
@@ -41,7 +65,11 @@ function logOf(block: number, txHash: Hex, index: number, address: Address, bloc
 function action(over: Partial<FoundAction> & Pick<FoundAction, 'blockNumber' | 'txHash' | 'logIndex' | 'kind'>): FoundAction {
     const address = over.address ?? SP;
     const blockHash = over.blockHash ?? word('a1');
-    const decoded: DecodedAction = over.decoded ?? { kind: over.kind, callData: priceCall };
+    const decoded: DecodedAction = over.decoded ?? (over.kind === 'GENERIC'
+        ? { kind: 'bls', callData: priceCall }
+        : { kind: 'event', callData: priceCall, event: 'GuardianSet', signature: GUARDIAN_SET });
+    const signature = (decoded as { signature?: unknown }).signature;
+    const topic0 = typeof signature === 'string' ? topicOf(signature) : word('11');
     return {
         blockNumber: over.blockNumber,
         blockHash,
@@ -50,7 +78,7 @@ function action(over: Partial<FoundAction> & Pick<FoundAction, 'blockNumber' | '
         address,
         kind: over.kind,
         decoded,
-        log: over.log ?? logOf(over.blockNumber, over.txHash, over.logIndex, address, blockHash),
+        log: over.log ?? logOf(over.blockNumber, over.txHash, over.logIndex, address, blockHash, topic0),
         attribution: 'attribution' in over ? over.attribution : { attributionSource: 'dual:alchemy+quicknode' },
     };
 }
@@ -60,7 +88,7 @@ function classify(found: FoundAction): RuleRecord {
         const callData = (found.decoded as { callData?: unknown }).callData;
         return { route: 'bls', kind: 'GENERIC', fields: { target: found.address, callData } };
     }
-    return { route: 'owner', event: 'GuardianSet', fields: { who: found.address } };
+    return { route: 'owner', event: 'GuardianSet' };
 }
 
 function complete(actions: FoundAction[], resolvedPrior: FoundAction[]): ScanResult {
@@ -338,10 +366,10 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(recounted.digest).toBe(quiet.digest);
 
         const wide = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
-        wide.decoded = { kind: 'owner' };
+        wide.decoded = { kind: 'event', event: 'GuardianSet', signature: GUARDIAN_SET };
         for (let i = 0; i < 65; i++) wide.decoded[`k${i}`] = i;
         const builtWide = build({ result: complete([wide], []) });
-        expect(Object.keys(builtWide.bundle.actions[0]!.decoded)).toHaveLength(66);
+        expect(Object.keys(builtWide.bundle.actions[0]!.decoded)).toHaveLength(68);
         const logless = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
         delete (logless.log as { data?: string }).data;
         expect(() => build({ result: complete([logless], []) })).toThrow(/log is invalid/);
@@ -492,7 +520,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         left.log = {
             ...base.log,
             address: getAddress(SP),
-            topics: [word('11').toUpperCase() as Hex],
+            topics: [topicOf(GUARDIAN_SET).toUpperCase() as Hex],
             data: '0xAB' as Hex,
             blockNumber: '0x0a' as Hex,
             blockHash: word('a1').toUpperCase() as Hex,
@@ -503,7 +531,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         right.log = {
             ...base.log,
             address: SP,
-            topics: [word('11')],
+            topics: [topicOf(GUARDIAN_SET)],
             data: '0xab' as Hex,
             blockNumber: '0xa' as Hex,
             blockHash: word('a1'),
@@ -606,7 +634,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
     });
 
     it('copies an own __proto__ key without polluting Object.prototype', () => {
-        const decoded: Record<string, unknown> = { kind: 'owner' };
+        const decoded: Record<string, unknown> = { kind: 'event', event: 'GuardianSet', signature: GUARDIAN_SET };
         Object.defineProperty(decoded, '__proto__', { value: { polluted: true }, enumerable: true, configurable: true });
         const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', decoded: decoded as DecodedAction });
         const built = build({ result: complete([found], []) });
@@ -615,7 +643,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         expect(Object.hasOwn(stored, '__proto__')).toBe(true);
         expect(Object.getOwnPropertyDescriptor(stored, '__proto__')?.value).toEqual({ polluted: true });
         expect((Object.prototype as { polluted?: boolean }).polluted).toBeUndefined();
-        expect(canonicalJson(stored)).toBe('{"__proto__":{"polluted":true},"kind":"owner"}');
+        expect(canonicalJson(stored)).toBe('{"__proto__":{"polluted":true},"event":"GuardianSet","kind":"event","signature":"GuardianSet(address)"}');
     });
 
     it('evaluates the stored record, not a later read of the original', () => {
@@ -660,7 +688,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
                 result.resolvedPrior = [];
                 item.txHash = word('ff');
                 item.log.transactionHash = word('ff');
-                return { route: 'owner', event: 'GuardianSet', fields: { who: item.address } };
+                return { route: 'owner', event: 'GuardianSet' };
             },
         });
         expect(found.txHash).toBe(before);
@@ -723,8 +751,11 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
     it('lowercases a classifier selector before the published record is checked', () => {
         const selector = toFunctionSelector('updatePrice()');
         const built = build({
-            result: complete([action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' })], []),
-            classify: () => ({ route: 'public', selector: selector.toUpperCase(), event: 'PriceUpdated' }),
+            result: complete([action({
+                blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', decoded: eventDecoded(PRICE_UPDATED),
+                attribution: spCall('updatePrice()'),
+            })], []),
+            classify: () => ({ route: 'public', selector: selector.toUpperCase(), event: 'PriceUpdated', callEvents: ['PriceUpdated'] }),
         });
         expect(built.bundle.actions[0]!.record.selector).toBe(selector);
         expect(built.bundle.actions[0]!.verdict.rule).toBe('publicRoute.functions.updatePrice()');
@@ -822,7 +853,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
             },
         });
         items.length = 1;
-        found.decoded = { kind: 'owner', items } as DecodedAction;
+        found.decoded = { kind: 'event', event: 'GuardianSet', signature: GUARDIAN_SET, items } as DecodedAction;
         const built = build({ result: complete([found], []) });
         expect(extra).toBe(0);
         expect((built.bundle.actions[0]!.decoded as { items: number[] }).items).toEqual([1]);
@@ -862,9 +893,10 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         const noSelector = structuredClone(seeded.bundle);
         noSelector.actions[0]!.record = { route: 'public' };
         expect(() => parseEvidenceFile(fileForSeed(noSelector))).toThrow(/^evidence action is invalid$/);
+        // A BLS record on an event log does not pair with its decoded action.
         const recovered = structuredClone(seeded.bundle);
         recovered.actions[0]!.record = { route: 'bls' };
-        expect(parseEvidenceFile(fileForSeed(recovered)).bundle.actions[0]!.record).toEqual({ route: 'bls' });
+        expect(() => parseEvidenceFile(fileForSeed(recovered))).toThrow(/^evidence record route does not match its log$/);
 
         const hexEvent = structuredClone(seeded.bundle);
         hexEvent.actions[0]!.record = { route: 'owner', event: '0xab' };
@@ -975,13 +1007,15 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
     });
 
     it('refuses a public route whose attribution is null', () => {
-        const bare = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution: null });
+        const bare = action({
+            blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner', attribution: null, decoded: eventDecoded(PRICE_UPDATED),
+        });
         const selector = toFunctionSelector('updatePrice()');
         expect(() => build({
             result: complete([bare], []),
             classify: () => ({ route: 'public', selector, event: 'PriceUpdated' }),
-        })).toThrow(/^public route requires attribution$/);
-        const open = build({ result: complete([bare], []) });
+        })).toThrow(/^evidence record route does not match its log$/);
+        const open = build({ result: complete([bare], []), classify: () => ({ route: 'unattributed', event: 'PriceUpdated' }) });
         expect(open.bundle.state).toBe('UNATTRIBUTED');
         const forged = structuredClone(open.bundle);
         forged.actions[0]!.record = { route: 'public', selector, event: 'PriceUpdated' };
@@ -1165,18 +1199,18 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
         fn.flag = false;
         fn.flagIfCallAlsoEmits = names;
         fn.alsoReason = 'A'.repeat(1024);
-        const found = action({ blockNumber: 4, logIndex: 0, txHash: word('aa'), kind: 'owner' });
-        const record = {
-            route: 'public' as const,
-            selector: toFunctionSelector('updatePrice()'),
-            event: names[0],
-            callEvents: names,
-        };
+        // One updatePrice() call emits all 64 events, so every record's callEvents lists them all.
+        const found = names.map((name, i) => action({
+            blockNumber: 4, logIndex: i, txHash: word('aa'), kind: 'owner',
+            decoded: eventDecoded(`${name}()`), attribution: spCall('updatePrice()'),
+        }));
         const built = build({
             ruleset: rs,
-            result: complete([found], []),
-            classify: () => record,
+            result: complete(found, []),
+            classify: undefined,
+            classifier: undefined,
         });
+        expect(built.bundle.actions[0]!.record.callEvents).toEqual(names);
         expect(built.bundle.actions[0]!.verdict).toEqual({
             flagged: true,
             reasons: ['verdict reason too long'],
@@ -1215,21 +1249,23 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
                 attributionSource: 'single:alchemy',
                 forwardingPath: [SP, timelock],
             },
-            decoded: { kind: 'GENERIC', callData: toFunctionSelector(timelockSig) },
+            decoded: { kind: 'bls', callData: toFunctionSelector(timelockSig) },
         });
         const relayAction = action({
             blockNumber: 4,
             logIndex: 1,
             txHash: word('bb'),
             kind: 'owner',
-            attribution: { attributionSource: 'single' },
+            attribution: spCall(relaySig, 'single'),
+            decoded: eventDecoded('Relayed(bytes)'),
         });
         const dualRelay = action({
             blockNumber: 4,
             logIndex: 2,
             txHash: word('cc'),
             kind: 'owner',
-            attribution: { attributionSource: 'dual:alchemy+quicknode' },
+            attribution: spCall(relaySig),
+            decoded: eventDecoded('Relayed(bytes)'),
         });
         const built = build({
             result: complete([timelockAction, relayAction, dualRelay], []),
@@ -1244,7 +1280,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
                         fields: { target: timelock, callData: toFunctionSelector(timelockSig) },
                     };
                 }
-                return { route: 'public', selector: toFunctionSelector(relaySig), event: 'Relayed' };
+                return { route: 'public', selector: toFunctionSelector(relaySig), event: 'Relayed', callEvents: ['Relayed'] };
             },
         });
         const byTx = new Map(built.bundle.actions.map((item) => [item.txHash, item.verdict]));
@@ -1430,7 +1466,7 @@ describe('guardian-audit evidence bundle (unit, not acceptance)', () => {
                 kind: 'GENERIC',
                 address: timelock,
                 attribution,
-                decoded: { kind: 'GENERIC', callData: toFunctionSelector(timelockSig) },
+                decoded: { kind: 'bls', callData: toFunctionSelector(timelockSig) },
             });
             const built = build({
                 result: complete([owner, direct], []),
