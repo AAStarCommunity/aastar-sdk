@@ -162,7 +162,8 @@ export type SuperPaymasterActions = {
     /**
      * `updatePriceDVT(int256 price, uint256 updatedAt, bytes proof, uint8 chainlinkRecovered)` (SP 5.4.2 and 5.5.x).
      * `chainlinkRecovered`: 0 = Chainlink still unavailable, price-only update; 1 = Chainlink has recovered, which also
-     * exits the emergency price mode. Required: the SDK does not pick it for the caller.
+     * exits the emergency price mode. It is required and has no default for that reason: a default of 1 would leave
+     * emergency mode as a side effect of a price update, and a default of 0 would hide that the choice exists.
      * Callable by the BLSAggregator (DVT consensus) or the SP owner (break-glass).
      */
     updatePriceDVT: (args: { price: bigint, updatedAt: bigint, proof: Hex, chainlinkRecovered: 0 | 1, account?: Account | Address }) => Promise<Hash>;
