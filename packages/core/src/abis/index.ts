@@ -53,10 +53,9 @@ import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json
 // Monitoring System
 import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
-// DEV PIN (rc.8 BLS routing): SP PR #630 head d084f180, NOT merged and NOT a tag. Re-pin to the SP main
-// merge commit when #630 merges, then to the rc.8 tag before the PR that ships it opens.
-import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.0.dev-d084f180.json' with { type: 'json' };
-import DVTValidatorV080DevABIData from './pending/DVTValidator-0.8.0.dev-d084f180.json' with { type: 'json' };
+// DEV PIN (rc.8 BLS routing): SP main 9cacd4ec (#630 merge), NOT a tag. Re-pin to the rc.8 tag before the PR opens.
+import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.0.dev-9cacd4ec.json' with { type: 'json' };
+import DVTValidatorV080DevABIData from './pending/DVTValidator-0.8.0.dev-9cacd4ec.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
 // DVT layer-1 account policy (SuperPaymaster v5.4) — sender-keyed, governance-gated
@@ -200,8 +199,8 @@ export const BLSAggregatorArtifact = BLSAggregatorABIData;
 /**
  * BLSAggregator-4.14.0 and DVTValidator-0.8.0 (SP PR #630, rc.8 step 3b). DEVELOPMENT PIN ONLY: byte-identical to
  * AAStarCommunity/SuperPaymaster `abis/BLSAggregator.json` (sha256 d7009f6f30f23a62f874c585c1c1534911aaf2b0f71eb672f0a2aaa5542f2fab)
- * and `abis/DVTValidator.json` (sha256 47c89b21aa2a6c7c3c6274f90f326a837db7d4d36d7e255f928d8dfbc7720e19) at PR head
- * d084f1804770d7400db3b390959a8eab0244bfe9, which is neither merged nor tagged. A later aggregator fix may change the
+ * and `abis/DVTValidator.json` (sha256 47c89b21aa2a6c7c3c6274f90f326a837db7d4d36d7e255f928d8dfbc7720e19) at SP main
+ * 9cacd4ecf228ca3eb9fb99470861c57de12608c4 (merge of PR #630, head d084f180; same bytes), not a tag. A later aggregator fix may change the
  * ABI again before the tag. MUST be re-pinned to the rc.8 tag (with a provenance gate) before the PR that ships it
  * opens. Used only by `dvtActions().registerBLSPublicKey`; not the default ABI of any client.
  */
