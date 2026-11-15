@@ -3,7 +3,7 @@ import { keccak256, stringToBytes, toFunctionSelector, type Address, type Hex } 
 import {
     buildEvidenceBundle, parseEvidenceFile, serializeEvidenceFile, verifyEvidenceFile,
 } from '../../src/guardianAudit/bundle';
-import { canonicalDigest } from '../../src/guardianAudit/canonical';
+import { canonicalDigest, canonicalJson } from '../../src/guardianAudit/canonical';
 import { EVENT_MISMATCH, REFERENCE_CLASSIFIER, eventMatchesLog } from '../../src/guardianAudit/reference';
 import {
     DEFAULT_CLASSIFIER_RULESET_SHA256, DEFAULT_RULESET, SINGLE_TRACE_INTERNAL_REASON, classifierRulesetSha256,
@@ -127,10 +127,12 @@ describe('guardian-audit event check', () => {
         const forgedTopic = act(0, eventOf(GUARDIAN_SET), attributed(direct(SET_GUARDIAN)), { topic0: word('11') });
         expect(() => build([forgedTopic])).toThrow(new RegExp(`^${EVENT_MISMATCH}$`));
         const renamed = act(0, { ...eventOf(PRICE_UPDATED), event: 'GuardianSet' }, attributed(direct(SET_GUARDIAN)));
-        expect(() => build([renamed], {
-            classify: () => ({ route: 'owner', event: 'GuardianSet' }),
-            classifier: { name: 'custom', version: '1.0.0' },
-        })).toThrow(new RegExp(`^${EVENT_MISMATCH}$`));
+        for (const event of ['GuardianSet', 'PriceUpdated']) {
+            expect(() => build([renamed], {
+                classify: () => ({ route: 'owner', event }),
+                classifier: { name: 'custom', version: '1.0.0' },
+            })).toThrow(new RegExp(`^${EVENT_MISMATCH}$`));
+        }
         const unsigned = act(0, { kind: 'event', event: 'GuardianSet' }, attributed(direct(SET_GUARDIAN)), {
             topic0: keccak256(stringToBytes(GUARDIAN_SET)),
         });
@@ -159,17 +161,15 @@ describe('guardian-audit event check', () => {
             reasons: ['owner/guardian route: not BLS, no on-chain signer verification: GlobalPauseSet'],
             rule: 'ownerRoute.events.GlobalPauseSet',
         };
-        const text = `${JSON.stringify({
+        const text = `${canonicalJson({
             schema: 'aastar.guardian-audit.evidence-file.v1',
             bundle: forged,
             digest: canonicalDigest(forged),
             runMetadata: built.runMetadata,
-        })}`;
-        expect(() => parseEvidenceFile(text)).toThrow();
-        const file = serializeEvidenceFile(built);
-        const swapped = file.replace('"record":{"event":"GuardianSet","route":"owner"}', '"record":{"event":"GlobalPauseSet","route":"owner"}');
-        expect(swapped).not.toBe(file);
-        expect(verifyEvidenceFile(swapped, built).ok).toBe(false);
+        })}\n`;
+        expect(() => parseEvidenceFile(text)).toThrow(new RegExp(`^${EVENT_MISMATCH}$`));
+        expect(verifyEvidenceFile(text, built).reasons).toContain(EVENT_MISMATCH);
+        expect(() => parseEvidenceFile(serializeEvidenceFile(built))).not.toThrow();
     });
 });
 

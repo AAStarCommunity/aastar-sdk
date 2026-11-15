@@ -115,6 +115,11 @@ function eventName(decoded: Record<string, any>): string {
     return decoded.event;
 }
 
+/** One SP call: the tx and the forwarding path up to the call that entered SP. */
+function groupOf(action: ReferenceInput, frame: Frame): string {
+    return `${action.txHash.toLowerCase()}|${frame.key}`;
+}
+
 function byLog(a: ReferenceInput, b: ReferenceInput): number {
     if (a.blockNumber !== b.blockNumber) return a.blockNumber - b.blockNumber;
     return a.logIndex - b.logIndex;
@@ -135,7 +140,7 @@ export function referenceRecords(actions: readonly ReferenceInput[], ruleset: Ru
         const frame = emittingFrame(action);
         frames.set(action, frame);
         if (!frame) continue;
-        const group = `${action.txHash.toLowerCase()}|${frame.key}`;
+        const group = groupOf(action, frame);
         const list = emitted.get(group) ?? [];
         if (!list.includes(event)) {
             if (list.length >= MAX_CALL_EVENTS) throw new Error('reference: too many events in one call');
@@ -165,7 +170,7 @@ export function referenceRecords(actions: readonly ReferenceInput[], ruleset: Ru
         if (!frame || frame.selector === null) return { route: 'unattributed', event };
         const pub = publicFunction(ruleset, frame.selector);
         if (!pub) return { route: 'owner', event, selector: frame.selector };
-        const callEvents = emitted.get(`${action.txHash.toLowerCase()}|${frame.key}`) ?? [event];
+        const callEvents = emitted.get(groupOf(action, frame)) ?? [event];
         return { route: 'public', event, selector: frame.selector, callEvents: [...callEvents] };
     });
 }
