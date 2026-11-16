@@ -1,0 +1,1731 @@
+/**
+ * One in-flight price transaction. The key signs only the two alpha price intents, and only while the gate is open.
+ * There is no fee replacement and no cancel. A nonce the chain has consumed is cleared before any receipt lookup.
+ * Fees at signing: tip = min(quoted tip, max tip), maxFee = min(max fee, FEE_BASE_MULTIPLIER * baseFee + tip).
+ * k = FEE_BASE_MULTIPLIER = 3. A formula above the ceiling still signs at the ceiling. The stall rule covers a slow tx.
+ */
+import {
+    encodeFunctionData,
+    keccak256,
+    parseAbi,
+    parseTransaction,
+    recoverTransactionAddress,
+    type Address,
+    type Hex,
+    type TransactionSerialized,
+} from 'viem';
+import type { RawSigner, SignRequest } from './castSigner.js';
+import type { JournalAccount } from './journal.js';
+import { Journal, JOURNAL_HASH_CAP, type InFlight, type IntentKind } from './journal.js';
+import { CRITICAL_RETRY_MS, isCriticalEvent, type CriticalEvent } from './exitAlerts.js';
+import { replayRawAllowed } from './replayGuard.js';
+import { createStallMarker, deleteStallMarker, readStallMarker, type StallRecord } from './stallMarker.js';
+import { dirname, join } from 'node:path';
+
+export const UPDATE_PRICE_DATA = encodeFunctionData({
+    abi: parseAbi(['function updatePrice()']),
+    functionName: 'updatePrice',
+});
+
+/** Documented k in `k * baseFee + tip`. */
+export const FEE_BASE_MULTIPLIER = 3n;
+/** One receipt lookup. It is not on the signing queue. Each consumed nonce gets at most three. */
+export const RECEIPT_LOOKUP_MS = 5_000;
+export const RECEIPT_TRIES = 3;
+const RECEIPT_QUEUE_MAX = 8;
+const DEFAULT_STALL_SEC = 600;
+const DEFAULT_MAX_TIP_WEI = 2n * 1_000_000_000n;
+
+export interface ChainReceipt {
+    status: 'success' | 'reverted';
+    gasUsed: bigint;
+    blockHash: Hex;
+    blockNumber: bigint;
+    transactionHash: Hex;
+}
+
+export interface ChainIO {
+    chainId(): Promise<number>;
+    getTransactionCount(addr: Address, tag: 'latest' | 'pending'): Promise<bigint>;
+    getBalance(addr: Address): Promise<bigint>;
+    estimateGas(tx: { to: Address; data: Hex; from: Address }): Promise<bigint>;
+    fees(): Promise<{ baseFee: bigint; tip: bigint }>;
+    sendRawTransaction(raw: Hex): Promise<Hex>;
+    getTransactionReceipt(hash: Hex): Promise<ChainReceipt | null>;
+    getBlockByNumber(n: bigint): Promise<{ hash: Hex; number: bigint } | null>;
+    getBlockByHash(hash: Hex): Promise<{ hash: Hex; number: bigint } | null>;
+    call(tx: { to: Address; data: Hex; from?: Address; blockHash?: Hex }): Promise<Hex>;
+}
+
+export type SendRequest = { kind: 'price-super' | 'price-paymaster'; to: Address; data: Hex };
+
+export type SendResult =
+    | { status: 'included'; hash: Hex; receipt: ChainReceipt }
+    | { status: 'pending'; hash: Hex }
+    | { status: 'blocked'; inFlightHash: Hex }
+    | { status: 'refused'; reason: string };
+
+export interface MaintainResult {
+    status: 'idle' | 'pending' | 'consumed' | 'refused';
+    hash?: Hex;
+    receipt?: ChainReceipt;
+    reason?: string;
+    /** Nonce moved. The receipt, if any, is a settlement event, not this result. */
+    unseen?: boolean;
+    kind?: IntentKind;
+}
+
+/** Done or unavailable. The keeper loop drains these. They are not tied to one send call. */
+export interface SettlementEvent {
+    kind: IntentKind;
+    nonce: number;
+    outcome: 'receipt' | 'reverted' | 'unavailable';
+    hash?: Hex;
+    receipt?: ChainReceipt;
+}
+
+export interface EnabledKinds {
+    'price-super': boolean;
+    'price-paymaster': boolean;
+}
+
+/** Fields checkIntent reads. Fees are compared separately against the journal. */
+export interface IntentTx {
+    to: Address;
+    data: Hex;
+    value: bigint;
+    gas: bigint;
+    chainId: number;
+    type: string;
+    accessListEmpty: boolean;
+}
+
+export interface IntentTargets {
+    superPaymaster: Address | null;
+    paymaster: Address | null;
+    signer: Address;
+    chainId: number;
+    maxGas: bigint;
+}
+
+export interface StalenessRead {
+    updatedAtSec: bigint;
+    thresholdSec: bigint;
+}
+
+/** On-chain cachedPrice().updatedAt for the request's target, read at latest. */
+export type UpdatedAtRead = { to: Address; updatedAtSec: bigint } | 'unreadable';
+
+const REFUSED = {
+    gate: 'sender: gate closed',
+    stopping: 'sender: stopping',
+    disabled: 'sender: kind disabled',
+    corrupt: 'sender: journal corrupt',
+    unsafe: 'sender: journal unsafe',
+    refusedJournal: 'sender: journal refused',
+    nonce: 'sender: nonce read failed',
+    journal: 'sender: journal write failed',
+    gas: 'sender: gas estimate failed',
+    fee: 'sender: fee read failed',
+    sign: 'sender: sign failed',
+    request: 'sender: request rejected',
+    send: 'sender: send failed',
+    broadcast: 'sender: broadcast failed',
+    chain: 'sender: chain id mismatch',
+    chainRead: 'sender: chain id unreadable',
+    unresolved: 'sender: target unresolved',
+    stalled: 'sender: stalled',
+    paymasterIdentity: 'sender: paymaster identity pending',
+    clearStall: 'sender: stall clear refused',
+    cache: 'sender: price cache refused',
+} as const;
+
+const ALERT = {
+    foreign: 'signer nonce moved outside this keeper',
+    aboveFee: 'sender: above fee ceiling',
+    aboveGas: 'sender: above gas ceiling',
+    unavailable: 'nonce consumed, receipt unavailable',
+    marker: 'stall marker write failed',
+} as const;
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isAddress(value: string): value is Address {
+    if (value.length !== 42) return false;
+    if (value.charCodeAt(0) !== 48 || value.charCodeAt(1) !== 120) return false;
+    for (let i = 2; i < value.length; i++) {
+        const c = value.charCodeAt(i);
+        const hex = (c >= 48 && c <= 57) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);
+        if (!hex) return false;
+    }
+    return true;
+}
+
+function isData(value: string): value is Hex {
+    if (value.length < 2 || value.length > 200_000 || (value.length % 2) !== 0) return false;
+    if (value.charCodeAt(0) !== 48 || value.charCodeAt(1) !== 120) return false;
+    for (let i = 2; i < value.length; i++) {
+        const c = value.charCodeAt(i);
+        const hex = (c >= 48 && c <= 57) || (c >= 97 && c <= 102) || (c >= 65 && c <= 70);
+        if (!hex) return false;
+    }
+    return true;
+}
+
+function norm(value: string): string {
+    return value.toLowerCase();
+}
+
+function copyReceipt(receipt: ChainReceipt): ChainReceipt {
+    return {
+        status: receipt.status === 'success' ? 'success' : 'reverted',
+        gasUsed: receipt.gasUsed,
+        blockHash: receipt.blockHash,
+        blockNumber: receipt.blockNumber,
+        transactionHash: receipt.transactionHash,
+    };
+}
+
+/**
+ * The only authorization check. Price targets must be the configured addresses.
+ * An unresolved PaymasterV4 or SuperPaymaster refuses that kind.
+ * Replay uses the same gas ceiling as a new signature.
+ */
+export function checkIntent(
+    kind: string,
+    tx: IntentTx,
+    targets: IntentTargets,
+    opts?: { enforceMaxGas?: boolean },
+): boolean {
+    if (!tx || typeof tx.to !== 'string' || typeof tx.data !== 'string') return false;
+    if (tx.value !== 0n || tx.type !== 'eip1559' || tx.accessListEmpty !== true) return false;
+    if (tx.chainId !== targets.chainId) return false;
+    if (typeof tx.gas !== 'bigint' || tx.gas <= 0n) return false;
+    const enforceMaxGas = opts?.enforceMaxGas !== false;
+    if (enforceMaxGas && tx.gas > targets.maxGas) return false;
+    const to = norm(tx.to);
+    const data = norm(tx.data);
+    if (data !== norm(UPDATE_PRICE_DATA)) return false;
+    if (kind === 'price-super') {
+        return targets.superPaymaster !== null && to === norm(targets.superPaymaster);
+    }
+    if (kind === 'price-paymaster') {
+        return targets.paymaster !== null && to === norm(targets.paymaster);
+    }
+    return false;
+}
+
+/** Round up so the printed replacement is at least 125% of the stuck fee. */
+export function bumpedFee(value: bigint): bigint {
+    if (typeof value !== 'bigint' || value <= 0n) return 0n;
+    return (value * 125n + 99n) / 100n;
+}
+
+/** POSIX single quotes. A path longer than 4096, or one containing NUL, is rejected without being printed. */
+function shellQuote(value: string): string {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 4_096 || value.includes('\0')) {
+        throw new Error('sender: manual command rejected');
+    }
+    let out = "'";
+    for (let i = 0; i < value.length; i++) {
+        const ch = value[i];
+        out += ch === "'" ? `'"'"'` : ch;
+    }
+    return `${out}'`;
+}
+
+/**
+ * Operator command when --clear-stall is too early.
+ * `$RPC_URL` is a shell instruction. The keeper does not print the URL.
+ * The operator reads it from the same env file passed as --env-file.
+ */
+export function manualStallCommand(input: {
+    chainId: number;
+    nonce: number;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+    keystorePath: string;
+    passwordFilePath: string;
+    signer: string;
+}): string {
+    if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) throw new Error('sender: manual command rejected');
+    if (!Number.isSafeInteger(input.nonce) || input.nonce < 0) throw new Error('sender: manual command rejected');
+    if (typeof input.maxFeePerGas !== 'bigint' || typeof input.maxPriorityFeePerGas !== 'bigint') {
+        throw new Error('sender: manual command rejected');
+    }
+    const fee = bumpedFee(input.maxFeePerGas);
+    const tip = bumpedFee(input.maxPriorityFeePerGas);
+    return `Read RPC_URL from the keeper env file (the value is not printed). `
+        + `cast send --chain ${input.chainId} --rpc-url "$RPC_URL" --nonce ${input.nonce} `
+        + `--gas-price ${fee} --priority-gas-price ${tip} `
+        + `--keystore ${shellQuote(input.keystorePath)} --password-file ${shellQuote(input.passwordFilePath)} ${shellQuote(input.signer)} --value 0`;
+}
+
+/** The one signing gate. The request is the exact object cast will receive. */
+export function authorizeSign(kind: string, req: SignRequest, targets: IntentTargets, maxFeeWei: bigint): boolean {
+    if (!req || typeof req.to !== 'string' || typeof req.data !== 'string') return false;
+    if (typeof req.gasLimit !== 'bigint' || typeof req.maxFeePerGas !== 'bigint' || typeof req.maxPriorityFeePerGas !== 'bigint') return false;
+    if (typeof maxFeeWei !== 'bigint' || maxFeeWei <= 0n) return false;
+    if (req.maxPriorityFeePerGas < 0n || req.maxFeePerGas < req.maxPriorityFeePerGas) return false;
+    if (req.maxFeePerGas > maxFeeWei || req.maxPriorityFeePerGas > maxFeeWei) return false;
+    return checkIntent(kind, {
+        to: req.to,
+        data: req.data,
+        value: 0n,
+        gas: req.gasLimit,
+        chainId: req.chainId,
+        type: 'eip1559',
+        accessListEmpty: true,
+    }, targets);
+}
+
+/**
+ * tip = min(quoted tip, max tip). maxFee = min(max fee, 3 * baseFee + tip).
+ * When the formula is above the ceiling, the signature uses the ceiling.
+ */
+export function signingFees(
+    quoted: { baseFee: bigint; tip: bigint },
+    maxFeeWei: bigint,
+    maxTipWei: bigint,
+): { fee: bigint; tip: bigint } | null {
+    if (!quoted || typeof quoted.baseFee !== 'bigint' || typeof quoted.tip !== 'bigint') return null;
+    if (quoted.baseFee < 0n || quoted.tip < 0n || maxFeeWei <= 0n || maxTipWei < 0n) return null;
+    let tip = quoted.tip < maxTipWei ? quoted.tip : maxTipWei;
+    if (tip > maxFeeWei) tip = maxFeeWei;
+    const formula = FEE_BASE_MULTIPLIER * quoted.baseFee + tip;
+    const fee = formula > maxFeeWei ? maxFeeWei : formula;
+    if (fee < tip || fee <= 0n) return null;
+    return { fee, tip };
+}
+
+function fixedSignReason(error: unknown): string {
+    const message = error instanceof Error ? error.message : '';
+    if (message.startsWith('cast signer:') || message.startsWith('secret file:') || message.startsWith('sender:')) return message;
+    return REFUSED.sign;
+}
+
+interface Decoded {
+    to: Address;
+    data: Hex;
+    value: bigint;
+    gas: bigint;
+    chainId: number;
+    nonce: number;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+    from: Address;
+}
+
+async function decodeRaw(raw: Hex, signer: Address): Promise<Decoded | null> {
+    if (typeof raw !== 'string' || raw.length < 4 || raw.length > 200_000) return null;
+    let tx;
+    try {
+        tx = parseTransaction(raw as TransactionSerialized);
+    } catch {
+        return null;
+    }
+    let from: Address;
+    try {
+        from = await recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized });
+    } catch {
+        return null;
+    }
+    if (!tx.to || tx.type !== 'eip1559') return null;
+    if (norm(from) !== norm(signer)) return null;
+    const accessEmpty = !tx.accessList || tx.accessList.length === 0;
+    if (!accessEmpty) return null;
+    if (tx.chainId === undefined || tx.nonce === undefined || tx.gas === undefined) return null;
+    // viem parses a zero fee field of a type-2 tx as undefined; it means 0 (#447 clestons M1').
+    const maxFeePerGas = tx.maxFeePerGas ?? 0n;
+    const maxPriorityFeePerGas = tx.maxPriorityFeePerGas ?? 0n;
+    return {
+        to: tx.to,
+        data: (tx.data ?? '0x') as Hex,
+        value: tx.value ?? 0n,
+        gas: tx.gas,
+        chainId: tx.chainId,
+        nonce: tx.nonce,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        from,
+    };
+}
+
+function asIntent(decoded: Decoded): IntentTx {
+    return {
+        to: decoded.to,
+        data: decoded.data,
+        value: decoded.value,
+        gas: decoded.gas,
+        chainId: decoded.chainId,
+        type: 'eip1559',
+        accessListEmpty: true,
+    };
+}
+
+interface ReceiptSnapshot {
+    nonce: number;
+    hashes: Hex[];
+    kind: IntentKind;
+}
+
+export class Sender {
+    private readonly chain: ChainIO;
+    private readonly signer: RawSigner;
+    private readonly journal: Journal;
+    private readonly signerAddress: Address;
+    private readonly chainId: number;
+    private readonly maxGas: bigint;
+    private readonly maxFeeWei: bigint;
+    private readonly maxTipWei: bigint;
+    private readonly minUpdateIntervalSec: number;
+    private readonly priceStalenessThresholdSec: bigint;
+    private readonly stallSec: number;
+    private readonly markerPath: string;
+    private readonly readUpdatedAt: (to: Address) => Promise<UpdatedAtRead>;
+    private readonly alert: (msg: string) => void | boolean | Promise<boolean | void>;
+    private readonly criticalPending = new Map<CriticalEvent, { key: string; message: string; last: number; inflight: boolean }>();
+    private readonly now: () => number;
+    private readonly paymaster: () => Address | null;
+    private readonly superPaymaster: Address | null;
+    private readonly enabled: EnabledKinds;
+    private readonly readStaleness: () => Promise<StalenessRead | 'unreadable'>;
+    private readonly manualStep: (nonce: number, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) => string;
+    private readonly limits: Readonly<{
+        chainId: number;
+        maxGas: bigint;
+        maxFeeWei: bigint;
+        maxTipWei: bigint;
+        stallSec: number;
+        minUpdateIntervalSec: number;
+        feeMultiplier: bigint;
+        receiptLookupMs: number;
+    }>;
+    private gate: { price: boolean; pause: boolean; reason: string; validUntil: number } = {
+        price: false,
+        pause: false,
+        reason: REFUSED.gate,
+        validUntil: 0,
+    };
+    /** Set by the chain-id read that just returned. The next sync check reads it. */
+    private chainIdOk = false;
+    private queue: Promise<void> = Promise.resolve();
+    private stopping = false;
+    private readonly alerted = new Set<string>();
+    private lastLatest: bigint | null = null;
+    private hydrated = false;
+    private accountDirty = false;
+    private stalled = false;
+    private stalledNonce: number | null = null;
+    private markerFirstSentAt: number | null = null;
+    private markerDurable = false;
+    private markerFailed = false;
+    private markerUnreadable = false;
+    private markerWrite: Promise<void> | null = null;
+    private bootTask: Promise<void> | null = null;
+    /** Price-paymaster signs only after an identity check that included the current owner. */
+    private paymasterIdentity = true;
+    private readonly settlements: SettlementEvent[] = [];
+    private readonly receiptQueue: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number }[] = [];
+    private receiptTask: Promise<void> | null = null;
+    /** Resolves once the deferred lookup has been started. */
+    private receiptArm: Promise<void> | null = null;
+    /** One lookup per nonce per tick. The epoch advances in tick(). */
+    private receiptEpoch = 0;
+    private readonly receiptEpochOf = new Map<number, number>();
+    /** In-memory flight. Stall timing does not re-read the journal. */
+    private flightSnap: { nonce: number; firstSentAt: number } | null = null;
+    private stallTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Formatted staleness line, only after a read that already finished. The watchdog does not fetch one. */
+    private knownStaleness: string | null = null;
+
+    constructor(opts: {
+        chain: ChainIO;
+        signer: RawSigner;
+        journal: Journal;
+        signerAddress: Address;
+        chainId: number;
+        superPaymaster: Address | null;
+        paymaster: () => Address | null;
+        enabledKinds?: EnabledKinds;
+        maxGas?: bigint;
+        maxFeeWei: bigint;
+        maxTipWei?: bigint;
+        /**
+         * Minimum age of cachedPrice().updatedAt before a price intent may be signed.
+         * Must be greater than 0 and strictly below priceStalenessThresholdSec.
+         */
+        minUpdateIntervalSec?: number;
+        /** On-chain priceStalenessThreshold, in seconds. Required with the interval. */
+        priceStalenessThresholdSec?: bigint;
+        stallSec?: number;
+        /** Journal directory file `<network>.stalled`. Defaults to sepolia next to the journal. */
+        network?: string;
+        now?: () => number;
+        alert: (msg: string) => void | boolean | Promise<boolean | void>;
+        /** Target cachedPrice().updatedAt at latest. A throw is treated as unreadable. */
+        readUpdatedAt?: (to: Address) => Promise<UpdatedAtRead>;
+        /** Cached updatedAt plus the on-chain staleness threshold, read when a stall is declared. */
+        readStaleness?: () => Promise<StalenessRead | 'unreadable'>;
+        /** Exact command printed when --clear-stall is too early. Fees are the stuck transaction's. */
+        manualStep?: (nonce: number, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }) => string;
+    }) {
+        const stallSec = opts.stallSec ?? DEFAULT_STALL_SEC;
+        const maxTipWei = opts.maxTipWei ?? DEFAULT_MAX_TIP_WEI;
+        const maxGas = opts.maxGas ?? 500_000n;
+        const minUpdateIntervalSec = opts.minUpdateIntervalSec ?? 1;
+        const priceStalenessThresholdSec = opts.priceStalenessThresholdSec ?? 2n;
+        const network = opts.network ?? 'sepolia';
+        if (!Number.isInteger(stallSec) || stallSec <= 0 || stallSec > 86_400) throw new Error('sender: stallSec invalid');
+        if (!Number.isInteger(opts.chainId) || opts.chainId <= 0) throw new Error('sender: chainId invalid');
+        if (!Number.isInteger(minUpdateIntervalSec) || minUpdateIntervalSec <= 0 || minUpdateIntervalSec > 86_400 * 365) {
+            throw new Error('sender: minUpdateIntervalSec invalid');
+        }
+        if (typeof priceStalenessThresholdSec !== 'bigint' || priceStalenessThresholdSec <= 0n
+            || priceStalenessThresholdSec <= BigInt(minUpdateIntervalSec)) {
+            throw new Error('sender: priceStalenessThresholdSec invalid');
+        }
+        if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(network)) throw new Error('sender: network invalid');
+        if (typeof maxGas !== 'bigint' || maxGas < 21_000n || maxGas > 30_000_000n) throw new Error('sender: maxGas invalid');
+        if (typeof opts.maxFeeWei !== 'bigint' || opts.maxFeeWei <= 0n || opts.maxFeeWei > 10_000n * 1_000_000_000n) {
+            throw new Error('sender: maxFeeWei invalid');
+        }
+        if (typeof maxTipWei !== 'bigint' || maxTipWei < 0n || maxTipWei > 10_000n * 1_000_000_000n) {
+            throw new Error('sender: maxTipWei invalid');
+        }
+        if (typeof opts.signerAddress !== 'string' || !isAddress(opts.signerAddress)) throw new Error('sender: signer invalid');
+        if (opts.superPaymaster !== null && (typeof opts.superPaymaster !== 'string' || !isAddress(opts.superPaymaster))) {
+            throw new Error('sender: superPaymaster invalid');
+        }
+        if (typeof opts.paymaster !== 'function') throw new Error('sender: paymaster invalid');
+        if (typeof opts.alert !== 'function') throw new Error('sender: alert invalid');
+        const enabled = opts.enabledKinds ?? { 'price-super': true, 'price-paymaster': true };
+        if (typeof enabled['price-super'] !== 'boolean' || typeof enabled['price-paymaster'] !== 'boolean') {
+            throw new Error('sender: enabledKinds invalid');
+        }
+        const now = opts.now ?? (() => Date.now());
+        if (typeof now !== 'function') throw new Error('sender: now invalid');
+        if (opts.readUpdatedAt !== undefined && typeof opts.readUpdatedAt !== 'function') {
+            throw new Error('sender: readUpdatedAt invalid');
+        }
+        if (opts.readStaleness !== undefined && typeof opts.readStaleness !== 'function') {
+            throw new Error('sender: readStaleness invalid');
+        }
+        if (opts.manualStep !== undefined && typeof opts.manualStep !== 'function') {
+            throw new Error('sender: manualStep invalid');
+        }
+        this.chain = opts.chain;
+        this.signer = opts.signer;
+        this.journal = opts.journal;
+        this.signerAddress = opts.signerAddress;
+        this.chainId = opts.chainId;
+        this.maxGas = maxGas;
+        this.maxFeeWei = opts.maxFeeWei;
+        this.maxTipWei = maxTipWei;
+        this.minUpdateIntervalSec = minUpdateIntervalSec;
+        this.priceStalenessThresholdSec = priceStalenessThresholdSec;
+        this.stallSec = stallSec;
+        this.markerPath = join(dirname(opts.journal.path), `${network}.stalled`);
+        this.readUpdatedAt = opts.readUpdatedAt ?? (async (to) => ({ to, updatedAtSec: 0n }));
+        this.alert = opts.alert;
+        this.now = now;
+        this.paymaster = opts.paymaster;
+        this.superPaymaster = opts.superPaymaster;
+        this.enabled = { 'price-super': enabled['price-super'], 'price-paymaster': enabled['price-paymaster'] };
+        this.readStaleness = opts.readStaleness ?? (async () => 'unreadable');
+        this.manualStep = opts.manualStep ?? ((nonce, fees) => manualStallCommand({
+            chainId: opts.chainId,
+            nonce,
+            maxFeePerGas: fees.maxFeePerGas,
+            maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+            keystorePath: '<path>',
+            passwordFilePath: '<path>',
+            signer: opts.signerAddress,
+        }));
+        this.limits = Object.freeze({
+            chainId: opts.chainId,
+            maxGas,
+            maxFeeWei: opts.maxFeeWei,
+            maxTipWei,
+            stallSec,
+            minUpdateIntervalSec,
+            feeMultiplier: FEE_BASE_MULTIPLIER,
+            receiptLookupMs: RECEIPT_LOOKUP_MS,
+        });
+        Object.freeze(this.enabled);
+    }
+
+    /** One keeper loop iteration. Stall is measured from firstSentAt, not from tick counts. */
+    tick(): void {
+        this.receiptEpoch += 1;
+        this.pumpReceipts();
+        if (this.stalled && !this.markerDurable) {
+            if (this.markerFailed) this.alertOnce(ALERT.marker);
+            this.scheduleMarker();
+        }
+        this.flushCritical();
+    }
+
+    /**
+     * Synchronous re-check immediately before cast is spawned.
+     * Gate expiry, the chain-id flag, and the in-memory stall latch. No I/O.
+     */
+    authorizeSpawn(): boolean {
+        return !this.stalled && !this.markerUnreadable && this.chainIdOk && this.timeFresh() && this.gate.price;
+    }
+
+    /** Price and pause scopes stay separate. Pause does not authorize a transaction. */
+    setGate(gate: { price: boolean; pause: boolean; reason: string; validUntil?: number }): void {
+        if (!gate || typeof gate.price !== 'boolean' || typeof gate.pause !== 'boolean') throw new Error('sender: gate rejected');
+        const validUntil = gate.validUntil === undefined ? Number.MAX_SAFE_INTEGER : gate.validUntil;
+        if (!Number.isSafeInteger(validUntil) || validUntil < 0) throw new Error('sender: gate rejected');
+        const reason = typeof gate.reason === 'string' ? gate.reason.slice(0, 500) : '';
+        this.gate = { price: gate.price, pause: gate.pause, reason, validUntil };
+        if (gate.price && gate.pause) this.alerted.delete(REFUSED.gate);
+    }
+
+    /**
+     * False until a successful identity check included this PaymasterV4 owner.
+     * A grace period from a check that omitted it does not open price-paymaster.
+     */
+    setPaymasterIdentity(cleared: boolean): void {
+        if (typeof cleared !== 'boolean') throw new Error('sender: paymaster identity rejected');
+        this.paymasterIdentity = cleared;
+    }
+
+    /**
+     * Arm supervision for a flight already on disk. An overdue flight latches and alerts
+     * before this returns, so a startup exit cannot drop the deadline warning.
+     */
+    armFlight(snap: { nonce: number; firstSentAt: number } | null): void {
+        if (!snap) {
+            this.noteFlight(null);
+            return;
+        }
+        if (!Number.isSafeInteger(snap.nonce) || snap.nonce < 0) return;
+        if (!Number.isSafeInteger(snap.firstSentAt) || snap.firstSentAt < 0) return;
+        this.noteFlight({ nonce: snap.nonce, firstSentAt: snap.firstSentAt }, true);
+    }
+
+    /**
+     * Marker file before any send. An old journal stall or an overdue flight is written here.
+     * A read error latches in memory and sends stay closed.
+     */
+    boot(): Promise<void> {
+        return this.ensureBoot();
+    }
+
+    /** True only when both scopes are open and the decision has not expired. */
+    gateOpen(): boolean {
+        return this.gate.price && this.gate.pause && this.timeFresh();
+    }
+
+    /** Refuse new work. An in-flight send already on the queue still finishes. */
+    stop(): void {
+        this.stopping = true;
+        this.clearStallTimer();
+    }
+
+    /** Copies. Mutating a returned event does not change the next drain. */
+    drainSettlements(): SettlementEvent[] {
+        const out = this.settlements.map((ev) => ({
+            kind: ev.kind,
+            nonce: ev.nonce,
+            outcome: ev.outcome,
+            hash: ev.hash,
+            receipt: ev.receipt ? copyReceipt(ev.receipt) : undefined,
+        }));
+        this.settlements.length = 0;
+        return out;
+    }
+
+    /** Wait for receipt lookups already started. It is not inside the signing queue. */
+    async flushReceipt(): Promise<void> {
+        for (let i = 0; i < RECEIPT_QUEUE_MAX + 1; i++) {
+            if (this.receiptArm) await this.receiptArm;
+            const task = this.receiptTask;
+            if (!task) return;
+            await task;
+        }
+    }
+
+    /** Wait until the queue is idle, or until timeoutMs. Does not cancel the in-flight send. */
+    async drain(timeoutMs: number): Promise<void> {
+        const start = Date.now();
+        for (;;) {
+            const pending = this.queue;
+            const left = timeoutMs - (Date.now() - start);
+            if (left <= 0) return;
+            await Promise.race([pending, sleep(left)]);
+            if (this.queue === pending) return;
+        }
+    }
+
+    async send(req: SendRequest): Promise<SendResult> {
+        if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
+        const job = this.copyJob(req);
+        if (!job) return { status: 'refused', reason: REFUSED.request };
+        try {
+            return await this.enqueue(() => this.sendLocked(job));
+        } catch (error) {
+            this.noteProgress(error);
+            this.alertOnce(REFUSED.send);
+            return { status: 'refused', reason: REFUSED.send };
+        }
+    }
+
+    /** Rebroadcast or settle. Runs even when no new update is due. */
+    async maintain(): Promise<MaintainResult> {
+        if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
+        try {
+            return await this.enqueue(async () => {
+                this.flushCritical();
+                if (this.accountDirty) await this.persistAccount();
+                return this.settle();
+            });
+        } catch (error) {
+            this.noteProgress(error);
+            this.alertOnce(REFUSED.send);
+            return { status: 'refused', reason: REFUSED.send };
+        }
+    }
+
+    /** One-shot. Accepted only when the chain nonce is already past the stalled nonce. */
+    async clearStall(): Promise<{ status: 'cleared' | 'idle' | 'refused'; reason?: string }> {
+        if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
+        try {
+            return await this.enqueue(() => this.clearStallLocked());
+        } catch (error) {
+            this.noteProgress(error);
+            this.alertOnce(REFUSED.send);
+            return { status: 'refused', reason: REFUSED.send };
+        }
+    }
+
+    private enqueue<T>(job: () => Promise<T>): Promise<T> {
+        const prev = this.queue;
+        let release: () => void = () => {};
+        this.queue = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+        return prev.then(() => job()).finally(release);
+    }
+
+    private copyJob(req: SendRequest): SendRequest | null {
+        if (!req || (req.kind !== 'price-super' && req.kind !== 'price-paymaster')) return null;
+        if (typeof req.to !== 'string' || typeof req.data !== 'string') return null;
+        if (!isAddress(req.to) || !isData(req.data)) return null;
+        return { kind: req.kind, to: req.to, data: req.data };
+    }
+
+    /** Configured addresses, including a kind whose updates are disabled. */
+    private targets(): IntentTargets {
+        const pm = this.paymaster();
+        return {
+            superPaymaster: this.superPaymaster,
+            paymaster: typeof pm === 'string' && isAddress(pm) ? pm : null,
+            signer: this.signerAddress,
+            chainId: this.chainId,
+            maxGas: this.maxGas,
+        };
+    }
+
+    private timeFresh(): boolean {
+        const now = this.now();
+        return Number.isSafeInteger(now) && now >= 0 && now < this.gate.validUntil;
+    }
+
+    /** Sync. Call only after the last awaited prerequisite. */
+    private allows(kind: IntentKind): boolean {
+        if (!this.authorizeSpawn()) return false;
+        return kind === 'price-super' || kind === 'price-paymaster';
+    }
+
+    private alertOnce(key: string, message = key, event?: CriticalEvent): void {
+        if (event && isCriticalEvent(event)) {
+            if (this.alerted.has(key)) return;
+            const row = this.criticalPending.get(event);
+            if (!row) this.criticalPending.set(event, { key, message, last: -1, inflight: false });
+            this.flushCritical();
+            return;
+        }
+        if (this.alerted.has(key)) return;
+        this.alerted.add(key);
+        this.alert(message);
+    }
+
+    /** Critical delivery is recorded only when `alert` returns true. Retries use the injected clock. */
+    private flushCritical(): void {
+        const now = this.safeNow();
+        for (const [event, row] of this.criticalPending) {
+            if (row.inflight) continue;
+            if (row.last >= 0 && now - row.last < CRITICAL_RETRY_MS) continue;
+            row.last = now;
+            row.inflight = true;
+            let result: unknown;
+            try {
+                result = this.alert(row.message);
+            } catch {
+                row.inflight = false;
+                continue;
+            }
+            const finish = (value: unknown) => {
+                row.inflight = false;
+                if (value === true && this.criticalPending.get(event) === row) {
+                    this.criticalPending.delete(event);
+                    this.alerted.add(row.key);
+                }
+            };
+            if (result !== null && result !== undefined && typeof (result as { then?: unknown }).then === 'function') {
+                void Promise.resolve(result).then(finish, () => {
+                    row.inflight = false;
+                });
+                continue;
+            }
+            finish(result);
+        }
+    }
+
+    private dropCritical(event: CriticalEvent): void {
+        this.criticalPending.delete(event);
+    }
+
+    private noteProgress(error: unknown): void {
+        if (error instanceof Error && error.message === 'journal: progress deadline') {
+            this.alertOnce('sender: journal progress deadline');
+        }
+    }
+
+    private async loadJournal(): Promise<'missing' | 'ok' | 'corrupt' | 'mismatch' | 'unsafe' | 'barrier' | 'substituted'> {
+        return this.journal.load();
+    }
+
+    private async seenChain(): Promise<'ok' | 'mismatch' | 'unreadable'> {
+        let id: number;
+        try {
+            id = await this.chain.chainId();
+        } catch {
+            this.chainIdOk = false;
+            return 'unreadable';
+        }
+        if (!Number.isInteger(id) || id <= 0) {
+            this.chainIdOk = false;
+            return 'unreadable';
+        }
+        this.chainIdOk = id === this.chainId;
+        return this.chainIdOk ? 'ok' : 'mismatch';
+    }
+
+    private async sendLocked(job: SendRequest): Promise<SendResult> {
+        if (this.stopping) return { status: 'refused', reason: REFUSED.stopping };
+        await this.ensureBoot();
+        const settled = await this.settle();
+        if (settled.status === 'refused' && settled.reason && settled.reason !== REFUSED.gate) {
+            return { status: 'refused', reason: settled.reason };
+        }
+        const flight = await this.openFlight();
+        if (flight === 'bad') return { status: 'refused', reason: REFUSED.refusedJournal };
+        if (flight) {
+            const hash = flight.hashes[flight.hashes.length - 1];
+            if (!hash) return { status: 'refused', reason: REFUSED.journal };
+            return { status: 'blocked', inFlightHash: hash };
+        }
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (!this.enabled[job.kind]) return { status: 'refused', reason: REFUSED.disabled };
+        if (job.kind === 'price-paymaster' && !this.paymasterIdentity) {
+            this.alertOnce(REFUSED.paymasterIdentity);
+            return { status: 'refused', reason: REFUSED.paymasterIdentity };
+        }
+        return this.signNew(job);
+    }
+
+    private async openFlight(): Promise<InFlight | null | 'bad'> {
+        const loaded = await this.loadJournal();
+        if (loaded === 'missing') return null;
+        if (loaded !== 'ok') return 'bad';
+        await this.hydrate();
+        return this.journal.inFlight();
+    }
+
+    private journalReason(loaded: string): string {
+        if (loaded === 'mismatch') return 'sender: journal belongs to another signer';
+        if (loaded === 'unsafe') return REFUSED.unsafe;
+        if (loaded === 'corrupt') return REFUSED.corrupt;
+        if (loaded === 'barrier') return 'sender: journal barrier incomplete';
+        if (loaded === 'substituted') return 'sender: journal path substituted';
+        return REFUSED.refusedJournal;
+    }
+
+    private async settle(): Promise<MaintainResult> {
+        await this.ensureBoot();
+        const loaded = await this.loadJournal();
+        if (loaded === 'missing') return { status: 'idle' };
+        if (loaded === 'barrier') {
+            const alarm = this.journal.alarmFlight();
+            if (alarm) this.noteFlight(alarm);
+            this.alertOnce('sender: journal barrier incomplete');
+            if (this.flightSnap && (this.stalled || this.stallDueSnap(this.flightSnap))) {
+                await this.declareStall(this.flightSnap, false);
+            }
+            return { status: 'refused', reason: 'sender: journal barrier incomplete' };
+        }
+        if (loaded === 'substituted') {
+            this.alertOnce('sender: journal path substituted');
+            return { status: 'refused', reason: 'sender: journal path substituted' };
+        }
+        if (loaded !== 'ok') return { status: 'refused', reason: this.journalReason(loaded) };
+        await this.hydrate();
+        const flight = this.journal.inFlight();
+        if (!flight) {
+            this.noteFlight(null);
+            await this.noteForeign(null);
+            if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+            return { status: 'idle' };
+        }
+        return this.serviceFlight(flight);
+    }
+
+    private async serviceFlight(flight: InFlight): Promise<MaintainResult> {
+        this.noteFlight(flight);
+        const overdue = this.stallDue(flight);
+        if (this.stalled) {
+            await this.alertStall(flight.nonce);
+            if ((await this.seenChain()) === 'ok') {
+                const latest = await this.readLatest();
+                if (this.stalled && latest.kind === 'ok') {
+                    this.noteLatest(latest.latest, flight);
+                    if (latest.latest > BigInt(flight.nonce)) {
+                        await this.consume(flight, latest.latest);
+                        return { status: 'refused', reason: REFUSED.stalled };
+                    }
+                }
+            }
+            if (this.accountDirty) await this.persistAccount();
+            return { status: 'refused', reason: REFUSED.stalled };
+        }
+        if (overdue) return this.declareStall(flight, true);
+        const chain = await this.seenChain();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (chain !== 'ok') {
+            const reason = chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead;
+            this.alertOnce(reason);
+            return { status: 'refused', reason };
+        }
+        const latest = await this.readLatest();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (latest.kind !== 'ok') return { status: 'refused', reason: latest.reason };
+        if (!(await this.rememberLatest(latest.latest, flight))) {
+            return { status: 'refused', reason: REFUSED.journal };
+        }
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (latest.latest > BigInt(flight.nonce)) return this.consume(flight, latest.latest);
+        const sent = await this.rebroadcast(flight);
+        if (sent === 'above') return this.pendingOf(flight);
+        if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
+        if (sent === 'gate') return { status: 'refused', reason: REFUSED.gate };
+        if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
+        if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
+        if (sent === 'broadcast') return { status: 'refused', reason: REFUSED.broadcast };
+        return this.pendingOf(this.journal.inFlight() ?? flight);
+    }
+
+    private ensureBoot(): Promise<void> {
+        if (!this.bootTask) this.bootTask = this.adoptMarker();
+        return this.bootTask;
+    }
+
+    /** Marker first. An old stalled journal or an overdue flight is latched before any send. */
+    private async adoptMarker(): Promise<void> {
+        const marker = await readStallMarker(this.markerPath);
+        if (marker.kind === 'record') {
+            this.markerDurable = true;
+            this.latchStall(marker.record.nonce, marker.record.firstSentAt);
+            this.queueStallAlert(marker.record.nonce);
+            return;
+        }
+        if (marker.kind === 'unreadable') {
+            this.markerUnreadable = true;
+            this.stalled = true;
+            this.queueStallAlert(null);
+            return;
+        }
+        const loaded = await this.loadJournal();
+        if (loaded === 'ok') {
+            const legacy = this.journal.legacyStall();
+            if (legacy) {
+                await this.persistMarker(legacy);
+                this.latchStall(legacy.nonce, legacy.firstSentAt);
+                this.queueStallAlert(legacy.nonce);
+                return;
+            }
+            // An overdue flight is latched by declareStall after latest is read,
+            // so a mined nonce is settled with no new marker.
+            return;
+        }
+        if (loaded === 'barrier') {
+            const alarm = this.journal.alarmFlight();
+            if (alarm && this.stallDueSnap(alarm)) {
+                await this.persistMarker(alarm);
+                this.latchStall(alarm.nonce, alarm.firstSentAt);
+                this.noteFlight(alarm);
+                this.queueStallAlert(alarm.nonce);
+            }
+        }
+    }
+
+    private queueStallAlert(nonce: number | null): void {
+        if (nonce === null) {
+            this.alertOnce('stall:unreadable', 'stall marker unreadable; ALL sends closed until a human acts', 'stall');
+            return;
+        }
+        const extra = this.knownStaleness ?? 'price-staleness deadline: check on chain';
+        const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
+        this.alertOnce(`stall:${nonce}`, message, 'stall');
+    }
+
+    private scheduleMarker(snap?: StallRecord): void {
+        const rec = snap ?? (this.stalledNonce !== null && this.markerFirstSentAt !== null
+            ? { nonce: this.stalledNonce, firstSentAt: this.markerFirstSentAt }
+            : null);
+        if (!rec || this.markerDurable || this.markerWrite) return;
+        this.markerWrite = this.persistMarker(rec).finally(() => {
+            if (this.markerWrite) this.markerWrite = null;
+        });
+    }
+
+    private async persistMarker(rec: StallRecord): Promise<void> {
+        const result = await createStallMarker(this.markerPath, rec);
+        if (result === 'created' || result === 'exists') {
+            this.markerDurable = true;
+            this.markerFailed = false;
+            return;
+        }
+        this.markerFailed = true;
+        this.alertOnce(ALERT.marker);
+    }
+
+    private stallDue(flight: InFlight): boolean {
+        return this.stallDueSnap(flight);
+    }
+
+    private stallDueSnap(flight: { firstSentAt: number }): boolean {
+        const age = this.safeNow() - flight.firstSentAt;
+        return Number.isSafeInteger(age) && age >= this.stallSec * 1000;
+    }
+
+    /** In-memory latch first. The marker file is separate and is never cleared here. */
+    private latchStall(nonce: number, firstSentAt: number | null = null): void {
+        if (!this.stalled) {
+            this.stalled = true;
+            this.stalledNonce = nonce;
+        }
+        if (firstSentAt !== null && this.markerFirstSentAt === null) this.markerFirstSentAt = firstSentAt;
+    }
+
+    private noteLatest(latest: bigint, flight: InFlight | null): boolean {
+        const unexplained = flight
+            ? latest > BigInt(flight.nonce) + 1n
+            : this.lastLatest !== null && latest > this.lastLatest;
+        if (unexplained) this.alertOnce(ALERT.foreign);
+        const changed = this.lastLatest !== latest;
+        this.lastLatest = latest;
+        return changed;
+    }
+
+    private async rememberLatest(latest: bigint, flight: InFlight | null): Promise<boolean> {
+        const changed = this.noteLatest(latest, flight);
+        if (!changed && !this.accountDirty) return true;
+        return this.persistAccount();
+    }
+
+    /**
+     * Latest only. A mined nonce is settled with no new latch. Pending is not read.
+     * The latch is set before the staleness read and before the journal write.
+     */
+    private async declareStall(flight: InFlight | { nonce: number; firstSentAt: number }, keepFlight: boolean): Promise<MaintainResult> {
+        if (!this.stalled && (await this.seenChain()) === 'ok') {
+            const latest = await this.readLatest();
+            if (!this.stalled && latest.kind === 'ok' && latest.latest > BigInt(flight.nonce)) {
+                if (keepFlight) {
+                    this.noteFlight(null);
+                    return this.consume(flight as InFlight, latest.latest);
+                }
+                const loaded = await this.loadJournal();
+                if (loaded === 'ok') {
+                    await this.hydrate();
+                    const open = this.journal.inFlight();
+                    if (open && open.nonce === flight.nonce && !this.stalled) {
+                        this.noteFlight(null);
+                        return this.consume(open, latest.latest);
+                    }
+                }
+                if (!this.stalled) {
+                    this.noteFlight(null);
+                    return { status: 'idle' };
+                }
+            }
+        }
+        this.latchStall(flight.nonce, flight.firstSentAt);
+        await this.alertStall(flight.nonce);
+        await this.persistMarker({ nonce: flight.nonce, firstSentAt: flight.firstSentAt });
+        return { status: 'refused', reason: REFUSED.stalled };
+    }
+
+    /** Latch is already set. Alert before any persistence. A hanging write must not swallow this. */
+    private async alertStall(nonce: number): Promise<void> {
+        let text = this.knownStaleness;
+        if (!text) {
+            try {
+                text = await this.stalenessText();
+            } catch {
+                text = null;
+            }
+            if (text) this.knownStaleness = text;
+        }
+        const extra = text ?? 'price-staleness deadline: check on chain';
+        const message = `in-flight nonce ${nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
+        this.alertOnce(`stall:${nonce}`, message, 'stall');
+    }
+
+    private async stalenessText(): Promise<string> {
+        let read: StalenessRead | 'unreadable' | 'timeout';
+        try {
+            read = await this.withTimeout(this.readStaleness(), this.limits.receiptLookupMs);
+        } catch {
+            read = 'unreadable';
+        }
+        if (read === 'timeout') read = 'unreadable';
+        if (read === 'unreadable' || typeof read.updatedAtSec !== 'bigint' || typeof read.thresholdSec !== 'bigint') {
+            return 'SuperPaymaster price staleness unreadable';
+        }
+        if (read.updatedAtSec < 0n || read.thresholdSec < 0n) return 'SuperPaymaster price staleness unreadable';
+        const deadlineSec = read.updatedAtSec + read.thresholdSec;
+        // Date rejects values past ±8_640_000_000_000_000 ms. A larger second count must not throw.
+        if (deadlineSec > 8_640_000_000_000n) return 'staleness unreadable';
+        const deadlineMs = Number(deadlineSec) * 1000;
+        if (!Number.isFinite(deadlineMs) || Math.abs(deadlineMs) > 8_640_000_000_000_000) return 'staleness unreadable';
+        const iso = new Date(deadlineMs).toISOString();
+        const left = deadlineMs - this.safeNow();
+        const minutes = left <= 0 ? 0 : Math.ceil(left / 60_000);
+        return `SuperPaymaster price goes stale at ${iso} (in ${minutes} min)`;
+    }
+
+    private async clearStallLocked(): Promise<{ status: 'cleared' | 'idle' | 'refused'; reason?: string }> {
+        await this.ensureBoot();
+        if (this.markerUnreadable) return { status: 'refused', reason: REFUSED.clearStall };
+        const loaded = await this.loadJournal();
+        if (loaded !== 'missing' && loaded !== 'ok') return { status: 'refused', reason: this.journalReason(loaded) };
+        if (loaded === 'ok') await this.hydrate();
+        const flight = loaded === 'ok' ? this.journal.inFlight() : null;
+        if (!this.stalled && !flight && !this.markerDurable) return { status: 'idle' };
+        const chain = await this.seenChain();
+        if (chain !== 'ok') return { status: 'refused', reason: chain === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        const nonce = this.stalledNonce ?? flight?.nonce ?? null;
+        const fees = {
+            maxFeePerGas: flight?.maxFeePerGas ?? 0n,
+            maxPriorityFeePerGas: flight?.maxPriorityFeePerGas ?? 0n,
+        };
+        if (nonce === null) {
+            this.alert(this.manualStep(0, fees));
+            return { status: 'refused', reason: REFUSED.clearStall };
+        }
+        const latest = await this.readLatest();
+        if (latest.kind !== 'ok') return { status: 'refused', reason: latest.reason };
+        if (latest.latest > BigInt(nonce)) {
+            const snapshot: ReceiptSnapshot | null = flight
+                ? { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind }
+                : null;
+            if (loaded === 'ok') {
+                try {
+                    await this.journal.commit({ inFlight: null, lastLatest: latest.latest });
+                } catch (error) {
+                    this.noteProgress(error);
+                    return { status: 'refused', reason: REFUSED.journal };
+                }
+            }
+            const removed = await deleteStallMarker(this.markerPath);
+            if (removed === 'failed') return { status: 'refused', reason: REFUSED.journal };
+            this.stalled = false;
+            this.stalledNonce = null;
+            this.markerFirstSentAt = null;
+            this.markerDurable = false;
+            this.markerFailed = false;
+            this.lastLatest = latest.latest;
+            this.noteFlight(null);
+            this.accountDirty = false;
+            this.dropCritical('stall');
+            this.alerted.delete(`stall:${nonce}`);
+            if (snapshot) this.deferReceipt(snapshot);
+            return { status: 'cleared' };
+        }
+        this.alert(`stall clear refused: chain latest is not past nonce ${nonce}. ${this.manualStep(nonce, fees)}`);
+        return { status: 'refused', reason: REFUSED.clearStall };
+    }
+
+    private noteNonce(latest: bigint, pending: bigint, flight: InFlight | null): boolean {
+        const unexplained = flight
+            ? latest > BigInt(flight.nonce) + 1n || (latest <= BigInt(flight.nonce) && pending > BigInt(flight.nonce) + 1n)
+            : (this.lastLatest !== null && latest > this.lastLatest) || pending > latest;
+        if (unexplained) this.alertOnce(ALERT.foreign);
+        const changed = this.lastLatest !== latest;
+        this.lastLatest = latest;
+        return changed;
+    }
+
+    private async rememberNonce(latest: bigint, pending: bigint, flight: InFlight | null): Promise<boolean> {
+        const changed = this.noteNonce(latest, pending, flight);
+        if (!changed && !this.accountDirty) return true;
+        return this.persistAccount();
+    }
+
+    private async noteForeign(flight: InFlight | null): Promise<void> {
+        if (!flight) {
+            const latest = await this.readLatest();
+            if (latest.kind !== 'ok') return;
+            const unexplained = this.lastLatest !== null && latest.latest > this.lastLatest;
+            if (unexplained) this.alertOnce(ALERT.foreign);
+            const changed = this.lastLatest !== latest.latest;
+            this.lastLatest = latest.latest;
+            if (changed || this.accountDirty) await this.persistAccount();
+            return;
+        }
+        const latest = await this.readLatest();
+        if (latest.kind !== 'ok') return;
+        await this.rememberLatest(latest.latest, flight);
+    }
+
+    /**
+     * Durable clear of the flight first. The stall latch stays until --clear-stall.
+     * The receipt lookup is outside this queue.
+     */
+    private async consume(flight: InFlight, latest?: bigint): Promise<MaintainResult> {
+        const snapshot: ReceiptSnapshot = { nonce: flight.nonce, hashes: [...flight.hashes], kind: flight.kind };
+        try {
+            await this.journal.commit({
+                inFlight: null,
+                lastLatest: latest ?? this.lastLatest,
+            });
+        } catch (error) {
+            this.noteProgress(error);
+            return { status: 'refused', reason: REFUSED.journal };
+        }
+        this.noteFlight(null);
+        this.deferReceipt(snapshot);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        return { status: 'consumed', unseen: true, kind: flight.kind };
+    }
+
+    /** After the journal commit returns. The lookup is not on the signing queue. */
+    private deferReceipt(snapshot: ReceiptSnapshot): void {
+        if (this.receiptQueue.some((job) => job.nonce === snapshot.nonce)) return;
+        const hashes: Hex[] = [];
+        const source = snapshot.hashes.length > JOURNAL_HASH_CAP
+            ? snapshot.hashes.slice(snapshot.hashes.length - JOURNAL_HASH_CAP)
+            : snapshot.hashes;
+        if (source.length > JOURNAL_HASH_CAP) return;
+        for (let i = 0; i < source.length; i++) {
+            const hash = source[i];
+            if (typeof hash !== 'string' || hash.length < 4 || hash.length > 66) continue;
+            hashes.push(hash);
+        }
+        if (this.receiptQueue.length >= RECEIPT_QUEUE_MAX) {
+            this.settlements.push({ kind: snapshot.kind, nonce: snapshot.nonce, outcome: 'unavailable' });
+            this.alertOnce(`${ALERT.unavailable}:${snapshot.nonce}`, ALERT.unavailable);
+            return;
+        }
+        this.receiptQueue.push({ nonce: snapshot.nonce, hashes, kind: snapshot.kind, tries: 0 });
+        this.receiptArm = Promise.resolve().then(() => {
+            this.pumpReceipts();
+        });
+    }
+
+    /** One bounded lookup per queued nonce for this tick. A running lookup is not cancelled. */
+    private pumpReceipts(): void {
+        if (this.receiptTask) return;
+        let job: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number } | undefined;
+        for (let i = 0; i < this.receiptQueue.length; i++) {
+            const item = this.receiptQueue[i];
+            if (!item || item.tries >= RECEIPT_TRIES) continue;
+            if (this.receiptEpochOf.get(item.nonce) === this.receiptEpoch) continue;
+            job = item;
+            break;
+        }
+        if (!job) return;
+        this.receiptEpochOf.set(job.nonce, this.receiptEpoch);
+        job.tries += 1;
+        const task = this.lookupReceipt(job).finally(() => {
+            if (this.receiptTask === task) this.receiptTask = null;
+            this.pumpReceipts();
+        });
+        this.receiptTask = task;
+    }
+
+    private dropReceipt(nonce: number): void {
+        for (let i = 0; i < this.receiptQueue.length; i++) {
+            if (this.receiptQueue[i]?.nonce !== nonce) continue;
+            this.receiptQueue.splice(i, 1);
+            return;
+        }
+    }
+
+    private async lookupReceipt(snapshot: { nonce: number; hashes: Hex[]; kind: IntentKind; tries: number }): Promise<void> {
+        const found = await this.withTimeout(this.findReceipt(snapshot.hashes), this.limits.receiptLookupMs);
+        if (found === 'timeout' || found === 'unread' || found === 'none') {
+            if (snapshot.tries < RECEIPT_TRIES) return;
+            this.dropReceipt(snapshot.nonce);
+            this.settlements.push({ kind: snapshot.kind, nonce: snapshot.nonce, outcome: 'unavailable' });
+            this.alertOnce(`${ALERT.unavailable}:${snapshot.nonce}`, ALERT.unavailable);
+            return;
+        }
+        this.dropReceipt(snapshot.nonce);
+        this.settlements.push({
+            kind: snapshot.kind,
+            nonce: snapshot.nonce,
+            outcome: found.status === 'success' ? 'receipt' : 'reverted',
+            hash: found.transactionHash,
+            receipt: copyReceipt(found),
+        });
+    }
+
+    private withTimeout<T>(work: Promise<T>, ms: number): Promise<T | 'timeout'> {
+        return new Promise((resolve) => {
+            const timer = setTimeout(() => resolve('timeout'), ms);
+            work.then(
+                (value) => {
+                    clearTimeout(timer);
+                    resolve(value);
+                },
+                () => {
+                    clearTimeout(timer);
+                    resolve('timeout');
+                },
+            );
+        });
+    }
+
+    private async findReceipt(hashes: readonly Hex[]): Promise<'unread' | 'none' | ChainReceipt> {
+        let unread = false;
+        const list = hashes.length > JOURNAL_HASH_CAP ? hashes.slice(hashes.length - JOURNAL_HASH_CAP) : hashes;
+        for (const hash of list) {
+            let receipt: ChainReceipt | null;
+            try {
+                receipt = await this.chain.getTransactionReceipt(hash);
+            } catch {
+                unread = true;
+                continue;
+            }
+            if (!receipt) continue;
+            const got = typeof receipt.transactionHash === 'string' ? receipt.transactionHash.toLowerCase() : '';
+            if (got !== hash.toLowerCase()) continue;
+            let block: { hash: Hex; number: bigint } | null;
+            try {
+                block = await this.chain.getBlockByNumber(receipt.blockNumber);
+            } catch {
+                unread = true;
+                continue;
+            }
+            if (!block || typeof block.hash !== 'string' || typeof block.number !== 'bigint') {
+                unread = true;
+                continue;
+            }
+            if (block.number !== receipt.blockNumber || block.hash.toLowerCase() !== receipt.blockHash.toLowerCase()) {
+                unread = true;
+                continue;
+            }
+            return copyReceipt(receipt);
+        }
+        return unread ? 'unread' : 'none';
+    }
+
+    private pendingOf(flight: InFlight): MaintainResult {
+        const hash = flight.hashes[flight.hashes.length - 1];
+        return hash ? { status: 'pending', hash } : { status: 'refused', reason: REFUSED.journal };
+    }
+
+    private aboveCeiling(decoded: Decoded): boolean {
+        return decoded.maxFeePerGas > this.maxFeeWei || decoded.maxPriorityFeePerGas > this.maxFeeWei;
+    }
+
+    /** Journal metadata must match the decoded raw. Replay applies the current gas cap. */
+    private async decodedFlight(flight: InFlight): Promise<Decoded | 'gas' | null> {
+        const raw = flight.raws[flight.raws.length - 1];
+        if (!raw) return null;
+        const decoded = await decodeRaw(raw, this.signerAddress);
+        if (!decoded) return null;
+        if (decoded.nonce !== flight.nonce || decoded.gas !== flight.gasLimit) return null;
+        if (decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) return null;
+        if (decoded.gas > this.maxGas) return 'gas';
+        if (!checkIntent(flight.kind, asIntent(decoded), this.targets())) return null;
+        return decoded;
+    }
+
+    /** Same raw. Free when this raw was already charged. A fee above the current ceiling is not sent. */
+    private async rebroadcast(flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'above' | 'journal' | 'broadcast'> {
+        const loaded = await this.loadJournal();
+        if (loaded !== 'ok') return 'refused';
+        const current = this.journal.inFlight();
+        if (!current) return 'refused';
+        const raw = current.raws[current.raws.length - 1];
+        if (!raw) return 'refused';
+        const decoded = await this.decodedFlight(current);
+        if (decoded === 'gas') {
+            this.alertOnce(ALERT.aboveGas);
+            return 'above';
+        }
+        if (!decoded) return 'refused';
+        if (this.aboveCeiling(decoded)) {
+            this.alertOnce(ALERT.aboveFee);
+            return 'above';
+        }
+        const entry = {
+            nonce: current.nonce,
+            kind: current.kind,
+            to: decoded.to,
+            data: decoded.data,
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
+        };
+        const allowed = await replayRawAllowed(raw, entry, { chainId: this.chainId, signer: this.signerAddress }, (kind, tx) => {
+            return checkIntent(kind, {
+                to: tx.to,
+                data: tx.data,
+                value: 0n,
+                gas: tx.gas,
+                chainId: this.chainId,
+                type: 'eip1559',
+                accessListEmpty: true,
+            }, this.targets());
+        });
+        if (!allowed) return 'refused';
+        return this.broadcast(raw, current);
+    }
+
+    private async signNew(job: SendRequest): Promise<SendResult> {
+        const quoted = await this.readFees();
+        if (typeof quoted === 'string') return { status: 'refused', reason: quoted };
+        let estimated: bigint;
+        try {
+            estimated = await this.chain.estimateGas({ to: job.to, data: job.data, from: this.signerAddress });
+        } catch {
+            return { status: 'refused', reason: REFUSED.gas };
+        }
+        if (typeof estimated !== 'bigint' || estimated <= 0n || estimated > this.maxGas) return { status: 'refused', reason: REFUSED.gas };
+        let gasLimit = estimated + estimated / 5n;
+        if (gasLimit > this.maxGas) gasLimit = this.maxGas;
+        if (gasLimit < estimated) return { status: 'refused', reason: REFUSED.gas };
+        const fees = signingFees(quoted, this.maxFeeWei, this.maxTipWei);
+        if (!fees) return { status: 'refused', reason: REFUSED.fee };
+        const nonces = await this.readNonces();
+        if (nonces.kind !== 'ok') return { status: 'refused', reason: nonces.reason };
+        if (nonces.pending > BigInt(Number.MAX_SAFE_INTEGER)) return { status: 'refused', reason: REFUSED.nonce };
+        const nonce = Number(nonces.pending);
+        const opened = await this.ensureJournal();
+        if (opened !== 'ok') return { status: 'refused', reason: opened };
+        if (!(await this.rememberNonce(nonces.latest, nonces.pending, null))) {
+            return { status: 'refused', reason: REFUSED.journal };
+        }
+        if (this.journal.inFlight()) return { status: 'refused', reason: REFUSED.journal };
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        const request: SignRequest = {
+            to: job.to,
+            data: job.data,
+            nonce,
+            gasLimit,
+            maxFeePerGas: fees.fee,
+            maxPriorityFeePerGas: fees.tip,
+            chainId: this.chainId,
+        };
+        if (!authorizeSign(job.kind, request, this.targets(), this.maxFeeWei)) {
+            this.alertOnce(`${REFUSED.unresolved}:${job.kind}`, REFUSED.unresolved);
+            return { status: 'refused', reason: REFUSED.request };
+        }
+        const beforeSign = await this.seenChain();
+        if (beforeSign !== 'ok') return { status: 'refused', reason: beforeSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        const cache = await this.readCache(job.to);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (!this.authorizeSpawn()) return this.chainIdOk ? this.refuseGate() : { status: 'refused', reason: REFUSED.chainRead };
+        if (!this.intervalAllows(cache, job.to)) {
+            this.alertOnce(REFUSED.cache);
+            return { status: 'refused', reason: REFUSED.cache };
+        }
+        if (!this.allows(job.kind)) return this.refuseGate();
+        const signed = await this.signOf(request);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (!signed.ok) {
+            this.alertOnce(signed.reason);
+            return { status: 'refused', reason: signed.reason };
+        }
+        const decoded = await decodeRaw(signed.raw, this.signerAddress);
+        if (!decoded) return { status: 'refused', reason: REFUSED.sign };
+        if (!checkIntent(job.kind, asIntent(decoded), this.targets())) return { status: 'refused', reason: REFUSED.sign };
+        if (decoded.nonce !== nonce || decoded.gas !== gasLimit || decoded.maxFeePerGas !== fees.fee || decoded.maxPriorityFeePerGas !== fees.tip) {
+            return { status: 'refused', reason: REFUSED.sign };
+        }
+        const hash = keccak256(signed.raw);
+        const entry: InFlight = {
+            kind: job.kind,
+            nonce: decoded.nonce,
+            raws: [signed.raw],
+            hashes: [hash],
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
+            attempts: 0,
+            firstSentAt: this.safeNow(),
+        };
+        this.noteFlight(entry);
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (!(await replayRawAllowed(signed.raw, {
+            nonce: decoded.nonce,
+            kind: job.kind,
+            to: decoded.to,
+            data: decoded.data,
+            gasLimit: decoded.gas,
+            maxFeePerGas: decoded.maxFeePerGas,
+            maxPriorityFeePerGas: decoded.maxPriorityFeePerGas,
+        }, { chainId: this.chainId, signer: this.signerAddress }, () => true))) {
+            if (!this.stalled) this.noteFlight(null);
+            return { status: 'refused', reason: REFUSED.sign };
+        }
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        const afterSign = await this.seenChain();
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        if (afterSign !== 'ok') {
+            this.noteFlight(null);
+            return { status: 'refused', reason: afterSign === 'mismatch' ? REFUSED.chain : REFUSED.chainRead };
+        }
+        if (!this.allows(job.kind)) {
+            this.noteFlight(null);
+            return this.refuseGate();
+        }
+        try {
+            await this.journal.writeInFlight(entry);
+        } catch (error) {
+            this.noteProgress(error);
+            if (!this.stalled) this.noteFlight(null);
+            return { status: 'refused', reason: REFUSED.journal };
+        }
+        if (this.stalled) return { status: 'refused', reason: REFUSED.stalled };
+        const sent = await this.broadcast(signed.raw, entry);
+        if (sent === 'gate') return this.refuseGate();
+        if (sent === 'chain') return { status: 'refused', reason: REFUSED.chain };
+        if (sent === 'above') return { status: 'refused', reason: REFUSED.fee };
+        if (sent === 'journal') return { status: 'refused', reason: REFUSED.journal };
+        if (sent === 'refused') return { status: 'refused', reason: REFUSED.refusedJournal };
+        if (sent === 'broadcast') return { status: 'refused', reason: REFUSED.broadcast };
+        return { status: 'pending', hash };
+    }
+
+    /**
+     * The fresh chain-id read is the last await before the synchronous gate check and the broadcast.
+     */
+    private async broadcast(raw: Hex, flight: InFlight): Promise<'ok' | 'refused' | 'gate' | 'chain' | 'above' | 'journal' | 'broadcast'> {
+        const decoded = await decodeRaw(raw, this.signerAddress);
+        if (this.stalled) return 'gate';
+        if (!decoded || decoded.maxFeePerGas !== flight.maxFeePerGas || decoded.maxPriorityFeePerGas !== flight.maxPriorityFeePerGas) {
+            return 'refused';
+        }
+        if (this.aboveCeiling(decoded)) {
+            this.alertOnce(ALERT.aboveFee);
+            return 'above';
+        }
+        const chainOk = await this.seenChain();
+        if (this.stalled) return 'gate';
+        if (chainOk !== 'ok') return 'chain';
+        if (!this.allows(flight.kind)) return 'gate';
+        let broadcastError = false;
+        try {
+            await this.chain.sendRawTransaction(raw);
+        } catch {
+            broadcastError = true;
+        }
+        if (broadcastError) {
+            this.alertOnce(REFUSED.broadcast);
+            return 'broadcast';
+        }
+        return 'ok';
+    }
+
+    private async hydrate(): Promise<void> {
+        if (this.hydrated) return;
+        const account: JournalAccount = this.journal.account();
+        if (this.lastLatest === null) this.lastLatest = account.lastLatest;
+        this.hydrated = true;
+    }
+
+    private async ensureJournal(): Promise<'ok' | string> {
+        const loaded = await this.loadJournal();
+        if (loaded === 'missing') {
+            try {
+                await this.journal.init();
+            } catch (error) {
+                this.noteProgress(error);
+                return REFUSED.journal;
+            }
+            this.hydrated = true;
+            return 'ok';
+        }
+        if (loaded !== 'ok') return this.journalReason(loaded);
+        await this.hydrate();
+        return 'ok';
+    }
+
+    private async persistAccount(): Promise<boolean> {
+        try {
+            await this.journal.commit({ lastLatest: this.lastLatest });
+            this.accountDirty = false;
+            return true;
+        } catch (error) {
+            this.noteProgress(error);
+            this.accountDirty = true;
+            return false;
+        }
+    }
+
+    private safeNow(): number {
+        const now = this.now();
+        return Number.isSafeInteger(now) && now >= 0 ? now : 0;
+    }
+
+    private refuseGate(): SendResult {
+        this.alertOnce(REFUSED.gate);
+        return { status: 'refused', reason: REFUSED.gate };
+    }
+
+    private async readFees(): Promise<{ baseFee: bigint; tip: bigint } | string> {
+        try {
+            const quoted = await this.chain.fees();
+            const baseFee = quoted?.baseFee;
+            const tip = quoted?.tip;
+            if (typeof baseFee !== 'bigint' || typeof tip !== 'bigint' || baseFee < 0n || tip < 0n) return REFUSED.fee;
+            return { baseFee, tip };
+        } catch {
+            return REFUSED.fee;
+        }
+    }
+
+    private async readLatest(): Promise<{ kind: 'ok'; latest: bigint } | { kind: 'stop'; reason: string }> {
+        try {
+            const latest = await this.chain.getTransactionCount(this.signerAddress, 'latest');
+            if (typeof latest !== 'bigint' || latest < 0n) return { kind: 'stop', reason: REFUSED.nonce };
+            return { kind: 'ok', latest };
+        } catch {
+            return { kind: 'stop', reason: REFUSED.nonce };
+        }
+    }
+
+    private noteFlight(snap: { nonce: number; firstSentAt: number } | null, immediate = false): void {
+        if (!snap) {
+            this.flightSnap = null;
+            this.clearStallTimer();
+            return;
+        }
+        const next = { nonce: snap.nonce, firstSentAt: snap.firstSentAt };
+        const same = this.flightSnap !== null
+            && this.flightSnap.nonce === next.nonce
+            && this.flightSnap.firstSentAt === next.firstSentAt;
+        this.flightSnap = next;
+        if (!same) this.armWatchdog(next, immediate);
+    }
+
+    private clearStallTimer(): void {
+        if (this.stallTimer) clearTimeout(this.stallTimer);
+        this.stallTimer = null;
+    }
+
+    /**
+     * Wall-clock delay from the same clock `stallDue` uses. The callback latches on its own.
+     * It does not enter the sender queue and it does not keep the process alive.
+     * An already-overdue flight is latched here only when `immediate` is set (startup).
+     * A maintain pass that is already overdue settles latest first, in `declareStall`.
+     */
+    private armWatchdog(snap: { nonce: number; firstSentAt: number }, immediate = false): void {
+        this.clearStallTimer();
+        const dueAt = snap.firstSentAt + this.stallSec * 1000;
+        const delay = dueAt - this.safeNow();
+        if (!Number.isFinite(delay)) return;
+        if (delay <= 0) {
+            if (immediate) this.fireWatchdog(snap);
+            return;
+        }
+        const maxDelay = 2_147_483_647;
+        const wait = delay > maxDelay ? maxDelay : delay;
+        const timer = setTimeout(() => {
+            this.stallTimer = null;
+            if (wait === maxDelay && this.safeNow() < dueAt) {
+                this.armWatchdog(snap, false);
+                return;
+            }
+            this.fireWatchdog(snap);
+        }, wait);
+        timer.unref?.();
+        this.stallTimer = timer;
+    }
+
+    /** Synchronous. No chain read, no journal write, no queue. */
+    private fireWatchdog(snap: { nonce: number; firstSentAt: number }): void {
+        if (this.stopping) return;
+        if (!this.flightSnap || this.flightSnap.nonce !== snap.nonce || this.flightSnap.firstSentAt !== snap.firstSentAt) return;
+        if (!this.stallDueSnap(snap) && !this.stalled) {
+            this.armWatchdog(snap, false);
+            return;
+        }
+        this.latchStall(snap.nonce, snap.firstSentAt);
+        const extra = this.knownStaleness ?? 'price-staleness deadline: check on chain';
+        const message = `in-flight nonce ${snap.nonce} not included after ${this.stallSec}s; ALL sends closed until a human acts; ${extra}`;
+        this.alertOnce(`stall:${snap.nonce}`, message, 'stall');
+        this.scheduleMarker(snap);
+    }
+
+    private async readNonces(): Promise<{ kind: 'ok'; latest: bigint; pending: bigint } | { kind: 'stop'; reason: string }> {
+        try {
+            const latest = await this.chain.getTransactionCount(this.signerAddress, 'latest');
+            const pending = await this.chain.getTransactionCount(this.signerAddress, 'pending');
+            if (typeof latest !== 'bigint' || typeof pending !== 'bigint' || latest < 0n || pending < 0n || pending < latest) {
+                return { kind: 'stop', reason: REFUSED.nonce };
+            }
+            return { kind: 'ok', latest, pending };
+        } catch {
+            return { kind: 'stop', reason: REFUSED.nonce };
+        }
+    }
+
+    /** Last await before the synchronous interval decision. Malformed and thrown reads send nothing. */
+    private async readCache(to: Address): Promise<UpdatedAtRead> {
+        let read: UpdatedAtRead;
+        try {
+            read = await this.readUpdatedAt(to);
+        } catch {
+            return 'unreadable';
+        }
+        if (read === 'unreadable') return 'unreadable';
+        if (!read || typeof read.to !== 'string' || typeof read.updatedAtSec !== 'bigint') return 'unreadable';
+        if (!isAddress(read.to) || read.updatedAtSec < 0n) return 'unreadable';
+        return { to: read.to, updatedAtSec: read.updatedAtSec };
+    }
+
+    /** Sync. `to` must be the request target. A fresh cache, or a bad read, does not sign. */
+    private intervalAllows(cache: UpdatedAtRead, to: Address): boolean {
+        if (cache === 'unreadable') return false;
+        if (norm(cache.to) !== norm(to)) return false;
+        const now = this.safeNow();
+        if (!Number.isSafeInteger(now)) return false;
+        const nowSec = BigInt(Math.floor(now / 1000));
+        if (cache.updatedAtSec > nowSec) return false;
+        if (this.priceStalenessThresholdSec <= BigInt(this.minUpdateIntervalSec)) return false;
+        return nowSec - cache.updatedAtSec >= BigInt(this.minUpdateIntervalSec);
+    }
+
+    private async signOf(req: SignRequest): Promise<{ ok: true; raw: Hex } | { ok: false; reason: string }> {
+        try {
+            const raw = await this.signer.sign(req);
+            if (typeof raw !== 'string' || !isData(raw)) return { ok: false, reason: REFUSED.sign };
+            return { ok: true, raw };
+        } catch (error) {
+            return { ok: false, reason: fixedSignReason(error) };
+        }
+    }
+}
