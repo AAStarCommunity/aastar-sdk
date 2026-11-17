@@ -87,7 +87,8 @@ export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
     const seen = new Set<string>();
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i]!;
-        if (!a.startsWith('--') && a !== '-h') throw new KeeperStartupRefusal(`unexpected argument "${a}"`);
+        // Never echo the argument: an operator who pastes a key here must not see it printed into logs.
+        if (!a.startsWith('--') && a !== '-h') throw new KeeperStartupRefusal(`unexpected positional argument at position ${i + 1} (not shown)`);
         if (a.includes('=')) throw new KeeperStartupRefusal(`${a.slice(0, a.indexOf('='))}=… is not accepted: pass "${a.slice(0, a.indexOf('='))}" and its value as separate arguments`);
         const isValue = (VALUE_FLAGS as readonly string[]).includes(a);
         if (!isValue && !(BOOLEAN_FLAGS as readonly string[]).includes(a)) throw new KeeperStartupRefusal(`unknown option ${a}`);
@@ -115,7 +116,8 @@ export function assertFlagValues(args: readonly string[], flags: readonly string
     for (let i = 0; i < args.length; i++) {
         if (!flags.includes(args[i]!)) continue;
         const v = args[i + 1];
-        if (v === undefined || v === '' || v.trim() === '' || v.startsWith('--')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
+        // No keeper value starts with '-': a value like `-h` or `--once` is a swallowed option, not a value.
+        if (v === undefined || v === '' || v.trim() === '' || v.startsWith('-')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
     }
 }
 

@@ -79,7 +79,9 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
             [['--dry-run', '--dry-run'], /--dry-run is given more than once/],
             [['--poll-interval', '60', '--poll-interval', '30'], /--poll-interval is given more than once/],
             [['--bogus'], /unknown option --bogus/],
-            [['sepolia'], /unexpected argument "sepolia"/],
+            [['sepolia'], /unexpected positional argument at position 1 \(not shown\)/],
+            [['--cast-account', '-h'], /--cast-account needs a value/],
+            [['--network', '-x'], /--network needs a value/],
             [['--network'], /--network needs a value/],
         ] as const) {
             expect(() => parseKeeperArgs(argv as unknown as string[]), JSON.stringify(argv)).toThrow(why as RegExp);
@@ -239,6 +241,7 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['--dryrun', ['--dryrun'], /unknown option --dryrun/],
         ['--dry-run --dry-run', ['--dry-run', '--dry-run'], /--dry-run is given more than once/],
         ['an unknown flag', ['--dry-run', '--bogus'], /unknown option --bogus/],
+        ['-h swallowed as a value', ['--cast-account', '-h'], /--cast-account needs a value/],
     ])('with KEEPER_PRIVATE_KEY set, %s refuses: exit 1, zero RPC requests, zero egress', async (_name, extra, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         const r = await keeper(['--network', 'sepolia', '--once', ...(extra as string[])], {
@@ -250,5 +253,15 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         expect(r.requests).toBe(0);
         expect(r.egress).toEqual([]);
         expect(r.out).not.toContain('wallet signer:');
+    });
+
+    it('a key pasted as a positional argument is refused without being printed', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', DEPLOYERISH]);
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/unexpected positional argument at position 4 \(not shown\)/);
+        expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
+        expect(r.requests).toBe(0);
+        expect(r.egress).toEqual([]);
     });
 });
