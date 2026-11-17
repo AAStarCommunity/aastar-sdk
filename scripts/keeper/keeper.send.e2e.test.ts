@@ -273,8 +273,13 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
         const r = await startKeeper({
             chain, fakeCastDir: bin, pty: { password: 'test-password' },
             args: [...BASE, '--once', '--cast-account', 'keeper', '--hard-max-fee-gwei', '5'],
-            env: { KEEPER_PRIVATE_KEY: KEY, PRIVATE_KEY: KEY, TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', DEPLOYER_ACCOUNT: 'optimism-deployer' },
+            // CAST_KEYSTORE_PASSWORD is set on purpose: it must not be read (KPR-015), so the keeper still prompts.
+            env: {
+                KEEPER_PRIVATE_KEY: KEY, PRIVATE_KEY: KEY, TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '', DEPLOYER_ACCOUNT: 'optimism-deployer',
+                CAST_KEYSTORE_PASSWORD: 'env-password-must-not-be-used',
+            },
         });
+        expect(r.out).toContain('Keystore password:');
         expect(r.out).toContain('cast signer args: --account keeper');
         const argv = readFileSync(castFile(bin, 'argv'), 'utf8').trim().split('\n');
         expect(argv.slice(0, 6)).toEqual(['send', '--async', '--timeout', '60', '--chain', String(SEPOLIA)]);
@@ -284,7 +289,7 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
         expect(argv.join(' ')).not.toContain(chain.url);
         const env = Object.fromEntries(readFileSync(castFile(bin, 'env'), 'utf8').trim().split('\n').map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
         expect(env.ETH_RPC_URL).toBe(chain.url);
-        for (const k of ['KEEPER_PRIVATE_KEY', 'PRIVATE_KEY', 'TELEGRAM_BOT_TOKEN', 'DEPLOYER_ACCOUNT', 'RPC_URL']) expect(env[k], k).toBeUndefined();
+        for (const k of ['KEEPER_PRIVATE_KEY', 'PRIVATE_KEY', 'TELEGRAM_BOT_TOKEN', 'DEPLOYER_ACCOUNT', 'RPC_URL', 'CAST_KEYSTORE_PASSWORD']) expect(env[k], k).toBeUndefined();
         expect(JSON.stringify(env)).not.toContain(KEY.slice(2));
         expect(r.out).toContain('confirmed: receipt kind=super');
     });
