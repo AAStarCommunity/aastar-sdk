@@ -16,7 +16,7 @@
     "SuperPaymaster": { "abi": "SuperPaymaster", "address": "0x1000000000000000000000000000000000000002" },
     "GTokenStaking": { "abi": "GTokenStaking", "address": "0x1000000000000000000000000000000000000003" },
     "BLSAggregator": { "abi": "BLSAggregatorV414Dev", "address": "0x1000000000000000000000000000000000000004" },
-    "DVTValidator": { "abi": "DVTValidatorV080Dev", "address": "0x1000000000000000000000000000000000000005" }
+    "DVTValidator": { "abi": "DVTValidatorV090Dev", "address": "0x1000000000000000000000000000000000000005" }
   },
   "assertions": [
     { "id": "sp-version", "kind": "version", "contract": "SuperPaymaster", "expected": "SuperPaymaster-0.0.0-placeholder" },

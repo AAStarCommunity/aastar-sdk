@@ -53,9 +53,9 @@ import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json
 // Monitoring System
 import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
-// DEV PIN (rc.8 BLS routing): SP main 1845b124 (#633 merge), NOT a tag. Re-pin to the rc.8 tag before the PR opens.
-import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.1.dev-1845b124.json' with { type: 'json' };
-import DVTValidatorV080DevABIData from './pending/DVTValidator-0.8.1.dev-1845b124.json' with { type: 'json' };
+// DEV PIN (rc.8 BLS routing + DVT evidence): SP #635 head d55f76f8, NOT merged, NOT a tag. Re-pin to the merge commit, then to the rc.8 tag before the PR opens.
+import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.1.dev-d55f76f8.json' with { type: 'json' };
+import DVTValidatorV090DevABIData from './pending/DVTValidator-0.9.0.dev-d55f76f8.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
 // DVT layer-1 account policy (SuperPaymaster v5.4) — sender-keyed, governance-gated
@@ -197,16 +197,19 @@ export const BLSAggregatorABI = (BLSAggregatorABIData as any).abi || BLSAggregat
 export const BLSAggregatorArtifact = BLSAggregatorABIData;
 
 /**
- * BLSAggregator-4.14.1 and DVTValidator-0.8.1 (SP #630 + #633, rc.8 step 3b). DEVELOPMENT PIN ONLY: byte-identical to
+ * BLSAggregator-4.14.1 and DVTValidator-0.9.0 (SP #630 + #633 + #635, rc.8 step 4). DEVELOPMENT PIN ONLY: byte-identical to
  * AAStarCommunity/SuperPaymaster `abis/BLSAggregator.json` (sha256 cba84adc14953edc330c7154fc8dc6b7fdb696935e7e30c52e8e59adf2734400)
- * and `abis/DVTValidator.json` (sha256 459a3ad992ba15bd4756d8e4d7c67fbf4267fa04a65a500e3cdb89c45e79a93d) at SP main
- * 1845b12482e13a9937c7ec7f7f059ed9a3d33829 (merge of #633), not a tag. Function / event / error signatures are identical
- * to the 4.14.0 / 0.8.0 pin (9cacd4ec); only bytecode and version() changed. MUST be re-pinned to the rc.8 tag (with a
- * provenance gate) before the PR that ships it opens. The export names keep V414 / V080 (the 4.14.x / 0.8.x interface).
- * Used only by `dvtActions().registerBLSPublicKey`; not the default ABI of any client.
+ * and `abis/DVTValidator.json` (sha256 9b83712f367d04cc3b74cca14f31521f9c3b3af6af0584d2ff13265e4dbcbf1c) at the head of SP #635,
+ * d55f76f8ac379718e47e7f5c1d8fa46467914d69, which is neither merged nor tagged. The DVTValidator ABI equals the compiler's
+ * own `out/DVTValidator.sol/DVTValidator.json` at that commit (checked order-insensitively). BLSAggregator is unchanged
+ * since 1845b124. DVTValidator-0.9.0 adds the `evidence` argument to `executeWithProof` / `queueSlashWithProof`, two
+ * constructor arrays (evidence categories and their checkers), the category getters, `ValidatorAdded` and eleven errors.
+ * MUST be re-pinned to the #635 merge commit, and to the rc.8 tag (with a provenance gate) before the PR that ships it opens.
+ * Used by `dvtActions().registerBLSPublicKey` and by `executeSlashWithProof` against a DVTValidator-0.9.x; not the default
+ * ABI of any client.
  */
 export const BLSAggregatorV414DevABI = (BLSAggregatorV414DevABIData as any).abi || BLSAggregatorV414DevABIData;
-export const DVTValidatorV080DevABI = (DVTValidatorV080DevABIData as any).abi || DVTValidatorV080DevABIData;
+export const DVTValidatorV090DevABI = (DVTValidatorV090DevABIData as any).abi || DVTValidatorV090DevABIData;
 
 export const BLSValidatorABI = (BLSValidatorABIData as any).abi || BLSValidatorABIData;
 export const BLSValidatorArtifact = BLSValidatorABIData;

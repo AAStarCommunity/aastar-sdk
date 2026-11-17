@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
     decodeErrorResult, encodeErrorResult, encodeFunctionData, toFunctionSelector, type Hex,
 } from 'viem';
-import { DVT_BLS_REGISTRATION_ABI, dvtActions } from '../../src/actions/dvt';
+import { DVT_V090_ABI, dvtActions } from '../../src/actions/dvt';
 import { aggregatorActions, type BLSG1Point, type BLSG2Point } from '../../src/actions/aggregator';
 import { BLSAggregatorABI } from '../../src/abis/index';
 import { ErrorCode } from '../../src/errors/index';
@@ -44,10 +44,10 @@ describe('rc.8 BLS key registration routed through DVTValidator (dev pin, SP #63
             ['InvalidParameter', [name]], ['InvalidThreshold', []], ['PermissionlessRegistrationDisabled', []],
             ['UnauthorizedCaller', [V]], ['SlotOutOfRange', [9]], ['ValidatorSuspended', [V]],
         ] as const) {
-            const data = encodeErrorResult({ abi: DVT_BLS_REGISTRATION_ABI, errorName, args: args as any });
-            expect(decodeErrorResult({ abi: DVT_BLS_REGISTRATION_ABI, data }).errorName).toBe(errorName);
+            const data = encodeErrorResult({ abi: DVT_V090_ABI, errorName, args: args as any });
+            expect(decodeErrorResult({ abi: DVT_V090_ABI, data }).errorName).toBe(errorName);
         }
-        const errors = DVT_BLS_REGISTRATION_ABI.filter((item) => item.type === 'error');
+        const errors = DVT_V090_ABI.filter((item) => item.type === 'error');
         const keys = errors.map((item) => `${item.name}(${item.inputs.map((x: any) => x.type).join(',')})`);
         expect(new Set(keys).size).toBe(keys.length);
         expect(keys).toContain('InvalidParameter(bytes32)');

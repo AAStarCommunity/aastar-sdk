@@ -19,3 +19,16 @@ describe('handleContractError: rc.8 BLSAggregator-4.14.0 error ABI', () => {
         expect(handleContractError(fail('InvalidThreshold', []), {}).message).toMatch(/Invalid threshold: it must be at least the minimum threshold/);
     });
 });
+
+describe('handleContractError: DVTValidator-0.9.0 evidence errors (SP #635)', () => {
+    it('each new error has its own message', () => {
+        const cat = `0x${'ab'.repeat(32)}`;
+        expect(handleContractError(fail('UnknownEvidenceCategory', [cat]), {}).message).toContain(`Evidence category ${cat} is not configured`);
+        expect(handleContractError(fail('EvidenceRejected', [cat]), {}).message).toContain(`evidence category ${cat} rejected`);
+        expect(handleContractError(fail('EvidenceHashMismatch', []), {}).message).toMatch(/does not hash to the evidenceHash/);
+        expect(handleContractError(fail('MissingEvidenceHash', []), {}).message).toMatch(/non-zero evidenceHash/);
+        expect(handleContractError(fail('ReputationEvidenceHashNotZero', []), {}).message).toMatch(/must have evidenceHash 0/);
+        expect(handleContractError(fail('ReputationEvidenceNotEmpty', []), {}).message).toMatch(/takes empty evidence/);
+        expect(handleContractError(fail('ProposalShapeMismatch', []), {}).message).toMatch(/do not match the proposal shape/);
+    });
+});
