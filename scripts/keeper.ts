@@ -3,7 +3,8 @@ import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains'
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import {
-    KeeperStartupRefusal, assertFlagValues, castSignerArgs, keeperAccountFor, parseKeeperMode, resolveKeeperSigner, type KeeperMode,
+    KeeperStartupRefusal, castSignerArgs, keeperAccountFor, parseKeeperArgs, parseKeeperMode, resolveKeeperSigner,
+    type KeeperArgs, type KeeperMode,
 } from './keeper/keeperKey.js';
 
 /** True until the signer is resolved. Any error before then is a configuration refusal: no Telegram, no network. */
@@ -51,14 +52,14 @@ const CHAINLINK_ABI = parseAbi([
     'function decimals() view returns (uint8)'
 ]);
 
-function getArgValue(args: string[], key: string): string | undefined {
-    const idx = args.indexOf(key);
-    if (idx < 0) return undefined;
-    return args[idx + 1];
+// Both read the strict parse (keeperKey.ts parseKeeperArgs): unknown, `--flag=value`, repeated and missing-value
+// arguments were refused before either is called.
+function getArgValue(args: KeeperArgs, key: string): string | undefined {
+    return args.value(key);
 }
 
-function hasFlag(args: string[], key: string): boolean {
-    return args.includes(key);
+function hasFlag(args: KeeperArgs, key: string): boolean {
+    return args.flag(key);
 }
 
 function nowSec(): bigint {
@@ -258,8 +259,7 @@ async function runCastSend(params: {
 
 async function main() {
     installPipeSafety();
-    const args = process.argv.slice(2).filter((a) => a !== '--');
-    assertFlagValues(args);
+    const args = parseKeeperArgs(process.argv.slice(2).filter((a) => a !== '--'));
     const network = (getArgValue(args, '--network') || 'op-sepolia') as NetworkName;
     const mode: KeeperMode = parseKeeperMode(getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore')));
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');

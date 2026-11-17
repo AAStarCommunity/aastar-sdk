@@ -25,7 +25,8 @@ export function parseKeeperMode(raw: string | undefined, hasKeystore: boolean): 
     const m = raw.toLowerCase();
     if (m === 'privatekey') return 'privateKey';
     if (m === 'cast') return 'cast';
-    throw new KeeperStartupRefusal(`unknown --mode "${raw}" (expected privateKey or cast)`);
+    // The value is not echoed: a mistyped variable can put a secret here.
+    throw new KeeperStartupRefusal('unknown --mode value (expected privateKey or cast; the value is not shown)');
 }
 
 export function keeperKeyFrom(env: Record<string, string | undefined>): `0x${string}` | undefined {
@@ -63,6 +64,62 @@ export function resolveKeeperSigner(a: {
     return { mode: 'cast', keystorePath: a.keystorePath, castAccount: a.castAccount };
 }
 
+/** Every flag keeper.ts reads without a value. */
+export const BOOLEAN_FLAGS = [
+    '--disable-paymaster', '--disable-superpaymaster', '--dry-run', '--help', '--logo', '--no-logo', '--no-paymaster',
+    '--no-superpaymaster', '--once', '-h',
+] as const;
+
+/** The parsed command line. Built only by parseKeeperArgs; every read of an option goes through it. */
+export interface KeeperArgs {
+    value(flag: string): string | undefined;
+    flag(flag: string): boolean;
+}
+
+/**
+ * Strict parse of keeper.ts's argv (the npm `--` separator already removed). Refuses at startup, before anything else:
+ * an argument that is not a known flag (including lookalikes such as `--dryrun`), any `--flag=value` form (no keeper
+ * flag accepts it, so `--dry-run=true` cannot silently mean a live run), a repeated flag (no "first one wins"), a
+ * positional argument, and a value flag without its value. `--dry-run` is then exactly `args.flag('--dry-run')`.
+ */
+/**
+ * Refusal messages echo an unknown option only when it reads like an option name (lowercase letters and '-',
+ * no digits). A key, address or URL pasted after `--` contains digits or other characters, so it is reported by
+ * position only and never printed.
+ */
+const OPTION_LIKE = /^--[a-z][a-z-]{0,40}$/;
+
+export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
+    const values = new Map<string, string>();
+    const flags = new Set<string>();
+    const seen = new Set<string>();
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i]!;
+        // Never echo the argument: an operator who pastes a key here must not see it printed into logs.
+        if (!a.startsWith('--') && a !== '-h') throw new KeeperStartupRefusal(`unexpected positional argument at position ${i + 1} (not shown)`);
+        if (a.includes('=')) {
+            const name = a.slice(0, a.indexOf('='));
+            const known = (VALUE_FLAGS as readonly string[]).includes(name) || (BOOLEAN_FLAGS as readonly string[]).includes(name);
+            throw new KeeperStartupRefusal(known
+                ? `${name}=… is not accepted: pass "${name}" and its value as separate arguments`
+                : `an --option=value argument at position ${i + 1} is not accepted (not shown)`);
+        }
+        const isValue = (VALUE_FLAGS as readonly string[]).includes(a);
+        if (!isValue && !(BOOLEAN_FLAGS as readonly string[]).includes(a)) {
+            throw new KeeperStartupRefusal(OPTION_LIKE.test(a) ? `unknown option ${a}` : `unknown option at position ${i + 1} (not shown)`);
+        }
+        if (seen.has(a)) throw new KeeperStartupRefusal(`${a} is given more than once`);
+        seen.add(a);
+        if (isValue) {
+            assertFlagValues([a, argv[i + 1] as string], [a]);
+            values.set(a, argv[++i]!);
+        } else {
+            flags.add(a);
+        }
+    }
+    return { value: (f) => values.get(f), flag: (f) => flags.has(f) };
+}
+
 /** Every flag keeper.ts reads with a value. One present without a value (end of argv, or another --flag next) refuses. */
 export const VALUE_FLAGS = [
     '--cast-account', '--chainlink-stale-sec', '--external-ethusd-url', '--health-interval', '--keystore',
@@ -75,7 +132,8 @@ export function assertFlagValues(args: readonly string[], flags: readonly string
     for (let i = 0; i < args.length; i++) {
         if (!flags.includes(args[i]!)) continue;
         const v = args[i + 1];
-        if (v === undefined || v === '' || v.trim() === '' || v.startsWith('--')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
+        // No keeper value starts with '-': a value like `-h` or `--once` is a swallowed option, not a value.
+        if (v === undefined || v === '' || v.trim() === '' || v.startsWith('-')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
     }
 }
 
