@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { encodeAbiParameters, encodeEventTopics, getAddress, type Address, type Hash, zeroAddress } from 'viem';
+import { decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, getAddress, type Abi, type Address, type Hash, type Hex, zeroAddress } from 'viem';
 import { verifyPaymasterDeployment } from '../../src/actions/factory';
-import { PaymasterFactoryABI } from '../../src/abis/index';
+import { PaymasterABI, PaymasterFactoryABI } from '../../src/abis/index';
 
 const FACTORY = '0x1111111111111111111111111111111111111111' as Address;
 const OPERATOR = '0x2222222222222222222222222222222222222222' as Address;
@@ -39,10 +39,11 @@ function fakeClient(opts: {
     const operator = opts.operator ?? OPERATOR;
     const paymaster = opts.paymaster ?? PM;
     // Answers only the exact reads the check must make: the configured factory, this caller's entry, the reverse
-    // entry and owner() of this scenario's paymaster, at a pinned block. Anything else throws.
-    const readContract = vi.fn(async ({ functionName, address, args, blockNumber }: any) => {
+    // entry and owner() of this scenario's paymaster, each pinned to a canonical block hash. Anything else throws.
+    // `readContract` records each decoded eth_call; `request` is what the code under test calls.
+    const readContract = vi.fn(async ({ functionName, address, args, block }: any) => {
         if (opts.readError) throw opts.readError;
-        if (blockNumber === undefined) throw new Error(`${functionName} read without a pinned block`);
+        if (!block?.blockHash || block.requireCanonical !== true) throw new Error(`${functionName} read not pinned to a canonical block hash`);
         if (lc(address) === lc(FACTORY) && functionName === 'getPaymasterByOperator' && lc(args[0]) === lc(operator)) return opts.byOperator ?? paymaster;
         if (lc(address) === lc(FACTORY) && functionName === 'getOperatorByPaymaster' && lc(args[0]) === lc(paymaster)) return opts.byPaymaster ?? operator;
         if (lc(address) === lc(paymaster) && functionName === 'owner') return opts.owner ?? operator;
@@ -57,7 +58,16 @@ function fakeClient(opts: {
         if (opts.hashAfter) return { number: args.blockNumber, hash: opts.hashAfter };
         return { number: args.blockNumber, hash: args.blockNumber === RECEIPT_BLOCK ? RECEIPT_HASH : LATEST_HASH };
     });
-    return { client: { readContract, waitForTransactionReceipt, getBlock } as any, readContract, waitForTransactionReceipt, getBlock };
+    const request = vi.fn(async ({ method, params }: any) => {
+        if (method !== 'eth_call') throw new Error(`unexpected RPC ${method}`);
+        const [{ to, data }, block] = params;
+        const abi = (lc(to) === lc(FACTORY) ? PaymasterFactoryABI : PaymasterABI) as Abi;
+        const { functionName, args } = decodeFunctionData({ abi, data: data as Hex });
+        const value = await readContract({ functionName, address: to, args: args ?? [], block });
+        // ABI-encoded addresses carry no case; encode lowercase so any fixture casing is accepted.
+        return encodeFunctionResult({ abi, functionName, result: typeof value === 'string' ? lc(value) : value } as any);
+    });
+    return { client: { request, waitForTransactionReceipt, getBlock } as any, readContract, waitForTransactionReceipt, getBlock };
 }
 
 describe('verifyPaymasterDeployment', () => {
@@ -70,7 +80,7 @@ describe('verifyPaymasterDeployment', () => {
         expect(readContract).toHaveBeenCalledWith(expect.objectContaining({ address: PM, functionName: 'owner' }));
         // All three reads are at the receipt's block, and that block's hash is read back afterwards.
         expect(readContract).toHaveBeenCalledTimes(3);
-        for (const [call] of readContract.mock.calls) expect(call.blockNumber).toBe(RECEIPT_BLOCK);
+        for (const [call] of readContract.mock.calls) expect(call.block).toEqual({ blockHash: RECEIPT_HASH, requireCanonical: true });
         expect(getBlock).toHaveBeenCalledWith({ blockNumber: RECEIPT_BLOCK });
     });
 
@@ -98,7 +108,7 @@ describe('verifyPaymasterDeployment', () => {
     it('a node that cannot serve the receipt block\'s state throws with the block and deploy hash', async () => {
         const { client } = fakeClient({ readError: new Error('missing trie node') });
         await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX }))
-            .rejects.toThrow(`at block ${RECEIPT_BLOCK} (deploy tx ${TX}); the node may not serve that block's state (missing trie node)`);
+            .rejects.toThrow(`at block ${RECEIPT_BLOCK} ${RECEIPT_HASH} (deploy tx ${TX}); the node may not serve that block's state or support EIP-1898 block-hash calls (missing trie node)`);
     });
 
     it('a reverted deploy throws before any read', async () => {
@@ -143,7 +153,7 @@ describe('verifyPaymasterDeployment', () => {
         expect(ok.waitForTransactionReceipt).not.toHaveBeenCalled();
         // One latest block, read once, pins the mapping lookup and all three checks; its hash is read back afterwards.
         expect(ok.readContract).toHaveBeenCalledTimes(4);
-        for (const [call] of ok.readContract.mock.calls) expect(call.blockNumber).toBe(LATEST_BLOCK);
+        for (const [call] of ok.readContract.mock.calls) expect(call.block).toEqual({ blockHash: LATEST_HASH, requireCanonical: true });
         expect(ok.getBlock).toHaveBeenCalledWith({ blockNumber: LATEST_BLOCK });
         const stolen = fakeClient({ owner: OTHER });
         await expect(verifyPaymasterDeployment(stolen.client, { factory: FACTORY, operator: OPERATOR })).rejects.toThrow(`owner() is ${OTHER}`);

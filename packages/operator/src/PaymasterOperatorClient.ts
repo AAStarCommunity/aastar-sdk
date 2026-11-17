@@ -146,7 +146,7 @@ export class PaymasterOperatorClient extends BaseClient {
         stakeAmount?: bigint; // Optional, defaults to 30 GToken (Registry requirement for AOA)
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
-        confirmations?: number; // Optional, confirmations to wait for on the deploy before checking and registering
+        confirmations?: number; // Optional, deploy receipt confirmations before the check (viem default if omitted); a reused deploy waits for none
         priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 

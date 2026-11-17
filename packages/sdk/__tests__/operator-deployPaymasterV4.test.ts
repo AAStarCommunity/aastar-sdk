@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { custom, encodeAbiParameters, encodeEventTopics, type Address, type Hash } from 'viem';
+import { custom, decodeFunctionData, encodeAbiParameters, encodeEventTopics, encodeFunctionResult, type Abi, type Address, type Hash, type Hex } from 'viem';
 import { sepolia } from 'viem/chains';
-import { PaymasterFactoryABI } from '@aastar/core';
+import { PaymasterABI, PaymasterFactoryABI } from '@aastar/core';
 import { createOperatorClient } from '../src/clients/operator';
 
 const OPERATOR = '0x3333333333333333333333333333333333333333' as Address;
@@ -33,11 +33,21 @@ function operatorClient(owner: Address) {
         }],
     }));
     oc.getBlock = vi.fn(async ({ blockNumber }: any) => ({ number: blockNumber, hash: BLOCK_HASH }));
+    // The check's reads are eth_calls pinned to the receipt's block hash; decode them and answer by function.
     oc.readContract = vi.fn(async ({ functionName }: any) => {
         if (functionName === 'getPaymasterByOperator') return PM;
         if (functionName === 'getOperatorByPaymaster') return OPERATOR;
         if (functionName === 'owner') return owner;
         throw new Error(`unexpected read ${functionName}`);
+    });
+    oc.request = vi.fn(async ({ method, params }: any) => {
+        if (method !== 'eth_call') throw new Error(`unexpected RPC ${method}`);
+        const [{ to, data }, block] = params;
+        if (block?.blockHash !== BLOCK_HASH || block.requireCanonical !== true) throw new Error('read not pinned to the receipt block');
+        const abi = (to.toLowerCase() === FACTORY.toLowerCase() ? PaymasterFactoryABI : PaymasterABI) as Abi;
+        const { functionName, args } = decodeFunctionData({ abi, data: data as Hex });
+        const value = await oc.readContract({ address: to, functionName, args });
+        return encodeFunctionResult({ abi, functionName, result: value } as any);
     });
     return oc;
 }

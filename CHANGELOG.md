@@ -9,11 +9,13 @@ All notable changes to this project will be documented in this file.
 - New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash?, confirmations? })` in `@aastar/core`.
   It takes the paymaster address only from the factory's `PaymasterDeployed` log in a successful receipt (exactly one
   emitted by `factory` for `operator`), or, without `deployHash`, from the factory mapping. It then requires
-  `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, read at one block number
-  (the receipt's, or the latest one read once), and throws otherwise. That block's hash is read back after the checks and
-  must be unchanged, so a reorg at that height during the check throws. Reading at the receipt's block needs a node that
-  still serves that state; a read failure throws with the block and the deploy hash. It is a client-side check at that
-  block: ownership can change later, and a reorg deeper than `confirmations` after the check can replace the deploy.
+  `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, and throws otherwise.
+  Every read is an `eth_call` pinned to one block hash with EIP-1898 `requireCanonical: true` (the receipt's block, or
+  the latest block read once), and the hash at that height is read again afterwards. A node that does not serve that
+  block's state or EIP-1898 calls fails the check, with the block and the deploy hash in the error. `confirmations`
+  applies only to the deploy receipt wait; a reused deploy is checked at the latest block without waiting. It is a
+  client-side check at that block: ownership can change later, and a reorg deeper than `confirmations` after the check
+  can replace the deploy.
 - `PaymasterOperatorClient.deployAndRegisterPaymasterV4` runs it on a new deploy and on a reused earlier deploy, before
   any approve or role registration, and now throws when the approve or the registration reverts instead of returning
   the hash as a success. `createOperatorClient().deployPaymasterV4` runs it after the receipt and throws on a mismatch,
