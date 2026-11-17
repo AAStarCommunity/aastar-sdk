@@ -71,6 +71,35 @@ const KNOWN_CONTRACT_ERRORS: Record<string, (context: ErrorContext, args?: any[]
     'InvalidThreshold': () => {
         return 'Invalid threshold: it must be at least the minimum threshold and at most the validator count.';
     },
+
+    // DVTValidator-0.9.0 (SP #635): raw evidence for slash-shaped proposals.
+    'UnknownEvidenceCategory': (ctx, args) => {
+        return `Evidence category ${args?.[0] ?? 'unknown'} is not configured on this DVTValidator.`;
+    },
+
+    'EvidenceRejected': (ctx, args) => {
+        return `The checker for evidence category ${args?.[0] ?? 'unknown'} rejected the evidence.`;
+    },
+
+    'EvidenceHashMismatch': () => {
+        return 'The evidence does not hash to the evidenceHash the proposal committed to.';
+    },
+
+    'MissingEvidenceHash': () => {
+        return 'A slash-shaped proposal needs a non-zero evidenceHash.';
+    },
+
+    'ReputationEvidenceHashNotZero': () => {
+        return 'A pure-reputation proposal (operator 0, level 0) must have evidenceHash 0.';
+    },
+
+    'ReputationEvidenceNotEmpty': () => {
+        return 'A pure-reputation proposal (operator 0, level 0) takes empty evidence (0x).';
+    },
+
+    'ProposalShapeMismatch': () => {
+        return 'The arguments do not match the proposal shape: reputation needs repUsers, a slash needs empty repUsers and newScores.';
+    },
     
     'Unauthorized': (ctx) => {
         return `Unauthorized operation. Account ${ctx.account || 'unknown'} does not have permission.`;

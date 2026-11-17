@@ -1,5 +1,8 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
-import { BLSAggregatorV414DevABI, DVTValidatorABI, DVTValidatorV080DevABI } from '../abis/index.js';
+import {
+    type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account,
+    decodeAbiParameters, encodeAbiParameters, isHex, keccak256, zeroAddress, zeroHash,
+} from 'viem';
+import { BLSAggregatorV414DevABI, DVTValidatorABI, DVTValidatorV090DevABI } from '../abis/index.js';
 import type { BLSG1Point, BLSG2Point } from './aggregator.js';
 import { validateAddress, validateRequired } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -9,7 +12,20 @@ export type DVTActions = {
     createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
     /** @deprecated Removed in the v5.x contract refactor — DVT slash signing is off-chain (BLS), there is no `signSlashProposal` in the DVTValidator ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
-    executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, proof: Hex, account?: Account | Address }) => Promise<Hash>;
+    /**
+     * DVTValidator.executeWithProof. The generation is chosen by `evidence`:
+     * - omitted: the 5-argument form `executeWithProof(id, repUsers, newScores, epoch, proof)` of DVTValidator-0.6.0 ..
+     *   0.8.x (the deployed Sepolia DVT is 0.6.0), with the default `DVTValidatorABI`.
+     * - given: the DVTValidator-0.9.0 form `executeWithProof(id, repUsers, newScores, epoch, evidence, proof)` (SP #635,
+     *   development pin `DVTValidatorV090DevABI`). Before sending, the stored proposal is read and the arguments are
+     *   checked against it as the contract would: a pure-reputation proposal (operator == 0 and level == 0) needs
+     *   repUsers, `evidence` exactly `0x` and a zero stored evidenceHash; a slash-shaped one needs empty repUsers /
+     *   newScores and `evidence = abi.encode(bytes32 category, bytes body)` with a configured category whose
+     *   `keccak256(abi.encode(TAG_EVIDENCE, category, keccak256(body)))` equals the stored evidenceHash. The category
+     *   checker itself runs only on chain. SP 5.5.0 configures no category, so every slash-shaped proposal is refused.
+     * Sending one generation's form to the other reverts at gas estimation; nothing is broadcast.
+     */
+    executeSlashWithProof: (args: { proposalId: bigint, repUsers: Address[], newScores: bigint[], epoch: bigint, evidence?: Hex, proof: Hex, account?: Account | Address }) => Promise<Hash>;
     markProposalExecuted: (args: { id: bigint, account?: Account | Address }) => Promise<Hash>;
     proposals: (args: { proposalId: bigint }) => Promise<{ operator: Address, slashLevel: number, reason: string, executed: boolean }>;
     nextProposalId: () => Promise<bigint>;
@@ -23,7 +39,7 @@ export type DVTActions = {
     pruneValidator: (args: { v: Address, account?: Account | Address }) => Promise<Hash>;
     
     /**
-     * Register a validator's BLS key through DVTValidator-0.8.0 (SP rc.8). From BLSAggregator-4.14.0 the
+     * Register a validator's BLS key through DVTValidator-0.8.0+ (SP rc.8; unchanged in 0.9.0). From BLSAggregator-4.14.0 the
      * aggregator accepts `registerBLSPublicKey` only from its current DVT, so this is the only working route.
      * ABI: registerBLSPublicKey(address validator, BLS.G1Point key, uint8 slot, BLS.G2Point pop).
      * - Owner of DVTValidator: may register any validator; `slot` is used as given.
@@ -31,7 +47,7 @@ export type DVTActions = {
      *   (else PermissionlessRegistrationDisabled / UnauthorizedCaller), and the validator must hold ROLE_DVT with
      *   the minimum stake and not be suspended. `slot` is ignored: the contract keeps an active key's slot or
      *   takes the first free one (SlotOutOfRange when full).
-     * The ABI is a development pin (see `DVTValidatorV080DevABI`) until the rc.8 tag.
+     * The ABI is a development pin (see `DVTValidatorV090DevABI`) until the rc.8 tag.
      */
     registerBLSPublicKey: (args: {
         validator: Address, key: BLSG1Point, slot: number, pop: BLSG2Point, account?: Account | Address,
@@ -56,16 +72,53 @@ const isWord = (v: unknown): boolean => typeof v === 'string' && /^0x[0-9a-fA-F]
 const errorKey = (item: any): string => `${item.name}(${(item.inputs ?? []).map((x: any) => x.type).join(',')})`;
 
 /**
- * DVTValidator-0.8.0 plus the BLSAggregator-4.14.0 errors it does not declare. `registerBLSPublicKey` forwards to the
- * aggregator, whose reverts (InvalidParameter(bytes32), InvalidThreshold, ...) bubble up unchanged; without these
- * entries viem cannot name them.
+ * DVTValidator-0.9.0 plus the BLSAggregator-4.14.x errors it does not declare. `registerBLSPublicKey` and
+ * `executeWithProof` forward to the aggregator, whose reverts (InvalidParameter(bytes32), InvalidThreshold, ...) bubble
+ * up unchanged; without these entries viem cannot name them.
  */
-export const DVT_BLS_REGISTRATION_ABI: readonly any[] = (() => {
-    const own = DVTValidatorV080DevABI as any[];
+export const DVT_V090_ABI: readonly any[] = (() => {
+    const own = DVTValidatorV090DevABI as any[];
     const seen = new Set(own.filter((item) => item.type === 'error').map(errorKey));
     const extra = (BLSAggregatorV414DevABI as any[]).filter((item) => item.type === 'error' && !seen.has(errorKey(item)));
     return Object.freeze([...own, ...extra]);
 })();
+
+const refuse = (message: string) => new AAStarError(ErrorCode.INVALID_PARAMETER, `executeWithProof (DVTValidator-0.9.0): ${message}`);
+
+/**
+ * The checks DVTValidator-0.9.0 `executeWithProof` makes before it calls the aggregator, run against the stored
+ * proposal so a doomed call is refused before it is sent. Proposal fields are fixed at creation, so the read cannot go
+ * stale before the send (only `executed` can change, and the contract still rejects a second execution).
+ */
+async function checkEvidenceAgainstProposal(
+    client: PublicClient, address: Address,
+    { proposalId, repUsers, newScores, evidence }: { proposalId: bigint, repUsers: readonly Address[], newScores: readonly bigint[], evidence: Hex },
+): Promise<void> {
+    if (!isHex(evidence, { strict: true }) || evidence.length % 2 !== 0) throw refuse('evidence must be 0x-prefixed hex bytes');
+    const [operator, slashLevel, , executed, exists, evidenceHash] = await client.readContract({
+        address, abi: DVT_V090_ABI, functionName: 'proposals', args: [proposalId],
+    }) as readonly [Address, number, string, boolean, boolean, Hex];
+    if (!exists) throw refuse(`proposal ${proposalId} does not exist (ProposalDoesNotExist)`);
+    if (executed) throw refuse(`proposal ${proposalId} is already executed (ProposalExecutedAlready)`);
+    if (operator.toLowerCase() === zeroAddress && Number(slashLevel) === 0) {
+        if (repUsers.length === 0) throw refuse('a pure-reputation proposal needs repUsers (ProposalShapeMismatch)');
+        if (evidence !== '0x') throw refuse('a pure-reputation proposal takes evidence "0x" (ReputationEvidenceNotEmpty)');
+        if (evidenceHash.toLowerCase() !== zeroHash) throw refuse('this pure-reputation proposal stores a non-zero evidenceHash (ReputationEvidenceHashNotZero)');
+        return;
+    }
+    if (repUsers.length !== 0 || newScores.length !== 0) throw refuse('a slash-shaped proposal takes empty repUsers and newScores (ProposalShapeMismatch)');
+    let category: Hex, body: Hex;
+    try {
+        [category, body] = decodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes' }], evidence);
+    } catch {
+        throw refuse('a slash-shaped proposal takes evidence = abi.encode(bytes32 category, bytes body)');
+    }
+    const checker = await client.readContract({ address, abi: DVT_V090_ABI, functionName: 'checkerOf', args: [category] }) as Address;
+    if (checker.toLowerCase() === zeroAddress) throw refuse(`evidence category ${category} is not configured (UnknownEvidenceCategory)`);
+    const tag = await client.readContract({ address, abi: DVT_V090_ABI, functionName: 'TAG_EVIDENCE', args: [] }) as Hex;
+    const hash = keccak256(encodeAbiParameters([{ type: 'bytes32' }, { type: 'bytes32' }, { type: 'bytes32' }], [tag, category, keccak256(body)]));
+    if (hash.toLowerCase() !== evidenceHash.toLowerCase()) throw refuse(`evidence hashes to ${hash}, the proposal committed to ${evidenceHash} (EvidenceHashMismatch)`);
+}
 
 export const dvtActions = (address: Address) => (client: PublicClient | WalletClient): DVTActions => ({
     // Proposal Management
@@ -101,22 +154,34 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
         );
     },
 
-    async executeSlashWithProof({ proposalId, repUsers, newScores, epoch, proof, account }) {
+    async executeSlashWithProof({ proposalId, repUsers, newScores, epoch, evidence, proof, account }) {
         try {
             validateRequired(proposalId, 'proposalId');
             validateRequired(repUsers, 'repUsers');
             validateRequired(newScores, 'newScores');
             validateRequired(epoch, 'epoch');
             validateRequired(proof, 'proof');
+            if (evidence === undefined) {
+                return await (client as any).writeContract({
+                    address,
+                    abi: DVTValidatorABI,
+                    functionName: 'executeWithProof',
+                    args: [proposalId, repUsers, newScores, epoch, proof],
+                    account: account as any,
+                    chain: (client as any).chain
+                });
+            }
+            await checkEvidenceAgainstProposal(client as PublicClient, address, { proposalId, repUsers, newScores, evidence });
             return await (client as any).writeContract({
                 address,
-                abi: DVTValidatorABI,
+                abi: DVT_V090_ABI,
                 functionName: 'executeWithProof',
-                args: [proposalId, repUsers, newScores, epoch, proof],
+                args: [proposalId, repUsers, newScores, epoch, evidence, proof],
                 account: account as any,
                 chain: (client as any).chain
             });
         } catch (error) {
+            if (error instanceof AAStarError) throw error;
             throw AAStarError.fromViemError(error as Error, 'executeSlashWithProof');
         }
     },
@@ -198,7 +263,7 @@ export const dvtActions = (address: Address) => (client: PublicClient | WalletCl
             }
             return await (client as any).writeContract({
                 address,
-                abi: DVT_BLS_REGISTRATION_ABI,
+                abi: DVT_V090_ABI,
                 functionName: 'registerBLSPublicKey',
                 args: [validator, key, slot, pop],
                 account: account as any,

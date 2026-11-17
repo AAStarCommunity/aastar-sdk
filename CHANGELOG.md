@@ -168,6 +168,19 @@ sent, so viem threw before anything reached the chain. Their unit tests only ass
 
 A scan (`scripts/write-encodability/`) now encodes every exported write action against its ABI without mocking it.
 
+### DVTValidator-0.9.0 (SP #635, development pin)
+
+- `dvtActions().executeSlashWithProof` takes an optional `evidence`. Omitted, it sends the 5-argument
+  `executeWithProof` of DVTValidator-0.6.0 .. 0.8.x, unchanged (the deployed Sepolia DVT is 0.6.0). Given, it sends
+  the 0.9.0 form `executeWithProof(id, repUsers, newScores, epoch, evidence, proof)` after checking the arguments
+  against the stored proposal: a pure-reputation proposal (operator 0, level 0) takes `evidence: '0x'`; a
+  slash-shaped one takes `abi.encode(bytes32 category, bytes body)` that hashes to the proposal's commitment, for a
+  configured category. SP 5.5.0 configures no category, so a slash-shaped proposal cannot execute on it.
+- The 0.9.0 errors (`UnknownEvidenceCategory`, `EvidenceHashMismatch`, `EvidenceRejected`, `MissingEvidenceHash`,
+  `ReputationEvidenceHashNotZero`, `ReputationEvidenceNotEmpty`, `ProposalShapeMismatch`, ...) are decoded by name.
+- `DVT_BLS_REGISTRATION_ABI` is renamed `DVT_V090_ABI`, and `DVTValidatorV080DevABI` is `DVTValidatorV090DevABI`
+  (neither was released).
+
 ### Documentation
 
 - `reputationActions().communityReputations` is documented as a raw value the protocol never reads: it plays no part
