@@ -79,10 +79,16 @@ The keeper loads `.env.<network>` from the current working directory.
 - `RPC_URL`
 - `TEST_PRIVATE_KEY` (required by shared network loader)
 
+Signer (exactly one, no fallback):
+
+- privateKey mode (default): `KEEPER_PRIVATE_KEY`, **required** for any run that sends (only `--dry-run` runs without it).
+  `PRIVATE_KEY_SUPPLIER` and `PRIVATE_KEY` in `.env.<network>` are not read, because on Sepolia they are the deployer EOA.
+- cast mode: `--keystore <path>` or `--cast-account <name>`, **required**. `DEPLOYER_ACCOUNT` is not read.
+
+Use the keeper's own dedicated signer, never the deployer or any account with a protocol privilege.
+
 Optional:
 
-- `KEEPER_PRIVATE_KEY` (privateKey mode; required unless `--dry-run`). There is no fallback: `PRIVATE_KEY_SUPPLIER` and
-  `PRIVATE_KEY` in `.env.<network>` are not read, because on Sepolia they are the deployer EOA.
 - `CAST_KEYSTORE_PASSWORD` (cast mode; otherwise it prompts)
 - `OFFICIAL_OPERATOR` (used to derive official Paymaster from the factory when no canonical instance exists)
 - `TELEGRAM_BOT_TOKEN`
