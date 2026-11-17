@@ -36,6 +36,7 @@ function fakeClient(opts: {
     hashAfter?: Hash; // the block hash read back after the checks
     readError?: Error;
     ownerRaw?: Hex; // raw eth_call result for owner(), e.g. '0x' when the paymaster has no code
+    rejectBlockHashParam?: boolean; // a provider without EIP-1898: rejects { blockHash }, answers 'latest' correctly
 }) {
     const operator = opts.operator ?? OPERATOR;
     const paymaster = opts.paymaster ?? PM;
@@ -64,12 +65,18 @@ function fakeClient(opts: {
         const [{ to, data }, block] = params;
         const abi = (lc(to) === lc(FACTORY) ? PaymasterFactoryABI : PaymasterABI) as Abi;
         const { functionName, args } = decodeFunctionData({ abi, data: data as Hex });
+        if (opts.rejectBlockHashParam) {
+            if (typeof block === 'object') throw new Error('invalid argument 1: hex string without 0x prefix');
+            // An unpinned call would get a valid, matching answer here: only a fallback to it could make the check pass.
+            const answer = functionName === 'getPaymasterByOperator' ? paymaster : operator;
+            return encodeFunctionResult({ abi, functionName, result: lc(answer) } as any);
+        }
         const value = await readContract({ functionName, address: to, args: args ?? [], block });
         if (functionName === 'owner' && opts.ownerRaw !== undefined) return opts.ownerRaw;
         // ABI-encoded addresses carry no case: the code under test always decodes checksummed addresses.
         return encodeFunctionResult({ abi, functionName, result: typeof value === 'string' ? lc(value) : value } as any);
     });
-    return { client: { request, waitForTransactionReceipt, getBlock } as any, readContract, waitForTransactionReceipt, getBlock };
+    return { client: { request, waitForTransactionReceipt, getBlock } as any, readContract, request, waitForTransactionReceipt, getBlock };
 }
 
 describe('verifyPaymasterDeployment', () => {
@@ -110,10 +117,13 @@ describe('verifyPaymasterDeployment', () => {
         }
     });
 
-    it('a node that rejects the EIP-1898 block parameter fails the check', async () => {
-        const { client } = fakeClient({ readError: new Error('invalid argument 1: hex string without 0x prefix') });
-        await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX }))
-            .rejects.toThrow('support EIP-1898 block-hash calls (invalid argument 1');
+    it('a node that rejects the EIP-1898 block parameter fails the check and never falls back to latest', async () => {
+        for (const deployHash of [TX, undefined]) {
+            const { client, request } = fakeClient({ rejectBlockHashParam: true });
+            await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash }))
+                .rejects.toThrow('support EIP-1898 block-hash calls (invalid argument 1');
+            for (const [{ params }] of request.mock.calls) expect(typeof params[1]).toBe('object');
+        }
     });
 
     it('a reorg at the checked height during the check throws', async () => {

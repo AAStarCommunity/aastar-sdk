@@ -23,8 +23,11 @@ All notable changes to this project will be documented in this file.
   so it no longer returns a hash for a reverted deploy. Both take an optional `confirmations` for the deploy receipt.
 - `deployAndRegisterPaymasterV4` still deploys before it registers `ROLE_PAYMASTER_AOA`; a factory with a Registry
   configured requires that role first, so a new operator's deploy reverts there (FU-116).
-- The generic deposit methods (`addDeposit`, `addStake`, `depositFor`, `setupPaymasterDeposit`) still send to the
-  address they are given or configured with and do not run this check (FU-116).
+- Scope: the SDK's two deploy flows act only on a checked paymaster. In both, the only paymaster address used after the
+  deploy is the one `verifyPaymasterDeployment` returned; neither uses a caller-supplied, mapping-read or `simulate()`
+  address. (`deployAndRegisterPaymasterV4` sends no funds to the paymaster: its approve goes to GTokenStaking and its
+  registration is the caller's own role.) The generic deposit methods (`addDeposit`, `addStake`, `depositFor`,
+  `setupPaymasterDeposit`) send to the address the caller gives or configures and do not run this check (FU-116).
 - Removed `scripts/01_prepare_all.ts` (it deposited to a `simulate()`-predicted address before the deploy confirmed)
   and `scripts/deploy_paymaster_v4.ts` (it used a factory function that does not exist, an unresolved import, and env
   private keys). Use `PaymasterOperatorClient`.

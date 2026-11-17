@@ -168,6 +168,18 @@ describe('PaymasterOperatorClient', () => {
         expect(result.paymasterAddress).toBe('0x7777777777777777777777777777777777777777');
       });
 
+      it('deployAndRegisterPaymasterV4: the paymaster address is the one verifyPaymasterDeployment returned, on both paths', async () => {
+        const VERIFIED = '0x9999999999999999999999999999999999999999';
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockVerifyPaymasterDeployment.mockResolvedValue(VERIFIED);
+        // New deploy: the factory mapping says 0x0 first and 0x7777 afterwards; neither is used.
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
+        // Reused deploy: the mapping read that chose this branch said 0x7777; the verified address is returned.
+        expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
+      });
+
       it('deployAndRegisterPaymasterV4: a failed deploy check approves and registers nothing', async () => {
         mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
             roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
