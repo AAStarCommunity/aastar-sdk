@@ -9,6 +9,8 @@ const OTHER = '0x3333333333333333333333333333333333333333' as Address;
 const PM = '0x4444444444444444444444444444444444444444' as Address;
 const PM2 = '0x5555555555555555555555555555555555555555' as Address;
 const TX = ('0x' + 'ab'.repeat(32)) as Hash;
+const RECEIPT_BLOCK = 100n;
+const LATEST_BLOCK = 200n;
 
 // A PaymasterDeployed log encoded with the vendored ABI, so the test also pins the event shape.
 function deployedLog(operator: Address, paymaster: Address, emitter: Address = FACTORY) {
@@ -27,23 +29,34 @@ function fakeClient(opts: {
     byPaymaster?: Address;
     owner?: Address;
 }) {
-    const readContract = vi.fn(async ({ functionName, address }: any) => {
-        if (functionName === 'getPaymasterByOperator') return opts.byOperator ?? PM;
-        if (functionName === 'getOperatorByPaymaster') return opts.byPaymaster ?? OPERATOR;
-        if (functionName === 'owner') {
-            if (address === PM || address === PM2) return opts.owner ?? OPERATOR;
-        }
-        throw new Error(`unexpected read ${functionName} on ${address}`);
+    // Answers only the exact reads the check must make: the configured factory, the caller's own entries, and
+    // owner() on the paymaster being checked. Anything else throws, so a wrong target or argument is caught.
+    const readContract = vi.fn(async ({ functionName, address, args, blockNumber }: any) => {
+        if (blockNumber === undefined) throw new Error(`${functionName} read without a pinned block`);
+        if (address === FACTORY && functionName === 'getPaymasterByOperator' && args[0] === OPERATOR) return opts.byOperator ?? PM;
+        if (address === FACTORY && functionName === 'getOperatorByPaymaster' && (args[0] === PM || args[0] === PM2)) return opts.byPaymaster ?? OPERATOR;
+        if ((address === PM || address === PM2) && functionName === 'owner') return opts.owner ?? OPERATOR;
+        throw new Error(`unexpected read ${functionName}(${args}) on ${address}`);
     });
-    const waitForTransactionReceipt = vi.fn(async () => ({ status: opts.status ?? 'success', logs: opts.logs ?? [deployedLog(OPERATOR, PM)] }));
-    return { client: { readContract, waitForTransactionReceipt } as any, readContract, waitForTransactionReceipt };
+    const waitForTransactionReceipt = vi.fn(async () => ({ status: opts.status ?? 'success', blockNumber: RECEIPT_BLOCK, logs: opts.logs ?? [deployedLog(OPERATOR, PM)] }));
+    const getBlockNumber = vi.fn(async () => LATEST_BLOCK);
+    return { client: { readContract, waitForTransactionReceipt, getBlockNumber } as any, readContract, waitForTransactionReceipt };
 }
 
 describe('verifyPaymasterDeployment', () => {
     it('returns the paymaster from the receipt once the mapping and owner() both name the operator', async () => {
-        const { client, readContract } = fakeClient({});
-        await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX })).resolves.toBe(PM);
+        const { client, readContract, waitForTransactionReceipt } = fakeClient({});
+        await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX, confirmations: 3 })).resolves.toBe(PM);
         expect(readContract).toHaveBeenCalledWith(expect.objectContaining({ address: PM, functionName: 'owner' }));
+        expect(waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: TX, confirmations: 3 }));
+        // All three reads are at the receipt's block, so they describe one state.
+        expect(readContract).toHaveBeenCalledTimes(3);
+        for (const [call] of readContract.mock.calls) expect(call.blockNumber).toBe(RECEIPT_BLOCK);
+    });
+
+    it('addresses are compared case-insensitively', async () => {
+        const { client } = fakeClient({ owner: OPERATOR.toLowerCase() as Address, byPaymaster: OPERATOR.toUpperCase().replace('0X', '0x') as Address });
+        await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX })).resolves.toBe(PM);
     });
 
     it('a reverted deploy throws before any read', async () => {
@@ -86,6 +99,9 @@ describe('verifyPaymasterDeployment', () => {
         const ok = fakeClient({});
         await expect(verifyPaymasterDeployment(ok.client, { factory: FACTORY, operator: OPERATOR })).resolves.toBe(PM);
         expect(ok.waitForTransactionReceipt).not.toHaveBeenCalled();
+        // One latest block number, read once, pins the mapping lookup and all three checks.
+        expect(ok.readContract).toHaveBeenCalledTimes(4);
+        for (const [call] of ok.readContract.mock.calls) expect(call.blockNumber).toBe(LATEST_BLOCK);
         const stolen = fakeClient({ owner: OTHER });
         await expect(verifyPaymasterDeployment(stolen.client, { factory: FACTORY, operator: OPERATOR })).rejects.toThrow(`owner() is ${OTHER}`);
     });

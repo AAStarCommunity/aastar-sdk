@@ -213,7 +213,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 });
                 
                 // The address comes from the successful receipt, and is checked against the mapping and owner()
-                // before the role registration below stakes anything for it.
+                // before the approve and role registration below.
                 paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash });
             }
 
@@ -243,7 +243,10 @@ export class PaymasterOperatorClient extends BaseClient {
                     amount: stakeAmount * 2n,
                     account: account
                 });
-                await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+                const approveReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+                if (approveReceipt.status !== 'success') {
+                    throw new Error(`GToken approve ${approveHash} reverted; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
+                }
             }
 
             const { encodeAbiParameters, parseAbiParameters } = await import('viem');
@@ -261,7 +264,10 @@ export class PaymasterOperatorClient extends BaseClient {
                 account: account
             });
             
-            await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+            const registerReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+            if (registerReceipt.status !== 'success') {
+                throw new Error(`registerRoleSelf(ROLE_PAYMASTER_AOA) ${registerHash} reverted; paymaster ${paymasterAddress} is deployed but not registered`);
+            }
 
             return {
                 paymasterAddress,

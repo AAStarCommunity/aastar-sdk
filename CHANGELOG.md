@@ -4,15 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### PaymasterV4 deploys are checked before anything is funded or registered
+### PaymasterV4 deploys are checked before the SDK registers them
 
-- New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash? })` in `@aastar/core`. It takes the
-  paymaster address only from the factory's `PaymasterDeployed` log in a successful receipt (exactly one, for
-  `operator`), or, without `deployHash`, from the factory mapping. It then requires `paymasterByOperator`,
-  `operatorByPaymaster` and the clone's `owner()` to all name `operator`, and throws otherwise.
+- New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash?, confirmations? })` in `@aastar/core`.
+  It takes the paymaster address only from the factory's `PaymasterDeployed` log in a successful receipt (exactly one
+  emitted by `factory` for `operator`), or, without `deployHash`, from the factory mapping. It then requires
+  `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, read at one block (the
+  receipt's, or one latest block number), and throws otherwise. It is a client-side check at that block: ownership can
+  change later and a reorg past `confirmations` can replace the deploy.
 - `PaymasterOperatorClient.deployAndRegisterPaymasterV4` runs it on a new deploy and on a reused earlier deploy, before
-  any approve or role registration. `createOperatorClient().deployPaymasterV4` runs it after the receipt and throws on a
-  mismatch, so it no longer returns a hash for a reverted deploy.
+  any approve or role registration, and now throws when the approve or the registration reverts instead of returning
+  the hash as a success. `createOperatorClient().deployPaymasterV4` runs it after the receipt and throws on a mismatch,
+  so it no longer returns a hash for a reverted deploy.
+- The generic deposit methods (`addDeposit`, `addStake`, `depositFor`, `setupPaymasterDeposit`) still send to the
+  address they are given or configured with and do not run this check (FU-116).
 - Removed `scripts/01_prepare_all.ts` (it deposited to a `simulate()`-predicted address before the deploy confirmed)
   and `scripts/deploy_paymaster_v4.ts` (it used a factory function that does not exist, an unresolved import, and env
   private keys). Use `PaymasterOperatorClient`.

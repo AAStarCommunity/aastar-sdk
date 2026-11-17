@@ -23,6 +23,7 @@ function operatorClient(owner: Address) {
     oc.writeContract = vi.fn(async () => TX);
     oc.waitForTransactionReceipt = vi.fn(async () => ({
         status: 'success',
+        blockNumber: 100n,
         logs: [{
             address: FACTORY,
             topics: encodeEventTopics({ abi: PaymasterFactoryABI, eventName: 'PaymasterDeployed', args: { operator: OPERATOR, paymaster: PM } }),

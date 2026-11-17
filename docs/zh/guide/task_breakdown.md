@@ -17,12 +17,7 @@
 
 ## 阶段 1: 准备 (储备“弹药”)
 
-- [x] **1.1. 自动化准备** — `scripts/01_prepare_all.ts` 已删除：它在部署确认之前就往 simulate() 预测的 paymaster 地址充值，而且早已跑不起来。部署 PaymasterV4 请用 `PaymasterOperatorClient`，它会先核对回执、工厂映射和 `owner()`，再充值或注册。
-    - [x] **统一脚本**: 运行以下所有检查。
-    - [x] **账户检查**: 计算 A、B、C 账户地址。
-    - [x] **ETH 检查**: 余额不足时从 Supplier 节点注资。
-    - [x] **身份检查**: 检查 C 账户 MySBT 余额，缺失时自动铸造。
-    - [x] **资产检查**: 检查 C 账户 xPNTs (GToken) 余额，不足时自动转账。
+- [ ] **1.1. 自动化准备** — 已停用。`scripts/01_prepare_all.ts` 已删除：它在部署确认之前就往 simulate() 预测的 paymaster 地址充值，而且早已跑不起来。它做的账户、ETH、MySBT、xPNTs 检查没有替代脚本，需要手工做。部署 PaymasterV4 请用 `PaymasterOperatorClient.deployAndRegisterPaymasterV4`，它会先核对回执、工厂映射和 `owner()`，再注册角色。
 
 ## 阶段 2: 测试 (执行阶段)
 

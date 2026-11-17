@@ -194,6 +194,29 @@ describe('PaymasterOperatorClient', () => {
         expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
       });
 
+      it('deployAndRegisterPaymasterV4: a reverted approve stops before registration', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        mocks.mockToken.approve.mockResolvedValue('0xApproveHash');
+        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('approve 0xApproveHash reverted');
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      });
+
+      it('deployAndRegisterPaymasterV4: a reverted registration is reported, not returned as success', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(parseEther('1000'));
+        mocks.mockRegistry.registerRoleSelf.mockResolvedValue('0xRegisterHash');
+        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('0xRegisterHash reverted');
+      });
+
       it('deployAndRegisterPaymasterV4 should skip register if already has role', async () => {
         // Mock getPaymaster to return existing address to exercise idempotency
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValue('0x7777777777777777777777777777777777777777');

@@ -732,21 +732,27 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
  * address first (SP Daybreak DB-d-M3). So the address comes only from the PaymasterDeployed log of a
  * successful receipt (or, with no `deployHash`, from the factory mapping of an earlier deploy), and
  * then all three must name `operator`: paymasterByOperator, operatorByPaymaster and the clone's owner().
+ * The three are read at one block: the receipt's block, or the latest block number read once.
+ *
+ * This is a client-side check at that block, not a guarantee at a later transaction: ownership can
+ * change afterwards, and a reorg past `confirmations` can replace the deploy. Callers that need more
+ * should raise `confirmations` and check again right before they send.
  */
 export async function verifyPaymasterDeployment(
     client: PublicClient,
-    args: { factory: Address; operator: Address; deployHash?: Hash }
+    args: { factory: Address; operator: Address; deployHash?: Hash; confirmations?: number }
 ): Promise<Address> {
-    const { factory, operator, deployHash } = args;
+    const { factory, operator, deployHash, confirmations } = args;
     validateAddress(factory, 'factory');
     validateAddress(operator, 'operator');
     const fail = (code: ErrorCode, msg: string): never => {
-        throw new AAStarError(code, `verifyPaymasterDeployment: ${msg}; nothing was funded or registered`);
+        throw new AAStarError(code, `verifyPaymasterDeployment: ${msg}; do not fund or register this paymaster`);
     };
 
     let paymaster: Address;
+    let blockNumber: bigint;
     if (deployHash) {
-        const receipt = await client.waitForTransactionReceipt({ hash: deployHash });
+        const receipt = await client.waitForTransactionReceipt({ hash: deployHash, confirmations });
         if (receipt.status !== 'success') fail(ErrorCode.CONTRACT_REVERT, `deploy tx ${deployHash} reverted`);
         const deployed = parseEventLogs({
             abi: PaymasterFactoryABI,
@@ -758,16 +764,17 @@ export async function verifyPaymasterDeployment(
             fail(ErrorCode.CONTRACT_REVERT, `expected one PaymasterDeployed for ${operator} from ${factory} in ${deployHash}, found ${mine.length}`);
         }
         paymaster = mine[0].args.paymaster;
+        blockNumber = receipt.blockNumber;
     } else {
-        paymaster = await paymasterFactoryActions(factory)(client).getPaymasterByOperator({ operator });
+        blockNumber = await client.getBlockNumber();
+        paymaster = await client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Address;
         if (isAddressEqual(paymaster, zeroAddress)) fail(ErrorCode.CONTRACT_REVERT, `factory ${factory} has no paymaster for ${operator}`);
     }
 
-    const factoryActs = paymasterFactoryActions(factory)(client);
     const [byOperator, byPaymaster, owner] = await Promise.all([
-        factoryActs.getPaymasterByOperator({ operator }),
-        factoryActs.getOperatorByPaymaster({ paymaster }),
-        client.readContract({ address: paymaster, abi: PaymasterABI, functionName: 'owner', args: [] }) as Promise<Address>,
+        client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Promise<Address>,
+        client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getOperatorByPaymaster', args: [paymaster], blockNumber }) as Promise<Address>,
+        client.readContract({ address: paymaster, abi: PaymasterABI, functionName: 'owner', args: [], blockNumber }) as Promise<Address>,
     ]);
     if (!isAddressEqual(byOperator, paymaster)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${operator} to ${byOperator}, not ${paymaster}`);
     if (!isAddressEqual(byPaymaster, operator)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${paymaster} to operator ${byPaymaster}, not ${operator}`);
