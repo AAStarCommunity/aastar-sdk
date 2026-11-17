@@ -53,9 +53,9 @@ import ReputationSystemABIData from './ReputationSystem.json' with { type: 'json
 // Monitoring System
 import DVTValidatorABIData from './DVTValidator.json' with { type: 'json' };
 import BLSAggregatorABIData from './BLSAggregator.json' with { type: 'json' };
-// DEV PIN (rc.8 BLS routing): SP main 9cacd4ec (#630 merge), NOT a tag. Re-pin to the rc.8 tag before the PR opens.
-import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.0.dev-9cacd4ec.json' with { type: 'json' };
-import DVTValidatorV080DevABIData from './pending/DVTValidator-0.8.0.dev-9cacd4ec.json' with { type: 'json' };
+// DEV PIN (rc.8 BLS routing): SP main 1845b124 (#633 merge), NOT a tag. Re-pin to the rc.8 tag before the PR opens.
+import BLSAggregatorV414DevABIData from './pending/BLSAggregator-4.14.1.dev-1845b124.json' with { type: 'json' };
+import DVTValidatorV080DevABIData from './pending/DVTValidator-0.8.1.dev-1845b124.json' with { type: 'json' };
 import BLSValidatorABIData from './BLSValidator.json' with { type: 'json' };
 
 // DVT layer-1 account policy (SuperPaymaster v5.4) — sender-keyed, governance-gated
@@ -197,12 +197,13 @@ export const BLSAggregatorABI = (BLSAggregatorABIData as any).abi || BLSAggregat
 export const BLSAggregatorArtifact = BLSAggregatorABIData;
 
 /**
- * BLSAggregator-4.14.0 and DVTValidator-0.8.0 (SP PR #630, rc.8 step 3b). DEVELOPMENT PIN ONLY: byte-identical to
- * AAStarCommunity/SuperPaymaster `abis/BLSAggregator.json` (sha256 d7009f6f30f23a62f874c585c1c1534911aaf2b0f71eb672f0a2aaa5542f2fab)
- * and `abis/DVTValidator.json` (sha256 47c89b21aa2a6c7c3c6274f90f326a837db7d4d36d7e255f928d8dfbc7720e19) at SP main
- * 9cacd4ecf228ca3eb9fb99470861c57de12608c4 (merge of PR #630, head d084f180; same bytes), not a tag. A later aggregator fix may change the
- * ABI again before the tag. MUST be re-pinned to the rc.8 tag (with a provenance gate) before the PR that ships it
- * opens. Used only by `dvtActions().registerBLSPublicKey`; not the default ABI of any client.
+ * BLSAggregator-4.14.1 and DVTValidator-0.8.1 (SP #630 + #633, rc.8 step 3b). DEVELOPMENT PIN ONLY: byte-identical to
+ * AAStarCommunity/SuperPaymaster `abis/BLSAggregator.json` (sha256 cba84adc14953edc330c7154fc8dc6b7fdb696935e7e30c52e8e59adf2734400)
+ * and `abis/DVTValidator.json` (sha256 459a3ad992ba15bd4756d8e4d7c67fbf4267fa04a65a500e3cdb89c45e79a93d) at SP main
+ * 1845b12482e13a9937c7ec7f7f059ed9a3d33829 (merge of #633), not a tag. Function / event / error signatures are identical
+ * to the 4.14.0 / 0.8.0 pin (9cacd4ec); only bytecode and version() changed. MUST be re-pinned to the rc.8 tag (with a
+ * provenance gate) before the PR that ships it opens. The export names keep V414 / V080 (the 4.14.x / 0.8.x interface).
+ * Used only by `dvtActions().registerBLSPublicKey`; not the default ABI of any client.
  */
 export const BLSAggregatorV414DevABI = (BLSAggregatorV414DevABIData as any).abi || BLSAggregatorV414DevABIData;
 export const DVTValidatorV080DevABI = (DVTValidatorV080DevABIData as any).abi || DVTValidatorV080DevABIData;
