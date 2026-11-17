@@ -5,7 +5,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
-import { KeeperStartupRefusal, keeperKeyFrom, parseKeeperMode, resolveKeeperSigner } from './keeperKey.js';
+import { readFileSync } from 'node:fs';
+import {
+    KeeperStartupRefusal, assertFlagValues, castSignerArgs, keeperAccountFor, keeperKeyFrom, parseKeeperMode, resolveKeeperSigner,
+} from './keeperKey.js';
 
 // This file spawns keeper.ts below; every top-level block states its timeout (check:spawn-timeouts).
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
@@ -43,6 +46,22 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         expect(() => resolveKeeperSigner({ mode: 'cast', dryRun: false, env, keystorePath: undefined, castAccount: '0xabc' })).toThrow(/use --keystore/);
     });
 
+    it('a value flag without its value refuses (end of argv, or another --flag next)', () => {
+        expect(() => assertFlagValues(['--network', 'sepolia', '--mode'])).toThrow(/--mode needs a value/);
+        expect(() => assertFlagValues(['--mode', 'cast', '--cast-account', '--once'])).toThrow(/--cast-account needs a value/);
+        expect(() => assertFlagValues(['--poll-interval', '--dry-run'])).toThrow(KeeperStartupRefusal);
+        expect(() => assertFlagValues(['--network', 'sepolia', '--mode', 'cast', '--cast-account', 'keeper', '--once', '--dry-run'])).not.toThrow();
+    });
+
+    it('the wallet and the cast arguments are built from the resolved signer only', () => {
+        const pk = resolveKeeperSigner({ mode: 'privateKey', dryRun: false, keystorePath: undefined, castAccount: undefined, env: { KEEPER_PRIVATE_KEY: KEEPER, PRIVATE_KEY_SUPPLIER: DEPLOYERISH } });
+        expect(keeperAccountFor(pk)?.address).toBe(KEEPER_ADDR);
+        expect(keeperAccountFor({ mode: 'privateKey', key: undefined, address: undefined })).toBeNull();
+        expect(castSignerArgs({ castAccount: 'keeper' })).toEqual(['--account', 'keeper']);
+        expect(castSignerArgs({ keystorePath: '/k.json', castAccount: 'keeper' })).toEqual(['--keystore', '/k.json']);
+        expect(() => castSignerArgs({})).toThrow(KeeperStartupRefusal);
+    });
+
     it('--mode is parsed canonically: any case of privateKey, cast, else refuse', () => {
         expect(parseKeeperMode(undefined, false)).toBe('privateKey');
         expect(parseKeeperMode('', true)).toBe('cast');
@@ -78,11 +97,20 @@ afterAll(async () => {
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
 /** Run keeper.ts; stop it as soon as it has reached the RPC (or after `ms`). Returns exit code, output, requests. */
-function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): Promise<{ code: number | null; out: string; requests: number }> {
+// Every child runs with no-egress.preload.mjs: a connection to any non-loopback host (Telegram, a public RPC) is
+// logged and refused. Refusals must log none; no test can reach a public network.
+let runs = 0;
+function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): Promise<{ code: number | null; out: string; requests: number; egress: string[] }> {
     const before = requests;
+    const egressLog = join(dir, `egress-${++runs}.log`);
+    writeFileSync(egressLog, '');
     return new Promise((resolve) => {
         const child = spawn(join(process.cwd(), 'node_modules/.bin/tsx'), [join(process.cwd(), 'scripts/keeper.ts'), ...args], {
-            cwd: dir, env: { PATH: process.env.PATH!, HOME: dir, RPC_URL: rpcUrl, ...env },
+            cwd: dir,
+            env: {
+                PATH: process.env.PATH!, HOME: dir, RPC_URL: rpcUrl, ...env,
+                NO_EGRESS_LOG: egressLog, NODE_OPTIONS: `--import=${join(process.cwd(), 'scripts/keeper/no-egress.preload.mjs')}`,
+            },
         });
         let out = '';
         child.stdout.on('data', (d) => { out += String(d); });
@@ -92,7 +120,7 @@ function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): 
         child.on('close', (code) => {
             clearInterval(poll);
             clearTimeout(stop);
-            resolve({ code, out, requests: requests - before });
+            resolve({ code, out, requests: requests - before, egress: readFileSync(egressLog, 'utf8').split('\n').filter(Boolean) });
         });
     });
 }
@@ -108,15 +136,18 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['unknown --mode', ['--network', 'sepolia', '--once', '--mode', 'bogus'], /unknown --mode "bogus"/],
         ['cast mode with only DEPLOYER_ACCOUNT in the env file', ['--network', 'sepolia', '--once', '--mode', 'cast'], /DEPLOYER_ACCOUNT is not read/],
         ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
-    ])('%s: exit 1, refused, zero RPC requests, no key printed', async (_name, args, why) => {
+        ['a trailing --mode with no value', ['--network', 'sepolia', '--once', '--mode'], /--mode needs a value/],
+        ['--cast-account followed by another flag', ['--network', 'sepolia', '--mode', 'cast', '--cast-account', '--once'], /--cast-account needs a value/],
+        ['an invalid number, before the signer is resolved', ['--network', 'sepolia', '--once', '--poll-interval', 'invalid'], /invalid|Cannot convert/],
+    ])('%s: exit 1, refused, zero RPC requests, zero egress (no Telegram), no key printed', async (_name, args, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         const r = await keeper([...(args as string[])]);
         expect(r.code).toBe(1);
         expect(r.out).toMatch(/refused: /);
         expect(r.out).toMatch(why as RegExp);
         expect(r.requests).toBe(0);
-        // The refusal path exits before the fatal handler's Telegram notification.
-        expect(r.out).not.toMatch(/\[keeper\] fatal/);
+        // Telegram credentials are in the env file: a notification would show up as egress to api.telegram.org.
+        expect(r.egress).toEqual([]);
         expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
     });
 

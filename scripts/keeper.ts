@@ -1,9 +1,13 @@
 import { createPublicClient, createWalletClient, formatGwei, http, parseAbi } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
-import { KeeperStartupRefusal, parseKeeperMode, resolveKeeperSigner, type KeeperMode } from './keeper/keeperKey.js';
+import {
+    KeeperStartupRefusal, assertFlagValues, castSignerArgs, keeperAccountFor, parseKeeperMode, resolveKeeperSigner, type KeeperMode,
+} from './keeper/keeperKey.js';
+
+/** True until the signer is resolved. Any error before then is a configuration refusal: no Telegram, no network. */
+let startupPhase = true;
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -204,13 +208,7 @@ async function runCastSend(params: {
     const cmd = 'cast';
     const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
 
-    if (params.keystorePath) {
-        castArgs.push('--keystore', params.keystorePath);
-    } else if (params.accountName) {
-        castArgs.push('--account', params.accountName);
-    } else {
-        throw new Error('cast mode requires --keystore or --cast-account');
-    }
+    castArgs.push(...castSignerArgs({ keystorePath: params.keystorePath, castAccount: params.accountName }));
 
     // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
     if (params.gasPriceWei && params.gasPriceWei > 0n) {
@@ -261,6 +259,7 @@ async function runCastSend(params: {
 async function main() {
     installPipeSafety();
     const args = process.argv.slice(2).filter((a) => a !== '--');
+    assertFlagValues(args);
     const network = (getArgValue(args, '--network') || 'op-sepolia') as NetworkName;
     const mode: KeeperMode = parseKeeperMode(getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore')));
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
@@ -299,9 +298,9 @@ async function main() {
         mode, dryRun, env: process.env,
         keystorePath: getArgValue(args, '--keystore'), castAccount: getArgValue(args, '--cast-account'),
     });
-    const keeperKey = signer.mode === 'privateKey' ? signer.key : undefined;
     if (signer.mode === 'privateKey') console.log(`signer (privateKey mode): ${signer.address ?? 'none (dry run)'}`);
-    else console.log(`signer (cast mode): ${signer.keystorePath ? `keystore ${signer.keystorePath}` : `account ${signer.castAccount ?? 'none (dry run)'}`}`);
+    else console.log(`signer (cast mode): ${signer.keystorePath ? `keystore ${signer.keystorePath}` : `account ${signer.castAccount}`}`);
+    startupPhase = false;
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
@@ -458,7 +457,7 @@ async function main() {
         }
     }
 
-    const keeperAccount = keeperKey ? privateKeyToAccount(keeperKey) : null;
+    const keeperAccount = keeperAccountFor(signer);
     const walletClient = keeperAccount
         ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
         : null;
@@ -996,7 +995,7 @@ async function main() {
 
 main().catch(async (e) => {
     // A startup refusal is a configuration error: print it and exit, with no outbound request at all.
-    if (e instanceof KeeperStartupRefusal) {
+    if (e instanceof KeeperStartupRefusal || startupPhase) {
         console.error(`refused: ${e.message}`);
         process.exit(1);
     }

@@ -57,8 +57,10 @@ pnpm keeper:op-mainnet -- --mode cast --keystore /path/to/keystore.json
 Cast (named account) mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --mode cast --cast-account <the keeper's own foundry account>
+pnpm keeper:op-mainnet -- --mode cast --cast-account keeper
 ```
+
+Replace `keeper` with the name of the keeper's own Foundry account. Do not use the deployer's account or any account that holds a protocol privilege (owner, admin, guardian, timelock role): the keeper signs every price update with it.
 
 `--cast-account` (or `--keystore`) is required in cast mode. `DEPLOYER_ACCOUNT` is not read: it names the deployer, and the keeper has no fallback signer of any kind. `run-keeper-main.sh` takes the account from `KEEPER_CAST_ACCOUNT` and has no default.
 

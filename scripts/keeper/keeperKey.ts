@@ -60,3 +60,31 @@ export function resolveKeeperSigner(a: {
     }
     return { mode: 'cast', keystorePath: a.keystorePath, castAccount: a.castAccount };
 }
+
+/** Every flag keeper.ts reads with a value. One present without a value (end of argv, or another --flag next) refuses. */
+export const VALUE_FLAGS = [
+    '--cast-account', '--chainlink-stale-sec', '--external-ethusd-url', '--health-interval', '--keystore',
+    '--max-base-fee-gwei', '--max-updates-per-day', '--mode', '--network', '--paymaster', '--paymaster-missing-alert',
+    '--paymaster-operator', '--poll-interval', '--safety-margin', '--superpaymaster', '--volatility-cooldown',
+    '--volatility-threshold-bps',
+] as const;
+
+export function assertFlagValues(args: readonly string[], flags: readonly string[] = VALUE_FLAGS): void {
+    for (let i = 0; i < args.length; i++) {
+        if (!flags.includes(args[i]!)) continue;
+        const v = args[i + 1];
+        if (v === undefined || v.startsWith('--')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
+    }
+}
+
+/** The wallet account for privateKey mode: built from the resolved signer and nothing else. */
+export function keeperAccountFor(signer: KeeperSigner) {
+    return signer.mode === 'privateKey' && signer.key ? privateKeyToAccount(signer.key) : null;
+}
+
+/** The `cast send` signer arguments: from the resolved signer and nothing else (keystore wins over an account). */
+export function castSignerArgs(signer: { keystorePath?: string; castAccount?: string }): string[] {
+    if (signer.keystorePath) return ['--keystore', signer.keystorePath];
+    if (signer.castAccount) return ['--account', signer.castAccount];
+    throw new KeeperStartupRefusal('cast mode requires --keystore or --cast-account');
+}
