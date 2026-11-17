@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Breaking: the price keeper needs an explicit, dedicated signer (#452)
+
+The keeper no longer falls back to any signer. Before, a keeper started without its own key signed with whatever
+`.env.<network>` held, which on Sepolia is the deployer EOA.
+
+- privateKey mode: `KEEPER_PRIVATE_KEY` is required (except `--dry-run`). `PRIVATE_KEY` (read by `run-keeper.sh`) and
+  `PRIVATE_KEY_SUPPLIER` (read by `keeper.ts`) are no longer used.
+- cast mode: `--keystore` or `--cast-account` is required. `DEPLOYER_ACCOUNT` is no longer used.
+- `run-keeper-main.sh` (OP Mainnet) requires `KEEPER_CAST_ACCOUNT`; its hard-coded `--cast-account optimism-deployer`
+  default is gone. **An OP Mainnet price keeper started from this script without `KEEPER_CAST_ACCOUNT` now refuses to
+  start.** That is intended: give it the keeper's own account, not the deployer's.
+- A refused start exits 1 before any network request and without a Telegram notification.
+
 ## [0.46.0-rc.2] - 2026-09-05 — first INSTALLABLE release candidate
 
 **SDK Code Integrity Hash**: `b8953258d0572badc75680733df33af7fb4092d34d1de46288d25ce1ff9a3b6d`
