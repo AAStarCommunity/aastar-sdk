@@ -6,7 +6,8 @@
  * implementations apart. Every assertion here exists to construct that difference synthetically.
  */
 import { describe, expect, it } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { replaySetEvents, setDifferenceSet, type SetEvent } from './committee-set-replay.js';
 
@@ -103,15 +104,34 @@ describe('setDifferenceSet stays out of production', () => {
     // .mts / .cts included — that is the hole review found, not a hypothetical one.
     const IS_CODE = (p: string) => /\.(m|c)?tsx?$/.test(p) && !/\.test\.(m|c)?tsx?$/.test(p);
 
+    // Transient test fixtures, excluded BY NAME at listing time: scripts/sp550-pin-fill-core.test.ts:31 writes
+    // `.pinfill-test-<pid>-<name>.ts` into packages/core/src (so its imports resolve) and deletes it after each test.
+    // Run concurrently, the file could vanish between this listing and the read below (ENOENT). Only this known
+    // name is skipped: any other file that cannot be read still fails the scan.
+    const TRANSIENT_FIXTURE = /^\.pinfill-test-.*\.ts$/;
+
     function walk(dir: string, acc: string[] = []): string[] {
         for (const e of readdirSync(dir, { withFileTypes: true })) {
             const p = join(dir, e.name);
             if (e.name === 'node_modules' || e.name === 'dist' || e.name === '.git') continue;
+            if (TRANSIENT_FIXTURE.test(e.name)) continue;
             if (e.isDirectory()) walk(p, acc);
             else if (statSync(p).isFile() && IS_CODE(p)) acc.push(p);
         }
         return acc;
     }
+
+    it('the pin-fill transient fixture is excluded by name, and only it', () => {
+        const d = mkdtempSync(join(tmpdir(), 'committee-scan-'));
+        try {
+            for (const f of ['.pinfill-test-x.ts', '.pinfill-test-123-last-rm.ts', 'real.ts', '.pinfill-other.ts', 'pinfill-test-x.ts']) {
+                writeFileSync(join(d, f), '// fixture\n');
+            }
+            expect(walk(d).map((f) => f.slice(d.length + 1)).sort()).toEqual(['.pinfill-other.ts', 'pinfill-test-x.ts', 'real.ts']);
+        } finally {
+            rmSync(d, { recursive: true, force: true });
+        }
+    });
 
     it('no non-test source file under the scanned roots references setDifferenceSet', () => {
         // Per-root, not just in total: a repo-wide floor cannot tell "every root is there" from
