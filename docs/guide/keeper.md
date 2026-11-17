@@ -62,7 +62,7 @@ pnpm keeper:op-mainnet -- --mode cast --cast-account keeper
 
 Replace `keeper` with the name of the keeper's own Foundry account. Do not use the deployer's account or any account that holds a protocol privilege (owner, admin, guardian, timelock role): the keeper signs every price update with it.
 
-`--cast-account` (or `--keystore`) is required in cast mode. `DEPLOYER_ACCOUNT` is not read: it names the deployer, and the keeper has no fallback signer of any kind. `run-keeper-main.sh` takes the account from `KEEPER_CAST_ACCOUNT` and has no default.
+`--cast-account` (or `--keystore`) is required in cast mode. Arguments are parsed strictly: an unknown option, an `--option=value` form, a repeated option or a value that starts with `-` refuses to start (so `--dry-run=true` is refused, not run live). A keystore file whose name starts with `-` is passed as `./-name.json`. `DEPLOYER_ACCOUNT` is not read: it names the deployer, and the keeper has no fallback signer of any kind. `run-keeper-main.sh` takes the account from `KEEPER_CAST_ACCOUNT` and has no default.
 
 In cast mode (non-dry-run), the keeper will prompt once for the keystore password at startup and reuse it for subsequent updates. For unattended runs, set `CAST_KEYSTORE_PASSWORD` in `.env.<network>` so no interactive prompt is needed.
 

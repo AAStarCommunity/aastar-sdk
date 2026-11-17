@@ -75,6 +75,7 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         for (const [argv, why] of [
             [['--dry-run=true'], /--dry-run=… is not accepted/],
             [['--network=sepolia'], /--network=… is not accepted/],
+            [['--keystore', './-keeper.json', '--bogus-x9'], /unknown option at position 3 \(not shown\)/],
             [['--dryrun'], /unknown option --dryrun/],
             [['--dry-run', '--dry-run'], /--dry-run is given more than once/],
             [['--poll-interval', '60', '--poll-interval', '30'], /--poll-interval is given more than once/],
@@ -94,7 +95,9 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         for (const empty of ['', '  ']) expect(() => parseKeeperMode(empty, true)).toThrow(/--mode needs a value/);
         for (const m of ['privateKey', 'privatekey', 'PRIVATEKEY']) expect(parseKeeperMode(m, false)).toBe('privateKey');
         expect(parseKeeperMode('CAST', false)).toBe('cast');
-        for (const m of ['private-key', 'bogus', 'pk']) expect(() => parseKeeperMode(m, false)).toThrow(KeeperStartupRefusal);
+        for (const m of ['private-key', 'bogus', 'pk']) expect(() => parseKeeperMode(m, false)).toThrow(/unknown --mode value \(expected privateKey or cast; the value is not shown\)/);
+        // A keystore file whose name starts with '-' is spelled ./-name (a bare '-name' would read as an option).
+        expect(parseKeeperArgs(['--keystore', './-keeper.json']).value('--keystore')).toBe('./-keeper.json');
     });
 });
 
@@ -162,7 +165,7 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['default mode', ['--network', 'sepolia', '--once'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
         ['explicit --mode privateKey', ['--network', 'sepolia', '--once', '--mode', 'privateKey'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
         ['--mode PRIVATEKEY', ['--network', 'sepolia', '--once', '--mode', 'PRIVATEKEY'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
-        ['unknown --mode', ['--network', 'sepolia', '--once', '--mode', 'bogus'], /unknown --mode "bogus"/],
+        ['unknown --mode', ['--network', 'sepolia', '--once', '--mode', 'bogus'], /unknown --mode value/],
         ['cast mode with only DEPLOYER_ACCOUNT in the env file', ['--network', 'sepolia', '--once', '--mode', 'cast'], /DEPLOYER_ACCOUNT is not read/],
         ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /unknown option --dry-run-lookalike/],
         ['a trailing --mode with no value', ['--network', 'sepolia', '--once', '--mode'], /--mode needs a value/],
@@ -253,6 +256,16 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         expect(r.requests).toBe(0);
         expect(r.egress).toEqual([]);
         expect(r.out).not.toContain('wallet signer:');
+    });
+
+    it('a key mistyped into an option, an --x=value, or --mode is refused without being printed', () => {
+        const key = DEPLOYERISH.slice(2);
+        for (const argv of [[`--${key}`], [`--${DEPLOYERISH}`], [`--${key}=x`], [`--x${key}=1`], ['--mode', DEPLOYERISH], ['--mode', key]]) {
+            let msg = '';
+            try { parseKeeperMode(parseKeeperArgs(argv).value('--mode'), false); } catch (e) { msg = String((e as Error).message); }
+            expect(msg, JSON.stringify(argv.map((a) => a.slice(0, 8)))).not.toBe('');
+            expect(msg.toLowerCase()).not.toContain(key.slice(0, 16));
+        }
     });
 
     it('a key pasted as a positional argument is refused without being printed', async () => {

@@ -25,7 +25,8 @@ export function parseKeeperMode(raw: string | undefined, hasKeystore: boolean): 
     const m = raw.toLowerCase();
     if (m === 'privatekey') return 'privateKey';
     if (m === 'cast') return 'cast';
-    throw new KeeperStartupRefusal(`unknown --mode "${raw}" (expected privateKey or cast)`);
+    // The value is not echoed: a mistyped variable can put a secret here.
+    throw new KeeperStartupRefusal('unknown --mode value (expected privateKey or cast; the value is not shown)');
 }
 
 export function keeperKeyFrom(env: Record<string, string | undefined>): `0x${string}` | undefined {
@@ -81,6 +82,13 @@ export interface KeeperArgs {
  * flag accepts it, so `--dry-run=true` cannot silently mean a live run), a repeated flag (no "first one wins"), a
  * positional argument, and a value flag without its value. `--dry-run` is then exactly `args.flag('--dry-run')`.
  */
+/**
+ * Refusal messages echo an unknown option only when it reads like an option name (lowercase letters and '-',
+ * no digits). A key, address or URL pasted after `--` contains digits or other characters, so it is reported by
+ * position only and never printed.
+ */
+const OPTION_LIKE = /^--[a-z][a-z-]{0,40}$/;
+
 export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
     const values = new Map<string, string>();
     const flags = new Set<string>();
@@ -89,9 +97,17 @@ export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
         const a = argv[i]!;
         // Never echo the argument: an operator who pastes a key here must not see it printed into logs.
         if (!a.startsWith('--') && a !== '-h') throw new KeeperStartupRefusal(`unexpected positional argument at position ${i + 1} (not shown)`);
-        if (a.includes('=')) throw new KeeperStartupRefusal(`${a.slice(0, a.indexOf('='))}=… is not accepted: pass "${a.slice(0, a.indexOf('='))}" and its value as separate arguments`);
+        if (a.includes('=')) {
+            const name = a.slice(0, a.indexOf('='));
+            const known = (VALUE_FLAGS as readonly string[]).includes(name) || (BOOLEAN_FLAGS as readonly string[]).includes(name);
+            throw new KeeperStartupRefusal(known
+                ? `${name}=… is not accepted: pass "${name}" and its value as separate arguments`
+                : `an --option=value argument at position ${i + 1} is not accepted (not shown)`);
+        }
         const isValue = (VALUE_FLAGS as readonly string[]).includes(a);
-        if (!isValue && !(BOOLEAN_FLAGS as readonly string[]).includes(a)) throw new KeeperStartupRefusal(`unknown option ${a}`);
+        if (!isValue && !(BOOLEAN_FLAGS as readonly string[]).includes(a)) {
+            throw new KeeperStartupRefusal(OPTION_LIKE.test(a) ? `unknown option ${a}` : `unknown option at position ${i + 1} (not shown)`);
+        }
         if (seen.has(a)) throw new KeeperStartupRefusal(`${a} is given more than once`);
         seen.add(a);
         if (isValue) {
