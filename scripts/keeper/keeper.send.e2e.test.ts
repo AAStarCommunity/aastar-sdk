@@ -174,7 +174,9 @@ function fakeCast(hang = false): string {
         `echo $$ > ${dir}/pid`,
         `printf '%s\\n' "$@" > ${dir}/argv`,
         `env > ${dir}/env`,
-        hang ? 'exec sleep 30' : `echo "transactionHash ${CAST_TX}"`,
+        // Ignore SIGHUP (inherited across exec): under the test's pty the session leader's exit would SIGHUP the
+        // child and hide a keeper that never terminates it. Under launchd there is no such SIGHUP.
+        hang ? "trap '' HUP\nexec sleep 30" : `echo "transactionHash ${CAST_TX}"`,
         '',
     ].join('\n'));
     chmodSync(join(bin, 'cast'), 0o755);
@@ -219,6 +221,15 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
         const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY } });
         expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([V4]);
         expect(r.out).toMatch(/superPaymaster reads: .*SuperPaymaster read failing/s);
+        expect(r.code).toBe(1);
+    });
+
+    it('a SuperPaymaster update that fails (reverted) does not stop the PaymasterV4 update in the same tick', async () => {
+        const chain = await fakeChain({ spUpdatedAt: 'empty', v4UpdatedAt: 'empty', receiptStatus: '0x0' });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY } });
+        expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([SP, V4]);
+        expect(r.out).toMatch(/superPaymaster: superPaymaster updatePrice reverted/);
         expect(r.code).toBe(1);
     });
 
