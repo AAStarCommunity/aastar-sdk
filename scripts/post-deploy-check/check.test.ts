@@ -6,11 +6,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { Abi, AbiEvent, Address } from 'viem';
+import { pad, toEventSelector, type Abi, type AbiEvent, type Address } from 'viem';
 import { ABI_REGISTRY } from './abis.js';
 import { ExpectationsError, parseExpectations, validateExpectations, type Expectations } from './expectations.js';
-import { REPUTATION_SOURCE_EVENT, formatReport, runChecks, type Report, type Result } from './run.js';
-import { blockHash, fakeProvider, reputationLog, type FakeChain } from './fakeChain.js';
+import { REPLAY_CAVEAT, REPUTATION_SOURCE_EVENT, formatReport, runChecks, type Report, type Result } from './run.js';
+import { blockHash, fakeProvider, ownershipLog, reputationLog, type FakeChain } from './fakeChain.js';
 import type { NamedProvider } from './rpc.js';
 import { main } from './check.js';
 
@@ -24,6 +24,7 @@ const DEPLOYER = '0x2000000000000000000000000000000000000009' as Address;
 const SRC1 = '0x3000000000000000000000000000000000000001' as Address;
 const SRC2 = '0x3000000000000000000000000000000000000002' as Address;
 const SRC3 = '0x3000000000000000000000000000000000000003' as Address;
+const SRC4 = '0x3000000000000000000000000000000000000004' as Address;
 const TL = '0x2000000000000000000000000000000000000005' as Address;
 const SAFE = '0x2000000000000000000000000000000000000006' as Address;
 const PROPOSER = `0x${'b0'.repeat(32)}` as const;
@@ -31,6 +32,8 @@ const ROLE_A = `0x${'a1'.repeat(32)}` as const;
 const ROLE_B = `0x${'a2'.repeat(32)}` as const;
 
 const repEvent = (ABI_REGISTRY.Registry as Abi).find(x => x.type === 'event' && x.name === REPUTATION_SOURCE_EVENT) as AbiEvent;
+const ownEvent = (ABI_REGISTRY.Registry as Abi).find(x => x.type === 'event' && x.name === 'OwnershipTransferred') as AbiEvent;
+const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 
 interface WorldOpts {
     seed?: string;
@@ -47,6 +50,10 @@ interface WorldOpts {
     events?: [Address, boolean, bigint][];
     /** Storage answers for isReputationSource; defaults to the replay result. */
     sourceState?: Record<string, boolean>;
+    /** Owner set by Registry.initialize (OwnershipTransferred 0x0 -> owner at block 6); null = no such log. Default: DEPLOYER. */
+    initOwner?: Address | null;
+    /** Registry.initialize sets isReputationSource[owner] = true WITHOUT an event; default false (as if revoked). */
+    initOwnerIsSource?: boolean;
     chainId?: number;
 }
 
@@ -54,7 +61,9 @@ function world(o: WorldOpts = {}): FakeChain {
     const events = o.events ?? [[SRC1, true, 10n], [SRC2, true, 20n], [SRC3, true, 30n], [SRC3, false, 40n]];
     const replay = new Map<string, boolean>();
     for (const [a, on] of events) replay.set(a.toLowerCase(), on);
-    const sourceState = o.sourceState ?? Object.fromEntries(replay);
+    const sourceState: Record<string, boolean> = o.sourceState ?? Object.fromEntries(replay);
+    const initOwner = o.initOwner === undefined ? DEPLOYER : o.initOwner;
+    if (initOwner && o.initOwnerIsSource) sourceState[initOwner.toLowerCase()] = true;
     const chain: FakeChain = {
         chainId: o.chainId ?? 11155111,
         finalized: o.finalized ?? 100n,
@@ -96,6 +105,7 @@ function world(o: WorldOpts = {}): FakeChain {
         },
     };
     chain.logs = events.map(([a, on, b], i) => reputationLog(chain, REGISTRY, repEvent, a, on, b, i));
+    if (initOwner) chain.logs.push(ownershipLog(REGISTRY, ownEvent, ZERO, initOwner, 6n, 0));
     return chain;
 }
 
@@ -119,7 +129,7 @@ function table(over: Partial<Expectations> = {}, assertions?: unknown[]): Expect
             { id: 'sp-version', kind: 'version', contract: 'SuperPaymaster', expected: 'SuperPaymaster-5.5.2' },
             { id: 'agg-balance', kind: 'balanceZero', address: AGG },
             { id: 'agg-owner', kind: 'notOwnerOf', address: AGG, contracts: ['Registry', 'SuperPaymaster', 'GTokenStaking'] },
-            { id: 'rep-set', kind: 'reputationSourceSet', registry: 'Registry', expected: [SRC1, SRC2], fromBlock: 5, logChunkSize: 7 },
+            { id: 'rep-set', kind: 'reputationSourceSet', registry: 'Registry', expected: [SRC1, SRC2], mustNotBe: ['$D'], fromBlock: 5, logChunkSize: 7 },
             { id: 'agg-slasher', kind: 'authorizedSlasher', staking: 'GTokenStaking', address: AGG, expected: false },
             { id: 'staking-registry', kind: 'call', contract: 'GTokenStaking', function: 'REGISTRY', args: [], compare: 'eq', expected: REGISTRY },
         ],
@@ -263,35 +273,59 @@ describe('post-deploy-check: dual-provider guards', () => {
     });
 });
 
-describe('post-deploy-check: reputationSourceSet is exact', () => {
-    it('FAILs on one extra source', async () => {
+describe('post-deploy-check: reputationSourceSet verdict is state readback', () => {
+    const rs = (extra: Record<string, unknown> = {}) => ({ id: 'rep-set', kind: 'reputationSourceSet', registry: 'Registry', expected: [SRC1, SRC2], mustNotBe: ['$D'], fromBlock: 5, ...extra });
+    it('always prints the replay caveat', async () => {
+        const r = await runChecks(table(), pair(world(), world()));
+        expect(row(r, 'rep-set').status).toBe('PASS');
+        expect(row(r, 'rep-set').detail).toContain(REPLAY_CAVEAT);
+        expect(REPLAY_CAVEAT).toContain('事件重放不完整，结论以状态读回为准');
+    });
+    it('deployer made a source by initialize, with NO ReputationSourceUpdated event, is caught via mustNotBe', async () => {
+        const w = () => world({ initOwnerIsSource: true });
+        const r = await runChecks(table(), pair(w(), w()));
+        expect(row(r, 'rep-set').status).toBe('FAIL');
+        expect(row(r, 'rep-set').detail).toContain(`$D (${DEPLOYER}) must not be a source but reads isReputationSource == true`);
+        // No ReputationSourceUpdated log names the deployer: the replay alone could not have seen it.
+        expect(w().logs.some(l => l.topics[0] === toEventSelector(repEvent) && l.topics[1] === pad(DEPLOYER.toLowerCase() as `0x${string}`, { size: 32 }))).toBe(false);
+    });
+    it('the initialize owner, not named anywhere in the table, is found only through the seed and FAILs as extra', async () => {
+        const w = () => world({ initOwner: SRC4, initOwnerIsSource: true });
+        const r = await runChecks(table({}, [rs({ mustNotBe: [] })]), pair(w(), w()));
+        expect(row(r, 'rep-set').status).toBe('FAIL');
+        expect(row(r, 'rep-set').detail).toContain(`extra source not in expected set: ${SRC4} (found via initialize owner (OwnershipTransferred from 0x0 at block 6)`);
+    });
+    it('a table seed stands in for the initialize owner when no OwnershipTransferred log is reachable', async () => {
+        const w = () => world({ initOwner: null, sourceState: { [SRC1.toLowerCase()]: true, [SRC2.toLowerCase()]: true, [SRC4.toLowerCase()]: true } });
+        let r = await runChecks(table({}, [rs({ mustNotBe: [], seeds: [{ address: SRC4, source: 'initialize owner per deploy log' }] })]), pair(w(), w()));
+        expect(row(r, 'rep-set').status).toBe('FAIL');
+        expect(row(r, 'rep-set').detail).toContain(`extra source not in expected set: ${SRC4} (found via table seed`);
+        // Without the seed and without the log, discovery has a known hole: INCOMPLETE, never PASS.
+        const ok = () => world({ initOwner: null });
+        r = await runChecks(table({}, [rs({ mustNotBe: [] })]), pair(ok(), ok()));
+        expect(row(r, 'rep-set').status).toBe('INCOMPLETE');
+        expect(row(r, 'rep-set').detail).toContain('initialize owner not found');
+    });
+    it('FAILs on one extra source found in the replay', async () => {
         const ev: [Address, boolean, bigint][] = [[SRC1, true, 10n], [SRC2, true, 20n], [SRC3, true, 30n]];
         const r = await runChecks(table(), pair(world({ events: ev }), world({ events: ev })));
         expect(row(r, 'rep-set').status).toBe('FAIL');
-        expect(row(r, 'rep-set').detail).toContain(`extra source(s) not in expected set: ${SRC3}`);
+        expect(row(r, 'rep-set').detail).toContain(`extra source not in expected set: ${SRC3}`);
     });
-    it('FAILs on one missing source', async () => {
-        const ev: [Address, boolean, bigint][] = [[SRC1, true, 10n]];
-        const r = await runChecks(table(), pair(world({ events: ev }), world({ events: ev })));
-        expect(row(r, 'rep-set').status).toBe('FAIL');
-        expect(row(r, 'rep-set').detail).toContain(`missing from replayed set: ${SRC2}`);
-    });
-    it('FAILs when storage disagrees with the replay (a source set without an event)', async () => {
+    it('FAILs on one missing source (direct read, whatever the replay says)', async () => {
         const st = { [SRC1.toLowerCase()]: true, [SRC2.toLowerCase()]: false };
         const ev: [Address, boolean, bigint][] = [[SRC1, true, 10n], [SRC2, true, 20n]];
         const r = await runChecks(table(), pair(world({ events: ev, sourceState: st }), world({ events: ev, sourceState: st })));
         expect(row(r, 'rep-set').status).toBe('FAIL');
-        expect(row(r, 'rep-set').detail).toContain('event replay says true');
+        expect(row(r, 'rep-set').detail).toContain(`expected source ${SRC2} (${SRC2}) reads isReputationSource == false`);
     });
-    it('ignores events before fromBlock only if the table says so (later fromBlock misses SRC1)', async () => {
-        const t = table({}, [{ id: 'rep-set', kind: 'reputationSourceSet', registry: 'Registry', expected: [SRC1, SRC2], fromBlock: 15 }]);
-        const r = await runChecks(t, pair(world(), world()));
-        expect(row(r, 'rep-set').status).toBe('FAIL');
+    it('a fromBlock after the deployment misses the initialize owner and reports INCOMPLETE', async () => {
+        const r = await runChecks(table({}, [rs({ fromBlock: 15 })]), pair(world(), world()));
+        expect(row(r, 'rep-set').status).toBe('INCOMPLETE');
     });
-    it('reports INCOMPLETE (never PASS) when the ABI cannot enumerate the set', async () => {
+    it('reports INCOMPLETE (never PASS) when the ABI has no ReputationSourceUpdated event', async () => {
         const noEvent = (ABI_REGISTRY.Registry as Abi).filter(x => !(x.type === 'event' && x.name === REPUTATION_SOURCE_EVENT));
-        const t = table({ contracts: { AGG: { abi: 'BLSAggregatorV414Dev', address: AGG }, Registry: { abi: 'RegistryNoEvent', address: REGISTRY } } },
-            [{ id: 'rep-set', kind: 'reputationSourceSet', registry: 'Registry', expected: [SRC1, SRC2], fromBlock: 0 }]);
+        const t = table({ contracts: { AGG: { abi: 'BLSAggregatorV414Dev', address: AGG }, Registry: { abi: 'RegistryNoEvent', address: REGISTRY } } }, [rs({ fromBlock: 0 })]);
         const r = await runChecks(t, pair(world(), world()), { abis: { RegistryNoEvent: noEvent } });
         expect(row(r, 'rep-set').status).toBe('INCOMPLETE');
         expect(r.exitCode).toBe(2);
@@ -329,8 +363,11 @@ describe('post-deploy-check: expectations table validation', () => {
         rejects(t => { t.assertions = []; }, 'non-empty array');
         rejects(t => { t.assertions[0] = { id: 'c', kind: 'call', contract: 'R', function: 'f', args: [], compare: 'gt', expected: 1 }; }, 'compare');
         rejects(t => { t.assertions[0] = { id: 's', kind: 'authorizedSlasher', staking: 'R', address: AGG, expected: 'false' }; }, 'must be a boolean');
-        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1, SRC1], fromBlock: 0 }; }, 'duplicate address');
-        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1] }; }, 'missing field "fromBlock"');
+        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1, SRC1], mustNotBe: [], fromBlock: 0 }; }, 'duplicate address');
+        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1], mustNotBe: [] }; }, 'missing field "fromBlock"');
+        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1], fromBlock: 0 }; }, 'missing field "mustNotBe"');
+        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [SRC1], mustNotBe: [SRC1], fromBlock: 0 }; }, 'also listed in expected');
+        rejects(t => { t.assertions[0] = { id: 'r', kind: 'reputationSourceSet', registry: 'R', expected: [], mustNotBe: [], fromBlock: 0, seeds: [{ address: SRC1 }] }; }, 'missing field "source"');
     });
     it('rejects bad references, an unresolved deployer and unresolved names without a reason', () => {
         rejects(t => { t.assertions[0] = { id: 'b', kind: 'balanceZero', address: '$NOPE' }; }, 'names nothing');
@@ -450,6 +487,9 @@ describe('post-deploy-check: rc.8 v0 example table', () => {
         expect(v0.principals[v0.deployer].address).toBe('0xb5600060e6de5E11D3636731964218E53caadf0E');
         // The owner table gives TL48 only truncated: it must stay null, never be filled by guesswork.
         expect(v0.contracts.TL48.address).toBeNull();
+        expect(v0.contracts.Registry.address).toBe('0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71');
+        const rsr = v0.assertions.find(a => a.kind === 'reputationSourceSet');
+        expect(rsr && rsr.kind === 'reputationSourceSet' && { mustNotBe: rsr.mustNotBe, fromBlock: rsr.fromBlock }).toEqual({ mustNotBe: ['$D'], fromBlock: 11151002 });
         const ro = v0.assertions.find(a => a.kind === 'roleOwners');
         expect(ro && ro.kind === 'roleOwners' && ro.roles.map(r => r.name)).toEqual(['COMMUNITY', 'ENDUSER', 'PAYMASTER_AOA', 'PAYMASTER_SUPER', 'DVT', 'ANODE', 'KMS']);
         expect(ro && ro.kind === 'roleOwners' && ro.roles.every(r => r.id === null)).toBe(true);
