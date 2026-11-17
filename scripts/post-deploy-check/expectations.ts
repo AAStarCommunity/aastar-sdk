@@ -31,7 +31,12 @@ export interface NotOwnerOfAssertion extends Base { kind: 'notOwnerOf'; address:
 export interface ReputationSourceSetAssertion extends Base {
     kind: 'reputationSourceSet';
     registry: string;
+    /** Must each read isReputationSource == true at the pinned block. */
     expected: AddrRef[];
+    /** Must each read isReputationSource == false (e.g. the deployer). Required, may be empty: an omission is not "no requirement". */
+    mustNotBe: AddrRef[];
+    /** Extra discovery candidates, e.g. the initialize owner when no OwnershipTransferred(0x0 -> owner) log is reachable. */
+    seeds?: { address: AddrRef; source: string }[];
     /** First block of the event replay (the Registry deployment block). Inclusive. */
     fromBlock: number;
     /** Max blocks per eth_getLogs request. */
@@ -116,7 +121,7 @@ const KIND_KEYS: Record<Kind, { required: string[]; optional: string[] }> = {
     version: { required: ['contract', 'expected'], optional: [] },
     balanceZero: { required: ['address'], optional: [] },
     notOwnerOf: { required: ['address', 'contracts'], optional: [] },
-    reputationSourceSet: { required: ['registry', 'expected', 'fromBlock'], optional: ['logChunkSize'] },
+    reputationSourceSet: { required: ['registry', 'expected', 'mustNotBe', 'fromBlock'], optional: ['logChunkSize', 'seeds'] },
     authorizedSlasher: { required: ['staking', 'address', 'expected'], optional: [] },
     call: { required: ['contract', 'function', 'args', 'compare', 'expected'], optional: ['field'] },
     privilege: { required: ['contract', 'function', 'args'], optional: ['field', 'expected', 'deployerException'] },
@@ -347,6 +352,24 @@ function validateAssertion(a: unknown, i: number, names: Set<string>, problems: 
                     });
                 }
             }
+            const exp = new Set(Array.isArray(a.expected) ? a.expected : []);
+            if ('mustNotBe' in a) {
+                if (!Array.isArray(a.mustNotBe)) problems.push(`${where}.mustNotBe: must be an array of addresses (may be empty)`);
+                else a.mustNotBe.forEach((x, j) => {
+                    const r = checkRef(`${where}.mustNotBe[${j}]`, x, names, problems);
+                    if (r && exp.has(r)) problems.push(`${where}.mustNotBe[${j}]: also listed in expected`);
+                });
+            }
+            if ('seeds' in a) {
+                if (!Array.isArray(a.seeds)) problems.push(`${where}.seeds: must be an array`);
+                else a.seeds.forEach((sd, j) => {
+                    const w = `${where}.seeds[${j}]`;
+                    if (!isObj(sd)) { problems.push(`${w}: must be an object`); return; }
+                    checkKeys(w, sd, ['address', 'source'], [], problems);
+                    if ('address' in sd) checkRef(`${w}.address`, sd.address, names, problems);
+                    if ('source' in sd && !isNonEmptyString(sd.source)) problems.push(`${w}.source: must be a non-empty string`);
+                });
+            }
             if ('fromBlock' in a && !isBlockInt(a.fromBlock)) problems.push(`${where}.fromBlock: must be a non-negative integer`);
             if ('logChunkSize' in a && !(isBlockInt(a.logChunkSize) && a.logChunkSize >= 1 && a.logChunkSize <= 1_000_000)) {
                 problems.push(`${where}.logChunkSize: must be an integer in 1..1000000`);
@@ -392,7 +415,11 @@ function validateAssertion(a: unknown, i: number, names: Set<string>, problems: 
     const norm = (v: unknown) => (typeof v === 'string' && !isRef(v) && isAddress(v, { strict: true }) ? getAddress(v) : v);
     const out: Record<string, unknown> = { ...a };
     if ('address' in out) out.address = norm(out.address);
-    if (k === 'reputationSourceSet') out.expected = (a.expected as string[]).map(norm);
+    if (k === 'reputationSourceSet') {
+        out.expected = (a.expected as string[]).map(norm);
+        out.mustNotBe = (a.mustNotBe as string[]).map(norm);
+        if (Array.isArray(a.seeds)) out.seeds = (a.seeds as { address: string; source: string }[]).map(sd => ({ ...sd, address: norm(sd.address) }));
+    }
     if (k === 'privilege' || k === 'roleOwners') { if (typeof out.expected === 'string') out.expected = norm(out.expected); }
     return out as unknown as Assertion;
 }

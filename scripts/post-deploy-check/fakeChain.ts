@@ -50,6 +50,17 @@ export function reputationLog(chain: FakeChain, registry: Address, ev: AbiEvent,
     };
 }
 
+/** OwnershipTransferred(previousOwner indexed, newOwner indexed), as Ownable emits from initialize. */
+export function ownershipLog(registry: Address, ev: AbiEvent, previousOwner: Address, newOwner: Address, blockNumber: bigint, logIndex: number): FakeLog {
+    return {
+        address: registry,
+        topics: [toEventSelector(ev), pad(previousOwner.toLowerCase() as Hex, { size: 32 }), pad(newOwner.toLowerCase() as Hex, { size: 32 })],
+        data: '0x',
+        blockNumber,
+        logIndex,
+    };
+}
+
 export interface FakeProvider extends Eip1193Provider { calls: { method: string; params: readonly unknown[] }[] }
 
 export function fakeProvider(chain: FakeChain): FakeProvider {
