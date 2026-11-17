@@ -1,5 +1,5 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther } from 'viem';
-import { xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther, parseEventLogs, isAddressEqual, zeroAddress, encodeFunctionData, decodeFunctionResult, type Abi } from 'viem';
+import { xPNTsFactoryABI, PaymasterFactoryABI, PaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
 
@@ -722,3 +722,92 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     };
     return actions;
 };
+
+/**
+ * Resolve the paymaster a PaymasterFactory deploy produced and check that `operator` really owns it.
+ * Call this before anything funds, deposits to or registers the paymaster.
+ *
+ * A simulate() or predict address is not evidence: the deploy can still revert, and before
+ * PaymasterFactory-1.1.0 a copied CREATE2 salt let anyone land their own clone at the predicted
+ * address first (SP Daybreak DB-d-M3). So the address comes only from the PaymasterDeployed log of a
+ * successful receipt (or, with no `deployHash`, from the factory mapping of an earlier deploy), and
+ * then all three must name `operator`: paymasterByOperator, operatorByPaymaster and the clone's owner().
+ * Every read is an eth_call pinned to one block hash (EIP-1898, `requireCanonical: true`): the receipt's
+ * block, or the latest block read once. A node that does not serve that block's state, or rejects the
+ * EIP-1898 parameter, fails the read and the check throws with the block and the deploy hash. After the
+ * reads, the hash at that height is read again and must be unchanged. Canonicality relies on the RPC
+ * honouring `requireCanonical`: a backend that ignores it and still returns the old hash at that height
+ * is not detected.
+ *
+ * `confirmations` applies only to the deploy receipt wait (viem's default when omitted). Without
+ * `deployHash` (reusing an earlier deploy) nothing is waited for: the check runs at the latest block.
+ *
+ * This is a client-side check at that block, not a guarantee at a later transaction: ownership can
+ * change afterwards, and a reorg deeper than `confirmations` after the check can replace the deploy.
+ * Callers that need more should raise `confirmations` and check again right before they send.
+ */
+export async function verifyPaymasterDeployment(
+    client: PublicClient,
+    args: { factory: Address; operator: Address; deployHash?: Hash; confirmations?: number }
+): Promise<Address> {
+    const { factory, operator, deployHash, confirmations } = args;
+    validateAddress(factory, 'factory');
+    validateAddress(operator, 'operator');
+    const fail = (code: ErrorCode, msg: string): never => {
+        throw new AAStarError(code, `verifyPaymasterDeployment: ${msg}; do not fund or register this paymaster`);
+    };
+
+    let paymaster: Address;
+    let blockNumber: bigint;
+    let blockHash: Hash;
+    if (deployHash) {
+        const receipt = await client.waitForTransactionReceipt({ hash: deployHash, confirmations });
+        if (receipt.status !== 'success') fail(ErrorCode.CONTRACT_REVERT, `deploy tx ${deployHash} reverted`);
+        const deployed = parseEventLogs({
+            abi: PaymasterFactoryABI,
+            eventName: 'PaymasterDeployed',
+            logs: receipt.logs.filter((l) => isAddressEqual(l.address, factory)),
+        }) as unknown as Array<{ args: { operator: Address; paymaster: Address } }>;
+        const mine = deployed.filter((l) => isAddressEqual(l.args.operator, operator));
+        if (mine.length !== 1) {
+            fail(ErrorCode.CONTRACT_REVERT, `expected one PaymasterDeployed for ${operator} from ${factory} in ${deployHash}, found ${mine.length}`);
+        }
+        paymaster = mine[0].args.paymaster;
+        blockNumber = receipt.blockNumber;
+        blockHash = receipt.blockHash;
+    } else {
+        const latest = await client.getBlock();
+        blockNumber = latest.number;
+        blockHash = latest.hash;
+    }
+    const where = `at block ${blockNumber} ${blockHash}${deployHash ? ` (deploy tx ${deployHash})` : ''}`;
+    // readContract cannot pin a call to a block hash, so the calls go through eth_call directly.
+    const callAt = async (to: Address, abi: Abi, functionName: string, callArgs: readonly unknown[]): Promise<Address> => {
+        const data = encodeFunctionData({ abi, functionName, args: callArgs } as any);
+        const result = await client.request({ method: 'eth_call', params: [{ to, data }, { blockHash, requireCanonical: true }] } as any) as Hex;
+        return decodeFunctionResult({ abi, functionName, data: result } as any) as Address;
+    };
+
+    let byOperator: Address, byPaymaster: Address, owner: Address;
+    try {
+        if (!deployHash) {
+            paymaster = await callAt(factory, PaymasterFactoryABI, 'getPaymasterByOperator', [operator]);
+            if (isAddressEqual(paymaster, zeroAddress)) fail(ErrorCode.CONTRACT_REVERT, `factory ${factory} has no paymaster for ${operator}`);
+        }
+        [byOperator, byPaymaster, owner] = await Promise.all([
+            callAt(factory, PaymasterFactoryABI, 'getPaymasterByOperator', [operator]),
+            callAt(factory, PaymasterFactoryABI, 'getOperatorByPaymaster', [paymaster!]),
+            callAt(paymaster!, PaymasterABI, 'owner', []),
+        ]);
+        const after = await client.getBlock({ blockNumber });
+        if (after.hash !== blockHash) fail(ErrorCode.RPC_ERROR, `block ${blockNumber} changed from ${blockHash} to ${after.hash} during the check (reorg)`);
+    } catch (error) {
+        if (error instanceof AAStarError) throw error;
+        return fail(ErrorCode.RPC_ERROR, `could not read the factory mapping or owner() ${where}; the node may not serve that block's state or support EIP-1898 block-hash calls (${(error as Error).message})`);
+    }
+    paymaster = paymaster!;
+    if (!isAddressEqual(byOperator, paymaster)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${operator} to ${byOperator}, not ${paymaster}`);
+    if (!isAddressEqual(byPaymaster, operator)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${paymaster} to operator ${byPaymaster}, not ${operator}`);
+    if (!isAddressEqual(owner, operator)) fail(ErrorCode.UNAUTHORIZED, `${paymaster}.owner() is ${owner}, not ${operator}`);
+    return paymaster;
+}

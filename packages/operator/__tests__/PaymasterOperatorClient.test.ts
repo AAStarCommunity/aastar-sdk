@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
     mockSuperPaymasterActions: vi.fn(() => () => mockSuperPaymaster),
     mockPaymasterFactoryActions: vi.fn(() => () => mockPaymasterFactory),
     mockPaymasterActions: vi.fn(() => () => mockPaymaster),
+    mockVerifyPaymasterDeployment: vi.fn(),
   };
 });
 
@@ -35,6 +36,7 @@ vi.mock('@aastar/core', async () => {
     superPaymasterActions: mocks.mockSuperPaymasterActions,
     paymasterFactoryActions: mocks.mockPaymasterFactoryActions,
     paymasterActions: mocks.mockPaymasterActions,
+    verifyPaymasterDeployment: mocks.mockVerifyPaymasterDeployment,
   };
 });
 
@@ -93,6 +95,8 @@ describe('PaymasterOperatorClient', () => {
     });
     mocks.mockPaymasterFactory.deployPaymaster.mockResolvedValue('0xTxHash');
     mocks.mockPaymasterFactory.getPaymaster.mockResolvedValue('0x7777777777777777777777777777777777777777');
+    mocks.mockVerifyPaymasterDeployment.mockReset();
+    mocks.mockVerifyPaymasterDeployment.mockResolvedValue('0x7777777777777777777777777777777777777777');
     mocks.mockPaymaster.setTokenPrice.mockResolvedValue('0xTxHash');
     mocks.mockPaymaster.tokenPrices.mockResolvedValue(100n);
     mocks.mockPaymaster.depositFor.mockResolvedValue('0xTxHash');
@@ -152,16 +156,77 @@ describe('PaymasterOperatorClient', () => {
         });
         
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000'); // Clean deploy
-        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x7777777777777777777777777777777777777777'); // After deploy
 
-        const result = await client.deployAndRegisterPaymasterV4();
+        const result = await client.deployAndRegisterPaymasterV4({ confirmations: 4 });
 
         expect(mocks.mockPaymasterFactory.deployPaymaster).toHaveBeenCalled();
-        expect(mocks.mockPaymasterFactory.getPaymaster).toHaveBeenCalled();
+        // The address comes from the verified receipt, not from a second mapping read.
+        expect(mocks.mockVerifyPaymasterDeployment).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ deployHash: '0xTxHash', confirmations: 4 }));
         expect(mocks.mockRegistry.registerRoleSelf).toHaveBeenCalledWith(expect.objectContaining({
             roleId: '0x3333333333333333333333333333333333333333333333333333333333333333'
         }));
         expect(result.paymasterAddress).toBe('0x7777777777777777777777777777777777777777');
+      });
+
+      it('deployAndRegisterPaymasterV4: the paymaster address is the one verifyPaymasterDeployment returned, on both paths', async () => {
+        const VERIFIED = '0x9999999999999999999999999999999999999999';
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockVerifyPaymasterDeployment.mockResolvedValue(VERIFIED);
+        // New deploy: the factory mapping says 0x0 first and 0x7777 afterwards; neither is used.
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
+        // Reused deploy: the mapping read that chose this branch said 0x7777; the verified address is returned.
+        expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
+      });
+
+      it('deployAndRegisterPaymasterV4: a failed deploy check approves and registers nothing', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        mocks.mockVerifyPaymasterDeployment.mockRejectedValue(new Error('verifyPaymasterDeployment: owner() is someone else'));
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('owner() is someone else');
+        expect(mocks.mockPaymasterFactory.deployPaymaster).toHaveBeenCalled();
+        expect(mocks.mockToken.approve).not.toHaveBeenCalled();
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      });
+
+      it('deployAndRegisterPaymasterV4: an existing paymaster that fails the check is not reused', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        mocks.mockVerifyPaymasterDeployment.mockRejectedValue(new Error('verifyPaymasterDeployment: factory maps elsewhere'));
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('maps elsewhere');
+        expect(mocks.mockVerifyPaymasterDeployment).toHaveBeenCalledWith(expect.anything(), expect.not.objectContaining({ deployHash: expect.anything() }));
+        expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
+        expect(mocks.mockToken.approve).not.toHaveBeenCalled();
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      });
+
+      it('deployAndRegisterPaymasterV4: a reverted approve stops before registration', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        mocks.mockToken.approve.mockResolvedValue('0xApproveHash');
+        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('approve 0xApproveHash reverted');
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      });
+
+      it('deployAndRegisterPaymasterV4: a reverted registration is reported, not returned as success', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(parseEther('1000'));
+        mocks.mockRegistry.registerRoleSelf.mockResolvedValue('0xRegisterHash');
+        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('0xRegisterHash reverted');
       });
 
       it('deployAndRegisterPaymasterV4 should skip register if already has role', async () => {

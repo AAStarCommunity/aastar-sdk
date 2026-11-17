@@ -8,6 +8,7 @@ import {
     SuperPaymasterABI,
     paymasterActions,
     PaymasterFactoryABI,
+    verifyPaymasterDeployment,
     xPNTsTokenABI,
     type StakingActions,
     type RegistryActions,
@@ -27,7 +28,8 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
      * High-level API: Setup operator with automatic funding and onboarding
      */
     setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>;
-    deployPaymasterV4: (args?: { version?: string, initData?: Hex }) => Promise<Hash>;
+    /** Deploys through the factory and throws unless verifyPaymasterDeployment accepts the deploy for this account. */
+    deployPaymasterV4: (args?: { version?: string, initData?: Hex, confirmations?: number }) => Promise<Hash>;
     /**
      * Orchestrates the full onboarding flow:
      * 1. Approve GToken (Stake)
@@ -110,7 +112,8 @@ export function createOperatorClient({
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return (this as any)._onboardOperator(args);
         },
-        async deployPaymasterV4({ version = 'v4.1', initData = '0x' }: { version?: string, initData?: Hex } = {}) {
+        async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations }: { version?: string, initData?: Hex, confirmations?: number } = {}) {
+            if (!account) throw new Error('Account required for deployPaymasterV4');
             console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.paymasterFactory,
@@ -120,7 +123,8 @@ export function createOperatorClient({
                 account,
                 chain
             });
-            await (client as any).waitForTransactionReceipt({ hash: tx });
+            // Throws unless the receipt succeeded and the factory mapping and the clone's owner() both name this account.
+            await verifyPaymasterDeployment(client as any, { factory: usedAddresses.paymasterFactory, operator: account.address, deployHash: tx, confirmations });
             return tx;
         },
         async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {

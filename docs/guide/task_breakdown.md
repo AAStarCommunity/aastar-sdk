@@ -17,12 +17,7 @@ Based on the PhD research requirements and the "Three-Step" (Prepare, Test, Anal
 
 ## Phase 1: Preparation (The "Ammo")
 
-- [x] **1.1. Automated Preparation (The "Ammo") (`scripts/01_prepare_all.ts`)**
-    - [x] **Unified Script**: Runs all checks below.
-    - [x] **Account Check**: Computes addresses for A, B, C.
-    - [x] **ETH Check**: Funds 0.05 ETH from Supplier if low.
-    - [x] **Identity Check**: Checks MySBT balance for SuperPaymaster User (C). Mints if missing.
-    - [x] **Asset Check**: Checks xPNTs (GToken) balance for SuperPaymaster User (C). Transfers if low.
+- [ ] **1.1. Automated Preparation (The "Ammo")** — retired. `scripts/01_prepare_all.ts` was removed: it deposited to a simulate()-predicted paymaster address before the deploy was confirmed, and it no longer ran. Nothing replaces its account, ETH, MySBT and xPNTs checks; do them by hand. To deploy a PaymasterV4, use `PaymasterOperatorClient.deployAndRegisterPaymasterV4`, which checks the receipt, the factory mapping and `owner()` before it registers the role.
 
 ## Phase 2: Testing (The Execution)
 1. Transfer ERC20 Test in sepolia, op sepolia and op mainnet.

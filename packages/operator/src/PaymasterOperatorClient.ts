@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -131,9 +131,12 @@ export class PaymasterOperatorClient extends BaseClient {
      * Deploy a new Paymaster V4 and Register as AOA Operator (one-stop API).
      * This method handles:
      * 1. Checks prerequisites (ROLE_COMMUNITY)
-     * 2. Predicts new Paymaster address
-     * 3. Deploys Paymaster V4 via Factory
+     * 2. Deploys Paymaster V4 via Factory, or reuses this account's earlier deploy
+     * 3. Checks the deploy with verifyPaymasterDeployment (receipt, factory mapping, owner()) before any approve
      * 4. Registers ROLE_PAYMASTER_AOA with staking
+     *
+     * A factory with a Registry configured requires ROLE_PAYMASTER_AOA before the deploy, which this order does
+     * not satisfy for a new operator (FU-116).
      * 
      * @param params Deployment parameters
      * @param options Transaction options
@@ -143,6 +146,7 @@ export class PaymasterOperatorClient extends BaseClient {
         stakeAmount?: bigint; // Optional, defaults to 30 GToken (Registry requirement for AOA)
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
+        confirmations?: number; // Optional, deploy receipt confirmations before the check (viem default if omitted); a reused deploy waits for none
         priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
@@ -180,8 +184,9 @@ export class PaymasterOperatorClient extends BaseClient {
             let paymasterAddress: Address;
 
             if (existingPaymaster && existingPaymaster !== '0x0000000000000000000000000000000000000000') {
-                console.log(`    ℹ️  Paymaster already deployed at: ${existingPaymaster}`);
-                paymasterAddress = existingPaymaster;
+                // An earlier deploy is reused only if the factory mapping and its owner() still name this account.
+                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr });
+                console.log(`    ℹ️  Paymaster already deployed at: ${paymasterAddress}`);
             } else {
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {
                     entryPoint: this.requireEntryPoint(),
@@ -211,13 +216,9 @@ export class PaymasterOperatorClient extends BaseClient {
                     account
                 });
                 
-                await (publicClient as any).waitForTransactionReceipt({ hash: deployHash });
-                
-                paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
-            }
-            
-            if (!paymasterAddress || paymasterAddress === '0x0000000000000000000000000000000000000000') {
-                 throw new Error('Failed to retrieve Paymaster address from Factory');
+                // The address comes from the successful receipt, and is checked against the mapping and owner()
+                // before the approve and role registration below.
+                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash, confirmations: params?.confirmations });
             }
 
             // 3. Register ROLE_PAYMASTER_AOA
@@ -246,7 +247,10 @@ export class PaymasterOperatorClient extends BaseClient {
                     amount: stakeAmount * 2n,
                     account: account
                 });
-                await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+                const approveReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
+                if (approveReceipt.status !== 'success') {
+                    throw new Error(`GToken approve ${approveHash} reverted; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
+                }
             }
 
             const { encodeAbiParameters, parseAbiParameters } = await import('viem');
@@ -264,7 +268,10 @@ export class PaymasterOperatorClient extends BaseClient {
                 account: account
             });
             
-            await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+            const registerReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
+            if (registerReceipt.status !== 'success') {
+                throw new Error(`registerRoleSelf(ROLE_PAYMASTER_AOA) ${registerHash} reverted; paymaster ${paymasterAddress} is deployed but not registered`);
+            }
 
             return {
                 paymasterAddress,

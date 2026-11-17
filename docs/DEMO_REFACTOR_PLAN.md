@@ -225,7 +225,7 @@
 - 📋 `09_local_test_community_lifecycle.ts` - 社区生命周期完整流程
 
 **运营商相关**
-- 📋 `deploy_paymaster_v4.ts` - Paymaster V4 部署逻辑
+- ~~`deploy_paymaster_v4.ts`~~ - 已删除（#457）：它调用的工厂函数已不存在、还从 env 读私钥；部署 Paymaster V4 用 `PaymasterOperatorClient`
 - 📋 `05_test_superpaymaster.ts` - SuperPaymaster 完整设置流程
   - Line 114-199: `setupOperator` 函数（包含配置和存款）
 
