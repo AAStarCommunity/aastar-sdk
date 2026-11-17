@@ -63,6 +63,46 @@ export function resolveKeeperSigner(a: {
     return { mode: 'cast', keystorePath: a.keystorePath, castAccount: a.castAccount };
 }
 
+/** Every flag keeper.ts reads without a value. */
+export const BOOLEAN_FLAGS = [
+    '--disable-paymaster', '--disable-superpaymaster', '--dry-run', '--help', '--logo', '--no-logo', '--no-paymaster',
+    '--no-superpaymaster', '--once', '-h',
+] as const;
+
+/** The parsed command line. Built only by parseKeeperArgs; every read of an option goes through it. */
+export interface KeeperArgs {
+    value(flag: string): string | undefined;
+    flag(flag: string): boolean;
+}
+
+/**
+ * Strict parse of keeper.ts's argv (the npm `--` separator already removed). Refuses at startup, before anything else:
+ * an argument that is not a known flag (including lookalikes such as `--dryrun`), any `--flag=value` form (no keeper
+ * flag accepts it, so `--dry-run=true` cannot silently mean a live run), a repeated flag (no "first one wins"), a
+ * positional argument, and a value flag without its value. `--dry-run` is then exactly `args.flag('--dry-run')`.
+ */
+export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
+    const values = new Map<string, string>();
+    const flags = new Set<string>();
+    const seen = new Set<string>();
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i]!;
+        if (!a.startsWith('--') && a !== '-h') throw new KeeperStartupRefusal(`unexpected argument "${a}"`);
+        if (a.includes('=')) throw new KeeperStartupRefusal(`${a.slice(0, a.indexOf('='))}=… is not accepted: pass "${a.slice(0, a.indexOf('='))}" and its value as separate arguments`);
+        const isValue = (VALUE_FLAGS as readonly string[]).includes(a);
+        if (!isValue && !(BOOLEAN_FLAGS as readonly string[]).includes(a)) throw new KeeperStartupRefusal(`unknown option ${a}`);
+        if (seen.has(a)) throw new KeeperStartupRefusal(`${a} is given more than once`);
+        seen.add(a);
+        if (isValue) {
+            assertFlagValues([a, argv[i + 1] as string], [a]);
+            values.set(a, argv[++i]!);
+        } else {
+            flags.add(a);
+        }
+    }
+    return { value: (f) => values.get(f), flag: (f) => flags.has(f) };
+}
+
 /** Every flag keeper.ts reads with a value. One present without a value (end of argv, or another --flag next) refuses. */
 export const VALUE_FLAGS = [
     '--cast-account', '--chainlink-stale-sec', '--external-ethusd-url', '--health-interval', '--keystore',

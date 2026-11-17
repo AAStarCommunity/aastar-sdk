@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 import { readFileSync } from 'node:fs';
 import {
-    KeeperStartupRefusal, assertFlagValues, castSignerArgs, keeperAccountFor, keeperKeyFrom, parseKeeperMode, resolveKeeperSigner,
+    KeeperStartupRefusal, assertFlagValues, parseKeeperArgs, castSignerArgs, keeperAccountFor, keeperKeyFrom, parseKeeperMode, resolveKeeperSigner,
 } from './keeperKey.js';
 
 // This file spawns keeper.ts below; every top-level block states its timeout (check:spawn-timeouts).
@@ -62,6 +62,28 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         expect(castSignerArgs({ castAccount: 'keeper' })).toEqual(['--account', 'keeper']);
         expect(castSignerArgs({ keystorePath: '/k.json', castAccount: 'keeper' })).toEqual(['--keystore', '/k.json']);
         expect(() => castSignerArgs({})).toThrow(KeeperStartupRefusal);
+    });
+
+    it('argv is parsed strictly: unknown, --flag=value, repeated and positional arguments refuse', () => {
+        const ok = parseKeeperArgs(['--network', 'sepolia', '--dry-run', '--once', '--poll-interval', '60', '-h']);
+        expect(ok.flag('--dry-run')).toBe(true);
+        expect(ok.flag('--once')).toBe(true);
+        expect(ok.flag('-h')).toBe(true);
+        expect(ok.value('--poll-interval')).toBe('60');
+        expect(ok.value('--mode')).toBeUndefined();
+        expect(parseKeeperArgs(['--network', 'sepolia']).flag('--dry-run')).toBe(false);
+        for (const [argv, why] of [
+            [['--dry-run=true'], /--dry-run=… is not accepted/],
+            [['--network=sepolia'], /--network=… is not accepted/],
+            [['--dryrun'], /unknown option --dryrun/],
+            [['--dry-run', '--dry-run'], /--dry-run is given more than once/],
+            [['--poll-interval', '60', '--poll-interval', '30'], /--poll-interval is given more than once/],
+            [['--bogus'], /unknown option --bogus/],
+            [['sepolia'], /unexpected argument "sepolia"/],
+            [['--network'], /--network needs a value/],
+        ] as const) {
+            expect(() => parseKeeperArgs(argv as unknown as string[]), JSON.stringify(argv)).toThrow(why as RegExp);
+        }
     });
 
     it('--mode is parsed canonically: any case of privateKey, cast, else refuse', () => {
@@ -140,7 +162,7 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['--mode PRIVATEKEY', ['--network', 'sepolia', '--once', '--mode', 'PRIVATEKEY'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
         ['unknown --mode', ['--network', 'sepolia', '--once', '--mode', 'bogus'], /unknown --mode "bogus"/],
         ['cast mode with only DEPLOYER_ACCOUNT in the env file', ['--network', 'sepolia', '--once', '--mode', 'cast'], /DEPLOYER_ACCOUNT is not read/],
-        ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
+        ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /unknown option --dry-run-lookalike/],
         ['a trailing --mode with no value', ['--network', 'sepolia', '--once', '--mode'], /--mode needs a value/],
         ['--cast-account followed by another flag', ['--network', 'sepolia', '--mode', 'cast', '--cast-account', '--once'], /--cast-account needs a value/],
         ['an invalid number, before the signer is resolved', ['--network', 'sepolia', '--once', '--poll-interval', 'invalid'], /invalid|Cannot convert/],
@@ -209,5 +231,24 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         expect(logged).toHaveLength(7);
         expect(logged).toContain('tcp 192.0.2.1:80');
         expect(logged).toContain('subprocess cast');
+    });
+
+    // With a LIVE key present: a dry-run lookalike must refuse, never run live (the operator meant a dry run).
+    it.each([
+        ['--dry-run=true', ['--dry-run=true'], /--dry-run=… is not accepted/],
+        ['--dryrun', ['--dryrun'], /unknown option --dryrun/],
+        ['--dry-run --dry-run', ['--dry-run', '--dry-run'], /--dry-run is given more than once/],
+        ['an unknown flag', ['--dry-run', '--bogus'], /unknown option --bogus/],
+    ])('with KEEPER_PRIVATE_KEY set, %s refuses: exit 1, zero RPC requests, zero egress', async (_name, extra, why) => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', ...(extra as string[])], {
+            KEEPER_PRIVATE_KEY: KEEPER, TELEGRAM_BOT_TOKEN: 'test-token', TELEGRAM_CHAT_ID: '1',
+        });
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/refused: /);
+        expect(r.out).toMatch(why as RegExp);
+        expect(r.requests).toBe(0);
+        expect(r.egress).toEqual([]);
+        expect(r.out).not.toContain('wallet signer:');
     });
 });

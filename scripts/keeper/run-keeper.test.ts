@@ -112,4 +112,22 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(valuesOf(argv, '--cast-account')).toEqual(['keeper']);
         expect(ok.stdout).not.toContain('optimism-deployer');
     });
+
+    it('a caller flag replaces the launcher default instead of repeating it (keeper.ts refuses repeats)', () => {
+        const r = run(['sepolia', '--poll-interval', '60', '--volatility-cooldown', '5']);
+        expect(r.status).toBe(0);
+        expect(valuesOf(r.argv, '--poll-interval')).toEqual(['60']);
+        expect(valuesOf(r.argv, '--volatility-cooldown')).toEqual(['5']);
+        expect(valuesOf(r.argv, '--safety-margin')).toEqual(['600']); // untouched defaults still present once
+        const flags = r.argv.filter((a) => a.startsWith('--'));
+        expect(new Set(flags).size).toBe(flags.length);
+        const main = spawnSync('bash', [join(dir, 'run-keeper-main.sh'), '--poll-interval', '60'], {
+            cwd: dir, encoding: 'utf8', env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_CAST_ACCOUNT: 'keeper' },
+        });
+        expect(main.status).toBe(0);
+        const mainArgv = main.stdout.split('\n');
+        expect(valuesOf(mainArgv, '--poll-interval')).toEqual(['60']);
+        const mainFlags = mainArgv.filter((a) => a.startsWith('--'));
+        expect(new Set(mainFlags).size).toBe(mainFlags.length);
+    });
 });

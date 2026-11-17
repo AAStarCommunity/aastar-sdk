@@ -73,13 +73,19 @@ EXT_URL="${KEEPER_ETHUSD_URL:-https://api.binance.com/api/v3/ticker/price?symbol
 
 # ${ADDR_ARGS[@]+...}: macOS bash 3.2 treats an empty array as unbound under `set -u`.
 echo "keeper: network=$NETWORK baked-args=${ADDR_ARGS[*]:-<none: canonical / caller>}"
+# Defaults are appended only when the caller did not pass the flag: keeper.ts refuses a repeated flag
+# (no "first one wins"), so a caller's --poll-interval replaces the default instead of colliding with it.
+DEFAULT_ARGS=()
+add_default() { has_arg "$1" "${@:3}" || DEFAULT_ARGS+=("$1" "$2"); }
+add_default --external-ethusd-url "$EXT_URL" "$@"
+add_default --poll-interval "${KEEPER_POLL_INTERVAL:-180}" "$@"
+add_default --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" "$@"
+add_default --health-interval "${KEEPER_HEALTH_INTERVAL:-1800}" "$@"
+add_default --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" "$@"
+add_default --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" "$@"
+
 exec pnpm exec tsx scripts/keeper.ts \
   --network "$NETWORK" \
   ${ADDR_ARGS[@]+"${ADDR_ARGS[@]}"} \
-  --external-ethusd-url "$EXT_URL" \
-  --poll-interval "${KEEPER_POLL_INTERVAL:-180}" \
-  --safety-margin "${KEEPER_SAFETY_MARGIN:-600}" \
-  --health-interval "${KEEPER_HEALTH_INTERVAL:-1800}" \
-  --volatility-threshold-bps "${KEEPER_VOL_BPS:-150}" \
-  --volatility-cooldown "${KEEPER_VOL_COOLDOWN:-600}" \
+  ${DEFAULT_ARGS[@]+"${DEFAULT_ARGS[@]}"} \
   "$@"
