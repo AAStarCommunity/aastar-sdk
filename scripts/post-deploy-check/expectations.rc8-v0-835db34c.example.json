@@ -42,8 +42,8 @@
     },
     "Registry": {
       "abi": "Registry",
-      "address": null,
-      "source": "SP owner table v0 @835db34c, A: gives only 'Registry (proxy) 0xf5Bf…' (truncated); not resolved, not guessed"
+      "address": "0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71",
+      "source": "DSR 2026-11-17 (SP confirmed): Sepolia Registry proxy, deployed at block 11151002; owner table v0 row A gives 0xf5Bf…"
     },
     "BLSAggregatorOld": {
       "abi": "BLSAggregator",
@@ -449,6 +449,18 @@
       ],
       "expected": false,
       "note": "Registry.sol:172 initialize auto-grant"
+    },
+    {
+      "id": "B-registry-reputation-sources",
+      "kind": "reputationSourceSet",
+      "registry": "Registry",
+      "expected": [],
+      "mustNotBe": [
+        "$D"
+      ],
+      "fromBlock": 11151002,
+      "logChunkSize": 5000,
+      "note": "owner table v0 does not give the expected source set, so expected is empty and FAIL-closed: every live source is printed as extra until v1 lists them. Registry.initialize sets isReputationSource[_owner] without an event; the initialize owner is seeded from OwnershipTransferred(0x0 -> owner)."
     },
     {
       "id": "B-registry-role-owners",

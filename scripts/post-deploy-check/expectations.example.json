@@ -33,6 +33,7 @@
       "kind": "reputationSourceSet",
       "registry": "Registry",
       "expected": ["$DVTValidator"],
+      "mustNotBe": ["$D"],
       "fromBlock": 0,
       "logChunkSize": 5000
     },

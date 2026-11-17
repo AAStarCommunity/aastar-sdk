@@ -11,6 +11,7 @@ import {
     encodeFunctionData,
     getAddress,
     isAddress,
+    pad,
     toEventSelector,
     type Abi,
     type AbiEvent,
@@ -427,43 +428,27 @@ interface RawLog { address: string; topics: Hex[]; data: Hex; blockNumber: strin
 
 const logKey = (l: RawLog) => canon([l.address, l.blockNumber, l.blockHash, l.transactionHash, l.logIndex, l.topics, l.data, l.removed ?? false]);
 
-async function checkReputationSourceSet(ctx: Ctx, table: Expectations, a: ReputationSourceSetAssertion): Promise<Outcome> {
-    const c = resolveContract(ctx, table, a.registry);
-    const isSrc = findFunction(c, 'isReputationSource(address)');
-    const ev = findReputationEvent(c.abi);
-    const expected = new Set(a.expected.map(x => ctx.addr(x)));
+/** Printed on every reputationSourceSet row: the replay is a discovery aid, never the verdict. */
+export const REPLAY_CAVEAT = '事件重放不完整，结论以状态读回为准 (event replay is incomplete; the verdict rests on state readback)';
+export const OWNERSHIP_EVENT = 'OwnershipTransferred';
 
-    const stateOf = async (addr: Address): Promise<boolean> => {
-        const v = await readFn(ctx, c, isSrc, [addr], `${a.registry}.isReputationSource(${addr})`);
-        if (typeof v !== 'boolean') throw new Fail('isReputationSource did not decode to a boolean');
-        return v;
-    };
+function findOwnershipEvent(abi: Abi): AbiEvent | undefined {
+    return abi.find((x): x is AbiEvent =>
+        x.type === 'event' && x.name === OWNERSHIP_EVENT && x.inputs.length === 2
+        && x.inputs.every(i => i.type === 'address' && i.indexed === true));
+}
 
-    if (!ev) {
-        // No way to enumerate: only "every expected address is a source" can be shown. Never PASS.
-        const notTrue: string[] = [];
-        for (const addr of expected) if (!(await stateOf(addr))) notTrue.push(addr);
-        if (notTrue.length) return { status: 'FAIL', detail: `isReputationSource false for expected ${notTrue.join(', ')}` };
-        return {
-            status: 'INCOMPLETE',
-            detail: `all ${a.expected.length} expected addresses are sources, but ABI ${c.abiName} has no enumerable getter and no ${REPUTATION_SOURCE_EVENT}(address indexed,bool) event, so extra sources cannot be ruled out`,
-        };
-    }
-
-    const to = ctx.pinned.number;
-    const from = BigInt(a.fromBlock);
-    if (from > to) throw new Fail(`fromBlock ${from} is after the pinned block ${to}`);
-    const chunk = BigInt(a.logChunkSize ?? DEFAULT_LOG_CHUNK);
-    const topic0 = toEventSelector(ev);
+/** eth_getLogs over [from..to] in chunks, on both providers, with the log sanity checks shared by every replay. */
+async function fetchLogs(ctx: Ctx, c: Resolved, topics: (Hex | null)[], from: bigint, to: bigint, chunk: bigint, label: string): Promise<RawLog[]> {
     const logs: RawLog[] = [];
     for (let lo = from; lo <= to; lo += chunk) {
         const hi = lo + chunk - 1n < to ? lo + chunk - 1n : to;
         const part = await ctx.both(
-            `logs ${REPUTATION_SOURCE_EVENT} [${lo}..${hi}]`,
+            `logs ${label} [${lo}..${hi}]`,
             async p => {
                 const r = await p.request({
                     method: 'eth_getLogs',
-                    params: [{ address: c.address, topics: [topic0], fromBlock: `0x${lo.toString(16)}`, toBlock: `0x${hi.toString(16)}` }],
+                    params: [{ address: c.address, topics, fromBlock: `0x${lo.toString(16)}`, toBlock: `0x${hi.toString(16)}` }],
                 });
                 if (!Array.isArray(r)) throw new Error('eth_getLogs returned a non-array');
                 return r as RawLog[];
@@ -479,43 +464,99 @@ async function checkReputationSourceSet(ctx: Ctx, table: Expectations, a: Reputa
             logs.push(l);
         }
     }
-    logs.sort((x, y) => {
+    return logs.sort((x, y) => {
         const d = BigInt(x.blockNumber) - BigInt(y.blockNumber);
         return d !== 0n ? (d < 0n ? -1 : 1) : Number(BigInt(x.logIndex) - BigInt(y.logIndex));
     });
+}
 
-    const replay = new Map<Address, boolean>();
-    for (const l of logs) {
-        const d = decodeEventLog({ abi: [ev], topics: l.topics as [Hex, ...Hex[]], data: l.data }) as { args: readonly unknown[] | Record<string, unknown> };
-        const vals = Array.isArray(d.args) ? d.args : Object.values(d.args as Record<string, unknown>);
-        replay.set(getAddress(vals[0] as string), vals[1] as boolean);
-    }
-    const active = new Set([...replay].filter(([, on]) => on).map(([k]) => k));
+/**
+ * The verdict is state readback at the pinned block, never the replay:
+ *  1. every `expected` address must read isReputationSource == true, every `mustNotBe` address false;
+ *  2. discovery of sources the table does not name: candidates are every address in a
+ *     ReputationSourceUpdated log, the initialize owner (Registry.initialize sets
+ *     isReputationSource[_owner] = true WITHOUT an event; taken from OwnershipTransferred(0x0 -> owner)),
+ *     and any table `seeds`. Each candidate's state is read directly; a true one outside `expected` FAILs.
+ * Without the initialize owner (no such log in range and no seed) discovery has a known hole: INCOMPLETE, never PASS.
+ */
+async function checkReputationSourceSet(ctx: Ctx, table: Expectations, a: ReputationSourceSetAssertion): Promise<Outcome> {
+    const c = resolveContract(ctx, table, a.registry);
+    const isSrc = findFunction(c, 'isReputationSource(address)');
+    const repEv = findReputationEvent(c.abi);
+    const ownEv = findOwnershipEvent(c.abi);
 
-    const missing = [...expected].filter(x => !active.has(x));
-    const extra = [...active].filter(x => !expected.has(x));
-
-    // Cross-check the replay against storage at the pinned block for every address either side knows.
-    const mismatches: string[] = [];
-    for (const addr of new Set<Address>([...expected, ...replay.keys()])) {
-        const onChain = await stateOf(addr);
-        const want = expected.has(addr);
-        if (onChain !== want) mismatches.push(`isReputationSource(${addr}) is ${onChain}, expected ${want}`);
-        const replayed = replay.get(addr) ?? false;
-        if (onChain !== replayed) mismatches.push(`isReputationSource(${addr}) is ${onChain} but event replay says ${replayed}`);
-    }
-
-    ctx.readings.push({ what: 'replayed active set', a: canon([...active].sort()), b: '(same logs on both)' });
-    const problems = [
-        ...(missing.length ? [`missing from replayed set: ${missing.join(', ')}`] : []),
-        ...(extra.length ? [`extra source(s) not in expected set: ${extra.join(', ')}`] : []),
-        ...mismatches,
-    ];
-    if (problems.length) return { status: 'FAIL', detail: problems.join('; ') };
-    return {
-        status: 'PASS',
-        detail: `reputation-source set == expected (${expected.size}); rebuilt from ${logs.length} ${REPUTATION_SOURCE_EVENT} log(s) in [${from}..${to}]`,
+    const state = new Map<Address, boolean>();
+    const stateOf = async (addr: Address): Promise<boolean> => {
+        const known = state.get(addr);
+        if (known !== undefined) return known;
+        const v = await readFn(ctx, c, isSrc, [addr], `${a.registry}.isReputationSource(${addr})`);
+        if (typeof v !== 'boolean') throw new Fail('isReputationSource did not decode to a boolean');
+        state.set(addr, v);
+        return v;
     };
+
+    const problems: string[] = [];
+    const holes: string[] = [];
+    const notes: string[] = [];
+
+    // 1. Direct state reads for every address the table names.
+    const expected = new Map<Address, string>(a.expected.map(r => [ctx.addr(r), r]));
+    const mustNotBe = new Map<Address, string>(a.mustNotBe.map(r => [ctx.addr(r), r]));
+    for (const [addr, ref] of expected) {
+        if (!(await stateOf(addr))) problems.push(`expected source ${show(ref)} (${addr}) reads isReputationSource == false`);
+    }
+    for (const [addr, ref] of mustNotBe) {
+        if (await stateOf(addr)) problems.push(`${show(ref)} (${addr}) must not be a source but reads isReputationSource == true`);
+    }
+
+    // 2. Discovery of sources outside the table.
+    const to = ctx.pinned.number;
+    const from = BigInt(a.fromBlock);
+    if (from > to) throw new Fail(`fromBlock ${from} is after the pinned block ${to}`);
+    const chunk = BigInt(a.logChunkSize ?? DEFAULT_LOG_CHUNK);
+    const candidates = new Map<Address, string>();
+    const addCandidate = (addr: Address, how: string) => { if (!candidates.has(addr)) candidates.set(addr, how); };
+
+    if (repEv) {
+        const logs = await fetchLogs(ctx, c, [toEventSelector(repEv)], from, to, chunk, REPUTATION_SOURCE_EVENT);
+        for (const l of logs) {
+            const d = decodeEventLog({ abi: [repEv], topics: l.topics as [Hex, ...Hex[]], data: l.data }) as { args: readonly unknown[] | Record<string, unknown> };
+            const vals = Array.isArray(d.args) ? d.args : Object.values(d.args as Record<string, unknown>);
+            addCandidate(getAddress(vals[0] as string), `${REPUTATION_SOURCE_EVENT} at block ${BigInt(l.blockNumber)}`);
+        }
+    } else {
+        holes.push(`ABI ${c.abiName} has no ${REPUTATION_SOURCE_EVENT}(address indexed,bool) event`);
+    }
+
+    let initOwners = 0;
+    if (ownEv) {
+        const zero = pad('0x0', { size: 32 });
+        const logs = await fetchLogs(ctx, c, [toEventSelector(ownEv), zero], from, to, chunk, `${OWNERSHIP_EVENT}(0x0 -> owner)`);
+        for (const l of logs) {
+            const owner = l.topics[2];
+            if (!owner) throw new Fail(`${OWNERSHIP_EVENT} log without a newOwner topic`);
+            addCandidate(getAddress(`0x${owner.slice(-40)}`), `initialize owner (${OWNERSHIP_EVENT} from 0x0 at block ${BigInt(l.blockNumber)})`);
+            initOwners++;
+        }
+    }
+    for (const sd of a.seeds ?? []) {
+        addCandidate(ctx.addr(sd.address), `table seed ${show(sd.address)} (${sd.source})`);
+    }
+    if (initOwners === 0 && (a.seeds ?? []).length === 0) {
+        holes.push(`initialize owner not found (${ownEv ? `no ${OWNERSHIP_EVENT} from 0x0 in [${from}..${to}]` : `ABI ${c.abiName} has no ${OWNERSHIP_EVENT} event`}) and the table gives no seed; Registry.initialize sets it as a source without an event`);
+    }
+
+    for (const [addr, how] of candidates) {
+        if (expected.has(addr) || mustNotBe.has(addr)) continue; // already read directly above
+        if (await stateOf(addr)) problems.push(`extra source not in expected set: ${addr} (found via ${how}; reads isReputationSource == true)`);
+    }
+    notes.push(`${candidates.size} discovery candidate(s): ${[...candidates].map(([k, how]) => `${k} via ${how}`).join('; ') || 'none'}`);
+    ctx.readings.push({ what: 'state readback', a: canon([...state].map(([k, v]) => `${k}=${v}`).sort()), b: '(each read compared on both providers above)' });
+
+    const tail = [...notes, REPLAY_CAVEAT];
+    if (problems.length) return { status: 'FAIL', detail: [...problems, ...holes.map(h => `discovery incomplete: ${h}`), ...tail].join('; ') };
+    if (holes.length) return { status: 'INCOMPLETE', detail: [`direct reads OK (${expected.size} expected true, ${mustNotBe.size} must-not-be false)`, ...holes.map(h => `discovery incomplete: ${h}`), ...tail].join('; ') };
+    return { status: 'PASS', detail: [`${expected.size} expected sources read true, ${mustNotBe.size} must-not-be read false, no extra source among discovery candidates`, ...tail].join('; ') };
 }
 
 async function runOne(ctx: Ctx, table: Expectations, a: Assertion): Promise<Outcome> {
