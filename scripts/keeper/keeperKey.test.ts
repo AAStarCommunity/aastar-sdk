@@ -60,7 +60,9 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         expect(keeperAccountFor(pk)?.address).toBe(KEEPER_ADDR);
         expect(keeperAccountFor({ mode: 'privateKey', key: undefined, address: undefined })).toBeNull();
         expect(castSignerArgs({ castAccount: 'keeper' })).toEqual(['--account', 'keeper']);
-        expect(castSignerArgs({ keystorePath: '/k.json', castAccount: 'keeper' })).toEqual(['--keystore', '/k.json']);
+        expect(castSignerArgs({ keystorePath: '/k.json' })).toEqual(['--keystore', '/k.json']);
+        // Both at once is an ambiguous signer (DSR 2026-11-17, overrides FU-112 ⑤e): refused, never "keystore wins".
+        expect(() => castSignerArgs({ keystorePath: '/k.json', castAccount: 'keeper' })).toThrow(/not both/);
         expect(() => castSignerArgs({})).toThrow(KeeperStartupRefusal);
     });
 
@@ -170,10 +172,10 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /unknown option --dry-run-lookalike/],
         ['a trailing --mode with no value', ['--network', 'sepolia', '--once', '--mode'], /--mode needs a value/],
         ['--cast-account followed by another flag', ['--network', 'sepolia', '--mode', 'cast', '--cast-account', '--once'], /--cast-account needs a value/],
-        ['an invalid number, before the signer is resolved', ['--network', 'sepolia', '--once', '--poll-interval', 'invalid'], /invalid|Cannot convert/],
+        ['an invalid number, before the signer is resolved', ['--network', 'sepolia', '--once', '--poll-interval', 'invalid'], /must be a whole number/],
         ['an explicitly empty --mode', ['--network', 'sepolia', '--once', '--mode', ''], /--mode needs a value/],
-        ['an invalid number after the signer, in a dry run', ['--network', 'sepolia', '--once', '--dry-run', '--paymaster-missing-alert', 'invalid'], /invalid|Cannot convert/],
-        ['an invalid number after the signer, in cast mode', ['--network', 'sepolia', '--once', '--mode', 'cast', '--cast-account', 'keeper', '--paymaster-missing-alert', 'invalid'], /invalid|Cannot convert/],
+        ['an invalid number after the signer, in a dry run', ['--network', 'sepolia', '--once', '--dry-run', '--paymaster-missing-alert', 'invalid'], /must be a whole number/],
+        ['an invalid number after the signer, in cast mode', ['--network', 'sepolia', '--once', '--mode', 'cast', '--cast-account', 'keeper', '--paymaster-missing-alert', 'invalid'], /must be a whole number/],
     ])('%s: exit 1, refused, zero RPC requests, zero egress (no Telegram), no key printed', async (_name, args, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         // Telegram credentials are ALSO exported into the child, so errors raised before dotenv runs are covered.
@@ -209,7 +211,7 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         const byName = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--mode', 'cast', '--cast-account', 'keeper']);
         expect(byName.out).toContain('cast signer args: --account keeper');
         expect(byName.out).not.toContain('optimism-deployer');
-        const byFile = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--keystore', '/nonexistent/k.json', '--cast-account', 'keeper']);
+        const byFile = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--keystore', '/nonexistent/k.json']);
         expect(byFile.out).toContain('cast signer args: --keystore /nonexistent/k.json');
     });
 
@@ -276,5 +278,70 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
         expect(r.requests).toBe(0);
         expect(r.egress).toEqual([]);
+    });
+
+    // Daybreak 6c240b42 round 1: refusals added for KPR-002 / 003 / 006 / 009 and unattended cast mode (FU-114).
+    it.each([
+        ['--mode privateKey with a cast signer argument', ['--mode', 'privateKey', '--cast-account', 'keeper'], /the mode is privateKey/],
+        ['--keystore and --cast-account together', ['--keystore', '/k.json', '--cast-account', 'keeper'], /not both/],
+        ['a key pasted after --paymaster', ['--paymaster', DEPLOYERISH], /--paymaster is not a valid address \(the value is not shown\)/],
+        ['a non-numeric --max-updates-per-day (NaN used to disable the daily cap)', ['--max-updates-per-day', 'abc'], /must be a whole number/],
+        ['live cast mode without a terminal (unattended cast is not supported, FU-114)', ['--cast-account', 'keeper'], /cast mode needs an interactive terminal/],
+    ])('%s: exit 1, refused, zero RPC requests, zero egress', async (_name, extra, why) => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', ...(extra as string[])], {
+            KEEPER_PRIVATE_KEY: KEEPER, TELEGRAM_BOT_TOKEN: 'test-token', TELEGRAM_CHAT_ID: '1',
+        });
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/refused: /);
+        expect(r.out).toMatch(why as RegExp);
+        expect(r.requests).toBe(0);
+        expect(r.egress).toEqual([]);
+        expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
+    });
+
+    it('an unknown --network is refused before it is used in a path, and not echoed', async () => {
+        const r = await keeper(['--network', `x${DEPLOYERISH}`, '--once'], { KEEPER_PRIVATE_KEY: KEEPER });
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/refused: unknown --network value/);
+        expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
+        expect(r.requests).toBe(0);
+    });
+
+    it('KPR-002: --cast-account alone selects cast mode even with KEEPER_PRIVATE_KEY in the env', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--cast-account', 'keeper'], { KEEPER_PRIVATE_KEY: KEEPER });
+        expect(r.out).toContain('signer (cast mode): account keeper');
+        expect(r.out).toContain('cast signer args: --account keeper');
+        expect(r.out).not.toContain('wallet signer:');
+    });
+
+    it('KPR-003: op-mainnet refuses when .env.optimism and .env.op-mainnet disagree, naming the variable only', async () => {
+        const OTHER = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a'; // anvil #2, public
+        writeFileSync(join(dir, '.env.optimism'), `KEEPER_PRIVATE_KEY=${DEPLOYERISH}\nRPC_URL=${rpcUrl}\n`);
+        writeFileSync(join(dir, '.env.op-mainnet'), `KEEPER_PRIVATE_KEY=${OTHER}\nRPC_URL=${rpcUrl}\n`);
+        try {
+            const r = await keeper(['--network', 'op-mainnet', '--once', '--dry-run']);
+            expect(r.code).toBe(1);
+            expect(r.out).toMatch(/refused: \.env\.optimism and \.env\.op-mainnet set KEEPER_PRIVATE_KEY to different values/);
+            expect(r.out).not.toMatch(/RPC_URL to/); // equal in both files: not a conflict
+            expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
+            expect(r.out.toLowerCase()).not.toContain(OTHER.slice(2));
+            expect(r.requests).toBe(0);
+            expect(r.egress).toEqual([]);
+        } finally {
+            rmSync(join(dir, '.env.optimism'), { force: true });
+            rmSync(join(dir, '.env.op-mainnet'), { force: true });
+        }
+    });
+
+    it('KPR-006: a live run on op-mainnet without --hard-max-fee-gwei refuses; a dry run does not', async () => {
+        const live = await keeper(['--network', 'op-mainnet', '--once'], { KEEPER_PRIVATE_KEY: KEEPER });
+        expect(live.code).toBe(1);
+        expect(live.out).toMatch(/refused: a live run on op-mainnet needs --hard-max-fee-gwei/);
+        expect(live.requests).toBe(0);
+        const dry = await keeper(['--network', 'op-mainnet', '--once', '--dry-run'], { KEEPER_PRIVATE_KEY: KEEPER });
+        expect(dry.out).not.toMatch(/hard-max-fee-gwei/);
+        expect(dry.requests).toBeGreaterThan(0);
     });
 });

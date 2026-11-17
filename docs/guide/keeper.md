@@ -20,8 +20,18 @@ The keeper submits `updatePrice()` only when all of the following are true:
 
 Additionally:
 
-- Enforces `maxUpdatesPerDay` to avoid abuse
+- Enforces `maxUpdatesPerDay` to avoid abuse (counted in memory per process; see Known Limitations)
 - Optionally skips updates when base fee is above `maxBaseFeeGwei` (unless very close to expiry)
+- With `--hard-max-fee-gwei`, never sends while the base fee is above it, not even close to expiry, and signs every
+  update with that value as its max fee per gas, so the chain cannot charge more. It alerts when it skips for this
+  reason. A live run on `op-mainnet` or `mainnet` refuses to start without it.
+- A mined update counts only if its receipt succeeded. A reverted `updatePrice()` is reported as reverted (log and
+  Telegram), not as an update.
+- SuperPaymaster and the Paymaster are refreshed independently in each tick: one failing does not stop the other.
+  The failures of a tick are reported together, and `--once` exits 1 when its tick failed.
+
+The bootstrap case (`updatedAt == 0`) sends without checking Chainlink's freshness first. `updatePrice()` reads the feed
+itself; what the contract does with an empty or stale round has not been verified in this repository.
 
 ## Addresses Source (No ENV Needed)
 
@@ -64,7 +74,11 @@ Replace `keeper` with the name of the keeper's own Foundry account. Do not use t
 
 `--cast-account` (or `--keystore`) is required in cast mode. Arguments are parsed strictly: an unknown option, an `--option=value` form, a repeated option or a value that starts with `-` refuses to start (so `--dry-run=true` is refused, not run live). A keystore file whose name starts with `-` is passed as `./-name.json`. `DEPLOYER_ACCOUNT` is not read: it names the deployer, and the keeper has no fallback signer of any kind. `run-keeper-main.sh` takes the account from `KEEPER_CAST_ACCOUNT` and has no default.
 
-In cast mode (non-dry-run), the keeper will prompt once for the keystore password at startup and reuse it for subsequent updates. For unattended runs, set `CAST_KEYSTORE_PASSWORD` in `.env.<network>` so no interactive prompt is needed.
+Who signs is never guessed. `--keystore` or `--cast-account` alone selects cast mode. `--mode privateKey` together with either of them refuses, and so do `--keystore` and `--cast-account` together.
+
+In cast mode (non-dry-run), the keeper asks once for the keystore password, on a hidden prompt at startup, and reuses it for later updates. It never reads the password from the environment, an argument or a file you provide. Without a terminal there is nobody to answer the prompt, so a live cast-mode run without a terminal refuses to start. **Unattended cast mode is not supported** until the keystore sender of #446/#447 (FU-114). Unattended runs use privateKey mode with the keeper's own key.
+
+`cast` runs with a minimal environment (`PATH`, `HOME`, `TMPDIR`, `LANG`, `LC_ALL`, `USER`, `FOUNDRY_DIR`), and the RPC URL is passed to it as `ETH_RPC_URL`, not on its command line. No key, password or Telegram variable reaches it. It is given `--chain <id>`, so it signs for the configured chain only.
 
 Private-key mode:
 
@@ -77,7 +91,10 @@ pnpm keeper:op-mainnet -- --mode privateKey
 The keeper loads `.env.<network>` from the current working directory.
 
 - `RPC_URL`
-- `TEST_PRIVATE_KEY` (required by shared network loader)
+
+The RPC must serve the network's chain: the keeper reads `eth_chainId` before anything else, and again right before each cast send, and refuses on a mismatch. The RPC URL is logged as scheme and host only.
+
+For `op-mainnet` the keeper reads `.env.optimism` and `.env.op-mainnet`. If both set the same variable to different values, it refuses to start and names the variables (never their values): keep one value.
 
 Signer (exactly one, no fallback):
 
@@ -89,7 +106,6 @@ Use the keeper's own dedicated signer, never the deployer or any account with a 
 
 Optional:
 
-- `CAST_KEYSTORE_PASSWORD` (cast mode; otherwise it prompts)
 - `OFFICIAL_OPERATOR` (used to derive official Paymaster from the factory when no canonical instance exists)
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID` (must be numeric like `123...`/`-100...` or start with `@`)
@@ -108,7 +124,16 @@ Optional:
 - `--poll-interval <seconds>` (default: 30)
 - `--safety-margin <seconds>` (default: 600)
 - `--max-updates-per-day <n>` (default: 24)
-- `--max-base-fee-gwei <gwei>` (optional)
+- `--max-base-fee-gwei <gwei>` (optional; a soft gate, overridden in the last 180 s before expiry)
+- `--hard-max-fee-gwei <gwei>` (absolute ceiling and the max fee per gas of every update; required for a live run on `op-mainnet` / `mainnet`)
 - `--dry-run`
 - `--once`
 - `--logo` / `--no-logo`
+
+Every value is checked locally before the first request: numbers must be whole numbers (seconds, counts), gwei amounts positive with at most 9 decimals, addresses valid (mixed case must be a valid checksum), and `--network` one of the names above. A refusal names the option, never the value.
+
+## Known Limitations
+
+- `maxUpdatesPerDay` is counted in memory: it restarts at 0 when the keeper restarts, and two keeper processes on the same signer each have their own count. A send that fails after the transaction was broadcast is not counted, so the next tick can send one more `updatePrice()`. The signer does not change, and once the price is fresh on chain the keeper does not send again. A persisted journal and a single-instance lock are part of the #446/#447 sender (FU-114).
+- In cast mode the password is written to a `0600` file in a fresh temporary directory, removed on a normal exit or SIGINT / SIGTERM. After SIGKILL or a crash the file stays (FU-114).
+- The test guard `scripts/keeper/no-egress.preload.mjs` is a guard on the test process tree, not OS-level isolation (FU-112 ②).
