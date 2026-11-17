@@ -1,54 +1,137 @@
-import { afterAll, describe, expect, it } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { spawn } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { keeperKeyFrom, keeperKeyProblem } from './keeperKey.js';
+import { privateKeyToAccount } from 'viem/accounts';
+import { KeeperStartupRefusal, keeperKeyFrom, parseKeeperMode, resolveKeeperSigner } from './keeperKey.js';
 
 // This file spawns keeper.ts below; every top-level block states its timeout (check:spawn-timeouts).
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 
-// anvil account #0: a public test key, never a real one.
-const ANVIL0 = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+// anvil accounts #0 and #1: public test keys, never real ones. #1 stands in for the deployer.
+const KEEPER = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const DEPLOYERISH = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+const KEEPER_ADDR = privateKeyToAccount(KEEPER).address;
+const DEPLOYERISH_ADDR = privateKeyToAccount(DEPLOYERISH).address;
 
-describe('keeper signing key: KEEPER_PRIVATE_KEY only', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('ignores PRIVATE_KEY_SUPPLIER and PRIVATE_KEY (the deployer on Sepolia)', () => {
-        expect(keeperKeyFrom({ PRIVATE_KEY_SUPPLIER: ANVIL0 })).toBeUndefined();
-        expect(keeperKeyFrom({ PRIVATE_KEY: ANVIL0, PRIVATE_KEY_JASON: ANVIL0 })).toBeUndefined();
-        expect(keeperKeyFrom({ KEEPER_PRIVATE_KEY: '' , PRIVATE_KEY_SUPPLIER: ANVIL0 })).toBeUndefined();
-        expect(keeperKeyFrom({ KEEPER_PRIVATE_KEY: ANVIL0, PRIVATE_KEY_SUPPLIER: '0x01' })).toBe(ANVIL0);
+describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('privateKey mode reads KEEPER_PRIVATE_KEY only (PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are the deployer on Sepolia)', () => {
+        expect(keeperKeyFrom({ PRIVATE_KEY_SUPPLIER: DEPLOYERISH, PRIVATE_KEY: DEPLOYERISH })).toBeUndefined();
+        expect(keeperKeyFrom({ KEEPER_PRIVATE_KEY: '', PRIVATE_KEY_SUPPLIER: DEPLOYERISH })).toBeUndefined();
+        const s = resolveKeeperSigner({
+            mode: 'privateKey', dryRun: false, keystorePath: undefined, castAccount: undefined,
+            env: { KEEPER_PRIVATE_KEY: KEEPER, PRIVATE_KEY_SUPPLIER: DEPLOYERISH },
+        });
+        expect(s).toMatchObject({ mode: 'privateKey', address: KEEPER_ADDR });
+        expect(() => resolveKeeperSigner({ mode: 'privateKey', dryRun: false, keystorePath: undefined, castAccount: undefined, env: { PRIVATE_KEY_SUPPLIER: DEPLOYERISH } }))
+            .toThrow(KeeperStartupRefusal);
+        expect(resolveKeeperSigner({ mode: 'privateKey', dryRun: true, keystorePath: undefined, castAccount: undefined, env: {} })).toMatchObject({ key: undefined });
+        expect(() => resolveKeeperSigner({ mode: 'privateKey', dryRun: false, keystorePath: undefined, castAccount: undefined, env: { KEEPER_PRIVATE_KEY: '0x1234' } }))
+            .toThrow(/not a valid private key/);
     });
 
-    it('privateKey mode without KEEPER_PRIVATE_KEY refuses at startup unless it is a dry run', () => {
-        expect(keeperKeyProblem({ mode: 'privateKey', dryRun: false, key: undefined })).toMatch(/requires KEEPER_PRIVATE_KEY/);
-        expect(keeperKeyProblem({ mode: 'privateKey', dryRun: true, key: undefined })).toBeNull();
-        expect(keeperKeyProblem({ mode: 'privateKey', dryRun: false, key: ANVIL0 })).toBeNull();
-        expect(keeperKeyProblem({ mode: 'cast', dryRun: false, key: undefined })).toBeNull();
+    it('cast mode takes the account from --cast-account / --keystore only (DEPLOYER_ACCOUNT is not read)', () => {
+        const env = { DEPLOYER_ACCOUNT: 'optimism-deployer' };
+        expect(() => resolveKeeperSigner({ mode: 'cast', dryRun: false, env, keystorePath: undefined, castAccount: undefined })).toThrow(/DEPLOYER_ACCOUNT is not read/);
+        expect(() => resolveKeeperSigner({ mode: 'cast', dryRun: true, env, keystorePath: undefined, castAccount: undefined })).toThrow(KeeperStartupRefusal);
+        expect(resolveKeeperSigner({ mode: 'cast', dryRun: false, env, keystorePath: undefined, castAccount: 'keeper' })).toMatchObject({ castAccount: 'keeper' });
+        // With a keystore and no --cast-account, the env's DEPLOYER_ACCOUNT must not be picked up either.
+        expect(resolveKeeperSigner({ mode: 'cast', dryRun: false, env, keystorePath: '/k.json', castAccount: undefined }))
+            .toEqual({ mode: 'cast', keystorePath: '/k.json', castAccount: undefined });
+        expect(() => resolveKeeperSigner({ mode: 'cast', dryRun: false, env, keystorePath: undefined, castAccount: '0xabc' })).toThrow(/use --keystore/);
+    });
+
+    it('--mode is parsed canonically: any case of privateKey, cast, else refuse', () => {
+        expect(parseKeeperMode(undefined, false)).toBe('privateKey');
+        expect(parseKeeperMode('', true)).toBe('cast');
+        for (const m of ['privateKey', 'privatekey', 'PRIVATEKEY']) expect(parseKeeperMode(m, false)).toBe('privateKey');
+        expect(parseKeeperMode('CAST', false)).toBe('cast');
+        for (const m of ['private-key', 'bogus', 'pk']) expect(() => parseKeeperMode(m, false)).toThrow(KeeperStartupRefusal);
     });
 });
 
-// keeper.ts itself: spawned in an empty temp dir (its .env.<network> is read from the cwd, so the real
-// repo files are out of reach), RPC on a closed local port. The refusal must come before any network read.
+// keeper.ts itself, spawned in an empty temp dir with --network sepolia (its .env.sepolia is read from the cwd, so
+// the real repo file is out of reach; addresses come from the SDK address book) against a local JSON-RPC server that counts requests and answers each with an error.
+// A refused start must make ZERO requests; a dry run must make some (it got past the guard).
 const dir = mkdtempSync(join(tmpdir(), 'keeper-key-'));
-afterAll(() => rmSync(dir, { recursive: true, force: true }), SPAWN_VERDICT_TIMEOUT_MS);
-
-function keeper(args: string[], env: Record<string, string> = {}) {
-    const r = spawnSync(join(process.cwd(), 'node_modules/.bin/tsx'), [join(process.cwd(), 'scripts/keeper.ts'), ...args], {
-        cwd: dir, encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000,
-        env: { PATH: process.env.PATH!, HOME: dir, RPC_URL: 'http://127.0.0.1:9', ...env },
+let server: Server;
+let requests = 0;
+let rpcUrl = '';
+beforeAll(async () => {
+    server = createServer((req, res) => {
+        requests++;
+        req.resume();
+        req.on('end', () => {
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32000, message: 'test server: no chain here' } }));
+        });
     });
-    return { status: r.status, out: `${r.stdout}${r.stderr}` };
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+    const addr = server.address();
+    rpcUrl = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+}, SPAWN_VERDICT_TIMEOUT_MS);
+afterAll(async () => {
+    await new Promise<void>((r) => server.close(() => r()));
+    rmSync(dir, { recursive: true, force: true });
+}, SPAWN_VERDICT_TIMEOUT_MS);
+
+/** Run keeper.ts; stop it as soon as it has reached the RPC (or after `ms`). Returns exit code, output, requests. */
+function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): Promise<{ code: number | null; out: string; requests: number }> {
+    const before = requests;
+    return new Promise((resolve) => {
+        const child = spawn(join(process.cwd(), 'node_modules/.bin/tsx'), [join(process.cwd(), 'scripts/keeper.ts'), ...args], {
+            cwd: dir, env: { PATH: process.env.PATH!, HOME: dir, RPC_URL: rpcUrl, ...env },
+        });
+        let out = '';
+        child.stdout.on('data', (d) => { out += String(d); });
+        child.stderr.on('data', (d) => { out += String(d); });
+        const poll = setInterval(() => { if (requests > before) child.kill('SIGTERM'); }, 50);
+        const stop = setTimeout(() => child.kill('SIGKILL'), ms);
+        child.on('close', (code) => {
+            clearInterval(poll);
+            clearTimeout(stop);
+            resolve({ code, out, requests: requests - before });
+        });
+    });
 }
 
-describe('keeper.ts refuses without KEEPER_PRIVATE_KEY, even when .env.<network> has the deployer keys', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('a dotenv-loaded PRIVATE_KEY_SUPPLIER / PRIVATE_KEY is not used', () => {
-        const key = ANVIL0.slice(2);
-        writeFileSync(join(dir, '.env.anvil'), `PRIVATE_KEY=0x${key}\nPRIVATE_KEY_SUPPLIER=0x${key}\n`);
-        const r = keeper(['--network', 'anvil', '--once']);
-        expect(r.status).toBe(1);
-        expect(r.out).toMatch(/privateKey mode requires KEEPER_PRIVATE_KEY/);
-        expect(r.out).not.toContain(key);
-        // A dry run gets past the key check (it then fails on the closed RPC port, which is fine).
-        expect(keeper(['--network', 'anvil', '--once', '--dry-run']).out).not.toMatch(/requires KEEPER_PRIVATE_KEY/);
+describe('keeper.ts refuses before any network request, whatever .env.<network> holds', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const envFile = `PRIVATE_KEY=${DEPLOYERISH}\nPRIVATE_KEY_SUPPLIER=${DEPLOYERISH}\nDEPLOYER_ACCOUNT=optimism-deployer\n` +
+        'TELEGRAM_BOT_TOKEN=test-token\nTELEGRAM_CHAT_ID=1\n';
+
+    it.each([
+        ['default mode', ['--network', 'sepolia', '--once'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
+        ['explicit --mode privateKey', ['--network', 'sepolia', '--once', '--mode', 'privateKey'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
+        ['--mode PRIVATEKEY', ['--network', 'sepolia', '--once', '--mode', 'PRIVATEKEY'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
+        ['unknown --mode', ['--network', 'sepolia', '--once', '--mode', 'bogus'], /unknown --mode "bogus"/],
+        ['cast mode with only DEPLOYER_ACCOUNT in the env file', ['--network', 'sepolia', '--once', '--mode', 'cast'], /DEPLOYER_ACCOUNT is not read/],
+        ['a --dry-run lookalike', ['--network', 'sepolia', '--once', '--dry-run-lookalike'], /privateKey mode requires KEEPER_PRIVATE_KEY/],
+    ])('%s: exit 1, refused, zero RPC requests, no key printed', async (_name, args, why) => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper([...(args as string[])]);
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/refused: /);
+        expect(r.out).toMatch(why as RegExp);
+        expect(r.requests).toBe(0);
+        // The refusal path exits before the fatal handler's Telegram notification.
+        expect(r.out).not.toMatch(/\[keeper\] fatal/);
+        expect(r.out.toLowerCase()).not.toContain(DEPLOYERISH.slice(2));
+    });
+
+    it('a dry run gets past the guard and reaches the RPC', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', '--dry-run']);
+        expect(r.out).not.toMatch(/refused: /);
+        expect(r.requests).toBeGreaterThan(0);
+    });
+
+    it('the signer is KEEPER_PRIVATE_KEY, not the env file\'s PRIVATE_KEY_SUPPLIER', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile);
+        const r = await keeper(['--network', 'sepolia', '--once', '--dry-run'], { KEEPER_PRIVATE_KEY: KEEPER });
+        expect(r.out).toContain(`signer (privateKey mode): ${KEEPER_ADDR}`);
+        expect(r.out).not.toContain(DEPLOYERISH_ADDR);
+        expect(r.out.toLowerCase()).not.toContain(KEEPER.slice(2));
     });
 });

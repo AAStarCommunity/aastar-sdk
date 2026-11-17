@@ -57,10 +57,10 @@ pnpm keeper:op-mainnet -- --mode cast --keystore /path/to/keystore.json
 Cast (named account) mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --mode cast --cast-account optimism-deployer
+pnpm keeper:op-mainnet -- --mode cast --cast-account <the keeper's own foundry account>
 ```
 
-If `--cast-account` is omitted, the keeper uses `DEPLOYER_ACCOUNT` from `.env.<network>` by default.
+`--cast-account` (or `--keystore`) is required in cast mode. `DEPLOYER_ACCOUNT` is not read: it names the deployer, and the keeper has no fallback signer of any kind. `run-keeper-main.sh` takes the account from `KEEPER_CAST_ACCOUNT` and has no default.
 
 In cast mode (non-dry-run), the keeper will prompt once for the keystore password at startup and reuse it for subsequent updates. For unattended runs, set `CAST_KEYSTORE_PASSWORD` in `.env.<network>` so no interactive prompt is needed.
 
@@ -82,7 +82,6 @@ Optional:
 - `KEEPER_PRIVATE_KEY` (privateKey mode; required unless `--dry-run`). There is no fallback: `PRIVATE_KEY_SUPPLIER` and
   `PRIVATE_KEY` in `.env.<network>` are not read, because on Sepolia they are the deployer EOA.
 - `CAST_KEYSTORE_PASSWORD` (cast mode; otherwise it prompts)
-- `DEPLOYER_ACCOUNT` (cast mode default account name for `--cast-account`)
 - `OFFICIAL_OPERATOR` (used to derive official Paymaster from the factory when no canonical instance exists)
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID` (must be numeric like `123...`/`-100...` or start with `@`)
