@@ -1,5 +1,5 @@
-import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther } from 'viem';
-import { xPNTsFactoryABI, PaymasterFactoryABI } from '../abis/index.js';
+import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account, parseEther, parseEventLogs, isAddressEqual, zeroAddress } from 'viem';
+import { xPNTsFactoryABI, PaymasterFactoryABI, PaymasterABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
 
@@ -722,3 +722,55 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
     };
     return actions;
 };
+
+/**
+ * Resolve the paymaster a PaymasterFactory deploy produced and check that `operator` really owns it.
+ * Call this before anything funds, deposits to or registers the paymaster.
+ *
+ * A simulate() or predict address is not evidence: the deploy can still revert, and before
+ * PaymasterFactory-1.1.0 a copied CREATE2 salt let anyone land their own clone at the predicted
+ * address first (SP Daybreak DB-d-M3). So the address comes only from the PaymasterDeployed log of a
+ * successful receipt (or, with no `deployHash`, from the factory mapping of an earlier deploy), and
+ * then all three must name `operator`: paymasterByOperator, operatorByPaymaster and the clone's owner().
+ */
+export async function verifyPaymasterDeployment(
+    client: PublicClient,
+    args: { factory: Address; operator: Address; deployHash?: Hash }
+): Promise<Address> {
+    const { factory, operator, deployHash } = args;
+    validateAddress(factory, 'factory');
+    validateAddress(operator, 'operator');
+    const fail = (code: ErrorCode, msg: string): never => {
+        throw new AAStarError(code, `verifyPaymasterDeployment: ${msg}; nothing was funded or registered`);
+    };
+
+    let paymaster: Address;
+    if (deployHash) {
+        const receipt = await client.waitForTransactionReceipt({ hash: deployHash });
+        if (receipt.status !== 'success') fail(ErrorCode.CONTRACT_REVERT, `deploy tx ${deployHash} reverted`);
+        const deployed = parseEventLogs({
+            abi: PaymasterFactoryABI,
+            eventName: 'PaymasterDeployed',
+            logs: receipt.logs.filter((l) => isAddressEqual(l.address, factory)),
+        }) as unknown as Array<{ args: { operator: Address; paymaster: Address } }>;
+        const mine = deployed.filter((l) => isAddressEqual(l.args.operator, operator));
+        if (mine.length !== 1) {
+            fail(ErrorCode.CONTRACT_REVERT, `expected one PaymasterDeployed for ${operator} from ${factory} in ${deployHash}, found ${mine.length}`);
+        }
+        paymaster = mine[0].args.paymaster;
+    } else {
+        paymaster = await paymasterFactoryActions(factory)(client).getPaymasterByOperator({ operator });
+        if (isAddressEqual(paymaster, zeroAddress)) fail(ErrorCode.CONTRACT_REVERT, `factory ${factory} has no paymaster for ${operator}`);
+    }
+
+    const factoryActs = paymasterFactoryActions(factory)(client);
+    const [byOperator, byPaymaster, owner] = await Promise.all([
+        factoryActs.getPaymasterByOperator({ operator }),
+        factoryActs.getOperatorByPaymaster({ paymaster }),
+        client.readContract({ address: paymaster, abi: PaymasterABI, functionName: 'owner', args: [] }) as Promise<Address>,
+    ]);
+    if (!isAddressEqual(byOperator, paymaster)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${operator} to ${byOperator}, not ${paymaster}`);
+    if (!isAddressEqual(byPaymaster, operator)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${paymaster} to operator ${byPaymaster}, not ${operator}`);
+    if (!isAddressEqual(owner, operator)) fail(ErrorCode.UNAUTHORIZED, `${paymaster}.owner() is ${owner}, not ${operator}`);
+    return paymaster;
+}

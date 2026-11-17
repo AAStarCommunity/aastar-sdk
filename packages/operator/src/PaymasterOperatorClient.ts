@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -180,8 +180,9 @@ export class PaymasterOperatorClient extends BaseClient {
             let paymasterAddress: Address;
 
             if (existingPaymaster && existingPaymaster !== '0x0000000000000000000000000000000000000000') {
-                console.log(`    ℹ️  Paymaster already deployed at: ${existingPaymaster}`);
-                paymasterAddress = existingPaymaster;
+                // An earlier deploy is reused only if the factory mapping and its owner() still name this account.
+                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr });
+                console.log(`    ℹ️  Paymaster already deployed at: ${paymasterAddress}`);
             } else {
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {
                     entryPoint: this.requireEntryPoint(),
@@ -211,13 +212,9 @@ export class PaymasterOperatorClient extends BaseClient {
                     account
                 });
                 
-                await (publicClient as any).waitForTransactionReceipt({ hash: deployHash });
-                
-                paymasterAddress = await factory(publicClient).getPaymaster({ owner: accountAddr });
-            }
-            
-            if (!paymasterAddress || paymasterAddress === '0x0000000000000000000000000000000000000000') {
-                 throw new Error('Failed to retrieve Paymaster address from Factory');
+                // The address comes from the successful receipt, and is checked against the mapping and owner()
+                // before the role registration below stakes anything for it.
+                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash });
             }
 
             // 3. Register ROLE_PAYMASTER_AOA

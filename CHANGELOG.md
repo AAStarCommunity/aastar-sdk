@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### PaymasterV4 deploys are checked before anything is funded or registered
+
+- New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash? })` in `@aastar/core`. It takes the
+  paymaster address only from the factory's `PaymasterDeployed` log in a successful receipt (exactly one, for
+  `operator`), or, without `deployHash`, from the factory mapping. It then requires `paymasterByOperator`,
+  `operatorByPaymaster` and the clone's `owner()` to all name `operator`, and throws otherwise.
+- `PaymasterOperatorClient.deployAndRegisterPaymasterV4` runs it on a new deploy and on a reused earlier deploy, before
+  any approve or role registration. `createOperatorClient().deployPaymasterV4` runs it after the receipt and throws on a
+  mismatch, so it no longer returns a hash for a reverted deploy.
+- Removed `scripts/01_prepare_all.ts` (it deposited to a `simulate()`-predicted address before the deploy confirmed)
+  and `scripts/deploy_paymaster_v4.ts` (it used a factory function that does not exist, an unresolved import, and env
+  private keys). Use `PaymasterOperatorClient`.
+
 ### Breaking: the price keeper needs an explicit, dedicated signer (#452)
 
 The keeper no longer falls back to any signer. Before, a keeper started without its own key signed with whatever

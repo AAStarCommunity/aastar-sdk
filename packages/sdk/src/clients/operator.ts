@@ -8,6 +8,7 @@ import {
     SuperPaymasterABI,
     paymasterActions,
     PaymasterFactoryABI,
+    verifyPaymasterDeployment,
     xPNTsTokenABI,
     type StakingActions,
     type RegistryActions,
@@ -111,6 +112,7 @@ export function createOperatorClient({
             return (this as any)._onboardOperator(args);
         },
         async deployPaymasterV4({ version = 'v4.1', initData = '0x' }: { version?: string, initData?: Hex } = {}) {
+            if (!account) throw new Error('Account required for deployPaymasterV4');
             console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.paymasterFactory,
@@ -120,7 +122,8 @@ export function createOperatorClient({
                 account,
                 chain
             });
-            await (client as any).waitForTransactionReceipt({ hash: tx });
+            // Throws unless the receipt succeeded and the factory mapping and the clone's owner() both name this account.
+            await verifyPaymasterDeployment(client as any, { factory: usedAddresses.paymasterFactory, operator: account.address, deployHash: tx });
             return tx;
         },
         async _onboardOperator({ stakeAmount, depositAmount, roleId, roleData }: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {

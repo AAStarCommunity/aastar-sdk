@@ -17,7 +17,7 @@ Based on the PhD research requirements and the "Three-Step" (Prepare, Test, Anal
 
 ## Phase 1: Preparation (The "Ammo")
 
-- [x] **1.1. Automated Preparation (The "Ammo") (`scripts/01_prepare_all.ts`)**
+- [x] **1.1. Automated Preparation (The "Ammo")** — `scripts/01_prepare_all.ts` was removed: it deposited to a simulate()-predicted paymaster address before the deploy was confirmed, and it no longer ran. Deploy a PaymasterV4 through `PaymasterOperatorClient`, which checks the receipt, the factory mapping and `owner()` before funding or registering it.
     - [x] **Unified Script**: Runs all checks below.
     - [x] **Account Check**: Computes addresses for A, B, C.
     - [x] **ETH Check**: Funds 0.05 ETH from Supplier if low.
