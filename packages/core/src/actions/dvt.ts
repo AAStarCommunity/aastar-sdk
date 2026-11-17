@@ -9,6 +9,13 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
 
 export type DVTActions = {
     // Proposal Management
+    /**
+     * On DVTValidator-0.9.0 this succeeds only for a pure-reputation proposal (operator == 0 and level == 0): it calls
+     * the 3-argument `createProposal`, which commits evidenceHash 0, so every slash-shaped proposal reverts with
+     * MissingEvidenceHash (or UnknownEvidenceCategory(0) while no category is configured, as on SP 5.5.0). A slash
+     * needs the 4-argument `createProposal(operator, level, reason, evidenceHash)`, which the SDK will add when 5.5.x
+     * enables slashing; the rename of this action waits for then too. On DVTValidator-0.6.0 .. 0.8.x it creates either shape.
+     */
     createSlashProposal: (args: { operator: Address, level: number, reason: string, account?: Account | Address }) => Promise<Hash>;
     /** @deprecated Removed in the v5.x contract refactor — DVT slash signing is off-chain (BLS), there is no `signSlashProposal` in the DVTValidator ABI. Throws {@link ErrorCode.NOT_IMPLEMENTED}. */
     signSlashProposal: (args: { proposalId: bigint, signature: Hex, account?: Account | Address }) => Promise<Hash>;
