@@ -10,7 +10,9 @@
 #   ./run-keeper.sh sepolia --once --dry-run  # show what it would do, send nothing
 #
 # Everything is auto-wired:
-#   - the signing key is read from ./.env.<network>'s PRIVATE_KEY (no manual export)
+#   - the signing key is NOT auto-loaded: export KEEPER_PRIVATE_KEY (or pass --mode cast --cast-account <name>).
+#     There is no fallback: PRIVATE_KEY / PRIVATE_KEY_SUPPLIER in .env.<network> are the deployer EOA on Sepolia,
+#     and a keeper that silently signs with the deployer moves its nonce (deploy-day rule). --dry-run needs no key.
 #   - the SuperPaymaster + PaymasterV4 addresses are baked in per network below
 #     (update the CONFIG block when a deployment changes)
 #
@@ -52,18 +54,10 @@ case "$NETWORK" in
     ;;
 esac
 
-# ── Auto-load the signing key from .env.<network> ─────────────────────────────
-ENV_FILE=".env.${NETWORK}"
-if [ -z "${KEEPER_PRIVATE_KEY:-}" ]; then
-  if [ -f "$ENV_FILE" ]; then
-    PK="$(grep -m1 '^PRIVATE_KEY=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'"' \r' || true)"
-    [ -n "$PK" ] && export KEEPER_PRIVATE_KEY="$PK"
-  fi
-fi
-if [ -z "${KEEPER_PRIVATE_KEY:-}" ] && ! has_arg --dry-run "$@"; then
-  echo "error: no signing key — set PRIVATE_KEY in $ENV_FILE (or export KEEPER_PRIVATE_KEY)" >&2
-  exit 1
-fi
+# ── Signing key ───────────────────────────────────────────────────────────────
+# Not handled here. keeper.ts decides, mode-aware and after it loads .env.<network>, with no fallback:
+# privateKey mode needs KEEPER_PRIVATE_KEY, cast mode needs --keystore / --cast-account. This script never reads
+# PRIVATE_KEY from .env.<network> (on Sepolia that is the deployer EOA) and never exports a key.
 
 # ── Build args (baked addresses unless the caller overrides) ──────────────────
 ADDR_ARGS=()

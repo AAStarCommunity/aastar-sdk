@@ -1,8 +1,13 @@
 import { createPublicClient, createWalletClient, formatGwei, http, parseAbi } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
+import {
+    KeeperStartupRefusal, assertFlagValues, castSignerArgs, keeperAccountFor, parseKeeperMode, resolveKeeperSigner, type KeeperMode,
+} from './keeper/keeperKey.js';
+
+/** True until the signer is resolved. Any error before then is a configuration refusal: no Telegram, no network. */
+let startupPhase = true;
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -11,7 +16,6 @@ import { spawn } from 'child_process';
 import readline from 'readline';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
 
-type KeeperMode = 'cast' | 'privateKey';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const TELEGRAM_BOT_USERNAME = '@AAstarMonitorBot' as const;
@@ -147,7 +151,7 @@ function usage(): string {
         'Keeper quickstart:',
         '',
         '1) Private key mode (simplest):',
-        '   - Set env: KEEPER_PRIVATE_KEY=0x... (or PRIVATE_KEY_SUPPLIER=0x...)',
+        '   - Set env: KEEPER_PRIVATE_KEY=0x... (required; PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are not read)',
         '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet',
         '',
         '2) Cast mode (use Foundry keystore/account):',
@@ -195,8 +199,8 @@ function shortUsage(): string {
 async function runCastSend(params: {
     rpcUrl: string;
     target: `0x${string}`;
-    keystorePath?: string;
-    accountName?: string;
+    /** From castSignerArgs(signer) at startup: the only source of --keystore / --account. */
+    signerArgs: string[];
     passwordFilePath: string;
     gasPriceWei?: bigint;   // explicit gas-price to avoid cast hanging on estimation
     processTimeoutMs?: number; // hard kill timeout (default 90s)
@@ -204,13 +208,7 @@ async function runCastSend(params: {
     const cmd = 'cast';
     const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
 
-    if (params.keystorePath) {
-        castArgs.push('--keystore', params.keystorePath);
-    } else if (params.accountName) {
-        castArgs.push('--account', params.accountName);
-    } else {
-        throw new Error('cast mode requires --keystore or --cast-account/DEPLOYER_ACCOUNT');
-    }
+    castArgs.push(...params.signerArgs);
 
     // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
     if (params.gasPriceWei && params.gasPriceWei > 0n) {
@@ -261,8 +259,9 @@ async function runCastSend(params: {
 async function main() {
     installPipeSafety();
     const args = process.argv.slice(2).filter((a) => a !== '--');
+    assertFlagValues(args);
     const network = (getArgValue(args, '--network') || 'op-sepolia') as NetworkName;
-    const mode = ((getArgValue(args, '--mode') || '').toLowerCase() as KeeperMode) || (getArgValue(args, '--keystore') ? 'cast' : 'privateKey');
+    const mode: KeeperMode = parseKeeperMode(getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore')));
     const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
     const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
     const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
@@ -293,6 +292,14 @@ async function main() {
             dotenv.config({ path: fullPath });
         }
     }
+    // Who signs: decided here, after the env files and before any network read, with no fallback (keeperKey.ts).
+    // Resolved once; the wallet and the cast arguments below use these same values.
+    const signer = resolveKeeperSigner({
+        mode, dryRun, env: process.env,
+        keystorePath: getArgValue(args, '--keystore'), castAccount: getArgValue(args, '--cast-account'),
+    });
+    if (signer.mode === 'privateKey') console.log(`signer (privateKey mode): ${signer.address ?? 'none (dry run)'}`);
+    else console.log(`signer (cast mode): ${signer.keystorePath ? `keystore ${signer.keystorePath}` : `account ${signer.castAccount}`}`);
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
@@ -363,6 +370,19 @@ async function main() {
         },
         paymasterMissingAlertSec
     );
+    // What this run signs with, built from the resolved signer only, before the first network request, and
+    // logged: the wallet below and every `cast send` use exactly these objects (no second lookup anywhere).
+    const keeperAccount = keeperAccountFor(signer);
+    const walletClient = keeperAccount
+        ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
+        : null;
+    if (walletClient) console.log(`wallet signer: ${walletClient.account!.address}`);
+    const castSigner = signer.mode === 'cast' ? castSignerArgs(signer) : null;
+    if (castSigner) console.log(`cast signer args: ${castSigner.join(' ')}`);
+    // Everything above is local configuration; an error up to here is a refusal (no Telegram). From here on the
+    // keeper touches the network.
+    startupPhase = false;
+
     let paymaster: `0x${string}` | null = null;
     let paymasterInit = 'disabled';
     if (!disablePaymaster) {
@@ -430,8 +450,8 @@ async function main() {
     console.log('group/channel: add bot and allow posting');
 
     let passwordFilePath: string | null = null;
-    const keystorePath = getArgValue(args, '--keystore');
-    const castAccount = getArgValue(args, '--cast-account') || process.env.DEPLOYER_ACCOUNT;
+    const keystorePath = signer.mode === 'cast' ? signer.keystorePath : undefined;
+    const castAccount = signer.mode === 'cast' ? signer.castAccount : undefined;
     const passwordFromEnv = process.env.CAST_KEYSTORE_PASSWORD;
 
     if (mode === 'cast') {
@@ -439,7 +459,7 @@ async function main() {
             throw new Error('cast mode: when providing an address, use --keystore <path> instead of --cast-account');
         }
         if (!keystorePath && !castAccount) {
-            throw new Error('cast mode requires --keystore or --cast-account (or DEPLOYER_ACCOUNT in env)');
+            throw new Error('cast mode requires --keystore or --cast-account');
         }
         if (!dryRun) {
             const pw = passwordFromEnv || (await promptHidden('Keystore password: '));
@@ -448,12 +468,6 @@ async function main() {
             await fs.promises.writeFile(passwordFilePath, pw, { mode: 0o600 });
         }
     }
-
-    const keeperKey = (process.env.KEEPER_PRIVATE_KEY || process.env.PRIVATE_KEY_SUPPLIER) as `0x${string}` | undefined;
-    const keeperAccount = keeperKey ? privateKeyToAccount(keeperKey) : null;
-    const walletClient = keeperAccount
-        ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
-        : null;
 
     const updatesTodayByPaymaster = new Map<string, number>();
     let dayStartSec = nowSec();
@@ -724,17 +738,17 @@ async function main() {
         const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
             if (mode === 'cast') {
                 if (!passwordFilePath) throw new Error('cast mode requires password file (should have been created at startup)');
+                if (!castSigner) throw new Error('cast mode requires --keystore or --cast-account');
                 return await runCastSend({
                     rpcUrl: config.rpcUrl,
                     target,
-                    keystorePath: keystorePath || undefined,
-                    accountName: !keystorePath ? castAccount || undefined : undefined,
+                    signerArgs: castSigner,
                     passwordFilePath,
                     gasPriceWei,
                     processTimeoutMs: 90_000
                 });
             }
-            if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY or PRIVATE_KEY_SUPPLIER');
+            if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY');
             const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
             return await walletClient.writeContract({
                 address: target,
@@ -987,6 +1001,11 @@ async function main() {
 }
 
 main().catch(async (e) => {
+    // A startup refusal is a configuration error: print it and exit, with no outbound request at all.
+    if (e instanceof KeeperStartupRefusal || startupPhase) {
+        console.error(`refused: ${e.message}`);
+        process.exit(1);
+    }
     try {
         await sendTelegramMessage(`[keeper] fatal\nmsg=${e?.message || String(e)}`);
     } catch {}
