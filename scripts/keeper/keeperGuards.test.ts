@@ -117,4 +117,13 @@ describe('keeper local guards (Daybreak 6c240b42 round 1)', () => {
         expect(parseIntOption('--poll-interval', '86400', 30n, 1n, 86_400n)).toBe(86_400n);
         expect(() => parseIntOption('--poll-interval', '86401', 30n, 1n, 86_400n)).toThrow(/at most 86400/);
     });
+
+    it('Codex F4: RPC user info is registered encoded and decoded, the password at any length', () => {
+        const secrets = secretValues({}, 'https://keeper:abc%40defgh@rpc.example/');
+        expect(redactSecrets('authentication failed for abc@defgh', secrets)).toBe('authentication failed for [redacted]');
+        const short = secretValues({}, 'https://user:pw7@rpc.example/');
+        expect(redactSecrets('bad password pw7', short)).toBe('bad password [redacted]');
+        // A malformed escape in one path segment does not stop the query value from being registered.
+        expect(secretValues({}, 'https://rpc.example/%E0%A4%A/x?key=QUERYKEY999')).toContain('QUERYKEY999');
+    });
 });

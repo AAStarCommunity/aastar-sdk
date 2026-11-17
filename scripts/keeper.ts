@@ -136,7 +136,7 @@ async function sendTelegramMessage(text: string): Promise<void> {
         );
     } catch (e: any) {
         const msg = e?.response?.data?.description || e?.message || String(e);
-        console.warn(`[telegram] sendMessage failed: ${msg}`);
+        console.warn(`[telegram] sendMessage failed: ${scrub(String(msg))}`);
     }
 }
 
@@ -241,16 +241,27 @@ let stopping = false;
  * request that timed out): whether they reached the network is unknown, so the exit must not say "stopped".
  */
 let sendsInterruptedByShutdown = 0;
+/** Thrown by the stop check: the send it refuses was never signed, so it is not an unknown send state. */
+class ShutdownRefusal extends Error {}
+const isShutdownRefusal = (e: unknown): boolean => {
+    // viem wraps errors thrown inside signTransaction; walk the cause chain.
+    for (let x: any = e, i = 0; x && i < 10; x = x.cause, i++) if (x instanceof ShutdownRefusal) return true;
+    return false;
+};
+/** Sends that were already signed when the signal came and then returned a hash: reported, never hidden. */
+const sendsCompletedDuringShutdown: string[] = [];
 async function trackSend<T>(send: () => Promise<T>): Promise<T> {
     try {
-        return await send();
+        const r = await send();
+        if (stopping) sendsCompletedDuringShutdown.push(String(r || 'hash not parsed'));
+        return r;
     } catch (e) {
-        if (stopping) sendsInterruptedByShutdown += 1;
+        if (stopping && !isShutdownRefusal(e)) sendsInterruptedByShutdown += 1;
         throw e;
     }
 }
 function assertNotStopping(): void {
-    if (stopping) throw new Error('shutting down: no new transaction is signed');
+    if (stopping) throw new ShutdownRefusal('shutting down: no new transaction is signed');
 }
 
 async function runCastSend(params: {
@@ -442,7 +453,18 @@ async function main() {
     );
     // What this run signs with, built from the resolved signer only, before the first network request, and
     // logged: the wallet below and every `cast send` use exactly these objects (no second lookup anywhere).
-    const keeperAccount = keeperAccountFor(signer);
+    // The stop check runs inside signTransaction, i.e. after viem's awaited preparation (gas estimate, fees, nonce),
+    // so a signal during preparation cannot let a transaction be signed (Codex F1). This relies on viem's local-account
+    // path calling account.signTransaction (checked against viem 2.43.3, the pinned version; re-check on upgrade).
+    // Nothing relies on how soon the broadcast follows the signature: a send that got past this check is treated as
+    // in flight during shutdown and its outcome is awaited and reported (trackSend, onExit).
+    const localAccount = keeperAccountFor(signer);
+    const keeperAccount = localAccount
+        ? ({
+            ...localAccount,
+            signTransaction: (tx: any, opts?: any) => { assertNotStopping(); return localAccount.signTransaction(tx, opts); },
+        } as typeof localAccount)
+        : null;
     const walletClient = keeperAccount
         ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
         : null;
@@ -645,7 +667,9 @@ async function main() {
             ? `exited (${signal}) with a send in an unknown state: the tick did not finish within 15 s`
             : sendsInterruptedByShutdown > 0
                 ? `exited (${signal}) with a send in an unknown state: a send was interrupted by the shutdown`
-                : `stopped (${signal})`;
+                : sendsCompletedDuringShutdown.length > 0
+                    ? `stopped (${signal}); a transaction signed before the signal was broadcast: ${sendsCompletedDuringShutdown.join(', ')}`
+                    : `stopped (${signal})`;
         console.log(status);
         await sendTelegramMessage(
             `[keeper] ${status}\nnetwork=${network}\n` +
@@ -721,10 +745,19 @@ async function main() {
             let json: unknown;
             try {
                 const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
-                if (!res.ok) return null;
-                const text = await res.text();
-                if (text.length > 65_536) return null;
-                json = JSON.parse(text);
+                if (!res.ok || !res.body) { await res.body?.cancel(); return null; }
+                // Counted in bytes while reading, and cancelled as soon as it passes 64 KiB (Codex F2).
+                const reader = res.body.getReader();
+                const chunks: Uint8Array[] = [];
+                let size = 0;
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    size += value.byteLength;
+                    if (size > 65_536) { await reader.cancel(); return null; }
+                    chunks.push(value);
+                }
+                json = JSON.parse(Buffer.concat(chunks).toString('utf8'));
             } finally {
                 clearTimeout(t);
             }

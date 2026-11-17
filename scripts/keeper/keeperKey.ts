@@ -62,14 +62,14 @@ export function resolveKeeperSigner(a: {
     }
     // A key pasted into --keystore / --cast-account would be logged as the signer argument and handed to cast.
     for (const [flag, v] of [['--keystore', a.keystorePath], ['--cast-account', a.castAccount]] as const) {
-        if (v !== undefined && /^(0x)?[0-9a-fA-F]{64}$/.test(v.trim())) {
+        if (v !== undefined && /^(?:0x)?[0-9a-f]{64}$/i.test(v.trim())) {
             throw new KeeperStartupRefusal(`${flag} looks like a private key, not a keystore path or account name (the value is not shown)`);
         }
     }
     if (a.keystorePath && a.castAccount) {
         throw new KeeperStartupRefusal('cast mode: pass --keystore or --cast-account, not both (the signer would be ambiguous)');
     }
-    if (!a.keystorePath && a.castAccount?.startsWith('0x')) {
+    if (!a.keystorePath && a.castAccount?.toLowerCase().startsWith('0x')) {
         throw new KeeperStartupRefusal('cast mode: when providing an address, use --keystore <path> instead of --cast-account');
     }
     if (!a.keystorePath && !a.castAccount) {

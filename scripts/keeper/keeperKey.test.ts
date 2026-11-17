@@ -289,6 +289,7 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['live cast mode without a terminal (unattended cast is not supported, FU-114)', ['--cast-account', 'keeper'], /cast mode needs an interactive terminal/],
         ['a key pasted after --keystore (Codex R5)', ['--keystore', DEPLOYERISH], /--keystore looks like a private key/],
         ['a key without 0x pasted after --cast-account (Codex R5)', ['--cast-account', DEPLOYERISH.slice(2)], /--cast-account looks like a private key/],
+        ['an upper-case 0X key after --keystore (Codex F3)', ['--keystore', `0X${DEPLOYERISH.slice(2).toUpperCase()}`], /--keystore looks like a private key/],
         ['a --poll-interval that would overflow the timer (Codex R9)', ['--poll-interval', '2147484'], /--poll-interval must be at most 86400/],
     ])('%s: exit 1, refused, zero RPC requests, zero egress', async (_name, extra, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);

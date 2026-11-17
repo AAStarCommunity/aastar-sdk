@@ -57,3 +57,17 @@ this round; one more Codex pass on this fix's diff only; Medium and below are wr
 | R16 | Low | (i) | A disabled SuperPaymaster is not read |
 | R17 | Low | (ii) | KPR-017, documented |
 | R18 | Low | (i) | Every mainnet example and the built-in usage text now pass `--hard-max-fee-gwei` |
+
+## Codex pass 2, on the fix diff only (99766d3e..41f124fa)
+
+88,478 tokens; R2 judged closed. DSR 2026-11-18: F1 fixed this round; Medium and below written down (the small and
+certain ones fixed); then Daybreak on the whole round's diff, then the PR, with no further local review round.
+
+| ID | Codex | Class | Disposition |
+|---|---|---|---|
+| F1 | High | (i) | The stop check ran before viem's awaited preparation (gas estimate), so a signal during it could still be followed by a signature. The check now runs inside the local account's `signTransaction` (relies on viem 2.43.3's local-account path; re-check on upgrade). A send already signed when the signal arrives is treated as in flight: awaited, and named in the exit message if it was broadcast. Only a send refused by the check is known not sent. Test holds `eth_estimateGas`, signals, releases: no raw transaction |
+| F2 | Medium | (i) | External price body read incrementally, cancelled past 64 KiB of bytes; test with a 70 KB body |
+| F3 | Medium | (i) | Key-shaped signer arguments matched case-insensitively (`0X…`), the `0x` address check too |
+| F4 | Medium | (i) | RPC user info registered encoded and decoded; password at any length, user name from 4 characters; components decoded independently |
+| F5 | Medium | (i), untested | Telegram failure diagnostics go through `scrub`. Not covered by a test: exercising it would need a reachable Telegram endpoint |
+| F6 | Low | (i) | The fake RPC echoes the key outside URL syntax, so the end-to-end test needs `scrub`, not just URL reduction |

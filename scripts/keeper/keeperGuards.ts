@@ -108,7 +108,7 @@ export function safeChildError(text: string, max = 300): string {
 
 /**
  * Values that must never appear in a log line or alert: the keeper key (with and without 0x), the Telegram token, the
- * RPC URL and each credential-like part of it (user info, path segments and query values of 8+ characters).
+ * RPC URL, its user info, and its path segments and query values of 8+ characters (each encoded and decoded).
  */
 export function secretValues(env: Record<string, string | undefined>, rpcUrl: string | undefined): string[] {
     const out = new Set<string>();
@@ -121,8 +121,12 @@ export function secretValues(env: Record<string, string | undefined>, rpcUrl: st
         add(rpcUrl);
         try {
             const u = new URL(rpcUrl);
-            add(u.username); add(u.password);
-            for (const seg of u.pathname.split('/')) add(decodeURIComponent(seg));
+            const decoded = (v: string): string | undefined => { try { return decodeURIComponent(v); } catch { return undefined; } };
+            // Explicit credentials, encoded and decoded: the password at any length, the user name from 4 characters
+            // (shorter names are words that redaction would remove from every line) (Codex F4).
+            for (const v of [u.password, decoded(u.password)]) if (v) out.add(v);
+            for (const v of [u.username, decoded(u.username)]) if (v && v.length >= 4) out.add(v);
+            for (const seg of u.pathname.split('/')) { add(seg); add(decoded(seg)); }
             for (const v of u.searchParams.values()) add(v);
         } catch { /* unparseable: the whole string is already listed */ }
     }

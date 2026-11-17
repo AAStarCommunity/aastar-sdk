@@ -66,6 +66,8 @@ type ChainOpts = {
     decimalsBroken?: boolean;
     /** Called when a raw transaction arrives; the node answers it only after the returned delay (ms). */
     onSend?: () => number;
+    /** Called on eth_estimateGas; the node answers only after the returned delay (ms). */
+    onEstimate?: () => number;
 };
 type Chain = { url: string; raw: Hex[]; methods: string[]; close: () => Promise<void> };
 
@@ -79,13 +81,14 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
     const cacheAt = (s: 'empty' | 'fresh') => (s === 'empty' ? 0n : now());
     const answer = (method: string, params: any[]): { result?: unknown; error?: { code: number; message: string } } => {
         switch (method) {
-            case 'eth_chainId': if (o.chainIdError) return { error: { code: -32000, message: 'fake: chain id unavailable' } }; return { result: `0x${(o.chainId ?? (() => SEPOLIA))(chainIdCalls++).toString(16)}` };
+            // The error text echoes the RPC key outside URL syntax, as some providers do (Codex F6).
+            case 'eth_chainId': if (o.chainIdError) return { error: { code: -32000, message: 'fake: invalid API key SECRETRPCKEY' } }; return { result: `0x${(o.chainId ?? (() => SEPOLIA))(chainIdCalls++).toString(16)}` };
             case 'eth_blockNumber': return { result: `0x${(block++).toString(16)}` };
             case 'eth_getBlockByNumber':
                 return { result: { number: `0x${block.toString(16)}`, hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now().toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
             case 'eth_getCode': return { result: '0x6080' };
             case 'eth_getTransactionCount': return { result: '0x0' };
-            case 'eth_estimateGas': return { result: '0x186a0' };
+            case 'eth_estimateGas': return { result: '0x186a0', delayMs: o.onEstimate?.() ?? 0 } as any;
             case 'eth_maxPriorityFeePerGas': return { result: '0x3b9aca00' };
             case 'eth_gasPrice': return { result: '0x77359400' };
             case 'eth_sendRawTransaction': {
@@ -327,6 +330,28 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
         expect(r.code).toBe(0);
     });
 
+    it('an external price body over 64 KiB is discarded; a small one is used (Codex F2)', async () => {
+        const chain = await fakeChain();
+        cleanups.push(chain.close);
+        const serve = (body: string) => createServer((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(body); });
+        const run = async (body: string) => {
+            const srv = serve(body);
+            await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+            cleanups.push(() => new Promise((r) => { srv.closeAllConnections?.(); srv.close(() => r()); }));
+            const port = (srv.address() as AddressInfo).port;
+            // 4000 vs the feed's 3000: a used answer raises the deviation alert.
+            return startKeeper({
+                chain, egress: true, extraPorts: [port], env: { KEEPER_PRIVATE_KEY: KEY },
+                args: [...BASE, '--once', '--volatility-threshold-bps', '150', '--external-ethusd-url', `http://127.0.0.1:${port}/ticker`],
+            });
+        };
+        const small = await run('{"price":"4000"}');
+        expect(small.out).toMatch(/alert kind=market reason=external-vs-chainlink/);
+        const big = await run(JSON.stringify({ price: '4000', pad: 'x'.repeat(70_000) }));
+        expect(big.out).not.toMatch(/alert kind=market/);
+        expect(big.code).toBe(0);
+    });
+
     it('--disable-superpaymaster: a broken SuperPaymaster is not read and does not fail the run (Codex R16)', async () => {
         const chain = await fakeChain({ spUpdatedAt: 'broken' });
         cleanups.push(chain.close);
@@ -546,7 +571,29 @@ describe('keeper shutdown, privateKey mode (the form the Mini runs)', { timeout:
         expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([SP]);
         expect(r.out).toMatch(/action=sendTx kind=paymaster/);
         expect(r.out).toMatch(/shutting down: no new transaction is signed/);
-        expect(r.out).toMatch(/stopped \(SIGTERM\)/);
+        // The SuperPaymaster transaction was signed before the signal and broadcast after it: named, not hidden.
+        expect(r.out).toMatch(/stopped \(SIGTERM\); a transaction signed before the signal was broadcast: 0x[0-9a-f]{64}/);
         expect(r.out).not.toMatch(/unknown state/);
+    });
+
+    it('SIGTERM while viem prepares a send (gas estimate pending): nothing is signed afterwards (Codex F1)', async () => {
+        let keeperChild: ChildProcess | null = null;
+        let signalled = false;
+        const chain = await fakeChain({
+            spUpdatedAt: 'empty',
+            onEstimate: () => {
+                if (signalled || !keeperChild) return 0;
+                signalled = true;
+                keeperChild.kill('SIGTERM');
+                return 500; // the estimate returns after the signal; viem would sign next
+            },
+        });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: BASE, env: { KEEPER_PRIVATE_KEY: KEY }, onOut: (_o, child) => { keeperChild = child; } });
+        expect(signalled).toBe(true);
+        expect(chain.raw).toEqual([]);
+        expect(r.out).toMatch(/shutting down: no new transaction is signed/);
+        // Refused before signing: known not sent, so a clean stop.
+        expect(r.out).toMatch(/stopped \(SIGTERM\)$/m);
     });
 });
