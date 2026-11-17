@@ -312,6 +312,14 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         expect(r.requests).toBe(0);
     });
 
+    it('env-backed options are read after .env.<network> is loaded, so a bad value there refuses (KDR-020)', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), `${envFile}KEEPER_HEALTH_INTERVAL_SEC=not-a-number\n`);
+        const r = await keeper(['--network', 'sepolia', '--once', '--dry-run']);
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/refused: --health-interval \/ KEEPER_HEALTH_INTERVAL_SEC must be a whole number/);
+        expect(r.requests).toBe(0);
+    });
+
     it('KPR-002: --cast-account alone selects cast mode even with KEEPER_PRIVATE_KEY in the env', async () => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         const r = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--cast-account', 'keeper'], { KEEPER_PRIVATE_KEY: KEEPER });

@@ -155,4 +155,13 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(sepolia.status).toBe(0);
         expect(pidOf(sepolia.stdout)).toBe(sepolia.pid);
     });
+
+    it('an unknown network (for example a key pasted first) refuses without being printed (KDR-012)', () => {
+        const key = '59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+        const r = run([`0x${key}`, '--dry-run']);
+        expect(r.status).toBe(1);
+        expect(r.stderr).toMatch(/unknown network .*the value is not shown/);
+        expect(`${r.stdout}${r.stderr}`).not.toContain(key);
+        expect(r.argv).toEqual([]); // keeper.ts never started
+    });
 });

@@ -1,0 +1,14 @@
+You are doing a strict, adversarial security review of a fix to the price keeper in this repository (AAStar SDK). The keeper is the only SDK code that runs in production with a live signing key, long-running.
+
+Scope rules:
+- Read ONLY files inside the working directory /Users/jason/Dev/aastar/aastar-sdk/.claude/worktrees/keeper-daybreak. Do not read any other directory under ~/Dev, other worktrees, or other sessions' files.
+- Do not touch any chain or RPC, do not run network commands, do not read any .env file, keystore, or password file. The sandbox is read-only; static review only.
+
+What to review: the whole fix round, `git diff 6c240b42653af2405dd60531f7686a029e69e683 c7a88443768935d4fbd35aa4ac5917ff06cd1d1b` (branch fix/keeper-daybreak-r1). Read the changed files in full where needed: scripts/keeper.ts, scripts/keeper/keeperKey.ts, scripts/keeper/keeperGuards.ts, run-keeper-main.sh, run-keeper.sh, their tests (scripts/keeper/*.test.ts), docs/guide/keeper.md.
+
+This round answers your own earlier review of 6c240b42 (raw text: docs/agent/reviews/daybreak-keeper-6c240b42.md) and two later Codex passes. How every finding was handled, and why, is in docs/agent/reviews/daybreak-keeper-6c240b42.dispositions.md; open follow-ups are FU-111..FU-114 in docs/agent/followups.md. Read them. Attack their premises: if a finding marked fixed is not actually closed, find the input, signal timing or environment that still reaches the bad outcome; if a deferral or "not fixed" rests on something false, say so with evidence.
+
+Threat model: the keeper holds a live key (privateKey mode with KEEPER_PRIVATE_KEY, or a cast keystore unlocked by an interactive password) and calls updatePrice on SuperPaymaster / PaymasterV4. Worst outcomes: it signs or sends something the operator did not intend or does not know about (wrong signer, chain, contract, function, fee; a send after shutdown began; a send reported wrongly); a secret (private key, keystore password, RPC credential, Telegram token) reaches argv, a child's environment, logs, Telegram or an error message; a refusal that can be bypassed or happens after a network request; tests that would stay green if a fix were removed. Also check for regressions in the form a deployment runs today: privateKey mode, --network sepolia --superpaymaster <a> --paymaster <a> --external-ethusd-url <url> --poll-interval 180 --safety-margin 600 --health-interval 1800 --chainlink-stale-sec 600 --volatility-threshold-bps 150 --volatility-cooldown 600, with only KEEPER_PRIVATE_KEY and RPC_URL in the environment.
+
+Report every finding you can substantiate from the code. For each give: ID, Severity (Critical/High/Medium/Low), file:line, what is wrong, a concrete scenario, a suggested fix, and whether it is new in this diff or a residual of an earlier finding (name it).
+End with a short list of what you checked and found sound.

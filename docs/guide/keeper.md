@@ -20,7 +20,7 @@ The keeper submits `updatePrice()` only when all of the following are true:
 
 Additionally:
 
-- Enforces `maxUpdatesPerDay` to avoid abuse (counted in memory per process; see Known Limitations)
+- Enforces `maxUpdatesPerDay` to avoid abuse. It counts transactions sent, including ones that later revert or stay pending, not confirmed updates (counted in memory per process; see Known Limitations)
 - Optionally skips updates when base fee is above `maxBaseFeeGwei` (unless very close to expiry)
 - With `--hard-max-fee-gwei`, never sends while the base fee is above it, not even close to expiry, and signs every
   update with that value as its max fee per gas, so the chain cannot charge more. It alerts when it skips for this
@@ -96,7 +96,7 @@ The keeper loads `.env.<network>` from the current working directory.
 
 The RPC must serve the network's chain: the keeper reads `eth_chainId` before anything else, and again right before each cast send, and refuses on a mismatch. The RPC URL is logged as scheme and host only.
 
-For `op-mainnet` the keeper reads `.env.optimism` and `.env.op-mainnet`. If both set the same variable to different values, it refuses to start and names the variables (never their values): keep one value.
+For `op-mainnet` the keeper reads `.env.optimism` and `.env.op-mainnet`. If both set the same variable to different values, it refuses to start and names the variables (never their values): keep one value. A variable already set in the process environment wins over the files. If `KEEPER_PRIVATE_KEY` or `RPC_URL` is set in both with different values, the keeper refuses to start (it would otherwise be guessing the signer or the chain); for any other variable it says, by name, that the file's value is ignored. Env-backed options (`KEEPER_HEALTH_INTERVAL_SEC`, `EXTERNAL_ETHUSD_URL`, ...) are read after the files are loaded, so the files can set them; a CLI flag still wins.
 
 Signer (exactly one, no fallback):
 
@@ -139,7 +139,7 @@ Every value is checked locally before the first request: numbers must be whole n
 - `maxUpdatesPerDay` is counted in memory: it restarts at 0 when the keeper restarts, and two keeper processes on the same signer each have their own count. A send that fails after the transaction was broadcast is not counted. This can repeat on every tick for as long as broadcasts succeed but their responses are lost and the cached price stays stale, so the number of uncounted transactions is not bounded by the keeper. The signer does not change, and once a price update lands on chain the keeper stops sending. A persisted journal and a single-instance lock are part of the #446/#447 sender (FU-114).
 - `--hard-max-fee-gwei` bounds the fee per gas, not the gas used: there is no gas-limit or per-transaction cost ceiling, so it is not a total-spend limit.
 - Each target's confirmation is awaited in the tick (up to about 10 minutes for a receipt and 10 more for the state), so a slow SuperPaymaster confirmation delays the PaymasterV4 decision by as much, and that decision uses the time read at the start of the tick.
-- After SIGINT / SIGTERM no new signature is started. A transaction already signed when the signal arrives is waited for and reported: "stopped" names it if it was broadcast. A cast send in flight is terminated, and the running tick gets up to 15 s to finish. If the tick does not finish, or a send was cut off (a terminated cast or a timed-out RPC request may or may not have reached the network), the keeper exits saying a send is in an unknown state: check the signer's nonce before restarting.
+- After SIGINT / SIGTERM no new signature is started. A transaction already signed when the signal arrives is waited for and reported: "stopped" names it if it was broadcast. A cast send in flight is terminated, and the running tick gets up to 15 s to finish. If the tick does not finish, or a send was cut off (a terminated cast or a timed-out RPC request may or may not have reached the network), the keeper exits with code 2, saying a send is in an unknown state: check the signer's nonce before restarting. A clean stop exits 0. A broken stdout/stderr pipe goes through the same path and never exits 0. A cast send that exits 0 without printing a transaction hash is treated as an unknown send state, not as an update.
 - In cast mode the password is written to a `0600` file in a fresh temporary directory, removed on a normal exit or SIGINT / SIGTERM. After SIGKILL or a crash the file stays, and a signal that arrives while the file is being written, before the shutdown handlers are installed, can leave it too (FU-114).
 - The password prompt does not echo what is typed or pasted. End of input, Ctrl-C or an empty answer refuses to start.
 - The test guard `scripts/keeper/no-egress.preload.mjs` is a guard on the test process tree, not OS-level isolation (FU-112 ②).

@@ -64,6 +64,8 @@ type ChainOpts = {
     chainIdError?: boolean;
     /** decimals() on the price feed fails. */
     decimalsBroken?: boolean;
+    /** eth_getCode for the PaymasterV4 fails with a provider-style message that echoes the RPC key. */
+    v4CodeError?: boolean;
     /** Called when a raw transaction arrives; the node answers it only after the returned delay (ms). */
     onSend?: () => number;
     /** Called on eth_estimateGas; the node answers only after the returned delay (ms). */
@@ -86,7 +88,9 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
             case 'eth_blockNumber': return { result: `0x${(block++).toString(16)}` };
             case 'eth_getBlockByNumber':
                 return { result: { number: `0x${block.toString(16)}`, hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now().toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
-            case 'eth_getCode': return { result: '0x6080' };
+            case 'eth_getCode':
+                if (o.v4CodeError && String(params[0]).toLowerCase() === V4) return { error: { code: 3, message: 'fake: invalid API key SECRETRPCKEY' } };
+                return { result: '0x6080' };
             case 'eth_getTransactionCount': return { result: '0x0' };
             case 'eth_estimateGas': return { result: '0x186a0', delayMs: o.onEstimate?.() ?? 0 } as any;
             case 'eth_maxPriorityFeePerGas': return { result: '0x3b9aca00' };
@@ -153,6 +157,8 @@ type Run = { code: number | null; out: string; child: ChildProcess };
 /** Start the keeper; resolves when it exits (or is killed at `timeoutMs`). `onOut` may act on the output so far. */
 function startKeeper(p: {
     chain: Chain; args: string[]; env?: Record<string, string>; fakeCastDir?: string;
+    /** Written to <cwd>/.env.sepolia before the keeper starts. */
+    envFile?: string;
     /**
      * Run under a pty. With `password`, answer the prompt with it: in one write (a paste) or one byte at a time.
      * Without, the test answers itself (onOut).
@@ -162,6 +168,7 @@ function startKeeper(p: {
 }): Promise<Run> {
     const cwd = mkdtempSync(join(tmpdir(), 'keeper-send-'));
     cleanups.push(() => rmSync(cwd, { recursive: true, force: true }));
+    if (p.envFile !== undefined) writeFileSync(join(cwd, '.env.sepolia'), p.envFile);
     const node = [process.execPath, '--import', pathToFileURL(TSX_LOADER).href, KEEPER, '--no-logo', ...p.args];
     const env: Record<string, string> = {
         PATH: p.fakeCastDir ? `${p.fakeCastDir}:${process.env.PATH}` : (process.env.PATH ?? ''), HOME: cwd, RPC_URL: p.chain.url, ...p.env,
@@ -198,7 +205,7 @@ function startKeeper(p: {
 }
 
 /** A fake `cast` that records argv, env and pid; with `hang`, it sleeps instead of answering. */
-function fakeCast(hang = false): string {
+function fakeCast(hang: boolean | 'nohash' | 'leak' = false): string {
     const dir = mkdtempSync(join(tmpdir(), 'fake-cast-'));
     cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
     const bin = join(dir, 'bin');
@@ -211,7 +218,10 @@ function fakeCast(hang = false): string {
         `env > ${dir}/env`,
         // Ignore SIGHUP (inherited across exec): under the test's pty the session leader's exit would SIGHUP the
         // child and hide a keeper that never terminates it. Under launchd there is no such SIGHUP.
-        hang ? "trap '' HUP\nexec sleep 30" : `echo "transactionHash ${CAST_TX}"`,
+        hang === 'nohash' ? 'exit 0'
+            // Prints the password file's content to stderr and fails: the keeper must not repeat it.
+            : hang === 'leak' ? 'while [ $# -gt 0 ]; do [ "$1" = "--password-file" ] && cat "$2" >&2; shift; done\nexit 1'
+            : hang ? "trap '' HUP\nexec sleep 30" : `echo "transactionHash ${CAST_TX}"`,
         '',
     ].join('\n'));
     chmodSync(join(bin, 'cast'), 0o755);
@@ -361,6 +371,52 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
         expect(r.code).toBe(0);
     });
 
+    it('a paymaster resolution error that echoes the RPC key does not reach the output (KDR-001)', async () => {
+        // With viem 2.43.3 the resolver keeps only the error's first line (viem's shortMessage, e.g. "RPC Request
+        // failed."), so the provider text does not reach it here; keeper.ts also scrubs the resolver's output, which
+        // this test cannot tell apart from that. It pins the outcome, not the mechanism.
+        const chain = await fakeChain({ v4CodeError: true });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY, RPC_URL: `${chain.url}/v2/SECRETRPCKEY` } });
+        expect(r.out).toMatch(/paymaster=not-found \(transient error=/);
+        expect(r.out).not.toContain('SECRETRPCKEY');
+    });
+
+    it('a broken stdout pipe goes through the shutdown path and never exits 0 (KDR-002)', async () => {
+        const chain = await fakeChain();
+        cleanups.push(chain.close);
+        let closed = false;
+        const r = await startKeeper({
+            chain, egress: true, args: [...BASE, '--dry-run'], env: { KEEPER_PRIVATE_KEY: KEY }, timeoutMs: 30_000,
+            onOut: (out, child) => { if (!closed && out.includes('TICK #1')) { closed = true; child.stdout!.destroy(); } },
+        });
+        expect(closed).toBe(true);
+        expect(r.code).toBe(1);
+    });
+
+    it("the Mini's form with its checkout's .env.sepolia (same RPC_URL only) starts; a different RPC_URL or key in the file refuses (KDR-004)", async () => {
+        const chain = await fakeChain();
+        cleanups.push(chain.close);
+        const MINI = ['--network', 'sepolia', '--superpaymaster', SP, '--paymaster', V4, '--poll-interval', '180', '--safety-margin', '600', '--once'];
+        const same = await startKeeper({ chain, egress: true, args: MINI, env: { KEEPER_PRIVATE_KEY: KEY }, envFile: `RPC_URL=${chain.url}\n` });
+        expect(same.out).not.toMatch(/refused: /);
+        expect(same.code).toBe(0);
+        const before = chain.methods.length;
+        const otherRpc = await startKeeper({ chain, egress: true, args: MINI, env: { KEEPER_PRIVATE_KEY: KEY }, envFile: 'RPC_URL=http://127.0.0.1:1/other\n' });
+        expect(otherRpc.out).toMatch(/refused: RPC_URL differ between the process environment and \.env\.sepolia/);
+        expect(otherRpc.out).not.toContain('127.0.0.1:1/other');
+        expect(otherRpc.code).toBe(1);
+        const otherKey = await startKeeper({ chain, egress: true, args: MINI, env: { KEEPER_PRIVATE_KEY: KEY }, envFile: `RPC_URL=${chain.url}\nKEEPER_PRIVATE_KEY=${DECOY_ENV.PRIVATE_KEY}\n` });
+        expect(otherKey.out).toMatch(/refused: KEEPER_PRIVATE_KEY differ between the process environment and \.env\.sepolia/);
+        expect(otherKey.out).not.toContain(DECOY_ENV.PRIVATE_KEY.slice(2));
+        expect(otherKey.code).toBe(1);
+        expect(chain.methods.length, 'the refusals made no request').toBe(before);
+        // Any other key: the environment wins and that is said, by name only.
+        const other = await startKeeper({ chain, egress: true, args: MINI, env: { KEEPER_PRIVATE_KEY: KEY, OFFICIAL_OPERATOR: V4 }, envFile: `RPC_URL=${chain.url}\nOFFICIAL_OPERATOR=${SP}\n` });
+        expect(other.out).toMatch(/OFFICIAL_OPERATOR is taken from the process environment; the value in the env file is ignored/);
+        expect(other.code).toBe(0);
+    });
+
     it("the Mini's current start-up form still starts (only KEEPER_PRIVATE_KEY and RPC_URL; DSR 2026-11-17)", async () => {
         const chain = await fakeChain();
         cleanups.push(chain.close);
@@ -456,7 +512,28 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
         // A cast terminated mid-send may or may not have broadcast: never reported as a clean stop.
         expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state: a send was interrupted by the shutdown/);
         expect(r.out).not.toMatch(/stopped \(SIGTERM\)/);
+        expect(r.code, 'an unknown send state is never exit 0 (KDR-013)').toBe(2);
         expect(alive(castPid), 'cast still running after the keeper exited').toBe(false);
+    });
+
+    it('cast exiting 0 without a transaction hash is an unknown send state, not an update (KDR-008)', async () => {
+        const chain = await fakeChain({ spUpdatedAt: 'empty' });
+        cleanups.push(chain.close);
+        const bin = fakeCast('nohash');
+        const r = await startKeeper({ chain, fakeCastDir: bin, pty: { password: 'p' }, args: [...BASE, '--once', '--cast-account', 'keeper'] });
+        expect(r.out).toMatch(/cast send exited 0 but printed no transaction hash; the send state is unknown/);
+        expect(r.out).not.toMatch(/updated: /);
+        expect(r.code).toBe(1);
+    });
+
+    it('a password echoed by cast is redacted from the keeper output', async () => {
+        const chain = await fakeChain({ spUpdatedAt: 'empty' });
+        cleanups.push(chain.close);
+        const bin = fakeCast('leak');
+        const r = await startKeeper({ chain, fakeCastDir: bin, pty: { password: 'leakme-pw-1234' }, args: [...BASE, '--once', '--cast-account', 'keeper'] });
+        expect(r.out).toMatch(/cast send failed: \[redacted\]/);
+        expect(r.out).not.toContain('leakme-pw-1234');
+        expect(r.code).toBe(1);
     });
 
     it('a password typed one byte at a time is not echoed either (Codex R2)', async () => {
@@ -529,6 +606,7 @@ describe('keeper shutdown, privateKey mode (the form the Mini runs)', { timeout:
         expect(chain.raw).toHaveLength(1);
         expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state: the tick did not finish within 15 s/);
         expect(r.out).not.toMatch(/stopped \(SIGTERM\)/);
+        expect(r.code).toBe(2);
     });
 
     it('a send whose request times out during shutdown: the exit says the send state is unknown, never "stopped" (DSR)', async () => {
@@ -595,5 +673,6 @@ describe('keeper shutdown, privateKey mode (the form the Mini runs)', { timeout:
         expect(r.out).toMatch(/shutting down: no new transaction is signed/);
         // Refused before signing: known not sent, so a clean stop.
         expect(r.out).toMatch(/stopped \(SIGTERM\)$/m);
+        expect(r.code).toBe(0);
     });
 });

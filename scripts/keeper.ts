@@ -19,7 +19,7 @@ import { Writable } from 'stream';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
 import {
     MAINNET_NETWORKS, assertChainId, castChildEnv, castSendArgs, envFileConflicts, feeDecision, parseAddressOption,
-    parseGweiOption, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
+    ambientOverrides, parseGweiOption, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
 } from './keeper/keeperGuards.js';
 
 /** Filled once the configuration is loaded: the values `scrub` removes from any log line or alert (Codex R4). */
@@ -33,9 +33,18 @@ function scrub(text: string, max = 300): string {
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const TELEGRAM_BOT_USERNAME = '@AAstarMonitorBot' as const;
 
+/** Set by main() once the shutdown path exists; a broken stdout/stderr pipe goes through it too (KDR-002). */
+let shutdownHook: ((reason: string) => void) | null = null;
 function installPipeSafety(): void {
+    let broken = false;
     const handle = (e: any) => {
-        if (e?.code === 'EPIPE') process.exit(0);
+        if (e?.code !== 'EPIPE' || broken) return;
+        broken = true;
+        // Nothing can be logged any more: silence the console so the shutdown path does not write to the dead pipe.
+        const mute = () => undefined;
+        console.log = mute; console.warn = mute; console.error = mute; console.info = mute;
+        if (shutdownHook) shutdownHook('EPIPE');
+        else process.exit(1);
     };
     (process.stdout as any)?.on?.('error', handle);
     (process.stderr as any)?.on?.('error', handle);
@@ -316,7 +325,8 @@ async function runCastSend(params: {
             if (txMatch?.[1]) return resolve(txMatch[1]);
             const altMatch = merged.match(/(0x[0-9a-fA-F]{64})/);
             if (altMatch?.[1]) return resolve(altMatch[1]);
-            return resolve('');
+            // Exit 0 without a hash: whether anything was broadcast is unknown, never "updated" (KDR-008).
+            return reject(new Error('cast send exited 0 but printed no transaction hash; the send state is unknown'));
         });
     });
 }
@@ -336,15 +346,6 @@ async function main() {
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
     const maxBaseFeeWei = parseGweiOption('--max-base-fee-gwei', maxBaseFeeGwei);
     const hardMaxFeeWei = parseGweiOption('--hard-max-fee-gwei', getArgValue(args, '--hard-max-fee-gwei'));
-    const healthIntervalSec = parseIntOption('--health-interval / KEEPER_HEALTH_INTERVAL_SEC',
-        getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC, 1800n, 0n);
-    const volatilityThresholdBps = parseIntOption('--volatility-threshold-bps / KEEPER_VOLATILITY_THRESHOLD_BPS',
-        getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS, 0n, 0n);
-    const volatilityCooldownSec = parseIntOption('--volatility-cooldown / KEEPER_VOLATILITY_COOLDOWN_SEC',
-        getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC, 600n, 0n);
-    const chainlinkStaleSec = parseIntOption('--chainlink-stale-sec / KEEPER_CHAINLINK_STALE_SEC',
-        getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC, 600n, 0n);
-    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
     const dryRun = hasFlag(args, '--dry-run');
     const once = hasFlag(args, '--once');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
@@ -369,7 +370,30 @@ async function main() {
             `${envFiles.join(' and ')} set ${conflicts.join(', ')} to different values; keep one value (the values are not shown)`,
         );
     }
+    // The process environment wins over the files (dotenv never overrides). For the two keys that decide the signer
+    // and the chain, a different value in a file is an ambiguity and refuses; for any other key the file's value is
+    // ignored and that is said, by name only (KDR-004, DSR 2026-11-18).
+    const fileVars: Record<string, string> = {};
+    for (const p of present) for (const [k, v] of Object.entries(dotenv.parse(fs.readFileSync(p)))) if (!(k in fileVars)) fileVars[k] = v;
+    const ambient = ambientOverrides(process.env, fileVars, ['KEEPER_PRIVATE_KEY', 'RPC_URL']);
+    if (ambient.refuse.length > 0) {
+        throw new KeeperStartupRefusal(
+            `${ambient.refuse.join(', ')} differ between the process environment and ${envFiles.join(' / ')}; keep one value (the values are not shown)`,
+        );
+    }
+    for (const k of ambient.ignored) console.log(`${k} is taken from the process environment; the value in the env file is ignored`);
     for (const fullPath of present) dotenv.config({ path: fullPath });
+    // Env-backed options are read after the env files, so a file can set them (KDR-020); the CLI still wins.
+    const healthIntervalSec = parseIntOption('--health-interval / KEEPER_HEALTH_INTERVAL_SEC',
+        getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC, 1800n, 0n);
+    const volatilityThresholdBps = parseIntOption('--volatility-threshold-bps / KEEPER_VOLATILITY_THRESHOLD_BPS',
+        getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS, 0n, 0n);
+    const volatilityCooldownSec = parseIntOption('--volatility-cooldown / KEEPER_VOLATILITY_COOLDOWN_SEC',
+        getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC, 600n, 0n);
+    const chainlinkStaleSec = parseIntOption('--chainlink-stale-sec / KEEPER_CHAINLINK_STALE_SEC',
+        getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC, 600n, 0n);
+    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
+
     // Who signs: decided here, after the env files and before any network read, with no fallback (keeperKey.ts).
     // Resolved once; the wallet and the cast arguments below use these same values.
     const signer = resolveKeeperSigner({
@@ -489,7 +513,7 @@ async function main() {
     if (!disablePaymaster) {
         const r = await paymasterTracker.ensure(nowSec());
         paymaster = paymasterTracker.current;
-        paymasterInit = r.kind === 'found' ? r.address : `not-found (${describeUnresolved(r)}; retried every tick)`;
+        paymasterInit = r.kind === 'found' ? r.address : `not-found (${scrub(describeUnresolved(r), 1000)}; retried every tick)`;
     }
 
     if (printLogo) console.log(`${logo()}\n`);
@@ -564,6 +588,8 @@ async function main() {
             // Hidden prompt only (the author's rule: no password in env, argv or files it did not create). A TTY was
             // required at startup.
             const pw = await promptHidden('Keystore password: ');
+            // Redacted from every later diagnostic, from 4 characters (a shorter one would erase ordinary letters).
+            if (pw.length >= 4) knownSecrets = [...new Set([...knownSecrets, pw])].sort((a, b) => b.length - a.length);
             const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aastar-keeper-'));
             passwordFilePath = path.join(dir, 'pw');
             await fs.promises.writeFile(passwordFilePath, pw, { mode: 0o600 });
@@ -677,11 +703,14 @@ async function main() {
                 `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`
         );
         await cleanup();
-        process.exit(0);
+        // 0 only for a clean stop; 2 when a send's state is unknown, so a supervisor does not take it as clean
+        // (KDR-013); a broken pipe is never clean.
+        process.exit(!tickSettled || sendsInterruptedByShutdown > 0 ? 2 : signal === 'EPIPE' ? 1 : 0);
     };
 
     process.on('SIGINT', () => void onExit('SIGINT'));
     process.on('SIGTERM', () => void onExit('SIGTERM'));
+    shutdownHook = (reason) => void onExit(reason);
 
     await sendTelegramMessage(
         `[keeper] started\nnetwork=${network}\n` +
@@ -791,8 +820,9 @@ async function main() {
                 network,
                 candidateLabel: paymasterCandidate || 'derive-from-factory',
                 operator: paymasterOperator,
-                log: (line) => console.log(line),
-                notify: sendTelegramMessage,
+                // Resolver text carries provider error messages (with the RPC URL): scrubbed on both outputs (KDR-001).
+                log: (line) => console.log(scrub(line, 2000)),
+                notify: (text) => sendTelegramMessage(scrub(text, 2000)),
             });
         }
 

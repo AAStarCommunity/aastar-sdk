@@ -3,7 +3,7 @@ import { getAddress } from 'viem';
 import { KeeperStartupRefusal, parseKeeperMode, resolveKeeperSigner } from './keeperKey.js';
 import {
     assertChainId, castChildEnv, castSendArgs, envFileConflicts, feeDecision, parseAddressOption, parseGweiOption,
-    parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
+    ambientOverrides, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
 } from './keeperGuards.js';
 
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // anvil #0, public test key
@@ -125,5 +125,17 @@ describe('keeper local guards (Daybreak 6c240b42 round 1)', () => {
         expect(redactSecrets('bad password pw7', short)).toBe('bad password [redacted]');
         // A malformed escape in one path segment does not stop the query value from being registered.
         expect(secretValues({}, 'https://rpc.example/%E0%A4%A/x?key=QUERYKEY999')).toContain('QUERYKEY999');
+    });
+
+    it('KDR-017: short and still-encoded RPC query values are registered', () => {
+        const secrets = secretValues({}, 'https://rpc.example/?apikey=abc123&t=abc%40defgh');
+        expect(redactSecrets('bad key abc123', secrets)).toBe('bad key [redacted]');
+        expect(redactSecrets('bad key abc%40defgh / abc@defgh', secrets)).toBe('bad key [redacted] / [redacted]');
+    });
+
+    it('KDR-004: env vs file differences: critical keys refuse, others are reported as ignored', () => {
+        expect(ambientOverrides({ RPC_URL: 'a', X: '1', SAME: 's' }, { RPC_URL: 'b', X: '2', SAME: 's', ONLY_FILE: 'f' }, ['KEEPER_PRIVATE_KEY', 'RPC_URL']))
+            .toEqual({ refuse: ['RPC_URL'], ignored: ['X'] });
+        expect(ambientOverrides({}, { RPC_URL: 'b' }, ['RPC_URL'])).toEqual({ refuse: [], ignored: [] });
     });
 });

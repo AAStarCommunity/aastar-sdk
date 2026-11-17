@@ -61,6 +61,23 @@ export function envFileConflicts(files: ReadonlyArray<{ name: string; vars: Reco
     return [...conflicts].sort();
 }
 
+/**
+ * Keys set both in the process environment and in an env file, with different values. The environment wins (dotenv
+ * never overrides). Those in `critical` are returned as `refuse`, the others as `ignored`. Names only.
+ */
+export function ambientOverrides(
+    env: Record<string, string | undefined>, fileVars: Record<string, string>, critical: readonly string[],
+): { refuse: string[]; ignored: string[] } {
+    const refuse: string[] = [];
+    const ignored: string[] = [];
+    for (const [k, v] of Object.entries(fileVars)) {
+        const e = env[k];
+        if (e === undefined || e === v) continue;
+        (critical.includes(k) ? refuse : ignored).push(k);
+    }
+    return { refuse: refuse.sort(), ignored: ignored.sort() };
+}
+
 /** The environment `cast` runs with: only what it needs to find itself and the keystore, plus the RPC URL. */
 const CAST_ENV_ALLOW = ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'USER', 'FOUNDRY_DIR'] as const;
 export function castChildEnv(env: Record<string, string | undefined>, rpcUrl: string): Record<string, string> {
@@ -127,7 +144,11 @@ export function secretValues(env: Record<string, string | undefined>, rpcUrl: st
             for (const v of [u.password, decoded(u.password)]) if (v) out.add(v);
             for (const v of [u.username, decoded(u.username)]) if (v && v.length >= 4) out.add(v);
             for (const seg of u.pathname.split('/')) { add(seg); add(decoded(seg)); }
-            for (const v of u.searchParams.values()) add(v);
+            // Query values from 4 characters, raw and decoded (KDR-017).
+            for (const raw of u.search.slice(1).split('&')) {
+                const v = raw.slice(raw.indexOf('=') + 1);
+                for (const x of [v, decoded(v)]) if (x && x.length >= 4) out.add(x);
+            }
         } catch { /* unparseable: the whole string is already listed */ }
     }
     return [...out].sort((a, b) => b.length - a.length);

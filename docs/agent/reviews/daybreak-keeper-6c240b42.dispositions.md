@@ -42,7 +42,7 @@ this round; one more Codex pass on this fix's diff only; Medium and below are wr
 | R1 | High | (i) | Real: shutdown killed the cast in flight but the tick went on and could sign the other target. Now a stop flag is set synchronously, checked right before every cast spawn and viem `writeContract`; shutdown waits up to 15 s for the tick, and says "unknown state" instead of "stopped" if it does not finish or if a send was cut off (a terminated cast, a timed-out request). Tests on both paths |
 | R2 | High | (i) | Real, older than this change, made mandatory by it: the readline prompt wrote the typed password before masking it. Now the readline output is muted while typing; EOF, Ctrl-C and an empty answer refuse. pty tests for pasted and byte-by-byte input |
 | R3 | High | (ii) | FU-111 / KPR-001, to #447 |
-| R4 | Medium | (i) | The fatal path printed the raw error object. Now every diagnostic goes through `scrub`: configured secrets (keeper key, Telegram token, RPC URL and its credential-like parts) redacted, URLs reduced, length bounded |
+| R4 | Medium | (i) | The fatal path printed the raw error object. `scrub` (configured secrets redacted, URLs reduced, length bounded) now covers: tick errors, the fatal path, cast failure output, Telegram send failures, market-monitoring failures, SuperPaymaster read errors and (after KDR-001) the paymaster resolver's log, alert and INIT line. Startup refusals print only the keeper's own fixed messages. Not covered: output of the shared regression config loader (KDR-011, FU-113) |
 | R5 | Medium | (i) | A key-shaped value (64 hex, with or without 0x) in `--keystore` / `--cast-account` refuses, unechoed. Logging other signer argument values is FU-113 ① |
 | R6 | Medium | (i) | The external price fetch deadline now covers the body; the body is capped at 64 KiB |
 | R7 | Medium | (i) | Market monitoring failures are logged and no longer stop the refreshes |
@@ -71,3 +71,33 @@ certain ones fixed); then Daybreak on the whole round's diff, then the PR, with 
 | F4 | Medium | (i) | RPC user info registered encoded and decoded; password at any length, user name from 4 characters; components decoded independently |
 | F5 | Medium | (i), untested | Telegram failure diagnostics go through `scrub`. Not covered by a test: exercising it would need a reachable Telegram endpoint |
 | F6 | Low | (i) | The fake RPC echoes the key outside URL syntax, so the end-to-end test needs `scrub`, not just URL reduction |
+
+## Daybreak rerun on the whole round (6c240b42..c7a88443)
+
+Raw report: [daybreak-keeper-r1-c7a88443.md](daybreak-keeper-r1-c7a88443.md). 235,757 tokens. Self-reported 5 High /
+11 Medium / 5 Low; each checked against c7a88443. DSR rule for this rerun: a High goes to DSR; Medium and below are
+written down, no new round.
+
+| ID | Reported | Re-rated | Class | Disposition |
+|---|---|---|---|---|
+| KDR-001 | High | Medium | (i) | The resolver's output (INIT line, tick log, Telegram alert) bypassed `scrub`; now scrubbed. The reported scenario does not reproduce with viem 2.43.3: the resolver keeps only the first line of viem's `shortMessage`, which never carries the provider text in any case the test could produce, so the end-to-end test pins the outcome but cannot tell the scrub apart (a removed scrub stays green). Kept as defense in depth |
+| KDR-002 | High | Medium | (i) | Real, older than this round: EPIPE called `exit(0)`. Now it silences the console (no writes to the dead pipe) and goes through the shutdown path; exit 1 |
+| KDR-003 | High | High | (ii) | FU-111 / KPR-001, to #447 |
+| KDR-004 | High | Medium | (i), DSR ruling | `KEEPER_PRIVATE_KEY` / `RPC_URL` set in both the environment and an env file with different values refuse (names only); other keys are reported as "taken from the process environment". DSR checked the Mini's checkout: its `.env.sepolia` holds only `RPC_URL`, equal to `rpc.env`'s, so the Mini still starts (regression case) |
+| KDR-005 | High | Medium | (ii) + small fix | Needs write access to a PATH directory (same uid); DSR's #447 R8 ruling puts path trust in deployment. Absolute cast path: FU-114. The typed password (4+ characters) is now in the redaction list |
+| KDR-006 | Medium | Medium | (ii) | DSR ruled the hard ceiling mandatory on mainnet networks only |
+| KDR-007 | Medium | Low | doc | The guide now says the daily count counts sends, reverted and pending ones included |
+| KDR-008 | Medium | Medium | (i) | Cast exit 0 without a hash is an error with an unknown send state, never "updated" |
+| KDR-009 | Medium | Medium | (ii) | FU-114 |
+| KDR-010 | Medium | Medium | (ii) | FU-112 ① (prompt after network reads) and FU-114 (temp file) |
+| KDR-011 | Medium | Medium | (ii) | FU-113 ①: the shared regression config loader logs raw env values; a keeper-specific loader belongs there |
+| KDR-012 | Medium | Medium | (i) | `run-keeper.sh` checks the network against an allowlist before logging it; refusal without the value |
+| KDR-013 | Medium | Medium | (i) | Unknown send state exits 2, a broken pipe 1, a clean stop 0 |
+| KDR-014 | Medium | Medium | (ii) | `exec pnpm` does not prove the signal reaches node; the Mini's launcher execs tsx directly. FU-114 |
+| KDR-015 | Medium | Medium | (ii) | FU-113 ② |
+| KDR-016 | Medium | Medium | (ii) | Codex R8, documented |
+| KDR-017 | Low | Low | (i) | RPC query values from 4 characters, raw and decoded |
+| KDR-018 | Low | Low | (ii) | FU-112 ④ (docs/api regenerated at release) |
+| KDR-019 | Low | Low | (ii) | FU-112 ② |
+| KDR-020 | Low | Low | (i) | Env-backed options are parsed after the env files are loaded |
+| KDR-021 | Low | Low | (ii) | KPR-017 |
