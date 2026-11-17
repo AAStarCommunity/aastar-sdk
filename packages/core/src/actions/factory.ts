@@ -733,9 +733,11 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
  * successful receipt (or, with no `deployHash`, from the factory mapping of an earlier deploy), and
  * then all three must name `operator`: paymasterByOperator, operatorByPaymaster and the clone's owner().
  * Every read is an eth_call pinned to one block hash (EIP-1898, `requireCanonical: true`): the receipt's
- * block, or the latest block read once. A node that does not serve that block's state, or no longer has
- * it on its canonical chain, fails the read and the check throws with the block and the deploy hash.
- * After the reads, the hash at that height is read again and must be unchanged.
+ * block, or the latest block read once. A node that does not serve that block's state, or rejects the
+ * EIP-1898 parameter, fails the read and the check throws with the block and the deploy hash. After the
+ * reads, the hash at that height is read again and must be unchanged. Canonicality relies on the RPC
+ * honouring `requireCanonical`: a backend that ignores it and still returns the old hash at that height
+ * is not detected.
  *
  * `confirmations` applies only to the deploy receipt wait (viem's default when omitted). Without
  * `deployHash` (reusing an earlier deploy) nothing is waited for: the check runs at the latest block.

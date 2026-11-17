@@ -12,7 +12,8 @@ All notable changes to this project will be documented in this file.
   `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, and throws otherwise.
   Every read is an `eth_call` pinned to one block hash with EIP-1898 `requireCanonical: true` (the receipt's block, or
   the latest block read once), and the hash at that height is read again afterwards. A node that does not serve that
-  block's state or EIP-1898 calls fails the check, with the block and the deploy hash in the error. `confirmations`
+  block's state or EIP-1898 calls fails the check, with the block and the deploy hash in the error (canonicality relies on
+  the RPC honouring `requireCanonical`). `confirmations`
   applies only to the deploy receipt wait; a reused deploy is checked at the latest block without waiting. It is a
   client-side check at that block: ownership can change later, and a reorg deeper than `confirmations` after the check
   can replace the deploy.

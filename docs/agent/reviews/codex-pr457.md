@@ -1,6 +1,6 @@
 # Codex Tier-1 review of PR #457 (codex exec, read-only sandbox, static)
 
-Final review text of each round, verbatim. Round 1 reviewed 625d3bd3 (whole PR); round 2 the diff 625d3bd3..e08a9c6a; round 3 the diff e08a9c6a..7f092e3f.
+Final review text of each round, verbatim. Round 1 reviewed 625d3bd3 (whole PR); round 2 the diff 625d3bd3..e08a9c6a; round 3 the diff e08a9c6a..7f092e3f; round 4 the diff 7f092e3f..86e4f69a. The round-4 Lows were fixed after round 4 and not re-reviewed by Codex (round budget).
 
 ## Round 1
 
@@ -156,6 +156,45 @@ Fix: document the receipt-wait default and explicitly state that no-hash verific
 
 I found no additional independent defects in the round-3 diff. This was a static review; I did not execute tests, access network/RPC services, or read `.env` files, keystores, or files outside this worktree.
 
+## Round 4
+
+**Round-3’s blocking issue is resolved. I found no new Critical, High, or Medium defect; two Low issues remain.**
+
+| Round-3 finding | Disposition | Reason |
+|---|---|---|
+| **M1 — Block identity** | **Resolved** | Every contract call now supplies the same expected block hash through EIP-1898. On a compliant node, an intermediate call cannot silently execute against another branch. Tests assert the exact hash and `requireCanonical: true`. |
+| **M2 — Confirmation forwarding and documentation** | **Resolved** | Forwarding remains intact. Documentation now explicitly delegates the omitted value to viem’s default and states that reuse/no-hash verification waits for no confirmations. A test gap remains below. |
+| **M3 — Historical-state requirement** | **Resolved** | Unsupported historical state or EIP-1898 requests fail closed. Ordinary RPC/decode failures include block number, block hash, deployment transaction when available, and the underlying message. |
+| **L4 — Ineffective casing test** | **Resolved** | Letter-containing addresses still exercise lowercase callers against decoded checksummed addresses. ABI encoding necessarily removes fixture casing; the comments about uppercase return values are now inaccurate, but the meaningful comparison remains exercised. |
+| **L5 — Fake accepts wrong paymaster** | **Resolved** | The core fake still restricts the target and mapping arguments to the scenario’s paymaster; the second-paymaster success case remains. |
+
+**Critical: none. High: none. Medium: none.**
+
+**Low — Canonicality documentation assumes compliant RPC behavior without saying so.**  
+Location: `packages/core/src/actions/factory.ts:735–738`.
+
+Concrete scenario: a backend honors `blockHash` but ignores `requireCanonical`, serving an orphaned block. The final lookup normally catches this, but a stale backend can return the original hash again. Verification then succeeds despite the documentation’s unconditional assertion that a noncanonical block fails the read.
+
+This does **not** reopen M1: honoring the hash still binds the reads to one state. It limits the claimed canonicality guarantee.
+
+Fix: explicitly state that canonicality enforcement depends on RPC compliance and that the final lookup cannot independently establish consensus or detect every stale/inconsistent backend. Do not imply that silently ignored parameters are detectable merely because unsupported requests usually reject.
+
+**Low — Tests do not cover the new raw-return failure boundary or explicit-confirmation reuse policy.**  
+Locations: `packages/core/__tests__/actions/verifyPaymasterDeployment.test.ts:61–69`, `:108–111`, `:150–157`.
+
+Concrete regression scenarios:
+
+- A future change substitutes a valid-looking owner when decoding empty return data fails. All current successful RPC fixtures produce ABI-valid addresses; the error fixture throws before decoding, so it would not catch this unsafe fallback.
+- A future change waits when `{ confirmations: 12 }` is supplied without `deployHash`. The existing reuse test omits `confirmations`, so it would still pass despite violating the newly documented policy.
+
+Fix: add raw `eth_call` response cases for `owner()` returning `0x` and truncated data, asserting rejection with deployment/block context. Add a successful no-hash call with explicit confirmations and assert no receipt wait. An unsupported-EIP-1898 rejection case would also directly document the required fail-closed behavior.
+
+The direct ABI path itself looks correct: both factory getters take one address and return one address; `owner()` takes no arguments and returns one address. `encodeFunctionData` and `decodeFunctionResult` use those matching ABIs. A no-code paymaster returns empty data, which cannot decode as the required address and therefore rejects; an additional code-existence check is not needed to prevent acceptance in that case.
+
+Error wrapping preserves ordinary RPC and decoding messages and stops verification. Receipt-wait and initial latest-block lookup failures remain outside that wrapper, and existing `AAStarError` instances bypass contextual wrapping; those are pre-existing diagnostic limitations, not new round-4 acceptance defects.
+
+This was a static review. I did not run tests, access network/RPC services, read `.env` files or keystores, or read files outside this worktree.
+
 ## Dispositions
 
 | Round | Finding | Class | What was done |
@@ -172,3 +211,5 @@ I found no additional independent defects in the round-3 diff. This was a static
 | 2 | L5 fake accepted the wrong paymaster | fixed | fake answers only the scenario's paymaster; PM2 case |
 | 3 | M1 end-point hash check does not bind the reads | fixed | every read is an EIP-1898 `eth_call` on `{ blockHash, requireCanonical: true }`; hash re-read kept |
 | 3 | L confirmations default and reuse semantics implicit | fixed | documented in the JSDoc, the option comment and CHANGELOG |
+| 4 | L canonicality assumes a compliant RPC | fixed | JSDoc and CHANGELOG say it relies on the RPC honouring `requireCanonical` |
+| 4 | L no tests for empty/truncated owner() data, EIP-1898 rejection, or `confirmations` on reuse | fixed | three tests; mutations (unsafe decode fallback, waiting on reuse) go red |

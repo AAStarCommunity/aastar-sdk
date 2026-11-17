@@ -35,6 +35,7 @@ function fakeClient(opts: {
     owner?: Address;
     hashAfter?: Hash; // the block hash read back after the checks
     readError?: Error;
+    ownerRaw?: Hex; // raw eth_call result for owner(), e.g. '0x' when the paymaster has no code
 }) {
     const operator = opts.operator ?? OPERATOR;
     const paymaster = opts.paymaster ?? PM;
@@ -64,7 +65,8 @@ function fakeClient(opts: {
         const abi = (lc(to) === lc(FACTORY) ? PaymasterFactoryABI : PaymasterABI) as Abi;
         const { functionName, args } = decodeFunctionData({ abi, data: data as Hex });
         const value = await readContract({ functionName, address: to, args: args ?? [], block });
-        // ABI-encoded addresses carry no case; encode lowercase so any fixture casing is accepted.
+        if (functionName === 'owner' && opts.ownerRaw !== undefined) return opts.ownerRaw;
+        // ABI-encoded addresses carry no case: the code under test always decodes checksummed addresses.
         return encodeFunctionResult({ abi, functionName, result: typeof value === 'string' ? lc(value) : value } as any);
     });
     return { client: { request, waitForTransactionReceipt, getBlock } as any, readContract, waitForTransactionReceipt, getBlock };
@@ -96,8 +98,22 @@ describe('verifyPaymasterDeployment', () => {
         const { client } = fakeClient({ operator: op, paymaster: pm, owner: lc(op) as Address, byPaymaster: op.toUpperCase().replace('0X', '0x') as Address, byOperator: lc(pm) as Address });
         // Lowercase caller against the checksummed log and mixed-case reads.
         await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: lc(op) as Address, deployHash: TX })).resolves.toBe(pm);
-        // Checksummed caller against a lowercase owner() and an uppercase reverse mapping.
+        // Checksummed caller against the decoded (checksummed) reads, with the log and fixtures in other casings.
         await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: op, deployHash: TX })).resolves.toBe(pm);
+    });
+
+    it('owner() with no code or truncated data rejects with the block and deploy hash', async () => {
+        for (const ownerRaw of ['0x', '0x1234'] as Hex[]) {
+            const { client } = fakeClient({ ownerRaw });
+            await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX }))
+                .rejects.toThrow(`at block ${RECEIPT_BLOCK} ${RECEIPT_HASH} (deploy tx ${TX})`);
+        }
+    });
+
+    it('a node that rejects the EIP-1898 block parameter fails the check', async () => {
+        const { client } = fakeClient({ readError: new Error('invalid argument 1: hex string without 0x prefix') });
+        await expect(verifyPaymasterDeployment(client, { factory: FACTORY, operator: OPERATOR, deployHash: TX }))
+            .rejects.toThrow('support EIP-1898 block-hash calls (invalid argument 1');
     });
 
     it('a reorg at the checked height during the check throws', async () => {
@@ -149,7 +165,8 @@ describe('verifyPaymasterDeployment', () => {
 
     it('without a deploy hash: an earlier deploy is checked the same way', async () => {
         const ok = fakeClient({});
-        await expect(verifyPaymasterDeployment(ok.client, { factory: FACTORY, operator: OPERATOR })).resolves.toBe(PM);
+        // `confirmations` applies only to a deploy receipt: a reused deploy is checked at latest without waiting.
+        await expect(verifyPaymasterDeployment(ok.client, { factory: FACTORY, operator: OPERATOR, confirmations: 12 })).resolves.toBe(PM);
         expect(ok.waitForTransactionReceipt).not.toHaveBeenCalled();
         // One latest block, read once, pins the mapping lookup and all three checks; its hash is read back afterwards.
         expect(ok.readContract).toHaveBeenCalledTimes(4);
