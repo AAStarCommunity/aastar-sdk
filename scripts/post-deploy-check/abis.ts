@@ -1,0 +1,73 @@
+/**
+ * ABI names an expectations table may use in `contracts.<key>.abi`.
+ *
+ * Every entry is a vendored ABI re-exported by `@aastar/core` (imported from its source so this
+ * runs under vitest without a build). Nothing here is hand-written: an ABI that is not in core
+ * cannot be named, and an assertion that names one fails with the reason instead of guessing.
+ */
+import type { Abi } from 'viem';
+import {
+    AAStarCommitteeValidatorABI,
+    AOAProtocolRegistryABI,
+    APNTsCappedABI,
+    BLSAggregatorABI,
+    BLSAggregatorV414DevABI,
+    BLSValidatorABI,
+    DVTValidatorABI,
+    DVTValidatorV080DevABI,
+    GlobalTierSourceABI,
+    GTokenABI,
+    GTokenAuthorizationABI,
+    GTokenStakingABI,
+    LivenessRegistryABI,
+    MicroPaymentChannelABI,
+    MySBTABI,
+    PaymasterABI,
+    PaymasterFactoryABI,
+    PolicyRegistryABI,
+    RegistryABI,
+    ReputationSystemABI,
+    SuperPaymasterABI,
+    SuperPaymasterLensABI,
+    SuperPaymasterV542ABI,
+    SuperPaymasterV550ABI,
+    TimelockControllerABI,
+    X402FacilitatorABI,
+    xPNTsFactoryABI,
+    xPNTsFactoryV2ABI,
+    xPNTsTokenABI,
+    xPNTsTokenV2ABI,
+} from '../../packages/core/src/abis/index.js';
+
+export const ABI_REGISTRY: Readonly<Record<string, Abi>> = Object.freeze({
+    AAStarCommitteeValidator: AAStarCommitteeValidatorABI as Abi,
+    AOAProtocolRegistry: AOAProtocolRegistryABI as Abi,
+    APNTsCapped: APNTsCappedABI as Abi,
+    BLSAggregator: BLSAggregatorABI as Abi,
+    BLSAggregatorV414Dev: BLSAggregatorV414DevABI as Abi,
+    BLSValidator: BLSValidatorABI as Abi,
+    DVTValidator: DVTValidatorABI as Abi,
+    DVTValidatorV080Dev: DVTValidatorV080DevABI as Abi,
+    GlobalTierSource: GlobalTierSourceABI as Abi,
+    GToken: GTokenABI as Abi,
+    GTokenAuthorization: GTokenAuthorizationABI as Abi,
+    GTokenStaking: GTokenStakingABI as Abi,
+    LivenessRegistry: LivenessRegistryABI as Abi,
+    MicroPaymentChannel: MicroPaymentChannelABI as Abi,
+    MySBT: MySBTABI as Abi,
+    Paymaster: PaymasterABI as Abi,
+    PaymasterFactory: PaymasterFactoryABI as Abi,
+    PolicyRegistry: PolicyRegistryABI as Abi,
+    Registry: RegistryABI as Abi,
+    ReputationSystem: ReputationSystemABI as Abi,
+    SuperPaymaster: SuperPaymasterABI as Abi,
+    SuperPaymasterV542: SuperPaymasterV542ABI as Abi,
+    SuperPaymasterV550: SuperPaymasterV550ABI as Abi,
+    SuperPaymasterLens: SuperPaymasterLensABI as Abi,
+    TimelockController: TimelockControllerABI as Abi,
+    X402Facilitator: X402FacilitatorABI as Abi,
+    xPNTsFactory: xPNTsFactoryABI as Abi,
+    xPNTsFactoryV2: xPNTsFactoryV2ABI as Abi,
+    xPNTsToken: xPNTsTokenABI as Abi,
+    xPNTsTokenV2: xPNTsTokenV2ABI as Abi,
+});

@@ -1,0 +1,70 @@
+{
+  "schema": "aastar-post-deploy-check/1",
+  "placeholder": true,
+  "note": "FORMAT PLACEHOLDER ONLY. Every address, version string, role id and block number below is made up to show the format. The real table comes from the SP owner table via DSR (FU-91); see expectations.rc8-v0-835db34c.example.json for the v0 derived from it.",
+  "chainId": 11155111,
+  "block": "finalized",
+  "deployer": "D",
+  "principals": {
+    "D": { "address": "0x1000000000000000000000000000000000000009", "source": "placeholder deployer EOA" },
+    "TL": { "address": "0x1000000000000000000000000000000000000006", "source": "placeholder timelock" },
+    "LATER": { "address": null, "source": "placeholder: shows a name the source table does not give yet" }
+  },
+  "aggregators": ["$BLSAggregator"],
+  "contracts": {
+    "Registry": { "abi": "Registry", "address": "0x1000000000000000000000000000000000000001" },
+    "SuperPaymaster": { "abi": "SuperPaymaster", "address": "0x1000000000000000000000000000000000000002" },
+    "GTokenStaking": { "abi": "GTokenStaking", "address": "0x1000000000000000000000000000000000000003" },
+    "BLSAggregator": { "abi": "BLSAggregatorV414Dev", "address": "0x1000000000000000000000000000000000000004" },
+    "DVTValidator": { "abi": "DVTValidatorV080Dev", "address": "0x1000000000000000000000000000000000000005" }
+  },
+  "assertions": [
+    { "id": "sp-version", "kind": "version", "contract": "SuperPaymaster", "expected": "SuperPaymaster-0.0.0-placeholder" },
+    { "id": "registry-version", "kind": "version", "contract": "Registry", "expected": "Registry-0.0.0-placeholder" },
+    { "id": "aggregator-balance-zero", "kind": "balanceZero", "address": "$BLSAggregator" },
+    {
+      "id": "aggregator-owns-nothing",
+      "kind": "notOwnerOf",
+      "address": "$BLSAggregator",
+      "contracts": ["Registry", "SuperPaymaster", "GTokenStaking", "DVTValidator"]
+    },
+    {
+      "id": "reputation-sources-exact",
+      "kind": "reputationSourceSet",
+      "registry": "Registry",
+      "expected": ["$DVTValidator"],
+      "fromBlock": 0,
+      "logChunkSize": 5000
+    },
+    { "id": "aggregator-not-slasher", "kind": "authorizedSlasher", "staking": "GTokenStaking", "address": "$BLSAggregator", "expected": false },
+    {
+      "id": "staking-registry-pointer",
+      "kind": "call",
+      "contract": "GTokenStaking",
+      "function": "REGISTRY",
+      "args": [],
+      "compare": "eq",
+      "expected": "$Registry"
+    },
+    { "id": "sp-owner", "kind": "privilege", "contract": "SuperPaymaster", "function": "owner", "args": [], "expected": "$TL" },
+    { "id": "deployer-not-reputation-source", "kind": "privilege", "contract": "Registry", "function": "isReputationSource", "args": ["$D"], "expected": false },
+    {
+      "id": "sp-treasury",
+      "kind": "privilege",
+      "contract": "SuperPaymaster",
+      "function": "treasury",
+      "args": [],
+      "deployerException": { "reason": "placeholder: shows how a per-row exception and its reason are recorded" }
+    },
+    {
+      "id": "registry-role-owners",
+      "kind": "roleOwners",
+      "registry": "Registry",
+      "roles": [
+        { "name": "COMMUNITY", "id": "0x0000000000000000000000000000000000000000000000000000000000000001" },
+        { "name": "KMS", "id": null, "source": "placeholder: shows a role id the source table does not give" }
+      ],
+      "expected": "$TL"
+    }
+  ]
+}

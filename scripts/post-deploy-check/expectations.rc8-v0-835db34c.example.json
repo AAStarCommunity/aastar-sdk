@@ -1,0 +1,1005 @@
+{
+  "schema": "aastar-post-deploy-check/1",
+  "placeholder": true,
+  "note": "rc.8 expectations v0, derived from the SP owner table v0 at 835db34c. NOT FINAL: v1 follows the SP L6-L10 PRs. Every address the owner table gives only truncated is left null on purpose, so those rows FAIL as UNRESOLVED instead of passing on a guess.",
+  "origin": {
+    "repo": "AAStarCommunity/SuperPaymaster",
+    "ref": "835db34c",
+    "path": "docs/security/rc8-owner-table.md",
+    "version": "v0"
+  },
+  "chainId": 11155111,
+  "block": "finalized",
+  "deployer": "D",
+  "principals": {
+    "D": {
+      "address": "0xb5600060e6de5E11D3636731964218E53caadf0E",
+      "source": "SP owner table v0 @835db34c, notation: deployer EOA"
+    },
+    "SAFE": {
+      "address": "0x16df788ed4ed1fc384e52dc832a6a6c3a23bdebf",
+      "source": "SP owner table v0 @835db34c, notation: manifest Safe (2-of-3)"
+    },
+    "MyceliumOperator": {
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'pNTs PMV4 owner 0xEcAA… (Mycelium operator)' (truncated); not resolved, not guessed"
+    },
+    "aPNTsCommunityOwner": {
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'aPNTs communityOwner 0x51C0…' (truncated); not resolved, not guessed"
+    }
+  },
+  "aggregators": [
+    "$BLSAggregatorOld",
+    "$BLSAggregatorPrevPrev",
+    "$BLSAggregatorRc8"
+  ],
+  "contracts": {
+    "SuperPaymaster": {
+      "abi": "SuperPaymasterV550",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'SuperPaymaster (proxy) 0x09DF…' (truncated); not resolved, not guessed"
+    },
+    "Registry": {
+      "abi": "Registry",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'Registry (proxy) 0xf5Bf…' (truncated); not resolved, not guessed"
+    },
+    "BLSAggregatorOld": {
+      "abi": "BLSAggregator",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'BLSAggregator 4.11.0 (old) 0xEaeC…' (truncated); not resolved, not guessed"
+    },
+    "BLSAggregatorPrevPrev": {
+      "abi": "BLSAggregator",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'BLSAggregator 4.3.0 (prev-prev) 0x174b…' (truncated); not resolved, not guessed"
+    },
+    "BLSAggregatorRc8": {
+      "abi": "BLSAggregatorV414Dev",
+      "address": null,
+      "source": "SP owner table v0 @835db34c: the rc.8 aggregator is not a row of the table; not resolved, not guessed"
+    },
+    "DVTValidatorOld": {
+      "abi": "DVTValidator",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'DVTValidator 0.6.0 0x568b…' (truncated); not resolved, not guessed"
+    },
+    "DVTValidatorNew": {
+      "abi": "DVTValidatorV080Dev",
+      "address": null,
+      "source": "SP owner table v0 @835db34c: new DVT is pending A7.dvt; no address; not resolved, not guessed"
+    },
+    "Committee": {
+      "abi": "AAStarCommitteeValidator",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'committee 0x7ac7…' (truncated); not resolved, not guessed"
+    },
+    "GTokenStaking": {
+      "abi": "GTokenStaking",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'GTokenStaking 0x4722…' (truncated); not resolved, not guessed"
+    },
+    "GToken": {
+      "abi": "GToken",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'GToken 0x4c09…' (truncated); not resolved, not guessed"
+    },
+    "MySBT": {
+      "abi": "MySBT",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'MySBT 0x4867…' (truncated); not resolved, not guessed"
+    },
+    "xPNTsFactoryV1": {
+      "abi": "xPNTsFactory",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'xPNTsFactory v1 0x6742…' (truncated); not resolved, not guessed"
+    },
+    "ReputationSystem": {
+      "abi": "ReputationSystem",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'ReputationSystem 0.3.2 0x4Ec2…' (truncated); not resolved, not guessed"
+    },
+    "PaymasterFactory": {
+      "abi": "PaymasterFactory",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'PaymasterFactory 0xA936…' (truncated); not resolved, not guessed"
+    },
+    "PaymasterV4Impl": {
+      "abi": "Paymaster",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'PaymasterV4 impl 0xa468…' (truncated); not resolved, not guessed"
+    },
+    "aPNTsPMV4": {
+      "abi": "Paymaster",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'aPNTs PMV4 0xf394…' (truncated); not resolved, not guessed"
+    },
+    "pNTsPMV4": {
+      "abi": "Paymaster",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'pNTs PMV4 0xC827…' (truncated); not resolved, not guessed"
+    },
+    "MicroPaymentChannel": {
+      "abi": "MicroPaymentChannel",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'MicroPaymentChannel 0x3757…' (truncated); not resolved, not guessed"
+    },
+    "X402Facilitator": {
+      "abi": "X402Facilitator",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'X402Facilitator 0xfe1D…' (truncated); not resolved, not guessed"
+    },
+    "LivenessRegistry": {
+      "abi": "LivenessRegistry",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'LivenessRegistry 0x02d8…' (truncated); not resolved, not guessed"
+    },
+    "xPNTsFactoryCC28": {
+      "abi": "xPNTsFactory",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'xPNTsFactoryCC28 0x9f42…' (truncated); not resolved, not guessed"
+    },
+    "PolicyRegistry": {
+      "abi": "PolicyRegistry",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'PolicyRegistry 0x2925…' (truncated); not resolved, not guessed"
+    },
+    "oldTL": {
+      "abi": "TimelockController",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, notation: gives only 'oldTL = 0x86C86c…9564' (truncated); not resolved, not guessed"
+    },
+    "TL48": {
+      "abi": "TimelockController",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, notation: gives only 'TL48 = 0xccdf8e0d…c34b' (truncated); not resolved, not guessed"
+    },
+    "aPNTs": {
+      "abi": "xPNTsToken",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'aPNTs (xPNTs v1) 0x696A…' (truncated); not resolved, not guessed"
+    },
+    "pNTs": {
+      "abi": "xPNTsToken",
+      "address": null,
+      "source": "SP owner table v0 @835db34c, A: gives only 'pNTs (xPNTs v1) 0xE657…' (truncated); not resolved, not guessed"
+    },
+    "AOAProtocolRegistry": {
+      "abi": "AOAProtocolRegistry",
+      "address": null,
+      "source": "SP owner table v0 @835db34c: planned transfer to TL48, no address given; not resolved, not guessed"
+    },
+    "xPNTsFactoryV2": {
+      "abi": "xPNTsFactoryV2",
+      "address": null,
+      "source": "SP owner table v0 @835db34c: planned transfer to TL48, no address given; not resolved, not guessed"
+    },
+    "APNTsCapped": {
+      "abi": "APNTsCapped",
+      "address": null,
+      "source": "SP owner table v0 @835db34c: deployed by a3a with TL48 as owner, no address given; not resolved, not guessed"
+    }
+  },
+  "assertions": [
+    {
+      "id": "A-sp-owner",
+      "kind": "privilege",
+      "contract": "SuperPaymaster",
+      "function": "owner",
+      "args": [],
+      "expected": "$TL48",
+      "note": "A17"
+    },
+    {
+      "id": "A-registry-owner",
+      "kind": "privilege",
+      "contract": "Registry",
+      "function": "owner",
+      "args": [],
+      "expected": "$TL48",
+      "note": "D.registry two-step"
+    },
+    {
+      "id": "A-agg-old-owner",
+      "kind": "privilege",
+      "contract": "BLSAggregatorOld",
+      "function": "owner",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "D.old_aggregator"
+    },
+    {
+      "id": "A-agg-prevprev-owner",
+      "kind": "privilege",
+      "contract": "BLSAggregatorPrevPrev",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"—\", status gap"
+    },
+    {
+      "id": "A-agg-rc8-owner",
+      "kind": "privilege",
+      "contract": "BLSAggregatorRc8",
+      "function": "owner",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "handover_contracts: BLSAggregator to SAFE"
+    },
+    {
+      "id": "A-dvt-old-owner",
+      "kind": "privilege",
+      "contract": "DVTValidatorOld",
+      "function": "owner",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "D.dvt"
+    },
+    {
+      "id": "A-dvt-new-owner",
+      "kind": "privilege",
+      "contract": "DVTValidatorNew",
+      "function": "owner",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "A7.dvt pending"
+    },
+    {
+      "id": "A-committee-owner",
+      "kind": "privilege",
+      "contract": "Committee",
+      "function": "owner",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "D.committee"
+    },
+    {
+      "id": "A-GTokenStaking-owner",
+      "kind": "privilege",
+      "contract": "GTokenStaking",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"TL48/SAFE?\", gap (tag blocker)"
+    },
+    {
+      "id": "A-GToken-owner",
+      "kind": "privilege",
+      "contract": "GToken",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-xPNTsFactoryV1-owner",
+      "kind": "privilege",
+      "contract": "xPNTsFactoryV1",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-ReputationSystem-owner",
+      "kind": "privilege",
+      "contract": "ReputationSystem",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-PaymasterFactory-owner",
+      "kind": "privilege",
+      "contract": "PaymasterFactory",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-PaymasterV4Impl-owner",
+      "kind": "privilege",
+      "contract": "PaymasterV4Impl",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-aPNTsPMV4-owner",
+      "kind": "privilege",
+      "contract": "aPNTsPMV4",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-MicroPaymentChannel-owner",
+      "kind": "privilege",
+      "contract": "MicroPaymentChannel",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap (tool contract)"
+    },
+    {
+      "id": "A-X402Facilitator-owner",
+      "kind": "privilege",
+      "contract": "X402Facilitator",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap (tool contract)"
+    },
+    {
+      "id": "A-LivenessRegistry-owner",
+      "kind": "privilege",
+      "contract": "LivenessRegistry",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap"
+    },
+    {
+      "id": "A-xPNTsFactoryCC28-owner",
+      "kind": "privilege",
+      "contract": "xPNTsFactoryCC28",
+      "function": "owner",
+      "args": [],
+      "note": "planned \"?\", gap (test factory)"
+    },
+    {
+      "id": "A-pNTsPMV4-owner",
+      "kind": "privilege",
+      "contract": "pNTsPMV4",
+      "function": "owner",
+      "args": [],
+      "expected": "$MyceliumOperator",
+      "note": "community-owned, unchanged"
+    },
+    {
+      "id": "A-aPNTs-communityOwner",
+      "kind": "privilege",
+      "contract": "aPNTs",
+      "function": "communityOwner",
+      "args": [],
+      "expected": "$aPNTsCommunityOwner",
+      "note": "community"
+    },
+    {
+      "id": "A-aPNTs-FACTORY",
+      "kind": "privilege",
+      "contract": "aPNTs",
+      "function": "FACTORY",
+      "args": [],
+      "expected": "$xPNTsFactoryV1"
+    },
+    {
+      "id": "A-pNTs-communityOwner",
+      "kind": "privilege",
+      "contract": "pNTs",
+      "function": "communityOwner",
+      "args": [],
+      "expected": "$MyceliumOperator",
+      "note": "community"
+    },
+    {
+      "id": "A-pNTs-FACTORY",
+      "kind": "privilege",
+      "contract": "pNTs",
+      "function": "FACTORY",
+      "args": [],
+      "expected": "$xPNTsFactoryV1"
+    },
+    {
+      "id": "A-AOAProtocolRegistry-owner",
+      "kind": "privilege",
+      "contract": "AOAProtocolRegistry",
+      "function": "owner",
+      "args": [],
+      "expected": "$TL48"
+    },
+    {
+      "id": "A-xPNTsFactoryV2-owner",
+      "kind": "privilege",
+      "contract": "xPNTsFactoryV2",
+      "function": "owner",
+      "args": [],
+      "expected": "$TL48"
+    },
+    {
+      "id": "A-APNTsCapped-owner",
+      "kind": "privilege",
+      "contract": "APNTsCapped",
+      "function": "owner",
+      "args": [],
+      "expected": "$TL48"
+    },
+    {
+      "id": "A-PolicyRegistry-timelock",
+      "kind": "privilege",
+      "contract": "PolicyRegistry",
+      "function": "timelock",
+      "args": [],
+      "expected": "$oldTL",
+      "note": "immutable; governed through oldTL, which D controls (see oldTL rows)"
+    },
+    {
+      "id": "D-sp-pendingOwner",
+      "kind": "privilege",
+      "contract": "SuperPaymaster",
+      "function": "pendingOwner",
+      "args": []
+    },
+    {
+      "id": "D-registry-pendingOwner",
+      "kind": "privilege",
+      "contract": "Registry",
+      "function": "pendingOwner",
+      "args": [],
+      "note": "vendored Registry ABI has no pendingOwner(); this row FAILs as function-not-found until the ABI is re-synced"
+    },
+    {
+      "id": "D-APNTsCapped-pendingOwner",
+      "kind": "privilege",
+      "contract": "APNTsCapped",
+      "function": "pendingOwner",
+      "args": []
+    },
+    {
+      "id": "B-registry-D-not-reputation-source",
+      "kind": "privilege",
+      "contract": "Registry",
+      "function": "isReputationSource",
+      "args": [
+        "$D"
+      ],
+      "expected": false,
+      "note": "Registry.sol:172 initialize auto-grant"
+    },
+    {
+      "id": "B-registry-role-owners",
+      "kind": "roleOwners",
+      "registry": "Registry",
+      "roles": [
+        {
+          "name": "COMMUNITY",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "ENDUSER",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "PAYMASTER_AOA",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "PAYMASTER_SUPER",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "DVT",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "ANODE",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        },
+        {
+          "name": "KMS",
+          "id": null,
+          "source": "SP owner table v0 @835db34c section B names the role but gives no bytes32 id"
+        }
+      ],
+      "expected": "$TL48",
+      "note": "configureRole(id, cfg with owner = TL48) x 7"
+    },
+    {
+      "id": "B-agg-old-slashPolicyAdmin",
+      "kind": "privilege",
+      "contract": "BLSAggregatorOld",
+      "function": "slashPolicyAdmin",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "D.old_aggregator.admin"
+    },
+    {
+      "id": "B-agg-rc8-slashPolicyAdmin",
+      "kind": "privilege",
+      "contract": "BLSAggregatorRc8",
+      "function": "slashPolicyAdmin",
+      "args": [],
+      "expected": "$SAFE",
+      "note": "handover_contracts: BLSAggregator and its slashPolicyAdmin to SAFE"
+    },
+    {
+      "id": "B-agg-prevprev-slashPolicyAdmin",
+      "kind": "privilege",
+      "contract": "BLSAggregatorPrevPrev",
+      "function": "slashPolicyAdmin",
+      "args": [],
+      "note": "not in the table; constructor auto-grant (C)"
+    },
+    {
+      "id": "B-sp-treasury",
+      "kind": "privilege",
+      "contract": "SuperPaymaster",
+      "function": "treasury",
+      "args": [],
+      "note": "not in the manifest"
+    },
+    {
+      "id": "B-staking-treasury",
+      "kind": "privilege",
+      "contract": "GTokenStaking",
+      "function": "treasury",
+      "args": [],
+      "note": "not in the manifest"
+    },
+    {
+      "id": "B-mysbt-daoMultisig",
+      "kind": "privilege",
+      "contract": "MySBT",
+      "function": "daoMultisig",
+      "args": [],
+      "note": "not in the manifest"
+    },
+    {
+      "id": "B-policyregistry-guardian",
+      "kind": "privilege",
+      "contract": "PolicyRegistry",
+      "function": "guardian",
+      "args": [],
+      "note": "setGuardian is onlyTimelock = oldTL"
+    },
+    {
+      "id": "B-dvt-old-D-not-validator",
+      "kind": "privilege",
+      "contract": "DVTValidatorOld",
+      "function": "isValidator",
+      "args": [
+        "$D"
+      ],
+      "expected": false
+    },
+    {
+      "id": "B-sp-guardian",
+      "kind": "privilege",
+      "contract": "SuperPaymaster",
+      "function": "guardian",
+      "args": [],
+      "note": "getter new in 5.5.0; check after the upgrade"
+    },
+    {
+      "id": "C-pmv4-impl-treasury",
+      "kind": "privilege",
+      "contract": "PaymasterV4Impl",
+      "function": "treasury",
+      "args": []
+    },
+    {
+      "id": "C-apnts-pmv4-treasury",
+      "kind": "privilege",
+      "contract": "aPNTsPMV4",
+      "function": "treasury",
+      "args": []
+    },
+    {
+      "id": "C-APNTsCapped-minter",
+      "kind": "privilege",
+      "contract": "APNTsCapped",
+      "function": "minter",
+      "args": []
+    },
+    {
+      "id": "C-APNTsCapped-capGuardian",
+      "kind": "privilege",
+      "contract": "APNTsCapped",
+      "function": "capGuardian",
+      "args": []
+    },
+    {
+      "id": "B-oldTL-D-no-PROPOSER_ROLE",
+      "kind": "privilege",
+      "contract": "oldTL",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "PROPOSER_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false,
+      "note": "table: renounce / leave idle? (gap)"
+    },
+    {
+      "id": "B-oldTL-D-no-EXECUTOR_ROLE",
+      "kind": "privilege",
+      "contract": "oldTL",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "EXECUTOR_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false,
+      "note": "table: renounce / leave idle? (gap)"
+    },
+    {
+      "id": "B-oldTL-D-no-CANCELLER_ROLE",
+      "kind": "privilege",
+      "contract": "oldTL",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "CANCELLER_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false,
+      "note": "table: renounce / leave idle? (gap)"
+    },
+    {
+      "id": "B-oldTL-D-no-DEFAULT_ADMIN_ROLE",
+      "kind": "privilege",
+      "contract": "oldTL",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "DEFAULT_ADMIN_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false,
+      "note": "table: renounce / leave idle? (gap)"
+    },
+    {
+      "id": "TL48-SAFE-has-PROPOSER_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "PROPOSER_ROLE"
+        },
+        "$SAFE"
+      ],
+      "expected": true,
+      "note": "notation: proposer, executor and canceller = SAFE"
+    },
+    {
+      "id": "TL48-D-no-PROPOSER_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "PROPOSER_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false
+    },
+    {
+      "id": "TL48-SAFE-has-EXECUTOR_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "EXECUTOR_ROLE"
+        },
+        "$SAFE"
+      ],
+      "expected": true,
+      "note": "notation: proposer, executor and canceller = SAFE"
+    },
+    {
+      "id": "TL48-D-no-EXECUTOR_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "EXECUTOR_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false
+    },
+    {
+      "id": "TL48-SAFE-has-CANCELLER_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "CANCELLER_ROLE"
+        },
+        "$SAFE"
+      ],
+      "expected": true,
+      "note": "notation: proposer, executor and canceller = SAFE"
+    },
+    {
+      "id": "TL48-D-no-CANCELLER_ROLE",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "CANCELLER_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false
+    },
+    {
+      "id": "TL48-admin-is-itself",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "DEFAULT_ADMIN_ROLE"
+        },
+        "$TL48"
+      ],
+      "expected": true,
+      "note": "notation: admin = itself only"
+    },
+    {
+      "id": "TL48-D-not-admin",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "DEFAULT_ADMIN_ROLE"
+        },
+        "$D"
+      ],
+      "expected": false
+    },
+    {
+      "id": "TL48-SAFE-not-admin",
+      "kind": "privilege",
+      "contract": "TL48",
+      "function": "hasRole",
+      "args": [
+        {
+          "$call": "DEFAULT_ADMIN_ROLE"
+        },
+        "$SAFE"
+      ],
+      "expected": false,
+      "note": "notation: admin = itself only"
+    },
+    {
+      "id": "TL48-minDelay",
+      "kind": "call",
+      "contract": "TL48",
+      "function": "getMinDelay",
+      "args": [],
+      "compare": "eq",
+      "expected": "172800"
+    },
+    {
+      "id": "D-BLSAggregatorOld-zero-eth",
+      "kind": "balanceZero",
+      "address": "$BLSAggregatorOld",
+      "note": "AGG-ZERO-BALANCES (ETH)"
+    },
+    {
+      "id": "D-BLSAggregatorOld-zero-GToken",
+      "kind": "call",
+      "contract": "GToken",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorOld"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorOld-zero-aPNTs",
+      "kind": "call",
+      "contract": "aPNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorOld"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorOld-zero-pNTs",
+      "kind": "call",
+      "contract": "pNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorOld"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorOld-not-slasher",
+      "kind": "authorizedSlasher",
+      "staking": "GTokenStaking",
+      "address": "$BLSAggregatorOld",
+      "expected": false,
+      "note": "Slashers"
+    },
+    {
+      "id": "D-BLSAggregatorOld-not-validator-DVTValidatorOld",
+      "kind": "privilege",
+      "contract": "DVTValidatorOld",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorOld"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    },
+    {
+      "id": "D-BLSAggregatorOld-not-validator-DVTValidatorNew",
+      "kind": "privilege",
+      "contract": "DVTValidatorNew",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorOld"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-zero-eth",
+      "kind": "balanceZero",
+      "address": "$BLSAggregatorPrevPrev",
+      "note": "AGG-ZERO-BALANCES (ETH)"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-zero-GToken",
+      "kind": "call",
+      "contract": "GToken",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorPrevPrev"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-zero-aPNTs",
+      "kind": "call",
+      "contract": "aPNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorPrevPrev"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-zero-pNTs",
+      "kind": "call",
+      "contract": "pNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorPrevPrev"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-not-slasher",
+      "kind": "authorizedSlasher",
+      "staking": "GTokenStaking",
+      "address": "$BLSAggregatorPrevPrev",
+      "expected": false,
+      "note": "Slashers"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-not-validator-DVTValidatorOld",
+      "kind": "privilege",
+      "contract": "DVTValidatorOld",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorPrevPrev"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    },
+    {
+      "id": "D-BLSAggregatorPrevPrev-not-validator-DVTValidatorNew",
+      "kind": "privilege",
+      "contract": "DVTValidatorNew",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorPrevPrev"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-zero-eth",
+      "kind": "balanceZero",
+      "address": "$BLSAggregatorRc8",
+      "note": "AGG-ZERO-BALANCES (ETH)"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-zero-GToken",
+      "kind": "call",
+      "contract": "GToken",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorRc8"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-zero-aPNTs",
+      "kind": "call",
+      "contract": "aPNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorRc8"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-zero-pNTs",
+      "kind": "call",
+      "contract": "pNTs",
+      "function": "balanceOf",
+      "args": [
+        "$BLSAggregatorRc8"
+      ],
+      "compare": "eq",
+      "expected": "0",
+      "note": "AGG-ZERO-BALANCES; the table names no asset list, these are the tokens it mentions"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-not-slasher",
+      "kind": "authorizedSlasher",
+      "staking": "GTokenStaking",
+      "address": "$BLSAggregatorRc8",
+      "expected": false,
+      "note": "Slashers"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-not-validator-DVTValidatorOld",
+      "kind": "privilege",
+      "contract": "DVTValidatorOld",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorRc8"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    },
+    {
+      "id": "D-BLSAggregatorRc8-not-validator-DVTValidatorNew",
+      "kind": "privilege",
+      "contract": "DVTValidatorNew",
+      "function": "isValidator",
+      "args": [
+        "$BLSAggregatorRc8"
+      ],
+      "expected": false,
+      "note": "AGG-NOT-DVT-VALIDATOR"
+    }
+  ]
+}
