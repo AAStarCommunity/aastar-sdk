@@ -58,6 +58,8 @@ type ChainOpts = {
     spUpdatedAt?: 'empty' | 'fresh' | 'broken';
     v4UpdatedAt?: 'empty' | 'fresh';
     receiptStatus?: '0x1' | '0x0';
+    /** Transactions are accepted but never mined (no receipt, ever). */
+    neverMined?: boolean;
     /** eth_chainId answers an error. */
     chainIdError?: boolean;
     /** decimals() on the price feed fails. */
@@ -94,7 +96,7 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
             }
             case 'eth_getTransactionByHash': return { result: null };
             case 'eth_getTransactionReceipt': {
-                if (!hashes.has(String(params[0]))) return { result: null };
+                if (!hashes.has(String(params[0])) || o.neverMined) return { result: null };
                 return { result: {
                     transactionHash: params[0], transactionIndex: '0x0', blockHash: '0x' + '33'.repeat(32), blockNumber: `0x${block.toString(16)}`,
                     from: KEY_ADDR.toLowerCase(), to: SP, cumulativeGasUsed: '0x5208', gasUsed: '0x5208', effectiveGasPrice: '0x3b9aca00',
@@ -426,7 +428,9 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
             },
         });
         expect(castPid).toBeGreaterThan(0);
-        expect(r.out).toMatch(/stopped \(SIGTERM\): the cast send in flight was terminated first/);
+        // A cast terminated mid-send may or may not have broadcast: never reported as a clean stop.
+        expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state: a send was interrupted by the shutdown/);
+        expect(r.out).not.toMatch(/stopped \(SIGTERM\)/);
         expect(alive(castPid), 'cast still running after the keeper exited').toBe(false);
     });
 
@@ -483,11 +487,43 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
         expect(readFileSync(castFile(bin, 'invocations'), 'utf8').trim().split('\n')).toHaveLength(1);
         expect(r.out).toMatch(/action=sendTx kind=paymaster/);
         expect(r.out).toMatch(/shutting down: no new transaction is signed/);
-        expect(r.out).toMatch(/stopped \(SIGTERM\)/);
+        expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state: a send was interrupted/);
     });
 });
 
 describe('keeper shutdown, privateKey mode (the form the Mini runs)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('a tick still waiting 15 s after SIGTERM (broadcast, never mined): the exit says so, never "stopped" (DSR)', async () => {
+        let keeperChild: ChildProcess | null = null;
+        let signalled = false;
+        const chain = await fakeChain({
+            spUpdatedAt: 'empty', neverMined: true,
+            onSend: () => { if (!signalled && keeperChild) { signalled = true; setTimeout(() => keeperChild!.kill('SIGTERM'), 300); } return 0; },
+        });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: BASE, env: { KEEPER_PRIVATE_KEY: KEY }, onOut: (_o, child) => { keeperChild = child; } });
+        expect(chain.raw).toHaveLength(1);
+        expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state: the tick did not finish within 15 s/);
+        expect(r.out).not.toMatch(/stopped \(SIGTERM\)/);
+    });
+
+    it('a send whose request times out during shutdown: the exit says the send state is unknown, never "stopped" (DSR)', async () => {
+        let keeperChild: ChildProcess | null = null;
+        let signalled = false;
+        const chain = await fakeChain({
+            spUpdatedAt: 'empty',
+            onSend: () => {
+                if (signalled || !keeperChild) return 0;
+                signalled = true;
+                keeperChild.kill('SIGTERM');
+                return 25_000; // the RPC request times out first: whether the node took the tx is unknown
+            },
+        });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: BASE, env: { KEEPER_PRIVATE_KEY: KEY }, onOut: (_o, child) => { keeperChild = child; } });
+        expect(r.out).toMatch(/exited \(SIGTERM\) with a send in an unknown state/);
+        expect(r.out).not.toMatch(/stopped \(SIGTERM\)/);
+    });
+
     it('SIGTERM while a sent update awaits its receipt: no further transaction is signed, then "stopped" (Codex R1)', async () => {
         let keeperChild: ChildProcess | null = null;
         let signalled = false;

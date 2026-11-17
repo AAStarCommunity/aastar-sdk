@@ -236,6 +236,19 @@ let activeCast: { child: ReturnType<typeof spawn>; closed: Promise<void> } | nul
  * writeContract), after the last await, so nothing new is signed once shutdown has begun (Codex R1).
  */
 let stopping = false;
+/**
+ * Sends that had passed the stop check and then ended in an error during shutdown (a cast we terminated, an RPC
+ * request that timed out): whether they reached the network is unknown, so the exit must not say "stopped".
+ */
+let sendsInterruptedByShutdown = 0;
+async function trackSend<T>(send: () => Promise<T>): Promise<T> {
+    try {
+        return await send();
+    } catch (e) {
+        if (stopping) sendsInterruptedByShutdown += 1;
+        throw e;
+    }
+}
 function assertNotStopping(): void {
     if (stopping) throw new Error('shutting down: no new transaction is signed');
 }
@@ -627,10 +640,12 @@ async function main() {
             ]);
             clearTimeout(waited);
         }
-        // "stopped" only once nothing can still be signing or broadcasting; otherwise say so plainly.
-        const status = tickSettled
-            ? `stopped (${signal})${inFlight ? ': the cast send in flight was terminated first' : ''}`
-            : `exited (${signal}) with a send in an unknown state: the tick did not finish within 15 s`;
+        // "stopped" only once nothing can still be signing or broadcasting and no send was cut off; otherwise say so.
+        const status = !tickSettled
+            ? `exited (${signal}) with a send in an unknown state: the tick did not finish within 15 s`
+            : sendsInterruptedByShutdown > 0
+                ? `exited (${signal}) with a send in an unknown state: a send was interrupted by the shutdown`
+                : `stopped (${signal})`;
         console.log(status);
         await sendTelegramMessage(
             `[keeper] ${status}\nnetwork=${network}\n` +
@@ -859,7 +874,7 @@ async function main() {
                     throw new Error(`before cast send: the RPC serves chain ${servedChain}, expected ${config.chain.id}; nothing was signed`);
                 }
                 assertNotStopping();
-                return await runCastSend({
+                return await trackSend(() => runCastSend({
                     rpcUrl: config.rpcUrl,
                     chainId: config.chain.id,
                     target,
@@ -868,19 +883,19 @@ async function main() {
                     gasPriceWei,
                     maxFeeWei: hardMaxFeeWei,
                     processTimeoutMs: 90_000
-                });
+                }));
             }
             if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY');
             const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
             assertNotStopping();
-            return await walletClient.writeContract({
+            return await trackSend(() => walletClient.writeContract({
                 address: target,
                 abi,
                 functionName: 'updatePrice',
                 account: keeperAccount,
                 // The chain cannot charge more than the hard ceiling (KPR-006).
                 ...(hardMaxFeeWei !== undefined ? { maxFeePerGas: hardMaxFeeWei } : {}),
-            });
+            }));
         };
 
         const feeCeilingAlert = async (label: string) => {

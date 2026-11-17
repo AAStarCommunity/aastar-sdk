@@ -39,7 +39,7 @@ this round; one more Codex pass on this fix's diff only; Medium and below are wr
 
 | ID | Codex | Class | Disposition |
 |---|---|---|---|
-| R1 | High | (i) | Real: shutdown killed the cast in flight but the tick went on and could sign the other target. Now a stop flag is set synchronously, checked right before every cast spawn and viem `writeContract`; shutdown waits up to 15 s for the tick, and says "unknown state" instead of "stopped" if it does not finish. Tests on both paths |
+| R1 | High | (i) | Real: shutdown killed the cast in flight but the tick went on and could sign the other target. Now a stop flag is set synchronously, checked right before every cast spawn and viem `writeContract`; shutdown waits up to 15 s for the tick, and says "unknown state" instead of "stopped" if it does not finish or if a send was cut off (a terminated cast, a timed-out request). Tests on both paths |
 | R2 | High | (i) | Real, older than this change, made mandatory by it: the readline prompt wrote the typed password before masking it. Now the readline output is muted while typing; EOF, Ctrl-C and an empty answer refuse. pty tests for pasted and byte-by-byte input |
 | R3 | High | (ii) | FU-111 / KPR-001, to #447 |
 | R4 | Medium | (i) | The fatal path printed the raw error object. Now every diagnostic goes through `scrub`: configured secrets (keeper key, Telegram token, RPC URL and its credential-like parts) redacted, URLs reduced, length bounded |
