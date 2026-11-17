@@ -60,6 +60,12 @@ export function resolveKeeperSigner(a: {
         try { address = key ? privateKeyToAccount(key).address : undefined; } catch { throw new KeeperStartupRefusal('KEEPER_PRIVATE_KEY is not a valid private key'); }
         return { mode: 'privateKey', key, address };
     }
+    // A key pasted into --keystore / --cast-account would be logged as the signer argument and handed to cast.
+    for (const [flag, v] of [['--keystore', a.keystorePath], ['--cast-account', a.castAccount]] as const) {
+        if (v !== undefined && /^(0x)?[0-9a-fA-F]{64}$/.test(v.trim())) {
+            throw new KeeperStartupRefusal(`${flag} looks like a private key, not a keystore path or account name (the value is not shown)`);
+        }
+    }
     if (a.keystorePath && a.castAccount) {
         throw new KeeperStartupRefusal('cast mode: pass --keystore or --cast-account, not both (the signer would be ambiguous)');
     }

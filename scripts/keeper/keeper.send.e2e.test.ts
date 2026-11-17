@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
-import { encodeFunctionResult, keccak256, parseAbi, parseTransaction, toFunctionSelector, type Hex } from 'viem';
+import { encodeFunctionResult, keccak256, parseAbi, parseTransaction, recoverTransactionAddress, toFunctionSelector, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const KEEPER = join(process.cwd(), 'scripts/keeper.ts');
@@ -29,6 +29,12 @@ const PRELOAD = join(process.cwd(), 'scripts/keeper/no-egress.preload.mjs');
 
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // anvil #0, public
 const KEY_ADDR = privateKeyToAccount(KEY).address;
+// anvil #1 / #2, public: decoys for the deployer variables the keeper must not sign with.
+const DECOY_ENV = {
+    PRIVATE_KEY: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d',
+    PRIVATE_KEY_SUPPLIER: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a',
+};
+const signerOf = (raw: Hex) => recoverTransactionAddress({ serializedTransaction: raw as any });
 const SEPOLIA = 11155111;
 const SP = '0x09df0d2e3722ec0e401fe3819e64278a42ae4de9';
 const V4 = '0x2118e9a404c15f70b1d4f53b400c8a566a5ea4b6';
@@ -52,6 +58,12 @@ type ChainOpts = {
     spUpdatedAt?: 'empty' | 'fresh' | 'broken';
     v4UpdatedAt?: 'empty' | 'fresh';
     receiptStatus?: '0x1' | '0x0';
+    /** eth_chainId answers an error. */
+    chainIdError?: boolean;
+    /** decimals() on the price feed fails. */
+    decimalsBroken?: boolean;
+    /** Called when a raw transaction arrives; the node answers it only after the returned delay (ms). */
+    onSend?: () => number;
 };
 type Chain = { url: string; raw: Hex[]; methods: string[]; close: () => Promise<void> };
 
@@ -65,7 +77,7 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
     const cacheAt = (s: 'empty' | 'fresh') => (s === 'empty' ? 0n : now());
     const answer = (method: string, params: any[]): { result?: unknown; error?: { code: number; message: string } } => {
         switch (method) {
-            case 'eth_chainId': return { result: `0x${(o.chainId ?? (() => SEPOLIA))(chainIdCalls++).toString(16)}` };
+            case 'eth_chainId': if (o.chainIdError) return { error: { code: -32000, message: 'fake: chain id unavailable' } }; return { result: `0x${(o.chainId ?? (() => SEPOLIA))(chainIdCalls++).toString(16)}` };
             case 'eth_blockNumber': return { result: `0x${(block++).toString(16)}` };
             case 'eth_getBlockByNumber':
                 return { result: { number: `0x${block.toString(16)}`, hash: '0x' + '11'.repeat(32), parentHash: '0x' + '22'.repeat(32), timestamp: '0x' + now().toString(16), baseFeePerGas: '0x3b9aca00', gasLimit: '0x1c9c380', gasUsed: '0x0', transactions: [], uncles: [], logsBloom: '0x' + '00'.repeat(256), miner: '0x' + '00'.repeat(20), difficulty: '0x0', extraData: '0x', nonce: '0x0000000000000000', mixHash: '0x' + '00'.repeat(32), sha3Uncles: '0x' + '00'.repeat(32), stateRoot: '0x' + '00'.repeat(32), receiptsRoot: '0x' + '00'.repeat(32), transactionsRoot: '0x' + '00'.repeat(32), size: '0x0', totalDifficulty: '0x0' } };
@@ -78,7 +90,7 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
                 raw.push(params[0]);
                 const h = keccak256(params[0]);
                 hashes.add(h);
-                return { result: h };
+                return { result: h, delayMs: o.onSend?.() ?? 0 } as any;
             }
             case 'eth_getTransactionByHash': return { result: null };
             case 'eth_getTransactionReceipt': {
@@ -93,6 +105,7 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
                 const to = String(params[0].to).toLowerCase();
                 const data = String(params[0].data ?? params[0].input).slice(0, 10);
                 if (data === sel('function latestRoundData()')) return { result: encodeFunctionResult({ abi, functionName: 'latestRoundData', result: [1n, 3000n * 10n ** 8n, now(), now(), 1n] }) };
+                if (data === sel('function decimals()') && o.decimalsBroken) return { error: { code: 3, message: 'fake: decimals failing' } };
                 if (data === sel('function decimals()')) return { result: encodeFunctionResult({ abi, functionName: 'decimals', result: 8 }) };
                 if (to === SP && o.spUpdatedAt === 'broken') return { error: { code: -32000, message: 'fake: SuperPaymaster read failing' } };
                 if (data === sel('function priceStalenessThreshold()')) return { result: encodeFunctionResult({ abi, functionName: 'priceStalenessThreshold', result: 3600n }) };
@@ -109,9 +122,15 @@ async function fakeChain(o: ChainOpts = {}): Promise<Chain> {
         req.on('data', (c) => (body += c));
         req.on('end', () => {
             const msg = JSON.parse(body);
-            const one = (m: any) => { methods.push(m.method); return { jsonrpc: '2.0', id: m.id, ...answer(m.method, m.params ?? []) }; };
-            res.setHeader('content-type', 'application/json');
-            res.end(JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg)));
+            let delayMs = 0;
+            const one = (m: any) => {
+                methods.push(m.method);
+                const { delayMs: d, ...a } = answer(m.method, m.params ?? []) as any;
+                delayMs = Math.max(delayMs, d ?? 0);
+                return { jsonrpc: '2.0', id: m.id, ...a };
+            };
+            const body2 = JSON.stringify(Array.isArray(msg) ? msg.map(one) : one(msg));
+            setTimeout(() => { res.setHeader('content-type', 'application/json'); res.end(body2); }, delayMs);
         });
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -128,8 +147,13 @@ type Run = { code: number | null; out: string; child: ChildProcess };
 
 /** Start the keeper; resolves when it exits (or is killed at `timeoutMs`). `onOut` may act on the output so far. */
 function startKeeper(p: {
-    chain: Chain; args: string[]; env?: Record<string, string>; pty?: { password: string }; fakeCastDir?: string;
-    egress?: boolean; onOut?: (out: string, child: ChildProcess) => void; timeoutMs?: number;
+    chain: Chain; args: string[]; env?: Record<string, string>; fakeCastDir?: string;
+    /**
+     * Run under a pty. With `password`, answer the prompt with it: in one write (a paste) or one byte at a time.
+     * Without, the test answers itself (onOut).
+     */
+    pty?: { password?: string; oneByteAtATime?: boolean };
+    egress?: boolean; extraPorts?: number[]; onOut?: (out: string, child: ChildProcess) => void; timeoutMs?: number;
 }): Promise<Run> {
     const cwd = mkdtempSync(join(tmpdir(), 'keeper-send-'));
     cleanups.push(() => rmSync(cwd, { recursive: true, force: true }));
@@ -140,7 +164,7 @@ function startKeeper(p: {
     if (p.egress) {
         const log = join(cwd, 'egress.log');
         writeFileSync(log, '');
-        Object.assign(env, { NO_EGRESS_LOG: log, NO_EGRESS_ALLOW_PORTS: p.chain.url.split(':').pop()!, NODE_OPTIONS: `--import=${PRELOAD}` });
+        Object.assign(env, { NO_EGRESS_LOG: log, NO_EGRESS_ALLOW_PORTS: [p.chain.url.split(':').pop()!, ...(p.extraPorts ?? [])].join(','), NODE_OPTIONS: `--import=${PRELOAD}` });
         cleanups.push(() => { expect(readFileSync(log, 'utf8').trim(), 'no egress other than the fake RPC').toBe(''); });
     }
     const cmd = p.pty ? 'python3' : node[0]!;
@@ -155,7 +179,12 @@ function startKeeper(p: {
     cleanups.push(async () => { clearTimeout(timer); if (child.exitCode === null) child.kill('SIGKILL'); await closed; });
     const onData = (d: Buffer) => {
         out += d.toString();
-        if (p.pty && !typed && out.includes('Keystore password:')) { typed = true; child.stdin!.write(`${p.pty.password}\n`); }
+        if (p.pty?.password !== undefined && !typed && out.includes('Keystore password:')) {
+            typed = true;
+            const answer = `${p.pty.password}\n`;
+            if (!p.pty.oneByteAtATime) child.stdin!.write(answer);
+            else [...answer].forEach((c, i) => setTimeout(() => child.stdin!.write(c), 30 * i));
+        }
         p.onOut?.(out, child);
     };
     child.stdout!.on('data', onData);
@@ -172,6 +201,7 @@ function fakeCast(hang = false): string {
     writeFileSync(join(bin, 'cast'), [
         '#!/bin/sh',
         `echo $$ > ${dir}/pid`,
+        `echo $$ >> ${dir}/invocations`,
         `printf '%s\\n' "$@" > ${dir}/argv`,
         `env > ${dir}/env`,
         // Ignore SIGHUP (inherited across exec): under the test's pty the session leader's exit would SIGHUP the
@@ -193,8 +223,10 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
     it('signs for the configured chain, the target and --hard-max-fee-gwei as max fee per gas', async () => {
         const chain = await fakeChain({ spUpdatedAt: 'empty' });
         cleanups.push(chain.close);
-        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once', '--hard-max-fee-gwei', '5'], env: { KEEPER_PRIVATE_KEY: KEY } });
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once', '--hard-max-fee-gwei', '5'], env: { KEEPER_PRIVATE_KEY: KEY, ...DECOY_ENV } });
         expect(r.out).toContain('confirmed: receipt kind=super');
+        // The signature itself, not a log line: recovered from the broadcast bytes (Codex R10).
+        expect(await signerOf(chain.raw[0]!)).toBe(KEY_ADDR);
         expect(r.code).toBe(0);
         expect(chain.raw).toHaveLength(1);
         const tx = parseTransaction(chain.raw[0]!);
@@ -227,8 +259,9 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
     it('a SuperPaymaster update that fails (reverted) does not stop the PaymasterV4 update in the same tick', async () => {
         const chain = await fakeChain({ spUpdatedAt: 'empty', v4UpdatedAt: 'empty', receiptStatus: '0x0' });
         cleanups.push(chain.close);
-        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY } });
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY, ...DECOY_ENV } });
         expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([SP, V4]);
+        for (const t of chain.raw) expect(await signerOf(t)).toBe(KEY_ADDR);
         expect(r.out).toMatch(/superPaymaster: superPaymaster updatePrice reverted/);
         expect(r.code).toBe(1);
     });
@@ -249,6 +282,55 @@ describe('keeper send boundary, privateKey mode', { timeout: SPAWN_VERDICT_TIMEO
         const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once', '--hard-max-fee-gwei', '0.5'], env: { KEEPER_PRIVATE_KEY: KEY } });
         expect(r.out).toMatch(/skip superPaymaster update: base fee 1 gwei is above --hard-max-fee-gwei; nothing is sent/);
         expect(chain.raw).toEqual([]);
+        expect(r.code).toBe(0);
+    });
+
+    it('a failing startup RPC call is logged without the RPC URL or its key (Codex R4)', async () => {
+        const chain = await fakeChain({ chainIdError: true });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once'], env: { KEEPER_PRIVATE_KEY: KEY, RPC_URL: `${chain.url}/v2/SECRETRPCKEY` } });
+        expect(r.code).toBe(1);
+        expect(r.out).toMatch(/fatal: /);
+        expect(r.out).not.toContain('SECRETRPCKEY');
+        expect(r.out).not.toContain(KEY.slice(2));
+    });
+
+    it('a slow external price endpoint cannot hold the tick; a failing feed decimals() does not stop either refresh (Codex R6/R7)', async () => {
+        const chain = await fakeChain({ v4UpdatedAt: 'empty', decimalsBroken: true });
+        cleanups.push(chain.close);
+        // Headers at once, then a body that never ends.
+        const drip = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"price":'); });
+        await new Promise<void>((r) => drip.listen(0, '127.0.0.1', r));
+        cleanups.push(() => new Promise((r) => { drip.closeAllConnections?.(); drip.close(() => r()); }));
+        const port = (drip.address() as AddressInfo).port;
+        const slow = await startKeeper({
+            chain, egress: true, extraPorts: [port], timeoutMs: 40_000, env: { KEEPER_PRIVATE_KEY: KEY },
+            args: [...BASE, '--once', '--volatility-threshold-bps', '150', '--external-ethusd-url', `http://127.0.0.1:${port}/ticker`],
+        });
+        expect(slow.code).toBe(0);
+        expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([V4]);
+        // A complete answer reaches the Chainlink comparison, whose decimals() read fails: logged, the refreshes go on.
+        const ok = createServer((_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{"price":"3000"}'); });
+        await new Promise<void>((r) => ok.listen(0, '127.0.0.1', r));
+        cleanups.push(() => new Promise((r) => { ok.closeAllConnections?.(); ok.close(() => r()); }));
+        const okPort = (ok.address() as AddressInfo).port;
+        const before = chain.raw.length;
+        const r = await startKeeper({
+            chain, egress: true, extraPorts: [okPort], env: { KEEPER_PRIVATE_KEY: KEY },
+            args: [...BASE, '--once', '--volatility-threshold-bps', '150', '--external-ethusd-url', `http://127.0.0.1:${okPort}/ticker`],
+        });
+        expect(r.out).toMatch(/market monitoring failed this tick/);
+        expect(r.out).toMatch(/paymaster decision=/);
+        expect(chain.raw.length).toBe(before + 1);
+        expect(r.code).toBe(0);
+    });
+
+    it('--disable-superpaymaster: a broken SuperPaymaster is not read and does not fail the run (Codex R16)', async () => {
+        const chain = await fakeChain({ spUpdatedAt: 'broken' });
+        cleanups.push(chain.close);
+        const r = await startKeeper({ chain, egress: true, args: [...BASE, '--once', '--disable-superpaymaster'], env: { KEEPER_PRIVATE_KEY: KEY } });
+        expect(r.out).not.toMatch(/superPaymaster reads/);
+        expect(r.out).toMatch(/paymaster decision=wait/);
         expect(r.code).toBe(0);
     });
 
@@ -291,6 +373,7 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
             },
         });
         expect(r.out).toContain('Keystore password:');
+        expect(r.out, 'the pasted password must not be echoed').not.toContain('test-password');
         expect(r.out).toContain('cast signer args: --account keeper');
         const argv = readFileSync(castFile(bin, 'argv'), 'utf8').trim().split('\n');
         expect(argv.slice(0, 6)).toEqual(['send', '--async', '--timeout', '60', '--chain', String(SEPOLIA)]);
@@ -345,5 +428,89 @@ describe('keeper send boundary, cast mode (under a pty)', { timeout: SPAWN_VERDI
         expect(castPid).toBeGreaterThan(0);
         expect(r.out).toMatch(/stopped \(SIGTERM\): the cast send in flight was terminated first/);
         expect(alive(castPid), 'cast still running after the keeper exited').toBe(false);
+    });
+
+    it('a password typed one byte at a time is not echoed either (Codex R2)', async () => {
+        const chain = await fakeChain();
+        cleanups.push(chain.close);
+        const bin = fakeCast();
+        const r = await startKeeper({ chain, fakeCastDir: bin, pty: { password: 'typed-secret-xyz', oneByteAtATime: true }, args: [...BASE, '--once', '--cast-account', 'keeper'] });
+        expect(r.out).toContain('Keystore password:');
+        // Fragments of the password only (dotenv's own tips can contain ordinary words such as "secrets").
+        for (const part of ['typed-secret-xyz', 'd-secr', 'ret-xy', 'yped-s']) expect(r.out).not.toContain(part);
+        expect(r.code).toBe(0);
+    });
+
+    it.each([
+        ['end of input (Ctrl-D)', '\u0004', /keystore password not entered \(end of input\)/],
+        ['Ctrl-C', '\u0003', /keystore password not entered \(Ctrl-C\)/],
+        ['an empty answer', '\n', /keystore password not entered \(empty\)/],
+    ])('%s at the password prompt refuses; nothing is signed', async (_name, keys, why) => {
+        const chain = await fakeChain({ spUpdatedAt: 'empty' });
+        cleanups.push(chain.close);
+        const bin = fakeCast();
+        let sent = false;
+        const r = await startKeeper({
+            chain, fakeCastDir: bin, args: [...BASE, '--once', '--cast-account', 'keeper'], pty: {},
+            onOut: (out, child) => { if (!sent && out.includes('Keystore password:')) { sent = true; setTimeout(() => child.stdin!.write(keys as string), 200); } },
+        });
+        expect(r.out).toMatch(why as RegExp);
+        expect(r.code).toBe(1);
+        expect(existsSync(castFile(bin, 'argv'))).toBe(false);
+    });
+
+    it('SIGTERM while cast is in flight: the other target is not sent afterwards (Codex R1)', async () => {
+        const chain = await fakeChain({ spUpdatedAt: 'empty', v4UpdatedAt: 'empty' });
+        cleanups.push(chain.close);
+        const bin = fakeCast(true);
+        let signalled = false;
+        const r = await startKeeper({
+            chain, fakeCastDir: bin, pty: { password: 'p' }, args: [...BASE, '--cast-account', 'keeper'],
+            onOut: (out) => {
+                if (signalled || !out.includes('action=sendTx kind=super')) return;
+                signalled = true;
+                const poll = setInterval(() => {
+                    if (!existsSync(castFile(bin, 'pid'))) return;
+                    clearInterval(poll);
+                    const pid = Number(readFileSync(castFile(bin, 'pid'), 'utf8').trim());
+                    const ps = spawn('ps', ['-o', 'ppid=', '-p', String(pid)]);
+                    let ppid = '';
+                    ps.stdout.on('data', (d) => (ppid += d));
+                    ps.on('close', () => process.kill(Number(ppid.trim()), 'SIGTERM'));
+                }, 50);
+            },
+        });
+        expect(readFileSync(castFile(bin, 'invocations'), 'utf8').trim().split('\n')).toHaveLength(1);
+        expect(r.out).toMatch(/action=sendTx kind=paymaster/);
+        expect(r.out).toMatch(/shutting down: no new transaction is signed/);
+        expect(r.out).toMatch(/stopped \(SIGTERM\)/);
+    });
+});
+
+describe('keeper shutdown, privateKey mode (the form the Mini runs)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('SIGTERM while a sent update awaits its receipt: no further transaction is signed, then "stopped" (Codex R1)', async () => {
+        let keeperChild: ChildProcess | null = null;
+        let signalled = false;
+        const chain = await fakeChain({
+            spUpdatedAt: 'empty', v4UpdatedAt: 'empty',
+            // The first broadcast is SuperPaymaster's. Signal then and answer it 500 ms later, so the tick goes on to
+            // PaymasterV4 while shutdown is under way.
+            onSend: () => {
+                if (signalled || !keeperChild) return 0;
+                signalled = true;
+                keeperChild.kill('SIGTERM');
+                return 500;
+            },
+        });
+        cleanups.push(chain.close);
+        const r = await startKeeper({
+            chain, egress: true, args: BASE, env: { KEEPER_PRIVATE_KEY: KEY },
+            onOut: (_out, child) => { keeperChild = child; },
+        });
+        expect(chain.raw.map((t) => parseTransaction(t).to?.toLowerCase())).toEqual([SP]);
+        expect(r.out).toMatch(/action=sendTx kind=paymaster/);
+        expect(r.out).toMatch(/shutting down: no new transaction is signed/);
+        expect(r.out).toMatch(/stopped \(SIGTERM\)/);
+        expect(r.out).not.toMatch(/unknown state/);
     });
 });

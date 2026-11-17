@@ -19,11 +19,12 @@ export function parseNetwork(raw: string | undefined): KeeperNetwork {
 }
 
 /** A non-negative decimal integer option (or its env fallback), at least `min`. `source` names where it came from. */
-export function parseIntOption(source: string, raw: string | undefined, fallback: bigint, min: bigint): bigint {
+export function parseIntOption(source: string, raw: string | undefined, fallback: bigint, min: bigint, max?: bigint): bigint {
     if (raw === undefined || raw === '') return fallback;
     if (!/^\d{1,15}$/.test(raw)) throw new KeeperStartupRefusal(`${source} must be a whole number (the value is not shown)`);
     const v = BigInt(raw);
     if (v < min) throw new KeeperStartupRefusal(`${source} must be at least ${min}`);
+    if (max !== undefined && v > max) throw new KeeperStartupRefusal(`${source} must be at most ${max}`);
     return v;
 }
 
@@ -103,6 +104,39 @@ export function redactRpcUrl(url: string): string {
 export function safeChildError(text: string, max = 300): string {
     const scrubbed = text.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, (m) => redactRpcUrl(m));
     return scrubbed.length > max ? `${scrubbed.slice(0, max)}…` : scrubbed;
+}
+
+/**
+ * Values that must never appear in a log line or alert: the keeper key (with and without 0x), the Telegram token, the
+ * RPC URL and each credential-like part of it (user info, path segments and query values of 8+ characters).
+ */
+export function secretValues(env: Record<string, string | undefined>, rpcUrl: string | undefined): string[] {
+    const out = new Set<string>();
+    const add = (v: string | undefined) => { if (v && v.length >= 8) out.add(v); };
+    const key = env.KEEPER_PRIVATE_KEY;
+    add(key);
+    if (key?.startsWith('0x')) add(key.slice(2));
+    add(env.TELEGRAM_BOT_TOKEN);
+    if (rpcUrl) {
+        add(rpcUrl);
+        try {
+            const u = new URL(rpcUrl);
+            add(u.username); add(u.password);
+            for (const seg of u.pathname.split('/')) add(decodeURIComponent(seg));
+            for (const v of u.searchParams.values()) add(v);
+        } catch { /* unparseable: the whole string is already listed */ }
+    }
+    return [...out].sort((a, b) => b.length - a.length);
+}
+
+/** `text` with every listed secret replaced, case-insensitively. */
+export function redactSecrets(text: string, secrets: readonly string[]): string {
+    let out = text;
+    for (const sv of secrets) {
+        const re = new RegExp(sv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+        out = out.replace(re, '[redacted]');
+    }
+    return out;
 }
 
 export function assertChainId(actual: number, expected: number, when: string): void {

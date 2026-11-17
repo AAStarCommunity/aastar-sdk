@@ -3,7 +3,7 @@ import { getAddress } from 'viem';
 import { KeeperStartupRefusal, parseKeeperMode, resolveKeeperSigner } from './keeperKey.js';
 import {
     assertChainId, castChildEnv, castSendArgs, envFileConflicts, feeDecision, parseAddressOption, parseGweiOption,
-    parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, safeChildError,
+    parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
 } from './keeperGuards.js';
 
 const KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // anvil #0, public test key
@@ -106,5 +106,15 @@ describe('keeper local guards (Daybreak 6c240b42 round 1)', () => {
         expect(receiptOutcome({ status: 'success' })).toBe('receipt');
         expect(receiptOutcome({ status: 'reverted' })).toBe('reverted');
         expect(receiptOutcome(undefined)).toBe('reverted');
+    });
+
+    it('Codex R4: configured secrets are redacted from diagnostic text, also outside URL syntax', () => {
+        const secrets = secretValues({ KEEPER_PRIVATE_KEY: KEY, TELEGRAM_BOT_TOKEN: '123456:ABCDEFtoken' }, 'https://u:pw-123456@rpc.example/v2/ALCHEMYKEY123?apikey=QUERYKEY999');
+        const text = `invalid API key ALCHEMYKEY123; key ${KEY.slice(2).toUpperCase()}; tg 123456:ABCDEFtoken; q=QUERYKEY999; auth pw-123456`;
+        const out = redactSecrets(text, secrets);
+        for (const leak of ['ALCHEMYKEY123', KEY.slice(2, 30), 'ABCDEFtoken', 'QUERYKEY999', 'pw-123456']) expect(out.toLowerCase()).not.toContain(leak.toLowerCase());
+        expect(out).toContain('invalid API key [redacted]');
+        expect(parseIntOption('--poll-interval', '86400', 30n, 1n, 86_400n)).toBe(86_400n);
+        expect(() => parseIntOption('--poll-interval', '86401', 30n, 1n, 86_400n)).toThrow(/at most 86400/);
     });
 });

@@ -15,11 +15,19 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import readline from 'readline';
+import { Writable } from 'stream';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
 import {
     MAINNET_NETWORKS, assertChainId, castChildEnv, castSendArgs, envFileConflicts, feeDecision, parseAddressOption,
-    parseGweiOption, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, safeChildError,
+    parseGweiOption, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
 } from './keeper/keeperGuards.js';
+
+/** Filled once the configuration is loaded: the values `scrub` removes from any log line or alert (Codex R4). */
+let knownSecrets: string[] = [];
+/** Diagnostic text for a log or Telegram: known secrets redacted, URLs reduced, length bounded. */
+function scrub(text: string, max = 300): string {
+    return safeChildError(redactSecrets(text, knownSecrets), max);
+}
 
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -75,21 +83,40 @@ function formatTs(ts: bigint): string {
     return new Date(Number(ts) * 1000).toISOString();
 }
 
+/**
+ * Read the keystore password from the terminal without echoing it (Codex R2). readline is given an output stream that
+ * is muted while the user types, so no typed or pasted byte is ever written; only the prompt and a newline are.
+ * End of input or Ctrl-C before Enter rejects (a refusal), instead of continuing with an empty or partial password.
+ */
 async function promptHidden(prompt: string): Promise<string> {
-    return await new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-        const onData = (char: Buffer) => {
-            const c = char.toString();
-            if (c === '\n' || c === '\r' || c === '\u0004') return;
-            readline.cursorTo(process.stdout, 0);
-            process.stdout.write(prompt);
-            process.stdout.write('*'.repeat((rl as any).line?.length || 0));
-        };
-        process.stdin.on('data', onData);
-        rl.question(prompt, (value) => {
-            process.stdin.off('data', onData);
-            rl.close();
+    let muted = false;
+    const output = new Writable({
+        write(chunk, _enc, cb) {
+            if (!muted) process.stdout.write(chunk);
+            cb();
+        },
+    });
+    return await new Promise((resolve, reject) => {
+        const rl = readline.createInterface({ input: process.stdin, output, terminal: true });
+        let answered = false;
+        const refuse = (why: string) => {
+            if (answered) return;
+            answered = true;
+            muted = false;
             process.stdout.write('\n');
+            rl.close();
+            reject(new KeeperStartupRefusal(`keystore password not entered (${why})`));
+        };
+        rl.on('SIGINT', () => refuse('Ctrl-C'));
+        rl.on('close', () => refuse('end of input'));
+        process.stdout.write(prompt);
+        muted = true;
+        rl.question('', (value) => {
+            if (value === '') return refuse('empty');
+            answered = true;
+            muted = false;
+            process.stdout.write('\n');
+            rl.close();
             resolve(value);
         });
     });
@@ -157,11 +184,11 @@ function usage(): string {
         '',
         '1) Private key mode (simplest):',
         '   - Set env: KEEPER_PRIVATE_KEY=0x... (required; PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are not read)',
-        '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet',
+        '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet --hard-max-fee-gwei <gwei>',
         '',
         '2) Cast mode (use Foundry keystore/account):',
-        '   - Run with keystore: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --keystore <path>',
-        '   - Or use cast account: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <name>',
+        '   - Run with keystore: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --keystore <path> --hard-max-fee-gwei <gwei>',
+        '   - Or use cast account: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <name> --hard-max-fee-gwei <gwei>',
         '',
         'Common flags:',
         '   --poll-interval <sec>       check interval (e.g. 180)',
@@ -195,7 +222,7 @@ function usage(): string {
 function shortUsage(): string {
     return [
         `help: pnpm exec tsx scripts/keeper.ts --help`,
-        `example: pnpm exec tsx scripts/keeper.ts --network op-mainnet --poll-interval 180 --safety-margin 600`,
+        `example: pnpm exec tsx scripts/keeper.ts --network op-mainnet --hard-max-fee-gwei <gwei> --poll-interval 180 --safety-margin 600`,
         `telegram: set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (bot ${TELEGRAM_BOT_USERNAME})`,
         `health: --health-interval 1800 (telegram periodic ok status)`,
         `anomaly: --external-ethusd-url <url> --volatility-threshold-bps 150 (1.50%)`
@@ -204,6 +231,14 @@ function shortUsage(): string {
 
 /** The `cast send` child in flight, if any. Shutdown terminates and awaits it before reporting "stopped". */
 let activeCast: { child: ReturnType<typeof spawn>; closed: Promise<void> } | null = null;
+/**
+ * Set synchronously by the first SIGINT / SIGTERM. Checked immediately before every signature (cast spawn, viem
+ * writeContract), after the last await, so nothing new is signed once shutdown has begun (Codex R1).
+ */
+let stopping = false;
+function assertNotStopping(): void {
+    if (stopping) throw new Error('shutting down: no new transaction is signed');
+}
 
 async function runCastSend(params: {
     rpcUrl: string;
@@ -221,6 +256,7 @@ async function runCastSend(params: {
     const killTimeoutMs = params.processTimeoutMs ?? 90_000;
 
     return await new Promise((resolve, reject) => {
+        assertNotStopping();
         // Only an allowlisted environment: no key, password or Telegram variable reaches the child (castChildEnv).
         const child = spawn(cmd, castArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: castChildEnv(process.env, params.rpcUrl) });
         const closed = new Promise<void>((r) => { child.once('close', () => r()); child.once('error', () => r()); });
@@ -251,7 +287,7 @@ async function runCastSend(params: {
             settled = true;
             clearTimeout(killTimer);
             const merged = `${out}\n${err}`.trim();
-            if (code !== 0) return reject(new Error(merged ? `cast send failed: ${safeChildError(merged)}` : `cast exited with code ${code}`));
+            if (code !== 0) return reject(new Error(merged ? `cast send failed: ${scrub(merged)}` : `cast exited with code ${code}`));
             const txMatch = merged.match(/transactionHash\s+([0x][0-9a-fA-F]{64})/);
             if (txMatch?.[1]) return resolve(txMatch[1]);
             const altMatch = merged.match(/(0x[0-9a-fA-F]{64})/);
@@ -269,7 +305,8 @@ async function main() {
     const mode: KeeperMode = parseKeeperMode(
         getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore') || getArgValue(args, '--cast-account')),
     );
-    const pollIntervalSec = parseIntOption('--poll-interval', getArgValue(args, '--poll-interval'), 30n, 1n);
+    // At most a day: a longer setTimeout delay overflows Node's 32-bit timer and fires at once (Codex R9).
+    const pollIntervalSec = parseIntOption('--poll-interval', getArgValue(args, '--poll-interval'), 30n, 1n, 86_400n);
     const safetyMarginSec = parseIntOption('--safety-margin', getArgValue(args, '--safety-margin'), 600n, 0n);
     const maxUpdatesPerDay = Number(parseIntOption('--max-updates-per-day', getArgValue(args, '--max-updates-per-day'), 24n, 0n));
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
@@ -356,6 +393,7 @@ async function main() {
             explorerUrl: ''
         } as any;
     }
+    knownSecrets = secretValues(process.env, config.rpcUrl);
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
 
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
@@ -506,6 +544,7 @@ async function main() {
     let lastChainlinkStaleAlertSec = 0n;
     let lastFeeCeilingAlertSec = 0n;
     let failedTicks = 0;
+    let currentTick: Promise<void> | null = null;
     let lastSuperHealthOk: boolean | null = null;
     let lastPaymasterHealthOk: boolean | null = null;
     const chainlinkDecimalsCache = new Map<string, number>();
@@ -567,8 +606,11 @@ async function main() {
     };
 
     const onExit = async (signal: string) => {
-        // A `cast send` in flight is terminated and awaited first, so "stopped" is not reported while it can still
-        // broadcast (KPR-008). SIGKILL after 5 s.
+        if (stopping) return;
+        // From here no new transaction is signed (assertNotStopping). A `cast send` in flight is terminated and awaited
+        // (SIGKILL after 5 s), then the running tick is allowed to finish (at most 15 s), so "stopped" is not reported
+        // while anything can still sign or broadcast (KPR-008, Codex R1).
+        stopping = true;
         const inFlight = activeCast;
         if (inFlight) {
             inFlight.child.kill('SIGTERM');
@@ -576,9 +618,22 @@ async function main() {
             await inFlight.closed;
             clearTimeout(forced);
         }
-        console.log(`stopped (${signal})${inFlight ? ': the cast send in flight was terminated first' : ''}`);
+        let tickSettled = true;
+        if (currentTick) {
+            let waited: ReturnType<typeof setTimeout> | undefined;
+            tickSettled = await Promise.race([
+                currentTick.then(() => true, () => true),
+                new Promise<boolean>((r) => { waited = setTimeout(() => r(false), 15_000); }),
+            ]);
+            clearTimeout(waited);
+        }
+        // "stopped" only once nothing can still be signing or broadcasting; otherwise say so plainly.
+        const status = tickSettled
+            ? `stopped (${signal})${inFlight ? ': the cast send in flight was terminated first' : ''}`
+            : `exited (${signal}) with a send in an unknown state: the tick did not finish within 15 s`;
+        console.log(status);
         await sendTelegramMessage(
-            `[keeper] stopped (${signal})\nnetwork=${network}\n` +
+            `[keeper] ${status}\nnetwork=${network}\n` +
                 `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
                 `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`
         );
@@ -644,12 +699,20 @@ async function main() {
     const fetchExternalEthUsd = async (): Promise<{ price: bigint; decimals: number } | null> => {
         if (!externalEthUsdUrl) return null;
         try {
+            // The 5 s deadline covers the body too, and the body is bounded: a slow or endless response cannot hold
+            // the tick (Codex R6).
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), 5000);
-            const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!res.ok) return null;
-            const json = await res.json();
+            let json: unknown;
+            try {
+                const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
+                if (!res.ok) return null;
+                const text = await res.text();
+                if (text.length > 65_536) return null;
+                json = JSON.parse(text);
+            } finally {
+                clearTimeout(t);
+            }
             const s = extractPriceString(json);
             if (!s) return null;
             const decimals = 8;
@@ -692,7 +755,8 @@ async function main() {
         // refreshed (KPR-016). With no read, refreshSuper does nothing (its zero defaults would read as "cache empty").
         const tickErrors: string[] = [];
         let superRead: { chainlinkUpdatedAt: bigint; superAnswer: bigint; cachedUpdatedAt: bigint; thresholdSec: bigint } | null = null;
-        try {
+        // A disabled SuperPaymaster is not read, so its failures cannot fail the tick (Codex R16).
+        if (!disableSuperPaymaster) try {
             const chainlink = await publicClient.readContract({
                 address: priceFeed,
                 abi: CHAINLINK_ABI,
@@ -715,7 +779,7 @@ async function main() {
                 cachedUpdatedAt: cache[1] as bigint, thresholdSec: threshold as bigint,
             };
         } catch (e: any) {
-            tickErrors.push(`superPaymaster reads: ${safeChildError(e?.message || String(e), 2000)}`);
+            tickErrors.push(`superPaymaster reads: ${scrub(e?.message || String(e), 2000)}`);
         }
         const chainlinkUpdatedAt = superRead?.chainlinkUpdatedAt ?? 0n;
         const cachedUpdatedAt = superRead?.cachedUpdatedAt ?? 0n;
@@ -740,7 +804,8 @@ async function main() {
             );
         }
 
-        if (volatilityThresholdBps > 0n && externalEthUsdUrl) {
+        // Market monitoring is advisory: its failure is logged and never stops either refresh (Codex R7).
+        if (volatilityThresholdBps > 0n && externalEthUsdUrl) try {
             const ext = await fetchExternalEthUsd();
             if (ext) {
                 if (lastExternalEthUsd !== null) {
@@ -781,6 +846,8 @@ async function main() {
 
                 lastExternalEthUsd = ext.price;
             }
+        } catch (e: any) {
+            console.warn(`market monitoring failed this tick: ${scrub(e?.message || String(e))}`);
         }
 
         const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
@@ -791,6 +858,7 @@ async function main() {
                 if (servedChain !== config.chain.id) {
                     throw new Error(`before cast send: the RPC serves chain ${servedChain}, expected ${config.chain.id}; nothing was signed`);
                 }
+                assertNotStopping();
                 return await runCastSend({
                     rpcUrl: config.rpcUrl,
                     chainId: config.chain.id,
@@ -804,6 +872,7 @@ async function main() {
             }
             if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY');
             const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
+            assertNotStopping();
             return await walletClient.writeContract({
                 address: target,
                 abi,
@@ -1068,11 +1137,13 @@ async function main() {
     };
 
     for (;;) {
+        if (stopping) break;
         try {
-            await tick();
+            currentTick = tick();
+            await currentTick;
         } catch (e: any) {
             failedTicks += 1;
-            const msg = safeChildError(e?.message || String(e), 1000);
+            const msg = scrub(e?.message || String(e), 1000);
             console.error(`[${new Date().toISOString()}] error: ${msg}`);
             try {
                 await sendTelegramMessage(`[keeper] error\nnetwork=${network}\nmsg=${msg}`);
@@ -1097,8 +1168,9 @@ main().catch(async (e) => {
         process.exit(1);
     }
     try {
-        await sendTelegramMessage(`[keeper] fatal\nmsg=${safeChildError(e?.message || String(e), 1000)}`);
+        await sendTelegramMessage(`[keeper] fatal\nmsg=${scrub(e?.message || String(e), 1000)}`);
     } catch {}
-    console.error(e);
+    // Never the raw error object: a transport error carries the RPC URL and request context (Codex R4).
+    console.error(`fatal: ${scrub(e?.message || String(e), 1000)}`);
     process.exit(1);
 });

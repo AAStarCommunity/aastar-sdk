@@ -49,25 +49,27 @@ From the monorepo root:
 
 ```bash
 pnpm keeper:op-sepolia
-pnpm keeper:op-mainnet
+pnpm keeper:op-mainnet -- --hard-max-fee-gwei <gwei>
 ```
+
+`<gwei>` is the fee ceiling you choose for OP Mainnet (see `--hard-max-fee-gwei` below); a live mainnet run refuses without it.
 
 One-shot mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --once
+pnpm keeper:op-mainnet -- --once --hard-max-fee-gwei <gwei>
 ```
 
 Cast (keystore) mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --mode cast --keystore /path/to/keystore.json
+pnpm keeper:op-mainnet -- --mode cast --keystore /path/to/keystore.json --hard-max-fee-gwei <gwei>
 ```
 
 Cast (named account) mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --mode cast --cast-account keeper
+pnpm keeper:op-mainnet -- --mode cast --cast-account keeper --hard-max-fee-gwei <gwei>
 ```
 
 Replace `keeper` with the name of the keeper's own Foundry account. Do not use the deployer's account or any account that holds a protocol privilege (owner, admin, guardian, timelock role): the keeper signs every price update with it.
@@ -83,7 +85,7 @@ In cast mode (non-dry-run), the keeper asks once for the keystore password, on a
 Private-key mode:
 
 ```bash
-pnpm keeper:op-mainnet -- --mode privateKey
+pnpm keeper:op-mainnet -- --mode privateKey --hard-max-fee-gwei <gwei>
 ```
 
 ## Required ENV
@@ -134,6 +136,10 @@ Every value is checked locally before the first request: numbers must be whole n
 
 ## Known Limitations
 
-- `maxUpdatesPerDay` is counted in memory: it restarts at 0 when the keeper restarts, and two keeper processes on the same signer each have their own count. A send that fails after the transaction was broadcast is not counted, so the next tick can send one more `updatePrice()`. The signer does not change, and once the price is fresh on chain the keeper does not send again. A persisted journal and a single-instance lock are part of the #446/#447 sender (FU-114).
-- In cast mode the password is written to a `0600` file in a fresh temporary directory, removed on a normal exit or SIGINT / SIGTERM. After SIGKILL or a crash the file stays (FU-114).
+- `maxUpdatesPerDay` is counted in memory: it restarts at 0 when the keeper restarts, and two keeper processes on the same signer each have their own count. A send that fails after the transaction was broadcast is not counted. This can repeat on every tick for as long as broadcasts succeed but their responses are lost and the cached price stays stale, so the number of uncounted transactions is not bounded by the keeper. The signer does not change, and once a price update lands on chain the keeper stops sending. A persisted journal and a single-instance lock are part of the #446/#447 sender (FU-114).
+- `--hard-max-fee-gwei` bounds the fee per gas, not the gas used: there is no gas-limit or per-transaction cost ceiling, so it is not a total-spend limit.
+- Each target's confirmation is awaited in the tick (up to about 10 minutes for a receipt and 10 more for the state), so a slow SuperPaymaster confirmation delays the PaymasterV4 decision by as much, and that decision uses the time read at the start of the tick.
+- On SIGINT / SIGTERM nothing new is signed; a cast send in flight is terminated and the running tick gets up to 15 s to finish. If it does not, the keeper exits saying a send is in an unknown state instead of "stopped".
+- In cast mode the password is written to a `0600` file in a fresh temporary directory, removed on a normal exit or SIGINT / SIGTERM. After SIGKILL or a crash the file stays, and a signal that arrives while the file is being written, before the shutdown handlers are installed, can leave it too (FU-114).
+- The password prompt does not echo what is typed or pasted. End of input, Ctrl-C or an empty answer refuses to start.
 - The test guard `scripts/keeper/no-egress.preload.mjs` is a guard on the test process tree, not OS-level isolation (FU-112 ②).

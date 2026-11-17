@@ -287,6 +287,9 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['a key pasted after --paymaster', ['--paymaster', DEPLOYERISH], /--paymaster is not a valid address \(the value is not shown\)/],
         ['a non-numeric --max-updates-per-day (NaN used to disable the daily cap)', ['--max-updates-per-day', 'abc'], /must be a whole number/],
         ['live cast mode without a terminal (unattended cast is not supported, FU-114)', ['--cast-account', 'keeper'], /cast mode needs an interactive terminal/],
+        ['a key pasted after --keystore (Codex R5)', ['--keystore', DEPLOYERISH], /--keystore looks like a private key/],
+        ['a key without 0x pasted after --cast-account (Codex R5)', ['--cast-account', DEPLOYERISH.slice(2)], /--cast-account looks like a private key/],
+        ['a --poll-interval that would overflow the timer (Codex R9)', ['--poll-interval', '2147484'], /--poll-interval must be at most 86400/],
     ])('%s: exit 1, refused, zero RPC requests, zero egress', async (_name, extra, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         const r = await keeper(['--network', 'sepolia', '--once', ...(extra as string[])], {

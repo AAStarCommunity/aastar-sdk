@@ -30,3 +30,30 @@ knowing keeps its original level.
 | KPR-020 | Medium | Medium | (i) | Receipt discarded; a reverted tx was logged as confirmed | Only `status: success` counts; reverted is logged, alerted and fails the tick |
 
 Not counted as a finding, also changed: an invalid `TELEGRAM_CHAT_ID` is no longer echoed in its refusal.
+
+## Codex gate on the round-1 fix (99766d3e), and its dispositions
+
+Codex CLI (Tier 1, not the author of the change), read-only, diff 6c240b42..99766d3e. 95,521 tokens. Raw output kept
+locally. Each finding checked against the code; same classes as above. DSR 2026-11-17: the two new Highs are fixed in
+this round; one more Codex pass on this fix's diff only; Medium and below are written down rather than reopening a round.
+
+| ID | Codex | Class | Disposition |
+|---|---|---|---|
+| R1 | High | (i) | Real: shutdown killed the cast in flight but the tick went on and could sign the other target. Now a stop flag is set synchronously, checked right before every cast spawn and viem `writeContract`; shutdown waits up to 15 s for the tick, and says "unknown state" instead of "stopped" if it does not finish. Tests on both paths |
+| R2 | High | (i) | Real, older than this change, made mandatory by it: the readline prompt wrote the typed password before masking it. Now the readline output is muted while typing; EOF, Ctrl-C and an empty answer refuse. pty tests for pasted and byte-by-byte input |
+| R3 | High | (ii) | FU-111 / KPR-001, to #447 |
+| R4 | Medium | (i) | The fatal path printed the raw error object. Now every diagnostic goes through `scrub`: configured secrets (keeper key, Telegram token, RPC URL and its credential-like parts) redacted, URLs reduced, length bounded |
+| R5 | Medium | (i) | A key-shaped value (64 hex, with or without 0x) in `--keystore` / `--cast-account` refuses, unechoed. Logging other signer argument values is FU-113 ① |
+| R6 | Medium | (i) | The external price fetch deadline now covers the body; the body is capped at 64 KiB |
+| R7 | Medium | (i) | Market monitoring failures are logged and no longer stop the refreshes |
+| R8 | Medium | not fixed | A long SuperPaymaster confirmation delays the V4 decision; documented under Known Limitations (rescheduling confirmations is not a small change) |
+| R9 | Medium | (i) | `--poll-interval` at most 86400 (a larger delay overflows Node's timer) |
+| R10 | Medium | (i) | The send tests recover the signer from the broadcast bytes, with decoy deployer keys in the env |
+| R11 | Medium | (ii) | KPR-013 / FU-113 ② (dry-run full-scenario test), not in this round |
+| R12 | Medium | (ii) | FU-114. The guide no longer says "one more": the uncounted sends are not bounded by the keeper |
+| R13 | Medium | not fixed | Per-gas ceiling only, no gas-limit or total-cost ceiling; documented. A spend ceiling belongs with FU-114 |
+| R14 | Medium | split | Prompt EOF / Ctrl-C now refuse (with R2). The temp-file window before the handlers are installed: FU-114, documented |
+| R15 | Medium | (ii) | FU-112 ② |
+| R16 | Low | (i) | A disabled SuperPaymaster is not read |
+| R17 | Low | (ii) | KPR-017, documented |
+| R18 | Low | (i) | Every mainnet example and the built-in usage text now pass `--hard-max-fee-gwei` |
