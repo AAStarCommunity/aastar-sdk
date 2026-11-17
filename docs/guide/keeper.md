@@ -79,8 +79,8 @@ The keeper loads `.env.<network>` from the current working directory.
 
 Optional:
 
-- `KEEPER_PRIVATE_KEY` (privateKey mode)
-- `PRIVATE_KEY_SUPPLIER` (fallback for privateKey mode)
+- `KEEPER_PRIVATE_KEY` (privateKey mode; required unless `--dry-run`). There is no fallback: `PRIVATE_KEY_SUPPLIER` and
+  `PRIVATE_KEY` in `.env.<network>` are not read, because on Sepolia they are the deployer EOA.
 - `CAST_KEYSTORE_PASSWORD` (cast mode; otherwise it prompts)
 - `DEPLOYER_ACCOUNT` (cast mode default account name for `--cast-account`)
 - `OFFICIAL_OPERATOR` (used to derive official Paymaster from the factory when no canonical instance exists)

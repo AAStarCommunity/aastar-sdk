@@ -3,6 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { anvil, mainnet, optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
+import { keeperKeyFrom, keeperKeyProblem } from './keeper/keeperKey.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -147,7 +148,7 @@ function usage(): string {
         'Keeper quickstart:',
         '',
         '1) Private key mode (simplest):',
-        '   - Set env: KEEPER_PRIVATE_KEY=0x... (or PRIVATE_KEY_SUPPLIER=0x...)',
+        '   - Set env: KEEPER_PRIVATE_KEY=0x... (required; PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are not read)',
         '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet',
         '',
         '2) Cast mode (use Foundry keystore/account):',
@@ -293,6 +294,11 @@ async function main() {
             dotenv.config({ path: fullPath });
         }
     }
+    // Signing key: KEEPER_PRIVATE_KEY only, checked here (after the env files, before any network read).
+    // Resolved once, here; the wallet below uses this same value (one source, no second lookup).
+    const keeperKey = keeperKeyFrom(process.env);
+    const keyProblem = keeperKeyProblem({ mode, dryRun, key: keeperKey });
+    if (keyProblem) throw new Error(keyProblem);
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
@@ -449,7 +455,6 @@ async function main() {
         }
     }
 
-    const keeperKey = (process.env.KEEPER_PRIVATE_KEY || process.env.PRIVATE_KEY_SUPPLIER) as `0x${string}` | undefined;
     const keeperAccount = keeperKey ? privateKeyToAccount(keeperKey) : null;
     const walletClient = keeperAccount
         ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
@@ -734,7 +739,7 @@ async function main() {
                     processTimeoutMs: 90_000
                 });
             }
-            if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY or PRIVATE_KEY_SUPPLIER');
+            if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY');
             const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
             return await walletClient.writeContract({
                 address: target,

@@ -20,7 +20,7 @@ const dir = mkdtempSync(join(tmpdir(), 'run-keeper-'));
 const bin = join(dir, 'bin');
 mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
-writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\n');
+writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\nprintf "KEY_SET=%s\\n" "${KEEPER_PRIVATE_KEY:+yes}"\n');
 chmodSync(join(bin, 'pnpm'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
@@ -30,8 +30,10 @@ function run(args: string[], key = 'dummy-not-a-key') {
         encoding: 'utf8',
         env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_PRIVATE_KEY: key },
     });
-    const argv = r.stdout.split('\n').filter((l) => l && !l.startsWith('keeper: '));
-    return { status: r.status, stderr: r.stderr, argv };
+    const lines = r.stdout.split('\n');
+    const argv = lines.filter((l) => l && !l.startsWith('keeper: ') && !l.startsWith('KEY_SET='));
+    const keySet = lines.find((l) => l.startsWith('KEY_SET='))?.slice('KEY_SET='.length);
+    return { status: r.status, stderr: r.stderr, stdout: r.stdout, argv, keySet };
 }
 
 /** Every value passed for `flag`, in order. */
@@ -74,6 +76,28 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         expect(r.argv.slice(0, 5)).toEqual(['exec', 'tsx', 'scripts/keeper.ts', '--network', 'op-mainnet']);
         expect(valuesOf(r.argv, '--paymaster')).toEqual([]);
         expect(valuesOf(r.argv, '--superpaymaster')).toEqual([]);
+    });
+
+    it('never falls back to PRIVATE_KEY in .env.<network> (the deployer on Sepolia)', () => {
+        // anvil account #0: a public test key standing in for the deployer's.
+        const deployerish = 'ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+        writeFileSync(join(dir, '.env.sepolia'), `PRIVATE_KEY=0x${deployerish}\nPRIVATE_KEY_SUPPLIER=0x${deployerish}\n`);
+        try {
+            const refused = run(['sepolia', '--once'], '');
+            expect(refused.status).toBe(1);
+            expect(refused.stderr).toMatch(/export KEEPER_PRIVATE_KEY/);
+            expect(refused.argv).toEqual([]); // keeper.ts never started
+            expect(`${refused.stdout}${refused.stderr}`).not.toContain(deployerish);
+            // A dry run starts, and still without a key in the child's environment.
+            const dry = run(['sepolia', '--once', '--dry-run'], '');
+            expect(dry.status).toBe(0);
+            expect(dry.argv.slice(0, 3)).toEqual(['exec', 'tsx', 'scripts/keeper.ts']);
+            expect(dry.keySet).toBe('');
+            // An explicit KEEPER_PRIVATE_KEY is the only way in.
+            expect(run(['sepolia', '--once']).keySet).toBe('yes');
+        } finally {
+            rmSync(join(dir, '.env.sepolia'), { force: true });
+        }
     });
 
     it('no key: refuses unless --dry-run is passed exactly', () => {
