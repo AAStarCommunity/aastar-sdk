@@ -130,4 +130,15 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
         const mainFlags = mainArgv.filter((a) => a.startsWith('--'));
         expect(new Set(mainFlags).size).toBe(mainFlags.length);
     });
+
+    it('run-keeper-main.sh refuses a caller --network / --mode / --cast-account / --keystore with a clear message', () => {
+        for (const extra of [['--mode', 'cast'], ['--cast-account', 'keeper'], ['--network', 'op-mainnet'], ['--keystore', '/k.json']]) {
+            const r = spawnSync('bash', [join(dir, 'run-keeper-main.sh'), ...extra, '--dry-run'], {
+                cwd: dir, encoding: 'utf8', env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_CAST_ACCOUNT: 'keeper' },
+            });
+            expect(r.status, extra[0]).toBe(1);
+            expect(r.stderr).toContain(`do not pass ${extra[0]}`);
+            expect(r.stdout).toBe(''); // keeper.ts never started
+        }
+    });
 });

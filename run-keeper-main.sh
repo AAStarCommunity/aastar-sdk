@@ -8,6 +8,13 @@ if [ -z "${KEEPER_CAST_ACCOUNT:-}" ]; then
 fi
 # keeper.ts refuses a repeated flag, so a default is added only when the caller did not pass it.
 has_arg() { local want="$1" a; shift; for a in "$@"; do [ "$a" = "$want" ] && return 0; done; return 1; }
+# This launcher fixes the network, the mode and the account; passing them again would be a repeated flag.
+for fixed in --network --mode --cast-account --keystore; do
+  if has_arg "$fixed" "$@"; then
+    echo "error: run-keeper-main.sh sets --network op-mainnet --mode cast and the account from KEEPER_CAST_ACCOUNT itself; do not pass $fixed" >&2
+    exit 1
+  fi
+done
 ARGS=()
 add_default() { has_arg "$1" "${@:3}" || ARGS+=("$1" "$2"); }
 add_default --external-ethusd-url "https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT" "$@"
