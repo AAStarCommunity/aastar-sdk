@@ -21,7 +21,7 @@ const bin = join(dir, 'bin');
 mkdirSync(bin);
 copyFileSync(join(process.cwd(), 'run-keeper.sh'), join(dir, 'run-keeper.sh'));
 copyFileSync(join(process.cwd(), 'run-keeper-main.sh'), join(dir, 'run-keeper-main.sh'));
-writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\nprintf "KEY_SET=%s\\n" "${KEEPER_PRIVATE_KEY:+yes}"\n');
+writeFileSync(join(bin, 'pnpm'), '#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done\nprintf "KEY_SET=%s\\n" "${KEEPER_PRIVATE_KEY:+yes}"\nprintf "PNPM_PID=%s\\n" "$$"\n');
 chmodSync(join(bin, 'pnpm'), 0o755);
 afterAll(() => rmSync(dir, { recursive: true, force: true }), 30_000);
 
@@ -32,7 +32,7 @@ function run(args: string[], key = 'dummy-not-a-key') {
         env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_PRIVATE_KEY: key },
     });
     const lines = r.stdout.split('\n');
-    const argv = lines.filter((l) => l && !l.startsWith('keeper: ') && !l.startsWith('KEY_SET='));
+    const argv = lines.filter((l) => l && !l.startsWith('keeper: ') && !l.startsWith('KEY_SET=') && !l.startsWith('PNPM_PID='));
     const keySet = lines.find((l) => l.startsWith('KEY_SET='))?.slice('KEY_SET='.length);
     return { status: r.status, stderr: r.stderr, stdout: r.stdout, argv, keySet };
 }
@@ -140,5 +140,28 @@ describe('run-keeper.sh argument assembly', { timeout: SPAWN_VERDICT_TIMEOUT_MS 
             expect(r.stderr).toContain(`do not pass ${extra[0]}`);
             expect(r.stdout).toBe(''); // keeper.ts never started
         }
+    });
+
+    it('both launchers exec keeper.ts, so a signal reaches it rather than an intermediate shell (KPR-008)', () => {
+        const pidOf = (out: string) => Number(out.split('\n').find((l) => l.startsWith('PNPM_PID='))?.slice('PNPM_PID='.length));
+        const main = spawnSync('bash', [join(dir, 'run-keeper-main.sh'), '--dry-run'], {
+            cwd: dir, encoding: 'utf8', env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir, KEEPER_CAST_ACCOUNT: 'keeper' },
+        });
+        expect(main.status).toBe(0);
+        expect(pidOf(main.stdout)).toBe(main.pid);
+        const sepolia = spawnSync('bash', [join(dir, 'run-keeper.sh'), 'sepolia', '--dry-run'], {
+            cwd: dir, encoding: 'utf8', env: { PATH: `${bin}:${process.env.PATH}`, HOME: dir },
+        });
+        expect(sepolia.status).toBe(0);
+        expect(pidOf(sepolia.stdout)).toBe(sepolia.pid);
+    });
+
+    it('an unknown network (for example a key pasted first) refuses without being printed (KDR-012)', () => {
+        const key = '59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
+        const r = run([`0x${key}`, '--dry-run']);
+        expect(r.status).toBe(1);
+        expect(r.stderr).toMatch(/unknown network .*the value is not shown/);
+        expect(`${r.stdout}${r.stderr}`).not.toContain(key);
+        expect(r.argv).toEqual([]); // keeper.ts never started
     });
 });

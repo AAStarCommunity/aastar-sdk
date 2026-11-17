@@ -15,15 +15,36 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import readline from 'readline';
+import { Writable } from 'stream';
 import { PaymasterTracker, describeUnresolved, paymasterTickStep } from './keeper/paymasterResolver.js';
+import {
+    MAINNET_NETWORKS, assertChainId, castChildEnv, castSendArgs, envFileConflicts, feeDecision, parseAddressOption,
+    ambientOverrides, parseGweiOption, parseIntOption, parseNetwork, receiptOutcome, redactRpcUrl, redactSecrets, safeChildError, secretValues,
+} from './keeper/keeperGuards.js';
+
+/** Filled once the configuration is loaded: the values `scrub` removes from any log line or alert (Codex R4). */
+let knownSecrets: string[] = [];
+/** Diagnostic text for a log or Telegram: known secrets redacted, URLs reduced, length bounded. */
+function scrub(text: string, max = 300): string {
+    return safeChildError(redactSecrets(text, knownSecrets), max);
+}
 
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const TELEGRAM_BOT_USERNAME = '@AAstarMonitorBot' as const;
 
+/** Set by main() once the shutdown path exists; a broken stdout/stderr pipe goes through it too (KDR-002). */
+let shutdownHook: ((reason: string) => void) | null = null;
 function installPipeSafety(): void {
+    let broken = false;
     const handle = (e: any) => {
-        if (e?.code === 'EPIPE') process.exit(0);
+        if (e?.code !== 'EPIPE' || broken) return;
+        broken = true;
+        // Nothing can be logged any more: silence the console so the shutdown path does not write to the dead pipe.
+        const mute = () => undefined;
+        console.log = mute; console.warn = mute; console.error = mute; console.info = mute;
+        if (shutdownHook) shutdownHook('EPIPE');
+        else process.exit(1);
     };
     (process.stdout as any)?.on?.('error', handle);
     (process.stderr as any)?.on?.('error', handle);
@@ -71,21 +92,40 @@ function formatTs(ts: bigint): string {
     return new Date(Number(ts) * 1000).toISOString();
 }
 
+/**
+ * Read the keystore password from the terminal without echoing it (Codex R2). readline is given an output stream that
+ * is muted while the user types, so no typed or pasted byte is ever written; only the prompt and a newline are.
+ * End of input or Ctrl-C before Enter rejects (a refusal), instead of continuing with an empty or partial password.
+ */
 async function promptHidden(prompt: string): Promise<string> {
-    return await new Promise((resolve) => {
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-        const onData = (char: Buffer) => {
-            const c = char.toString();
-            if (c === '\n' || c === '\r' || c === '\u0004') return;
-            readline.cursorTo(process.stdout, 0);
-            process.stdout.write(prompt);
-            process.stdout.write('*'.repeat((rl as any).line?.length || 0));
-        };
-        process.stdin.on('data', onData);
-        rl.question(prompt, (value) => {
-            process.stdin.off('data', onData);
-            rl.close();
+    let muted = false;
+    const output = new Writable({
+        write(chunk, _enc, cb) {
+            if (!muted) process.stdout.write(chunk);
+            cb();
+        },
+    });
+    return await new Promise((resolve, reject) => {
+        const rl = readline.createInterface({ input: process.stdin, output, terminal: true });
+        let answered = false;
+        const refuse = (why: string) => {
+            if (answered) return;
+            answered = true;
+            muted = false;
             process.stdout.write('\n');
+            rl.close();
+            reject(new KeeperStartupRefusal(`keystore password not entered (${why})`));
+        };
+        rl.on('SIGINT', () => refuse('Ctrl-C'));
+        rl.on('close', () => refuse('end of input'));
+        process.stdout.write(prompt);
+        muted = true;
+        rl.question('', (value) => {
+            if (value === '') return refuse('empty');
+            answered = true;
+            muted = false;
+            process.stdout.write('\n');
+            rl.close();
             resolve(value);
         });
     });
@@ -105,7 +145,7 @@ async function sendTelegramMessage(text: string): Promise<void> {
         );
     } catch (e: any) {
         const msg = e?.response?.data?.description || e?.message || String(e);
-        console.warn(`[telegram] sendMessage failed: ${msg}`);
+        console.warn(`[telegram] sendMessage failed: ${scrub(String(msg))}`);
     }
 }
 
@@ -125,7 +165,7 @@ function assertTelegramConfigValid(): void {
     const ok = /^-?\d+$/.test(chatId) || chatId.startsWith('@');
     if (!ok) {
         throw new Error(
-            `Telegram config invalid: TELEGRAM_CHAT_ID must be a numeric chat id (e.g. 123456789 or -100123...) or start with @ (e.g. @MyChannel). Got: ${chatId}`
+            'Telegram config invalid: TELEGRAM_CHAT_ID must be a numeric chat id (e.g. 123456789 or -100123...) or start with @ (e.g. @MyChannel); the value is not shown'
         );
     }
 }
@@ -153,11 +193,11 @@ function usage(): string {
         '',
         '1) Private key mode (simplest):',
         '   - Set env: KEEPER_PRIVATE_KEY=0x... (required; PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are not read)',
-        '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet',
+        '   - Run: pnpm exec tsx scripts/keeper.ts --network op-mainnet --hard-max-fee-gwei <gwei>',
         '',
         '2) Cast mode (use Foundry keystore/account):',
-        '   - Run with keystore: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --keystore <path>',
-        '   - Or use cast account: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <name>',
+        '   - Run with keystore: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --keystore <path> --hard-max-fee-gwei <gwei>',
+        '   - Or use cast account: pnpm exec tsx scripts/keeper.ts --network op-mainnet --mode cast --cast-account <name> --hard-max-fee-gwei <gwei>',
         '',
         'Common flags:',
         '   --poll-interval <sec>       check interval (e.g. 180)',
@@ -168,6 +208,7 @@ function usage(): string {
         '   --no-paymaster              disable PaymasterV4 updates',
         '   --max-updates-per-day <n>   per-target limit (default 24)',
         '   --max-base-fee-gwei <n>     skip updates if base fee too high',
+        '   --hard-max-fee-gwei <n>     absolute fee ceiling, also the tx max fee (required live on op-mainnet / mainnet)',
         '',
         'Telegram notifications (optional):',
         '   - Set env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID',
@@ -190,38 +231,70 @@ function usage(): string {
 function shortUsage(): string {
     return [
         `help: pnpm exec tsx scripts/keeper.ts --help`,
-        `example: pnpm exec tsx scripts/keeper.ts --network op-mainnet --poll-interval 180 --safety-margin 600`,
+        `example: pnpm exec tsx scripts/keeper.ts --network op-mainnet --hard-max-fee-gwei <gwei> --poll-interval 180 --safety-margin 600`,
         `telegram: set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID (bot ${TELEGRAM_BOT_USERNAME})`,
         `health: --health-interval 1800 (telegram periodic ok status)`,
         `anomaly: --external-ethusd-url <url> --volatility-threshold-bps 150 (1.50%)`
     ].join('\n');
 }
 
+/** The `cast send` child in flight, if any. Shutdown terminates and awaits it before reporting "stopped". */
+let activeCast: { child: ReturnType<typeof spawn>; closed: Promise<void> } | null = null;
+/**
+ * Set synchronously by the first SIGINT / SIGTERM. Checked immediately before every signature (cast spawn, viem
+ * writeContract), after the last await, so nothing new is signed once shutdown has begun (Codex R1).
+ */
+let stopping = false;
+/**
+ * Sends that had passed the stop check and then ended in an error during shutdown (a cast we terminated, an RPC
+ * request that timed out): whether they reached the network is unknown, so the exit must not say "stopped".
+ */
+let sendsInterruptedByShutdown = 0;
+/** Thrown by the stop check: the send it refuses was never signed, so it is not an unknown send state. */
+class ShutdownRefusal extends Error {}
+const isShutdownRefusal = (e: unknown): boolean => {
+    // viem wraps errors thrown inside signTransaction; walk the cause chain.
+    for (let x: any = e, i = 0; x && i < 10; x = x.cause, i++) if (x instanceof ShutdownRefusal) return true;
+    return false;
+};
+/** Sends that were already signed when the signal came and then returned a hash: reported, never hidden. */
+const sendsCompletedDuringShutdown: string[] = [];
+async function trackSend<T>(send: () => Promise<T>): Promise<T> {
+    try {
+        const r = await send();
+        if (stopping) sendsCompletedDuringShutdown.push(String(r || 'hash not parsed'));
+        return r;
+    } catch (e) {
+        if (stopping && !isShutdownRefusal(e)) sendsInterruptedByShutdown += 1;
+        throw e;
+    }
+}
+function assertNotStopping(): void {
+    if (stopping) throw new ShutdownRefusal('shutting down: no new transaction is signed');
+}
+
 async function runCastSend(params: {
     rpcUrl: string;
+    chainId: number;
     target: `0x${string}`;
     /** From castSignerArgs(signer) at startup: the only source of --keystore / --account. */
     signerArgs: string[];
     passwordFilePath: string;
     gasPriceWei?: bigint;   // explicit gas-price to avoid cast hanging on estimation
+    maxFeeWei?: bigint;     // --hard-max-fee-gwei: sent as the max fee per gas
     processTimeoutMs?: number; // hard kill timeout (default 90s)
 }): Promise<string> {
     const cmd = 'cast';
-    const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
-
-    castArgs.push(...params.signerArgs);
-
-    // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
-    if (params.gasPriceWei && params.gasPriceWei > 0n) {
-        castArgs.push('--gas-price', params.gasPriceWei.toString());
-    }
-
-    castArgs.push('--password-file', params.passwordFilePath, params.target, 'updatePrice()');
-
+    const castArgs = castSendArgs(params);
     const killTimeoutMs = params.processTimeoutMs ?? 90_000;
 
     return await new Promise((resolve, reject) => {
-        const child = spawn(cmd, castArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+        assertNotStopping();
+        // Only an allowlisted environment: no key, password or Telegram variable reaches the child (castChildEnv).
+        const child = spawn(cmd, castArgs, { stdio: ['ignore', 'pipe', 'pipe'], env: castChildEnv(process.env, params.rpcUrl) });
+        const closed = new Promise<void>((r) => { child.once('close', () => r()); child.once('error', () => r()); });
+        activeCast = { child, closed };
+        void closed.then(() => { if (activeCast?.child === child) activeCast = null; });
         let out = '';
         let err = '';
         let settled = false;
@@ -247,12 +320,13 @@ async function runCastSend(params: {
             settled = true;
             clearTimeout(killTimer);
             const merged = `${out}\n${err}`.trim();
-            if (code !== 0) return reject(new Error(merged || `cast exited with code ${code}`));
+            if (code !== 0) return reject(new Error(merged ? `cast send failed: ${scrub(merged)}` : `cast exited with code ${code}`));
             const txMatch = merged.match(/transactionHash\s+([0x][0-9a-fA-F]{64})/);
             if (txMatch?.[1]) return resolve(txMatch[1]);
             const altMatch = merged.match(/(0x[0-9a-fA-F]{64})/);
             if (altMatch?.[1]) return resolve(altMatch[1]);
-            return resolve('');
+            // Exit 0 without a hash: whether anything was broadcast is unknown, never "updated" (KDR-008).
+            return reject(new Error('cast send exited 0 but printed no transaction hash; the send state is unknown'));
         });
     });
 }
@@ -260,17 +334,18 @@ async function runCastSend(params: {
 async function main() {
     installPipeSafety();
     const args = parseKeeperArgs(process.argv.slice(2).filter((a) => a !== '--'));
-    const network = (getArgValue(args, '--network') || 'op-sepolia') as NetworkName;
-    const mode: KeeperMode = parseKeeperMode(getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore')));
-    const pollIntervalSec = BigInt(getArgValue(args, '--poll-interval') || '30');
-    const safetyMarginSec = BigInt(getArgValue(args, '--safety-margin') || '600');
-    const maxUpdatesPerDay = Number(getArgValue(args, '--max-updates-per-day') || '24');
+    // Every value is checked here, locally, with a fixed message that never echoes it (KPR-009/012, FU-113 ①).
+    const network: NetworkName = parseNetwork(getArgValue(args, '--network'));
+    const mode: KeeperMode = parseKeeperMode(
+        getArgValue(args, '--mode'), Boolean(getArgValue(args, '--keystore') || getArgValue(args, '--cast-account')),
+    );
+    // At most a day: a longer setTimeout delay overflows Node's 32-bit timer and fires at once (Codex R9).
+    const pollIntervalSec = parseIntOption('--poll-interval', getArgValue(args, '--poll-interval'), 30n, 1n, 86_400n);
+    const safetyMarginSec = parseIntOption('--safety-margin', getArgValue(args, '--safety-margin'), 600n, 0n);
+    const maxUpdatesPerDay = Number(parseIntOption('--max-updates-per-day', getArgValue(args, '--max-updates-per-day'), 24n, 0n));
     const maxBaseFeeGwei = getArgValue(args, '--max-base-fee-gwei');
-    const healthIntervalSec = BigInt(getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC || '1800');
-    const volatilityThresholdBps = BigInt(getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS || '0');
-    const volatilityCooldownSec = BigInt(getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC || '600');
-    const chainlinkStaleSec = BigInt(getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC || '600');
-    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
+    const maxBaseFeeWei = parseGweiOption('--max-base-fee-gwei', maxBaseFeeGwei);
+    const hardMaxFeeWei = parseGweiOption('--hard-max-fee-gwei', getArgValue(args, '--hard-max-fee-gwei'));
     const dryRun = hasFlag(args, '--dry-run');
     const once = hasFlag(args, '--once');
     const printLogo = hasFlag(args, '--logo') || !hasFlag(args, '--no-logo');
@@ -286,26 +361,55 @@ async function main() {
 
     const envFiles: string[] =
         network === 'op-mainnet' ? ['.env.optimism', '.env.op-mainnet'] : [`.env.${network}`];
-    for (const envFile of envFiles) {
-        const fullPath = path.resolve(process.cwd(), envFile);
-        if (fs.existsSync(fullPath)) {
-            dotenv.config({ path: fullPath });
-        }
+    const present = envFiles.map((f) => path.resolve(process.cwd(), f)).filter((p) => fs.existsSync(p));
+    // dotenv keeps the first value it loads: with two files, a variable set differently in both would silently come
+    // from the legacy one. Refuse instead, naming the variables only (KPR-003).
+    const conflicts = envFileConflicts(present.map((p) => ({ name: path.basename(p), vars: dotenv.parse(fs.readFileSync(p)) })));
+    if (conflicts.length > 0) {
+        throw new KeeperStartupRefusal(
+            `${envFiles.join(' and ')} set ${conflicts.join(', ')} to different values; keep one value (the values are not shown)`,
+        );
     }
+    // The process environment wins over the files (dotenv never overrides). For the two keys that decide the signer
+    // and the chain, a different value in a file is an ambiguity and refuses; for any other key the file's value is
+    // ignored and that is said, by name only (KDR-004, DSR 2026-11-18).
+    const fileVars: Record<string, string> = {};
+    for (const p of present) for (const [k, v] of Object.entries(dotenv.parse(fs.readFileSync(p)))) if (!(k in fileVars)) fileVars[k] = v;
+    const ambient = ambientOverrides(process.env, fileVars, ['KEEPER_PRIVATE_KEY', 'RPC_URL']);
+    if (ambient.refuse.length > 0) {
+        throw new KeeperStartupRefusal(
+            `${ambient.refuse.join(', ')} differ between the process environment and ${envFiles.join(' / ')}; keep one value (the values are not shown)`,
+        );
+    }
+    for (const k of ambient.ignored) console.log(`${k} is taken from the process environment; the value in the env file is ignored`);
+    for (const fullPath of present) dotenv.config({ path: fullPath });
+    // Env-backed options are read after the env files, so a file can set them (KDR-020); the CLI still wins.
+    const healthIntervalSec = parseIntOption('--health-interval / KEEPER_HEALTH_INTERVAL_SEC',
+        getArgValue(args, '--health-interval') || process.env.KEEPER_HEALTH_INTERVAL_SEC, 1800n, 0n);
+    const volatilityThresholdBps = parseIntOption('--volatility-threshold-bps / KEEPER_VOLATILITY_THRESHOLD_BPS',
+        getArgValue(args, '--volatility-threshold-bps') || process.env.KEEPER_VOLATILITY_THRESHOLD_BPS, 0n, 0n);
+    const volatilityCooldownSec = parseIntOption('--volatility-cooldown / KEEPER_VOLATILITY_COOLDOWN_SEC',
+        getArgValue(args, '--volatility-cooldown') || process.env.KEEPER_VOLATILITY_COOLDOWN_SEC, 600n, 0n);
+    const chainlinkStaleSec = parseIntOption('--chainlink-stale-sec / KEEPER_CHAINLINK_STALE_SEC',
+        getArgValue(args, '--chainlink-stale-sec') || process.env.KEEPER_CHAINLINK_STALE_SEC, 600n, 0n);
+    const externalEthUsdUrl = getArgValue(args, '--external-ethusd-url') || process.env.EXTERNAL_ETHUSD_URL || '';
+
     // Who signs: decided here, after the env files and before any network read, with no fallback (keeperKey.ts).
     // Resolved once; the wallet and the cast arguments below use these same values.
     const signer = resolveKeeperSigner({
         mode, dryRun, env: process.env,
         keystorePath: getArgValue(args, '--keystore'), castAccount: getArgValue(args, '--cast-account'),
     });
+    if (!dryRun && hardMaxFeeWei === undefined && (MAINNET_NETWORKS as readonly string[]).includes(network)) {
+        throw new KeeperStartupRefusal(`a live run on ${network} needs --hard-max-fee-gwei (an absolute fee ceiling)`);
+    }
     if (signer.mode === 'privateKey') console.log(`signer (privateKey mode): ${signer.address ?? 'none (dry run)'}`);
     else console.log(`signer (cast mode): ${signer.keystorePath ? `keystore ${signer.keystorePath}` : `account ${signer.castAccount}`}`);
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
-    const paymasterMissingAlertSec = BigInt(
-        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC || '1800'
-    );
+    const paymasterMissingAlertSec = parseIntOption('--paymaster-missing-alert / KEEPER_PAYMASTER_MISSING_ALERT_SEC',
+        getArgValue(args, '--paymaster-missing-alert') || process.env.KEEPER_PAYMASTER_MISSING_ALERT_SEC, 1800n, 0n);
     const telegramEnabled = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 
     let config: ReturnType<typeof loadNetworkConfig>;
@@ -337,22 +441,23 @@ async function main() {
             explorerUrl: ''
         } as any;
     }
+    knownSecrets = secretValues(process.env, config.rpcUrl);
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
 
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[config.chain.id];
     const superPaymasterDefault = (canonical?.superPaymaster || config.contracts.superPaymaster) as `0x${string}`;
     const priceFeed = (canonical?.priceFeed || config.contracts.priceFeed) as `0x${string}`;
-    const superPaymaster = (getArgValue(args, '--superpaymaster') || superPaymasterDefault) as `0x${string}`;
+    const superPaymaster = (parseAddressOption('--superpaymaster', getArgValue(args, '--superpaymaster')) || superPaymasterDefault) as `0x${string}`;
 
     const paymasterFactory = (canonical?.paymasterFactory || config.contracts.paymasterFactory) as `0x${string}`;
-    const paymasterFromArgs = getArgValue(args, '--paymaster') as `0x${string}` | undefined;
+    const paymasterFromArgs = parseAddressOption('--paymaster', getArgValue(args, '--paymaster'));
     const paymasterFromCanonical = canonical?.paymasterV4 as `0x${string}` | undefined;
     const paymasterFromConfig = config.contracts.paymasterV4 as `0x${string}` | undefined;
-    const paymasterOperatorFromArgs = getArgValue(args, '--paymaster-operator') as `0x${string}` | undefined;
+    const paymasterOperatorFromArgs = parseAddressOption('--paymaster-operator', getArgValue(args, '--paymaster-operator'));
     const paymasterOperator =
         (paymasterOperatorFromArgs ||
-            (process.env.OFFICIAL_OPERATOR as `0x${string}` | undefined) ||
-            (process.env.TEST_ACCOUNT_ADDRESS as `0x${string}` | undefined) ||
+            parseAddressOption('OFFICIAL_OPERATOR', process.env.OFFICIAL_OPERATOR) ||
+            parseAddressOption('TEST_ACCOUNT_ADDRESS', process.env.TEST_ACCOUNT_ADDRESS) ||
             ('0xb5600060e6de5E11D3636731964218E53caadf0E' as `0x${string}`)) as `0x${string}`;
 
     const paymasterCandidate = (paymasterFromArgs || paymasterFromCanonical || paymasterFromConfig || null) as `0x${string}` | null;
@@ -372,23 +477,43 @@ async function main() {
     );
     // What this run signs with, built from the resolved signer only, before the first network request, and
     // logged: the wallet below and every `cast send` use exactly these objects (no second lookup anywhere).
-    const keeperAccount = keeperAccountFor(signer);
+    // The stop check runs inside signTransaction, i.e. after viem's awaited preparation (gas estimate, fees, nonce),
+    // so a signal during preparation cannot let a transaction be signed (Codex F1). This relies on viem's local-account
+    // path calling account.signTransaction (checked against viem 2.43.3, the pinned version; re-check on upgrade).
+    // Nothing relies on how soon the broadcast follows the signature: a send that got past this check is treated as
+    // in flight during shutdown and its outcome is awaited and reported (trackSend, onExit).
+    const localAccount = keeperAccountFor(signer);
+    const keeperAccount = localAccount
+        ? ({
+            ...localAccount,
+            signTransaction: (tx: any, opts?: any) => { assertNotStopping(); return localAccount.signTransaction(tx, opts); },
+        } as typeof localAccount)
+        : null;
     const walletClient = keeperAccount
         ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
         : null;
     if (walletClient) console.log(`wallet signer: ${walletClient.account!.address}`);
     const castSigner = signer.mode === 'cast' ? castSignerArgs(signer) : null;
     if (castSigner) console.log(`cast signer args: ${castSigner.join(' ')}`);
+    // The keystore password is read from a hidden prompt only. Without a terminal there is nobody to type it, and
+    // unattended cast mode is not supported until #446/#447 (FU-114): refuse instead of printing a prompt and exiting.
+    if (signer.mode === 'cast' && !dryRun && !process.stdin.isTTY) {
+        throw new KeeperStartupRefusal('cast mode needs an interactive terminal for the keystore password; unattended cast mode is not supported (FU-114)');
+    }
     // Everything above is local configuration; an error up to here is a refusal (no Telegram). From here on the
     // keeper touches the network.
     startupPhase = false;
+
+    // The RPC must serve the configured chain before anything else is read or a password is asked for (KPR-005).
+    // The viem wallet path checks this itself on every send; cast is also given --chain and re-checked before each send.
+    assertChainId(await publicClient.getChainId(), config.chain.id, 'startup');
 
     let paymaster: `0x${string}` | null = null;
     let paymasterInit = 'disabled';
     if (!disablePaymaster) {
         const r = await paymasterTracker.ensure(nowSec());
         paymaster = paymasterTracker.current;
-        paymasterInit = r.kind === 'found' ? r.address : `not-found (${describeUnresolved(r)}; retried every tick)`;
+        paymasterInit = r.kind === 'found' ? r.address : `not-found (${scrub(describeUnresolved(r), 1000)}; retried every tick)`;
     }
 
     if (printLogo) console.log(`${logo()}\n`);
@@ -398,7 +523,7 @@ async function main() {
     console.log(section('INIT'));
 
     console.log(`network=${network}`);
-    console.log(`rpcUrl=${config.rpcUrl}`);
+    console.log(`rpcUrl=${redactRpcUrl(config.rpcUrl)}`);
     console.log(`superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}`);
     console.log(`paymaster=${paymasterInit}`);
     console.log(`paymasterFactory=${paymasterFactory}`);
@@ -452,8 +577,6 @@ async function main() {
     let passwordFilePath: string | null = null;
     const keystorePath = signer.mode === 'cast' ? signer.keystorePath : undefined;
     const castAccount = signer.mode === 'cast' ? signer.castAccount : undefined;
-    const passwordFromEnv = process.env.CAST_KEYSTORE_PASSWORD;
-
     if (mode === 'cast') {
         if (!keystorePath && castAccount?.startsWith('0x')) {
             throw new Error('cast mode: when providing an address, use --keystore <path> instead of --cast-account');
@@ -462,7 +585,11 @@ async function main() {
             throw new Error('cast mode requires --keystore or --cast-account');
         }
         if (!dryRun) {
-            const pw = passwordFromEnv || (await promptHidden('Keystore password: '));
+            // Hidden prompt only (the author's rule: no password in env, argv or files it did not create). A TTY was
+            // required at startup.
+            const pw = await promptHidden('Keystore password: ');
+            // Redacted from every later diagnostic, from 4 characters (a shorter one would erase ordinary letters).
+            if (pw.length >= 4) knownSecrets = [...new Set([...knownSecrets, pw])].sort((a, b) => b.length - a.length);
             const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aastar-keeper-'));
             passwordFilePath = path.join(dir, 'pw');
             await fs.promises.writeFile(passwordFilePath, pw, { mode: 0o600 });
@@ -476,6 +603,9 @@ async function main() {
     let lastExternalEthUsd: bigint | null = null;
     let lastExternalVolAlertSec = 0n;
     let lastChainlinkStaleAlertSec = 0n;
+    let lastFeeCeilingAlertSec = 0n;
+    let failedTicks = 0;
+    let currentTick: Promise<void> | null = null;
     let lastSuperHealthOk: boolean | null = null;
     let lastPaymasterHealthOk: boolean | null = null;
     const chainlinkDecimalsCache = new Map<string, number>();
@@ -494,15 +624,16 @@ async function main() {
         txHash: string;
         beforeUpdatedAt: bigint;
         expectedUpdatedAt: bigint;
-    }): Promise<'receipt' | 'state' | 'pending'> => {
+    }): Promise<'receipt' | 'reverted' | 'state' | 'pending'> => {
         const hash = params.txHash as `0x${string}`;
         try {
-            await publicClient.waitForTransactionReceipt({
+            const receipt = await publicClient.waitForTransactionReceipt({
                 hash,
                 timeout: 10 * 60 * 1000,
                 pollingInterval: 2000
             });
-            return 'receipt';
+            // A reverted transaction is mined but did not update the price (KPR-020).
+            return receiptOutcome(receipt);
         } catch (e: any) {
             const msg = e?.message || String(e);
             if (!/Timed out/i.test(msg)) throw e;
@@ -536,17 +667,50 @@ async function main() {
     };
 
     const onExit = async (signal: string) => {
+        if (stopping) return;
+        // From here no new transaction is signed (assertNotStopping). A `cast send` in flight is terminated and awaited
+        // (SIGKILL after 5 s), then the running tick is allowed to finish (at most 15 s), so "stopped" is not reported
+        // while anything can still sign or broadcast (KPR-008, Codex R1).
+        stopping = true;
+        const inFlight = activeCast;
+        if (inFlight) {
+            inFlight.child.kill('SIGTERM');
+            const forced = setTimeout(() => inFlight.child.kill('SIGKILL'), 5_000);
+            await inFlight.closed;
+            clearTimeout(forced);
+        }
+        let tickSettled = true;
+        if (currentTick) {
+            let waited: ReturnType<typeof setTimeout> | undefined;
+            tickSettled = await Promise.race([
+                currentTick.then(() => true, () => true),
+                new Promise<boolean>((r) => { waited = setTimeout(() => r(false), 15_000); }),
+            ]);
+            clearTimeout(waited);
+        }
+        // "stopped" only once nothing can still be signing or broadcasting and no send was cut off; otherwise say so.
+        const status = !tickSettled
+            ? `exited (${signal}) with a send in an unknown state: the tick did not finish within 15 s`
+            : sendsInterruptedByShutdown > 0
+                ? `exited (${signal}) with a send in an unknown state: a send was interrupted by the shutdown`
+                : sendsCompletedDuringShutdown.length > 0
+                    ? `stopped (${signal}); a transaction signed before the signal was broadcast: ${sendsCompletedDuringShutdown.join(', ')}`
+                    : `stopped (${signal})`;
+        console.log(status);
         await sendTelegramMessage(
-            `[keeper] stopped (${signal})\nnetwork=${network}\n` +
+            `[keeper] ${status}\nnetwork=${network}\n` +
                 `superPaymaster=${disableSuperPaymaster ? 'disabled' : superPaymaster}\n` +
                 `paymaster=${disablePaymaster ? 'disabled' : paymaster || 'not-found'}`
         );
         await cleanup();
-        process.exit(0);
+        // 0 only for a clean stop; 2 when a send's state is unknown, so a supervisor does not take it as clean
+        // (KDR-013); a broken pipe is never clean.
+        process.exit(!tickSettled || sendsInterruptedByShutdown > 0 ? 2 : signal === 'EPIPE' ? 1 : 0);
     };
 
     process.on('SIGINT', () => void onExit('SIGINT'));
     process.on('SIGTERM', () => void onExit('SIGTERM'));
+    shutdownHook = (reason) => void onExit(reason);
 
     await sendTelegramMessage(
         `[keeper] started\nnetwork=${network}\n` +
@@ -603,12 +767,29 @@ async function main() {
     const fetchExternalEthUsd = async (): Promise<{ price: bigint; decimals: number } | null> => {
         if (!externalEthUsdUrl) return null;
         try {
+            // The 5 s deadline covers the body too, and the body is bounded: a slow or endless response cannot hold
+            // the tick (Codex R6).
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), 5000);
-            const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
-            clearTimeout(t);
-            if (!res.ok) return null;
-            const json = await res.json();
+            let json: unknown;
+            try {
+                const res = await fetch(externalEthUsdUrl, { signal: ctrl.signal });
+                if (!res.ok || !res.body) { await res.body?.cancel(); return null; }
+                // Counted in bytes while reading, and cancelled as soon as it passes 64 KiB (Codex F2).
+                const reader = res.body.getReader();
+                const chunks: Uint8Array[] = [];
+                let size = 0;
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    size += value.byteLength;
+                    if (size > 65_536) { await reader.cancel(); return null; }
+                    chunks.push(value);
+                }
+                json = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+            } finally {
+                clearTimeout(t);
+            }
             const s = extractPriceString(json);
             if (!s) return null;
             const decimals = 8;
@@ -639,39 +820,48 @@ async function main() {
                 network,
                 candidateLabel: paymasterCandidate || 'derive-from-factory',
                 operator: paymasterOperator,
-                log: (line) => console.log(line),
-                notify: sendTelegramMessage,
+                // Resolver text carries provider error messages (with the RPC URL): scrubbed on both outputs (KDR-001).
+                log: (line) => console.log(scrub(line, 2000)),
+                notify: (text) => sendTelegramMessage(scrub(text, 2000)),
             });
         }
 
         const latestBlock = await publicClient.getBlock({ blockTag: 'latest' });
         const baseFeePerGas = (latestBlock as any).baseFeePerGas as bigint | undefined;
-        const baseFeeOk =
-            !maxBaseFeeGwei ||
-            (baseFeePerGas !== undefined && baseFeePerGas <= BigInt(Math.floor(Number(maxBaseFeeGwei) * 1e9)));
 
-        const chainlink = await publicClient.readContract({
-            address: priceFeed,
-            abi: CHAINLINK_ABI,
-            functionName: 'latestRoundData'
-        });
-        const chainlinkUpdatedAt = chainlink[3] as bigint;
-
-        const [cache, threshold] = await Promise.all([
-            publicClient.readContract({
-                address: superPaymaster,
-                abi: SUPERPAYMASTER_ABI,
-                functionName: 'cachedPrice'
-            }),
-            publicClient.readContract({
-                address: superPaymaster,
-                abi: SUPERPAYMASTER_ABI,
-                functionName: 'priceStalenessThreshold'
-            })
-        ]);
-
-        const cachedUpdatedAt = cache[1] as bigint;
-        const thresholdSec = threshold as bigint;
+        // SuperPaymaster's reads fail on their own: a failure here is reported, and the PaymasterV4 below is still
+        // refreshed (KPR-016). With no read, refreshSuper does nothing (its zero defaults would read as "cache empty").
+        const tickErrors: string[] = [];
+        let superRead: { chainlinkUpdatedAt: bigint; superAnswer: bigint; cachedUpdatedAt: bigint; thresholdSec: bigint } | null = null;
+        // A disabled SuperPaymaster is not read, so its failures cannot fail the tick (Codex R16).
+        if (!disableSuperPaymaster) try {
+            const chainlink = await publicClient.readContract({
+                address: priceFeed,
+                abi: CHAINLINK_ABI,
+                functionName: 'latestRoundData'
+            });
+            const [cache, threshold] = await Promise.all([
+                publicClient.readContract({
+                    address: superPaymaster,
+                    abi: SUPERPAYMASTER_ABI,
+                    functionName: 'cachedPrice'
+                }),
+                publicClient.readContract({
+                    address: superPaymaster,
+                    abi: SUPERPAYMASTER_ABI,
+                    functionName: 'priceStalenessThreshold'
+                })
+            ]);
+            superRead = {
+                chainlinkUpdatedAt: chainlink[3] as bigint, superAnswer: chainlink[1] as bigint,
+                cachedUpdatedAt: cache[1] as bigint, thresholdSec: threshold as bigint,
+            };
+        } catch (e: any) {
+            tickErrors.push(`superPaymaster reads: ${scrub(e?.message || String(e), 2000)}`);
+        }
+        const chainlinkUpdatedAt = superRead?.chainlinkUpdatedAt ?? 0n;
+        const cachedUpdatedAt = superRead?.cachedUpdatedAt ?? 0n;
+        const thresholdSec = superRead?.thresholdSec ?? 0n;
 
         const validUntil = cachedUpdatedAt + thresholdSec;
         const deadline = validUntil > safetyMarginSec ? validUntil - safetyMarginSec : 0n;
@@ -681,7 +871,7 @@ async function main() {
 
         const superCacheOk = cachedUpdatedAt > 0n && validUntil > currentSec;
         let paymasterCacheOk: boolean | null = null;
-        const superAnswer = chainlink[1] as bigint;
+        const superAnswer = superRead?.superAnswer ?? 0n;
 
         if (chainlinkStaleSec > 0n && chainlinkAge >= chainlinkStaleSec && currentSec - lastChainlinkStaleAlertSec >= volatilityCooldownSec) {
             lastChainlinkStaleAlertSec = currentSec;
@@ -692,7 +882,8 @@ async function main() {
             );
         }
 
-        if (volatilityThresholdBps > 0n && externalEthUsdUrl) {
+        // Market monitoring is advisory: its failure is logged and never stops either refresh (Codex R7).
+        if (volatilityThresholdBps > 0n && externalEthUsdUrl) try {
             const ext = await fetchExternalEthUsd();
             if (ext) {
                 if (lastExternalEthUsd !== null) {
@@ -713,9 +904,9 @@ async function main() {
                     }
                 }
 
-                const clDec = await getChainlinkDecimals(priceFeed);
+                const clDec = superRead ? await getChainlinkDecimals(priceFeed) : 0;
                 const clNorm = normalizeDecimals(superAnswer, clDec, ext.decimals);
-                const devBps = toBpsChange(clNorm, ext.price);
+                const devBps = superRead ? toBpsChange(clNorm, ext.price) : null;
                 if (
                     devBps !== null &&
                     devBps >= volatilityThresholdBps &&
@@ -733,33 +924,54 @@ async function main() {
 
                 lastExternalEthUsd = ext.price;
             }
+        } catch (e: any) {
+            console.warn(`market monitoring failed this tick: ${scrub(e?.message || String(e))}`);
         }
 
         const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
             if (mode === 'cast') {
                 if (!passwordFilePath) throw new Error('cast mode requires password file (should have been created at startup)');
                 if (!castSigner) throw new Error('cast mode requires --keystore or --cast-account');
-                return await runCastSend({
+                const servedChain = await publicClient.getChainId();
+                if (servedChain !== config.chain.id) {
+                    throw new Error(`before cast send: the RPC serves chain ${servedChain}, expected ${config.chain.id}; nothing was signed`);
+                }
+                assertNotStopping();
+                return await trackSend(() => runCastSend({
                     rpcUrl: config.rpcUrl,
+                    chainId: config.chain.id,
                     target,
                     signerArgs: castSigner,
                     passwordFilePath,
                     gasPriceWei,
+                    maxFeeWei: hardMaxFeeWei,
                     processTimeoutMs: 90_000
-                });
+                }));
             }
             if (!walletClient || !keeperAccount) throw new Error('privateKey mode requires KEEPER_PRIVATE_KEY');
             const abi = kind === 'super' ? SUPERPAYMASTER_ABI : PAYMASTER_V4_ABI;
-            return await walletClient.writeContract({
+            assertNotStopping();
+            return await trackSend(() => walletClient.writeContract({
                 address: target,
                 abi,
                 functionName: 'updatePrice',
-                account: keeperAccount
-            });
+                account: keeperAccount,
+                // The chain cannot charge more than the hard ceiling (KPR-006).
+                ...(hardMaxFeeWei !== undefined ? { maxFeePerGas: hardMaxFeeWei } : {}),
+            }));
+        };
+
+        const feeCeilingAlert = async (label: string) => {
+            console.log(`skip ${label} update: base fee ${baseFeeInfo} is above --hard-max-fee-gwei; nothing is sent`);
+            if (currentSec - lastFeeCeilingAlertSec >= volatilityCooldownSec) {
+                lastFeeCeilingAlertSec = currentSec;
+                await sendTelegramMessage(`[keeper] fee above hard ceiling, ${label} not updated\nnetwork=${network}\nbaseFee=${baseFeeInfo}`);
+            }
         };
 
         const refreshSuper = async () => {
             if (disableSuperPaymaster) return;
+            if (!superRead) return; // reads failed this tick: reported below, never treated as an empty cache
             const shouldUpdate =
                 cachedUpdatedAt === 0n ||
                 (currentSec >= deadline && chainlinkUpdatedAt > cachedUpdatedAt && chainlinkUpdatedAt + thresholdSec >= currentSec);
@@ -779,8 +991,13 @@ async function main() {
             );
 
             if (!shouldUpdate) return;
-            if (!baseFeeOk && currentSec + 180n < validUntil) {
+            const fee = feeDecision({ baseFeeWei: baseFeePerGas, maxBaseFeeWei, hardMaxFeeWei, nearExpiry: currentSec + 180n >= validUntil });
+            if (fee === 'skip-soft') {
                 console.log(`skip superPaymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeGwei})`);
+                return;
+            }
+            if (fee === 'skip-hard') {
+                await feeCeilingAlert('superPaymaster');
                 return;
             }
 
@@ -809,6 +1026,11 @@ async function main() {
                     beforeUpdatedAt: cachedUpdatedAt,
                     expectedUpdatedAt: chainlinkUpdatedAt
                 });
+                if (confirmedBy === 'reverted') {
+                    console.error(`reverted: kind=super tx=${txHash} (mined, price not updated)`);
+                    await sendTelegramMessage(`[keeper] superPaymaster updatePrice REVERTED\nnetwork=${network}\ntarget=${superPaymaster}\ntx=${txHash}`);
+                    throw new Error(`superPaymaster updatePrice reverted: tx=${txHash}`);
+                }
                 if (confirmedBy === 'receipt') {
                     console.log(`confirmed: receipt kind=super tx=${txHash}`);
                 } else if (confirmedBy === 'state') {
@@ -901,8 +1123,13 @@ async function main() {
             );
 
             if (!shouldUpdate) return;
-            if (!baseFeeOk && currentSec + 180n < pmValidUntil) {
+            const fee = feeDecision({ baseFeeWei: baseFeePerGas, maxBaseFeeWei, hardMaxFeeWei, nearExpiry: currentSec + 180n >= pmValidUntil });
+            if (fee === 'skip-soft') {
                 console.log(`skip paymaster update: base fee above threshold (maxBaseFeeGwei=${maxBaseFeeGwei})`);
+                return;
+            }
+            if (fee === 'skip-hard') {
+                await feeCeilingAlert('paymaster');
                 return;
             }
 
@@ -931,6 +1158,11 @@ async function main() {
                     beforeUpdatedAt: BigInt(pmCachedUpdatedAt),
                     expectedUpdatedAt: pmChainlinkUpdatedAt
                 });
+                if (confirmedBy === 'reverted') {
+                    console.error(`reverted: kind=paymaster tx=${txHash} (mined, price not updated)`);
+                    await sendTelegramMessage(`[keeper] paymaster updatePrice REVERTED\nnetwork=${network}\ntarget=${paymaster}\ntx=${txHash}`);
+                    throw new Error(`paymaster updatePrice reverted: tx=${txHash}`);
+                }
                 if (confirmedBy === 'receipt') {
                     console.log(`confirmed: receipt kind=paymaster tx=${txHash}`);
                 } else if (confirmedBy === 'state') {
@@ -947,8 +1179,9 @@ async function main() {
             }
         };
 
-        await refreshSuper();
-        await refreshPaymaster();
+        // Each target is refreshed even when the other one fails (KPR-016); the failures are reported together.
+        try { await refreshSuper(); } catch (e: any) { tickErrors.push(`superPaymaster: ${e?.message || String(e)}`); }
+        try { await refreshPaymaster(); } catch (e: any) { tickErrors.push(`paymaster: ${e?.message || String(e)}`); }
 
         const superHealth = disableSuperPaymaster ? 'disabled' : superCacheOk ? '✅' : 'not-ok';
         const paymasterHealth =
@@ -978,13 +1211,17 @@ async function main() {
                 `[keeper] ✅ health ok\nnetwork=${network}\n✅ super=ok\n✅ paymaster=ok\nbaseFee=${baseFeeInfo}`
             );
         }
+        if (tickErrors.length > 0) throw new Error(tickErrors.join('; '));
     };
 
     for (;;) {
+        if (stopping) break;
         try {
-            await tick();
+            currentTick = tick();
+            await currentTick;
         } catch (e: any) {
-            const msg = e?.message || String(e);
+            failedTicks += 1;
+            const msg = scrub(e?.message || String(e), 1000);
             console.error(`[${new Date().toISOString()}] error: ${msg}`);
             try {
                 await sendTelegramMessage(`[keeper] error\nnetwork=${network}\nmsg=${msg}`);
@@ -998,6 +1235,8 @@ async function main() {
     }
 
     await cleanup();
+    // --once reports the tick's outcome: a scheduler sees a failed run as a failure (KPR-011).
+    if (once && failedTicks > 0) process.exitCode = 1;
 }
 
 main().catch(async (e) => {
@@ -1007,8 +1246,9 @@ main().catch(async (e) => {
         process.exit(1);
     }
     try {
-        await sendTelegramMessage(`[keeper] fatal\nmsg=${e?.message || String(e)}`);
+        await sendTelegramMessage(`[keeper] fatal\nmsg=${scrub(e?.message || String(e), 1000)}`);
     } catch {}
-    console.error(e);
+    // Never the raw error object: a transport error carries the RPC URL and request context (Codex R4).
+    console.error(`fatal: ${scrub(e?.message || String(e), 1000)}`);
     process.exit(1);
 });

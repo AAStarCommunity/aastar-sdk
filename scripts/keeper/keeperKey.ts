@@ -6,8 +6,9 @@ import { privateKeyToAccount } from 'viem/accounts';
  * keeper.ts loads .env.<network> with dotenv, and on Sepolia PRIVATE_KEY_SUPPLIER / PRIVATE_KEY / DEPLOYER_ACCOUNT
  * there belong to the deployer EOA. Any fallback to them made a keeper started without its own key sign with the
  * deployer and move its nonce (deploy-day rule, DSR 2026-11-17). So there is no fallback of any kind:
- * - privateKey mode: KEEPER_PRIVATE_KEY, or refuse.
- * - cast mode: an explicit --keystore or --cast-account, or refuse.
+ * - privateKey mode: KEEPER_PRIVATE_KEY, or refuse. A cast signer argument in privateKey mode refuses: the operator named
+ *   a signer that this mode would not use.
+ * - cast mode: exactly one of --keystore / --cast-account, or refuse (both at once is an ambiguous signer).
  * - --dry-run sends nothing: privateKey mode needs no key for it; cast mode still names its account.
  * An explicitly supplied key or account is not identity-checked here; refusing a known privileged signer is the
  * signer guard's job (#447).
@@ -17,10 +18,11 @@ export type KeeperMode = 'cast' | 'privateKey';
 /** Thrown for a configuration the keeper refuses at startup. The top-level handler does not notify Telegram for it. */
 export class KeeperStartupRefusal extends Error {}
 
-/** `--mode` as given (any case), or the default from whether --keystore was passed. Unknown values refuse. */
-export function parseKeeperMode(raw: string | undefined, hasKeystore: boolean): KeeperMode {
+/** `--mode` as given (any case), or the default from whether a cast signer argument was passed. Unknown values refuse. */
+export function parseKeeperMode(raw: string | undefined, hasCastSignerArg: boolean): KeeperMode {
     // Absent --mode picks the default; an explicitly empty one is a missing value, never a silent default.
-    if (raw === undefined) return hasKeystore ? 'cast' : 'privateKey';
+    // Either --keystore or --cast-account means cast: `--cast-account keeper` alone must not sign with KEEPER_PRIVATE_KEY.
+    if (raw === undefined) return hasCastSignerArg ? 'cast' : 'privateKey';
     if (raw.trim() === '') throw new KeeperStartupRefusal('--mode needs a value');
     const m = raw.toLowerCase();
     if (m === 'privatekey') return 'privateKey';
@@ -47,6 +49,9 @@ export function resolveKeeperSigner(a: {
     keystorePath: string | undefined; castAccount: string | undefined;
 }): KeeperSigner {
     if (a.mode === 'privateKey') {
+        if (a.keystorePath || a.castAccount) {
+            throw new KeeperStartupRefusal('--keystore / --cast-account name a cast signer, but the mode is privateKey; pass --mode cast or drop them');
+        }
         const key = keeperKeyFrom(a.env);
         if (!key && !a.dryRun) {
             throw new KeeperStartupRefusal('privateKey mode requires KEEPER_PRIVATE_KEY (the keeper\'s own key). PRIVATE_KEY_SUPPLIER / PRIVATE_KEY are not read: on Sepolia they are the deployer.');
@@ -55,7 +60,16 @@ export function resolveKeeperSigner(a: {
         try { address = key ? privateKeyToAccount(key).address : undefined; } catch { throw new KeeperStartupRefusal('KEEPER_PRIVATE_KEY is not a valid private key'); }
         return { mode: 'privateKey', key, address };
     }
-    if (!a.keystorePath && a.castAccount?.startsWith('0x')) {
+    // A key pasted into --keystore / --cast-account would be logged as the signer argument and handed to cast.
+    for (const [flag, v] of [['--keystore', a.keystorePath], ['--cast-account', a.castAccount]] as const) {
+        if (v !== undefined && /^(?:0x)?[0-9a-f]{64}$/i.test(v.trim())) {
+            throw new KeeperStartupRefusal(`${flag} looks like a private key, not a keystore path or account name (the value is not shown)`);
+        }
+    }
+    if (a.keystorePath && a.castAccount) {
+        throw new KeeperStartupRefusal('cast mode: pass --keystore or --cast-account, not both (the signer would be ambiguous)');
+    }
+    if (!a.keystorePath && a.castAccount?.toLowerCase().startsWith('0x')) {
         throw new KeeperStartupRefusal('cast mode: when providing an address, use --keystore <path> instead of --cast-account');
     }
     if (!a.keystorePath && !a.castAccount) {
@@ -123,7 +137,7 @@ export function parseKeeperArgs(argv: readonly string[]): KeeperArgs {
 /** Every flag keeper.ts reads with a value. One present without a value (end of argv, or another --flag next) refuses. */
 export const VALUE_FLAGS = [
     '--cast-account', '--chainlink-stale-sec', '--external-ethusd-url', '--health-interval', '--keystore',
-    '--max-base-fee-gwei', '--max-updates-per-day', '--mode', '--network', '--paymaster', '--paymaster-missing-alert',
+    '--hard-max-fee-gwei', '--max-base-fee-gwei', '--max-updates-per-day', '--mode', '--network', '--paymaster', '--paymaster-missing-alert',
     '--paymaster-operator', '--poll-interval', '--safety-margin', '--superpaymaster', '--volatility-cooldown',
     '--volatility-threshold-bps',
 ] as const;
@@ -142,8 +156,9 @@ export function keeperAccountFor(signer: KeeperSigner) {
     return signer.mode === 'privateKey' && signer.key ? privateKeyToAccount(signer.key) : null;
 }
 
-/** The `cast send` signer arguments: from the resolved signer and nothing else (keystore wins over an account). */
+/** The `cast send` signer arguments: from the resolved signer and nothing else (it never carries both). */
 export function castSignerArgs(signer: { keystorePath?: string; castAccount?: string }): string[] {
+    if (signer.keystorePath && signer.castAccount) throw new KeeperStartupRefusal('cast mode: pass --keystore or --cast-account, not both');
     if (signer.keystorePath) return ['--keystore', signer.keystorePath];
     if (signer.castAccount) return ['--account', signer.castAccount];
     throw new KeeperStartupRefusal('cast mode requires --keystore or --cast-account');

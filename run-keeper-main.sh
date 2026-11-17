@@ -23,7 +23,8 @@ add_default --safety-margin 600 "$@"
 add_default --health-interval 1800 "$@"
 add_default --volatility-threshold-bps 150 "$@"
 add_default --volatility-cooldown 600 "$@"
-pnpm exec tsx scripts/keeper.ts \
+# exec: launchd / a terminal signal reaches keeper.ts itself, which stops an in-flight cast send before it exits.
+exec pnpm exec tsx scripts/keeper.ts \
   --network op-mainnet \
   --mode cast \
   --cast-account "$KEEPER_CAST_ACCOUNT" \

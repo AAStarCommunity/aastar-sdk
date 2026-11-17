@@ -21,6 +21,11 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 NETWORK="${1:-sepolia}"
 [ $# -gt 0 ] && shift || true
+# Checked before it is logged or used: a key pasted as the first argument must not be printed (KDR-012).
+case "$NETWORK" in
+  anvil|sepolia|op-sepolia|op-mainnet|mainnet) ;;
+  *) echo "error: unknown network (expected anvil, sepolia, op-sepolia, op-mainnet or mainnet; the value is not shown)" >&2; exit 1 ;;
+esac
 
 # True when the caller passed exactly this flag. Whole-argument match, like keeper.ts's own
 # parser: a substring grep took --paymaster-missing-alert for --paymaster and silently dropped
