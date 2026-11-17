@@ -50,6 +50,8 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
         expect(() => assertFlagValues(['--network', 'sepolia', '--mode'])).toThrow(/--mode needs a value/);
         expect(() => assertFlagValues(['--mode', 'cast', '--cast-account', '--once'])).toThrow(/--cast-account needs a value/);
         expect(() => assertFlagValues(['--poll-interval', '--dry-run'])).toThrow(KeeperStartupRefusal);
+        // An explicitly empty value (e.g. `--cast-account "$UNSET"`) is a missing value too.
+        for (const empty of ['', ' ']) expect(() => assertFlagValues(['--mode', 'cast', '--cast-account', empty])).toThrow(/--cast-account needs a value/);
         expect(() => assertFlagValues(['--network', 'sepolia', '--mode', 'cast', '--cast-account', 'keeper', '--once', '--dry-run'])).not.toThrow();
     });
 
@@ -64,7 +66,8 @@ describe('keeper signer: no fallback of any kind', { timeout: SPAWN_VERDICT_TIME
 
     it('--mode is parsed canonically: any case of privateKey, cast, else refuse', () => {
         expect(parseKeeperMode(undefined, false)).toBe('privateKey');
-        expect(parseKeeperMode('', true)).toBe('cast');
+        expect(parseKeeperMode(undefined, true)).toBe('cast');
+        for (const empty of ['', '  ']) expect(() => parseKeeperMode(empty, true)).toThrow(/--mode needs a value/);
         for (const m of ['privateKey', 'privatekey', 'PRIVATEKEY']) expect(parseKeeperMode(m, false)).toBe('privateKey');
         expect(parseKeeperMode('CAST', false)).toBe('cast');
         for (const m of ['private-key', 'bogus', 'pk']) expect(() => parseKeeperMode(m, false)).toThrow(KeeperStartupRefusal);
@@ -97,8 +100,9 @@ afterAll(async () => {
 }, SPAWN_VERDICT_TIMEOUT_MS);
 
 /** Run keeper.ts; stop it as soon as it has reached the RPC (or after `ms`). Returns exit code, output, requests. */
-// Every child runs with no-egress.preload.mjs: a connection to any non-loopback host (Telegram, a public RPC) is
-// logged and refused. Refusals must log none; no test can reach a public network.
+// Every child runs with no-egress.preload.mjs, which records and refuses any TCP connection other than to the test
+// server, any DNS query other than localhost, UDP, and any subprocess other than node. A refusal must record none.
+// This is a guard on this process tree (its own self-test is below), not OS-level isolation.
 let runs = 0;
 function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): Promise<{ code: number | null; out: string; requests: number; egress: string[] }> {
     const before = requests;
@@ -109,7 +113,8 @@ function keeper(args: string[], env: Record<string, string> = {}, ms = 20_000): 
             cwd: dir,
             env: {
                 PATH: process.env.PATH!, HOME: dir, RPC_URL: rpcUrl, ...env,
-                NO_EGRESS_LOG: egressLog, NODE_OPTIONS: `--import=${join(process.cwd(), 'scripts/keeper/no-egress.preload.mjs')}`,
+                NO_EGRESS_LOG: egressLog, NO_EGRESS_ALLOW_PORTS: rpcUrl.split(':').pop()!,
+                NODE_OPTIONS: `--import=${join(process.cwd(), 'scripts/keeper/no-egress.preload.mjs')}`,
             },
         });
         let out = '';
@@ -139,9 +144,13 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         ['a trailing --mode with no value', ['--network', 'sepolia', '--once', '--mode'], /--mode needs a value/],
         ['--cast-account followed by another flag', ['--network', 'sepolia', '--mode', 'cast', '--cast-account', '--once'], /--cast-account needs a value/],
         ['an invalid number, before the signer is resolved', ['--network', 'sepolia', '--once', '--poll-interval', 'invalid'], /invalid|Cannot convert/],
+        ['an explicitly empty --mode', ['--network', 'sepolia', '--once', '--mode', ''], /--mode needs a value/],
+        ['an invalid number after the signer, in a dry run', ['--network', 'sepolia', '--once', '--dry-run', '--paymaster-missing-alert', 'invalid'], /invalid|Cannot convert/],
+        ['an invalid number after the signer, in cast mode', ['--network', 'sepolia', '--once', '--mode', 'cast', '--cast-account', 'keeper', '--paymaster-missing-alert', 'invalid'], /invalid|Cannot convert/],
     ])('%s: exit 1, refused, zero RPC requests, zero egress (no Telegram), no key printed', async (_name, args, why) => {
         writeFileSync(join(dir, '.env.sepolia'), envFile);
-        const r = await keeper([...(args as string[])]);
+        // Telegram credentials are ALSO exported into the child, so errors raised before dotenv runs are covered.
+        const r = await keeper([...(args as string[])], { TELEGRAM_BOT_TOKEN: 'test-token', TELEGRAM_CHAT_ID: '1' });
         expect(r.code).toBe(1);
         expect(r.out).toMatch(/refused: /);
         expect(r.out).toMatch(why as RegExp);
@@ -162,7 +171,43 @@ describe('keeper.ts refuses before any network request, whatever .env.<network> 
         writeFileSync(join(dir, '.env.sepolia'), envFile);
         const r = await keeper(['--network', 'sepolia', '--once', '--dry-run'], { KEEPER_PRIVATE_KEY: KEEPER });
         expect(r.out).toContain(`signer (privateKey mode): ${KEEPER_ADDR}`);
+        // The wallet the sending path uses, logged where it is built (before the first RPC read).
+        expect(r.out).toContain(`wallet signer: ${KEEPER_ADDR}`);
         expect(r.out).not.toContain(DEPLOYERISH_ADDR);
         expect(r.out.toLowerCase()).not.toContain(KEEPER.slice(2));
+    });
+
+    it('cast mode passes exactly the given account / keystore to cast, never DEPLOYER_ACCOUNT', async () => {
+        writeFileSync(join(dir, '.env.sepolia'), envFile); // envFile sets DEPLOYER_ACCOUNT=optimism-deployer
+        const byName = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--mode', 'cast', '--cast-account', 'keeper']);
+        expect(byName.out).toContain('cast signer args: --account keeper');
+        expect(byName.out).not.toContain('optimism-deployer');
+        const byFile = await keeper(['--network', 'sepolia', '--once', '--dry-run', '--keystore', '/nonexistent/k.json', '--cast-account', 'keeper']);
+        expect(byFile.out).toContain('cast signer args: --keystore /nonexistent/k.json');
+    });
+
+    it('the no-egress guard itself records and refuses each kind of attempt', async () => {
+        const log = join(dir, 'selftest.log');
+        writeFileSync(log, '');
+        const out = await new Promise<string>((resolve) => {
+            const c = spawn(process.execPath, [join(process.cwd(), 'scripts/keeper/no-egress.selftest.mjs')], {
+                env: {
+                    PATH: process.env.PATH!, NO_EGRESS_LOG: log, NO_EGRESS_ALLOW_PORTS: rpcUrl.split(':').pop()!,
+                    NODE_OPTIONS: `--import=${join(process.cwd(), 'scripts/keeper/no-egress.preload.mjs')}`,
+                },
+            });
+            let o = '';
+            c.stdout.on('data', (d) => { o += String(d); });
+            c.on('close', () => resolve(o));
+        });
+        const results = JSON.parse(out.trim()) as Record<string, string>;
+        expect(results).toEqual({
+            'fetch': 'refused', 'tcp-other-loopback-port': 'refused', 'tcp-custom-lookup': 'refused', 'dns-resolve': 'refused',
+            'dns-lookup': 'refused', 'udp': 'refused', 'subprocess': 'refused', 'allowed-loopback': 'SUCCEEDED',
+        });
+        const logged = readFileSync(log, 'utf8').split('\n').filter(Boolean);
+        expect(logged).toHaveLength(7);
+        expect(logged).toContain('tcp 192.0.2.1:80');
+        expect(logged).toContain('subprocess cast');
     });
 });

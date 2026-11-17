@@ -19,7 +19,9 @@ export class KeeperStartupRefusal extends Error {}
 
 /** `--mode` as given (any case), or the default from whether --keystore was passed. Unknown values refuse. */
 export function parseKeeperMode(raw: string | undefined, hasKeystore: boolean): KeeperMode {
-    if (raw === undefined || raw === '') return hasKeystore ? 'cast' : 'privateKey';
+    // Absent --mode picks the default; an explicitly empty one is a missing value, never a silent default.
+    if (raw === undefined) return hasKeystore ? 'cast' : 'privateKey';
+    if (raw.trim() === '') throw new KeeperStartupRefusal('--mode needs a value');
     const m = raw.toLowerCase();
     if (m === 'privatekey') return 'privateKey';
     if (m === 'cast') return 'cast';
@@ -73,7 +75,7 @@ export function assertFlagValues(args: readonly string[], flags: readonly string
     for (let i = 0; i < args.length; i++) {
         if (!flags.includes(args[i]!)) continue;
         const v = args[i + 1];
-        if (v === undefined || v.startsWith('--')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
+        if (v === undefined || v === '' || v.trim() === '' || v.startsWith('--')) throw new KeeperStartupRefusal(`${args[i]} needs a value`);
     }
 }
 

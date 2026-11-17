@@ -199,8 +199,8 @@ function shortUsage(): string {
 async function runCastSend(params: {
     rpcUrl: string;
     target: `0x${string}`;
-    keystorePath?: string;
-    accountName?: string;
+    /** From castSignerArgs(signer) at startup: the only source of --keystore / --account. */
+    signerArgs: string[];
     passwordFilePath: string;
     gasPriceWei?: bigint;   // explicit gas-price to avoid cast hanging on estimation
     processTimeoutMs?: number; // hard kill timeout (default 90s)
@@ -208,7 +208,7 @@ async function runCastSend(params: {
     const cmd = 'cast';
     const castArgs = ['send', '--rpc-url', params.rpcUrl, '--async', '--timeout', '60'];
 
-    castArgs.push(...castSignerArgs({ keystorePath: params.keystorePath, castAccount: params.accountName }));
+    castArgs.push(...params.signerArgs);
 
     // Explicit gas price prevents cast from calling eth_estimateGas (which can hang)
     if (params.gasPriceWei && params.gasPriceWei > 0n) {
@@ -300,7 +300,6 @@ async function main() {
     });
     if (signer.mode === 'privateKey') console.log(`signer (privateKey mode): ${signer.address ?? 'none (dry run)'}`);
     else console.log(`signer (cast mode): ${signer.keystorePath ? `keystore ${signer.keystorePath}` : `account ${signer.castAccount}`}`);
-    startupPhase = false;
     assertTelegramConfigValid();
     // Read AFTER the .env.<network> files above, so the network file can set it (CLI still wins).
     // Alert when PaymasterV4 stays unresolved this long (then at most once per interval). 0 disables.
@@ -371,6 +370,19 @@ async function main() {
         },
         paymasterMissingAlertSec
     );
+    // What this run signs with, built from the resolved signer only, before the first network request, and
+    // logged: the wallet below and every `cast send` use exactly these objects (no second lookup anywhere).
+    const keeperAccount = keeperAccountFor(signer);
+    const walletClient = keeperAccount
+        ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
+        : null;
+    if (walletClient) console.log(`wallet signer: ${walletClient.account!.address}`);
+    const castSigner = signer.mode === 'cast' ? castSignerArgs(signer) : null;
+    if (castSigner) console.log(`cast signer args: ${castSigner.join(' ')}`);
+    // Everything above is local configuration; an error up to here is a refusal (no Telegram). From here on the
+    // keeper touches the network.
+    startupPhase = false;
+
     let paymaster: `0x${string}` | null = null;
     let paymasterInit = 'disabled';
     if (!disablePaymaster) {
@@ -456,11 +468,6 @@ async function main() {
             await fs.promises.writeFile(passwordFilePath, pw, { mode: 0o600 });
         }
     }
-
-    const keeperAccount = keeperAccountFor(signer);
-    const walletClient = keeperAccount
-        ? createWalletClient({ account: keeperAccount, chain: config.chain, transport: http(config.rpcUrl) })
-        : null;
 
     const updatesTodayByPaymaster = new Map<string, number>();
     let dayStartSec = nowSec();
@@ -731,11 +738,11 @@ async function main() {
         const sendUpdate = async (target: `0x${string}`, kind: 'super' | 'paymaster', gasPriceWei?: bigint): Promise<string> => {
             if (mode === 'cast') {
                 if (!passwordFilePath) throw new Error('cast mode requires password file (should have been created at startup)');
+                if (!castSigner) throw new Error('cast mode requires --keystore or --cast-account');
                 return await runCastSend({
                     rpcUrl: config.rpcUrl,
                     target,
-                    keystorePath: keystorePath || undefined,
-                    accountName: !keystorePath ? castAccount || undefined : undefined,
+                    signerArgs: castSigner,
                     passwordFilePath,
                     gasPriceWei,
                     processTimeoutMs: 90_000
