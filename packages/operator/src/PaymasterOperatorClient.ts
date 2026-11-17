@@ -131,9 +131,12 @@ export class PaymasterOperatorClient extends BaseClient {
      * Deploy a new Paymaster V4 and Register as AOA Operator (one-stop API).
      * This method handles:
      * 1. Checks prerequisites (ROLE_COMMUNITY)
-     * 2. Predicts new Paymaster address
-     * 3. Deploys Paymaster V4 via Factory
+     * 2. Deploys Paymaster V4 via Factory, or reuses this account's earlier deploy
+     * 3. Checks the deploy with verifyPaymasterDeployment (receipt, factory mapping, owner()) before any approve
      * 4. Registers ROLE_PAYMASTER_AOA with staking
+     *
+     * A factory with a Registry configured requires ROLE_PAYMASTER_AOA before the deploy, which this order does
+     * not satisfy for a new operator (FU-116).
      * 
      * @param params Deployment parameters
      * @param options Transaction options
@@ -143,6 +146,7 @@ export class PaymasterOperatorClient extends BaseClient {
         stakeAmount?: bigint; // Optional, defaults to 30 GToken (Registry requirement for AOA)
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
+        confirmations?: number; // Optional, confirmations to wait for on the deploy before checking and registering
         priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
@@ -214,7 +218,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 
                 // The address comes from the successful receipt, and is checked against the mapping and owner()
                 // before the approve and role registration below.
-                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash });
+                paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash, confirmations: params?.confirmations });
             }
 
             // 3. Register ROLE_PAYMASTER_AOA

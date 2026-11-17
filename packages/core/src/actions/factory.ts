@@ -732,11 +732,14 @@ export const paymasterFactoryActions = (address: Address) => (client: PublicClie
  * address first (SP Daybreak DB-d-M3). So the address comes only from the PaymasterDeployed log of a
  * successful receipt (or, with no `deployHash`, from the factory mapping of an earlier deploy), and
  * then all three must name `operator`: paymasterByOperator, operatorByPaymaster and the clone's owner().
- * The three are read at one block: the receipt's block, or the latest block number read once.
+ * The three are read at one block number (the receipt's, or the latest one read once), and the hash of
+ * that block is read again afterwards and must still be the one the check started from; a reorg at that
+ * height during the check throws. Reading at the receipt's block needs a node that still serves that
+ * block's state; a read failure throws with the block and the deploy hash.
  *
  * This is a client-side check at that block, not a guarantee at a later transaction: ownership can
- * change afterwards, and a reorg past `confirmations` can replace the deploy. Callers that need more
- * should raise `confirmations` and check again right before they send.
+ * change afterwards, and a reorg deeper than `confirmations` after the check can replace the deploy.
+ * Callers that need more should raise `confirmations` and check again right before they send.
  */
 export async function verifyPaymasterDeployment(
     client: PublicClient,
@@ -751,6 +754,7 @@ export async function verifyPaymasterDeployment(
 
     let paymaster: Address;
     let blockNumber: bigint;
+    let blockHash: Hash;
     if (deployHash) {
         const receipt = await client.waitForTransactionReceipt({ hash: deployHash, confirmations });
         if (receipt.status !== 'success') fail(ErrorCode.CONTRACT_REVERT, `deploy tx ${deployHash} reverted`);
@@ -765,17 +769,32 @@ export async function verifyPaymasterDeployment(
         }
         paymaster = mine[0].args.paymaster;
         blockNumber = receipt.blockNumber;
+        blockHash = receipt.blockHash;
     } else {
-        blockNumber = await client.getBlockNumber();
-        paymaster = await client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Address;
-        if (isAddressEqual(paymaster, zeroAddress)) fail(ErrorCode.CONTRACT_REVERT, `factory ${factory} has no paymaster for ${operator}`);
+        const latest = await client.getBlock();
+        blockNumber = latest.number;
+        blockHash = latest.hash;
     }
+    const where = `at block ${blockNumber}${deployHash ? ` (deploy tx ${deployHash})` : ''}`;
 
-    const [byOperator, byPaymaster, owner] = await Promise.all([
-        client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Promise<Address>,
-        client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getOperatorByPaymaster', args: [paymaster], blockNumber }) as Promise<Address>,
-        client.readContract({ address: paymaster, abi: PaymasterABI, functionName: 'owner', args: [], blockNumber }) as Promise<Address>,
-    ]);
+    let byOperator: Address, byPaymaster: Address, owner: Address;
+    try {
+        if (!deployHash) {
+            paymaster = await client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Address;
+            if (isAddressEqual(paymaster, zeroAddress)) fail(ErrorCode.CONTRACT_REVERT, `factory ${factory} has no paymaster for ${operator}`);
+        }
+        [byOperator, byPaymaster, owner] = await Promise.all([
+            client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getPaymasterByOperator', args: [operator], blockNumber }) as Promise<Address>,
+            client.readContract({ address: factory, abi: PaymasterFactoryABI, functionName: 'getOperatorByPaymaster', args: [paymaster!], blockNumber }) as Promise<Address>,
+            client.readContract({ address: paymaster!, abi: PaymasterABI, functionName: 'owner', args: [], blockNumber }) as Promise<Address>,
+        ]);
+        const after = await client.getBlock({ blockNumber });
+        if (after.hash !== blockHash) fail(ErrorCode.RPC_ERROR, `block ${blockNumber} changed from ${blockHash} to ${after.hash} during the check (reorg)`);
+    } catch (error) {
+        if (error instanceof AAStarError) throw error;
+        return fail(ErrorCode.RPC_ERROR, `could not read the factory mapping or owner() ${where}; the node may not serve that block's state (${(error as Error).message})`);
+    }
+    paymaster = paymaster!;
     if (!isAddressEqual(byOperator, paymaster)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${operator} to ${byOperator}, not ${paymaster}`);
     if (!isAddressEqual(byPaymaster, operator)) fail(ErrorCode.UNAUTHORIZED, `factory maps ${paymaster} to operator ${byPaymaster}, not ${operator}`);
     if (!isAddressEqual(owner, operator)) fail(ErrorCode.UNAUTHORIZED, `${paymaster}.owner() is ${owner}, not ${operator}`);

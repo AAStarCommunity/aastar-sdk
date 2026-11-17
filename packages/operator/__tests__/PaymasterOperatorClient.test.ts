@@ -157,11 +157,11 @@ describe('PaymasterOperatorClient', () => {
         
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000'); // Clean deploy
 
-        const result = await client.deployAndRegisterPaymasterV4();
+        const result = await client.deployAndRegisterPaymasterV4({ confirmations: 4 });
 
         expect(mocks.mockPaymasterFactory.deployPaymaster).toHaveBeenCalled();
         // The address comes from the verified receipt, not from a second mapping read.
-        expect(mocks.mockVerifyPaymasterDeployment).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ deployHash: '0xTxHash' }));
+        expect(mocks.mockVerifyPaymasterDeployment).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ deployHash: '0xTxHash', confirmations: 4 }));
         expect(mocks.mockRegistry.registerRoleSelf).toHaveBeenCalledWith(expect.objectContaining({
             roleId: '0x3333333333333333333333333333333333333333333333333333333333333333'
         }));

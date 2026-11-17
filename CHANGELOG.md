@@ -9,13 +9,17 @@ All notable changes to this project will be documented in this file.
 - New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash?, confirmations? })` in `@aastar/core`.
   It takes the paymaster address only from the factory's `PaymasterDeployed` log in a successful receipt (exactly one
   emitted by `factory` for `operator`), or, without `deployHash`, from the factory mapping. It then requires
-  `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, read at one block (the
-  receipt's, or one latest block number), and throws otherwise. It is a client-side check at that block: ownership can
-  change later and a reorg past `confirmations` can replace the deploy.
+  `paymasterByOperator`, `operatorByPaymaster` and the clone's `owner()` to all name `operator`, read at one block number
+  (the receipt's, or the latest one read once), and throws otherwise. That block's hash is read back after the checks and
+  must be unchanged, so a reorg at that height during the check throws. Reading at the receipt's block needs a node that
+  still serves that state; a read failure throws with the block and the deploy hash. It is a client-side check at that
+  block: ownership can change later, and a reorg deeper than `confirmations` after the check can replace the deploy.
 - `PaymasterOperatorClient.deployAndRegisterPaymasterV4` runs it on a new deploy and on a reused earlier deploy, before
   any approve or role registration, and now throws when the approve or the registration reverts instead of returning
   the hash as a success. `createOperatorClient().deployPaymasterV4` runs it after the receipt and throws on a mismatch,
-  so it no longer returns a hash for a reverted deploy.
+  so it no longer returns a hash for a reverted deploy. Both take an optional `confirmations` for the deploy receipt.
+- `deployAndRegisterPaymasterV4` still deploys before it registers `ROLE_PAYMASTER_AOA`; a factory with a Registry
+  configured requires that role first, so a new operator's deploy reverts there (FU-116).
 - The generic deposit methods (`addDeposit`, `addStake`, `depositFor`, `setupPaymasterDeposit`) still send to the
   address they are given or configured with and do not run this check (FU-116).
 - Removed `scripts/01_prepare_all.ts` (it deposited to a `simulate()`-predicted address before the deploy confirmed)

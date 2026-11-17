@@ -9,6 +9,7 @@ const OTHER = '0x8888888888888888888888888888888888888888' as Address;
 const FACTORY = '0x7777777777777777777777777777777777777777' as Address;
 const PM = '0x4444444444444444444444444444444444444444' as Address;
 const TX = ('0x' + 'cd'.repeat(32)) as Hash;
+const BLOCK_HASH = ('0x' + 'e1'.repeat(32)) as Hash;
 
 // No request may reach the network: every chain call below is stubbed on the client itself.
 const transport = custom({ request: async ({ method }) => { throw new Error(`unexpected RPC ${method}`); } });
@@ -24,12 +25,14 @@ function operatorClient(owner: Address) {
     oc.waitForTransactionReceipt = vi.fn(async () => ({
         status: 'success',
         blockNumber: 100n,
+        blockHash: BLOCK_HASH,
         logs: [{
             address: FACTORY,
             topics: encodeEventTopics({ abi: PaymasterFactoryABI, eventName: 'PaymasterDeployed', args: { operator: OPERATOR, paymaster: PM } }),
             data: encodeAbiParameters([{ type: 'string' }, { type: 'uint256' }], ['v4.1', 1n]),
         }],
     }));
+    oc.getBlock = vi.fn(async ({ blockNumber }: any) => ({ number: blockNumber, hash: BLOCK_HASH }));
     oc.readContract = vi.fn(async ({ functionName }: any) => {
         if (functionName === 'getPaymasterByOperator') return PM;
         if (functionName === 'getOperatorByPaymaster') return OPERATOR;
@@ -44,6 +47,12 @@ describe('createOperatorClient().deployPaymasterV4', () => {
         const oc = operatorClient(OPERATOR);
         await expect(oc.deployPaymasterV4()).resolves.toBe(TX);
         expect(oc.readContract).toHaveBeenCalledWith(expect.objectContaining({ address: PM, functionName: 'owner' }));
+    });
+
+    it('forwards confirmations to the receipt wait', async () => {
+        const oc = operatorClient(OPERATOR);
+        await oc.deployPaymasterV4({ confirmations: 5 });
+        expect(oc.waitForTransactionReceipt).toHaveBeenCalledWith(expect.objectContaining({ hash: TX, confirmations: 5 }));
     });
 
     it('throws when the deployed clone is owned by someone else', async () => {
