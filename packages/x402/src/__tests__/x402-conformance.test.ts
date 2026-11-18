@@ -7,6 +7,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { X402Client } from '../X402Client.js';
 import { createX402AuthHeaders } from '../authHeaders.js';
+import { domainClient } from './domainClient.js';
 
 // Cross-repo golden vectors — byte-identical to the DVT facilitator's
 // `conformance/x402/fixtures.json` (YetAnotherAA-Validator#130 / aastar-sdk#39).
@@ -22,7 +23,8 @@ const CHAIN_ID = fixtures.config.chainId as number;
 function clientFor(tokenName: string, tokenVersion: string) {
   const walletClient = createWalletClient({ account: payer, chain: sepolia, transport: http('http://localhost:8545') });
   return new X402Client({
-    publicClient: {} as never, walletClient,
+    // The asset reports the fixture's domain; createPayment reads it from this client, tokenName/tokenVersion are expectations.
+    publicClient: domainClient(CHAIN_ID, tokenName, tokenVersion), walletClient,
     superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID, facilitatorContract: FACILITATOR,
     tokenName, tokenVersion,
   });

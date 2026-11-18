@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### EIP-712 domains for USDC and BuyHelper are read from the chain (they were hard-coded)
+
+USDC's domain name is "USDC" on Sepolia / OP Sepolia but "USD Coin" on OP Mainnet. The SDK hard-coded
+`{ name: 'USDC', version: '2' }`, so its EIP-3009 authorizations were accepted on testnets and rejected on OP
+Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domain-op-fork.md`).
+
+- New `resolveEip712Domain(publicClient, contract, { getters?, expected? })` in `@aastar/core`. It uses
+  `eip712Domain()` (EIP-5267) when the contract has it, otherwise the name and version getters with the live
+  `eth_chainId`, and always requires the result to match the contract's `DOMAIN_SEPARATOR()`. A mismatch or an
+  unreadable getter throws; there is no default value. Checked results are cached per (chainId, contract).
+- `X402Client.createPayment` reads the asset's domain this way on both settlement paths. **Behaviour change:**
+  `tokenName` / `tokenVersion` no longer default to `'USDC'` / `'2'`; when set they are expected values, and a
+  difference from the chain throws. A config `chainId` other than the RPC's throws.
+- `TokenSaleClient.buyGasless` reads the USDC domain (`name()`/`version()`) and the BuyHelper domain
+  (`NAME()`/`VERSION()`) from the chain, each checked against `DOMAIN_SEPARATOR()`.
+- Bridged USDC.e on OP Mainnet (`0x7F5c…1607`) has no `version()` and no `DOMAIN_SEPARATOR()`; signing for it is
+  refused.
+- `GTOKEN_EIP712_DOMAIN` (`@aastar/x402`) is deprecated in favour of `resolveEip712Domain`.
+- Not in this change (FU-117): the MicroPaymentChannel voucher domain, the X402Facilitator domain, and the three
+  KMS payment digests.
+
 ### PaymasterV4 deploys are checked before the SDK registers them
 
 - New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash?, confirmations? })` in `@aastar/core`.

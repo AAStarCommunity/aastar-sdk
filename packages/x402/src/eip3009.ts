@@ -41,6 +41,11 @@ export function generateNonce(): Hex {
 }
 
 // GToken EIP-712 domain constants (GTokenAuthorization v2.2.0)
+/**
+ * @deprecated Hard-coded; matches GTokenAuthorization's `EIP712("GToken", "1")` today but is not
+ * checked against any deployment. Use `resolveEip712Domain(publicClient, gTokenAddress)` from
+ * `@aastar/core`, which reads the domain from the chain and checks it against `DOMAIN_SEPARATOR()`.
+ */
 export const GTOKEN_EIP712_DOMAIN = { name: 'GToken', version: '1' } as const;
 
 export async function signTransferWithAuthorization(

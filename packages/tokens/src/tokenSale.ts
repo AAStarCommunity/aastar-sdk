@@ -5,6 +5,7 @@ import {
   APNTsSaleContractABI,
   getLaunchSaleAddresses,
   getDvtRelayerUrlsForChain,
+  resolveEip712Domain,
   type LaunchSaleAddresses,
   type PublicClient,
   type WalletClient,
@@ -306,10 +307,22 @@ export class TokenSaleClient {
     const deadline = BigInt(Math.floor(Date.now() / 1000) + (params.deadlineSeconds ?? 1800));
     const nonce = randomNonce();
 
+    // Both domains come from the chain and are checked against each contract's DOMAIN_SEPARATOR():
+    // USDC's name differs per chain ("USDC" on Sepolia, "USD Coin" on OP Mainnet).
+    const [usdcDomain, buyHelperDomain] = await Promise.all([
+      resolveEip712Domain(this.publicClient as any, usdc),
+      resolveEip712Domain(this.publicClient as any, buyHelper, { getters: 'constants' }),
+    ]);
+    for (const [what, d] of [['USDC', usdcDomain.domain], ['BuyHelper', buyHelperDomain.domain]] as const) {
+      if (d.chainId !== this.chainId) {
+        throw new Error(`buyGasless: ${what} domain is on chain ${d.chainId}, the sale is configured for ${this.chainId}; refusing to sign`);
+      }
+    }
+
     // ① EIP-3009 USDC ReceiveWithAuthorization → BuyHelper
     const transferSig = await (wallet as any).signTypedData({
       account: signer,
-      domain: { name: 'USDC', version: '2', chainId: this.chainId, verifyingContract: usdc },
+      domain: usdcDomain.domain,
       types: {
         ReceiveWithAuthorization: [
           { name: 'from', type: 'address' },
@@ -331,10 +344,10 @@ export class TokenSaleClient {
       },
     });
 
-    // ② EIP-712 BuyIntent (domain MyceliumBuyHelper v1, verifyingContract = BuyHelper)
+    // ② EIP-712 BuyIntent (domain read from BuyHelper NAME()/VERSION(), verifyingContract = BuyHelper)
     const buyIntentSig = await (wallet as any).signTypedData({
       account: signer,
-      domain: { name: 'MyceliumBuyHelper', version: '1', chainId: this.chainId, verifyingContract: buyHelper },
+      domain: buyHelperDomain.domain,
       types: {
         BuyIntent: [
           { name: 'buyer', type: 'address' },

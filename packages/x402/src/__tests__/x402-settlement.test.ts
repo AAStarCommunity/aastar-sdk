@@ -9,6 +9,7 @@ import { X402Client } from '../X402Client.js';
 import { deriveEip3009Nonce, X402_PAYMENT_AUTHORIZATION_TYPES } from '../x402auth.js';
 import { EIP3009_TYPES, getEIP3009Domain } from '../eip3009.js';
 import { getX402FacilitatorContract } from '../facilitators.js';
+import { domainClient } from './domainClient.js';
 
 const PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'; // anvil #1 (test only)
 const account = privateKeyToAccount(PK);
@@ -19,7 +20,7 @@ const PAYTO = '0xF7Bf79AcB7F3702b9DbD397d8140ac9DE6Ce642C' as Address;
 
 function client() {
   const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
-  return new X402Client({ publicClient: {} as never, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+  return new X402Client({ publicClient: domainClient(CHAIN_ID, 'USDC', '2'), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
 }
 
 describe('deriveEip3009Nonce (matches X402Facilitator.settleX402Payment)', () => {
@@ -83,7 +84,7 @@ describe('settleViaFacilitator carries the settlement extra into paymentRequirem
   function facilClient() {
     const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
     return new X402Client({
-      publicClient: {} as never, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID,
+      publicClient: domainClient(CHAIN_ID, 'USDC', '2'), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID,
       facilitator: { url: 'https://dvt1.aastar.io/x402' },
     });
   }
@@ -111,5 +112,43 @@ describe('settleViaFacilitator carries the settlement extra into paymentRequirem
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('X402Client.createPayment — the asset domain comes from the chain (OP Mainnet USDC is "USD Coin")', () => {
+  const OP_USDC = '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85' as Address;
+  const OP_FACILITATOR = '0x000000000000000000000000000000000000fac1' as Address;
+  function opClient(extra: { tokenName?: string; tokenVersion?: string; chainId?: number } = {}) {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    return new X402Client({
+      publicClient: domainClient(10, 'USD Coin', '2'), walletClient, superPaymasterAddress: OP_FACILITATOR,
+      chainId: extra.chainId ?? 10, facilitatorContract: OP_FACILITATOR,
+      tokenName: extra.tokenName, tokenVersion: extra.tokenVersion,
+    });
+  }
+  const pay = (c: X402Client) => c.createPayment({
+    from: account.address, to: PAYTO, asset: OP_USDC, amount: 1n, settlement: 'eip-3009', maxFee: 1n,
+    salt: ('0x' + '33'.repeat(32)) as Hex, validAfter: 0n, validBefore: 4102444800n,
+  });
+
+  it('signs under "USD Coin" / "2" with no configuration, and the signature recovers under that domain only', async () => {
+    const { payload, nonce } = await pay(opClient());
+    expect(payload.accepted.extra.name).toBe('USD Coin');
+    expect(payload.accepted.extra.version).toBe('2');
+    const message = { from: account.address, to: OP_FACILITATOR, value: 1n, validAfter: 0n, validBefore: 4102444800n, nonce };
+    const under = (name: string) => recoverTypedDataAddress({
+      domain: getEIP3009Domain(name, '2', 10, OP_USDC), types: EIP3009_TYPES, primaryType: 'ReceiveWithAuthorization',
+      message, signature: payload.payload.signature,
+    });
+    expect((await under('USD Coin')).toLowerCase()).toBe(account.address.toLowerCase());
+    expect((await under('USDC')).toLowerCase()).not.toBe(account.address.toLowerCase()); // the old default would not verify
+  });
+
+  it('a configured tokenName the chain does not report throws instead of signing', async () => {
+    await expect(pay(opClient({ tokenName: 'USDC' }))).rejects.toThrow('expected name "USDC"');
+  });
+
+  it('a config chainId other than the RPC\'s throws', async () => {
+    await expect(pay(opClient({ chainId: 11155420 }))).rejects.toThrow('config chainId 11155420');
   });
 });
