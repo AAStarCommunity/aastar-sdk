@@ -25,9 +25,22 @@ All notable changes to this project will be documented in this file.
   replacement-underpriced answer, which needs both raised, is returned when either was given); a generated field is
   still raised to a bundler's explicit requirement, within an explicit maxFeePerGas.
 - A bundler answer that is not an estimate is not used as one: a field left out or a sentinel (≤ 1, e.g. a postOp it
-  did not simulate) is filled only by an explicit value or a contract floor read from the chain, otherwise the op is
-  refused before signing (V4 has no postOp floor). An endpoint without eth_estimateUserOperationGas gives the old local
-  defaults, labelled `default` and not scaled. `estimateUserOperationGas` itself still returns all five fields or throws.
+  did not simulate) is filled only by an explicit value, a contract floor read from the chain, or — for a V4
+  paymaster's postOp, which bundlers such as Alchemy do not estimate — `V4_DEFAULT_POSTOP_GAS` (200,000, the
+  pre-change value; labelled `default`, never a scaled sentinel); otherwise the op is refused before signing. An
+  endpoint without eth_estimateUserOperationGas gives the old local defaults, labelled `default` and not scaled.
+  `estimateUserOperationGas` itself still returns all five fields or throws.
+- `UserClient.executeGasless({ …, gas })`: explicit gas limits for either paymaster type, used instead of the estimate.
+- A replacement answer whose fee fields are null falls back to the 15% bump (as before); a named fee that is not a
+  number is a named bundler error (it was a raw TypeError).
+- Paymaster prefund and per-op cap move with the limits and fees: a V4 paymaster checks
+  `maxCost <= maxGasCostCap` (`Paymaster__GasCostExceedsCap`) and pre-charges `token(maxCost)` from the sender's
+  balance, refunding the difference in postOp. With limits at estimate × 1.5 and maxFee = 2 × base + priority, maxCost
+  can rise on chains where it used to be bounded by tuned limits, and fall on testnets that lost the 1 gwei maxFee
+  floor. Bundler efficiency checks: Alchemy rejects an op whose actual/limit ratio is below 0.4, which a 1.5x
+  coefficient passes only while the estimate is within ~1.67x of actual use; SuperPaymaster's postOp floor (500,000 on
+  rc.8 against ~100,000 used) is a known risk there, to be measured on a real Sepolia submission (#434 B5).
+  `gasLimitCoefficientBps` is the knob.
 - `tuneEstimate` now receives the bundler's raw estimate (it used to get the SDK-tuned values), and is refused with a
   partial estimate instead of being skipped. An unusable preVerificationGas estimate is refused like the others (the
   SDK's local calculation has no L1 data fee); it is computed locally only without an estimation endpoint.

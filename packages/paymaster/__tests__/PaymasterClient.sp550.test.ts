@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createWalletClient, custom, defineChain, encodeAbiParameters, fallback, HttpRequestError, keccak256, pad, toBytes, type Address, type Hex } from 'viem';
 import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
-import { PaymasterClient } from '../src/V4/PaymasterClient';
+import { PaymasterClient, V4_DEFAULT_POSTOP_GAS } from '../src/V4/PaymasterClient';
 import { getUserOpHashV07 } from '../src/V4/PaymasterUtils';
 import { UserOperationNotYetValidError } from '../src/V4/userOpOutcome';
 import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
@@ -1501,15 +1501,44 @@ describe('round 2: partial caller fees, sentinel / partial estimates, fallback p
     });
 });
 
-describe('V4 path (no contract postOp floor): a sentinel postOp estimate is refused, an explicit one is used', () => {
-    const sentinel = { result: { ...ESTIMATE.result, paymasterPostOpGasLimit: '0x1' } };
-    it('postOp 0x1 from the bundler → refused before signing; with an explicit postOp it goes through', async () => {
+describe('V4 path (no contract postOp floor): an unestimated postOp gets the labelled default, never a scaled sentinel (clestons #464 B1)', () => {
+    const { paymasterPostOpGasLimit: _drop, ...noPostOp } = ESTIMATE.result;
+    for (const [label, est] of [['field missing (Alchemy)', { result: noPostOp }], ['sentinel 0x1', { result: { ...ESTIMATE.result, paymasterPostOpGasLimit: '0x1' } }]] as const) {
+        it(`${label} → postOp ${V4_DEFAULT_POSTOP_GAS} labelled default, unscaled; an explicit postOp wins`, async () => {
+            const seen: any[] = [];
+            const decisions: any[] = [];
+            const bundler = async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? est : { result: OP_HASH }; };
+            await expect(harness(bundler).submit({ operator: undefined, onGasDecided: (d: any) => decisions.push(d) })).resolves.toBe(OP_HASH);
+            const sent = seen.filter((x) => x.method === 'eth_sendUserOperation');
+            expect(BigInt(sent[0].op.paymasterPostOpGasLimit)).toBe(V4_DEFAULT_POSTOP_GAS);
+            expect(decisions[0].limitSources.paymasterPostOpGasLimit).toBe('default');
+            await expect(harness(bundler).submit({ operator: undefined, paymasterPostOpGasLimit: 150_000n })).resolves.toBe(OP_HASH);
+            expect(BigInt(seen.filter((x) => x.method === 'eth_sendUserOperation')[1].op.paymasterPostOpGasLimit)).toBe(150_000n);
+        });
+    }
+});
+
+describe('replacement answer with null / unreadable fees (clestons #464 Low)', () => {
+    const run = async (data: any) => {
         const seen: any[] = [];
-        const bundler = async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? sentinel : { result: OP_HASH }; };
-        await expect(harness(bundler).submit({ operator: undefined })).rejects.toThrow('no usable paymasterPostOpGasLimit; pass it explicitly');
-        expect(seen.filter((x) => x.method === 'eth_sendUserOperation')).toHaveLength(0);
-        await expect(harness(bundler).submit({ operator: undefined, paymasterPostOpGasLimit: 150_000n })).resolves.toBe(OP_HASH);
-        expect(BigInt(seen.find((x) => x.method === 'eth_sendUserOperation').op.paymasterPostOpGasLimit)).toBe(150_000n);
+        let first = true;
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first) { first = false; return { error: { code: -32602, message: 'replacement underpriced', data } }; }
+            return { result: OP_HASH };
+        });
+        return { r: submit(), seen };
+    };
+    it('null fee fields → the 15% bump (as before this PR), not a TypeError', async () => {
+        const { r, seen } = await run({ currentMaxPriorityFee: null, currentMaxFee: null });
+        await expect(r).resolves.toBe(OP_HASH);
+        const sends = seen.filter((x) => x.method === 'eth_sendUserOperation');
+        expect(BigInt(sends[1].op.maxPriorityFeePerGas)).toBe((BigInt(sends[0].op.maxPriorityFeePerGas) * 115n) / 100n);
+    });
+    it('a named fee that is not a number → a named bundler error', async () => {
+        const { r } = await run({ currentMaxPriorityFee: 'abc', currentMaxFee: '0x1' });
+        await expect(r).rejects.toThrow(/replacement underpriced with an unreadable currentMaxPriorityFee/);
     });
 });
 

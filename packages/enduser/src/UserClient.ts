@@ -466,6 +466,8 @@ export class UserClient extends BaseClient {
         gasToken?: Address;
         operator?: Address; // Added for SuperPaymaster
         maxRate?: bigint;   // Added for SuperPaymaster
+        /** Explicit gas limits, used instead of the bundler's estimate for those fields (e.g. a V4 postOp limit). */
+        gas?: Partial<Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit', bigint>>;
     }, options?: TransactionOptions): Promise<Hash> {
         try {
             const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
@@ -507,6 +509,7 @@ export class UserClient extends BaseClient {
                 this.bundlerClient?.transport?.url || (this.client.transport as any).url || '',
                 callData,
                 {
+                    ...params.gas,
                     operator: params.operator
                 }
             );

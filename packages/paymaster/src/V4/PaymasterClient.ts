@@ -58,6 +58,12 @@ export type SubmitGaslessOptions = {
 };
 
 /** The limits used when the endpoint cannot estimate at all (eth_estimateUserOperationGas missing): defaults, not estimates. */
+/**
+ * A V4 paymaster's postOp limit when the bundler gives no estimate for it (Alchemy omits the field): the value the SDK
+ * used before limits came from estimates (max(est + 100k, 200k) with no estimate). Labelled 'default', not scaled.
+ */
+export const V4_DEFAULT_POSTOP_GAS = 200_000n;
+
 const LOCAL_DEFAULT_LIMITS: GasEstimate = {
     preVerificationGas: 0n, verificationGasLimit: 1_000_000n, callGasLimit: 2_000_000n,
     paymasterVerificationGasLimit: 100_000n, paymasterPostOpGasLimit: 100_000n,
@@ -761,8 +767,10 @@ export class PaymasterClient {
             }
             if (!fallback) {
                 const unestimated = FIELDS.filter((k) => gasLimits[k] === undefined);
-                // SuperPaymaster's postOp has a contract floor read from the chain; anything else needs a value.
-                const coveredByFloor = (k: Field) => k === 'paymasterPostOpGasLimit' && !!(options?.operator && spCtx);
+                // postOp: SuperPaymaster's has a contract floor read from the chain; a V4 paymaster's gets a labelled
+                // default (V4_DEFAULT_POSTOP_GAS, never a scaled sentinel) — bundlers such as Alchemy do not estimate it.
+                // Anything else needs a value.
+                const coveredByFloor = (k: Field) => k === 'paymasterPostOpGasLimit';
                 // preVerificationGas too: the SDK's local calculation has no L1 data fee, so it is not a stand-in for an L2 estimate.
                 const refuse = unestimated.filter((k) => !coveredByFloor(k));
                 if (refuse.length > 0) {
@@ -813,7 +821,7 @@ export class PaymasterClient {
             // Since PVG is ~100k, (VGL + PMVGL) must be <= 150k.
             // We set each to 75k to safely pass the 0.4 efficiency guard.
             if (gasLimits.paymasterVerificationGasLimit === undefined) { gasLimits.paymasterVerificationGasLimit = 75000n; limitSources.paymasterVerificationGasLimit = 'default'; }
-            if (gasLimits.paymasterPostOpGasLimit === undefined) { gasLimits.paymasterPostOpGasLimit = 100000n; limitSources.paymasterPostOpGasLimit = 'default'; }
+            if (gasLimits.paymasterPostOpGasLimit === undefined) { gasLimits.paymasterPostOpGasLimit = V4_DEFAULT_POSTOP_GAS; limitSources.paymasterPostOpGasLimit = 'default'; }
 
             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
@@ -988,9 +996,14 @@ export class PaymasterClient {
                      const curMax = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
                      // What the replacement needs, per field: 10% over the pending op's fees when the bundler names them
                      // (Alchemy/Pimlico), else 15% over this op's.
-                     const named = errData.currentMaxPriorityFee !== undefined && errData.currentMaxFee !== undefined;
-                     const needPriority = named ? (BigInt(errData.currentMaxPriorityFee) * 110n) / 100n : (curPriority * 115n) / 100n;
-                     const needMax = named ? (BigInt(errData.currentMaxFee) * 110n) / 100n : (curMax * 115n) / 100n;
+                     // A null / absent pair is "not named" (the 15% path); a named value that is not a number is a bundler error.
+                     const named = errData.currentMaxPriorityFee != null && errData.currentMaxFee != null;
+                     const feeOf = (v: unknown, field: string): bigint => {
+                         try { return BigInt(v as any); }
+                         catch { throw new Error(`Bundler Error: replacement underpriced with an unreadable ${field} ${JSON.stringify(v)}: ${JSON.stringify(result.error)}`); }
+                     };
+                     const needPriority = named ? (feeOf(errData.currentMaxPriorityFee, 'currentMaxPriorityFee') * 110n) / 100n : (curPriority * 115n) / 100n;
+                     const needMax = named ? (feeOf(errData.currentMaxFee, 'currentMaxFee') * 110n) / 100n : (curMax * 115n) / 100n;
                      const refuseRaise = (field: string) => {
                          throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (${field} was given by the caller and is not raised)`);
                      };
