@@ -42,7 +42,7 @@ import { resolveSp550Network, sp550OverlayBook, sp550PinsFor } from '../packages
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook, DEPLOYLIVE_ARCHIVE_PENDING } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, DEPLOYLIVE_ARCHIVE_PENDING, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -158,11 +158,9 @@ async function main() {
     const lock = `${lockBase}.lock`;
     // The lock doubles as a journal: a run killed between the two renames leaves it behind, naming the
     // files that may be half-written and how to recover (they are tracked: git restore puts them back).
-    const tableFile0 = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
     // Before-images go next to the lock, so recovery never depends on git (which would also drop
     // unrelated local edits): copy each .before back over its file, then delete the lock and backups.
-    const written = net.coexist ? [tableFile0] : [tableFile0, FILES.book];
-    const backups = written.map((f) => [f, `${lockBase}.${path.basename(f)}.before`] as const);
+    const backups = pinFillTargets(net, FILES).map((f) => [f, `${lockBase}.${path.basename(f)}.before`] as const);
     const journal = `pid ${process.pid} · ${new Date().toISOString()}\n` +
         backups.map(([f, bk]) => `writing ${path.relative(ROOT, f)} · before-image ${path.relative(ROOT, bk)}`).join('\n') +
         `\nif this file outlives the run, the source may be half-written: restore each file from its before-image (cp), then delete this lock and the before-images\n`;
@@ -188,13 +186,10 @@ async function main() {
     let code = 1;
     let keepLock = false;
     try { write: {
-        const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
-        const before = { table: fs.readFileSync(tableFile, 'utf8'), book: fs.readFileSync(FILES.book, 'utf8') };
-        let after;
-        try { after = { table: fillPinsTable(before.table, table, net.coexist ? tableKey : net.chainId, pins), book: net.coexist ? before.book : switchBook(before.book, net.chainId, changed, note) }; }
+        let files: { path: string; before: string; after: string }[];
+        try { files = pinFillWritePlan(net, pins, FILES, (f) => fs.readFileSync(f, 'utf8'), changed, note); }
         catch (e) { console.error(`nothing written: ${(e as Error).message}`); break write; }
         let restore: () => string[];
-        const files = [{ path: tableFile, before: before.table, after: after.table }, ...(net.coexist ? [] : [{ path: FILES.book, before: before.book, after: after.book }])];
         try { restore = writeAll(files, ROOT); }
         catch (e) {
             console.error((e as Error).message);

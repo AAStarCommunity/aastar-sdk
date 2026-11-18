@@ -24,7 +24,7 @@ import {
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
+    assertSp550ChainId, sp550CoexistOverlapProblems, sp550HoldFor, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -132,8 +132,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const problems = net.mode === 'fresh'
         ? sp550FreshPinProblems(pins, { allowRc: input.allowRc || net.allowRc })
         : sp550UpgradePinProblems(pins, { allowRc: input.allowRc || net.allowRc });
+    if (net.coexist) problems.push(...sp550CoexistOverlapProblems(net.network, pins));
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
-    const hold = SP550_RELEASE_HOLDS[chainId];
+    const hold = sp550HoldFor(net.network);
     if (hold) record('no release hold on this chain', false, hold);
 
     // 5. State reads on every RPC; a disagreement is returned as a Diverge object, which fails any comparison.

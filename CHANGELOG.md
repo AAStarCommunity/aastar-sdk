@@ -14,7 +14,13 @@ All notable changes to this project will be documented in this file.
   (`gTokenStaking`, `mySBT`) from the pins, external ones from the shipped book, declared-absent ones as the zero
   address, so a client's `{ ...chainDefaults, ...addresses }` merge cannot fall back to the 5.4.2 stack.
   `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
-- A network's release-tag policy (`allowRc`) applies alike to the writer, the gate and `sp550AddressSet`; only
+- `requireDeployedAddress(set, key, deployment)`: the address of a key, or a named `Sp550NotDeployedError` when it is
+  zero (not deployed), missing or malformed — for every path that signs, sends or encodes an address (the rc.8 live
+  cells route their keys through it). Client factories do not check this uniformly yet (FU-123).
+- A coexisting stack may not reuse an SP-owned address of the chain's shipped stack (`sp550CoexistOverlapProblems`;
+  a deliberate share is a reviewed `SP550_COEXIST_SHARED_KEYS` entry). Its release holds are its own
+  (`SP550_COEXIST_HOLDS`, `sp550HoldFor`), so holding one Sepolia deployment never holds or releases the other.
+- A network's release-tag policy (`allowRc`) applies alike to the writer, the gate, the read-back comparator and `sp550AddressSet`; only
   `sepolia-rc8` accepts `v5.5.0-rc.N` without `--allow-rc`. `resolveSp550Network` returns a discriminated union.
 - Fresh pins (every fresh network): the book's `aPNTs` / `xPNTsFactory` must be the `aPNTsCapped` / `xPNTsFactoryV2`
   contracts (neither different nor declared absent), as an upgrade derives them. The gate accepts the zero address

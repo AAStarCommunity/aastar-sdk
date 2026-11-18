@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import { SP550_CERTIFIED_ADDRESS_KEYS, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
-import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { SP550_PIN_ALIASES, sp550PinsFor, type Sp550FreshDeployPins, type Sp550NetworkEntry } from '../packages/core/src/sp550Deployments.js';
 import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
 export { isNotDeployedPlaceholder };
 import { isIP } from 'net';
@@ -143,6 +143,32 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
  */
 export type Sp550PinSourceKind = 'manifest' | 'deploylive-archive';
 export const DEPLOYLIVE_ARCHIVE_PENDING = '--deploylive-archive is not implemented yet: it waits for SP to name the source of the expected runtime codehashes (DSR 2026-11-19); nothing was read or written';
+
+/** The source files a fill may write, by role. */
+export interface PinFillFiles { upgrade: string; fresh: string; book: string }
+
+/** The files a fill writes for a network: its pin table's file, plus the address book unless the stack coexists. */
+export function pinFillTargets(net: Sp550NetworkEntry, files: PinFillFiles): string[] {
+    const table = net.mode === 'fresh' ? files.fresh : files.upgrade;
+    return net.coexist ? [table] : [table, files.book];
+}
+
+/**
+ * Exactly what a fill writes: the pin table entry (by chain, or by network name for a coexisting stack) and, unless
+ * the stack coexists, the address-book switch. A coexisting stack's plan never contains the book.
+ */
+export function pinFillWritePlan(net: Sp550NetworkEntry, pins: Sp550FreshDeployPins, files: PinFillFiles, read: (path: string) => string,
+    changed: Record<string, string | null>, note: string): { path: string; before: string; after: string }[] {
+    const { table, key } = sp550PinsFor(net.network);
+    const [tableFile, bookFile] = pinFillTargets(net, files);
+    const before = read(tableFile);
+    const plan = [{ path: tableFile, before, after: fillPinsTable(before, table, net.coexist ? key : net.chainId, pins) }];
+    if (bookFile !== undefined) {
+        const b = read(bookFile);
+        plan.push({ path: bookFile, before: b, after: switchBook(b, net.chainId, changed, note) });
+    }
+    return plan;
+}
 
 /** SP's GitHub repository: the live read-back is fetched from it, and its main must contain the commit. */
 export const SP_REPO = 'AAStarCommunity/SuperPaymaster';

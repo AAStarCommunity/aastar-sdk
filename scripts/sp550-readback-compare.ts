@@ -124,7 +124,7 @@ async function main() {
     if (source === 'fork' && !process.env.SP550_FORK_URL) refuse('a fork read-back needs SP550_FORK_URL (the upstream the fork was started from) for the Amsterdam checks');
     const rbJson = JSON.parse(fs.readFileSync(rbFile, 'utf8'));
     const problems = await readbackProblems(rbJson, pins, {
-        chainId: net.chainId, mode: net.mode, source, allowRc: args.includes('--allow-rc'),
+        chainId: net.chainId, mode: net.mode, source, allowRc: args.includes('--allow-rc') || net.allowRc,
         forkBlock: fb !== undefined ? BigInt(fb) : undefined, dumpSha256: arg('--dump-sha256'), hardfork: arg('--hardfork'),
         anvilCommit: arg('--anvil-commit'), spCommit: arg('--sp-commit'),
     }, read);

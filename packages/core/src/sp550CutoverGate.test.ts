@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
-import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -595,7 +595,8 @@ describe('5.5.0 deploys no DisclosureRegistry (author 2026-11-12): absent stands
 });
 
 describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-19)', () => {
-    const shippedSepolia = (CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id];
+    const shippedSepolia = structuredClone((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id]);
+    const shippedSnapshot = JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id]);
 
     it('resolves as fresh + coexist on chain 11155111, next to the sepolia upgrade entry', () => {
         expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true });
@@ -638,8 +639,8 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         expect(a.priceFeed).toBe(shippedSepolia.priceFeed);
         expect(set.absent.length).toBeGreaterThan(0);
         for (const k of set.absent) expect(a[k]).toBe('0x0000000000000000000000000000000000000000');
-        expect(a.timelockControllerLegacy).toBeUndefined();
-        expect((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id].superPaymaster).toBe(shippedSepolia.superPaymaster);
+        expect(a.timelockControllerLegacy).toBe('0x0000000000000000000000000000000000000000');
+        expect(JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id])).toBe(shippedSnapshot); // by value, captured before
         expect(() => sp550AddressSet('sepolia' as any, m.pins)).toThrow('is not a coexisting');
     });
 
@@ -689,5 +690,56 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         const net = resolveSp550Network('sepolia-rc8');
         if (net.coexist) expect(() => sp550AddressSet(net.network)).toThrow(/not usable/); // compiles without a cast
         else throw new Error('sepolia-rc8 must be coexisting');
+    });
+
+    it('requireDeployedAddress: a declared-absent (zero) key throws a named error instead of yielding address zero (DSR 2026-11-19)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const set = sp550AddressSet('sepolia-rc8', m.pins);
+        expect(requireDeployedAddress(set.addresses, 'superPaymaster', 'sepolia-rc8')).toBe(m.pins.superPaymaster);
+        expect(requireDeployedAddress(set.addresses, 'gTokenStaking', 'sepolia-rc8')).toBe(m.pins.addresses.staking);
+        for (const k of set.absent) {
+            expect(() => requireDeployedAddress(set.addresses, k, 'sepolia-rc8')).toThrow(Sp550NotDeployedError);
+            expect(() => requireDeployedAddress(set.addresses, k, 'sepolia-rc8')).toThrow(`the sepolia-rc8 deployment does not include ${k}`);
+        }
+        expect(() => requireDeployedAddress(set.addresses, 'nope', 'sepolia-rc8')).toThrow(/does not include nope \(no entry\)/);
+        expect(() => requireDeployedAddress({ token: '0x12' }, 'token', 'chain read')).toThrow(Sp550NotDeployedError);
+        expect(() => requireDeployedAddress(undefined, 'registry', 'sepolia-rc8')).toThrow(Sp550NotDeployedError);
+    });
+
+    it('a coexisting stack may not reuse an SP-owned address of the shipped Sepolia stack, even with a matching codehash (Codex r2 H1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const old = shippedSepolia.staking as Address;
+        const pins = { ...m.pins, addresses: { ...m.pins.addresses, staking: old }, codehashes: { ...m.pins.codehashes, 'addresses.staking': keccak256(codeOf(old)) } };
+        expect(sp550CoexistOverlapProblems('sepolia-rc8', pins)).toEqual([expect.stringMatching(/addresses\.staking .* is the shipped stack's staking/)]);
+        expect(() => sp550AddressSet('sepolia-rc8', pins)).toThrow(/is the shipped stack's staking/);
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(/is the shipped stack's staking/);
+        expect(sp550CoexistOverlapProblems('sepolia-rc8', m.pins)).toEqual([]);
+    });
+
+    it('holds are per deployment: holding sepolia-rc8 does not hold the sepolia upgrade, and the reverse (Codex r2 M3)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        expect(sp550HoldFor('sepolia-rc8')).toBeUndefined();
+        SP550_COEXIST_HOLDS['sepolia-rc8'] = 'test hold';
+        try {
+            expect(sp550HoldFor('sepolia-rc8')).toBe('test hold');
+            expect(sp550HoldFor('sepolia')).toBeUndefined();
+            expect(() => sp550AddressSet('sepolia-rc8', m.pins)).toThrow(/release hold: test hold/);
+        } finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
+        SP550_RELEASE_HOLDS[sepolia.id] = 'chain hold';
+        try {
+            expect(sp550HoldFor('sepolia')).toBe('chain hold');
+            expect(sp550HoldFor('sepolia-rc8')).toBeUndefined();
+            expect(sp550AddressSet('sepolia-rc8', m.pins).chainId).toBe(sepolia.id);
+        } finally { delete SP550_RELEASE_HOLDS[sepolia.id]; }
+        expect(sp550HoldFor('op-mainnet')).toMatch(/3\.2\.2/);
+    });
+
+    it('the overlay zeroes the shipped stack\'s history (timelockControllerLegacy), even when it is set (Codex r2 L4)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const book = sp550OverlayBook({ ...shippedSepolia, timelockControllerLegacy: A(0x777) }, m.pins);
+        expect(book.timelockControllerLegacy).toBe('0x0000000000000000000000000000000000000000');
+        expect(book.entryPoint).toBe(shippedSepolia.entryPoint);
     });
 });
