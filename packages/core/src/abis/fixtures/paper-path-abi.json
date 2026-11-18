@@ -1,0 +1,151 @@
+{
+  "spCommit": "cf8b106844da8f38f8c195c951634b115530ccfb",
+  "files": {
+    "SuperPaymaster-5.5.0.full.json": {
+      "upstream": "abis/SuperPaymaster.full.json",
+      "upstreamBlobSha256": "0559cf307e7765e0cbbd6cf123b5d1001fee7fb5ac46138afa5c0993f245ae43",
+      "entries": [
+        {
+          "signature": "version() returns (string) pure",
+          "selector": "0x54fd4d50"
+        },
+        {
+          "signature": "operators(address) returns (uint128,bool,bool,address,uint32,uint48,address,uint256,uint256) view",
+          "selector": "0x13e7c9d8"
+        },
+        {
+          "signature": "gasParams() returns ((uint32,uint32,uint32,uint32),(uint32,uint32,uint32,uint32,uint64)) view",
+          "selector": "0xbe875cf3"
+        },
+        {
+          "signature": "cachedPrice() returns (int256,uint256,uint80,uint8) view",
+          "selector": "0xf60fdcb3"
+        },
+        {
+          "signature": "priceStalenessThreshold() returns (uint256) view",
+          "selector": "0xbd111870"
+        },
+        {
+          "signature": "updatePrice() returns () nonpayable",
+          "selector": "0x673a7e28"
+        },
+        {
+          "signature": "isEligibleForSponsorship(address) returns (bool) view",
+          "selector": "0x6a16e22d"
+        },
+        {
+          "signature": "TransactionSponsored(address indexed,address indexed,uint256,uint256)",
+          "selector": "0xcde7e91a718e2439d8ff2a679ad52713e82a37b72622fb530c8c41039fdd5bf0"
+        }
+      ]
+    },
+    "SuperPaymasterLens.json": {
+      "upstream": "abis/SuperPaymasterLens.json",
+      "upstreamBlobSha256": "835c8e25b3b1f640a7bb3beb96e71903b0c3013fe532375ee9c4cd63900fea72",
+      "entries": [
+        {
+          "signature": "dryRunValidation(address,(address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),uint256) returns (bool,bytes32) view",
+          "selector": "0x56a07f70"
+        }
+      ]
+    },
+    "xPNTsTokenV2.full.json": {
+      "upstream": "abis/xPNTsTokenV2.full.json",
+      "upstreamBlobSha256": "73eff8610e5f76ba0999eea3d4dbd34e48bf28c46ee8c0c84a6493cdb98878cc",
+      "entries": [
+        {
+          "signature": "balanceOf(address) returns (uint256) view",
+          "selector": "0x70a08231"
+        },
+        {
+          "signature": "transfer(address,uint256) returns (bool) nonpayable",
+          "selector": "0xa9059cbb"
+        },
+        {
+          "signature": "exchangeRate() returns (uint256) view",
+          "selector": "0x3ba0b9a9"
+        },
+        {
+          "signature": "previewLock(address,address,bytes32,uint256,bool) returns (uint8,uint256) view",
+          "selector": "0xb393eddd"
+        },
+        {
+          "signature": "previewCredit(address,address,bytes32,uint256) returns (uint8) view",
+          "selector": "0x5ce94e3c"
+        },
+        {
+          "signature": "renewForSelf(address) returns () nonpayable",
+          "selector": "0xe8c122c7"
+        },
+        {
+          "signature": "debts(address) returns (uint256) view",
+          "selector": "0x2ecd4e7d"
+        },
+        {
+          "signature": "repayDebt(uint256) returns () nonpayable",
+          "selector": "0x6b09de45"
+        },
+        {
+          "signature": "requestCredit(uint256) returns () nonpayable",
+          "selector": "0xb6b1d5ca"
+        },
+        {
+          "signature": "revokeCredit() returns () nonpayable",
+          "selector": "0x48567aab"
+        },
+        {
+          "signature": "approveCredit(address,uint256) returns () nonpayable",
+          "selector": "0x709f2101"
+        },
+        {
+          "signature": "queueCreditPolicy(uint8) returns () nonpayable",
+          "selector": "0x41068c0c"
+        },
+        {
+          "signature": "executeCreditPolicy() returns () nonpayable",
+          "selector": "0x5050a44a"
+        },
+        {
+          "signature": "cancelCreditPolicy() returns () nonpayable",
+          "selector": "0x04ad0733"
+        },
+        {
+          "signature": "effectiveCreditCap(address) returns (uint256) view",
+          "selector": "0xa7c791d7"
+        },
+        {
+          "signature": "creditPolicy() returns (uint8) view",
+          "selector": "0xfaaddb94"
+        },
+        {
+          "signature": "policyEpoch() returns (uint32) view",
+          "selector": "0xa921d322"
+        },
+        {
+          "signature": "pendingPolicyEta() returns (uint64) view",
+          "selector": "0x800094d2"
+        },
+        {
+          "signature": "creditTierSource() returns (address) view",
+          "selector": "0xd095fe72"
+        },
+        {
+          "signature": "CreditSettled(address indexed,bytes32 indexed,uint256)",
+          "selector": "0xe24e7f4be2a6dcf7000d9d67421687e27dcf1f62554dbdeec78adb103aae6323"
+        },
+        {
+          "signature": "DebtRepaid(address indexed,uint256,uint256)",
+          "selector": "0x798353030d4251a345706609acf9ea7527f2ace26f73150a098c0fae89e5886d"
+        },
+        {
+          "signature": "LockSettled(address indexed,bytes32 indexed,uint256,uint256)",
+          "selector": "0x0db2e760de332f46e05e4200a1577fc713d3601c848f570fbbe50a4d281ecec1"
+        },
+        {
+          "signature": "Transfer(address indexed,address indexed,uint256)",
+          "selector": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+        }
+      ]
+    }
+  }
+}

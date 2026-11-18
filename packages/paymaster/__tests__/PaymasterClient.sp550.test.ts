@@ -67,6 +67,8 @@ function harness(
         chain: { id: 11155111 },
         getChainId: async () => 11155111,
         estimateFeesPerGas: async () => ({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n }),
+        // Fees come from eth_feeHistory: base fee 0.5 gwei, priority 1 gwei → maxFee 2 gwei.
+        getFeeHistory: async () => ({ baseFeePerGas: [500_000_000n, 500_000_000n], reward: [[1_000_000_000n]] }),
         getGasPrice: async () => 1_000_000_000n,
         getBlockNumber: async () => 1234n,
         waitForTransactionReceipt: async (args: { hash: Hex; onReplaced?: (response: { reason?: string; transaction?: { hash?: Hex } }) => void }) => {
@@ -1271,5 +1273,109 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         expect(finals).toHaveLength(3);
         expect(finals[2]).toBeGreaterThan(finals[1]);
         expect(c.sent[0].a0).toBe(finals[2]);
+    });
+});
+
+describe('gas limits = estimate × coefficient, contract floors from the chain, frozen limits as given', () => {
+    const sentOp = (seen: any[]) => seen.find((x) => x.method === 'eth_sendUserOperation')!.op;
+    const recordingBundler = (seen: any[], estimate: object = ESTIMATE) => async (method: string, op: any) => {
+        seen.push({ method, op });
+        return method === 'eth_estimateUserOperationGas' ? estimate : { result: OP_HASH };
+    };
+
+    it('every limit is the bundler estimate × 1.5 (no SDK-side compression, no 250k verification floor)', async () => {
+        const seen: any[] = [];
+        const decisions: any[] = [];
+        const { submit } = harness(recordingBundler(seen));
+        await submit({ onGasDecided: (d: any) => decisions.push(d) });
+        const op = sentOp(seen);
+        expect(BigInt(op.preVerificationGas)).toBe(75_000n);
+        expect(BigInt(op.verificationGasLimit)).toBe(300_000n);
+        expect(BigInt(op.callGasLimit)).toBe(150_000n);
+        expect(BigInt(op.paymasterVerificationGasLimit)).toBe(300_000n);
+        expect(BigInt(op.paymasterPostOpGasLimit)).toBe(300_000n);
+        expect(decisions).toHaveLength(1);
+        expect(decisions[0]).toMatchObject({ limitsSource: 'estimate', coefficientBps: 15_000n, feesRaisedByBundler: false, floors: { paymasterPostOpGasLimit: 200_000n } });
+        expect(decisions[0].estimate.paymasterVerificationGasLimit).toBe(200_000n);
+        expect(decisions[0].limits.callGasLimit).toBe(150_000n);
+    });
+
+    it('a small estimate is not raised to a fixed SDK floor; postOp is raised to the on-chain minPostOpGas', async () => {
+        const seen: any[] = [];
+        const small = { result: { preVerificationGas: '0xc350', verificationGasLimit: '0x7530', callGasLimit: '0x7530', paymasterVerificationGasLimit: '0x7530', paymasterPostOpGasLimit: '0x1' } };
+        const { submit } = harness(recordingBundler(seen, small));
+        await submit();
+        const op = sentOp(seen);
+        expect(BigInt(op.paymasterVerificationGasLimit)).toBe(45_000n); // 30k × 1.5, below the old 250k floor
+        expect(BigInt(op.paymasterPostOpGasLimit)).toBe(200_000n); // gasParams().minPostOpGas
+    });
+
+    it('the coefficient is the caller\'s; below 1x is refused', async () => {
+        const seen: any[] = [];
+        const { submit } = harness(recordingBundler(seen));
+        await submit({ gasLimitCoefficientBps: 12_000n });
+        expect(BigInt(sentOp(seen).callGasLimit)).toBe(120_000n);
+        SuperPaymasterInflightGuard.clearAll();
+        await expect(harness(recordingBundler([])).submit({ gasLimitCoefficientBps: 9_999n })).rejects.toThrow('below 1x');
+    });
+
+    const FROZEN = { preVerificationGas: 60_000n, verificationGasLimit: 210_000n, callGasLimit: 110_000n, paymasterVerificationGasLimit: 450_000n, paymasterPostOpGasLimit: 500_000n };
+
+    it('frozen limits are sent exactly as given, with no estimation', async () => {
+        const seen: any[] = [];
+        const decisions: any[] = [];
+        const { submit } = harness(recordingBundler(seen));
+        await submit({ frozenGas: FROZEN, onGasDecided: (d: any) => decisions.push(d) });
+        expect(seen.some((x) => x.method === 'eth_estimateUserOperationGas')).toBe(false);
+        const op = sentOp(seen);
+        expect([op.preVerificationGas, op.verificationGasLimit, op.callGasLimit, op.paymasterVerificationGasLimit, op.paymasterPostOpGasLimit].map((x: string) => BigInt(x)))
+            .toEqual([60_000n, 210_000n, 110_000n, 450_000n, 500_000n]);
+        expect(decisions[0]).toMatchObject({ limitsSource: 'frozen', coefficientBps: undefined, estimate: undefined, limits: FROZEN });
+    });
+
+    it('a frozen postOp below the on-chain minPostOpGas is refused, not raised; so is a frozen pmVGL below the caller floor', async () => {
+        await expect(harness(recordingBundler([])).submit({ frozenGas: { ...FROZEN, paymasterPostOpGasLimit: 199_999n } })).rejects.toThrow('below SuperPaymaster');
+        await expect(harness(recordingBundler([])).submit({ frozenGas: FROZEN, superPaymasterVerificationGasFloor: 450_001n })).rejects.toThrow('below superPaymasterVerificationGasFloor');
+    });
+
+    it('a frozen preVerificationGas the bundler finds too low is refused instead of bumped', async () => {
+        const seen: any[] = [];
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            return { error: { code: -32500, message: 'preVerificationGas is 60000 but must be at least 61000' } };
+        });
+        await expect(submit({ frozenGas: FROZEN })).rejects.toThrow('frozenGas.preVerificationGas 60000 is below the bundler');
+        expect(seen.filter((x) => x.method === 'eth_sendUserOperation')).toHaveLength(1);
+    });
+
+    it('fees come from eth_feeHistory (base × 2 + priority) with no testnet floor; caller fees win', async () => {
+        const seen: any[] = [];
+        const decisions: any[] = [];
+        const { submit } = harness(recordingBundler(seen));
+        await submit({ onGasDecided: (d: any) => decisions.push(d) });
+        expect(BigInt(sentOp(seen).maxPriorityFeePerGas)).toBe(1_000_000_000n);
+        expect(BigInt(sentOp(seen).maxFeePerGas)).toBe(2_000_000_000n);
+        expect(decisions[0].fees).toMatchObject({ source: 'feeHistory', baseFeePerGas: 500_000_000n });
+        const seen2: any[] = [];
+        SuperPaymasterInflightGuard.clearAll();
+        await harness(recordingBundler(seen2)).submit({ maxFeePerGas: 3_000n, maxPriorityFeePerGas: 1_000n }); // sepolia mock, tiny fees kept
+        expect(BigInt(sentOp(seen2).maxPriorityFeePerGas)).toBe(1_000n);
+        expect(BigInt(sentOp(seen2).maxFeePerGas)).toBe(3_000n);
+    });
+
+    it('fees a bundler explicitly required are reported as raised by it', async () => {
+        const seen: any[] = [];
+        const decisions: any[] = [];
+        let first = true;
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first) { first = false; return { error: { code: -32500, message: 'maxPriorityFeePerGas is 1000000000 but must be at least 1500000000' } }; }
+            return { result: OP_HASH };
+        });
+        await submit({ onGasDecided: (d: any) => decisions.push(d) });
+        expect(decisions).toHaveLength(1);
+        expect(decisions[0].feesRaisedByBundler).toBe(true);
+        expect(decisions[0].fees.maxPriorityFeePerGas).toBe(1_500_000_000n);
     });
 });
