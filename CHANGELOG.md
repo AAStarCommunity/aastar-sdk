@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### `sepolia-rc8`: SuperPaymaster rc.8 as a fresh stack next to Sepolia's 5.4.2 one
+
+- New SP 5.5.0 network `sepolia-rc8` (chain 11155111, `fresh`, `coexist: true`). Its pins live in
+  `SP550_COEXIST_PINS['sepolia-rc8']` (empty until the post-deploy read-back, so every consumer fails closed); it never
+  switches `CANONICAL_ADDRESSES`, which stays the 5.4.2 stack. `sepolia` (the in-place upgrade entry) is unchanged.
+- `sp550AddressSet('sepolia-rc8')`: the stack's full address set after the complete fresh-deploy validation (SP
+  entries from the pins, external ones from the shipped book, declared-absent ones removed) — what a caller passes
+  explicitly. `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
+- The cutover gate holds a coexisting stack against that overlay; `scripts/sp550-pin-fill.ts --network sepolia-rc8`
+  fills only its pin table entry. Its input will be a DeployLive release archive (`--deploylive-archive`), which
+  refuses until SP names the source of the expected runtime codehashes.
+
 ### ROLE_ENDUSER registration sends the role data Registry decodes, through `registerRole`
 
 - Registry decodes `EndUserRoleData { address community; uint256 stakeAmount; }` (since SP 5.3.3; Registry-5.8.0 on

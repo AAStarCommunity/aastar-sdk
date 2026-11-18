@@ -16,21 +16,29 @@
  */
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
-import type { CanonicalAddresses } from './addresses.js';
+import { CANONICAL_ADDRESSES, type CanonicalAddresses } from './addresses.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
 
+/**
+ * `coexist`: a fresh full stack deployed NEXT TO the chain's existing one (DSR 2026-11-19: rc.8 on Sepolia via
+ * DeployLive, the 5.4.2 stack untouched). Its pins live in SP550_COEXIST_PINS under the network name, it never
+ * switches CANONICAL_ADDRESSES, and callers select it explicitly (sp550AddressSet), so the default book stays
+ * the existing stack.
+ */
 export const SP550_NETWORKS = {
-    sepolia: { chainId: sepolia.id, mode: 'upgrade' },
-    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh' },
-    'op-mainnet': { chainId: optimism.id, mode: 'fresh' },
-} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode }>;
+    sepolia: { chainId: sepolia.id, mode: 'upgrade', coexist: false },
+    'sepolia-rc8': { chainId: sepolia.id, mode: 'fresh', coexist: true },
+    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh', coexist: false },
+    'op-mainnet': { chainId: optimism.id, mode: 'fresh', coexist: false },
+} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode; coexist: boolean }>;
 
 export type Sp550Network = keyof typeof SP550_NETWORKS;
+export type Sp550CoexistNetwork = { [K in Sp550Network]: (typeof SP550_NETWORKS)[K]['coexist'] extends true ? K : never }[Sp550Network];
 
 /** The network entry for a name, or throw listing the accepted names. */
-export function resolveSp550Network(name: string | undefined): { network: Sp550Network; chainId: number; mode: Sp550DeployMode } {
+export function resolveSp550Network(name: string | undefined): { network: Sp550Network; chainId: number; mode: Sp550DeployMode; coexist: boolean } {
     if (!name || !Object.prototype.hasOwnProperty.call(SP550_NETWORKS, name)) {
         throw new Error(`unknown SP 5.5.0 network ${JSON.stringify(name)}; expected one of ${Object.keys(SP550_NETWORKS).join(', ')}`);
     }
@@ -127,6 +135,49 @@ export const SP550_FRESH_DEPLOY_PINS: Record<number, Sp550FreshDeployPins> = {
     [optimismSepolia.id]: {},
     [optimism.id]: {},
 };
+
+/**
+ * Coexisting fresh stacks, by network name (a chain may carry one next to its existing stack). Empty until the
+ * post-deploy two-RPC read-back fills it (scripts/sp550-pin-fill.ts), so every consumer fails closed.
+ */
+export const SP550_COEXIST_PINS: Record<Sp550CoexistNetwork, Sp550FreshDeployPins> = {
+    'sepolia-rc8': {},
+};
+
+/** The pin table entry the gate and the consumers read for a network: by name for a coexisting stack, else by chain. */
+export function sp550PinsFor(network: Sp550Network): { table: string; key: string; pins: Sp550FreshDeployPins | undefined } {
+    const n = SP550_NETWORKS[network];
+    if (n.coexist) return { table: 'SP550_COEXIST_PINS', key: network, pins: SP550_COEXIST_PINS[network as Sp550CoexistNetwork] };
+    if (n.mode === 'fresh') return { table: 'SP550_FRESH_DEPLOY_PINS', key: String(n.chainId), pins: SP550_FRESH_DEPLOY_PINS[n.chainId] };
+    return { table: 'SP550_CUTOVER_PINS', key: String(n.chainId), pins: SP550_CUTOVER_PINS[n.chainId] };
+}
+
+/**
+ * The address book a fresh pin set stands for: the chain's shipped book with every SP-owned entry taken from the
+ * pins, and the keys the pins declare absent removed. External entries (EntryPoint, price feed, AirAccount) stay
+ * the shipped ones; the gate checks SP's wiring against them.
+ */
+export function sp550OverlayBook(shipped: Record<string, unknown>, pins: Sp550FreshDeployPins): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...shipped };
+    for (const [k, owner] of Object.entries(SP550_ADDRESS_OWNER)) {
+        if (owner !== 'external' && k !== 'timelockControllerLegacy') delete out[k];
+    }
+    delete out.timelockControllerLegacy; // history of the shipped stack, not this one
+    return { ...out, ...(pins.addresses ?? {}) };
+}
+
+/**
+ * The full address set of a coexisting stack, after the complete fresh-deploy validation and any release hold:
+ * what a caller passes explicitly to select it (e.g. `--network sepolia-rc8`). Throws until its pins are read back.
+ */
+export function sp550AddressSet(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined = SP550_COEXIST_PINS[network]): { chainId: number; pins: Sp550ValidatedPins<Sp550FreshDeployPins>; addresses: Record<string, Address> } {
+    const n = SP550_NETWORKS[network] as { chainId: number; coexist: boolean };
+    if (!n?.coexist) throw new Error(`${JSON.stringify(network)} is not a coexisting SP 5.5.0 network`);
+    const valid = requireSp550FreshDeployPins(n.chainId, pins);
+    const book = sp550OverlayBook((CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[n.chainId] ?? {}, valid);
+    const addresses = Object.fromEntries(Object.entries(book).filter((e): e is [string, Address] => typeof e[1] === 'string' && isAddress(e[1], { strict: false }))) as Record<string, Address>;
+    return { chainId: n.chainId, pins: valid, addresses };
+}
 
 /** Chains whose 5.5.0 pins must not ship in a release even when complete, with the reason. */
 export const SP550_RELEASE_HOLDS: Record<number, string> = {

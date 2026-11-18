@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING } from './sp550-pin-fill-core.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -102,6 +102,17 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
         expect(m.SP550_FRESH_DEPLOY_PINS[11155420].addresses).toEqual({ registry: getAddress(A(0x21)) });
         expect(m.SP550_FRESH_DEPLOY_PINS[11155420].absent).toEqual(['pnts', 'timelockController']);
         expect(m.SP550_FRESH_DEPLOY_PINS[10]).toEqual({});
+    });
+    it('coexist: SP550_COEXIST_PINS is filled under the network name; the chain-keyed tables are untouched', async () => {
+        const dep = fs.readFileSync(path.join(SRC, 'sp550Deployments.ts'), 'utf8');
+        const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x31) }, absent: ['pnts'] }, 'fresh');
+        const filled = fillPinsTable(dep, 'SP550_COEXIST_PINS', 'sepolia-rc8', pins);
+        const m = await load('coexist', filled);
+        expect(m.SP550_COEXIST_PINS['sepolia-rc8'].addresses).toEqual({ registry: getAddress(A(0x31)) });
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155111]).toBeUndefined();
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155420]).toEqual({});
+        expect(() => fillPinsTable(filled, 'SP550_COEXIST_PINS', 'sepolia-rc8', pins)).toThrow(/already filled/);
+        expect(() => fillPinsTable(dep, 'SP550_COEXIST_PINS', 'op-mainnet-rc8', pins)).toThrow(/no entry for this chain/);
     });
 });
 
@@ -531,5 +542,15 @@ describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0
 describe('absent must be an array of key names (PR-Daemon #443 N1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([[{}], ['pnts'], [[1]], [null]])('absent %j is a manifest error, not a TypeError', (absent) => {
         expect(() => parseManifestPins({ ...MANIFEST, absent }, 'fresh')).toThrow(/manifest pins: absent must be an array of key names/);
+    });
+});
+
+describe('sp550-pin-fill --deploylive-archive refuses until SP names the runtime-codehash source', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('exit 2 with the pending reason, before reading any manifest or RPC', async () => {
+        const { spawnSync } = await import('child_process');
+        const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', 'sepolia-rc8', '--deploylive-archive', '/nonexistent'],
+            { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+        expect(r.status).toBe(2);
+        expect(r.stderr).toContain(DEPLOYLIVE_ARCHIVE_PENDING);
     });
 });

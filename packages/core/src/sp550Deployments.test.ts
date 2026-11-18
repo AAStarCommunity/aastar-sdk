@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import {
+    sp550PinsFor,
     SP550_ADDRESS_OWNER, SP550_FRESH_DEPLOY_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_NETWORKS, SP550_RELEASE_HOLDS,
     assertSp550ChainId, requireSp550FreshDeployPins, resolveSp550Network, sp550FreshPinProblems,
 } from './sp550Deployments.js';
@@ -28,9 +29,10 @@ Object.assign(FULL as any, { codehashes: Object.fromEntries([
 
 describe('SP 5.5.0 network selection', () => {
     it('maps each network name to its viem chainId and deploy mode', () => {
-        expect(resolveSp550Network('sepolia')).toEqual({ network: 'sepolia', chainId: sepolia.id, mode: 'upgrade' });
-        expect(resolveSp550Network('op-sepolia')).toEqual({ network: 'op-sepolia', chainId: optimismSepolia.id, mode: 'fresh' });
-        expect(resolveSp550Network('op-mainnet')).toEqual({ network: 'op-mainnet', chainId: optimism.id, mode: 'fresh' });
+        expect(resolveSp550Network('sepolia')).toEqual({ network: 'sepolia', chainId: sepolia.id, mode: 'upgrade', coexist: false });
+        expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true });
+        expect(resolveSp550Network('op-sepolia')).toEqual({ network: 'op-sepolia', chainId: optimismSepolia.id, mode: 'fresh', coexist: false });
+        expect(resolveSp550Network('op-mainnet')).toEqual({ network: 'op-mainnet', chainId: optimism.id, mode: 'fresh', coexist: false });
     });
     it.each([undefined, '', 'optimism', 'mainnet', 'toString', '__proto__'])('refuses an unknown network name: %s', (n) => {
         expect(() => resolveSp550Network(n as any)).toThrow(/unknown SP 5.5.0 network/);
@@ -41,10 +43,13 @@ describe('SP 5.5.0 network selection', () => {
         expect(() => assertSp550ChainId('op-mainnet', optimism.id)).not.toThrow();
     });
     it('every fresh network has a (fail-closed) pin entry, and none is pre-wired', () => {
-        for (const n of Object.values(SP550_NETWORKS)) {
+        for (const [name, n] of Object.entries(SP550_NETWORKS)) {
             if (n.mode !== 'fresh') continue;
-            expect(SP550_FRESH_DEPLOY_PINS[n.chainId]).toEqual({});
-            expect(() => requireSp550FreshDeployPins(n.chainId)).toThrow(/addresses\.registry: unpinned/);
+            // A coexisting stack's entry is by network name (SP550_COEXIST_PINS), a chain's by chainId.
+            const { pins } = sp550PinsFor(name as keyof typeof SP550_NETWORKS);
+            expect(pins).toEqual({});
+            if (!n.coexist) expect(pins).toBe(SP550_FRESH_DEPLOY_PINS[n.chainId]);
+            expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/addresses\.registry: unpinned/);
         }
     });
 });

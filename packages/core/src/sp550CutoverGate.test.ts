@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
-import { SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS } from './sp550Deployments.js';
+import { SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -590,5 +590,52 @@ describe('5.5.0 deploys no DisclosureRegistry (author 2026-11-12): absent stands
         const r = await runSp550CutoverGate({ network: 'sepolia', rpcs: [rpc('--rpc', LOOP, m, [])], pins });
         expect(r.exitCode).toBe(1);
         expect(r.results.find((c) => c.check === 'pins complete and well-formed')!.detail).toMatch(msg);
+    });
+});
+
+describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-19)', () => {
+    const shippedSepolia = (CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id];
+
+    it('resolves as fresh + coexist on chain 11155111, next to the sepolia upgrade entry', () => {
+        expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true });
+        expect(resolveSp550Network('sepolia').coexist).toBe(false);
+        expect(sp550PinsFor('sepolia-rc8')).toMatchObject({ table: 'SP550_COEXIST_PINS', key: 'sepolia-rc8' });
+        expect(sp550PinsFor('sepolia')).toMatchObject({ table: 'SP550_CUTOVER_PINS', key: String(sepolia.id) });
+    });
+
+    it('the gate holds its pins against the shipped book overlaid with them, without an injected book', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+        expect(r.header).toContain('coexisting stack');
+    });
+
+    it('held against the shipped Sepolia book itself (no overlay), the same pins fail', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins, book: shippedSepolia });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins.superPaymaster == SDK book superPaymaster')?.ok).toBe(false);
+    });
+
+    it('its shipped table entry is empty, so the gate and sp550AddressSet fail closed', async () => {
+        expect(SP550_COEXIST_PINS['sepolia-rc8']).toEqual({});
+        expect(() => sp550AddressSet('sepolia-rc8')).toThrow(/fresh-deploy pins for chain 11155111 are not usable/);
+        const m = deployment(sepolia.id, 'fresh');
+        expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m) })).exitCode).toBe(1);
+    });
+
+    it('sp550AddressSet: SP entries from the pins, external ones shipped, declared-absent ones gone; the default book unchanged', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const set = sp550AddressSet('sepolia-rc8', m.pins);
+        expect(set.chainId).toBe(sepolia.id);
+        for (const [k, a] of Object.entries(m.pins.addresses)) expect(set.addresses[k]).toBe(a);
+        expect(set.addresses.entryPoint).toBe(shippedSepolia.entryPoint);
+        expect(set.addresses.priceFeed).toBe(shippedSepolia.priceFeed);
+        for (const k of SP550_FRESH_OPTIONAL_ADDRESS_KEYS) expect(set.addresses[k]).toBeUndefined(); // the fixture declares them all absent
+        expect(set.addresses.timelockControllerLegacy).toBeUndefined();
+        expect(set.addresses.superPaymaster).not.toBe(shippedSepolia.superPaymaster);
+        expect((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id].superPaymaster).toBe(shippedSepolia.superPaymaster);
+        expect(() => sp550AddressSet('sepolia' as any, m.pins)).toThrow('is not a coexisting');
     });
 });

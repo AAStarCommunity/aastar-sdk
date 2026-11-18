@@ -3,7 +3,7 @@
  * SP 5.5.0 pin fill (read-only on chain): turns SP's step-13 manifest pins JSON into the SDK's pin
  * table entry and address-book switch, so neither is typed by hand.
  *
- *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> \
+ *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> \
  *       --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] \
  *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]   (path default: deployments/release/rc<N>/<network>.readback.live.json from pins.tag)
  *
@@ -23,6 +23,11 @@
  *     entry and switches CANONICAL_ADDRESSES, then re-runs check-sp550-cutover.ts with NO --pins, so
  *     the gate reads the written source tables. If that re-run does not exit 0 the files are restored.
  *
+ * A coexisting stack (sepolia-rc8: rc.8 deployed next to Sepolia's 5.4.2 stack) fills SP550_COEXIST_PINS under
+ * its network name and never switches CANONICAL_ADDRESSES; the gate holds it against the shipped book overlaid
+ * with its SP entries. Its input will be a DeployLive archive (--deploylive-archive, refused until SP names the
+ * runtime-codehash source; see Sp550PinSourceKind).
+ *
  * Exit 2 = refused before the gate; 1 = gate FAIL or the written source did not pass; 0 = PASS.
  * Sends no transaction.
  */
@@ -33,13 +38,13 @@ import { lookup } from 'dns/promises';
 import { isIP } from 'net';
 import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
-import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
+import { resolveSp550Network, sp550OverlayBook, sp550PinsFor } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, fillPinsTable, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, switchBook, DEPLOYLIVE_ARCHIVE_PENDING } from './sp550-pin-fill-core.js';
 
-const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
+const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const FILES = {
     upgrade: path.join(ROOT, 'packages/core/src/sp550Cutover.ts'),
@@ -52,6 +57,7 @@ const refuse = (m: string): never => { console.error(`${m}\n${USAGE}`); process.
 
 async function main() {
     const net = (() => { try { return resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); } })();
+    if (arg('--deploylive-archive') !== undefined) refuse(DEPLOYLIVE_ARCHIVE_PENDING);
     const file = arg('--manifest') ?? refuse('--manifest <pins.json> is required');
     let pins;
     try { pins = parseManifestPins(JSON.parse(fs.readFileSync(file, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }
@@ -68,7 +74,9 @@ async function main() {
         const moved = upgradeBookProblems(pins, switched, shipped);
         if (moved.length) refuse(`the manifest moves book entries an upgrade keeps: ${moved.join('; ')}`);
     }
-    const book = applyBookSwitch(shipped, switched);
+    // A coexisting stack (sepolia-rc8) never switches the shipped book: the gate holds the pins against the
+    // overlay (shipped book + the pins' SP entries), and only its own pin table entry is written.
+    const book = net.coexist ? sp550OverlayBook(shipped, pins) : applyBookSwitch(shipped, switched);
 
     // ---- 2. the gate, on exactly what would be written ----
     const r = await runSp550CutoverGate({ network: net.network, rpcs, pins, pinsSource: file, book, block, allowRc: args.includes('--allow-rc') });
@@ -79,11 +87,12 @@ async function main() {
         console.log(`\nFAIL: ${r.results.filter((c) => !c.ok).length}/${r.results.length} check(s) failed; nothing written.`);
         process.exit(1);
     }
-    const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
+    const { table, key: tableKey } = sp550PinsFor(net.network);
     const note = `SP ${pins.tag} cutover, read back at block ${pins.readbackBlock} (scripts/sp550-pin-fill.ts)`;
-    console.log(`\nPASS. ${table}[${net.chainId}] = ${renderPinsLiteral(pins, '')}`);
-    const changed = withTimelockLegacy(changedEntries(switched, shipped), shipped);
-    console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
+    console.log(`\nPASS. ${table}[${JSON.stringify(tableKey)}] = ${renderPinsLiteral(pins, '')}`);
+    const changed = net.coexist ? {} : withTimelockLegacy(changedEntries(switched, shipped), shipped);
+    if (net.coexist) console.log(`CANONICAL_ADDRESSES[${net.chainId}]: unchanged (${net.network} is a coexisting stack, selected explicitly)`);
+    else console.log(`CANONICAL_ADDRESSES[${net.chainId}] switch (entries that change): ${JSON.stringify(changed)}`);
     if (changed.timelockControllerLegacy !== undefined) console.log(`\nNOTE: timelockController ${String(shipped.timelockController)} -> ${changed.timelockController === null ? '(removed: the manifest declares none)' : changed.timelockController}; the old value is kept as timelockControllerLegacy (history, never live)`);
     if (!args.includes('--write')) { console.log('\n(preview only: pass --write to fill the source)'); return; }
 
@@ -151,7 +160,8 @@ async function main() {
     const tableFile0 = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
     // Before-images go next to the lock, so recovery never depends on git (which would also drop
     // unrelated local edits): copy each .before back over its file, then delete the lock and backups.
-    const backups = [tableFile0, FILES.book].map((f) => [f, `${lockBase}.${path.basename(f)}.before`] as const);
+    const written = net.coexist ? [tableFile0] : [tableFile0, FILES.book];
+    const backups = written.map((f) => [f, `${lockBase}.${path.basename(f)}.before`] as const);
     const journal = `pid ${process.pid} · ${new Date().toISOString()}\n` +
         backups.map(([f, bk]) => `writing ${path.relative(ROOT, f)} · before-image ${path.relative(ROOT, bk)}`).join('\n') +
         `\nif this file outlives the run, the source may be half-written: restore each file from its before-image (cp), then delete this lock and the before-images\n`;
@@ -180,10 +190,11 @@ async function main() {
         const tableFile = net.mode === 'fresh' ? FILES.fresh : FILES.upgrade;
         const before = { table: fs.readFileSync(tableFile, 'utf8'), book: fs.readFileSync(FILES.book, 'utf8') };
         let after;
-        try { after = { table: fillPinsTable(before.table, table, net.chainId, pins), book: switchBook(before.book, net.chainId, changed, note) }; }
+        try { after = { table: fillPinsTable(before.table, table, net.coexist ? tableKey : net.chainId, pins), book: net.coexist ? before.book : switchBook(before.book, net.chainId, changed, note) }; }
         catch (e) { console.error(`nothing written: ${(e as Error).message}`); break write; }
         let restore: () => string[];
-        try { restore = writeAll([{ path: tableFile, before: before.table, after: after.table }, { path: FILES.book, before: before.book, after: after.book }], ROOT); }
+        const files = [{ path: tableFile, before: before.table, after: after.table }, ...(net.coexist ? [] : [{ path: FILES.book, before: before.book, after: after.book }])];
+        try { restore = writeAll(files, ROOT); }
         catch (e) {
             console.error((e as Error).message);
             // A rename failed and a rollback did too: the checkout is half-written — keep the recovery data.
@@ -201,11 +212,11 @@ async function main() {
         const rc = { status: gateRc.status === 0 ? tscRc.status : gateRc.status };
         if (rc.status !== 0) {
             const left = restore();
-            console.error(`\nthe gate or the type check did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'both files restored'}.`);
+            console.error(`\nthe gate or the type check did not pass on the written source (exit ${rc.status}); ${left.length ? left.join('; ') : 'the written files restored'}.`);
             if (left.length) keepLock = true; // unrestored files: the journal and before-images stay
             break write;
         }
-        console.log(`\nwritten and re-verified from source: ${path.relative(ROOT, tableFile)}, ${path.relative(ROOT, FILES.book)}`);
+        console.log(`\nwritten and re-verified from source: ${files.map((f) => path.relative(ROOT, f.path)).join(', ')}`);
         code = 0;
     } } catch (e) {
         keepLock = true; // an unexpected failure mid-write: keep the journal and before-images for recovery

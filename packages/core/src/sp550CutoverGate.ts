@@ -22,9 +22,9 @@ import {
     APNTsCappedABI, BLSAggregatorABI, DVTValidatorABI, RegistryABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
 } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
-import { SP550_CUTOVER_PINS, sp550PinnedAddressEntries } from './sp550Cutover.js';
+import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    SP550_FRESH_DEPLOY_PINS, SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550UpgradePinProblems,
+    SP550_RELEASE_HOLDS, assertSp550ChainId, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -126,9 +126,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
 
     // 4. Pins for the network's mode, and holds.
     const chainId = net.chainId;
-    const table = net.mode === 'fresh' ? 'SP550_FRESH_DEPLOY_PINS' : 'SP550_CUTOVER_PINS';
-    const pins: Sp550FreshDeployPins = input.pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[chainId] ?? {};
-    const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${table}[${chainId}]`} ===`;
+    const entry = sp550PinsFor(net.network);
+    const pins: Sp550FreshDeployPins = input.pins ?? entry.pins ?? {};
+    const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}${net.coexist ? ', coexisting stack' : ''}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${entry.table}[${JSON.stringify(entry.key)}]`} ===`;
     const problems = net.mode === 'fresh'
         ? sp550FreshPinProblems(pins, { allowRc: input.allowRc })
         : sp550UpgradePinProblems(pins, { allowRc: input.allowRc });
@@ -157,7 +157,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         record(check, eq(observed, expected), `observed ${str(observed)} · ${what} ${expected === undefined ? '(unpinned)' : str(expected)}`);
 
     // Unpinned proxy: still READ the canonical one, so the report shows what the chain holds.
-    const canonical = (input.book ?? (CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {}) as Record<string, any>;
+    // A coexisting stack never enters CANONICAL_ADDRESSES: its book is the shipped one with the pins' SP entries.
+    const shipped = ((CANONICAL_ADDRESSES as Record<number, any>)[chainId] ?? {}) as Record<string, unknown>;
+    const canonical = (input.book ?? (net.coexist ? sp550OverlayBook(shipped, pins) : shipped)) as Record<string, any>;
     const sp = (pins.superPaymaster ?? canonical.superPaymaster) as Address | undefined;
     if (!pins.superPaymaster) record('pins.superPaymaster', false, `(unpinned) — reading canonical ${sp ?? 'none'}`);
     if (!sp) return await finish();
