@@ -57,6 +57,12 @@ export type SubmitGaslessOptions = {
     onGasDecided?: (decision: GasDecision) => void;
 };
 
+/** The limits used when the endpoint cannot estimate at all (eth_estimateUserOperationGas missing): defaults, not estimates. */
+const LOCAL_DEFAULT_LIMITS: GasEstimate = {
+    preVerificationGas: 0n, verificationGasLimit: 1_000_000n, callGasLimit: 2_000_000n,
+    paymasterVerificationGasLimit: 100_000n, paymasterPostOpGasLimit: 100_000n,
+};
+
 /** What estimateUserOperationGas returns (all limits). */
 export type GasEstimate = {
     preVerificationGas: bigint;
@@ -337,7 +343,23 @@ export class PaymasterClient {
     /**
      * Estimate Gas for a UserOperation.
      */
-    static async estimateUserOperationGas(
+    /**
+     * The bundler's estimate for one op, all five limits (unscaled). Throws when the bundler leaves a limit out or returns a
+     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults.
+     */
+    static async estimateUserOperationGas(...args: Parameters<typeof PaymasterClient.estimateUserOperationGasDetailed>): Promise<GasEstimate> {
+        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(...args);
+        const missing = (Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]).filter((k) => fields[k] === undefined);
+        if (missing.length > 0 && !fallback) throw new Error(`Estimation Error: the bundler returned no usable ${missing.join(', ')}`);
+        return fields as GasEstimate;
+    }
+
+    /**
+     * What the bundler estimated: a field is absent when the bundler left it out or answered a sentinel (≤ 1, e.g. a postOp it
+     * did not simulate). `fallback`: the endpoint has no eth_estimateUserOperationGas and the fields are local defaults, not
+     * an estimate.
+     */
+    private static async estimateUserOperationGasDetailed(
         client: any,
         wallet: any,
         aaAddress: Address,
@@ -372,7 +394,7 @@ export class PaymasterClient {
             maxPriorityFeePerGas?: bigint;
             feePolicy?: FeePolicy;
         }
-    ): Promise<GasEstimate> {
+    ): Promise<{ fields: Partial<GasEstimate>; fallback: boolean }> {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
             try {
@@ -551,31 +573,23 @@ export class PaymasterClient {
 
         // Anvil Fallback for Estimation
         if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
-             console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using Anvil defaults.');
-             return {
-                 preVerificationGas: partialUserOp.preVerificationGas,
-                 verificationGasLimit: 1000000n, 
-                 callGasLimit: 2000000n,
-                 paymasterVerificationGasLimit: 100000n,
-                 paymasterPostOpGasLimit: 100000n
-             };
+             console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using local defaults (not an estimate).');
+             return { fallback: true, fields: { ...LOCAL_DEFAULT_LIMITS, preVerificationGas: partialUserOp.preVerificationGas } };
         }
 
         if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
         
-        // The bundler's own estimate, unscaled: submitGaslessUserOperation applies the coefficient and the
-        // contract floors in one place. A bundler that leaves a paymaster field out estimated nothing for it.
-        const need = (k: string) => {
-            if (data?.[k] === undefined || data?.[k] === null) throw new Error(`Estimation Error: the bundler returned no ${k}`);
-            return BigInt(data[k]);
-        };
-        return {
-            preVerificationGas: need('preVerificationGas'),
-            verificationGasLimit: need('verificationGasLimit'),
-            callGasLimit: need('callGasLimit'),
-            paymasterVerificationGasLimit: need('paymasterVerificationGasLimit'),
-            paymasterPostOpGasLimit: need('paymasterPostOpGasLimit'),
-        };
+        // The bundler's own estimate, unscaled: submitGaslessUserOperation applies the coefficient and the contract floors in
+        // one place. A field left out, or answered with a sentinel (≤ 1, e.g. a postOp the bundler did not simulate), is not
+        // an estimate: it is left absent so the caller's explicit value, or a refusal, decides it.
+        const fields: Partial<GasEstimate> = {};
+        for (const k of Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]) {
+            const v = data?.[k];
+            if (v === undefined || v === null) continue;
+            const n = BigInt(v);
+            if (n > 1n) fields[k] = n;
+        }
+        return { fields, fallback: false };
     }
 
     /**
@@ -699,7 +713,7 @@ export class PaymasterClient {
 
         // Estimate whenever a limit is still missing (unless estimation is switched off); fill only the missing ones.
         if (!frozen && options?.autoEstimate !== false && FIELDS.some((k) => gasLimits[k] === undefined)) {
-            const est = await this.estimateUserOperationGas(
+            const { fields: est, fallback } = await this.estimateUserOperationGasDetailed(
                 client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData,
                 {
                     validityWindow: options?.validityWindow,
@@ -716,13 +730,25 @@ export class PaymasterClient {
                     feePolicy: options?.feePolicy,
                 }
             );
-            rawEstimate = est;
-            const scaled = scaleLimits(est, coefficientBps);
-            const tuned = options?.tuneEstimate?.(est) ?? {};
+            // A fallback (no estimation endpoint) yields local defaults: used as they are and labelled 'default'.
+            if (!fallback) rawEstimate = FIELDS.every((k) => est[k] !== undefined) ? est as GasEstimate : undefined;
+            const tuned = !fallback && rawEstimate ? (options?.tuneEstimate?.(rawEstimate) ?? {}) : {};
             for (const k of FIELDS) {
                 if (gasLimits[k] !== undefined) continue;
-                if (tuned[k] !== undefined) { gasLimits[k] = tuned[k]; limitSources[k] = 'tuned'; }
-                else { gasLimits[k] = scaled[k]; limitSources[k] = 'estimate'; }
+                if (tuned[k] !== undefined) { gasLimits[k] = tuned[k]; limitSources[k] = 'tuned'; continue; }
+                const v = est[k];
+                if (v === undefined) continue; // not estimated: a contract floor, or a refusal below, decides it
+                if (fallback) { gasLimits[k] = v; limitSources[k] = k === 'preVerificationGas' ? 'computed' : 'default'; }
+                else { gasLimits[k] = scaleLimits({ ...LOCAL_DEFAULT_LIMITS, [k]: v } as GasEstimate, coefficientBps)[k]; limitSources[k] = 'estimate'; }
+            }
+            if (!fallback) {
+                const unestimated = FIELDS.filter((k) => gasLimits[k] === undefined);
+                // SuperPaymaster's postOp has a contract floor read from the chain; anything else needs a value.
+                const coveredByFloor = (k: Field) => k === 'paymasterPostOpGasLimit' && !!(options?.operator && spCtx);
+                const refuse = unestimated.filter((k) => !coveredByFloor(k) && k !== 'preVerificationGas');
+                if (refuse.length > 0) {
+                    throw new Error(`Estimation Error: the bundler returned no usable ${refuse.join(', ')}; pass ${refuse.length > 1 ? 'them' : 'it'} explicitly`);
+                }
             }
         }
 
@@ -751,7 +777,7 @@ export class PaymasterClient {
             } else {
                 const raise = (k: 'paymasterPostOpGasLimit' | 'paymasterVerificationGasLimit', floor: bigint, fallback: bigint) => {
                     const cur = gasLimits[k];
-                    if (cur === undefined) { gasLimits[k] = atLeast(fallback, floor); limitSources[k] = 'default'; }
+                    if (cur === undefined) { gasLimits[k] = atLeast(fallback, floor); limitSources[k] = floor > fallback ? 'floor' : 'default'; }
                     else if (cur < floor) { gasLimits[k] = floor; limitSources[k] = 'floor'; }
                 };
                 raise('paymasterPostOpGasLimit', spCtx.minPostOpGas, 0n);
@@ -860,8 +886,9 @@ export class PaymasterClient {
         // What was decided, read back from the op actually sent (fees may have been raised by a bundler's
         // explicit requirement in the retry loop below).
         const initialGasFees = userOp.gasFees;
-        // Fees the caller gave are a price limit: the retry loop below does not raise them.
-        const callerFees = options?.maxFeePerGas !== undefined || options?.maxPriorityFeePerGas !== undefined;
+        // Fees the caller gave are a price limit: the retry loop below never raises an explicit field (per field).
+        const callerPriority = options?.maxPriorityFeePerGas !== undefined;
+        const callerMaxFee = options?.maxFeePerGas !== undefined;
         const reportGas = () => {
             if (!options?.onGasDecided) return;
             const pmd = userOp.paymasterAndData;
@@ -937,7 +964,8 @@ export class PaymasterClient {
                 // Case A: Replacement Underpriced (Nonce collision in mempool)
                 // e.g. {"code":-32602,"message":"replacement underpriced","data":{"currentMaxPriorityFee":"0x5f5e100","currentMaxFee":"0xf6a44be"}}
                 if (result.error.code === -32602 || msg.includes('replacement underpriced')) {
-                     if (callerFees) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
+                     // A replacement must raise both fees; an explicit one is not raised.
+                     if (callerPriority || callerMaxFee) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
                      console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Bumping fees to replace pending UserOp...`);
                      let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
                      let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
@@ -979,33 +1007,38 @@ export class PaymasterClient {
                 const matchMaxFee = msg.match(/maxFeePerGas.*(?:at least|expected) (\d+)/i);
 
                 if (matchPriority || matchMaxFee) {
-                    if (callerFees) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
                     console.log(`[PaymasterClient] ⚠️  Fee Error: ${msg}. Retrying with higher fees...`);
-                    
+
                     let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
                     let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
+                    const refuseRaise = (field: string) => {
+                        throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (${field} was given by the caller and is not raised)`);
+                    };
 
                     if (matchPriority && matchPriority[1]) {
                         const required = BigInt(matchPriority[1]);
                         if (required > newMaxPriority) {
+                            if (callerPriority) refuseRaise('maxPriorityFeePerGas');
                             console.log(`   -> Bumping Priority Fee to ${required}`);
-                            // Bump maxFee by at least the delta
                             const delta = required - newMaxPriority;
                             newMaxPriority = required;
-                            newMaxFee += delta;
+                            if (!callerMaxFee) newMaxFee += delta; // an explicit maxFee stays the cap
                         }
                     }
 
                     if (matchMaxFee && matchMaxFee[1]) {
                          const required = BigInt(matchMaxFee[1]);
                          if (required > newMaxFee) {
+                            if (callerMaxFee) refuseRaise('maxFeePerGas');
                             console.log(`   -> Bumping Max Fee to ${required}`);
                             newMaxFee = required;
                          }
                     }
 
-                    // Double check maxFee >= maxPriority
-                    if (newMaxFee < newMaxPriority) newMaxFee = newMaxPriority + 1n; // Minimal bump
+                    if (newMaxFee < newMaxPriority) {
+                        if (callerMaxFee) refuseRaise('maxFeePerGas');
+                        newMaxFee = newMaxPriority + 1n; // Minimal bump
+                    }
 
                     // Update UserOp
                     userOp.gasFees = concat([

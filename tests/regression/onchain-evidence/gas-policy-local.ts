@@ -7,9 +7,12 @@
  *   LOCAL_ANVIL_CONFIG=<SP DeployLive config.json> LOCAL_ANVIL_RPC=http://127.0.0.1:8545 BUNDLER_URL=http://127.0.0.1:4337 \
  *   SENDER_AA=<SimpleAccount of mnemonic index 0> TASK_TOKEN=<plain ERC-20 the account holds> pnpm exec tsx tests/regression/onchain-evidence/gas-policy-local.ts
  *
- * Sends transactions on a DISPOSABLE local chain only: the RPC and the bundler must be loopback URLs and both must report
- * chain id 31337. Part 1 changes that chain's state (price, balances, debt, nonces) and is not undone; Part 2 runs in
- * snapshots that are reverted. Accounts come from anvil's public default mnemonic. The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
+ * Sends transactions on a local chain only: the RPC and the bundler must be loopback URLs and both must report chain id
+ * 31337. The whole run is inside one evm_snapshot that is reverted at the end and read back (account nonce, operator
+ * deposit, the account's token balance and debt), so the chain is left as found; run it against an anvil + bundler pair
+ * that nothing else is using at the same time. The bundler must accept debug_bundler_clearState (Alto: --enable-debug-endpoints):
+ * it is cleared before the run and after the revert, so it holds no op the reverted chain never saw. Accounts come from
+ * anvil's public default mnemonic. The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
  * Output: docs/onchain-evidence/gas-policy-local.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -57,16 +60,37 @@ async function main() {
         for (let i = 0; i < 120; i++) {
             const res = await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] }) });
             const r = (await res.json()).result;
-            if (r) return r;
+            // Only a receipt on the current chain counts: a bundler may still hold one from a reverted run.
+            if (r?.receipt?.transactionHash) {
+                const onChain = await pub.getTransactionReceipt({ hash: r.receipt.transactionHash }).catch(() => undefined);
+                if (onChain && onChain.blockHash === r.receipt.blockHash) return r;
+            }
             await new Promise((ok) => setTimeout(ok, 1000));
         }
         return undefined;
     };
 
-    // The cached price goes stale on an idle local chain; updatePrice is permissionless (the keeper's job).
-    await wait(await wallet.writeContract({ address: cfg.superPaymaster, abi: [{ type: 'function', name: 'updatePrice', stateMutability: 'nonpayable', inputs: [], outputs: [] }], functionName: 'updatePrice' }));
+    const NONCE = [{ type: 'function', name: 'getNonce', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'uint192' }], outputs: [{ type: 'uint256' }] }] as const;
+    const state = async () => JSON.stringify([
+        await pub.readContract({ address: EP, abi: NONCE, functionName: 'getNonce', args: [aa, 0n] }),
+        (await pub.readContract({ address: cfg.superPaymaster, abi: OPERATORS, functionName: 'operators', args: [operator.address] }))[0],
+        await balance(), await debt(),
+    ], (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
     const rows: string[] = [];
     let ok = true;
+    const clearBundler = async () => {
+        const r = await (await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'debug_bundler_clearState', params: [] }) })).json();
+        if (r.error) throw new Error(`the bundler refused debug_bundler_clearState (${r.error.message}); start it with its debug endpoints enabled (Alto: --enable-debug-endpoints)`);
+    };
+    await clearBundler();
+    const before = await state();
+    const outer = await pub.request({ method: 'evm_snapshot', params: [] }) as Hex;
+    let part2: string[] = [];
+    // Fees do not enter actualGasUsed; fixed explicit fees keep the reservation (and so the branch) the same in every variant.
+    const FIXED_FEES = { maxPriorityFeePerGas: 1_000_000n, maxFeePerGas: 2_000_000n };
+    try {
+    // The cached price goes stale on an idle local chain; updatePrice is permissionless (the keeper's job).
+    await wait(await wallet.writeContract({ address: cfg.superPaymaster, abi: [{ type: 'function', name: 'updatePrice', stateMutability: 'nonpayable', inputs: [], outputs: [] }], functionName: 'updatePrice' }));
     const s = (x?: bigint) => (x === undefined ? '—' : x.toString());
     async function op(label: string, extra: Record<string, unknown>, expect: (d: GasDecision, debtBefore: bigint, debtAfter: bigint) => string | undefined) {
         let decision: GasDecision | undefined;
@@ -128,8 +152,6 @@ async function main() {
         ['paymasterPostOpGasLimit + 200k', { paymasterPostOpGasLimit: dB.limits.paymasterPostOpGasLimit + STEP }, STEP / 10n],
         ['verificationGasLimit + 200k', { verificationGasLimit: dB.limits.verificationGasLimit + STEP }, 0n],
     ];
-    // Fees do not enter actualGasUsed; fixed explicit fees keep the reservation (and so the branch) the same in every variant.
-    const FIXED_FEES = { maxPriorityFeePerGas: 1_000_000n, maxFeePerGas: 2_000_000n };
     const measured: Array<[string, Hex, bigint, bigint, string, GasDecision['limits']]> = [];
     // A bundler remembers sender+nonce across evm_revert, so these variants go straight to EntryPoint.handleOps
     // (PaymasterClient's own fallback when the endpoint has no eth_sendUserOperation): same EntryPoint accounting.
@@ -155,13 +177,21 @@ async function main() {
 
     stub.close();
     const base = measured[0][2];
-    const part2 = measured.map(([label, hash, gas, cost, ev, l], i) => {
+    part2 = measured.map(([label, hash, gas, cost, ev, l], i) => {
         const delta = gas - base, want = variants[i][2];
         const okRow = delta === want;
         if (!okRow) ok = false;
         return `| ${label} | ${hash} | ${l.verificationGasLimit}/${l.callGasLimit}/${l.preVerificationGas}/${l.paymasterVerificationGasLimit}/${l.paymasterPostOpGasLimit} | ${gas} | ${cost} | ${ev} | ${delta >= 0n ? '+' : ''}${delta} | +${want} | ${okRow ? 'yes' : '**NO**'} |`;
     });
 
+    } finally {
+        if ((await pub.request({ method: 'evm_revert', params: [outer] })) !== true) throw new Error('evm_revert of the whole run failed');
+        SuperPaymasterInflightGuard.clearAll();
+        await clearBundler(); // its mempool / known ops refer to the reverted chain
+    }
+    const after = await state();
+    const restored = after === before;
+    if (!restored) ok = false;
     const version = await pub.readContract({ address: cfg.superPaymaster, abi: [{ type: 'function', name: 'version', stateMutability: 'pure', inputs: [], outputs: [{ type: 'string' }] }], functionName: 'version' });
     const lines = [
         '# Gas limits and fees from the chain: local SuperPaymaster DeployLive stack',
@@ -183,6 +213,8 @@ async function main() {
         ...part2,
         '',
         'The 40,000 unused-execution-gas threshold is EntryPoint v0.7\'s `PENALTY_GAS_THRESHOLD`; it is not measured here (on this SuperPaymaster path the 500,000 minPostOpGas keeps unused execution gas above it).',
+        '',
+        `Whole run reverted to its starting snapshot; read back (EntryPoint nonce, operator deposit, account token balance, debt): ${restored ? 'unchanged' : `**CHANGED** ${before} → ${after}`}.`,
         '',
         `Verdict: ${ok ? 'PASS' : 'FAIL'}`,
         '',

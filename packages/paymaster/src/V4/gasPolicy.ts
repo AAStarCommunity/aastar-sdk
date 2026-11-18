@@ -83,9 +83,11 @@ export function scaleLimits(estimate: UserOpGasLimits, coefficientBps: bigint): 
     };
 }
 
+/** Median; for an even count the mean of the two middle values, rounded down. */
 const median = (xs: bigint[]): bigint => {
     const s = [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-    return s[Math.floor((s.length - 1) / 2)];
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 === 1 ? s[mid] : (s[mid - 1] + s[mid]) / 2n;
 };
 
 /**

@@ -21,8 +21,15 @@ All notable changes to this project will be documented in this file.
   It runs after the op is accepted; a throwing callback is reported and does not change the outcome.
 - Estimation now runs whenever any of the five limits is missing (unless `autoEstimate: false`), filling only the
   missing ones; before, giving verificationGasLimit and callGasLimit skipped it and the paymaster limits got defaults.
-- Fees the caller gives are a price limit: the retry loop no longer raises them (replacement-underpriced and
-  "must be at least" answers are returned instead); fees taken from the chain are still raised on such answers.
+- Fees the caller gives are a price limit, per field: the retry loop never raises an explicit field (a
+  replacement-underpriced answer, which needs both raised, is returned when either was given); a generated field is
+  still raised to a bundler's explicit requirement, within an explicit maxFeePerGas.
+- A bundler answer that is not an estimate is not used as one: a field left out or a sentinel (≤ 1, e.g. a postOp it
+  did not simulate) is filled only by an explicit value or a contract floor read from the chain, otherwise the op is
+  refused before signing (V4 has no postOp floor). An endpoint without eth_estimateUserOperationGas gives the old local
+  defaults, labelled `default` and not scaled. `estimateUserOperationGas` itself still returns all five fields or throws.
+- `tuneEstimate` now receives the bundler's raw estimate (it used to get the SDK-tuned values).
+- eth_feeHistory priority: the median of the per-block rewards (mean of the two middle values for an even count).
 - `SuperPaymasterClient` and `UserClient.executeGasless` (Super) no longer pass their own `tuneEstimate` (it capped
   paymasterVerificationGasLimit near 133k, below what SuperPaymaster 5.5.x validation needs); they use the policy above.
 - Evidence: `docs/onchain-evidence/gas-policy-local.md` (local SuperPaymaster DeployLive stack: credit branch, balance

@@ -1402,7 +1402,7 @@ describe('gas decision: provenance, observer isolation, caller fees kept, frozen
             if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
             return { error: { code: -32500, message: 'maxPriorityFeePerGas is 1000 but must be at least 2000' } };
         });
-        await expect(submit({ maxFeePerGas: 5_000n, maxPriorityFeePerGas: 1_000n })).rejects.toThrow('fees were given by the caller and are not raised');
+        await expect(submit({ maxFeePerGas: 5_000n, maxPriorityFeePerGas: 1_000n })).rejects.toThrow('maxPriorityFeePerGas was given by the caller and is not raised');
         expect(sendOf(seen)).toHaveLength(1);
         SuperPaymasterInflightGuard.clearAll();
         const seen2: any[] = [];
@@ -1443,5 +1443,72 @@ describe('gas decision: provenance, observer isolation, caller fees kept, frozen
         const frozen = { preVerificationGas: 60_000n, verificationGasLimit: 210_000n, callGasLimit: 110_000n, paymasterVerificationGasLimit: 450_000n, paymasterPostOpGasLimit: 500_000n };
         await harness(est([])).submit({ frozenGas: frozen, onGasDecided: (d: any) => decisions.push(d) });
         expect(Object.values(decisions[1].limitSources)).toEqual(['frozen', 'frozen', 'frozen', 'frozen', 'frozen']);
+    });
+});
+
+describe('round 2: partial caller fees, sentinel / partial estimates, fallback provenance', () => {
+    it('only maxFee given: the generated priority may be raised to the bundler\'s requirement within that cap', async () => {
+        const seen: any[] = [];
+        let first = true;
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first) { first = false; return { error: { code: -32500, message: 'maxPriorityFeePerGas is 1000000000 but must be at least 1200000000' } }; }
+            return { result: OP_HASH };
+        });
+        await expect(submit({ maxFeePerGas: 3_000_000_000n })).resolves.toBe(OP_HASH);
+        const sends = seen.filter((x) => x.method === 'eth_sendUserOperation');
+        expect(BigInt(sends[1].op.maxPriorityFeePerGas)).toBe(1_200_000_000n);
+        expect(BigInt(sends[1].op.maxFeePerGas)).toBe(3_000_000_000n); // the caller's cap is kept
+        SuperPaymasterInflightGuard.clearAll();
+        let first2 = true;
+        const h2 = harness(async (method) => {
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first2) { first2 = false; return { error: { code: -32500, message: 'maxPriorityFeePerGas is 1000000000 but must be at least 4000000000' } }; }
+            return { result: OP_HASH };
+        });
+        await expect(h2.submit({ maxFeePerGas: 3_000_000_000n })).rejects.toThrow('maxFeePerGas was given by the caller and is not raised');
+    });
+
+    it('a postOp sentinel (0x1) from the bundler is not an estimate: the SP floor fills it, labelled floor', async () => {
+        const decisions: any[] = [];
+        const sentinel = { result: { ...ESTIMATE.result, paymasterPostOpGasLimit: '0x1' } };
+        await harness(async (m) => (m === 'eth_estimateUserOperationGas' ? sentinel : { result: OP_HASH })).submit({ onGasDecided: (d: any) => decisions.push(d) });
+        expect(decisions[0].limits.paymasterPostOpGasLimit).toBe(200_000n);
+        expect(decisions[0].limitSources.paymasterPostOpGasLimit).toBe('floor');
+        expect(decisions[0].estimate).toBeUndefined(); // the estimate was incomplete
+    });
+
+    it('a field the bundler left out but the caller gave does not block the op', async () => {
+        const partial = { result: { preVerificationGas: '0xc350', verificationGasLimit: '0x30d40', callGasLimit: '0x186a0' } };
+        const decisions: any[] = [];
+        await expect(harness(async (m) => (m === 'eth_estimateUserOperationGas' ? partial : { result: OP_HASH }))
+            .submit({ paymasterVerificationGasLimit: 400_000n, onGasDecided: (d: any) => decisions.push(d) })).resolves.toBe(OP_HASH);
+        expect(decisions[0].limitSources).toMatchObject({ paymasterVerificationGasLimit: 'explicit', paymasterPostOpGasLimit: 'floor', callGasLimit: 'estimate' });
+        SuperPaymasterInflightGuard.clearAll();
+        await expect(harness(async (m) => (m === 'eth_estimateUserOperationGas' ? partial : { result: OP_HASH })).submit())
+            .rejects.toThrow('the bundler returned no usable paymasterVerificationGasLimit; pass it explicitly');
+    });
+
+    it('an endpoint without eth_estimateUserOperationGas yields defaults labelled default, never "estimate"', async () => {
+        const decisions: any[] = [];
+        await harness(async (m) => (m === 'eth_estimateUserOperationGas' ? { error: { code: -32601, message: 'Method not found' } } : { result: OP_HASH }))
+            .submit({ onGasDecided: (d: any) => decisions.push(d) });
+        expect(decisions[0].estimate).toBeUndefined();
+        expect(decisions[0].coefficientBps).toBeUndefined();
+        expect(decisions[0].limitSources.callGasLimit).toBe('default');
+        expect(decisions[0].limits.callGasLimit).toBe(2_000_000n); // not scaled
+    });
+});
+
+describe('V4 path (no contract postOp floor): a sentinel postOp estimate is refused, an explicit one is used', () => {
+    const sentinel = { result: { ...ESTIMATE.result, paymasterPostOpGasLimit: '0x1' } };
+    it('postOp 0x1 from the bundler → refused before signing; with an explicit postOp it goes through', async () => {
+        const seen: any[] = [];
+        const bundler = async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? sentinel : { result: OP_HASH }; };
+        await expect(harness(bundler).submit({ operator: undefined })).rejects.toThrow('no usable paymasterPostOpGasLimit; pass it explicitly');
+        expect(seen.filter((x) => x.method === 'eth_sendUserOperation')).toHaveLength(0);
+        await expect(harness(bundler).submit({ operator: undefined, paymasterPostOpGasLimit: 150_000n })).resolves.toBe(OP_HASH);
+        expect(BigInt(seen.find((x) => x.method === 'eth_sendUserOperation').op.paymasterPostOpGasLimit)).toBe(150_000n);
     });
 });

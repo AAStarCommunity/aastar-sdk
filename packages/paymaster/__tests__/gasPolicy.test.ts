@@ -67,3 +67,12 @@ describe('resolveUserOpFees asks the chain only for what is missing', () => {
         expect(c.getBlock).not.toHaveBeenCalled();
     });
 });
+
+describe('median over an even number of blocks', () => {
+    it('is the mean of the two middle rewards, rounded down', async () => {
+        const c = { getFeeHistory: vi.fn(async () => ({ baseFeePerGas: [1n, 1n], reward: [1n, 1n, 1n, 1n, 1n, 9n, 9n, 9n, 9n, 9n].map((r) => [r]) })), estimateMaxPriorityFeePerGas: vi.fn(), getBlock: vi.fn() };
+        expect((await resolveUserOpFees(c, {})).maxPriorityFeePerGas).toBe(5n);
+        const c2 = { getFeeHistory: vi.fn(async () => ({ baseFeePerGas: [1n, 1n], reward: [[2n], [5n]] })), estimateMaxPriorityFeePerGas: vi.fn(), getBlock: vi.fn() };
+        expect((await resolveUserOpFees(c2, {})).maxPriorityFeePerGas).toBe(3n); // (2 + 5) / 2 rounded down
+    });
+});
