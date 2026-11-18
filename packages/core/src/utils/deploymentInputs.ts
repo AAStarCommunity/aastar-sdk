@@ -1,4 +1,4 @@
-import { type Address, type PublicClient, isAddressEqual } from 'viem';
+import { type Abi, type Address, type Hash, type Hex, type PublicClient, isAddressEqual, encodeFunctionData, decodeFunctionResult } from 'viem';
 import { getCanonicalAddresses } from '../addresses.js';
 import { SimpleAccountFactoryABI, SimpleAccountABI } from '../abis/index.js';
 import { AAStarError, ErrorCode } from '../errors/index.js';
@@ -13,28 +13,54 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
  * entryPoint() shows that it builds v0.6 accounts while the SDK uses v0.7).
  */
 
-const fail = (msg: string): never => {
-    throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg);
+/**
+ * Every refusal carries a fixed `data.reason` (and, for an EntryPoint mismatch, the value read from the chain), so a
+ * caller or a report can tell refusals apart without parsing messages that may embed provider text.
+ */
+export type DeploymentInputRefusal =
+    | 'chain-mismatch' | 'signing-chain-unbound' | 'no-feed-in-book' | 'no-factory-in-book' | 'stale-head'
+    | 'no-code' | 'not-an-aggregator' | 'wrong-decimals' | 'wrong-description' | 'non-positive-answer' | 'stale-feed'
+    | 'no-account-implementation' | 'entrypoint-mismatch' | 'block-unavailable';
+
+const fail = (reason: DeploymentInputRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
+    throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg, cause instanceof Error ? cause : undefined, { reason, ...extra });
 };
 
-const hasCode = async (client: PublicClient, address: Address, blockNumber?: bigint) => {
-    const code = await client.getCode({ address, blockNumber });
+// Reads pinned to one block HASH with EIP-1898 (`requireCanonical`), so every answer comes from the same state;
+// viem's readContract/getCode only take a block number. A node without EIP-1898 support fails the read.
+type Pin = { blockHash: Hash; requireCanonical: true };
+const codeAt = async (client: PublicClient, address: Address, pin: Pin): Promise<Hex> =>
+    client.request({ method: 'eth_getCode', params: [address, pin] } as any) as Promise<Hex>;
+const callAt = async <T>(client: PublicClient, to: Address, abi: Abi, functionName: string, pin: Pin): Promise<T> => {
+    const data = encodeFunctionData({ abi, functionName, args: [] } as any);
+    const result = await client.request({ method: 'eth_call', params: [{ to, data }, pin] } as any) as Hex;
+    return decodeFunctionResult({ abi, functionName, data: result } as any) as T;
+};
+const hasCode = async (client: PublicClient, address: Address, pin: Pin) => {
+    let code: Hex;
+    try {
+        code = await codeAt(client, address, pin);
+    } catch (e) {
+        // An orphaned block (requireCanonical), a pruned state, or no EIP-1898 support: nothing can be checked.
+        return fail('block-unavailable', `state at block ${pin.blockHash} could not be read for ${address} (${(e as Error).message.split('\n')[0]})`, { address }, e);
+    }
     return code !== undefined && code !== '0x';
 };
 
 /**
  * The chain id both clients are on: the one that reads (and checks) and the one that signs. Different chains
- * throw. The signing client must also have a configured `chain` with that id: viem's writeContract passes it and
- * re-checks `eth_chainId` against it at send time, so a wallet that switches chains after this check fails to send
- * instead of sending on the new chain.
+ * throw. The signing client must also have a configured `chain` with that id. For a local account viem signs that
+ * chain id into the transaction, so the send is bound to it. For a JSON-RPC account viem re-reads `eth_chainId`
+ * before `eth_sendTransaction` but does not put the chain id in the request (viem 2.43.3), so a wallet that
+ * switches chains between that read and the send is not caught.
  */
 export async function assertSameChain(
     reader: { getChainId: () => Promise<number> },
     writer: { getChainId: () => Promise<number>; chain?: { id: number } },
 ): Promise<number> {
     const [r, w] = await Promise.all([reader.getChainId(), writer.getChainId()]);
-    if (r !== w) fail(`the reading client is on chain ${r} but the signing client is on chain ${w}; refusing to continue`);
-    if (writer.chain?.id !== r) fail(`the signing client has no configured chain ${r} (it has ${writer.chain?.id ?? 'none'}), so the send would not be bound to the checked chain; refusing to continue`);
+    if (r !== w) fail('chain-mismatch', `the reading client is on chain ${r} but the signing client is on chain ${w}; refusing to continue`, { reader: r, writer: w });
+    if (writer.chain?.id !== r) fail('signing-chain-unbound', `the signing client has no configured chain ${r} (it has ${writer.chain?.id ?? 'none'}), so the send would not be bound to the checked chain; refusing to continue`);
     return r;
 }
 
@@ -60,7 +86,7 @@ export const MAX_HEAD_LAG_SECONDS = 600;
 export function resolveEthUsdFeedAddress(chainId: number, explicit?: Address): Address {
     if (explicit) return explicit;
     const fromBook = getCanonicalAddresses(chainId)?.priceFeed as Address | undefined;
-    if (!fromBook) fail(`no ETH/USD price feed for chain ${chainId} in the address book; pass ethUsdPriceFeedAddress`);
+    if (!fromBook) fail('no-feed-in-book', `no ETH/USD price feed for chain ${chainId} in the address book; pass ethUsdPriceFeedAddress`);
     return fromBook!;
 }
 
@@ -68,8 +94,8 @@ export function resolveEthUsdFeedAddress(chainId: number, explicit?: Address): A
  * Check `feed` on the chain before it is written into a deployment: it has code, `decimals() == 8`,
  * `description() == "ETH / USD"`, a positive answer, and `updatedAt` within `maxAgeSeconds` of the latest
  * block's timestamp. Pass the staleness threshold the deployment itself will enforce as `maxAgeSeconds`.
- * All reads are pinned to that one block, and the block must be within `maxHeadLagSeconds` of the wall clock
- * (`Infinity` for a deliberately historical fork).
+ * All reads are pinned to that block's hash (EIP-1898, `requireCanonical`), and the block must be within
+ * `maxHeadLagSeconds` of the wall clock (`Infinity` for a deliberately historical fork).
  *
  * What this does not establish: that the contract IS Chainlink's feed (any contract can answer these reads),
  * L2 sequencer health, or anything after this block. The address-book default is the trusted source; an
@@ -86,33 +112,26 @@ export async function verifyEthUsdFeed(
     const wall = opts.nowSeconds ? opts.nowSeconds() : Math.floor(Date.now() / 1000);
     const lag = wall - Number(block.timestamp);
     const maxLag = opts.maxHeadLagSeconds ?? MAX_HEAD_LAG_SECONDS;
-    if (lag > maxLag) fail(`the RPC's latest block ${block.number} is ${lag}s behind the clock (max ${maxLag}s); refusing to deploy`);
-    const blockNumber = block.number!;
-    // Reads are pinned by number; the block hash is read again afterwards, so a reorg at that height during the
-    // check (different state under the same number) throws instead of mixing two states.
-    const sameBlock = async () => {
-        const again = await client.getBlock({ blockNumber });
-        if (again.hash !== block.hash) fail(`block ${blockNumber} changed from ${block.hash} to ${again.hash} during the check; refusing to deploy`);
-    };
-    if (!(await hasCode(client, feed, blockNumber))) fail(`${where} has no code on this chain; refusing to deploy`);
+    if (lag > maxLag) fail('stale-head', `the RPC's latest block ${block.number} is ${lag}s behind the clock (max ${maxLag}s); refusing to deploy`);
+    const pin: Pin = { blockHash: block.hash!, requireCanonical: true };
+    if (!(await hasCode(client, feed, pin))) fail('no-code', `${where} has no code on this chain; refusing to deploy`, { address: feed });
     let decimals: number, description: string, round: readonly [bigint, bigint, bigint, bigint, bigint];
     try {
         [decimals, description, round] = await Promise.all([
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'decimals', blockNumber }) as Promise<number>,
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'description', blockNumber }) as Promise<string>,
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'latestRoundData', blockNumber }) as Promise<readonly [bigint, bigint, bigint, bigint, bigint]>,
+            callAt<number>(client, feed, AGGREGATOR_V3_ABI as unknown as Abi, 'decimals', pin),
+            callAt<string>(client, feed, AGGREGATOR_V3_ABI as unknown as Abi, 'description', pin),
+            callAt<readonly [bigint, bigint, bigint, bigint, bigint]>(client, feed, AGGREGATOR_V3_ABI as unknown as Abi, 'latestRoundData', pin),
         ]);
     } catch (e) {
-        return fail(`${where} could not be read as a Chainlink aggregator (${(e as Error).message.split('\n')[0]}); refusing to deploy`);
+        return fail('not-an-aggregator', `${where} could not be read as a Chainlink aggregator at block ${block.hash} (${(e as Error).message.split('\n')[0]}); refusing to deploy`, { address: feed }, e);
     }
-    if (Number(decimals) !== 8) fail(`${where} reports decimals ${decimals}, expected 8; refusing to deploy`);
-    if (description !== 'ETH / USD') fail(`${where} reports description ${JSON.stringify(description)}, expected "ETH / USD"; refusing to deploy`);
+    if (Number(decimals) !== 8) fail('wrong-decimals', `${where} reports decimals ${decimals}, expected 8; refusing to deploy`);
+    if (description !== 'ETH / USD') fail('wrong-description', `${where} reports description ${JSON.stringify(description)}, expected "ETH / USD"; refusing to deploy`);
     const [, answer, , updatedAt] = round;
-    if (answer <= 0n) fail(`${where} reports a non-positive answer ${answer}; refusing to deploy`);
-    await sameBlock();
+    if (answer <= 0n) fail('non-positive-answer', `${where} reports a non-positive answer ${answer}; refusing to deploy`);
     const now = block.timestamp;
     if (updatedAt === 0n || updatedAt > now || now - updatedAt > maxAge) {
-        fail(`${where} last updated at ${updatedAt}, block time ${now} (max age ${maxAge}s); refusing to deploy`);
+        fail('stale-feed', `${where} last updated at ${updatedAt}, block time ${now} (max age ${maxAge}s); refusing to deploy`);
     }
     return { decimals: Number(decimals), description, answer, updatedAt };
 }
@@ -121,30 +140,28 @@ export async function verifyEthUsdFeed(
 export function resolveAccountFactoryAddress(chainId: number, explicit?: Address): Address {
     if (explicit && !isAddressEqual(explicit, '0x0000000000000000000000000000000000000000')) return explicit;
     const fromBook = getCanonicalAddresses(chainId)?.simpleAccountFactory as Address | undefined;
-    if (!fromBook) fail(`no simpleAccountFactory for chain ${chainId} in the address book; pass the factory address`);
+    if (!fromBook) fail('no-factory-in-book', `no simpleAccountFactory for chain ${chainId} in the address book; pass the factory address`);
     return fromBook!;
 }
 
 /**
  * Check that `factory` builds accounts for `entryPoint`: it has code, and its `accountImplementation()`
- * reports `entryPoint()` equal to `entryPoint`, all read at one block. A v0.6 factory with a v0.7 EntryPoint
+ * reports `entryPoint()` equal to `entryPoint`, all read at one block hash (EIP-1898). A v0.6 factory with a v0.7 EntryPoint
  * throws, naming both. This checks what the factory reports, not what `createAccount` will deploy.
  */
 export async function verifyAccountFactory(client: PublicClient, factory: Address, entryPoint: Address): Promise<{ implementation: Address }> {
     const block = await client.getBlock();
-    const blockNumber = block.number!;
-    if (!(await hasCode(client, factory, blockNumber))) fail(`account factory ${factory} has no code on this chain`);
+    const pin: Pin = { blockHash: block.hash!, requireCanonical: true };
+    if (!(await hasCode(client, factory, pin))) fail('no-code', `account factory ${factory} has no code on this chain`, { address: factory });
     let implementation: Address, implEntryPoint: Address;
     try {
-        implementation = await client.readContract({ address: factory, abi: SimpleAccountFactoryABI, functionName: 'accountImplementation', blockNumber }) as Address;
-        implEntryPoint = await client.readContract({ address: implementation, abi: SimpleAccountABI, functionName: 'entryPoint', blockNumber }) as Address;
+        implementation = await callAt<Address>(client, factory, SimpleAccountFactoryABI as Abi, 'accountImplementation', pin);
+        implEntryPoint = await callAt<Address>(client, implementation, SimpleAccountABI as Abi, 'entryPoint', pin);
     } catch (e) {
-        return fail(`account factory ${factory}: accountImplementation().entryPoint() could not be read (${(e as Error).message.split('\n')[0]})`);
+        return fail('no-account-implementation', `account factory ${factory}: accountImplementation().entryPoint() could not be read at block ${block.hash} (${(e as Error).message.split('\n')[0]})`, { address: factory }, e);
     }
     if (!isAddressEqual(implEntryPoint, entryPoint)) {
-        fail(`account factory ${factory} builds accounts for EntryPoint ${implEntryPoint}, but the SDK is configured for ${entryPoint}`);
+        fail('entrypoint-mismatch', `account factory ${factory} builds accounts for EntryPoint ${implEntryPoint}, but the SDK is configured for ${entryPoint}`, { address: factory, reported: implEntryPoint, expected: entryPoint });
     }
-    const again = await client.getBlock({ blockNumber });
-    if (again.hash !== block.hash) fail(`block ${blockNumber} changed from ${block.hash} to ${again.hash} while checking account factory ${factory}`);
     return { implementation };
 }

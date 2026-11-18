@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { type Address } from 'viem';
+import { type Abi, type Address, decodeFunctionData, encodeFunctionResult } from 'viem';
+import { SimpleAccountFactoryABI, SimpleAccountABI } from '../abis/index.js';
 import {
     resolveEthUsdFeedAddress, verifyEthUsdFeed, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain,
 } from './deploymentInputs.js';
@@ -16,20 +17,40 @@ const IMPL = '0x68641DE71cfEa5a5d0D29712449Ee254bb1400C2' as Address;
 const NOW = 1_800_000_000n;
 const BLOCK = 123n;
 const HASH = ('0x' + 'aa'.repeat(32)) as `0x${string}`;
-const REORGED = ('0x' + 'bb'.repeat(32)) as `0x${string}`;
 const clock = { nowSeconds: () => Number(NOW) + 5 }; // wall clock 5 s ahead of the head
-function feedClient(o: { code?: string; decimals?: number; description?: string; answer?: bigint; updatedAt?: bigint; readError?: boolean; reorg?: boolean } = {}) {
-    return {
-        getCode: vi.fn(async ({ blockNumber }: any) => { if (blockNumber !== BLOCK) throw new Error('getCode not pinned'); return o.code ?? '0x6080'; }),
-        getBlock: vi.fn(async (args?: any) => ({ timestamp: NOW, number: BLOCK, hash: args?.blockNumber !== undefined && o.reorg ? REORGED : HASH })),
-        readContract: vi.fn(async ({ functionName, blockNumber }: any) => {
-            if (blockNumber !== BLOCK) throw new Error(`${functionName} not pinned to the checked block`);
+
+// The code under test reads through raw eth_getCode / eth_call pinned to {blockHash, requireCanonical}; this decodes
+// those requests, refuses any that are not pinned to HASH, and answers through `readContract` (the recorder below).
+const AGG = [
+    { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+    { type: 'function', name: 'description', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+    { type: 'function', name: 'latestRoundData', inputs: [], outputs: [{ type: 'uint80' }, { type: 'int256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint80' }], stateMutability: 'view' },
+] as const;
+const ALL = [...AGG, ...(SimpleAccountFactoryABI as any[]), ...(SimpleAccountABI as any[])] as Abi;
+function pinnedRequest(fake: { readContract: any; code: () => string; unavailable?: boolean }) {
+    return vi.fn(async ({ method, params }: any) => {
+        const pin = params[1];
+        if (pin?.blockHash !== HASH || pin.requireCanonical !== true) throw new Error(`${method} not pinned to the checked block hash`);
+        if (fake.unavailable) throw new Error('header not found');
+        if (method === 'eth_getCode') return fake.code();
+        if (method !== 'eth_call') throw new Error(`unexpected ${method}`);
+        const { functionName } = decodeFunctionData({ abi: ALL, data: params[0].data });
+        const value = await fake.readContract({ functionName, address: params[0].to });
+        return encodeFunctionResult({ abi: ALL, functionName, result: value } as any);
+    });
+}
+function feedClient(o: { code?: string; decimals?: number; description?: string; answer?: bigint; updatedAt?: bigint; readError?: boolean; unavailable?: boolean } = {}) {
+    const readContract = vi.fn(async ({ functionName }: any) => {
             if (o.readError) throw new Error('execution reverted');
             if (functionName === 'decimals') return o.decimals ?? 8;
             if (functionName === 'description') return o.description ?? 'ETH / USD';
             if (functionName === 'latestRoundData') return [1n, o.answer ?? 3_000_00000000n, NOW - 60n, o.updatedAt ?? NOW - 60n, 1n];
             throw new Error(`unexpected ${functionName}`);
-        }),
+    });
+    return {
+        getBlock: vi.fn(async () => ({ timestamp: NOW, number: BLOCK, hash: HASH })),
+        readContract,
+        request: pinnedRequest({ readContract, code: () => o.code ?? '0x6080', unavailable: o.unavailable }),
     } as any;
 }
 
@@ -67,8 +88,13 @@ describe('ETH/USD feed', () => {
         await expect(verifyEthUsdFeed(feedClient({ updatedAt: NOW - 3600n }), OP_FEED, clock)).resolves.toBeTruthy(); // exactly at the bound
     });
 
-    it('a reorg at the checked height during the check is refused', async () => {
-        await expect(verifyEthUsdFeed(feedClient({ reorg: true }), OP_FEED, clock)).rejects.toThrow(`changed from ${HASH} to ${REORGED}`);
+    it('every read is pinned to the checked block hash; a node that cannot serve it (orphaned, pruned, no EIP-1898) refuses', async () => {
+        await expect(verifyEthUsdFeed(feedClient({ unavailable: true }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+    });
+
+    it('refusals carry a fixed data.reason', async () => {
+        await expect(verifyEthUsdFeed(feedClient({ code: '0x' }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'no-code', address: OP_FEED } });
+        await expect(verifyEthUsdFeed(feedClient({ decimals: 18 }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'wrong-decimals' } });
     });
 
     it('an RPC whose latest block lags the wall clock is refused (its "fresh" feed may be hours old)', async () => {
@@ -77,17 +103,17 @@ describe('ETH/USD feed', () => {
     });
 });
 
-function factoryClient(o: { code?: string; implEntryPoint?: Address; readError?: boolean; reorg?: boolean } = {}) {
+function factoryClient(o: { code?: string; implEntryPoint?: Address; readError?: boolean; unavailable?: boolean } = {}) {
+    const readContract = vi.fn(async ({ functionName }: any) => {
+        if (o.readError) throw new Error('execution reverted');
+        if (functionName === 'accountImplementation') return IMPL;
+        if (functionName === 'entryPoint') return o.implEntryPoint ?? EP_V07;
+        throw new Error(`unexpected ${functionName}`);
+    });
     return {
-        getBlock: vi.fn(async (args?: any) => ({ number: BLOCK, hash: args?.blockNumber !== undefined && o.reorg ? REORGED : HASH })),
-        getCode: vi.fn(async ({ blockNumber }: any) => { if (blockNumber !== BLOCK) throw new Error('getCode not pinned'); return o.code ?? '0x6080'; }),
-        readContract: vi.fn(async ({ functionName, blockNumber }: any) => {
-            if (blockNumber !== BLOCK) throw new Error(`${functionName} not pinned to the checked block`);
-            if (o.readError) throw new Error('execution reverted');
-            if (functionName === 'accountImplementation') return IMPL;
-            if (functionName === 'entryPoint') return o.implEntryPoint ?? EP_V07;
-            throw new Error(`unexpected ${functionName}`);
-        }),
+        getBlock: vi.fn(async () => ({ number: BLOCK, hash: HASH })),
+        readContract,
+        request: pinnedRequest({ readContract, code: () => o.code ?? '0x6080', unavailable: o.unavailable }),
     } as any;
 }
 
@@ -112,8 +138,10 @@ describe('account factory', () => {
             .rejects.toThrow(`builds accounts for EntryPoint ${EP_V06}, but the SDK is configured for ${EP_V07}`);
     });
 
-    it('a reorg at the checked height while checking the factory is refused', async () => {
-        await expect(verifyAccountFactory(factoryClient({ reorg: true }), V07_FACTORY, EP_V07)).rejects.toThrow('changed from');
+    it('a block the node cannot serve refuses, and an EntryPoint mismatch carries the value read', async () => {
+        await expect(verifyAccountFactory(factoryClient({ unavailable: true }), V07_FACTORY, EP_V07)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        await expect(verifyAccountFactory(factoryClient({ implEntryPoint: EP_V06 }), V06_FACTORY, EP_V07))
+            .rejects.toMatchObject({ data: { reason: 'entrypoint-mismatch', reported: EP_V06, expected: EP_V07 } });
     });
 
     it('no code, or no accountImplementation().entryPoint(), is refused', async () => {

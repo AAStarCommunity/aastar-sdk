@@ -13,6 +13,11 @@ const BLOCK_HASH = ('0x' + 'e1'.repeat(32)) as Hash;
 const FEED = '0x694AA1769357215DE4FAC081bf1f309aDC325306' as Address; // Sepolia ETH/USD (the client is on Sepolia)
 const NO_CODE_FEED = '0x13e3Ee699D1909E989722E753853AE30b17e08c5' as Address; // OP Mainnet's feed: no code on Sepolia here
 const NOW = BigInt(Math.floor(Date.now() / 1000));
+const AGG = [
+    { type: 'function', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' },
+    { type: 'function', name: 'description', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+    { type: 'function', name: 'latestRoundData', inputs: [], outputs: [{ type: 'uint80' }, { type: 'int256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint80' }], stateMutability: 'view' },
+] as const;
 const initFor = (feed: Address, staleness = 3600n) => encodeFunctionData({
     abi: PaymasterABI, functionName: 'initialize',
     args: [OPERATOR, OPERATOR, OPERATOR, feed, 200n, 10n ** 17n, staleness],
@@ -55,10 +60,13 @@ function operatorClient(owner: Address) {
         throw new Error(`unexpected read ${functionName}`);
     });
     oc.request = vi.fn(async ({ method, params }: any) => {
+        const block = params[1];
+        if (block?.blockHash !== BLOCK_HASH || block.requireCanonical !== true) throw new Error(`${method} not pinned to the checked block`);
+        if (method === 'eth_getCode') return oc.getCode({ address: params[0] });
         if (method !== 'eth_call') throw new Error(`unexpected RPC ${method}`);
-        const [{ to, data }, block] = params;
-        if (block?.blockHash !== BLOCK_HASH || block.requireCanonical !== true) throw new Error('read not pinned to the receipt block');
-        const abi = (to.toLowerCase() === FACTORY.toLowerCase() ? PaymasterFactoryABI : PaymasterABI) as Abi;
+        const [{ to, data }] = params;
+        const abi = (to.toLowerCase() === FACTORY.toLowerCase() ? PaymasterFactoryABI
+            : [FEED, NO_CODE_FEED].some((f) => f.toLowerCase() === to.toLowerCase()) ? AGG : PaymasterABI) as Abi;
         const { functionName, args } = decodeFunctionData({ abi, data: data as Hex });
         const value = await oc.readContract({ address: to, functionName, args });
         return encodeFunctionResult({ abi, functionName, result: value } as any);

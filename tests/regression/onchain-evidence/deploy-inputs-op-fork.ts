@@ -31,27 +31,17 @@ const OP_SEPOLIA_TYPO = '0x91E6060613810449d098b0b5EC8b51A0fe8C8985' as Address;
 const EP_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
 const OUT = 'docs/onchain-evidence/deploy-inputs-op-fork.md';
 
-// Errors are written out only as fixed reason identifiers (plus the EntryPoint address a factory reported, which is
-// an on-chain value). No error text is copied: SDK messages can embed provider text, and provider text can carry
-// endpoint details or credentials.
-const REASONS: Array<[RegExp, string]> = [
-    [/has no code/, 'no-code'],
-    [/could not be read as a Chainlink aggregator/, 'not-an-aggregator'],
-    [/accountImplementation\(\)\.entryPoint\(\) could not be read/, 'no-account-implementation'],
-    [/reports decimals/, 'wrong-decimals'],
-    [/expected "ETH \/ USD"/, 'wrong-description'],
-    [/non-positive answer/, 'non-positive-answer'],
-    [/last updated at/, 'stale-feed'],
-    [/behind the clock/, 'stale-head'],
-    [/changed from 0x/, 'reorg-during-check'],
-];
+// Errors are written out only from the SDK's structured refusal (data.reason, plus data.reported for an EntryPoint
+// mismatch, which the verifier sets from the value it read). No message, error name or provider text is copied;
+// anything else is recorded as one constant.
 const clean = (e: unknown) => {
-    const code = (e as any)?.code;
-    if (!(typeof code === 'string' && /^E\d{4}$/.test(code))) return `unexpected-${(e as any)?.name ?? 'error'}`;
-    const msg = String((e as Error).message);
-    const ep = msg.match(/builds accounts for EntryPoint (0x[0-9a-fA-F]{40}), but/);
-    if (ep) return `entrypoint-mismatch (factory reports ${ep[1]})`;
-    return REASONS.find(([re]) => re.test(msg))?.[1] ?? 'other-sdk-refusal';
+    const data = (e as any)?.data;
+    const reason = typeof data?.reason === 'string' && /^[a-z-]+$/.test(data.reason) ? data.reason : undefined;
+    if (!reason) return 'unexpected-error';
+    if (reason === 'entrypoint-mismatch' && typeof data.reported === 'string' && /^0x[0-9a-fA-F]{40}$/.test(data.reported)) {
+        return `entrypoint-mismatch (factory reports ${data.reported})`;
+    }
+    return reason;
 };
 const outcome = async (f: () => Promise<unknown>) => {
     try { const v = await f(); return { ok: true as const, text: typeof v === 'object' ? JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)) : String(v) }; }

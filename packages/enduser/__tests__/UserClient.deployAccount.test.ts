@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { type Address } from 'viem';
+import { decodeFunctionData, encodeFunctionResult, type Abi, type Address } from 'viem';
+import { SimpleAccountFactoryABI, SimpleAccountABI } from '@aastar/core';
 import { UserClient } from '../src/UserClient';
 
 const V07_FACTORY = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985' as Address;
@@ -9,8 +10,9 @@ const EP_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as Address;
 const OWNER = '0x1111111111111111111111111111111111111111' as Address;
 const AA = '0x2222222222222222222222222222222222222222' as Address;
 
+const ALL = [...(SimpleAccountFactoryABI as any[]), ...(SimpleAccountABI as any[])] as Abi;
 function client(chainId: number, implEntryPoint: Address = EP_V07) {
-    return {
+    const c: any = {
         account: { address: OWNER },
         chain: { id: chainId },
         getChainId: vi.fn(async () => chainId),
@@ -23,7 +25,15 @@ function client(chainId: number, implEntryPoint: Address = EP_V07) {
             throw new Error(`unexpected read ${functionName}`);
         }),
         writeContract: vi.fn(async () => '0xbeef'),
-    } as any;
+    };
+    // The factory check reads through pinned raw eth_getCode / eth_call; answer them through the stubs above.
+    c.request = vi.fn(async ({ method, params }: any) => {
+        if (params[1]?.blockHash !== '0x' + '11'.repeat(32) || params[1]?.requireCanonical !== true) throw new Error(`${method} not pinned`);
+        if (method === 'eth_getCode') return c.getCode({ address: params[0] });
+        const { functionName } = decodeFunctionData({ abi: ALL, data: params[0].data });
+        return encodeFunctionResult({ abi: ALL, functionName, result: await c.readContract({ functionName, address: params[0].to }) } as any);
+    });
+    return c;
 }
 
 describe('UserClient.deployAccount — account factory', () => {

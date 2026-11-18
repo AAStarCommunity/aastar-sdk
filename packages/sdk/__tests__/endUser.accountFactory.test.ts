@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { custom, type Address } from 'viem';
+import { custom, decodeFunctionData, encodeFunctionResult, type Abi, type Address } from 'viem';
+import { SimpleAccountFactoryABI, SimpleAccountABI } from '@aastar/core';
 import { sepolia } from 'viem/chains';
 import { createEndUserClient } from '../src/clients/endUser';
 
@@ -18,6 +19,14 @@ function client(addresses: Record<string, Address> = {}, implEntryPoint: Address
     const c: any = createEndUserClient({ chain, transport, account: { address: OWNER, type: 'json-rpc' } as any, addresses });
     c.getChainId = vi.fn(async () => chain.id);
     c.getBlock = vi.fn(async () => ({ number: 1n, hash: '0x' + '11'.repeat(32) }));
+    // The factory check reads through pinned raw eth_getCode / eth_call; answer them through the stubs below.
+    const ALL = [...(SimpleAccountFactoryABI as any[]), ...(SimpleAccountABI as any[])] as Abi;
+    c.request = vi.fn(async ({ method, params }: any) => {
+        if (params[1]?.blockHash !== '0x' + '11'.repeat(32) || params[1]?.requireCanonical !== true) throw new Error(`${method} not pinned`);
+        if (method === 'eth_getCode') return c.getCode({ address: params[0] });
+        const { functionName } = decodeFunctionData({ abi: ALL, data: params[0].data });
+        return encodeFunctionResult({ abi: ALL, functionName, result: await c.readContract({ functionName, address: params[0].to }) } as any);
+    });
     c.getCode = vi.fn(async () => '0x6080');
     c.getBytecode = vi.fn(async () => undefined);
     c.readContract = vi.fn(async ({ functionName }: any) => {
