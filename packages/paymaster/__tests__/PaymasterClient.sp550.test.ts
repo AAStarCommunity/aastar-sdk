@@ -1411,7 +1411,7 @@ describe('gas decision: provenance, observer isolation, caller fees kept, frozen
             if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
             return { error: { code: -32602, message: 'replacement underpriced' } };
         });
-        await expect(h2.submit({ maxPriorityFeePerGas: 1_000n })).rejects.toThrow('fees were given by the caller');
+        await expect(h2.submit({ maxPriorityFeePerGas: 1_000n })).rejects.toThrow('maxPriorityFeePerGas was given by the caller and is not raised');
         expect(sendOf(seen2)).toHaveLength(1);
     });
 
@@ -1510,5 +1510,50 @@ describe('V4 path (no contract postOp floor): a sentinel postOp estimate is refu
         expect(seen.filter((x) => x.method === 'eth_sendUserOperation')).toHaveLength(0);
         await expect(harness(bundler).submit({ operator: undefined, paymasterPostOpGasLimit: 150_000n })).resolves.toBe(OP_HASH);
         expect(BigInt(seen.find((x) => x.method === 'eth_sendUserOperation').op.paymasterPostOpGasLimit)).toBe(150_000n);
+    });
+});
+
+describe('round 3: PVG sentinel, per-field replacement, tuneEstimate on a partial estimate', () => {
+    it('an unusable preVerificationGas estimate is refused unless given explicitly', async () => {
+        const noPvg = { result: { ...ESTIMATE.result, preVerificationGas: '0x1' } };
+        const b = async (m: string) => (m === 'eth_estimateUserOperationGas' ? noPvg : { result: OP_HASH });
+        await expect(harness(b).submit()).rejects.toThrow('no usable preVerificationGas; pass it explicitly');
+        await expect(harness(b).submit({ preVerificationGas: 70_000n })).resolves.toBe(OP_HASH);
+    });
+
+    it('replacement: an explicit fee that already meets the requirement is kept and only the generated one is raised', async () => {
+        const seen: any[] = [];
+        let first = true;
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first) { first = false; return { error: { code: -32602, message: 'replacement underpriced', data: { currentMaxPriorityFee: '0x3b9aca00', currentMaxFee: '0xb2d05e00' } } }; }
+            return { result: OP_HASH };
+        });
+        // priority 2 gwei given (≥ 1.1 × the pending 1 gwei): kept. maxFee generated (0.5 × 2 + 2 = 3 gwei) is below
+        // 1.1 × the pending 3 gwei, so it rises to 3.3 gwei.
+        await expect(submit({ maxPriorityFeePerGas: 2_000_000_000n })).resolves.toBe(OP_HASH);
+        const sends = seen.filter((x) => x.method === 'eth_sendUserOperation');
+        expect(BigInt(sends[1].op.maxPriorityFeePerGas)).toBe(2_000_000_000n);
+        expect(BigInt(sends[1].op.maxFeePerGas)).toBe(3_300_000_000n);
+    });
+
+    it('a -32602 that is not about replacement is not treated as one', async () => {
+        let first = true;
+        const seen: any[] = [];
+        const { submit } = harness(async (method, op) => {
+            seen.push({ method, op });
+            if (method === 'eth_estimateUserOperationGas') return ESTIMATE;
+            if (first) { first = false; return { error: { code: -32602, message: 'maxPriorityFeePerGas is 1000000000 but must be at least 1100000000' } }; }
+            return { result: OP_HASH };
+        });
+        await expect(submit({ maxFeePerGas: 5_000_000_000n })).resolves.toBe(OP_HASH);
+        expect(BigInt(seen.filter((x) => x.method === 'eth_sendUserOperation')[1].op.maxPriorityFeePerGas)).toBe(1_100_000_000n);
+    });
+
+    it('tuneEstimate with a partial estimate is an error, not silently skipped', async () => {
+        const partial = { result: { ...ESTIMATE.result, paymasterPostOpGasLimit: '0x1' } };
+        await expect(harness(async (m) => (m === 'eth_estimateUserOperationGas' ? partial : { result: OP_HASH }))
+            .submit({ tuneEstimate: () => ({ verificationGasLimit: 1n }) })).rejects.toThrow('tuneEstimate needs a complete estimate');
     });
 });

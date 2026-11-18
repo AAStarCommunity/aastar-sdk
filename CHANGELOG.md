@@ -28,7 +28,12 @@ All notable changes to this project will be documented in this file.
   did not simulate) is filled only by an explicit value or a contract floor read from the chain, otherwise the op is
   refused before signing (V4 has no postOp floor). An endpoint without eth_estimateUserOperationGas gives the old local
   defaults, labelled `default` and not scaled. `estimateUserOperationGas` itself still returns all five fields or throws.
-- `tuneEstimate` now receives the bundler's raw estimate (it used to get the SDK-tuned values).
+- `tuneEstimate` now receives the bundler's raw estimate (it used to get the SDK-tuned values), and is refused with a
+  partial estimate instead of being skipped. An unusable preVerificationGas estimate is refused like the others (the
+  SDK's local calculation has no L1 data fee); it is computed locally only without an estimation endpoint.
+- A replacement answer is recognised by its message (not by code -32602 alone) and handled per field: an explicit fee
+  that already meets the requirement stays, one that does not is refused, a generated one is raised.
+- `EstimateGasOptions`: the named options type of `estimateUserOperationGas`.
 - eth_feeHistory priority: the median of the per-block rewards (mean of the two middle values for an even count).
 - `SuperPaymasterClient` and `UserClient.executeGasless` (Super) no longer pass their own `tuneEstimate` (it capped
   paymasterVerificationGasLimit near 133k, below what SuperPaymaster 5.5.x validation needs); they use the policy above.

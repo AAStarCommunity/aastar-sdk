@@ -63,6 +63,34 @@ const LOCAL_DEFAULT_LIMITS: GasEstimate = {
     paymasterVerificationGasLimit: 100_000n, paymasterPostOpGasLimit: 100_000n,
 };
 
+/** Options of PaymasterClient.estimateUserOperationGas. */
+export type EstimateGasOptions = {
+    validityWindow?: number;
+    airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
+    operator?: Address; // For SuperPaymaster
+    factory?: Address;
+    factoryData?: Hex;
+    /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
+    superPaymasterFlags?: number;
+    /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
+    superPaymasterAutoRenew?: boolean;
+    /**
+     * Sponsorship already read for this op. When set, it is not read again — a 5.4.2→5.5.0
+     * upgrade between submit's read and this one would otherwise build two generations.
+     */
+    sponsorship?: SuperPaymasterSponsorshipContext;
+    /**
+     * Nonce already chosen for this op. Submit passes the reconciled value
+     * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
+     * so estimation cannot sign a different one.
+     */
+    nonce?: bigint;
+    /** Fees for the estimation op; unset ones come from the chain (feePolicy). */
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    feePolicy?: FeePolicy;
+};
+
 /** What estimateUserOperationGas returns (all limits). */
 export type GasEstimate = {
     preVerificationGas: bigint;
@@ -347,8 +375,19 @@ export class PaymasterClient {
      * The bundler's estimate for one op, all five limits (unscaled). Throws when the bundler leaves a limit out or returns a
      * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults.
      */
-    static async estimateUserOperationGas(...args: Parameters<typeof PaymasterClient.estimateUserOperationGasDetailed>): Promise<GasEstimate> {
-        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(...args);
+    static async estimateUserOperationGas(
+        client: any,
+        wallet: any,
+        aaAddress: Address,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        bundlerUrl: string,
+        callData: `0x${string}`,
+        options?: EstimateGasOptions
+    ): Promise<GasEstimate> {
+        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(
+            client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
         const missing = (Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]).filter((k) => fields[k] === undefined);
         if (missing.length > 0 && !fallback) throw new Error(`Estimation Error: the bundler returned no usable ${missing.join(', ')}`);
         return fields as GasEstimate;
@@ -368,32 +407,7 @@ export class PaymasterClient {
         token: Address,
         bundlerUrl: string,
         callData: `0x${string}`,
-        options?: {
-            validityWindow?: number;
-            airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
-            operator?: Address; // For SuperPaymaster
-            factory?: Address;
-            factoryData?: Hex;
-            /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
-            superPaymasterFlags?: number;
-            /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
-            superPaymasterAutoRenew?: boolean;
-            /**
-             * Sponsorship already read for this op. When set, it is not read again — a 5.4.2→5.5.0
-             * upgrade between submit's read and this one would otherwise build two generations.
-             */
-            sponsorship?: SuperPaymasterSponsorshipContext;
-            /**
-             * Nonce already chosen for this op. Submit passes the reconciled value
-             * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
-             * so estimation cannot sign a different one.
-             */
-            nonce?: bigint;
-            /** Fees for the estimation op; unset ones come from the chain (feePolicy). */
-            maxFeePerGas?: bigint;
-            maxPriorityFeePerGas?: bigint;
-            feePolicy?: FeePolicy;
-        }
+        options?: EstimateGasOptions
     ): Promise<{ fields: Partial<GasEstimate>; fallback: boolean }> {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
@@ -732,6 +746,10 @@ export class PaymasterClient {
             );
             // A fallback (no estimation endpoint) yields local defaults: used as they are and labelled 'default'.
             if (!fallback) rawEstimate = FIELDS.every((k) => est[k] !== undefined) ? est as GasEstimate : undefined;
+            if (options?.tuneEstimate && !fallback && !rawEstimate) {
+                // tuneEstimate is defined over a complete estimate; do not run it on a partial one, and do not skip it silently.
+                throw new Error(`tuneEstimate needs a complete estimate, but the bundler returned no usable ${FIELDS.filter((k) => est[k] === undefined).join(', ')}`);
+            }
             const tuned = !fallback && rawEstimate ? (options?.tuneEstimate?.(rawEstimate) ?? {}) : {};
             for (const k of FIELDS) {
                 if (gasLimits[k] !== undefined) continue;
@@ -745,7 +763,8 @@ export class PaymasterClient {
                 const unestimated = FIELDS.filter((k) => gasLimits[k] === undefined);
                 // SuperPaymaster's postOp has a contract floor read from the chain; anything else needs a value.
                 const coveredByFloor = (k: Field) => k === 'paymasterPostOpGasLimit' && !!(options?.operator && spCtx);
-                const refuse = unestimated.filter((k) => !coveredByFloor(k) && k !== 'preVerificationGas');
+                // preVerificationGas too: the SDK's local calculation has no L1 data fee, so it is not a stand-in for an L2 estimate.
+                const refuse = unestimated.filter((k) => !coveredByFloor(k));
                 if (refuse.length > 0) {
                     throw new Error(`Estimation Error: the bundler returned no usable ${refuse.join(', ')}; pass ${refuse.length > 1 ? 'them' : 'it'} explicitly`);
                 }
@@ -963,26 +982,24 @@ export class PaymasterClient {
                 
                 // Case A: Replacement Underpriced (Nonce collision in mempool)
                 // e.g. {"code":-32602,"message":"replacement underpriced","data":{"currentMaxPriorityFee":"0x5f5e100","currentMaxFee":"0xf6a44be"}}
-                if (result.error.code === -32602 || msg.includes('replacement underpriced')) {
-                     // A replacement must raise both fees; an explicit one is not raised.
-                     if (callerPriority || callerMaxFee) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
-                     console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Bumping fees to replace pending UserOp...`);
-                     let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
-                     let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
-
-                     // Extract from data if available (Alchemy/Pimlico standard)
-                     if (errData.currentMaxPriorityFee && errData.currentMaxFee) {
-                         const currentPriority = BigInt(errData.currentMaxPriorityFee);
-                         const currentMax = BigInt(errData.currentMaxFee);
-                         
-                         // Bump by 10% to ensure replacement (Geth/Alchemy minimum)
-                         newMaxPriority = (currentPriority * 110n) / 100n;
-                         newMaxFee = (currentMax * 110n) / 100n;
-                     } else {
-                         // Fallback: Bump current values by 15% if data missing
-                         newMaxPriority = (newMaxPriority * 115n) / 100n;
-                         newMaxFee = (newMaxFee * 115n) / 100n;
-                     }
+                if (/replacement/i.test(msg)) {
+                     console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Raising fees to replace the pending UserOp...`);
+                     const curPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
+                     const curMax = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
+                     // What the replacement needs, per field: 10% over the pending op's fees when the bundler names them
+                     // (Alchemy/Pimlico), else 15% over this op's.
+                     const named = errData.currentMaxPriorityFee !== undefined && errData.currentMaxFee !== undefined;
+                     const needPriority = named ? (BigInt(errData.currentMaxPriorityFee) * 110n) / 100n : (curPriority * 115n) / 100n;
+                     const needMax = named ? (BigInt(errData.currentMaxFee) * 110n) / 100n : (curMax * 115n) / 100n;
+                     const refuseRaise = (field: string) => {
+                         throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (${field} was given by the caller and is not raised)`);
+                     };
+                     // An explicit field that already meets the requirement stays; one that does not is refused.
+                     let newMaxPriority = curPriority;
+                     let newMaxFee = curMax;
+                     if (curPriority < needPriority) { if (callerPriority) refuseRaise('maxPriorityFeePerGas'); newMaxPriority = needPriority; }
+                     if (curMax < needMax) { if (callerMaxFee) refuseRaise('maxFeePerGas'); newMaxFee = needMax; }
+                     if (newMaxFee < newMaxPriority) { if (callerMaxFee) refuseRaise('maxFeePerGas'); newMaxFee = newMaxPriority + 1n; }
 
                      console.log(`   -> New Priority: ${newMaxPriority}, New MaxFee: ${newMaxFee}`);
                      

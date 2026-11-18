@@ -4,19 +4,21 @@
  * bundler. Three SuperPaymaster ops from one account: the credit branch, the balance branch, and the balance branch again
  * with the second op's limits frozen. callData is the three-arm task shape execute(T, 0, transfer(0x…dEaD, 1)).
  *
- *   LOCAL_ANVIL_CONFIG=<SP DeployLive config.json> LOCAL_ANVIL_RPC=http://127.0.0.1:8545 BUNDLER_URL=http://127.0.0.1:4337 \
+ *   LOCAL_ANVIL_CONFIG=<SP DeployLive config.json> LOCAL_ANVIL_RPC=http://127.0.0.1:8545 \
  *   SENDER_AA=<SimpleAccount of mnemonic index 0> TASK_TOKEN=<plain ERC-20 the account holds> pnpm exec tsx tests/regression/onchain-evidence/gas-policy-local.ts
  *
  * Sends transactions on a local chain only: the RPC and the bundler must be loopback URLs and both must report chain id
  * 31337. The whole run is inside one evm_snapshot that is reverted at the end and read back (account nonce, operator
  * deposit, the account's token balance and debt), so the chain is left as found; run it against an anvil + bundler pair
- * that nothing else is using at the same time. The bundler must accept debug_bundler_clearState (Alto: --enable-debug-endpoints):
- * it is cleared before the run and after the revert, so it holds no op the reverted chain never saw. Accounts come from
- * anvil's public default mnemonic. The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
+ * that nothing else is using at the same time. The run starts its OWN bundler (Alto, via pnpm dlx, on a free loopback
+ * port) and stops it at the end, so no bundler state outlives the reverted chain. Accounts come from anvil's public default
+ * mnemonic (bundler executor and utility: indices 2 and 3). The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
  * Output: docs/onchain-evidence/gas-policy-local.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { toHex as hex } from 'viem';
 import type { AddressInfo } from 'node:net';
 import { createPublicClient, createWalletClient, decodeEventLog, encodeFunctionData, erc20Abi, http, parseEther, type Address, type Hex } from 'viem';
 import { EntryPointABI } from '../../../packages/core/src/abis/index.js';
@@ -30,21 +32,44 @@ const OUT = 'docs/onchain-evidence/gas-policy-local.md';
 const EP = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
 const DEAD = '0x000000000000000000000000000000000000dEaD' as Address;
 const MNEMONIC = 'test test test test test test test test test test test junk'; // anvil's public default mnemonic
+const USER_OP_EVENT = '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f'; // UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)
 const DEBTS = [{ type: 'function', name: 'debts', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint256' }] }] as const;
 const EXECUTE = [{ type: 'function', name: 'execute', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes' }], outputs: [] }] as const;
 const OPERATORS = [{ type: 'function', name: 'operators', stateMutability: 'view', inputs: [{ type: 'address' }], outputs: [{ type: 'uint128' }, { type: 'bool' }, { type: 'bool' }, { type: 'address' }, { type: 'uint32' }, { type: 'uint48' }, { type: 'address' }, { type: 'uint256' }, { type: 'uint256' }] }] as const;
 
 const need = (k: string) => { const v = process.env[k]; if (!v) throw new Error(`${k} is required`); return v; };
 
+let bundlerProc: ChildProcess | undefined;
+/** A fresh Alto on a free loopback port, against the local chain; resolved when it answers eth_supportedEntryPoints. */
+async function startBundler(rpc: string): Promise<string> {
+    const port = await new Promise<number>((ok) => { const srv = createServer(); srv.listen(0, '127.0.0.1', () => { const p = (srv.address() as AddressInfo).port; srv.close(() => ok(p)); }); });
+    const key = (i: number) => hex(mnemonicToAccount(MNEMONIC, { addressIndex: i }).getHdKey().privateKey!);
+    bundlerProc = spawn('pnpm', ['dlx', '@pimlico/alto', '--entrypoints', EP, '--rpc-url', rpc, '--port', String(port),
+        '--executor-private-keys', key(2), '--utility-private-key', key(3), '--safe-mode', 'false',
+        '--min-entity-stake', '0', '--min-entity-unstake-delay', '86400'], { stdio: 'ignore' });
+    const url = `http://127.0.0.1:${port}`;
+    for (let i = 0; i < 180; i++) {
+        try {
+            const r = await (await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_supportedEntryPoints', params: [] }) })).json();
+            if (JSON.stringify(r.result ?? []).toLowerCase().includes(EP.toLowerCase())) return url;
+        } catch { /* not up yet */ }
+        await new Promise((ok) => setTimeout(ok, 1000));
+    }
+    throw new Error('the bundler did not start');
+}
+const stopBundler = () => { try { bundlerProc?.kill('SIGTERM'); } catch { /* already gone */ } };
+
 async function main() {
     const cfg = JSON.parse(readFileSync(need('LOCAL_ANVIL_CONFIG'), 'utf8'));
     const t = http(process.env.LOCAL_ANVIL_RPC ?? 'http://127.0.0.1:8545');
-    const bundlerUrl = need('BUNDLER_URL');
+    const loopbackUrl = (u: string) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname);
+    if (!loopbackUrl(process.env.LOCAL_ANVIL_RPC ?? 'http://127.0.0.1:8545')) throw new Error('LOCAL_ANVIL_RPC must be a loopback URL');
+    const bundlerUrl = await startBundler(process.env.LOCAL_ANVIL_RPC ?? 'http://127.0.0.1:8545');
     const aa = need('SENDER_AA') as Address, taskToken = need('TASK_TOKEN') as Address;
     const owner = mnemonicToAccount(MNEMONIC, { addressIndex: 0 }), operator = mnemonicToAccount(MNEMONIC, { addressIndex: 1 });
     const loopback = (u: string) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname);
     const rpcUrl = process.env.LOCAL_ANVIL_RPC ?? 'http://127.0.0.1:8545';
-    if (!loopback(rpcUrl) || !loopback(bundlerUrl)) throw new Error('LOCAL_ANVIL_RPC and BUNDLER_URL must be loopback URLs (a disposable local chain)');
+    if (!loopback(rpcUrl) || !loopback(bundlerUrl)) throw new Error('the RPC and the bundler must be loopback URLs');
     const pub: any = createPublicClient({ chain: foundry, transport: t });
     if ((await pub.getChainId()) !== 31337) throw new Error('not a local anvil (chain 31337)');
     const bundlerChain = await (await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) })).json();
@@ -56,14 +81,25 @@ async function main() {
     const balance = () => pub.readContract({ address: gasToken, abi: erc20Abi, functionName: 'balanceOf', args: [aa] }) as Promise<bigint>;
     const debt = () => pub.readContract({ address: gasToken, abi: DEBTS, functionName: 'debts', args: [aa] }) as Promise<bigint>;
     const callData = PaymasterClient.encodeExecution(taskToken, 0n, PaymasterClient.encodeTokenTransfer(DEAD, 1n));
+    // The outcome of one UserOperation, from the chain: the EntryPoint's UserOperationEvent for exactly this userOpHash and
+    // sender in a receipt the local node has (a bundler may still answer from a reverted run).
     const receiptOf = async (userOpHash: Hex) => {
         for (let i = 0; i < 120; i++) {
             const res = await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] }) });
             const r = (await res.json()).result;
-            // Only a receipt on the current chain counts: a bundler may still hold one from a reverted run.
             if (r?.receipt?.transactionHash) {
-                const onChain = await pub.getTransactionReceipt({ hash: r.receipt.transactionHash }).catch(() => undefined);
-                if (onChain && onChain.blockHash === r.receipt.blockHash) return r;
+                let onChain = await pub.getTransactionReceipt({ hash: r.receipt.transactionHash }).catch(() => undefined);
+                // anvil can still return a receipt from a reverted block: require that block to be the canonical one.
+                if (onChain) {
+                    const canonical = await pub.getBlock({ blockNumber: onChain.blockNumber }).catch(() => undefined);
+                    if (canonical?.hash !== onChain.blockHash) onChain = undefined;
+                }
+                for (const l of onChain?.logs ?? []) {
+                    if (l.address.toLowerCase() !== EP.toLowerCase() || l.topics[0] !== USER_OP_EVENT || l.topics[1]?.toLowerCase() !== userOpHash.toLowerCase()) continue;
+                    const ev: any = decodeEventLog({ abi: EntryPointABI as any, data: l.data, topics: l.topics as any });
+                    if (ev.args.sender.toLowerCase() !== aa.toLowerCase()) continue;
+                    return { success: ev.args.success as boolean, actualGasUsed: ev.args.actualGasUsed as bigint, actualGasCost: ev.args.actualGasCost as bigint, transactionHash: onChain!.transactionHash };
+                }
             }
             await new Promise((ok) => setTimeout(ok, 1000));
         }
@@ -78,13 +114,9 @@ async function main() {
     ], (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
     const rows: string[] = [];
     let ok = true;
-    const clearBundler = async () => {
-        const r = await (await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'debug_bundler_clearState', params: [] }) })).json();
-        if (r.error) throw new Error(`the bundler refused debug_bundler_clearState (${r.error.message}); start it with its debug endpoints enabled (Alto: --enable-debug-endpoints)`);
-    };
-    await clearBundler();
     const before = await state();
     const outer = await pub.request({ method: 'evm_snapshot', params: [] }) as Hex;
+    onDeadline = async () => { await pub.request({ method: 'evm_revert', params: [outer] }); stopBundler(); };
     let part2: string[] = [];
     // Fees do not enter actualGasUsed; fixed explicit fees keep the reservation (and so the branch) the same in every variant.
     const FIXED_FEES = { maxPriorityFeePerGas: 1_000_000n, maxFeePerGas: 2_000_000n };
@@ -158,13 +190,14 @@ async function main() {
     const stub = createServer((_req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'Method not found' } })); });
     await new Promise<void>((ok) => stub.listen(0, '127.0.0.1', ok));
     const stubUrl = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+    try {
     for (const [label, change] of variants) {
         const snap = await pub.request({ method: 'evm_snapshot', params: [] }) as Hex;
         try {
             const txHash = await PaymasterClient.submitGaslessUserOperation(pub, wallet, aa, EP, cfg.superPaymaster, gasToken, stubUrl, callData,
                 { operator: operator.address, frozenGas: { ...dB.limits, ...change }, ...FIXED_FEES });
             const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
-            const evLog = receipt.logs.find((l: any) => l.address.toLowerCase() === EP.toLowerCase() && l.topics[0] === '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f');
+            const evLog = receipt.logs.find((l: any) => l.address.toLowerCase() === EP.toLowerCase() && l.topics[0] === USER_OP_EVENT);
             if (!evLog) throw new Error(`${label}: no UserOperationEvent`);
             const ev: any = decodeEventLog({ abi: EntryPointABI as any, data: evLog.data, topics: evLog.topics as any });
             if (!ev.args.success) throw new Error(`${label}: op did not succeed`);
@@ -174,8 +207,9 @@ async function main() {
             SuperPaymasterInflightGuard.clearAll(); // the reverted op's nonce is free again
         }
     }
-
-    stub.close();
+    } finally {
+        await new Promise<void>((ok) => stub.close(() => ok()));
+    }
     const base = measured[0][2];
     part2 = measured.map(([label, hash, gas, cost, ev, l], i) => {
         const delta = gas - base, want = variants[i][2];
@@ -187,7 +221,6 @@ async function main() {
     } finally {
         if ((await pub.request({ method: 'evm_revert', params: [outer] })) !== true) throw new Error('evm_revert of the whole run failed');
         SuperPaymasterInflightGuard.clearAll();
-        await clearBundler(); // its mempool / known ops refer to the reverted chain
     }
     const after = await state();
     const restored = after === before;
@@ -227,7 +260,13 @@ async function main() {
 // A run that stops making progress must not sit silent: a heartbeat every 30 s, and a hard deadline that fails the run.
 const started = Date.now();
 const heartbeat = setInterval(() => console.error(`gas-policy-local: still running (${Math.round((Date.now() - started) / 1000)} s)`), 30_000);
-const deadline = setTimeout(() => { console.error('gas-policy-local: failed (deadline exceeded)'); process.exit(1); }, Number(process.env.EVIDENCE_TIMEOUT_MS ?? 15 * 60_000));
+// On the deadline the run is abandoned, but the chain and the bundler are still put back (bounded to 30 s) before exiting.
+let onDeadline: (() => Promise<void>) | undefined;
+const deadline = setTimeout(async () => {
+    console.error('gas-policy-local: failed (deadline exceeded); reverting the run');
+    await Promise.race([onDeadline?.().catch((e) => console.error('gas-policy-local: cleanup failed', e?.message)), new Promise((ok) => setTimeout(ok, 30_000))]);
+    process.exit(1);
+}, Number(process.env.EVIDENCE_TIMEOUT_MS ?? 15 * 60_000));
 main()
     .catch((e) => { console.error('gas-policy-local: failed', process.env.DEBUG_EVIDENCE ? e : ''); process.exitCode = 1; })
-    .finally(() => { clearInterval(heartbeat); clearTimeout(deadline); });
+    .finally(() => { clearInterval(heartbeat); clearTimeout(deadline); stopBundler(); });
