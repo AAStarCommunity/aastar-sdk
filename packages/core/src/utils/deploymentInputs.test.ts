@@ -3,7 +3,7 @@ import { type Abi, type Address, decodeFunctionData, encodeFunctionResult } from
 import { SimpleAccountFactoryABI, SimpleAccountABI } from '../abis/index.js';
 import {
     resolveEthUsdFeedAddress, verifyEthUsdFeed, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain,
-    requireLocalSigner, confirmSentOnChain,
+    requireLocalSigner, confirmSentOnChain, isDeploymentInputRefusal,
 } from './deploymentInputs.js';
 import { getCanonicalAddresses } from '../addresses.js';
 
@@ -213,5 +213,14 @@ describe('confirmSentOnChain', () => {
         ['the client switched chain while waiting', { chainIds: [10, 11155111] }, 'tx-chain-unconfirmed'],
     ])('stops on %s', async (_l, o, reason) => {
         await expect(confirmSentOnChain(sendClient(o as any), TX, 10)).rejects.toMatchObject({ data: { reason } });
+    });
+});
+
+describe('isDeploymentInputRefusal', () => {
+    it('recognises the verifiers\' refusals and nothing that merely carries similar data', async () => {
+        const refusal = await verifyAccountFactory(factoryClient({ code: '0x' }), V07_FACTORY, EP_V07).catch((e) => e);
+        expect(isDeploymentInputRefusal(refusal)).toBe(true);
+        const forged: any = new Error('x'); forged.code = 'E4003'; forged.data = { reason: 'entrypoint-mismatch', reported: EP_V06 };
+        expect(isDeploymentInputRefusal(forged)).toBe(false);
     });
 });

@@ -17,7 +17,7 @@ import { createPublicClient, http, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import {
     resolveEthUsdFeedAddress, verifyEthUsdFeed, resolveAccountFactoryAddress, verifyAccountFactory, getCanonicalAddresses,
-    AAStarError, ErrorCode, DEPLOYMENT_INPUT_REFUSALS,
+    isDeploymentInputRefusal,
 } from '@aastar/core';
 
 const PUBLIC = {
@@ -36,14 +36,12 @@ const OUT = 'docs/onchain-evidence/deploy-inputs-op-fork.md';
 // mismatch, which the verifier sets from the value it read). No message, error name or provider text is copied;
 // anything else is recorded as one constant.
 const clean = (e: unknown) => {
-    // Only a genuine SDK refusal (AAStarError, INVALID_CONFIGURATION, a reason from the SDK's own list) is recorded;
-    // provider errors can carry arbitrary `data`, so anything else is one constant.
-    if (!(e instanceof AAStarError) || e.code !== ErrorCode.INVALID_CONFIGURATION) return 'unexpected-error';
-    const data = e.data as { reason?: unknown; reported?: unknown } | undefined;
-    const reason = DEPLOYMENT_INPUT_REFUSALS.find((r) => r === data?.reason);
-    if (!reason) return 'unexpected-error';
+    // Only a genuine SDK refusal (isDeploymentInputRefusal: an AAStarError from the verifiers with a reason from the
+    // SDK's own list) is recorded; provider errors can carry arbitrary `data`, so anything else is one constant.
+    if (!isDeploymentInputRefusal(e)) return 'unexpected-error';
+    const { reason, reported } = e.data;
     if (reason === 'entrypoint-mismatch') {
-        return typeof data?.reported === 'string' && /^0x[0-9a-fA-F]{40}$/.test(data.reported) ? `entrypoint-mismatch (factory reports ${data.reported})` : 'unexpected-error';
+        return typeof reported === 'string' && /^0x[0-9a-fA-F]{40}$/.test(reported) ? `entrypoint-mismatch (factory reports ${reported})` : 'unexpected-error';
     }
     return reason;
 };

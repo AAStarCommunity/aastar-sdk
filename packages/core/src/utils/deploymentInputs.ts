@@ -31,6 +31,16 @@ export const DEPLOYMENT_INPUT_REFUSALS: readonly DeploymentInputRefusal[] = [
     'tx-chain-unconfirmed', 'tx-reverted', 'tx-not-canonical', 'tx-replaced', 'tx-wrong-chain',
 ];
 
+/**
+ * True only for a refusal thrown by this module: an AAStarError (INVALID_CONFIGURATION) whose `data.reason` is one of
+ * {@link DEPLOYMENT_INPUT_REFUSALS}. Any other error, including a provider error that happens to carry similar
+ * `data`, is not one.
+ */
+export function isDeploymentInputRefusal(e: unknown): e is AAStarError & { data: { reason: DeploymentInputRefusal; reported?: Address } } {
+    return e instanceof AAStarError && e.code === ErrorCode.INVALID_CONFIGURATION
+        && DEPLOYMENT_INPUT_REFUSALS.includes((e.data as { reason?: DeploymentInputRefusal } | undefined)?.reason as DeploymentInputRefusal);
+}
+
 const fail = (reason: DeploymentInputRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg, cause instanceof Error ? cause : undefined, { reason, ...extra });
 };
