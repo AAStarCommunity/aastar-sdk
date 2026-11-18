@@ -30,6 +30,7 @@ export * from './clients/BundlerClient.js';
 export * from './actions/index.js';
 export * from './crypto/index.js';
 export * from './roles.js'; // Role system
+export * from './roleData.js'; // Registry EndUserRoleData encoder (community, stakeAmount)
 export * from './requirementChecker.js'; // Requirement validation
 export * from './config/ContractConfigManager.js';
 export * from './transports/helios.js';

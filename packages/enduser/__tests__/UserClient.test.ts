@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UserClient } from '../src/UserClient';
 import { createMockPublicClient, createMockWalletClient, resetMocks } from './mocks/client';
-import { parseEther } from 'viem';
+import { parseEther, decodeFunctionData } from 'viem';
+import { RegistryABI, ROLE_ENDUSER, decodeEndUserRoleData } from '@aastar/core';
 
 // Define mocks using vi.hoisted
 const mocks = vi.hoisted(() => {
@@ -257,7 +258,40 @@ describe('UserClient', () => {
         }));
     });
 
+    const ROLE_CONFIG = { minStake: 2n, ticketPrice: parseEther('0.3') };
+    const approvedAmount = () => decodeFunctionData({ abi: [{ name: 'approve', type: 'function', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' }] as const, data: mocks.mockAccount.execute.mock.calls[0][0].func }).args[1];
+
+    it('registerAsEndUser with stake 0 approves the role\'s minStake + ticket, read from the chain', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue(ROLE_CONFIG);
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        await client.registerAsEndUser('0x3333333333333333333333333333333333333333', 0n);
+        expect(mockPublicClient.readContract).toHaveBeenCalledWith(expect.objectContaining({ functionName: 'getRoleConfig', args: [ROLE_ENDUSER] }));
+        expect(approvedAmount()).toBe(2n + parseEther('0.3'));
+    });
+
+    it('registerAsEndUser with minStake 0 approves only the ticket (Registry locks no stake then)', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue({ minStake: 0n, ticketPrice: parseEther('0.3') });
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        await client.registerAsEndUser('0x3333333333333333333333333333333333333333', parseEther('100'));
+        expect(approvedAmount()).toBe(parseEther('0.3'));
+    });
+
+    it('registerAsEndUser refuses a stake below minStake before sending anything', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue(ROLE_CONFIG);
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        await expect(client.registerAsEndUser('0x3333333333333333333333333333333333333333', 1n)).rejects.toThrow('below the role\'s minStake 2');
+        expect(mocks.mockAccount.execute).not.toHaveBeenCalled();
+    });
+
+    it('registerAsEndUser throws when a step reverts instead of returning its hash', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue(ROLE_CONFIG);
+        mocks.mockToken.allowance.mockResolvedValue(parseEther('10000'));
+        (mockPublicClient.waitForTransactionReceipt as any).mockResolvedValueOnce({ status: 'reverted' });
+        await expect(client.registerAsEndUser('0x3333333333333333333333333333333333333333', 100n)).rejects.toThrow('reverted');
+    });
+
     it('registerAsEndUser should execute batch (approve + register)', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue(ROLE_CONFIG);
         mocks.mockToken.allowance.mockResolvedValue(0n); // Force approve
         
         await client.registerAsEndUser('0x3333333333333333333333333333333333333333', 100n);
@@ -265,16 +299,23 @@ describe('UserClient', () => {
         // Should verify execute called twice (approve + register)
         expect(mocks.mockAccount.execute).toHaveBeenCalledTimes(2);
         
-        // 1. Approve
+        // 1. Approve: the stake plus the ticket
         const approveCall = mocks.mockAccount.execute.mock.calls[0][0];
         expect(approveCall.dest).toBe(config.gTokenAddress);
+        expect(approvedAmount()).toBe(100n + parseEther('0.3'));
         
-        // 2. Register
+        // 2. Register: the AA calls registerRole(ROLE_ENDUSER, itself, EndUserRoleData{community, stake})
         const registerCall = mocks.mockAccount.execute.mock.calls[1][0];
         expect(registerCall.dest).toBe(config.registryAddress);
+        const { functionName, args } = decodeFunctionData({ abi: RegistryABI, data: registerCall.func });
+        expect(functionName).toBe('registerRole');
+        expect(args[0]).toBe(ROLE_ENDUSER);
+        expect(args[1]).toBe(config.accountAddress);
+        expect(decodeEndUserRoleData(args[2] as `0x${string}`)).toEqual({ community: '0x3333333333333333333333333333333333333333', stakeAmount: 100n });
     });
 
     it('registerAsEndUser should execute single if already approved', async () => {
+        (mockPublicClient.readContract as any).mockResolvedValue(ROLE_CONFIG);
         mocks.mockToken.allowance.mockResolvedValue(parseEther('10000'));
         
         await client.registerAsEndUser('0x3333333333333333333333333333333333333333', 100n);

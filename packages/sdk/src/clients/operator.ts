@@ -4,6 +4,7 @@ import {
     stakingActions,
     registryActions,
     RegistryABI,
+    decodeEndUserRoleData,
     superPaymasterActions,
     SuperPaymasterABI,
     paymasterActions,
@@ -155,47 +156,7 @@ export function createOperatorClient({
             if (!accountToUse) throw new Error("Account required for onboarding");
 
             try {
-                // 1. Fetch Entry Burn & Approve GToken
-                console.log('   SDK: Fetching role config for entry burn...');
-                const roleConfig = await (client as any).readContract({
-                    address: usedAddresses.registry,
-                    abi: RegistryABI,
-                    functionName: 'roleConfigs',
-                    args: [roleId]
-                }) as any; 
-
-                const entryBurn = roleConfig[1]; 
-                const totalStakeNeeded = stakeAmount + entryBurn;
-
-                console.log(`   SDK: Approving GToken (Stake: ${stakeAmount}, Burn: ${entryBurn})...`);
-                const approveGToken = await (client as any).writeContract({
-                    address: usedAddresses.gToken,
-                    abi: erc20Abi,
-                    functionName: 'approve',
-                    args: [usedAddresses.gTokenStaking, totalStakeNeeded],
-                    account: accountToUse,
-                    chain
-                });
-                await (client as any).waitForTransactionReceipt({ hash: approveGToken });
-                txs.push(approveGToken);
-
-                // 2. Register Role
-                let data: Hex;
-                if (roleData && roleData !== '0x') {
-                    data = roleData;
-                } else {
-                    console.log(`   SDK: Auto-generating roleData for roleId ${roleId}...`);
-                    if (roleId === keccak256(stringToBytes('COMMUNITY'))) {
-                        data = RoleDataFactory.community();
-                    } else if (roleId === keccak256(stringToBytes('ENDUSER'))) {
-                        data = RoleDataFactory.endUser();
-                    } else if (roleId === keccak256(stringToBytes('PAYMASTER_SUPER'))) {
-                        data = RoleDataFactory.paymasterSuper();
-                    } else {
-                        data = RoleDataFactory.paymasterSuper();
-                    }
-                }
-                
+                // 1. Already registered? Then there is nothing to approve or register.
                 console.log(`   SDK: Checking if role already granted...`);
                 const hasRoleResult = await (client as any).readContract({
                     address: usedAddresses.registry,
@@ -207,13 +168,73 @@ export function createOperatorClient({
                 if (hasRoleResult) {
                     console.log(`   ℹ️  Role already granted, skipping registration`);
                 } else {
+                    // 2. Role data first, so a request that cannot be registered fails before any transaction.
+                    // bytes32 role ids compare as bytes: normalise the hex case before any role-specific branch.
+                    const role = roleId.toLowerCase();
+                    const isRole = (name: string) => role === keccak256(stringToBytes(name)).toLowerCase();
+                    let data: Hex;
+                    if (roleData && roleData !== '0x') {
+                        data = roleData;
+                    } else {
+                        console.log(`   SDK: Auto-generating roleData for roleId ${roleId}...`);
+                        if (isRole('COMMUNITY')) {
+                            data = RoleDataFactory.community();
+                        } else if (isRole('ENDUSER')) {
+                            // EndUserRoleData needs the community to join; there is no default for it.
+                            throw new Error('ENDUSER registration needs roleData (RoleDataFactory.endUser({ community }))');
+                        } else {
+                            data = RoleDataFactory.paymasterSuper();
+                        }
+                    }
+
+                    // 3. Fetch Entry Burn & Approve GToken
+                    console.log('   SDK: Fetching role config for entry burn...');
+                    const roleConfig = await (client as any).readContract({
+                        address: usedAddresses.registry,
+                        abi: RegistryABI,
+                        functionName: 'getRoleConfig',
+                        args: [roleId]
+                    }) as { minStake: bigint; ticketPrice: bigint };
+
+                    const entryBurn = roleConfig.ticketPrice;
+                    let stakeToApprove = stakeAmount;
+                    if (isRole('ENDUSER')) {
+                        // Registry takes the ENDUSER stake from the role data and applies _enforceMinStake to it.
+                        const encoded = decodeEndUserRoleData(data).stakeAmount;
+                        if (roleConfig.minStake > 0n && encoded > 0n && encoded < roleConfig.minStake) {
+                            throw new Error(`ENDUSER stake ${encoded} in roleData is below the role's minStake ${roleConfig.minStake}`);
+                        }
+                        const effective = roleConfig.minStake === 0n ? 0n : (encoded === 0n ? roleConfig.minStake : encoded);
+                        if (stakeAmount !== 0n && stakeAmount !== effective) {
+                            throw new Error(`stakeAmount ${stakeAmount} disagrees with the ${effective} Registry will lock for this ENDUSER roleData`);
+                        }
+                        stakeToApprove = effective;
+                    }
+                    const totalStakeNeeded = stakeToApprove + entryBurn;
+                    const confirmed = async (hash: Hash, what: string) => {
+                        const receipt = await (client as any).waitForTransactionReceipt({ hash });
+                        if (receipt?.status !== 'success') throw new Error(`${what} ${hash} reverted`);
+                    };
+
+                    console.log(`   SDK: Approving GToken (Stake: ${stakeToApprove}, Burn: ${entryBurn})...`);
+                    const approveGToken = await (client as any).writeContract({
+                        address: usedAddresses.gToken,
+                        abi: erc20Abi,
+                        functionName: 'approve',
+                        args: [usedAddresses.gTokenStaking, totalStakeNeeded],
+                        account: accountToUse,
+                        chain
+                    });
+                    await confirmed(approveGToken, 'approve');
+                    txs.push(approveGToken);
+
                     console.log(`   SDK: Registering role ${roleId}...`);
                     const registerTx = await actions.registerRoleSelf({
                         roleId,
-                        data, 
+                        data,
                         account: accountToUse
                     });
-                    await (client as any).waitForTransactionReceipt({ hash: registerTx });
+                    await confirmed(registerTx, 'registerRole');
                     txs.push(registerTx);
                 }
 
@@ -227,7 +248,8 @@ export function createOperatorClient({
                         account: accountToUse,
                         chain
                     });
-                    await (client as any).waitForTransactionReceipt({ hash: depositTx });
+                    const depositReceipt = await (client as any).waitForTransactionReceipt({ hash: depositTx });
+                    if (depositReceipt?.status !== 'success') throw new Error(`depositFor ${depositTx} reverted`);
                     txs.push(depositTx);
                 }
 

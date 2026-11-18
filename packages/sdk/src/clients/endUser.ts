@@ -17,6 +17,7 @@ import {
     resolveAccountFactoryAddress,
     verifyAccountFactory,
     confirmSentOnChain,
+    encodeEndUserRoleData,
 } from '@aastar/core';
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
@@ -153,39 +154,22 @@ export function createEndUserClient({
 
             console.log(`   SDK: Joining community ${community}...`);
             
-            // Registry.registerRoleSelf is now idempotent (modified contract)
-            // First call: Mints SBT + grants role
-            // Subsequent calls: Adds community membership
-            
-            // If roleData not provided, encode EndUserRoleData structure
-            let finalData: Hex;
-            if (roleData) {
-                finalData = roleData;
-            } else {
-                // Encode EndUserRoleData: (address account, address community, string avatarURI, string ensName, uint256 stakeAmount)
-                const { encodeAbiParameters } = await import('viem');
-                finalData = encodeAbiParameters(
-                    [
-                        { name: 'account', type: 'address' },
-                        { name: 'community', type: 'address' },
-                        { name: 'avatarURI', type: 'string' },
-                        { name: 'ensName', type: 'string' },
-                        { name: 'stakeAmount', type: 'uint256' }
-                    ],
-                    [accountToUse.address, community, '', '', 0n] // Use minimum stake (Registry will use roleConfig.minStake)
-                ) as Hex;
-            }
-            
+            // Registry.registerRole(roleId, user, roleData) requires msg.sender == user, so the
+            // account registers itself. ENDUSER may be registered again to add a community.
+            // Without roleData: EndUserRoleData { community, stakeAmount: 0 } (0 = the role's minStake).
+            const finalData: Hex = roleData ?? encodeEndUserRoleData({ community });
+
             const regTx = await (client as any).writeContract({
                 address: usedAddresses.registry,
                 abi: RegistryABI,
-                functionName: 'registerRoleSelf',
-                args: [roleId, finalData],
+                functionName: 'registerRole',
+                args: [roleId, accountToUse.address, finalData],
                 account: accountToUse,
                 chain
             });
-            
-            await (client as any).waitForTransactionReceipt({ hash: regTx });
+
+            const regReceipt = await (client as any).waitForTransactionReceipt({ hash: regTx });
+            if (regReceipt.status !== 'success') throw new Error(`joinAndActivate: registerRole ${regTx} reverted`);
 
             // 2. Fetch SBT ID
             const sbtId = await actions.getUserSBT({ user: accountToUse.address });
@@ -203,7 +187,7 @@ export function createEndUserClient({
                 }) as Address;
 
                 credit = await actions.getAvailableCredit({
-                    user: (client as any).aaAddress || accountToUse.address,
+                    user: accountToUse.address, // the account that just registered (not a separately configured AA)
                     token: tokenAddress
                 });
 
