@@ -13,7 +13,10 @@ import {
     TEST_ACCOUNT_ADDRESSES,
     getCanonicalAddresses,
     describeSupportedChains,
-    RegistryABI
+    RegistryABI,
+    resolveAccountFactoryAddress,
+    verifyAccountFactory,
+    confirmSentOnChain,
 } from '@aastar/core';
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
@@ -106,6 +109,21 @@ export function createEndUserClient({
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };
+
+    // The account factory: the caller's `addresses.simpleAccountFactory`, else the address book's for the live chain;
+    // on every call it must build accounts for the EntryPoint this client uses.
+    // Captured once: later changes to the caller's `addresses` object cannot swap the factory between calls.
+    const factoryOverride = (addresses as any)?.simpleAccountFactory as Address | undefined;
+    const checkedAccountFactory = async (): Promise<Address> => {
+        const liveChainId = await (client as any).getChainId();
+        if (liveChainId !== chain.id) throw new Error(`the RPC is on chain ${liveChainId}, the client is configured for ${chain.id}; refusing to create an account`);
+        const entryPoint = (usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address;
+        // Only the caller's own override or the address book: not the merged usedAddresses, whose global
+        // TEST_ACCOUNT_ADDRESSES entry would otherwise pass as "explicit" on a chain outside the book.
+        const factory = resolveAccountFactoryAddress(liveChainId, factoryOverride);
+        await verifyAccountFactory(client as any, factory, entryPoint);
+        return factory;
+    };
 
     const actions = {
         ...registryActions(usedAddresses.registry)(client as any),
@@ -371,14 +389,10 @@ export function createEndUserClient({
             const { SimpleAccountFactoryABI } = await import('@aastar/core');
             const { encodeFunctionData, concat } = await import('viem');
 
-            let factoryAddress = (usedAddresses as any).simpleAccountFactory; 
+            // From the configuration, else the address book for this chain; checked to build accounts for the
+            // configured EntryPoint (the old fallback 0x9406… is the EntryPoint v0.6 factory).
+            const factoryAddress = await checkedAccountFactory();
             console.log(`   SDK: Using SimpleAccountFactory: ${factoryAddress} (Owner: ${owner}, Salt: ${salt})`);
-            
-            // Fallback to official v0.7 factory if not provided
-            if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                console.warn("   ⚠️  SimpleAccountFactory not found in configuration. Using default fallback.");
-                factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
-            }
 
             const accountAddress = await (client as any).readContract({
                 address: factoryAddress,
@@ -400,7 +414,7 @@ export function createEndUserClient({
             return { accountAddress, initCode, isDeployed };
         },
         async deploySmartAccount({ owner, salt = 0n, fundWithETH = 0n }: { owner: Address, salt?: bigint, fundWithETH?: bigint }) {
-            const { accountAddress, isDeployed } = await (this as any).createSmartAccount({ owner, salt });
+            const { accountAddress, isDeployed, initCode } = await (this as any).createSmartAccount({ owner, salt });
             const { formatEther } = await import('viem');
 
             let deployHash: Hash = '0x0';
@@ -409,10 +423,10 @@ export function createEndUserClient({
                 console.log(`   ℹ️ Account ${accountAddress} already deployed.`);
             } else {
                 const { SimpleAccountFactoryABI } = await import('@aastar/core');
-                let factoryAddress = (usedAddresses as any).simpleAccountFactory;
-                if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                    factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
-                }
+                // The factory the address was predicted with (the first 20 bytes of its initCode, already checked),
+                // not a second resolution: the account deployed and funded must be the one returned.
+                const { getAddress } = await import('viem');
+                const factoryAddress = getAddress(('0x' + (initCode as string).slice(2, 42)) as Address);
 
                 console.log(`   🏭 Deploying Smart Account for ${owner}...`);
                 deployHash = await (client as any).writeContract({
@@ -423,11 +437,16 @@ export function createEndUserClient({
                     account,
                     chain
                 }) as Hash;
-                await (client as any).waitForTransactionReceipt({ hash: deployHash });
+                // Confirmed on this client's chain before anything else is sent (a JSON-RPC wallet that switched chains
+                // would have sent it elsewhere: the flow stops here instead of funding).
+                await confirmSentOnChain(client as any, deployHash, chain.id);
                 console.log(`   ✅ Deployed at ${accountAddress}`);
             }
 
             if (fundWithETH > 0n) {
+                // ETH goes only to an account that exists on this chain now, never to a predicted address.
+                const code = await (client as any).getCode({ address: accountAddress });
+                if (!code || code === '0x') throw new Error(`deploySmartAccount: ${accountAddress} has no code on chain ${chain.id}; not funding it`);
                 console.log(`   ⛽ Funding account with ${formatEther(fundWithETH)} ETH...`);
                 const tx = await (client as any).sendTransaction({
                     to: accountAddress,
@@ -435,7 +454,7 @@ export function createEndUserClient({
                     account,
                     chain
                 });
-                await (client as any).waitForTransactionReceipt({ hash: tx });
+                await confirmSentOnChain(client as any, tx, chain.id);
             }
 
             return { accountAddress, deployTxHash: deployHash, isDeployed: true }; 

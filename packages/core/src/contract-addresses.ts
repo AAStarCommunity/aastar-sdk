@@ -66,8 +66,9 @@ export const TEST_TOKEN_ADDRESSES = {
  * Test Account Addresses (For Development & Testing)
  */
 export const TEST_ACCOUNT_ADDRESSES = {
-  // Official EntryPoint 0.6 Factory for Sepolia
-  simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || '0x9406Cc6185a346906296840746125a0E44976454') as Address,
+  // EntryPoint v0.7 SimpleAccountFactory (code on OP Mainnet, Sepolia, OP Sepolia; implementation entryPoint() = v0.7).
+  // It was 0x9406Cc61…6454, the EntryPoint v0.6 factory, which builds accounts the SDK's v0.7 EntryPoint cannot use.
+  simpleAccountFactory: (process.env.SIMPLE_ACCOUNT_FACTORY || '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985') as Address,
 } as const;
 
 /**

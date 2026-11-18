@@ -413,6 +413,12 @@ export const xPNTsFactoryActions = (address: Address) => (client: PublicClient |
     return actions;
 };
 
+/**
+ * Raw PaymasterFactory calls. `deployPaymaster` / `deployPaymasterDeterministic` send `initData` as given and do not
+ * check what it initializes (e.g. its price feed): they are unchecked primitives. Use
+ * `PaymasterOperatorClient.deployAndRegisterPaymasterV4` or `createOperatorClient().deployPaymasterV4`, which check the
+ * feed on the live chain, and `verifyPaymasterDeployment` after the receipt.
+ */
 export const paymasterFactoryActions = (address: Address) => (client: PublicClient | WalletClient): PaymasterFactoryActions => {
     const actions: PaymasterFactoryActions = {
         async deployPaymaster({ version, initData, account }) {

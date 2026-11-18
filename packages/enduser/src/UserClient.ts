@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -48,6 +48,8 @@ export class UserClient extends BaseClient {
             owner: Address;
             salt?: bigint;
             factoryAddress?: Address;
+            /** EntryPoint the account must use; defaults to the address book's for the chain. Checked against the factory. */
+            entryPointAddress?: Address;
             publicClient?: any;
             accountType?: 'simple' | 'kernel' | 'safe' | string;
             customAbi?: any;
@@ -61,11 +63,27 @@ export class UserClient extends BaseClient {
         // In the future, we can add more built-in ABIs here based on accountType
         // if (params.accountType === 'kernel') abi = KernelFactoryABI;
         
-        const factoryAddr = params.factoryAddress || '0x9406Cc6185a346906296840746125a0E44976454'; // Default v0.7 Factory
         const salt = params.salt || 0n;
         
         // Use publicClient for reading if provided, otherwise fallback to client (which might be a Full Client)
         const readClient = params.publicClient || client;
+
+        // No cross-chain default: the caller's factory, else the address book's for this chain. The old default
+        // 0x9406… is the EntryPoint v0.6 SimpleAccountFactory (it has code everywhere, so only its implementation's
+        // entryPoint() exposes that). A SimpleAccount factory is always checked against the EntryPoint. Another
+        // accountType is only accepted with its own customAbi, and is then deployed unchecked (the caller's factory).
+        // Reader and signer must be on the same, configured chain.
+        const chainId = await assertSameChain(readClient, client);
+        const factoryAddr = resolveAccountFactoryAddress(chainId, params.factoryAddress);
+        const isSimple = params.accountType === undefined || params.accountType === 'simple';
+        if (!isSimple && !params.customAbi) {
+            throw new Error(`deployAccount: accountType ${JSON.stringify(params.accountType)} needs its own customAbi; refusing to deploy it as a SimpleAccount unchecked`);
+        }
+        if (isSimple) {
+            const entryPoint = params.entryPointAddress ?? (getCanonicalAddresses(chainId)?.entryPoint as Address | undefined);
+            if (!entryPoint) throw new Error(`deployAccount: no EntryPoint for chain ${chainId} in the address book; pass entryPointAddress`);
+            await verifyAccountFactory(readClient, factoryAddr, entryPoint);
+        }
         
         // Use the generic actions with the selected ABI
         const factoryRead = accountFactoryActions(factoryAddr, abi)(readClient);
@@ -78,13 +96,13 @@ export class UserClient extends BaseClient {
         });
 
         // 2. Deploy
+        let hash: Hash;
         try {
-            const hash = await factoryWrite.createAccount({
+            hash = await factoryWrite.createAccount({
                 owner: params.owner,
                 salt,
                 account: client.account
             });
-            return { accountAddress, hash };
         } catch (error: any) {
             const messageParts = [
                 error?.shortMessage,
@@ -97,22 +115,23 @@ export class UserClient extends BaseClient {
                 error?.cause?.cause?.message
             ].filter(Boolean);
             const message = messageParts.join(' ');
-            if (message.includes('gas required exceeds allowance') || message.includes('intrinsic gas too low')) {
-                const data = encodeFunctionData({
-                    abi,
-                    functionName: 'createAccount',
-                    args: [params.owner, salt]
-                });
-                const hash = await client.sendTransaction({
-                    to: factoryAddr,
-                    data,
-                    gas: 2_000_000n,
-                    account: client.account
-                });
-                return { accountAddress, hash };
-            }
-            throw error;
+            if (!(message.includes('gas required exceeds allowance') || message.includes('intrinsic gas too low'))) throw error;
+            const data = encodeFunctionData({
+                abi,
+                functionName: 'createAccount',
+                args: [params.owner, salt]
+            });
+            hash = await client.sendTransaction({
+                to: factoryAddr,
+                data,
+                gas: 2_000_000n,
+                account: client.account,
+                chain: client.chain
+            });
         }
+        // Either send is confirmed through the reading (checked-chain) client before the caller uses the account.
+        await confirmSentOnChain(readClient, hash, chainId);
+        return { accountAddress, hash };
     }
 
     // ========================================

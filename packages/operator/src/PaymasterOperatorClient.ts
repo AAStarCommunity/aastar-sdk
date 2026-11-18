@@ -1,6 +1,9 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed, assertSameChain, requireLocalSigner, confirmSentOnChain } from '@aastar/core';
+
+/** priceStalenessThreshold written into a new PaymasterV4 (1 hour); the feed is checked against the same bound. */
+const PRICE_STALENESS_THRESHOLD = 3600n;
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -20,14 +23,15 @@ export interface SponsorshipPolicy {
 export class PaymasterOperatorClient extends BaseClient {
     public superPaymasterAddress: Address;
     public tokenAddress?: Address;
-    public ethUsdPriceFeed: Address;
+    /** The configured ETH/USD feed. Unset → the address book's feed for the chain at deploy time (no cross-chain default). */
+    public ethUsdPriceFeed?: Address;
     public xpntsFactory: Address;
 
     constructor(config: OperatorClientConfig) {
         super(config);
         this.superPaymasterAddress = config.superPaymasterAddress;
         this.tokenAddress = config.tokenAddress;
-        this.ethUsdPriceFeed = config.ethUsdPriceFeedAddress || '0x694AA1769357215DE4FAC081bf1f309aDC325306'; // Default Sepolia
+        this.ethUsdPriceFeed = config.ethUsdPriceFeedAddress;
         this.xpntsFactory = config.xpntsFactoryAddress || '0x0000000000000000000000000000000000000000'; // Should be provided
     }
 
@@ -147,6 +151,8 @@ export class PaymasterOperatorClient extends BaseClient {
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
         confirmations?: number; // Optional, deploy receipt confirmations before the check (viem default if omitted); a reused deploy waits for none
+        /** Accept a JSON-RPC (browser / node-managed) signer; by default only a local account is accepted. See requireLocalSigner. */
+        allowJsonRpcAccount?: boolean;
         priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
@@ -178,6 +184,20 @@ export class PaymasterOperatorClient extends BaseClient {
                 throw new Error('Must have ROLE_COMMUNITY before deploying Paymaster V4');
             }
 
+            // The reading and the signing client must be on the same, configured chain before either branch below
+            // sends anything (the reuse branch still approves and registers).
+            const chainId = await assertSameChain(publicClient as any, this.client as any);
+            requireLocalSigner(account as any, { allowJsonRpcAccount: params?.allowJsonRpcAccount, path: 'deployAndRegisterPaymasterV4' });
+            // Every send below is confirmed on the checked chain before the next step (see confirmSentOnChain).
+            const confirmed = async (hash: Hash, what: string, note = '') => {
+                try {
+                    await confirmSentOnChain(publicClient as any, hash, chainId, { confirmations: params?.confirmations });
+                } catch (e: any) {
+                    if (e?.data?.reason === 'tx-reverted') throw new Error(`${what} ${hash} reverted${note}`);
+                    throw e;
+                }
+            };
+
             // 2. Deployment (Idempotent Check)
             const existingPaymaster = await factory(publicClient).getPaymaster({ owner: accountAddr });
             let deployHash: Hash = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -188,10 +208,15 @@ export class PaymasterOperatorClient extends BaseClient {
                 paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr });
                 console.log(`    ℹ️  Paymaster already deployed at: ${paymasterAddress}`);
             } else {
+                // The feed is written into the paymaster's initialize(); it comes from the caller or the address book
+                // for this chain, and is checked on the chain (code, 8 decimals, "ETH / USD", fresh) before deploying.
+                // The feed must be fresh under the staleness threshold the paymaster will enforce.
+                const priceFeed = resolveEthUsdFeedAddress(chainId, this.ethUsdPriceFeed);
+                await verifyEthUsdFeed(publicClient as any, priceFeed, { maxAgeSeconds: Number(PRICE_STALENESS_THRESHOLD) });
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {
                     entryPoint: this.requireEntryPoint(),
                     owner: accountAddr,
-                    priceFeed: this.ethUsdPriceFeed,
+                    priceFeed,
                     factory: factoryAddr
                 });
 
@@ -203,10 +228,10 @@ export class PaymasterOperatorClient extends BaseClient {
                         this.requireEntryPoint(), // EntryPoint v0.7
                         accountAddr,
                         accountAddr, // Treasury defaults to owner
-                        this.ethUsdPriceFeed,
+                        priceFeed,
                         200n, // serviceFeeRate (2%)
                         parseEther('0.1'), // maxGasCostCap
-                        3600n // priceStalenessThreshold (1 hour)
+                        PRICE_STALENESS_THRESHOLD
                     ]
                 });
 
@@ -218,6 +243,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 
                 // The address comes from the successful receipt, and is checked against the mapping and owner()
                 // before the approve and role registration below.
+                await confirmed(deployHash, 'deployPaymaster');
                 paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash, confirmations: params?.confirmations });
             }
 
@@ -247,10 +273,7 @@ export class PaymasterOperatorClient extends BaseClient {
                     amount: stakeAmount * 2n,
                     account: account
                 });
-                const approveReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
-                if (approveReceipt.status !== 'success') {
-                    throw new Error(`GToken approve ${approveHash} reverted; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
-                }
+                await confirmed(approveHash, 'GToken approve', `; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
             }
 
             const { encodeAbiParameters, parseAbiParameters } = await import('viem');
@@ -268,10 +291,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 account: account
             });
             
-            const registerReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
-            if (registerReceipt.status !== 'success') {
-                throw new Error(`registerRoleSelf(ROLE_PAYMASTER_AOA) ${registerHash} reverted; paymaster ${paymasterAddress} is deployed but not registered`);
-            }
+            await confirmed(registerHash, 'registerRoleSelf(ROLE_PAYMASTER_AOA)', `; paymaster ${paymasterAddress} is deployed but not registered`);
 
             return {
                 paymasterAddress,

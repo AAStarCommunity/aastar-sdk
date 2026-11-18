@@ -51,6 +51,8 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
         type: 'V4' | 'SUPER';
         stakeAmount?: bigint;
         depositAmount?: bigint;
+        /** V4 only: accept a JSON-RPC (browser / node-managed) signer; see deployAndRegisterPaymasterV4. */
+        allowJsonRpcAccount?: boolean;
     }, options?: TransactionOptions): Promise<Hash[]> {
         const hashes: Hash[] = [];
 
@@ -75,7 +77,8 @@ export class OperatorLifecycle extends PaymasterOperatorClient {
             }
         } else {
             const result = await this.deployAndRegisterPaymasterV4({
-                stakeAmount: params.stakeAmount
+                stakeAmount: params.stakeAmount,
+                allowJsonRpcAccount: params.allowJsonRpcAccount
             }, options);
             hashes.push(result.deployHash);
             hashes.push(result.registerHash);

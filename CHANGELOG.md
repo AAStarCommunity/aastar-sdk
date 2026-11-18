@@ -27,6 +27,58 @@ Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domai
 - Not in this change (FU-117): the MicroPaymentChannel voucher domain, the X402Facilitator domain (and so the
   `'direct'` x402 path), the three KMS payment digests, and the exported `sign*Authorization` helpers in
   `@aastar/x402`, which sign under whatever name/version the caller passes.
+### No cross-chain defaults for the ETH/USD feed and the account factory; both are checked on the chain
+
+- `PaymasterOperatorClient.deployAndRegisterPaymasterV4` wrote Sepolia's Chainlink ETH/USD feed (`0x694A…5306`) into
+  a new PaymasterV4's `initialize()` on any chain when `ethUsdPriceFeedAddress` was not given; that address has no code
+  on OP Mainnet. The feed now comes from the caller or the address book for the live chain, and before deploying it
+  must have code, `decimals() == 8`, `description() == "ETH / USD"`, a positive answer and `updatedAt` within 7200 s
+  of the latest block. Otherwise nothing is deployed. **Behaviour change:** a chain outside the address book needs
+  `ethUsdPriceFeedAddress`; `ethUsdPriceFeed` is now `undefined` unless configured.
+- The account factory default `0x9406…6454` is the **EntryPoint v0.6** SimpleAccountFactory (its implementation's
+  `entryPoint()` is `0x5FF1…2789`) while the SDK uses v0.7. `createEndUserClient().createSmartAccount` /
+  `deploySmartAccount` and `UserClient.deployAccount` now take the factory from the caller or the address book, and
+  check that its `accountImplementation().entryPoint()` equals the EntryPoint in use; a v0.6 factory is refused,
+  including one passed explicitly. `UserClient.deployAccount` takes an optional `entryPointAddress`.
+- Address book fix: OP Sepolia's `simpleAccountFactory` was `0x91E6060613…8985`, which has no code on any chain; it is
+  now the v0.7 factory `0x91E60e0613…8985`, as on OP Mainnet and Sepolia (same in `config.op-sepolia.json`).
+- The checks run on the chain the transaction is sent on: the reading and the signing client must report the same
+  chain id (`assertSameChain`), and `createEndUserClient` / `createOperatorClient` compare the RPC's chain id with the
+  configured `chain`. Feed reads are pinned to one block, that block must be within 600 s of the wall clock, and
+  the feed must be fresh under the staleness threshold the new paymaster will enforce (3600 s).
+- `createOperatorClient().deployPaymasterV4` now decodes `initData` as `initialize(...)` and checks its price feed
+  before sending; `initData` that is not an `initialize()` call (including the old default `'0x'`, which the factory
+  rejects anyway) throws. `paymasterFactoryActions().deployPaymaster*` stay unchecked primitives (documented).
+- `UserClient.deployAccount` checks the factory unless `accountType` names a non-simple account; passing
+  `customAbi` alone no longer skips the check.
+- New in `@aastar/core`: `resolveEthUsdFeedAddress`, `verifyEthUsdFeed`, `resolveAccountFactoryAddress`,
+  `verifyAccountFactory`, `assertSameChain`. Evidence: `docs/onchain-evidence/deploy-inputs-op-fork.md`.
+- **Migration:** `ethUsdPriceFeed` is optional; a chain outside the address book needs `ethUsdPriceFeedAddress` and
+  a factory address. A different factory gives a different counterfactual account address for the same owner and
+  salt: an integration that already has accounts from a factory should keep passing that factory explicitly (it is
+  still checked against the EntryPoint). On OP Sepolia nothing changes for existing accounts: the old book entry had
+  no code, so no account was ever created through it.
+- **Signer (behaviour change):** the two paymaster deploy paths (`deployAndRegisterPaymasterV4`, also through
+  `OperatorLifecycle.setupNode`, and `createOperatorClient().deployPaymasterV4`) accept a local account (private key /
+  keystore) by default and refuse a JSON-RPC account with an error naming `allowJsonRpcAccount`. Passing
+  `allowJsonRpcAccount: true` accepts it and logs a one-time warning. The account-creation paths keep accepting
+  JSON-RPC wallets.
+- **Every send is confirmed before the next step:** deploy, approve, registration, account creation and funding. The
+  receipt must be found through the client of the checked chain, that client must still report the checked chain, the
+  receipt must be for exactly that hash (a replacement or cancellation stops the flow), successful and in the
+  canonical block, and the transaction must carry the checked chain's signed `chainId` (`confirmSentOnChain`);
+  otherwise the flow stops with "may have been sent on another chain" (or "replaced or cancelled") and nothing
+  further is sent. `deploySmartAccount` funds only after the deploy is
+  confirmed and only an address that has code on that chain. `UserClient.deployAccount` now waits for that receipt.
+- **Remaining window, stated as it is:** viem 2.43.3 sends `eth_sendTransaction` without a chainId. A JSON-RPC wallet
+  that switches chains between viem's chain-id read and the send puts that one transaction on the new chain. The
+  post-send confirmation detects this and stops the flow, but cannot prevent that transaction. A local account is not
+  affected (the chain id is signed into the transaction).
+- **On OP:** the feed freshness check is not a sequencer-uptime check; the SDK does not read Chainlink's L2 sequencer
+  uptime feed.
+- Not covered (FU-120): L2 sequencer health, the identity of a caller-supplied feed or factory, binding a JSON-RPC
+  send to the chain, and the unchecked primitives `paymasterFactoryActions().deployPaymaster*`,
+  `toSimpleSmartAccount`, `accountFactoryActions`.
 
 ### PaymasterV4 deploys are checked before the SDK registers them
 

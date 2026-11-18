@@ -9,6 +9,10 @@ import {
     paymasterActions,
     PaymasterFactoryABI,
     verifyPaymasterDeployment,
+    verifyEthUsdFeed,
+    requireLocalSigner,
+    confirmSentOnChain,
+    PaymasterABI,
     xPNTsTokenABI,
     type StakingActions,
     type RegistryActions,
@@ -29,7 +33,7 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
      */
     setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>;
     /** Deploys through the factory and throws unless verifyPaymasterDeployment accepts the deploy for this account. */
-    deployPaymasterV4: (args?: { version?: string, initData?: Hex, confirmations?: number }) => Promise<Hash>;
+    deployPaymasterV4: (args?: { version?: string, initData?: Hex, confirmations?: number, allowJsonRpcAccount?: boolean }) => Promise<Hash>;
     /**
      * Orchestrates the full onboarding flow:
      * 1. Approve GToken (Stake)
@@ -112,8 +116,24 @@ export function createOperatorClient({
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return (this as any)._onboardOperator(args);
         },
-        async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations }: { version?: string, initData?: Hex, confirmations?: number } = {}) {
+        async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations, allowJsonRpcAccount }: { version?: string, initData?: Hex, confirmations?: number, allowJsonRpcAccount?: boolean } = {}) {
             if (!account) throw new Error('Account required for deployPaymasterV4');
+            requireLocalSigner(account as any, { allowJsonRpcAccount, path: 'deployPaymasterV4' });
+            // initData is the caller's, so its price feed is decoded and checked on the live chain before anything is
+            // sent: initialize(entryPoint, owner, treasury, priceFeed, serviceFeeRate, maxGasCostCap, staleness).
+            const { decodeFunctionData } = await import('viem');
+            let feed: Address, staleness: bigint;
+            try {
+                const decoded = decodeFunctionData({ abi: PaymasterABI, data: initData });
+                if (decoded.functionName !== 'initialize') throw new Error(`not initialize() but ${decoded.functionName}()`);
+                feed = (decoded.args as readonly unknown[])[3] as Address;
+                staleness = (decoded.args as readonly unknown[])[6] as bigint;
+            } catch (e) {
+                throw new Error(`deployPaymasterV4: initData is not a PaymasterV4 initialize() call (${(e as Error).message.split('\n')[0]}); refusing to deploy`);
+            }
+            const liveChainId = await (client as any).getChainId();
+            if (liveChainId !== chain.id) throw new Error(`deployPaymasterV4: the RPC is on chain ${liveChainId}, the client is configured for ${chain.id}; refusing to deploy`);
+            await verifyEthUsdFeed(client as any, feed, { maxAgeSeconds: Number(staleness) });
             console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.paymasterFactory,
@@ -123,7 +143,9 @@ export function createOperatorClient({
                 account,
                 chain
             });
-            // Throws unless the receipt succeeded and the factory mapping and the clone's owner() both name this account.
+            // Confirmed on the checked chain (receipt, still that chain, canonical block), then the factory mapping
+            // and the clone's owner() must both name this account.
+            await confirmSentOnChain(client as any, tx, chain.id, { confirmations });
             await verifyPaymasterDeployment(client as any, { factory: usedAddresses.paymasterFactory, operator: account.address, deployHash: tx, confirmations });
             return tx;
         },

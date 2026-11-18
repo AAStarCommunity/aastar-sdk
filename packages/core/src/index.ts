@@ -35,3 +35,4 @@ export * from './config/ContractConfigManager.js';
 export * from './transports/helios.js';
 export * from './utils/ens.js';
 export * from './utils/eip712Domain.js'; // EIP-712 domain read from the chain and checked against DOMAIN_SEPARATOR()
+export * from './utils/deploymentInputs.js'; // per-chain ETH/USD feed + account factory, checked on the chain
