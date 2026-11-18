@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
     mockPaymasterFactoryActions: vi.fn(() => () => mockPaymasterFactory),
     mockPaymasterActions: vi.fn(() => () => mockPaymaster),
     mockVerifyPaymasterDeployment: vi.fn(),
+    mockResolveEthUsdFeedAddress: vi.fn(),
+    mockVerifyEthUsdFeed: vi.fn(),
   };
 });
 
@@ -37,6 +39,8 @@ vi.mock('@aastar/core', async () => {
     paymasterFactoryActions: mocks.mockPaymasterFactoryActions,
     paymasterActions: mocks.mockPaymasterActions,
     verifyPaymasterDeployment: mocks.mockVerifyPaymasterDeployment,
+    resolveEthUsdFeedAddress: mocks.mockResolveEthUsdFeedAddress,
+    verifyEthUsdFeed: mocks.mockVerifyEthUsdFeed,
   };
 });
 
@@ -97,6 +101,11 @@ describe('PaymasterOperatorClient', () => {
     mocks.mockPaymasterFactory.getPaymaster.mockResolvedValue('0x7777777777777777777777777777777777777777');
     mocks.mockVerifyPaymasterDeployment.mockReset();
     mocks.mockVerifyPaymasterDeployment.mockResolvedValue('0x7777777777777777777777777777777777777777');
+    mocks.mockResolveEthUsdFeedAddress.mockReset();
+    mocks.mockResolveEthUsdFeedAddress.mockReturnValue('0x13e3Ee699D1909E989722E753853AE30b17e08c5');
+    mocks.mockVerifyEthUsdFeed.mockReset();
+    mocks.mockVerifyEthUsdFeed.mockResolvedValue({ decimals: 8, description: 'ETH / USD', answer: 1n, updatedAt: 1n });
+    (mockPublicClient as any).getChainId = vi.fn(async () => 10);
     mocks.mockPaymaster.setTokenPrice.mockResolvedValue('0xTxHash');
     mocks.mockPaymaster.tokenPrices.mockResolvedValue(100n);
     mocks.mockPaymaster.depositFor.mockResolvedValue('0xTxHash');
@@ -178,6 +187,25 @@ describe('PaymasterOperatorClient', () => {
         expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
         // Reused deploy: the mapping read that chose this branch said 0x7777; the verified address is returned.
         expect((await client.deployAndRegisterPaymasterV4()).paymasterAddress).toBe(VERIFIED);
+      });
+
+      it('deployAndRegisterPaymasterV4: the price feed is resolved for the live chain and checked before the deploy', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        await client.deployAndRegisterPaymasterV4();
+        expect(mocks.mockResolveEthUsdFeedAddress).toHaveBeenCalledWith(10, undefined); // no cross-chain default left
+        expect(mocks.mockVerifyEthUsdFeed).toHaveBeenCalledWith(expect.anything(), '0x13e3Ee699D1909E989722E753853AE30b17e08c5');
+      });
+
+      it('deployAndRegisterPaymasterV4: a feed that fails the on-chain check deploys nothing', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockVerifyEthUsdFeed.mockRejectedValue(new Error('ETH/USD feed 0x694A has no code on this chain; refusing to deploy'));
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('refusing to deploy');
+        expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
       });
 
       it('deployAndRegisterPaymasterV4: a failed deploy check approves and registers nothing', async () => {

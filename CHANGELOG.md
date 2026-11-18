@@ -27,6 +27,23 @@ Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domai
 - Not in this change (FU-117): the MicroPaymentChannel voucher domain, the X402Facilitator domain (and so the
   `'direct'` x402 path), the three KMS payment digests, and the exported `sign*Authorization` helpers in
   `@aastar/x402`, which sign under whatever name/version the caller passes.
+### No cross-chain defaults for the ETH/USD feed and the account factory; both are checked on the chain
+
+- `PaymasterOperatorClient.deployAndRegisterPaymasterV4` wrote Sepolia's Chainlink ETH/USD feed (`0x694A…5306`) into
+  a new PaymasterV4's `initialize()` on any chain when `ethUsdPriceFeedAddress` was not given; that address has no code
+  on OP Mainnet. The feed now comes from the caller or the address book for the live chain, and before deploying it
+  must have code, `decimals() == 8`, `description() == "ETH / USD"`, a positive answer and `updatedAt` within 7200 s
+  of the latest block. Otherwise nothing is deployed. **Behaviour change:** a chain outside the address book needs
+  `ethUsdPriceFeedAddress`; `ethUsdPriceFeed` is now `undefined` unless configured.
+- The account factory default `0x9406…6454` is the **EntryPoint v0.6** SimpleAccountFactory (its implementation's
+  `entryPoint()` is `0x5FF1…2789`) while the SDK uses v0.7. `createEndUserClient().createSmartAccount` /
+  `deploySmartAccount` and `UserClient.deployAccount` now take the factory from the caller or the address book, and
+  check that its `accountImplementation().entryPoint()` equals the EntryPoint in use; a v0.6 factory is refused,
+  including one passed explicitly. `UserClient.deployAccount` takes an optional `entryPointAddress`.
+- Address book fix: OP Sepolia's `simpleAccountFactory` was `0x91E6060613…8985`, which has no code on any chain; it is
+  now the v0.7 factory `0x91E60e0613…8985`, as on OP Mainnet and Sepolia (same in `config.op-sepolia.json`).
+- New in `@aastar/core`: `resolveEthUsdFeedAddress`, `verifyEthUsdFeed`, `resolveAccountFactoryAddress`,
+  `verifyAccountFactory`. Evidence: `docs/onchain-evidence/deploy-inputs-op-fork.md`.
 
 ### PaymasterV4 deploys are checked before the SDK registers them
 

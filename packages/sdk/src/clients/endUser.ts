@@ -13,7 +13,9 @@ import {
     TEST_ACCOUNT_ADDRESSES,
     getCanonicalAddresses,
     describeSupportedChains,
-    RegistryABI
+    RegistryABI,
+    resolveAccountFactoryAddress,
+    verifyAccountFactory,
 } from '@aastar/core';
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
@@ -106,6 +108,16 @@ export function createEndUserClient({
         );
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };
+
+    // The account factory: configured, else the address book's for this chain; on every call it must build
+    // accounts for the EntryPoint this client uses, whichever source it came from (including a SIMPLE_ACCOUNT_FACTORY
+    // env override of TEST_ACCOUNT_ADDRESSES, which used to default to the v0.6 factory 0x9406…).
+    const checkedAccountFactory = async (): Promise<Address> => {
+        const entryPoint = (usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address;
+        const factory = resolveAccountFactoryAddress(chain.id, (usedAddresses as any).simpleAccountFactory);
+        await verifyAccountFactory(client as any, factory, entryPoint);
+        return factory;
+    };
 
     const actions = {
         ...registryActions(usedAddresses.registry)(client as any),
@@ -371,14 +383,10 @@ export function createEndUserClient({
             const { SimpleAccountFactoryABI } = await import('@aastar/core');
             const { encodeFunctionData, concat } = await import('viem');
 
-            let factoryAddress = (usedAddresses as any).simpleAccountFactory; 
+            // From the configuration, else the address book for this chain; checked to build accounts for the
+            // configured EntryPoint (the old fallback 0x9406… is the EntryPoint v0.6 factory).
+            const factoryAddress = await checkedAccountFactory();
             console.log(`   SDK: Using SimpleAccountFactory: ${factoryAddress} (Owner: ${owner}, Salt: ${salt})`);
-            
-            // Fallback to official v0.7 factory if not provided
-            if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                console.warn("   ⚠️  SimpleAccountFactory not found in configuration. Using default fallback.");
-                factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
-            }
 
             const accountAddress = await (client as any).readContract({
                 address: factoryAddress,
@@ -409,10 +417,7 @@ export function createEndUserClient({
                 console.log(`   ℹ️ Account ${accountAddress} already deployed.`);
             } else {
                 const { SimpleAccountFactoryABI } = await import('@aastar/core');
-                let factoryAddress = (usedAddresses as any).simpleAccountFactory;
-                if (!factoryAddress || factoryAddress === '0x0000000000000000000000000000000000000000') {
-                    factoryAddress = '0x9406Cc6185a346906296840746125a0E44976454';
-                }
+                const factoryAddress = await checkedAccountFactory();
 
                 console.log(`   🏭 Deploying Smart Account for ${owner}...`);
                 deployHash = await (client as any).writeContract({

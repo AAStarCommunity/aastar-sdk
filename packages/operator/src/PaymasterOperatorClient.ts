@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed } from '@aastar/core';
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -20,14 +20,15 @@ export interface SponsorshipPolicy {
 export class PaymasterOperatorClient extends BaseClient {
     public superPaymasterAddress: Address;
     public tokenAddress?: Address;
-    public ethUsdPriceFeed: Address;
+    /** The configured ETH/USD feed. Unset → the address book's feed for the chain at deploy time (no cross-chain default). */
+    public ethUsdPriceFeed?: Address;
     public xpntsFactory: Address;
 
     constructor(config: OperatorClientConfig) {
         super(config);
         this.superPaymasterAddress = config.superPaymasterAddress;
         this.tokenAddress = config.tokenAddress;
-        this.ethUsdPriceFeed = config.ethUsdPriceFeedAddress || '0x694AA1769357215DE4FAC081bf1f309aDC325306'; // Default Sepolia
+        this.ethUsdPriceFeed = config.ethUsdPriceFeedAddress;
         this.xpntsFactory = config.xpntsFactoryAddress || '0x0000000000000000000000000000000000000000'; // Should be provided
     }
 
@@ -188,10 +189,14 @@ export class PaymasterOperatorClient extends BaseClient {
                 paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr });
                 console.log(`    ℹ️  Paymaster already deployed at: ${paymasterAddress}`);
             } else {
+                // The feed is written into the paymaster's initialize(); it comes from the caller or the address book
+                // for this chain, and is checked on the chain (code, 8 decimals, "ETH / USD", fresh) before deploying.
+                const priceFeed = resolveEthUsdFeedAddress(await (publicClient as any).getChainId(), this.ethUsdPriceFeed);
+                await verifyEthUsdFeed(publicClient as any, priceFeed);
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {
                     entryPoint: this.requireEntryPoint(),
                     owner: accountAddr,
-                    priceFeed: this.ethUsdPriceFeed,
+                    priceFeed,
                     factory: factoryAddr
                 });
 
@@ -203,7 +208,7 @@ export class PaymasterOperatorClient extends BaseClient {
                         this.requireEntryPoint(), // EntryPoint v0.7
                         accountAddr,
                         accountAddr, // Treasury defaults to owner
-                        this.ethUsdPriceFeed,
+                        priceFeed,
                         200n, // serviceFeeRate (2%)
                         parseEther('0.1'), // maxGasCostCap
                         3600n // priceStalenessThreshold (1 hour)

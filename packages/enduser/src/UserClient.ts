@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -48,6 +48,8 @@ export class UserClient extends BaseClient {
             owner: Address;
             salt?: bigint;
             factoryAddress?: Address;
+            /** EntryPoint the account must use; defaults to the address book's for the chain. Checked against the factory. */
+            entryPointAddress?: Address;
             publicClient?: any;
             accountType?: 'simple' | 'kernel' | 'safe' | string;
             customAbi?: any;
@@ -61,11 +63,21 @@ export class UserClient extends BaseClient {
         // In the future, we can add more built-in ABIs here based on accountType
         // if (params.accountType === 'kernel') abi = KernelFactoryABI;
         
-        const factoryAddr = params.factoryAddress || '0x9406Cc6185a346906296840746125a0E44976454'; // Default v0.7 Factory
         const salt = params.salt || 0n;
         
         // Use publicClient for reading if provided, otherwise fallback to client (which might be a Full Client)
         const readClient = params.publicClient || client;
+
+        // No cross-chain default: the caller's factory, else the address book's for this chain. The old default
+        // 0x9406… is the EntryPoint v0.6 SimpleAccountFactory (it has code everywhere, so only its implementation's
+        // entryPoint() exposes that). A SimpleAccount factory is checked against the EntryPoint; a custom ABI is not.
+        const chainId: number = await readClient.getChainId();
+        const factoryAddr = resolveAccountFactoryAddress(chainId, params.factoryAddress);
+        if (!params.customAbi) {
+            const entryPoint = params.entryPointAddress ?? (getCanonicalAddresses(chainId)?.entryPoint as Address | undefined);
+            if (!entryPoint) throw new Error(`deployAccount: no EntryPoint for chain ${chainId} in the address book; pass entryPointAddress`);
+            await verifyAccountFactory(readClient, factoryAddr, entryPoint);
+        }
         
         // Use the generic actions with the selected ABI
         const factoryRead = accountFactoryActions(factoryAddr, abi)(readClient);
