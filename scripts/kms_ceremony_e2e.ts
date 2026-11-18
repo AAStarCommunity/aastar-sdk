@@ -115,28 +115,28 @@ async function main() {
     rec("signTypedDataWithCeremony (EIP-712 commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
   }
 
-  // 2e. Payment convenience signers with commitment — proves the SDK's per-schema EIP-712
-  // digest matches the KMS host-side schema (else the commitment wouldn't verify).
+  // 2e. Payment convenience signers. The SDK now refuses these two before any ceremony: the KMS voucher is typed
+  // uint256 while MicroPaymentChannel verifies uint128 (FU-118), and the KMS x402 PaymentPayload has no on-chain
+  // verifier (FU-119). The expected outcome is that refusal; a signature here would mean the pre-check is gone.
   const { KmsPaymentSigner } = await import("../packages/airaccount/src/server/index.js");
   const pay = new KmsPaymentSigner((kms as any).httpClient);
-  try {
-    const r = await pay.signMicropaymentVoucherWithCeremony(
-      { keyId, chainId: 11155111, verifyingContract: ("0x" + "33".repeat(20)), channelId: ("0x" + "44".repeat(32)), cumulativeAmount: "1000000" },
-      signer
-    );
-    rec("signMicropaymentVoucherWithCeremony (commitment)", !!r.signature, `sig=${(r.signature || "").slice(0, 16)}…`);
-  } catch (e: any) {
-    rec("signMicropaymentVoucherWithCeremony (commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
-  }
-  try {
-    const r = await pay.signX402PaymentWithCeremony(
-      { keyId, chainId: 11155111, verifyingContract: ("0x" + "55".repeat(20)), paymentId: ("0x" + "66".repeat(32)), amount: "2000000", recipient: ("0x" + "77".repeat(20)), deadline: "9999999999" },
-      signer
-    );
-    rec("signX402PaymentWithCeremony (commitment)", !!r.signature, `sig=${(r.signature || "").slice(0, 16)}…`);
-  } catch (e: any) {
-    rec("signX402PaymentWithCeremony (commitment)", false, e?.response?.data ? JSON.stringify(e.response.data) : e.message);
-  }
+  const refusedAsExpected = async (label: string, marker: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+      rec(label, false, "signed — the SDK pre-check should have refused");
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      rec(label, msg.includes(marker), msg.includes(marker) ? `refused before the ceremony (${marker})` : msg);
+    }
+  };
+  await refusedAsExpected("signMicropaymentVoucherWithCeremony refused (FU-118)", "FU-118", () => pay.signMicropaymentVoucherWithCeremony(
+    { keyId, chainId: 11155111, verifyingContract: ("0x" + "33".repeat(20)), channelId: ("0x" + "44".repeat(32)), cumulativeAmount: "1000000" },
+    signer
+  ));
+  await refusedAsExpected("signX402PaymentWithCeremony refused (FU-119)", "FU-119", () => pay.signX402PaymentWithCeremony(
+    { keyId, chainId: 11155111, verifyingContract: ("0x" + "55".repeat(20)), paymentId: ("0x" + "66".repeat(32)), amount: "2000000", recipient: ("0x" + "77".repeat(20)), deadline: "9999999999" },
+    signer
+  ));
 
   // 2f. Grant-session final_hash ORACLE: the SDK's off-chain grantSessionFinalHash must equal
   // toEthSignedMessageHash(contract.buildGrantHash(...)) — proves the abi.encode (incl. the

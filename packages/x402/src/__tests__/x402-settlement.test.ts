@@ -9,7 +9,7 @@ import { X402Client } from '../X402Client.js';
 import { deriveEip3009Nonce, X402_PAYMENT_AUTHORIZATION_TYPES } from '../x402auth.js';
 import { EIP3009_TYPES, getEIP3009Domain } from '../eip3009.js';
 import { getX402FacilitatorContract } from '../facilitators.js';
-import { domainClient } from './domainClient.js';
+import { domainClient, type FacilitatorBehaviour } from './domainClient.js';
 
 const PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'; // anvil #1 (test only)
 const account = privateKeyToAccount(PK);
@@ -157,13 +157,51 @@ describe('X402Client.createPayment — direct path does not depend on the asset 
   it('a plain ERC-20 asset (no version(), no DOMAIN_SEPARATOR()) still gets a direct-path payment', async () => {
     const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
     const reads: string[] = [];
+    // Facilitator reads are served (its code check); any read of the asset is recorded and reverts.
     const plainErc20 = {
-      getChainId: async () => CHAIN_ID,
+      ...(domainClient(CHAIN_ID, 'unused', 'unused') as any),
       readContract: async ({ functionName }: { functionName: string }) => { reads.push(functionName); throw new Error('execution reverted'); },
     } as never;
     const c = new X402Client({ publicClient: plainErc20, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
     const { payload } = await c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
     expect(payload.accepted.extra.settlement).toBe('direct');
     expect(reads).toEqual([]);
+  });
+});
+
+describe('X402Client.createPayment — direct path asks the facilitator\'s verifier before signing', () => {
+  const directClient = (facilitator?: FacilitatorBehaviour) => {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    return new X402Client({ publicClient: domainClient(CHAIN_ID, 'USDC', '2', { facilitator }), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+  };
+  const pay = (c: X402Client) => c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
+
+  it('a facilitator whose verifier accepts { X402Facilitator, 1 } gets the payment signed', async () => {
+    await expect(pay(directClient())).resolves.toBeTruthy();
+  });
+
+  it('an RPC on another chain than the payment\'s gets no signature (checked before the probe)', async () => {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    const c = new X402Client({ publicClient: domainClient(10, 'USDC', '2'), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+    await expect(pay(c)).rejects.toThrow(`the RPC is on chain 10, the payment is for chain ${CHAIN_ID}`);
+  });
+
+  it('a facilitator verifying under another domain (version "2") gets no signature', async () => {
+    await expect(pay(directClient({ kind: 'verifier', version: '2' }))).rejects.toThrow('its verifier rejects a probe signed under');
+  });
+
+  it('a verifier that encodes from/to in the other order gets no signature (the probe uses distinct addresses)', async () => {
+    await expect(pay(directClient({ kind: 'verifier', swapFromTo: true }))).rejects.toThrow('its verifier rejects a probe');
+  });
+
+  it('a right-domain probe that ends in anything but the role check after the signature gets no signature', async () => {
+    await expect(pay(directClient({ kind: 'verifier', afterSignature: 'NonceAlreadyUsed' }))).rejects.toThrow('reverted with NonceAlreadyUsed, not the role check');
+    await expect(pay(directClient({ kind: 'transport-with-data' }))).rejects.toThrow('failed without an execution revert');
+  });
+
+  it('a simulation that does not reach the signature check (roles first, no revert data, no code) cannot confirm the domain', async () => {
+    await expect(pay(directClient({ kind: 'role-first' }))).rejects.toThrow('reverted with Unauthorized, not InvalidX402Signature');
+    await expect(pay(directClient({ kind: 'no-data' }))).rejects.toThrow('reverted with revert-without-data');
+    await expect(pay(directClient({ kind: 'no-code' }))).rejects.toThrow('reverted with no-revert');
   });
 });

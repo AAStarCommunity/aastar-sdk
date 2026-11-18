@@ -6,6 +6,7 @@ import type {
 } from './types.js';
 import { EIP3009_TYPES, generateNonce } from './eip3009.js';
 import { signX402PaymentAuthorization, deriveEip3009Nonce } from './x402auth.js';
+import { verifyFacilitatorDomain } from './facilitatorDomain.js';
 import { getX402FacilitatorContract } from './facilitators.js';
 import {
     encodePaymentPayload,
@@ -110,13 +111,15 @@ export class X402Client {
         if (settlement === 'direct') {
             // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712). The asset is not the
             // verifying contract here, so its domain is not read; name/version below are payload metadata only.
-            // The facilitator's own domain is still hard-coded in signX402PaymentAuthorization (FU-117 ②).
+            // The facilitator exposes no domain getter: its verifier is asked instead (a simulated settle with a probe
+            // signature under this domain, and one under a wrong domain), on the configured chain, before signing.
+            const { blockHash: _b, blockNumber: _n, ...facilitatorDomain } = await verifyFacilitatorDomain(this.config.publicClient, facilitator, chainId);
             const tokenName = this.config.tokenName || 'USDC';
             const tokenVersion = this.config.tokenVersion || '2';
             const nonce = params.nonce || generateNonce();
             const signature = await signX402PaymentAuthorization(wallet, {
                 from: params.from, to: params.to, asset: params.asset, amount: params.amount,
-                maxFee, validBefore, nonce, chainId, facilitator,
+                maxFee, validBefore, nonce, chainId, facilitator, domain: facilitatorDomain,
             });
             const payload: PaymentPayload = {
                 x402Version: 2,

@@ -1,3 +1,5 @@
+import { type Address, type Hex, type PublicClient, decodeFunctionResult, domainSeparator, encodeFunctionData, hashTypedData, keccak256, toHex } from "viem";
+import { GTokenAuthorizationABI, resolveReportedEip712Domain } from "@aastar/core";
 import { KmsHttpClient } from "./kms-http-client";
 import { WebAuthnAssertion, eip712Digest } from "./kms-signer";
 import {
@@ -72,7 +74,76 @@ export interface KmsSignX402PaymentRequest {
  * session / payment / monitor services.
  */
 export class KmsPaymentSigner {
-  constructor(private readonly http: KmsHttpClient) {}
+  /**
+   * @param publicClient - a client on the chain the payments are for. Every method checks, before it calls the KMS
+   *   (and before any ceremony), that what the KMS will sign is what the on-chain verifier accepts; without a client
+   *   the checks that need the chain refuse. See {@link KmsPaymentSigner.precheck}.
+   */
+  constructor(private readonly http: KmsHttpClient, private readonly opts: { publicClient?: PublicClient } = {}) {}
+
+  /**
+   * Pre-checks against the contracts that verify these signatures (the KMS host builds the domain and type itself;
+   * the digests below mirror it):
+   * - voucher: the digest under MicroPaymentChannel's type (`uint128 cumulativeAmount`, its VOUCHER_TYPEHASH) must
+   *   equal the digest the KMS signs. Today they differ (the KMS host uses `uint256`), so this refuses until the KMS
+   *   host is fixed (FU-118). Then the KMS domain must equal the channel's eip712Domain() on the chain.
+   * - GToken authorization: the token's DOMAIN_SEPARATOR() must equal the separator of the exact KMS domain
+   *   { "GToken", "1", chainId, gTokenAddress } (so a salted or otherwise different domain fails), and its
+   *   TRANSFER_WITH_AUTHORIZATION_TYPEHASH must be the type the KMS signs; both read at one block hash.
+   * - x402 PaymentPayload ("SuperPaymaster"/"1"): nothing on chain verifies it (SuperPaymaster verifies no EIP-712
+   *   signature; x402's verifier is X402Facilitator with its own type), so it always refuses (FU-119).
+   */
+  private async precheck(
+    kind: "voucher" | "gtoken" | "x402",
+    params: KmsSignMicropaymentVoucherRequest | KmsSignGTokenAuthorizationRequest | KmsSignX402PaymentRequest
+  ): Promise<void> {
+    if (kind === "x402") {
+      throw new Error(
+        "signX402Payment: the KMS PaymentPayload (domain SuperPaymaster/1) has no on-chain verifier; refusing to start the signature (FU-119)"
+      );
+    }
+    const pc = this.opts.publicClient;
+    if (kind === "voucher") {
+      const p = params as KmsSignMicropaymentVoucherRequest;
+      const kmsDigest = micropaymentVoucherDigest(p);
+      const contractDigest = micropaymentVoucherContractDigest(p);
+      if (kmsDigest !== contractDigest) {
+        throw new Error(
+          `signMicropaymentVoucher: the KMS would sign ${kmsDigest} (cumulativeAmount as uint256) but MicroPaymentChannel verifies ${contractDigest} (uint128); refusing to start a signature the contract rejects (FU-118)`
+        );
+      }
+      if (!pc) throw new Error("signMicropaymentVoucher: pass publicClient to KmsPaymentSigner so the channel's domain can be checked; refusing");
+      const { domain } = await resolveReportedEip712Domain(pc, p.verifyingContract as Address, { expectedChainId: p.chainId, mayLackSeparator: true });
+      if (domain.name !== "MicroPaymentChannel" || domain.version !== "1.0.0") {
+        throw new Error(`signMicropaymentVoucher: the channel reports domain ${domain.name}/${domain.version}, the KMS signs MicroPaymentChannel/1.0.0; refusing`);
+      }
+      return;
+    }
+    const p = params as KmsSignGTokenAuthorizationRequest;
+    if (!pc) throw new Error("signGTokenAuthorization: pass publicClient to KmsPaymentSigner so the GToken domain can be checked; refusing");
+    const live = await pc.getChainId();
+    if (live !== p.chainId) throw new Error(`signGTokenAuthorization: the publicClient is on chain ${live}, the authorization is for chain ${p.chainId}; refusing`);
+    const token = p.gTokenAddress as Address;
+    const pin = { blockHash: (await pc.getBlock()).hash, requireCanonical: true };
+    const read = async (functionName: "DOMAIN_SEPARATOR" | "TRANSFER_WITH_AUTHORIZATION_TYPEHASH"): Promise<Hex> => {
+      const data = encodeFunctionData({ abi: GTokenAuthorizationABI, functionName, args: [] });
+      const raw = await pc.request({ method: "eth_call", params: [{ to: token, data }, pin] } as any) as Hex;
+      return decodeFunctionResult({ abi: GTokenAuthorizationABI, functionName, data: raw }) as Hex;
+    };
+    let onChainSeparator: Hex, onChainTypeHash: Hex;
+    try {
+      [onChainSeparator, onChainTypeHash] = await Promise.all([read("DOMAIN_SEPARATOR"), read("TRANSFER_WITH_AUTHORIZATION_TYPEHASH")]);
+    } catch {
+      throw new Error(`signGTokenAuthorization: ${token}'s DOMAIN_SEPARATOR() / TRANSFER_WITH_AUTHORIZATION_TYPEHASH could not be read at one block; refusing`);
+    }
+    const kmsSeparator = domainSeparator({ domain: { name: "GToken", version: "1", chainId: p.chainId, verifyingContract: token } });
+    if (onChainSeparator.toLowerCase() !== kmsSeparator.toLowerCase()) {
+      throw new Error(`signGTokenAuthorization: ${token}'s DOMAIN_SEPARATOR() ${onChainSeparator} is not the KMS domain GToken/1 on chain ${p.chainId} (${kmsSeparator}); refusing`);
+    }
+    if (onChainTypeHash.toLowerCase() !== GTOKEN_TRANSFER_TYPEHASH.toLowerCase()) {
+      throw new Error(`signGTokenAuthorization: ${token}'s TRANSFER_WITH_AUTHORIZATION_TYPEHASH ${onChainTypeHash} is not the type the KMS signs; refusing`);
+    }
+  }
 
   /**
    * Dispatch a payment-signing request with the chosen auth mode.
@@ -101,6 +172,7 @@ export class KmsPaymentSigner {
     auth: KmsPaymentAuth
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("voucher", params);
     return this.signWithAuth("/kms/SignMicropaymentVoucher", { ...params }, auth);
   }
 
@@ -113,6 +185,7 @@ export class KmsPaymentSigner {
     auth: KmsPaymentAuth
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("gtoken", params);
     return this.signWithAuth("/kms/SignGTokenAuthorization", { ...params }, auth);
   }
 
@@ -124,6 +197,7 @@ export class KmsPaymentSigner {
     auth: KmsPaymentAuth
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("x402", params);
     return this.signWithAuth("/kms/SignX402Payment", { ...params }, auth);
   }
 
@@ -140,6 +214,7 @@ export class KmsPaymentSigner {
     options?: Omit<RunCeremonyOptions, "signer" | "payload">
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("voucher", params); // before the ceremony: the user is not asked to approve a voucher the contract rejects
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.keyId, signer, {
       ...options,
       payload: micropaymentVoucherDigest(params),
@@ -154,6 +229,7 @@ export class KmsPaymentSigner {
     options?: Omit<RunCeremonyOptions, "signer" | "payload">
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("gtoken", params);
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.keyId, signer, {
       ...options,
       payload: gTokenAuthorizationDigest(params),
@@ -168,6 +244,7 @@ export class KmsPaymentSigner {
     options?: Omit<RunCeremonyOptions, "signer" | "payload">
   ): Promise<KmsPaymentSignatureResponse> {
     this.http.ensureEnabled();
+    await this.precheck("x402", params);
     const webAuthnAssertion = await runAuthenticationCeremony(this.http, params.keyId, signer, {
       ...options,
       payload: x402PaymentDigest(params),
@@ -201,6 +278,25 @@ export function micropaymentVoucherDigest(p: KmsSignMicropaymentVoucherRequest):
     ],
   });
 }
+
+/**
+ * The voucher digest MicroPaymentChannel verifies: same domain as the KMS uses, but the contract's type
+ * `Voucher(bytes32 channelId,uint128 cumulativeAmount)` (MicroPaymentChannel.sol VOUCHER_TYPEHASH). It differs from
+ * {@link micropaymentVoucherDigest} while the KMS host signs `uint256` (FU-118).
+ */
+export function micropaymentVoucherContractDigest(p: KmsSignMicropaymentVoucherRequest): `0x${string}` {
+  return hashTypedData({
+    domain: { name: "MicroPaymentChannel", version: "1.0.0", chainId: p.chainId, verifyingContract: p.verifyingContract as Address },
+    types: { Voucher: [{ name: "channelId", type: "bytes32" }, { name: "cumulativeAmount", type: "uint128" }] },
+    primaryType: "Voucher",
+    message: { channelId: p.channelId as `0x${string}`, cumulativeAmount: BigInt(p.cumulativeAmount) },
+  });
+}
+
+/** The TransferWithAuthorization type the KMS signs for GToken (mirrors kms/host/src/api_server.rs). */
+const GTOKEN_TRANSFER_TYPEHASH = keccak256(toHex(
+  "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+));
 
 /** EIP-712 digest for a GToken EIP-3009 `TransferWithAuthorization` (domain GToken/1). */
 export function gTokenAuthorizationDigest(p: KmsSignGTokenAuthorizationRequest): `0x${string}` {

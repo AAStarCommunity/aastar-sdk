@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### EIP-712 domains of MicroPaymentChannel and X402Facilitator are checked on the chain; KMS payment signatures are pre-checked
+
+- New in `@aastar/core`: `resolveReportedEip712Domain` (a contract's `eip712Domain()`, checked against
+  `DOMAIN_SEPARATOR()`; only a caller that declares the contract may lack it (`mayLackSeparator`, used for
+  MicroPaymentChannel) accepts a missing selector, i.e. an execution revert with no data).
+  Reads are pinned to one block hash (EIP-1898), which it returns for follow-up reads.
+- `ChannelClient.signVoucherOffline` signs under the domain MicroPaymentChannel reports and refuses when the channel's
+  `VOUCHER_TYPEHASH` (read at the same block hash) is not the type the SDK signs. MicroPaymentChannel has no `DOMAIN_SEPARATOR()`, so its
+  `eip712Domain()` report is the source (SP plans to add the view). It now reads the chain; it still sends nothing.
+  `getVoucherDomain` is deprecated; `signVoucher` takes the domain.
+- `X402Client` direct path: the facilitator has no domain getter, so its verifier is asked
+  (`verifyFacilitatorDomain`, `@aastar/x402`): two simulated `settleX402PaymentDirect` calls at one block hash with a
+  probe key generated in memory and distinct from/to/asset addresses. The probe signed under a deliberately wrong
+  domain must revert `InvalidX402Signature`, and the probe signed under { "X402Facilitator", "1", chainId,
+  facilitator } must reach SP's role check that follows the signature (`Unauthorized`). Anything else, including a
+  non-execution error, and the payment is not signed. Nothing is sent. This is a behavioural check of SP's
+  X402Facilitator implementation (signature verified before roles), not discovery of an arbitrary contract's domain.
+- `KmsPaymentSigner(http, { publicClient })` pre-checks before any KMS call or ceremony:
+  - micropayment voucher: refused while the KMS host signs `uint256 cumulativeAmount` and MicroPaymentChannel verifies
+    `uint128` (the digests differ; FU-118). Then the channel's domain is checked.
+  - GToken authorization: the token's `DOMAIN_SEPARATOR()` must equal the separator of the exact KMS domain
+    GToken/1 for that chain and address (a salted domain fails), and `TRANSFER_WITH_AUTHORIZATION_TYPEHASH` must be
+    the type the KMS signs, both at one block hash. **Behaviour change:** without `publicClient` this refuses.
+  - x402 `PaymentPayload` ("SuperPaymaster"/"1"): always refused, nothing on chain verifies it (FU-119).
+- Evidence: `docs/onchain-evidence/eip712-domains-sepolia.md`.
+
 ### EIP-712 domains for USDC and BuyHelper are read from the chain (they were hard-coded)
 
 USDC's domain name is "USDC" on Sepolia / OP Sepolia but "USD Coin" on OP Mainnet. The SDK hard-coded

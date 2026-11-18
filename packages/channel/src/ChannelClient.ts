@@ -1,7 +1,7 @@
-import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
-import { channelActions, type ChannelState } from '@aastar/core';
+import { type Address, type Hex, type Hash, type PublicClient, type WalletClient, decodeFunctionResult, encodeFunctionData } from 'viem';
+import { channelActions, resolveReportedEip712Domain, MicroPaymentChannelABI, type ChannelState } from '@aastar/core';
 import type { SignedVoucher, ChannelConfig } from './types.js';
-import { signVoucher } from './voucher.js';
+import { signVoucher, VOUCHER_TYPEHASH, VOUCHER_TYPE_STRING } from './voucher.js';
 
 export type ChannelClientConfig = {
     publicClient: PublicClient;
@@ -36,12 +36,29 @@ export class ChannelClient {
         });
     }
 
+    /**
+     * Sign a voucher (the signature itself needs no transaction). The domain is the one the channel contract reports
+     * through `eip712Domain()` (EIP-5267) on the configured chain; MicroPaymentChannel has no `DOMAIN_SEPARATOR()`, so
+     * that report is not independently confirmed unless the contract adds it. Its `VOUCHER_TYPEHASH` must equal the
+     * type the SDK signs. Either mismatch throws instead of producing a voucher the contract would reject.
+     */
     async signVoucherOffline(channelId: Hex, cumulativeAmount: bigint): Promise<SignedVoucher> {
+        const { domain, blockHash } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId, mayLackSeparator: true });
+        // The type hash is read at the same block hash as the domain, so both describe one state of the contract.
+        const data = encodeFunctionData({ abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', args: [] });
+        const raw = await this.config.publicClient.request({
+            method: 'eth_call', params: [{ to: this.config.channelAddress, data }, { blockHash, requireCanonical: true }],
+        } as any) as Hex;
+        const onChainTypeHash = decodeFunctionResult({ abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', data: raw }) as Hex;
+        if (onChainTypeHash.toLowerCase() !== VOUCHER_TYPEHASH.toLowerCase()) {
+            throw new Error(`signVoucherOffline: the channel's VOUCHER_TYPEHASH ${onChainTypeHash} is not keccak256("${VOUCHER_TYPE_STRING}"); refusing to sign`);
+        }
         const signature = await signVoucher(this.config.walletClient, {
             channelId,
             cumulativeAmount,
             chainId: this.config.chainId,
             verifyingContract: this.config.channelAddress,
+            domain,
         });
 
         return { channelId, cumulativeAmount, signature };
