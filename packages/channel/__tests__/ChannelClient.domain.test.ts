@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { decodeFunctionData, domainSeparator, encodeFunctionResult, keccak256, toHex, type Abi, type Address, type Hex } from 'viem';
-import { GTokenAuthorizationABI } from '@aastar/core';
+import { GTokenAuthorizationABI, MicroPaymentChannelABI } from '@aastar/core';
 import { ChannelClient } from '../src/ChannelClient.js';
 import { VOUCHER_TYPEHASH } from '../src/voucher.js';
 
@@ -9,7 +9,10 @@ const CHANNEL = '0x37578b70B231CC0Eda5991CA633ae99eb35f3818' as Address;
 const CHAIN_ID = 11155111;
 const ONCHAIN_TYPEHASH = '0xe97c93f01d3ef8eaba1586553df13308f236815bf4ea49c7b696895d8f5ea68a' as Hex;
 const HASH = ('0x' + 'aa'.repeat(32)) as Hex;
-const READ_ABI = (GTokenAuthorizationABI as any[]).filter((e) => e.name === 'eip712Domain' || e.name === 'DOMAIN_SEPARATOR') as Abi;
+const READ_ABI = [
+    ...(GTokenAuthorizationABI as any[]).filter((e) => e.name === 'eip712Domain' || e.name === 'DOMAIN_SEPARATOR'),
+    ...(MicroPaymentChannelABI as any[]).filter((e) => e.name === 'VOUCHER_TYPEHASH'),
+] as Abi;
 const DOMAIN = { name: 'MicroPaymentChannel', version: '1.0.0', chainId: CHAIN_ID, verifyingContract: CHANNEL };
 
 function channel(o: { reportedChainId?: bigint; separator?: Hex; typehash?: Hex } = {}) {
@@ -17,6 +20,7 @@ function channel(o: { reportedChainId?: bigint; separator?: Hex; typehash?: Hex 
         if (params[1]?.blockHash !== HASH || params[1]?.requireCanonical !== true) throw new Error(`${method} not pinned`);
         if (method === 'eth_getCode') return '0x6080';
         const { functionName } = decodeFunctionData({ abi: READ_ABI, data: params[0].data });
+        if (functionName === 'VOUCHER_TYPEHASH') return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.typehash ?? ONCHAIN_TYPEHASH } as any);
         if (functionName === 'eip712Domain') {
             return encodeFunctionResult({ abi: READ_ABI, functionName, result: ['0x0f', DOMAIN.name, DOMAIN.version, o.reportedChainId ?? BigInt(CHAIN_ID), CHANNEL, '0x' + '00'.repeat(32), []] } as any);
         }
@@ -27,7 +31,8 @@ function channel(o: { reportedChainId?: bigint; separator?: Hex; typehash?: Hex 
         getChainId: vi.fn(async () => CHAIN_ID),
         getBlock: vi.fn(async () => ({ number: 1n, hash: HASH })),
         request,
-        readContract: vi.fn(async ({ functionName }: any) => { if (functionName === 'VOUCHER_TYPEHASH') return o.typehash ?? ONCHAIN_TYPEHASH; throw new Error(functionName); }),
+        // Every read must go through the pinned request above; an unpinned readContract is a test failure.
+        readContract: vi.fn(async ({ functionName }: any) => { throw new Error(`unpinned read ${functionName}`); }),
     };
     const walletClient: any = { account: { address: '0x1111111111111111111111111111111111111111' }, signTypedData: vi.fn(async () => '0xsig') };
     return { c: new ChannelClient({ publicClient, walletClient, channelAddress: CHANNEL, chainId: CHAIN_ID }), walletClient };

@@ -1,11 +1,12 @@
 import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
-import { x402Actions, resolveEip712Domain, verifyPinnedEip712Domain } from '@aastar/core';
+import { x402Actions, resolveEip712Domain } from '@aastar/core';
 import type {
     X402PaymentParams, PaymentRequired, PaymentPayload,
     PaymentRequirements, SettleResponse, FacilitatorConfig,
 } from './types.js';
 import { EIP3009_TYPES, generateNonce } from './eip3009.js';
-import { signX402PaymentAuthorization, deriveEip3009Nonce, X402_FACILITATOR_DOMAIN, X402_PAYMENT_AUTHORIZATION_TYPE_STRING } from './x402auth.js';
+import { signX402PaymentAuthorization, deriveEip3009Nonce } from './x402auth.js';
+import { verifyFacilitatorDomain } from './facilitatorDomain.js';
 import { getX402FacilitatorContract } from './facilitators.js';
 import {
     encodePaymentPayload,
@@ -110,11 +111,9 @@ export class X402Client {
         if (settlement === 'direct') {
             // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712). The asset is not the
             // verifying contract here, so its domain is not read; name/version below are payload metadata only.
-            // The facilitator exposes no domain getter, so its pinned domain is checked against its deployed code (and
-            // against DOMAIN_SEPARATOR() once it has one) on the configured chain before signing.
-            const { domain: facilitatorDomain } = await verifyPinnedEip712Domain(this.config.publicClient, facilitator, {
-                ...X402_FACILITATOR_DOMAIN, typeStrings: [X402_PAYMENT_AUTHORIZATION_TYPE_STRING],
-            }, { expectedChainId: chainId });
+            // The facilitator exposes no domain getter: its verifier is asked instead (a simulated settle with a probe
+            // signature under this domain, and one under a wrong domain), on the configured chain, before signing.
+            const facilitatorDomain = await verifyFacilitatorDomain(this.config.publicClient, facilitator, chainId);
             const tokenName = this.config.tokenName || 'USDC';
             const tokenVersion = this.config.tokenVersion || '2';
             const nonce = params.nonce || generateNonce();

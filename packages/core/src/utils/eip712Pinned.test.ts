@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { decodeFunctionData, domainSeparator, encodeFunctionResult, keccak256, toHex, type Abi, type Address, type Hex } from 'viem';
-import { resolveReportedEip712Domain, verifyPinnedEip712Domain } from './eip712Pinned.js';
+import { decodeFunctionData, domainSeparator, encodeFunctionResult, type Abi, type Address, type Hex } from 'viem';
+import { resolveReportedEip712Domain } from './eip712Pinned.js';
 import { GTokenAuthorizationABI } from '../abis/index.js';
 
 const C = '0x37578b70B231CC0Eda5991CA633ae99eb35f3818' as Address;
@@ -22,6 +22,7 @@ function client(o: O = {}) {
             return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.report ?? ['0x0f', DOMAIN.name, DOMAIN.version, 11155111n, C, '0x' + '00'.repeat(32), []] } as any);
         }
         if (o.separator === 'transport') throw new Error('fetch failed: socket hang up');
+        if ((o.separator as any) === 'transport-revert') throw new Error('upstream proxy: request reverted by gateway');
         if (o.separator === undefined || o.separator === 'revert') revert();
         return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.separator } as any);
     });
@@ -34,7 +35,7 @@ function client(o: O = {}) {
 
 describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', () => {
     it('returns the reported domain, marked unchecked when there is no DOMAIN_SEPARATOR()', async () => {
-        await expect(resolveReportedEip712Domain(client(), C, { expectedChainId: 11155111 })).resolves.toEqual({ domain: DOMAIN, separator: domainSeparator({ domain: DOMAIN }), separatorChecked: false });
+        await expect(resolveReportedEip712Domain(client(), C, { expectedChainId: 11155111 })).resolves.toEqual({ domain: DOMAIN, separator: domainSeparator({ domain: DOMAIN }), separatorChecked: false, blockHash: HASH });
     });
 
     it('a matching DOMAIN_SEPARATOR() marks it checked; a different one refuses', async () => {
@@ -42,8 +43,9 @@ describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', 
         await expect(resolveReportedEip712Domain(client({ separator: ('0x' + 'ee'.repeat(32)) as Hex }), C)).rejects.toMatchObject({ data: { reason: 'separator-mismatch' } });
     });
 
-    it('a transport failure on DOMAIN_SEPARATOR() refuses instead of counting as "not present"', async () => {
+    it('a transport failure on DOMAIN_SEPARATOR() refuses instead of counting as "not present", even if its text says "revert"', async () => {
         await expect(resolveReportedEip712Domain(client({ separator: 'transport' }), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        await expect(resolveReportedEip712Domain(client({ separator: 'transport-revert' as any }), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
     });
 
     it.each([
@@ -56,27 +58,5 @@ describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', 
         ['a latest-block read that rejects with a non-Error', { blockFails: true }, 'block-unavailable'],
     ])('refuses when %s', async (_l, o, reason) => {
         await expect(resolveReportedEip712Domain(client(o as O), C, { expectedChainId: 11155111 })).rejects.toMatchObject({ data: { reason } });
-    });
-});
-
-describe('verifyPinnedEip712Domain (no getters; the code must contain the domain constants)', () => {
-    const PINNED = { name: 'X402Facilitator', version: '1', typeStrings: ['T(uint256 a)'] };
-    const constants = ['X402Facilitator', '1', 'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)', 'T(uint256 a)'];
-    const codeWith = (cs: string[]) => ('0x6080' + cs.map((c) => keccak256(toHex(c)).slice(2)).join('')) as Hex;
-
-    it('passes when the code contains every constant, and returns the pinned domain for the live chain', async () => {
-        const r = await verifyPinnedEip712Domain(client({ code: codeWith(constants) }), C, PINNED, { expectedChainId: 11155111 });
-        expect(r).toMatchObject({ domain: { name: 'X402Facilitator', version: '1', chainId: 11155111, verifyingContract: C }, separatorChecked: false });
-    });
-
-    it.each(constants.map((c) => [c]))('refuses when the code lacks keccak256(%j)', async (missing) => {
-        await expect(verifyPinnedEip712Domain(client({ code: codeWith(constants.filter((c) => c !== missing)) }), C, PINNED))
-            .rejects.toMatchObject({ data: { reason: 'code-lacks-domain-constants' } });
-    });
-
-    it('a DOMAIN_SEPARATOR() that disagrees with the pinned domain refuses; one that agrees is checked', async () => {
-        const domain = { name: 'X402Facilitator', version: '1', chainId: 11155111, verifyingContract: C };
-        await expect(verifyPinnedEip712Domain(client({ code: codeWith(constants), separator: ('0x' + 'ee'.repeat(32)) as Hex }), C, PINNED)).rejects.toMatchObject({ data: { reason: 'separator-mismatch' } });
-        await expect(verifyPinnedEip712Domain(client({ code: codeWith(constants), separator: domainSeparator({ domain }) }), C, PINNED)).resolves.toMatchObject({ separatorChecked: true });
     });
 });

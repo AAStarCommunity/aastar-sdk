@@ -1,4 +1,4 @@
-import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
+import { type Address, type Hex, type Hash, type PublicClient, type WalletClient, decodeFunctionResult, encodeFunctionData } from 'viem';
 import { channelActions, resolveReportedEip712Domain, MicroPaymentChannelABI, type ChannelState } from '@aastar/core';
 import type { SignedVoucher, ChannelConfig } from './types.js';
 import { signVoucher, VOUCHER_TYPEHASH, VOUCHER_TYPE_STRING } from './voucher.js';
@@ -43,10 +43,13 @@ export class ChannelClient {
      * type the SDK signs. Either mismatch throws instead of producing a voucher the contract would reject.
      */
     async signVoucherOffline(channelId: Hex, cumulativeAmount: bigint): Promise<SignedVoucher> {
-        const { domain } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId });
-        const onChainTypeHash = await this.config.publicClient.readContract({
-            address: this.config.channelAddress, abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', args: [],
-        }) as Hex;
+        const { domain, blockHash } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId });
+        // The type hash is read at the same block hash as the domain, so both describe one state of the contract.
+        const data = encodeFunctionData({ abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', args: [] });
+        const raw = await this.config.publicClient.request({
+            method: 'eth_call', params: [{ to: this.config.channelAddress, data }, { blockHash, requireCanonical: true }],
+        } as any) as Hex;
+        const onChainTypeHash = decodeFunctionResult({ abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', data: raw }) as Hex;
         if (onChainTypeHash.toLowerCase() !== VOUCHER_TYPEHASH.toLowerCase()) {
             throw new Error(`signVoucherOffline: the channel's VOUCHER_TYPEHASH ${onChainTypeHash} is not keccak256("${VOUCHER_TYPE_STRING}"); refusing to sign`);
         }

@@ -1,5 +1,5 @@
-import { type Address, type PublicClient, hashTypedData, isAddressEqual } from "viem";
-import { resolveEip712Domain, resolveReportedEip712Domain } from "@aastar/core";
+import { type Address, type Hex, type PublicClient, decodeFunctionResult, domainSeparator, encodeFunctionData, hashTypedData, keccak256, toHex } from "viem";
+import { GTokenAuthorizationABI, resolveReportedEip712Domain } from "@aastar/core";
 import { KmsHttpClient } from "./kms-http-client";
 import { WebAuthnAssertion, eip712Digest } from "./kms-signer";
 import {
@@ -87,8 +87,9 @@ export class KmsPaymentSigner {
    * - voucher: the digest under MicroPaymentChannel's type (`uint128 cumulativeAmount`, its VOUCHER_TYPEHASH) must
    *   equal the digest the KMS signs. Today they differ (the KMS host uses `uint256`), so this refuses until the KMS
    *   host is fixed (FU-118). Then the KMS domain must equal the channel's eip712Domain() on the chain.
-   * - GToken authorization: the KMS domain { "GToken", "1", chainId, gTokenAddress } must be the token's domain on
-   *   the chain, checked against its DOMAIN_SEPARATOR().
+   * - GToken authorization: the token's DOMAIN_SEPARATOR() must equal the separator of the exact KMS domain
+   *   { "GToken", "1", chainId, gTokenAddress } (so a salted or otherwise different domain fails), and its
+   *   TRANSFER_WITH_AUTHORIZATION_TYPEHASH must be the type the KMS signs; both read at one block hash.
    * - x402 PaymentPayload ("SuperPaymaster"/"1"): nothing on chain verifies it (SuperPaymaster verifies no EIP-712
    *   signature; x402's verifier is X402Facilitator with its own type), so it always refuses (FU-119).
    */
@@ -120,11 +121,27 @@ export class KmsPaymentSigner {
     }
     const p = params as KmsSignGTokenAuthorizationRequest;
     if (!pc) throw new Error("signGTokenAuthorization: pass publicClient to KmsPaymentSigner so the GToken domain can be checked; refusing");
-    const { domain } = await resolveEip712Domain(pc, p.gTokenAddress as Address);
-    if (domain.name !== "GToken" || domain.version !== "1" || domain.chainId !== p.chainId || !domain.verifyingContract || !isAddressEqual(domain.verifyingContract, p.gTokenAddress as Address)) {
-      throw new Error(
-        `signGTokenAuthorization: the token's domain is ${JSON.stringify(domain)}, the KMS signs GToken/1 on chain ${p.chainId} for ${p.gTokenAddress}; refusing`
-      );
+    const live = await pc.getChainId();
+    if (live !== p.chainId) throw new Error(`signGTokenAuthorization: the publicClient is on chain ${live}, the authorization is for chain ${p.chainId}; refusing`);
+    const token = p.gTokenAddress as Address;
+    const pin = { blockHash: (await pc.getBlock()).hash, requireCanonical: true };
+    const read = async (functionName: "DOMAIN_SEPARATOR" | "TRANSFER_WITH_AUTHORIZATION_TYPEHASH"): Promise<Hex> => {
+      const data = encodeFunctionData({ abi: GTokenAuthorizationABI, functionName, args: [] });
+      const raw = await pc.request({ method: "eth_call", params: [{ to: token, data }, pin] } as any) as Hex;
+      return decodeFunctionResult({ abi: GTokenAuthorizationABI, functionName, data: raw }) as Hex;
+    };
+    let onChainSeparator: Hex, onChainTypeHash: Hex;
+    try {
+      [onChainSeparator, onChainTypeHash] = await Promise.all([read("DOMAIN_SEPARATOR"), read("TRANSFER_WITH_AUTHORIZATION_TYPEHASH")]);
+    } catch {
+      throw new Error(`signGTokenAuthorization: ${token}'s DOMAIN_SEPARATOR() / TRANSFER_WITH_AUTHORIZATION_TYPEHASH could not be read at one block; refusing`);
+    }
+    const kmsSeparator = domainSeparator({ domain: { name: "GToken", version: "1", chainId: p.chainId, verifyingContract: token } });
+    if (onChainSeparator.toLowerCase() !== kmsSeparator.toLowerCase()) {
+      throw new Error(`signGTokenAuthorization: ${token}'s DOMAIN_SEPARATOR() ${onChainSeparator} is not the KMS domain GToken/1 on chain ${p.chainId} (${kmsSeparator}); refusing`);
+    }
+    if (onChainTypeHash.toLowerCase() !== GTOKEN_TRANSFER_TYPEHASH.toLowerCase()) {
+      throw new Error(`signGTokenAuthorization: ${token}'s TRANSFER_WITH_AUTHORIZATION_TYPEHASH ${onChainTypeHash} is not the type the KMS signs; refusing`);
     }
   }
 
@@ -275,6 +292,11 @@ export function micropaymentVoucherContractDigest(p: KmsSignMicropaymentVoucherR
     message: { channelId: p.channelId as `0x${string}`, cumulativeAmount: BigInt(p.cumulativeAmount) },
   });
 }
+
+/** The TransferWithAuthorization type the KMS signs for GToken (mirrors kms/host/src/api_server.rs). */
+const GTOKEN_TRANSFER_TYPEHASH = keccak256(toHex(
+  "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
+));
 
 /** EIP-712 digest for a GToken EIP-3009 `TransferWithAuthorization` (domain GToken/1). */
 export function gTokenAuthorizationDigest(p: KmsSignGTokenAuthorizationRequest): `0x${string}` {

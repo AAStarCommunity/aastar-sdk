@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { domainSeparator } from "viem";
-import { clearEip712DomainCache } from "@aastar/core";
+import { decodeFunctionData, domainSeparator, encodeFunctionResult, keccak256, toHex } from "viem";
+import { clearEip712DomainCache, GTokenAuthorizationABI } from "@aastar/core";
 import { KmsHttpClient } from "../services/kms-http-client";
 import {
   KmsPaymentSigner,
@@ -66,15 +66,19 @@ const X402: KmsSignX402PaymentRequest = {
   deadline: "1999999999",
 };
 
-// A client on the payments' chain that reports GTOKEN_AUTH.gTokenAddress's domain as `domain` (EIP-5267 plus
-// DOMAIN_SEPARATOR(), as GTokenAuthorization does).
-function gTokenChain(domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}` }) {
+// A client on the payments' chain whose token answers DOMAIN_SEPARATOR() and TRANSFER_WITH_AUTHORIZATION_TYPEHASH,
+// read through eth_call pinned to one block hash (as GTokenAuthorization does).
+const TRANSFER_TYPEHASH = keccak256(toHex("TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"));
+const PIN = "0x" + "ab".repeat(32);
+function gTokenChain(domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}`; salt?: `0x${string}` }, typehash = TRANSFER_TYPEHASH) {
   return {
     getChainId: vi.fn(async () => domain.chainId),
-    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (functionName === "eip712Domain") return ["0x0f", domain.name, domain.version, BigInt(domain.chainId), domain.verifyingContract, "0x" + "00".repeat(32), []];
-      if (functionName === "DOMAIN_SEPARATOR") return domainSeparator({ domain });
-      throw new Error(`execution reverted (${functionName})`);
+    getBlock: vi.fn(async () => ({ number: 1n, hash: PIN })),
+    request: vi.fn(async ({ method, params }: any) => {
+      if (method !== "eth_call" || params[1]?.blockHash !== PIN || params[1]?.requireCanonical !== true) throw new Error(`${method} not pinned`);
+      const { functionName } = decodeFunctionData({ abi: GTokenAuthorizationABI, data: params[0].data });
+      const result = functionName === "DOMAIN_SEPARATOR" ? domainSeparator({ domain }) : typehash;
+      return encodeFunctionResult({ abi: GTokenAuthorizationABI, functionName, result } as any);
     }),
   } as any;
 }
@@ -142,15 +146,22 @@ describe("KmsPaymentSigner", () => {
       expect(result).toEqual(RESPONSE);
     });
 
-    it("a token whose on-chain domain is not GToken/1 for that chain and address gets no request", async () => {
-      for (const domain of [{ ...GTOKEN_DOMAIN, name: "GToken2" }, { ...GTOKEN_DOMAIN, version: "2" }]) {
-        clearEip712DomainCache();
+    it("a token whose on-chain domain is not exactly the KMS's GToken/1 (name, version, or a salt, even zero) gets no request", async () => {
+      const salted = (salt: `0x${string}`) => ({ ...GTOKEN_DOMAIN, salt });
+      for (const domain of [{ ...GTOKEN_DOMAIN, name: "GToken2" }, { ...GTOKEN_DOMAIN, version: "2" }, salted(("0x" + "00".repeat(32)) as `0x${string}`), salted(("0x" + "01".repeat(32)) as `0x${string}`)]) {
         const s2 = new KmsPaymentSigner(client, { publicClient: gTokenChain(domain) });
-        await expect(s2.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("the KMS signs GToken/1");
+        await expect(s2.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("is not the KMS domain GToken/1");
+        await expect(s2.signGTokenAuthorizationWithCeremony(GTOKEN_AUTH, {} as any)).rejects.toThrow("is not the KMS domain GToken/1");
       }
-      clearEip712DomainCache();
       const otherChain = new KmsPaymentSigner(client, { publicClient: gTokenChain({ ...GTOKEN_DOMAIN, chainId: 10 }) });
-      await expect(otherChain.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("refusing");
+      await expect(otherChain.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("the publicClient is on chain 10, the authorization is for chain 11155420");
+      expect(bearerSpy).not.toHaveBeenCalled();
+      expect(postSpy).not.toHaveBeenCalled();
+    });
+
+    it("a token whose TransferWithAuthorization type differs from the KMS's gets no request", async () => {
+      const s2 = new KmsPaymentSigner(client, { publicClient: gTokenChain(GTOKEN_DOMAIN, keccak256(toHex("TransferWithAuthorization(address from,address to,uint256 value,uint256 validBefore,uint256 validAfter,bytes32 nonce)"))) });
+      await expect(s2.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("TRANSFER_WITH_AUTHORIZATION_TYPEHASH");
       expect(bearerSpy).not.toHaveBeenCalled();
     });
 
