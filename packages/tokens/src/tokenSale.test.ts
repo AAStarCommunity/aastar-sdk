@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { domainSeparator } from 'viem';
+import { clearEip712DomainCache } from '@aastar/core';
 import { TokenSaleClient, usd } from './tokenSale.js';
 
 const SEPOLIA = 11155111;
@@ -11,8 +13,30 @@ const GTOKEN_PAYOUT = '0x4e6A1125B8619d6D05c99AB2F30BDFc96C843B67';
 const APNTS_PAYOUT = '0x4C4EC2e866f0c43DCA4670A6033e962a05B4C772';
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 
-// readContract dispatcher keyed by functionName.
-function makeReadContract(overrides: Record<string, any> = {}) {
+// The domains the two signing contracts report (USDC: name()/version(); BuyHelper: NAME()/VERSION()).
+const USDC_DOMAIN = { name: 'USDC', version: '2', chainId: SEPOLIA, verifyingContract: USDC } as const;
+const HELPER_DOMAIN = { name: 'MyceliumBuyHelper', version: '1', chainId: SEPOLIA, verifyingContract: BUY_HELPER } as const;
+type DomainFixture = { usdc?: string; helper?: string; usdcDomain?: typeof USDC_DOMAIN | any; helperDomain?: typeof HELPER_DOMAIN | any };
+function domainReads(address: string, functionName: string, f: DomainFixture) {
+  const a = address.toLowerCase();
+  const usdcD = f.usdcDomain ?? USDC_DOMAIN;
+  const helperD = f.helperDomain ?? HELPER_DOMAIN;
+  if (functionName === 'eip712Domain') throw new Error('execution reverted');
+  if (a === USDC.toLowerCase()) {
+    if (functionName === 'name') return usdcD.name;
+    if (functionName === 'version') return usdcD.version;
+    if (functionName === 'DOMAIN_SEPARATOR') return f.usdc ?? domainSeparator({ domain: usdcD });
+  }
+  if (a === BUY_HELPER.toLowerCase()) {
+    if (functionName === 'NAME') return helperD.name;
+    if (functionName === 'VERSION') return helperD.version;
+    if (functionName === 'DOMAIN_SEPARATOR') return f.helper ?? domainSeparator({ domain: helperD });
+  }
+  return undefined;
+}
+
+// readContract dispatcher keyed by functionName (EIP-712 domain reads keyed by address as well).
+function makeReadContract(overrides: Record<string, any> = {}, separators: DomainFixture = {}) {
   const map: Record<string, any> = {
     gToken: GTOKEN_PAYOUT,
     aPNTs: APNTS_PAYOUT,
@@ -24,12 +48,13 @@ function makeReadContract(overrides: Record<string, any> = {}) {
     balanceOf: 7n,
     ...overrides,
   };
-  return vi.fn(async ({ functionName }: any) => map[functionName]);
+  return vi.fn(async ({ address, functionName }: any) => domainReads(address, functionName, separators) ?? map[functionName]);
 }
 
 function makePublicClient(readContract = makeReadContract()) {
   return {
     chain: { id: SEPOLIA },
+    getChainId: vi.fn(async () => SEPOLIA),
     readContract,
     getBalance: vi.fn(async () => 1000n),
     waitForTransactionReceipt: vi.fn(async ({ hash }: any) => ({ status: 'success', hash })),
@@ -164,6 +189,38 @@ describe('buySelfPay', () => {
 describe('buyGasless', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    clearEip712DomainCache();
+  });
+
+  it('signs under the domains the contracts report, checked against their DOMAIN_SEPARATOR()', async () => {
+    const wallet = makeWalletClient();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ txHash: '0xc0ffee' }) })));
+    await new TokenSaleClient(makePublicClient(), wallet).buyGasless({ token: 'GTOKEN', usdAmount: usd(5) });
+    const domains = wallet.signTypedData.mock.calls.map((a: any) => a[0].domain);
+    expect(domains).toEqual([USDC_DOMAIN, HELPER_DOMAIN]);
+  });
+
+  it('signs under whatever the contracts report, not fixed names (USDC is "USD Coin" on OP Mainnet)', async () => {
+    const usdcDomain = { ...USDC_DOMAIN, name: 'USD Coin' };
+    const helperDomain = { ...HELPER_DOMAIN, version: '2' };
+    const wallet = makeWalletClient();
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ txHash: '0xc0ffee' }) })));
+    await new TokenSaleClient(makePublicClient(makeReadContract({}, { usdcDomain, helperDomain })), wallet)
+      .buyGasless({ token: 'GTOKEN', usdAmount: usd(5) });
+    expect(wallet.signTypedData.mock.calls.map((a: any) => a[0].domain)).toEqual([usdcDomain, helperDomain]);
+  });
+
+  it('a USDC or BuyHelper domain that does not match DOMAIN_SEPARATOR() signs nothing', async () => {
+    for (const separators of [{ usdc: '0x' + 'ab'.repeat(32) }, { helper: '0x' + 'cd'.repeat(32) }]) {
+      clearEip712DomainCache();
+      const wallet = makeWalletClient();
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      await expect(new TokenSaleClient(makePublicClient(makeReadContract({}, separators)), wallet)
+        .buyGasless({ token: 'GTOKEN', usdAmount: usd(5) })).rejects.toThrow('does not match DOMAIN_SEPARATOR()');
+      expect(wallet.signTypedData).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    }
   });
 
   it('signs EIP-3009 + BuyIntent and posts to the relayer', async () => {

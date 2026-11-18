@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### EIP-712 domains for USDC and BuyHelper are read from the chain (they were hard-coded)
+
+USDC's domain name is "USDC" on Sepolia / OP Sepolia but "USD Coin" on OP Mainnet. The SDK hard-coded
+`{ name: 'USDC', version: '2' }`, so its EIP-3009 authorizations were accepted on testnets and rejected on OP
+Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domain-op-fork.md`).
+
+- New `resolveEip712Domain(publicClient, contract, { getters?, expected? })` in `@aastar/core`. It uses
+  `eip712Domain()` (EIP-5267) when the contract has it, otherwise the name and version getters with the live
+  `eth_chainId`, and always requires the result to match the contract's `DOMAIN_SEPARATOR()`. A mismatch or an
+  unreadable getter throws; there is no default value. Checked results are cached per client and (chainId, contract),
+  and every use reads `DOMAIN_SEPARATOR()` again: a changed separator re-resolves, an unreadable one throws.
+- `X402Client.createPayment` with `settlement: 'eip-3009'` reads the asset's domain this way. **Behaviour change on
+  that path:** `tokenName` / `tokenVersion` no longer default to `'USDC'` / `'2'`; when set they are expected values,
+  and a difference from the chain throws. A config `chainId` other than the RPC's throws. The `'direct'` path is
+  unchanged: the asset is not its verifying contract (the facilitator is, FU-117).
+- `TokenSaleClient.buyGasless` reads the USDC domain (`name()`/`version()`) and the BuyHelper domain
+  (`NAME()`/`VERSION()`) from the chain, each checked against `DOMAIN_SEPARATOR()`.
+- Bridged USDC.e on OP Mainnet (`0x7F5c…1607`) has no `version()` and no `DOMAIN_SEPARATOR()`; signing for it is
+  refused.
+- `GTOKEN_EIP712_DOMAIN` (`@aastar/x402`) is deprecated in favour of `resolveEip712Domain`.
+- Not in this change (FU-117): the MicroPaymentChannel voucher domain, the X402Facilitator domain (and so the
+  `'direct'` x402 path), the three KMS payment digests, and the exported `sign*Authorization` helpers in
+  `@aastar/x402`, which sign under whatever name/version the caller passes.
+
 ### PaymasterV4 deploys are checked before the SDK registers them
 
 - New `verifyPaymasterDeployment(publicClient, { factory, operator, deployHash?, confirmations? })` in `@aastar/core`.

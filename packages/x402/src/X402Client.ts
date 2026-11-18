@@ -1,10 +1,10 @@
 import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
-import { x402Actions } from '@aastar/core';
+import { x402Actions, resolveEip712Domain } from '@aastar/core';
 import type {
     X402PaymentParams, PaymentRequired, PaymentPayload,
     PaymentRequirements, SettleResponse, FacilitatorConfig,
 } from './types.js';
-import { EIP3009_TYPES, getEIP3009Domain, generateNonce } from './eip3009.js';
+import { EIP3009_TYPES, generateNonce } from './eip3009.js';
 import { signX402PaymentAuthorization, deriveEip3009Nonce } from './x402auth.js';
 import { getX402FacilitatorContract } from './facilitators.js';
 import {
@@ -33,7 +33,13 @@ export type X402ClientConfig = {
     facilitatorContract?: Address;
     /** Facilitator endpoint (default: self-facilitated via SuperPaymaster) */
     facilitator?: FacilitatorConfig;
-    /** EIP-712 domain for asset token (defaults: USDC / version "2") */
+    /**
+     * eip-3009 path: the asset token's EIP-712 domain is read from the chain (`resolveEip712Domain`) and
+     * checked against its `DOMAIN_SEPARATOR()`. These are optional expected values: when set and the chain
+     * reports something else, createPayment throws instead of signing. There is no default: USDC is
+     * "USDC" on Sepolia / OP Sepolia but "USD Coin" on OP Mainnet.
+     * direct path: payload metadata only (unsigned), defaulting to "USDC" / "2" as before.
+     */
     tokenName?: string;
     tokenVersion?: string;
     /** Payment policy: max amount per request (in atomic units) */
@@ -88,8 +94,6 @@ export class X402Client {
         const now = BigInt(Math.floor(Date.now() / 1000));
         const validAfter = params.validAfter ?? (now - 600n); // 10 min grace (per x402 spec)
         const validBefore = params.validBefore ?? (now + 3600n);
-        const tokenName = this.config.tokenName || 'USDC';
-        const tokenVersion = this.config.tokenVersion || '2';
         const maxFee = params.maxFee ?? params.amount;
         const settlement = params.settlement ?? 'eip-3009';
         const facilitator = this.facilitatorContract();
@@ -104,7 +108,11 @@ export class X402Client {
         };
 
         if (settlement === 'direct') {
-            // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712).
+            // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712). The asset is not the
+            // verifying contract here, so its domain is not read; name/version below are payload metadata only.
+            // The facilitator's own domain is still hard-coded in signX402PaymentAuthorization (FU-117 ②).
+            const tokenName = this.config.tokenName || 'USDC';
+            const tokenVersion = this.config.tokenVersion || '2';
             const nonce = params.nonce || generateNonce();
             const signature = await signX402PaymentAuthorization(wallet, {
                 from: params.from, to: params.to, asset: params.asset, amount: params.amount,
@@ -124,12 +132,24 @@ export class X402Client {
             return { payload, encoded: encodePaymentPayload(payload), nonce };
         }
 
-        // eip-3009 path (USDC) — ReceiveWithAuthorization, recipient = facilitator, recipient-bound nonce.
+        // eip-3009 path (USDC) — ReceiveWithAuthorization over the TOKEN, so the token's domain is read from the
+        // chain and checked against its DOMAIN_SEPARATOR(); a configured name/version is only an expectation.
+        const { domain: assetDomain } = await resolveEip712Domain(this.config.publicClient, params.asset, {
+            expected: { name: this.config.tokenName, version: this.config.tokenVersion },
+        });
+        if (assetDomain.chainId !== chainId) {
+            throw new Error(`x402: config chainId ${chainId} but the asset's domain is on chain ${assetDomain.chainId}; refusing to sign`);
+        }
+        if (typeof assetDomain.name !== 'string' || typeof assetDomain.version !== 'string') {
+            throw new Error(`x402: the asset's EIP-712 domain has no name/version to put in the payment requirements; refusing to sign`);
+        }
+        const tokenName = assetDomain.name;
+        const tokenVersion = assetDomain.version;
         const salt = params.salt || generateNonce();
         const derivedNonce = deriveEip3009Nonce(params.to, maxFee, salt);
         const signature = await wallet.signTypedData({
             account,
-            domain: getEIP3009Domain(tokenName, tokenVersion, chainId, params.asset),
+            domain: assetDomain,
             types: EIP3009_TYPES,
             primaryType: 'ReceiveWithAuthorization',
             message: {
