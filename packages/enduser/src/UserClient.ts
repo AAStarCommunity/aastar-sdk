@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain, encodeEndUserRoleData, RegistryABI } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -380,55 +380,53 @@ export class UserClient extends BaseClient {
             if (!this.gTokenStakingAddress) throw new Error('GTokenStaking address required for this client');
             if (!this.gTokenAddress) throw new Error('GToken address required for this client');
 
-            const { encodeAbiParameters, keccak256, toBytes, parseEther } = await import('viem');
+            const { keccak256, toBytes } = await import('viem');
             const ROLE_ENDUSER = keccak256(toBytes("ENDUSER"));
-            // Correct mapping for Registry Actions
-            const registry = registryActions(this.registryAddress);
             const publicClient = this.getStartPublicClient();
             const tokens = tokenActions()(publicClient);
 
-            // 1. Check Allowance
+            // 1. What Registry will pull: the ticket plus the stake it actually locks (see
+            // _enforceMinStake below). Read from the chain, not assumed.
+            const roleConfig = await (publicClient as any).readContract({
+                address: this.registryAddress,
+                abi: RegistryABI,
+                functionName: 'getRoleConfig',
+                args: [ROLE_ENDUSER]
+            }) as { minStake: bigint; ticketPrice: bigint };
+            if (stakeAmount > 0n && stakeAmount < roleConfig.minStake) {
+                // Registry would revert InsufficientStake; refuse before sending the approval.
+                throw new Error(`registerAsEndUser: stake ${stakeAmount} is below the role's minStake ${roleConfig.minStake} (pass 0 to use the minimum)`);
+            }
+            // Registry _enforceMinStake: minStake 0 → no stake is locked whatever is asked; 0 → minStake.
+            const effectiveStake = roleConfig.minStake === 0n ? 0n : (stakeAmount === 0n ? roleConfig.minStake : stakeAmount);
+            const required = effectiveStake + roleConfig.ticketPrice;
+
             const allowance = await tokens.allowance({
                 token: this.gTokenAddress,
                 owner: this.accountAddress,
                 spender: this.gTokenStakingAddress
             });
-            console.log(`   🔍 Debug Allowance: Account=${this.accountAddress}, Allowance=${allowance}, Needed=${stakeAmount}`);
-            
+            console.log(`   🔍 Debug Allowance: Account=${this.accountAddress}, Allowance=${allowance}, Needed=${required}`);
+
             const txs: { target: Address, value: bigint, data: Hex }[] = [];
 
-            if (allowance < stakeAmount) {
+            if (allowance < required) {
                  const approveData = encodeFunctionData({
                      abi: [{name:'approve', type:'function', inputs:[{type:'address'},{type:'uint256'}], outputs:[{type:'bool'}], stateMutability:'nonpayable'}],
                      functionName: 'approve',
-                     args: [this.gTokenStakingAddress, parseEther('1000')]
+                     args: [this.gTokenStakingAddress, required]
                  });
                  txs.push({ target: this.gTokenAddress, value: 0n, data: approveData });
             }
 
-            // 2. Construct Register Call
-            // struct EndUserRoleData { address account; address community; string avatarURI; string ensName; uint256 stakeAmount; }
-            const roleData = encodeAbiParameters(
-                [
-                    { type: 'address', name: 'account' },
-                    { type: 'address', name: 'community' },
-                    { type: 'string', name: 'avatarURI' },
-                    { type: 'string', name: 'ensName' },
-                    { type: 'uint256', name: 'stakeAmount' }
-                ],
-                [
-                    this.accountAddress,
-                    communityAddress,
-                    '',
-                    '',
-                    stakeAmount
-                ]
-            );
+            // 2. Construct Register Call: Registry.registerRole(roleId, user, roleData) with
+            // msg.sender == user, so the AA calls it for itself through execute().
+            const roleData = encodeEndUserRoleData({ community: communityAddress, stakeAmount });
 
             const registerData = encodeFunctionData({
-                abi: [{ name: 'registerRoleSelf', type: 'function', inputs: [{type:'bytes32'}, {type:'bytes'}], outputs: [{type:'uint256'}], stateMutability: 'nonpayable' }],
-                functionName: 'registerRoleSelf',
-                args: [ROLE_ENDUSER, roleData]
+                abi: RegistryABI,
+                functionName: 'registerRole',
+                args: [ROLE_ENDUSER, this.accountAddress, roleData]
             });
             
             txs.push({ target: this.registryAddress, value: 0n, data: registerData });
@@ -442,7 +440,8 @@ export class UserClient extends BaseClient {
                 const h = await this.execute(tx.target, tx.value, tx.data, options);
                 hashes.push(h);
                 // Wait for each tx to ensure sequential state updates (approve -> register)
-                await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: h });
+                const receipt = await (this.getStartPublicClient() as any).waitForTransactionReceipt({ hash: h });
+                if (receipt?.status !== 'success') throw new Error(`registerAsEndUser: ${h} reverted`);
             }
             return hashes[hashes.length - 1];
         } catch (error) {

@@ -1,4 +1,5 @@
 import { keccak256, stringToBytes, encodeAbiParameters, decodeAbiParameters, parseAbiParameters, type Hex, type Address, zeroAddress } from 'viem';
+import { encodeEndUserRoleData, decodeEndUserRoleData } from '@aastar/core';
 
 export const RoleIds = {
     PAYMASTER_SUPER: keccak256(stringToBytes('PAYMASTER_SUPER')),
@@ -64,28 +65,20 @@ export const RoleDataFactory = {
     },
 
     /**
-     * Data for EndUser (matches Registry.sol EndUserRoleData)
+     * Data for EndUser: Registry's `EndUserRoleData { address community; uint256 stakeAmount; }`.
+     * `account`, `avatarURI` and `ensName` are not part of it (since SP 5.3.3) and are ignored; encoding
+     * them moved the community out of the first word and every registration reverted InvalidParam.
+     * A missing community throws here instead of being sent as the zero address.
      */
-    endUser: (params?: { account?: Address, community?: Address, avatarURI?: string, ensName?: string, stakeAmount?: bigint }): Hex => {
-        return encodeAbiParameters(
-            [{
-                type: 'tuple',
-                components: [
-                    { name: 'account', type: 'address' },
-                    { name: 'community', type: 'address' },
-                    { name: 'avatarURI', type: 'string' },
-                    { name: 'ensName', type: 'string' },
-                    { name: 'stakeAmount', type: 'uint256' }
-                ]
-            }],
-            [[
-                params?.account || zeroAddress,
-                params?.community || zeroAddress,
-                params?.avatarURI || '',
-                params?.ensName || '',
-                params?.stakeAmount || 0n
-            ] as any]
-        );
+    endUser: (params: {
+        community: Address,
+        stakeAmount?: bigint,
+        /** @deprecated not in Registry's EndUserRoleData; ignored */ account?: Address,
+        /** @deprecated not in Registry's EndUserRoleData; ignored */ avatarURI?: string,
+        /** @deprecated not in Registry's EndUserRoleData; ignored */ ensName?: string,
+    }): Hex => {
+        if (!params?.community) throw new Error('RoleDataFactory.endUser: community is required (Registry reverts InvalidParam without one)');
+        return encodeEndUserRoleData({ community: params.community, stakeAmount: params.stakeAmount ?? 0n });
     },
 
     decodeCommunity: (data: Hex) => {
@@ -120,32 +113,6 @@ export const RoleDataFactory = {
         }
     },
 
-    decodeEndUser: (data: Hex) => {
-        const decoded = decodeAbiParameters(
-            [{
-                type: 'tuple',
-                components: [
-                    { name: 'account', type: 'address' },
-                    { name: 'community', type: 'address' },
-                    { name: 'avatarURI', type: 'string' },
-                    { name: 'ensName', type: 'string' },
-                    { name: 'stakeAmount', type: 'uint256' }
-                ]
-            }],
-            data
-        );
-        const result = decoded[0] as any;
-        if (Array.isArray(result)) {
-            const [a, c, av, en, s] = result;
-            return { account: a, community: c, avatarURI: av, ensName: en, stakeAmount: s };
-        } else {
-            return {
-                account: result.account,
-                community: result.community,
-                avatarURI: result.avatarURI,
-                ensName: result.ensName,
-                stakeAmount: result.stakeAmount
-            };
-        }
-    }
+    /** Inverse of `endUser`: Registry's `EndUserRoleData { community, stakeAmount }`. */
+    decodeEndUser: (data: Hex) => decodeEndUserRoleData(data)
 };

@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### ROLE_ENDUSER registration sends the role data Registry decodes, through `registerRole`
+
+- Registry decodes `EndUserRoleData { address community; uint256 stakeAmount; }` (since SP 5.3.3; Registry-5.8.0 on
+  Sepolia and 5.10.x in rc.8). The SDK encoded five fields `(account, community, avatarURI, ensName, stakeAmount)`, so
+  Registry read the account (or a tuple offset) as the community and every such registration reverted `InvalidParam`.
+  Measured read-only on Sepolia: docs/onchain-evidence/enduser-roledata-sepolia.md.
+- New in `@aastar/core`: `encodeEndUserRoleData({ community, stakeAmount? })` and `decodeEndUserRoleData`.
+  `stakeAmount` 0 means the role's minStake.
+- `RoleDataFactory.endUser` encodes those two fields; `community` is required (typed, and checked at run time instead
+  of encoding the zero address). `account`, `avatarURI` and `ensName` are deprecated and ignored (they never reached the
+  chain). **Breaking:** `RoleDataFactory.decodeEndUser` / `decodeEndUserRoleData` return `{ community, stakeAmount }`
+  and refuse any payload that is not the canonical 64 bytes, so an old five-field payload throws instead of decoding
+  into a wrong community.
+- `createEndUserClient().joinAndActivate` and `UserClient.registerAsEndUser` called `registerRoleSelf`, which no
+  deployed Registry has; both now call `registerRole(roleId, self, roleData)` (Registry requires `msg.sender == user`).
+  `joinAndActivate` throws if the registration reverts instead of going on to report an SBT, and reads the credit of the
+  account it registered (it used to prefer a separately set `aaAddress`, which this call does not register).
+- `UserClient.registerAsEndUser` approves what Registry will pull, read from `getRoleConfig`: the ticket plus the stake
+  Registry locks (none when the role's minStake is 0, minStake when the stake passed is 0), instead of comparing the
+  allowance with the literal stake and approving a fixed 1000 GT. A stake below minStake is refused before anything is
+  sent, and either transaction reverting throws.
+- `createOperatorClient().onboardOperator` checks `hasRole` first: a role already held sends nothing (it used to send an
+  approval anyway), and ENDUSER without `roleData` throws before any transaction. It read the entry burn through
+  `roleConfigs`, which the deployed Registry ABI does not have, so a first registration failed before approving; it now
+  reads `getRoleConfig().ticketPrice`. For ENDUSER it approves the stake Registry will lock for the roleData being sent
+  (not the separate `stakeAmount`), refusing a disagreeing `stakeAmount` or a below-minimum encoded stake before sending.
+  A reverted approval, registration or deposit now throws instead of moving to the next step.
+  Role ids are compared case-insensitively.
+
 ### EIP-712 domains of MicroPaymentChannel and X402Facilitator are checked on the chain; KMS payment signatures are pre-checked
 
 - New in `@aastar/core`: `resolveReportedEip712Domain` (a contract's `eip712Domain()`, checked against
