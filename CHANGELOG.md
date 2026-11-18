@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
+
+- Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`
+  (default 15000 = 1.5x, the coefficient of SuperPaymaster's three-arm collector). The SDK-side compression
+  (`tuneGasLimit`) and the fixed 250k SuperPaymaster verification floor are no longer applied; the contract's
+  `gasParams().minPostOpGas` still raises postOp. `superPaymasterVerificationGasFloor` stays as an explicit floor.
+  `estimateUserOperationGas` now returns the bundler's estimate unscaled.
+- Fees: both caller values given → used as they are; otherwise eth_feeHistory (priority = median of the 50th-percentile
+  rewards over 10 blocks, maxFee = next base fee × 2 + priority; `feePolicy` overrides). **No testnet priority floor**
+  (it used to replace even explicit fees on 31337 / Sepolia / OP Sepolia).
+- `frozenGas`: all five limits used exactly as given, for a data collection; refused instead of raised when below the
+  on-chain minPostOpGas or `superPaymasterVerificationGasFloor`, or when a bundler says preVerificationGas is too low.
+- `onGasDecided`: the sent limits, fees and their sources (and whether a bundler's explicit requirement raised the
+  fees) before the call returns, so a collector can record them per row.
+- Evidence: `docs/onchain-evidence/gas-policy-local.md` (local SuperPaymaster DeployLive stack: credit branch, balance
+  branch, frozen limits giving identical actualGas, and one-limit-at-a-time variants: only callGasLimit and
+  paymasterPostOpGasLimit change actualGas, by 10% of the extra unused gas). `docs/onchain-evidence/paper-path-abi-equality.md`
+  with `packages/core/src/abis/paperPathAbi.test.ts`: the 32 ABI entries the paper paths use are identical in the vendored
+  files and SuperPaymaster cf8b1068. FU-122 lists the gas literals left outside this path.
+
 ### ROLE_ENDUSER registration sends the role data Registry decodes, through `registerRole`
 
 - Registry decodes `EndUserRoleData { address community; uint256 stakeAmount; }` (since SP 5.3.3; Registry-5.8.0 on

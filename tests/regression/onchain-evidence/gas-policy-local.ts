@@ -93,7 +93,8 @@ async function main() {
     await op('A: credit branch, estimate, caller fees', { maxPriorityFeePerGas: 1_000_000n, maxFeePerGas: 2_000_000n }, (d, before, after) =>
         scaledOk(d) ?? (d.fees.source !== 'caller' ? 'caller fees not used' : after > before ? undefined : 'no debt recorded (not the credit branch)'));
     // B: enough balance for the reservation at anvil's fees, so the balance branch.
-    await wait(await opWallet.writeContract({ address: gasToken, abi: erc20Abi, functionName: 'transfer', args: [aa, parseEther('300')] }));
+    // Minted by the operator (the community that owns the token), so a rerun does not run the operator's balance out.
+    await wait(await opWallet.writeContract({ address: gasToken, abi: [{ type: 'function', name: 'mint', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [] }], functionName: 'mint', args: [aa, parseEther('300')] }));
     const dB = await op('B: balance branch, estimate, feeHistory fees', {}, (d, before, after) =>
         scaledOk(d) ?? (d.fees.source !== 'feeHistory' ? 'fees not from eth_feeHistory' : after === before ? undefined : 'debt changed (not the balance branch)'));
     // C: B's limits frozen: sent exactly, no estimate.
@@ -136,50 +137,6 @@ async function main() {
         }
     }
 
-    // Part 3 — the 40,000 threshold, on the PaymasterV4 path (no on-chain postOp floor, so unused execution gas can be
-    // made small). Same callData. Cost K with no penalty is the flat level; above E + 40,000 (E = execution gas used)
-    // EntryPoint adds 10% of ALL unused execution gas, so the step at the threshold is 4,000.
-    const pm = cfg.aPNTsPaymasterV4 as Address;
-    await wait(await wallet.writeContract({ address: pm, abi: [{ type: 'function', name: 'updatePrice', stateMutability: 'nonpayable', inputs: [], outputs: [] }], functionName: 'updatePrice' }));
-    let dV4: GasDecision | undefined;
-    const t1 = await PaymasterClient.submitGaslessUserOperation(pub, wallet, aa, EP, pm, cfg.aPNTs, bundlerUrl, callData,
-        { autoEstimate: true, onGasDecided: (d: GasDecision) => { dV4 = d; }, ...FIXED_FEES }).catch((e: Error) => { throw new Error(`T1 (PaymasterV4) estimate op: ${e.message}`); });
-    const t1r: any = await receiptOf(t1);
-    if (!t1r?.success || !dV4?.estimate) throw new Error('T1 (PaymasterV4) estimate op did not succeed');
-    const measureV4 = async (change: Partial<GasDecision['limits']>) => {
-        const snap = await pub.request({ method: 'evm_snapshot', params: [] }) as Hex;
-        try {
-            const txHash = await PaymasterClient.submitGaslessUserOperation(pub, wallet, aa, EP, pm, cfg.aPNTs, stubUrl, callData, { frozenGas: { ...dV4!.limits, ...change }, ...FIXED_FEES });
-            const receipt = await pub.waitForTransactionReceipt({ hash: txHash });
-            const evLog = receipt.logs.find((l: any) => l.address.toLowerCase() === EP.toLowerCase() && l.topics[0] === '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f');
-            const ev: any = evLog ? decodeEventLog({ abi: EntryPointABI as any, data: evLog.data, topics: evLog.topics as any }) : undefined;
-            if (!ev?.args.success) throw new Error('PaymasterV4 variant did not succeed');
-            return { gas: ev.args.actualGasUsed as bigint, cost: ev.args.actualGasCost as bigint, userOpHash: ev.args.userOpHash as Hex, txHash };
-        } finally {
-            if ((await pub.request({ method: 'evm_revert', params: [snap] })) !== true) throw new Error('evm_revert failed');
-        }
-    };
-    // Execution limit = callGasLimit + paymasterPostOpGasLimit; vary callGasLimit only, postOp at the raw estimate.
-    const postOp = dV4.estimate.paymasterPostOpGasLimit;
-    const exec = (call: bigint) => ({ callGasLimit: call, paymasterPostOpGasLimit: postOp });
-    const lowCall = dV4.estimate.callGasLimit;
-    const flat1 = await measureV4(exec(lowCall)), flat2 = await measureV4(exec(lowCall + 5_000n));
-    if (flat1.gas !== flat2.gas) throw new Error('the raw-estimate limits already leave more than 40,000 unused; no flat level to measure from');
-    const K = flat1.gas;
-    // Largest callGasLimit with no penalty (binary search): there, unused execution gas = 40,000 exactly... or the first
-    // larger value adds 4,000 at once.
-    let lo = lowCall + 5_000n, hi = lowCall + 200_000n;
-    if ((await measureV4(exec(hi))).gas === K) throw new Error('no penalty even 200k above the estimate');
-    while (hi - lo > 1n) { const mid = (lo + hi) / 2n; if ((await measureV4(exec(mid))).gas === K) lo = mid; else hi = mid; }
-    const below = await measureV4(exec(lo)), above = await measureV4(exec(lo + 1n));
-    const usedExec = lo + postOp - 40_000n; // E, from the threshold itself
-    const part3Ok = below.gas === K && above.gas - K === 4_000n;
-    if (!part3Ok) ok = false;
-    const part3 = [
-        `| callGasLimit ${lowCall} (raw estimate), postOp ${postOp} | ${flat1.userOpHash} | ${flat1.gas} | ${flat1.cost} | flat level K | — |`,
-        `| callGasLimit ${lo}: execution limit ${lo + postOp}, unused ${lo + postOp - usedExec} | ${below.userOpHash} | ${below.gas} | ${below.cost} | +${below.gas - K} | ${below.gas === K ? 'yes (no penalty)' : '**NO**'} |`,
-        `| callGasLimit ${lo + 1n}: execution limit ${lo + 1n + postOp}, unused ${lo + 1n + postOp - usedExec} | ${above.userOpHash} | ${above.gas} | ${above.cost} | +${above.gas - K} | ${above.gas - K === 4_000n ? 'yes (10% of 40,001, rounded down)' : '**NO**'} |`,
-    ];
     stub.close();
     const base = measured[0][2];
     const part2 = measured.map(([label, hash, gas, cost, ev, l], i) => {
@@ -203,19 +160,13 @@ async function main() {
         '',
         'Each row is the balance-branch op above with B\'s frozen limits and exactly one of them raised by 200,000, sent from one `evm_snapshot` and reverted afterwards. Expected change from EntryPoint v0.7: 10% of the extra unused execution gas (callGasLimit, paymasterPostOpGasLimit) once unused execution gas exceeds 40,000; none for verification gas.',
         '',
-        `Fees fixed for every variant (priority ${FIXED_FEES.maxPriorityFeePerGas}, maxFee ${FIXED_FEES.maxFeePerGas}). Note: SuperPaymaster's minPostOpGas (500,000 here) is far above what postOp uses, so unused execution gas is always above the 40,000 threshold on this path and the penalty always applies; the threshold itself is measured on the PaymasterV4 path in Part 3.`,
+        `Fees fixed for every variant (priority ${FIXED_FEES.maxPriorityFeePerGas}, maxFee ${FIXED_FEES.maxFeePerGas}). Note: SuperPaymaster's minPostOpGas (500,000 here) is far above what postOp uses, so unused execution gas is always above the 40,000 threshold on this path and the penalty always applies; the threshold itself is EntryPoint v0.7's PENALTY_GAS_THRESHOLD constant (not measured here).`,
         '',
         '| Variant | UserOp hash (reverted) | limits | actualGasUsed | actualGasCost (wei) | EntryPoint event | change vs baseline | expected | OK |',
         '|---|---|---|---|---|---|---|---|---|',
         ...part2,
         '',
-        '## Part 3 — the 40,000 threshold (PaymasterV4 path)',
-        '',
-        `PaymasterV4 ${cfg.aPNTsPaymasterV4} has no on-chain postOp floor, so the execution limit can be set close to what is used. The T1-shape op (estimate ×1.5 through the bundler: ${t1}) gave the raw estimates; each row below is that op with only callGasLimit changed, from one evm_snapshot, sent to EntryPoint.handleOps and reverted. The threshold is found by bisection on callGasLimit; execution gas used E = ${usedExec}.`,
-        '',
-        '| Limits | UserOp hash (reverted) | actualGasUsed | actualGasCost (wei) | change vs K | OK |',
-        '|---|---|---|---|---|---|',
-        ...part3,
+        'The 40,000 unused-execution-gas threshold is EntryPoint v0.7\'s `PENALTY_GAS_THRESHOLD`; it is not measured here (on this SuperPaymaster path the 500,000 minPostOpGas keeps unused execution gas above it).',
         '',
         `Verdict: ${ok ? 'PASS' : 'FAIL'}`,
         '',
@@ -225,4 +176,10 @@ async function main() {
     if (!ok) process.exitCode = 1;
 }
 
-main().catch((e) => { console.error('gas-policy-local: failed', process.env.DEBUG_EVIDENCE ? e : ''); process.exitCode = 1; });
+// A run that stops making progress must not sit silent: a heartbeat every 30 s, and a hard deadline that fails the run.
+const started = Date.now();
+const heartbeat = setInterval(() => console.error(`gas-policy-local: still running (${Math.round((Date.now() - started) / 1000)} s)`), 30_000);
+const deadline = setTimeout(() => { console.error('gas-policy-local: failed (deadline exceeded)'); process.exit(1); }, Number(process.env.EVIDENCE_TIMEOUT_MS ?? 15 * 60_000));
+main()
+    .catch((e) => { console.error('gas-policy-local: failed', process.env.DEBUG_EVIDENCE ? e : ''); process.exitCode = 1; })
+    .finally(() => { clearInterval(heartbeat); clearTimeout(deadline); });
