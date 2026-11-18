@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { domainSeparator } from "viem";
+import { clearEip712DomainCache } from "@aastar/core";
 import { KmsHttpClient } from "../services/kms-http-client";
 import {
   KmsPaymentSigner,
+  micropaymentVoucherDigest,
+  micropaymentVoucherContractDigest,
   KmsSignMicropaymentVoucherRequest,
   KmsSignGTokenAuthorizationRequest,
   KmsSignX402PaymentRequest,
@@ -62,6 +66,20 @@ const X402: KmsSignX402PaymentRequest = {
   deadline: "1999999999",
 };
 
+// A client on the payments' chain that reports GTOKEN_AUTH.gTokenAddress's domain as `domain` (EIP-5267 plus
+// DOMAIN_SEPARATOR(), as GTokenAuthorization does).
+function gTokenChain(domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}` }) {
+  return {
+    getChainId: vi.fn(async () => domain.chainId),
+    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+      if (functionName === "eip712Domain") return ["0x0f", domain.name, domain.version, BigInt(domain.chainId), domain.verifyingContract, "0x" + "00".repeat(32), []];
+      if (functionName === "DOMAIN_SEPARATOR") return domainSeparator({ domain });
+      throw new Error(`execution reverted (${functionName})`);
+    }),
+  } as any;
+}
+const GTOKEN_DOMAIN = { name: "GToken", version: "1", chainId: 11155420, verifyingContract: ADDRESS as `0x${string}` };
+
 describe("KmsPaymentSigner", () => {
   let client: KmsHttpClient;
   let signer: KmsPaymentSigner;
@@ -70,7 +88,8 @@ describe("KmsPaymentSigner", () => {
 
   beforeEach(() => {
     client = makeClient();
-    signer = new KmsPaymentSigner(client);
+    clearEip712DomainCache();
+    signer = new KmsPaymentSigner(client, { publicClient: gTokenChain(GTOKEN_DOMAIN) });
     postSpy = vi.spyOn(client, "post").mockResolvedValue(RESPONSE);
     bearerSpy = vi.spyOn(client, "postWithBearer").mockResolvedValue(RESPONSE);
   });
@@ -78,29 +97,20 @@ describe("KmsPaymentSigner", () => {
   // ── signMicropaymentVoucher ──────────────────────────────────────
 
   describe("signMicropaymentVoucher", () => {
-    it("WebAuthn mode: POSTs to /kms/SignMicropaymentVoucher with params + assertion", async () => {
-      const result = await signer.signMicropaymentVoucher(VOUCHER, { webAuthnAssertion: ASSERTION });
-
-      expect(bearerSpy).not.toHaveBeenCalled();
-      expect(postSpy).toHaveBeenCalledWith(
-        "/kms/SignMicropaymentVoucher",
-        expect.objectContaining({ ...VOUCHER, webAuthnAssertion: ASSERTION })
-      );
-      expect(result).toEqual(RESPONSE);
+    it("the KMS digest (uint256 cumulativeAmount) differs from the one MicroPaymentChannel verifies (uint128)", () => {
+      expect(micropaymentVoucherDigest(VOUCHER)).not.toBe(micropaymentVoucherContractDigest(VOUCHER));
     });
 
-    it("JWT mode: posts with Bearer jwt and params (no assertion)", async () => {
-      const result = await signer.signMicropaymentVoucher(VOUCHER, { jwt: JWT });
-
+    it("refuses before any request, in both auth modes, while the KMS signs a voucher the contract rejects (FU-118)", async () => {
+      await expect(signer.signMicropaymentVoucher(VOUCHER, { webAuthnAssertion: ASSERTION })).rejects.toThrow("MicroPaymentChannel verifies");
+      await expect(signer.signMicropaymentVoucher(VOUCHER, { jwt: JWT })).rejects.toThrow("(FU-118)");
       expect(postSpy).not.toHaveBeenCalled();
-      expect(bearerSpy).toHaveBeenCalledWith(
-        "/kms/SignMicropaymentVoucher",
-        expect.objectContaining({ ...VOUCHER }),
-        JWT
-      );
-      const body = bearerSpy.mock.calls[0][1] as Record<string, unknown>;
-      expect(body).not.toHaveProperty("webAuthnAssertion");
-      expect(result).toEqual(RESPONSE);
+      expect(bearerSpy).not.toHaveBeenCalled();
+    });
+
+    it("the ceremony variant refuses before the ceremony starts", async () => {
+      await expect(signer.signMicropaymentVoucherWithCeremony(VOUCHER, {} as any)).rejects.toThrow("(FU-118)");
+      expect(postSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -131,32 +141,35 @@ describe("KmsPaymentSigner", () => {
       );
       expect(result).toEqual(RESPONSE);
     });
+
+    it("a token whose on-chain domain is not GToken/1 for that chain and address gets no request", async () => {
+      for (const domain of [{ ...GTOKEN_DOMAIN, name: "GToken2" }, { ...GTOKEN_DOMAIN, version: "2" }]) {
+        clearEip712DomainCache();
+        const s2 = new KmsPaymentSigner(client, { publicClient: gTokenChain(domain) });
+        await expect(s2.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("the KMS signs GToken/1");
+      }
+      clearEip712DomainCache();
+      const otherChain = new KmsPaymentSigner(client, { publicClient: gTokenChain({ ...GTOKEN_DOMAIN, chainId: 10 }) });
+      await expect(otherChain.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("refusing");
+      expect(bearerSpy).not.toHaveBeenCalled();
+    });
+
+    it("without a publicClient the domain cannot be checked, so it refuses", async () => {
+      const blind = new KmsPaymentSigner(client);
+      await expect(blind.signGTokenAuthorization(GTOKEN_AUTH, { jwt: JWT })).rejects.toThrow("pass publicClient");
+      expect(bearerSpy).not.toHaveBeenCalled();
+    });
   });
 
   // ── signX402Payment ──────────────────────────────────────────────
 
   describe("signX402Payment", () => {
-    it("WebAuthn mode: POSTs to /kms/SignX402Payment with params + assertion", async () => {
-      const result = await signer.signX402Payment(X402, { webAuthnAssertion: ASSERTION });
-
-      expect(bearerSpy).not.toHaveBeenCalled();
-      expect(postSpy).toHaveBeenCalledWith(
-        "/kms/SignX402Payment",
-        expect.objectContaining({ ...X402, webAuthnAssertion: ASSERTION })
-      );
-      expect(result).toEqual(RESPONSE);
-    });
-
-    it("JWT mode: posts with Bearer jwt and params", async () => {
-      const result = await signer.signX402Payment(X402, { jwt: JWT });
-
+    it("refuses before any request, in every mode: no contract verifies this PaymentPayload (FU-119)", async () => {
+      await expect(signer.signX402Payment(X402, { webAuthnAssertion: ASSERTION })).rejects.toThrow("no on-chain verifier");
+      await expect(signer.signX402Payment(X402, { jwt: JWT })).rejects.toThrow("(FU-119)");
+      await expect(signer.signX402PaymentWithCeremony(X402, {} as any)).rejects.toThrow("(FU-119)");
       expect(postSpy).not.toHaveBeenCalled();
-      expect(bearerSpy).toHaveBeenCalledWith(
-        "/kms/SignX402Payment",
-        expect.objectContaining({ ...X402 }),
-        JWT
-      );
-      expect(result).toEqual(RESPONSE);
+      expect(bearerSpy).not.toHaveBeenCalled();
     });
   });
 

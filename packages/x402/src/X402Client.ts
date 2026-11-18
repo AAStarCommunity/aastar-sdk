@@ -1,11 +1,11 @@
 import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
-import { x402Actions, resolveEip712Domain } from '@aastar/core';
+import { x402Actions, resolveEip712Domain, verifyPinnedEip712Domain } from '@aastar/core';
 import type {
     X402PaymentParams, PaymentRequired, PaymentPayload,
     PaymentRequirements, SettleResponse, FacilitatorConfig,
 } from './types.js';
 import { EIP3009_TYPES, generateNonce } from './eip3009.js';
-import { signX402PaymentAuthorization, deriveEip3009Nonce } from './x402auth.js';
+import { signX402PaymentAuthorization, deriveEip3009Nonce, X402_FACILITATOR_DOMAIN, X402_PAYMENT_AUTHORIZATION_TYPE_STRING } from './x402auth.js';
 import { getX402FacilitatorContract } from './facilitators.js';
 import {
     encodePaymentPayload,
@@ -110,13 +110,17 @@ export class X402Client {
         if (settlement === 'direct') {
             // xPNTs path — X402PaymentAuthorization over the facilitator (EIP-712). The asset is not the
             // verifying contract here, so its domain is not read; name/version below are payload metadata only.
-            // The facilitator's own domain is still hard-coded in signX402PaymentAuthorization (FU-117 ②).
+            // The facilitator exposes no domain getter, so its pinned domain is checked against its deployed code (and
+            // against DOMAIN_SEPARATOR() once it has one) on the configured chain before signing.
+            const { domain: facilitatorDomain } = await verifyPinnedEip712Domain(this.config.publicClient, facilitator, {
+                ...X402_FACILITATOR_DOMAIN, typeStrings: [X402_PAYMENT_AUTHORIZATION_TYPE_STRING],
+            }, { expectedChainId: chainId });
             const tokenName = this.config.tokenName || 'USDC';
             const tokenVersion = this.config.tokenVersion || '2';
             const nonce = params.nonce || generateNonce();
             const signature = await signX402PaymentAuthorization(wallet, {
                 from: params.from, to: params.to, asset: params.asset, amount: params.amount,
-                maxFee, validBefore, nonce, chainId, facilitator,
+                maxFee, validBefore, nonce, chainId, facilitator, domain: facilitatorDomain,
             });
             const payload: PaymentPayload = {
                 x402Version: 2,

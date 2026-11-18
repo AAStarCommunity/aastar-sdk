@@ -1,7 +1,7 @@
 import { type Address, type Hex, type Hash, type PublicClient, type WalletClient } from 'viem';
-import { channelActions, type ChannelState } from '@aastar/core';
+import { channelActions, resolveReportedEip712Domain, MicroPaymentChannelABI, type ChannelState } from '@aastar/core';
 import type { SignedVoucher, ChannelConfig } from './types.js';
-import { signVoucher } from './voucher.js';
+import { signVoucher, VOUCHER_TYPEHASH, VOUCHER_TYPE_STRING } from './voucher.js';
 
 export type ChannelClientConfig = {
     publicClient: PublicClient;
@@ -36,12 +36,26 @@ export class ChannelClient {
         });
     }
 
+    /**
+     * Sign a voucher (the signature itself needs no transaction). The domain is the one the channel contract reports
+     * through `eip712Domain()` (EIP-5267) on the configured chain; MicroPaymentChannel has no `DOMAIN_SEPARATOR()`, so
+     * that report is not independently confirmed unless the contract adds it. Its `VOUCHER_TYPEHASH` must equal the
+     * type the SDK signs. Either mismatch throws instead of producing a voucher the contract would reject.
+     */
     async signVoucherOffline(channelId: Hex, cumulativeAmount: bigint): Promise<SignedVoucher> {
+        const { domain } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId });
+        const onChainTypeHash = await this.config.publicClient.readContract({
+            address: this.config.channelAddress, abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', args: [],
+        }) as Hex;
+        if (onChainTypeHash.toLowerCase() !== VOUCHER_TYPEHASH.toLowerCase()) {
+            throw new Error(`signVoucherOffline: the channel's VOUCHER_TYPEHASH ${onChainTypeHash} is not keccak256("${VOUCHER_TYPE_STRING}"); refusing to sign`);
+        }
         const signature = await signVoucher(this.config.walletClient, {
             channelId,
             cumulativeAmount,
             chainId: this.config.chainId,
             verifyingContract: this.config.channelAddress,
+            domain,
         });
 
         return { channelId, cumulativeAmount, signature };

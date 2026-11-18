@@ -157,13 +157,30 @@ describe('X402Client.createPayment — direct path does not depend on the asset 
   it('a plain ERC-20 asset (no version(), no DOMAIN_SEPARATOR()) still gets a direct-path payment', async () => {
     const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
     const reads: string[] = [];
+    // Facilitator reads are served (its code check); any read of the asset is recorded and reverts.
     const plainErc20 = {
-      getChainId: async () => CHAIN_ID,
+      ...(domainClient(CHAIN_ID, 'unused', 'unused') as any),
       readContract: async ({ functionName }: { functionName: string }) => { reads.push(functionName); throw new Error('execution reverted'); },
     } as never;
     const c = new X402Client({ publicClient: plainErc20, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
     const { payload } = await c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
     expect(payload.accepted.extra.settlement).toBe('direct');
     expect(reads).toEqual([]);
+  });
+});
+
+describe('X402Client.createPayment — direct path checks the facilitator\'s pinned domain on the chain', () => {
+  const directClient = (facilitatorCode?: `0x${string}`) => {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    return new X402Client({ publicClient: domainClient(CHAIN_ID, 'USDC', '2', { facilitatorCode }), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+  };
+  const pay = (c: X402Client) => c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
+
+  it('a facilitator address with no code gets no signature', async () => {
+    await expect(pay(directClient('0x'))).rejects.toThrow('has no code on this chain');
+  });
+
+  it('a contract whose code lacks the X402Facilitator domain constants gets no signature', async () => {
+    await expect(pay(directClient('0x6080604052'))).rejects.toThrow('does not contain keccak256 of "X402Facilitator"');
   });
 });
