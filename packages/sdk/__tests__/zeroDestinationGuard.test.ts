@@ -67,3 +67,29 @@ describe('client writes to a zero-address book entry are refused before signing 
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 });
+
+describe('the inner call target and the admin DVT / BLS bindings (Codex r4 H2 / M4)', () => {
+    it('EndUserClient.executeGasless with target = address zero: refused before the account is touched or anything signed', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const signMsg = vi.spyOn(account, 'signMessage');
+        const client = createEndUserClient({ chain: sepolia, transport, account });
+        await expect((client as any).executeGasless({ target: zeroAddress, data: '0x', value: 1n, operator: '0x4444444444444444444444444444444444444444' }))
+            .rejects.toThrow(ZeroAddressDestinationError);
+        expect(signMsg).not.toHaveBeenCalled();
+        expect(methods).toEqual([]); // not even a read: the check is first
+    });
+
+    it('AdminClient binds dvtActions to the resolved dvtValidator (not a placeholder): the write goes to the selected pin', async () => {
+        const { transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const dvt = '0x5555555555555555555555555555555555555555' as Address;
+        const client: any = createAdminClient({ chain: sepolia, transport, account, addresses: { dvtValidator: dvt, blsAggregator: '0x6666666666666666666666666666666666666666' } as Record<string, Address> });
+        const sent: string[] = [];
+        const orig = client.writeContract;
+        client.writeContract = (args: any) => { sent.push(args.address); return orig(args); };
+        const err: any = await client.addValidator({ v: '0x7777777777777777777777777777777777777777', account }).catch((e: unknown) => e);
+        expect(sent).toEqual([dvt]);
+        expect(err instanceof ZeroAddressDestinationError || err?.cause instanceof ZeroAddressDestinationError).toBe(false);
+    });
+});

@@ -58,6 +58,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${book.registry}.GTOKEN_STAKING`]: book.staking, [`${book.registry}.MYSBT`]: book.sbt,
         [`${book.staking}.REGISTRY`]: book.registry, [`${book.staking}.GTOKEN`]: book.gToken,
         [`${book.sbt}.REGISTRY`]: book.registry, [`${book.sbt}.GTOKEN_STAKING`]: book.staking, [`${book.sbt}.GTOKEN`]: book.gToken,
+        [`${p.factory}.REGISTRY`]: book.registry, [`${book.paymasterFactory}.registry`]: book.registry, [`${book.x402Facilitator}.REGISTRY`]: book.registry,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -757,7 +758,8 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         m.reads[`${m.pins.addresses[holder]}.${fn}`] = shippedSepolia[oldKey];
         const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
         expect(r.exitCode).toBe(1);
-        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual([expect.stringContaining(label.split('.')[1])]);
+        // The explicit leg fails, and the exhaustive scan names the same getter.
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContainEqual(expect.stringContaining(label.split('.')[1]));
     });
 
     it('the chain-keyed validator refuses a chain that hosts a coexisting stack (Codex r3 M3)', () => {
@@ -768,5 +770,28 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         expect(sp550NetworkPinProblems('sepolia-rc8', overlap).problems).toEqual([expect.stringMatching(/shipped stack's staking/)]);
         SP550_COEXIST_HOLDS['sepolia-rc8'] = 'held';
         try { expect(sp550NetworkPinProblems('sepolia-rc8', m.pins).hold).toBe('held'); } finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
+    });
+
+    it.each([
+        ['xPNTsFactoryV2.REGISTRY', (m: any) => `${m.p.factory}.REGISTRY`],
+        ['PaymasterFactory.registry', (m: any) => `${m.pins.addresses.paymasterFactory}.registry`],
+        ['X402Facilitator.REGISTRY', (m: any) => `${m.pins.addresses.x402Facilitator}.REGISTRY`],
+    ] as const)('%s() naming the shipped Registry fails the gate (Codex r4 H1)', async (label, key) => {
+        const m = deployment(sepolia.id, 'fresh');
+        m.reads[key(m)] = shippedSepolia.registry;
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContainEqual(expect.stringContaining(label));
+    });
+
+    it('the exhaustive scan: ANY address getter naming a shipped-stack contract fails, even one no hand check reads (Codex r4 H1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        // GTokenStaking.treasury() is in the vendored ABI and is checked by no explicit comparison.
+        m.reads[`${m.pins.addresses.staking}.treasury`] = shippedSepolia.superPaymaster;
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.exitCode).toBe(1);
+        const bad = r.results.filter((c) => !c.ok);
+        expect(bad.map((c) => c.check)).toEqual(['no address getter of addresses.staking names the shipped stack']);
+        expect(bad[0].detail).toMatch(/treasury\(\) = .* \(the shipped stack's superPaymaster\)/);
     });
 });

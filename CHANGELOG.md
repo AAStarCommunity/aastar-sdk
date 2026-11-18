@@ -20,8 +20,15 @@ All notable changes to this project will be documented in this file.
 - `zeroDestinationGuard` (viem client extension, `ZeroAddressDestinationError`): `createOperatorClient` /
   `createAdminClient` / `createEndUserClient` / `createCommunityClient` refuse a `writeContract` / `sendTransaction`
   to the zero address before signing, so an action bound to a declared-absent entry cannot burn value there.
-- The cutover gate also reads the token / staking / SBT wiring of a fresh stack (Registry.GTOKEN_STAKING / MYSBT,
-  GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN) against the pins.
+  `executeGasless` (SDK EndUserClient and `@aastar/enduser` UserClient) refuses a zero call target, which sits inside
+  the UserOp past that guard. AdminClient's DVT / BLS actions are bound to the resolved `dvtValidator` /
+  `blsAggregator` (they were bound to a zero placeholder).
+- The cutover gate also reads the wiring of a fresh stack against the pins: Registry.GTOKEN_STAKING / MYSBT,
+  GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN, xPNTsFactoryV2.REGISTRY,
+  PaymasterFactory.registry, X402Facilitator.REGISTRY; and it scans every no-argument address getter of every pinned
+  contract with a vendored ABI, failing on any that names an SP-owned contract of the chain's shipped stack.
+- The read-back comparator refuses a context without a network on a chain that hosts more than one stack, and a
+  network that does not match the context's chain and mode.
 - One network-aware validation (`sp550NetworkPinProblems`: tag policy, coexist overlap, hold) for the gate, the
   read-back comparator and `sp550AddressSet`; `requireSp550FreshDeployPins(chainId)` refuses a chain that hosts a
   coexisting stack.

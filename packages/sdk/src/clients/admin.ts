@@ -60,9 +60,9 @@ export function createAdminClient({
         ...paymasterActions(usedAddresses.paymasterV4)(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
-        ...dvtActions(ADDRESS_PLACEHOLDER)(baseClient as any),
+        ...dvtActions((usedAddresses as Record<string, Address | undefined>).dvtValidator ?? ADDRESS_PLACEHOLDER)(baseClient as any),
         ...xPNTsFactoryActions(usedAddresses.xPNTsFactory || '0x')(baseClient as any),
-        ...aggregatorActions(ADDRESS_PLACEHOLDER)(baseClient as any),
+        ...aggregatorActions((usedAddresses as Record<string, Address | undefined>).blsAggregator ?? ADDRESS_PLACEHOLDER)(baseClient as any),
     };
 
     return Object.assign(baseClient, actions) as unknown as AdminClient;
