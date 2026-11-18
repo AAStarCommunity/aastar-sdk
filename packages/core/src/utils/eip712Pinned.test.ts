@@ -16,12 +16,14 @@ function client(o: O = {}) {
         if (params[1]?.blockHash !== HASH || params[1]?.requireCanonical !== true) throw new Error(`${method} not pinned to the checked block hash`);
         if (method === 'eth_getCode') return o.code ?? '0x6080';
         const { functionName } = decodeFunctionData({ abi: READ_ABI, data: params[0].data });
-        const revert = () => { const e: any = new Error('execution reverted'); e.code = 3; throw e; };
+        const revert = () => { const e: any = new Error('execution reverted'); e.code = 3; e.data = '0x'; throw e; };
         if (functionName === 'eip712Domain') {
             if (o.report === 'revert') revert();
             return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.report ?? ['0x0f', DOMAIN.name, DOMAIN.version, 11155111n, C, '0x' + '00'.repeat(32), []] } as any);
         }
         if (o.separator === 'transport') throw new Error('fetch failed: socket hang up');
+        if ((o.separator as any) === 'revert-no-data-field') { const e: any = new Error('execution reverted'); e.code = 3; throw e; }
+        if ((o.separator as any) === 'revert-odd-shape') { const e: any = new Error('execution reverted'); e.code = 3; e.data = { originalError: { data: '0x1234' } }; throw e; }
         if ((o.separator as any) === 'revert-with-data') { const e: any = new Error('execution reverted'); e.code = 3; e.data = '0x08c379a0' + '00'.repeat(96); throw e; }
         if ((o.separator as any) === 'transport-revert') throw new Error('upstream proxy: request reverted by gateway');
         if (o.separator === undefined || o.separator === 'revert') revert();
@@ -41,6 +43,12 @@ describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', 
 
     it('a missing DOMAIN_SEPARATOR() refuses unless the caller says the contract may lack it', async () => {
         await expect(resolveReportedEip712Domain(client(), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+    });
+
+    it('a revert whose data is missing or in an unrecognised shape is not "absent", even with mayLackSeparator', async () => {
+        for (const separator of ['revert-no-data-field', 'revert-odd-shape']) {
+            await expect(resolveReportedEip712Domain(client({ separator: separator as any }), C, { mayLackSeparator: true })).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        }
     });
 
     it('a DOMAIN_SEPARATOR() that exists but reverts (revert data) is not "absent", even with mayLackSeparator', async () => {
