@@ -7,8 +7,9 @@
  *   LOCAL_ANVIL_CONFIG=<SP DeployLive config.json> LOCAL_ANVIL_RPC=http://127.0.0.1:8545 BUNDLER_URL=http://127.0.0.1:4337 \
  *   SENDER_AA=<SimpleAccount of mnemonic index 0> TASK_TOKEN=<plain ERC-20 the account holds> pnpm exec tsx tests/regression/onchain-evidence/gas-policy-local.ts
  *
- * Sends transactions on that local chain only (chain id must be 31337). Accounts come from anvil's public default
- * mnemonic. The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
+ * Sends transactions on a DISPOSABLE local chain only: the RPC and the bundler must be loopback URLs and both must report
+ * chain id 31337. Part 1 changes that chain's state (price, balances, debt, nonces) and is not undone; Part 2 runs in
+ * snapshots that are reverted. Accounts come from anvil's public default mnemonic. The account needs ENDUSER on the operator's community, and the operator's token needs credit open for it.
  * Output: docs/onchain-evidence/gas-policy-local.md.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -38,8 +39,13 @@ async function main() {
     const bundlerUrl = need('BUNDLER_URL');
     const aa = need('SENDER_AA') as Address, taskToken = need('TASK_TOKEN') as Address;
     const owner = mnemonicToAccount(MNEMONIC, { addressIndex: 0 }), operator = mnemonicToAccount(MNEMONIC, { addressIndex: 1 });
+    const loopback = (u: string) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname);
+    const rpcUrl = process.env.LOCAL_ANVIL_RPC ?? 'http://127.0.0.1:8545';
+    if (!loopback(rpcUrl) || !loopback(bundlerUrl)) throw new Error('LOCAL_ANVIL_RPC and BUNDLER_URL must be loopback URLs (a disposable local chain)');
     const pub: any = createPublicClient({ chain: foundry, transport: t });
     if ((await pub.getChainId()) !== 31337) throw new Error('not a local anvil (chain 31337)');
+    const bundlerChain = await (await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] }) })).json();
+    if (BigInt(bundlerChain.result ?? 0) !== 31337n) throw new Error('the bundler is not on chain 31337');
     const wallet: any = createWalletClient({ account: owner, chain: foundry, transport: t });
     const opWallet: any = createWalletClient({ account: operator, chain: foundry, transport: t });
     const gasToken = (await pub.readContract({ address: cfg.superPaymaster, abi: OPERATORS, functionName: 'operators', args: [operator.address] }))[3] as Address;
@@ -74,8 +80,10 @@ async function main() {
         if (problem) ok = false;
         const d = decision!, l = d?.limits, e = d?.estimate;
         rows.push(`| ${label} | ${hash} | ${r?.success} | ${s(r?.actualGasUsed !== undefined ? BigInt(r.actualGasUsed) : undefined)} | ${d?.limitsSource}${d?.coefficientBps ? ` ×${Number(d.coefficientBps) / 10_000}` : ''} | ${e ? `${e.verificationGasLimit}/${e.callGasLimit}/${e.preVerificationGas}/${e.paymasterVerificationGasLimit}/${e.paymasterPostOpGasLimit}` : '—'} | ${l ? `${l.verificationGasLimit}/${l.callGasLimit}/${l.preVerificationGas}/${l.paymasterVerificationGasLimit}/${l.paymasterPostOpGasLimit}` : '—'} | ${s(d?.floors.paymasterPostOpGasLimit)} | ${d ? `${d.fees.source}: priority ${d.fees.maxPriorityFeePerGas}, maxFee ${d.fees.maxFeePerGas}, base ${s(d.fees.baseFeePerGas)}` : '—'} | ${debtAfter - debtBefore} | ${problem ? `**NO** (${problem})` : 'yes'} |`);
+        lastGas = r?.actualGasUsed !== undefined ? BigInt(r.actualGasUsed) : undefined;
         return d;
     }
+    let lastGas: bigint | undefined;
     const scaledOk = (d: GasDecision) => {
         const e = d.estimate!;
         const want = (x: bigint) => (x * d.coefficientBps! + 9_999n) / 10_000n;
@@ -91,15 +99,23 @@ async function main() {
     // Anvil reports a 1 gwei priority fee, so its feeHistory fees reserve more than the credit cap; this op passes
     // OP-like fees explicitly (they win over the chain's), B and C take theirs from eth_feeHistory.
     await op('A: credit branch, estimate, caller fees', { maxPriorityFeePerGas: 1_000_000n, maxFeePerGas: 2_000_000n }, (d, before, after) =>
-        scaledOk(d) ?? (d.fees.source !== 'caller' ? 'caller fees not used' : after > before ? undefined : 'no debt recorded (not the credit branch)'));
+        scaledOk(d) ?? (d.fees.source !== 'caller' || d.feesRaisedByBundler || d.fees.maxPriorityFeePerGas !== 1_000_000n || d.fees.maxFeePerGas !== 2_000_000n
+            ? 'caller fees not sent as given' : after > before ? undefined : 'no debt recorded (not the credit branch)'));
     // B: enough balance for the reservation at anvil's fees, so the balance branch.
     // Minted by the operator (the community that owns the token), so a rerun does not run the operator's balance out.
     await wait(await opWallet.writeContract({ address: gasToken, abi: [{ type: 'function', name: 'mint', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [] }], functionName: 'mint', args: [aa, parseEther('300')] }));
     const dB = await op('B: balance branch, estimate, feeHistory fees', {}, (d, before, after) =>
         scaledOk(d) ?? (d.fees.source !== 'feeHistory' ? 'fees not from eth_feeHistory' : after === before ? undefined : 'debt changed (not the balance branch)'));
+    const gasB = lastGas;
     // C: B's limits frozen: sent exactly, no estimate.
     await op('C: balance branch, B\'s limits frozen', { frozenGas: dB.limits }, (d) =>
         d.limitsSource === 'frozen' && d.estimate === undefined && JSON.stringify(d.limits, (_k, v) => typeof v === 'bigint' ? v.toString() : v) === JSON.stringify(dB.limits, (_k, v) => typeof v === 'bigint' ? v.toString() : v) ? undefined : 'frozen limits were not sent as given');
+    if (gasB === undefined || lastGas !== gasB) {
+        ok = false;
+        rows.push(`| C vs B: actualGasUsed with the same frozen limits | B ${gasB}, C ${lastGas} | — | — | — | — | — | — | — | — | **NO** (not identical) |`);
+    } else {
+        rows.push(`| C vs B: actualGasUsed with the same frozen limits | identical: ${gasB} | — | — | — | — | — | — | — | — | yes |`);
+    }
 
     // Part 2 — does a limit change actualGas? From one snapshot, the same op with exactly one limit raised by 200k, each
     // sent and then reverted, so every variant starts from identical state. EntryPoint v0.7 charges 10% of the unused

@@ -43,14 +43,24 @@ export interface FeePolicy {
     feeHistoryBlocks?: number;
 }
 
+/**
+ * Where one sent limit came from: frozenGas, an explicit option, the caller's tuneEstimate, the bundler estimate ×
+ * coefficient, a contract floor read from the chain, an SDK default (estimation off or skipped), the SDK's local
+ * preVerificationGas calculation, or a bundler's explicit requirement in the retry loop.
+ */
+export type LimitSource = 'frozen' | 'explicit' | 'tuned' | 'estimate' | 'floor' | 'default' | 'computed' | 'bundler-retry';
+
 /** What submitGaslessUserOperation decided for one op, handed to `onGasDecided` so a collector can record it. */
 export interface GasDecision {
     limits: UserOpGasLimits;
+    /** Per field: where the sent value came from. */
+    limitSources: Record<keyof UserOpGasLimits, LimitSource>;
     fees: UserOpFees;
     /** True when a bundler's explicit "must be at least" made the SDK raise the fees before it accepted the op. */
     feesRaisedByBundler: boolean;
-    limitsSource: 'frozen' | 'estimate';
-    /** Coefficient applied to the estimate (bps); undefined for frozen limits. */
+    /** 'frozen': all five frozen; 'estimate': every field from the estimate (or a floor over it); otherwise 'mixed'. */
+    limitsSource: 'frozen' | 'estimate' | 'mixed';
+    /** Coefficient applied to the estimate (bps), when any field came from it. */
     coefficientBps?: bigint;
     /** The bundler's estimate before scaling; undefined for frozen limits. */
     estimate?: UserOpGasLimits;
@@ -95,7 +105,11 @@ export async function resolveUserOpFees(
         if (given.maxFeePerGas < given.maxPriorityFeePerGas) throw new Error('maxFeePerGas is below maxPriorityFeePerGas');
         return { maxFeePerGas: given.maxFeePerGas, maxPriorityFeePerGas: given.maxPriorityFeePerGas, source: 'caller' };
     }
-    let priority: bigint | undefined;
+    // Only the missing fields are taken from the chain: the priority fee when it is not given, the base fee only
+    // when maxFeePerGas has to be calculated.
+    const needPriority = given.maxPriorityFeePerGas === undefined;
+    const needBase = given.maxFeePerGas === undefined;
+    let priority = given.maxPriorityFeePerGas;
     let baseFee: bigint | undefined;
     let source: UserOpFees['source'] = 'feeHistory';
     try {
@@ -105,22 +119,22 @@ export async function resolveUserOpFees(
             rewardPercentiles: [policy.priorityFeePercentile ?? DEFAULT_PRIORITY_FEE_PERCENTILE],
         }) as { baseFeePerGas?: (bigint | Hex)[]; reward?: (bigint | Hex)[][] };
         const rewards = (h.reward ?? []).map((r) => BigInt(r[0])).filter((r) => r >= 0n);
-        if (rewards.length > 0) priority = median(rewards);
+        if (needPriority && rewards.length > 0) priority = median(rewards);
         // baseFeePerGas has one more entry than blocks: the last is the next block's base fee.
         const bases = h.baseFeePerGas ?? [];
         if (bases.length > 0) baseFee = BigInt(bases[bases.length - 1]);
     } catch { /* fall back below */ }
-    if (priority === undefined || baseFee === undefined) {
+    if (priority === undefined || (needBase && baseFee === undefined)) {
         source = 'node-estimate';
         if (priority === undefined) priority = BigInt(await client.estimateMaxPriorityFeePerGas());
-        if (baseFee === undefined) {
+        if (needBase && baseFee === undefined) {
             const block = await client.getBlock({ blockTag: 'latest' });
             if (block.baseFeePerGas === undefined || block.baseFeePerGas === null) throw new Error('the chain reports no base fee; pass maxFeePerGas and maxPriorityFeePerGas');
             baseFee = BigInt(block.baseFeePerGas);
         }
     }
-    const maxPriorityFeePerGas = given.maxPriorityFeePerGas ?? priority;
-    const maxFeePerGas = given.maxFeePerGas ?? baseFee * multiplier + maxPriorityFeePerGas;
+    const maxPriorityFeePerGas = priority as bigint;
+    const maxFeePerGas = given.maxFeePerGas ?? (baseFee as bigint) * multiplier + maxPriorityFeePerGas;
     if (maxFeePerGas < maxPriorityFeePerGas) throw new Error('maxFeePerGas is below maxPriorityFeePerGas');
     return { maxFeePerGas, maxPriorityFeePerGas, source, baseFeePerGas: baseFee };
 }

@@ -10,15 +10,15 @@
           "selector": "0x54fd4d50"
         },
         {
-          "signature": "operators(address) returns (uint128,bool,bool,address,uint32,uint48,address,uint256,uint256) view",
+          "signature": "operators(address) returns (uint128 aPNTsBalance,bool isConfigured,bool isPaused,address xPNTsToken,uint32 reputation,uint48 minTxInterval,address treasury,uint256 totalSpent,uint256 totalTxSponsored) view",
           "selector": "0x13e7c9d8"
         },
         {
-          "signature": "gasParams() returns ((uint32,uint32,uint32,uint32),(uint32,uint32,uint32,uint32,uint64)) view",
+          "signature": "gasParams() returns ((uint32 minPostOpGas,uint32 settleGasBound,uint32 cWrap,uint32 cPostop) current,(uint32 minPostOpGas,uint32 settleGasBound,uint32 cWrap,uint32 cPostop,uint64 eta) pending) view",
           "selector": "0xbe875cf3"
         },
         {
-          "signature": "cachedPrice() returns (int256,uint256,uint80,uint8) view",
+          "signature": "cachedPrice() returns (int256 price,uint256 updatedAt,uint80 roundId,uint8 decimals) view",
           "selector": "0xf60fdcb3"
         },
         {
@@ -30,11 +30,11 @@
           "selector": "0x673a7e28"
         },
         {
-          "signature": "isEligibleForSponsorship(address) returns (bool) view",
+          "signature": "isEligibleForSponsorship(address user) returns (bool) view",
           "selector": "0x6a16e22d"
         },
         {
-          "signature": "TransactionSponsored(address indexed,address indexed,uint256,uint256)",
+          "signature": "TransactionSponsored(address operator indexed,address user indexed,uint256 aPNTsCost,uint256 debtAPNTs)",
           "selector": "0xcde7e91a718e2439d8ff2a679ad52713e82a37b72622fb530c8c41039fdd5bf0"
         }
       ]
@@ -44,7 +44,7 @@
       "upstreamBlobSha256": "835c8e25b3b1f640a7bb3beb96e71903b0c3013fe532375ee9c4cd63900fea72",
       "entries": [
         {
-          "signature": "dryRunValidation(address,(address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),uint256) returns (bool,bytes32) view",
+          "signature": "dryRunValidation(address sp,(address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature) userOp,uint256 maxCost) returns (bool ok,bytes32 reasonCode) view",
           "selector": "0x56a07f70"
         }
       ]
@@ -54,11 +54,11 @@
       "upstreamBlobSha256": "73eff8610e5f76ba0999eea3d4dbd34e48bf28c46ee8c0c84a6493cdb98878cc",
       "entries": [
         {
-          "signature": "balanceOf(address) returns (uint256) view",
+          "signature": "balanceOf(address account) returns (uint256) view",
           "selector": "0x70a08231"
         },
         {
-          "signature": "transfer(address,uint256) returns (bool) nonpayable",
+          "signature": "transfer(address to,uint256 value) returns (bool) nonpayable",
           "selector": "0xa9059cbb"
         },
         {
@@ -66,27 +66,27 @@
           "selector": "0x3ba0b9a9"
         },
         {
-          "signature": "previewLock(address,address,bytes32,uint256,bool) returns (uint8,uint256) view",
+          "signature": "previewLock(address spender,address user,bytes32 opHash,uint256 reserveAPNTs,bool spRenew) returns (uint8 r,uint256 x) view",
           "selector": "0xb393eddd"
         },
         {
-          "signature": "previewCredit(address,address,bytes32,uint256) returns (uint8) view",
+          "signature": "previewCredit(address spender,address user,bytes32 opHash,uint256 aPNTs) returns (uint8) view",
           "selector": "0x5ce94e3c"
         },
         {
-          "signature": "renewForSelf(address) returns () nonpayable",
+          "signature": "renewForSelf(address spender) returns () nonpayable",
           "selector": "0xe8c122c7"
         },
         {
-          "signature": "debts(address) returns (uint256) view",
+          "signature": "debts(address user) returns (uint256) view",
           "selector": "0x2ecd4e7d"
         },
         {
-          "signature": "repayDebt(uint256) returns () nonpayable",
+          "signature": "repayDebt(uint256 amountXPNTs) returns () nonpayable",
           "selector": "0x6b09de45"
         },
         {
-          "signature": "requestCredit(uint256) returns () nonpayable",
+          "signature": "requestCredit(uint256 maxCapAPNTs) returns () nonpayable",
           "selector": "0xb6b1d5ca"
         },
         {
@@ -94,11 +94,11 @@
           "selector": "0x48567aab"
         },
         {
-          "signature": "approveCredit(address,uint256) returns () nonpayable",
+          "signature": "approveCredit(address user,uint256 capAPNTs) returns () nonpayable",
           "selector": "0x709f2101"
         },
         {
-          "signature": "queueCreditPolicy(uint8) returns () nonpayable",
+          "signature": "queueCreditPolicy(uint8 p) returns () nonpayable",
           "selector": "0x41068c0c"
         },
         {
@@ -110,7 +110,7 @@
           "selector": "0x04ad0733"
         },
         {
-          "signature": "effectiveCreditCap(address) returns (uint256) view",
+          "signature": "effectiveCreditCap(address user) returns (uint256) view",
           "selector": "0xa7c791d7"
         },
         {
@@ -130,19 +130,19 @@
           "selector": "0xd095fe72"
         },
         {
-          "signature": "CreditSettled(address indexed,bytes32 indexed,uint256)",
+          "signature": "CreditSettled(address user indexed,bytes32 opHash indexed,uint256 debtAdded)",
           "selector": "0xe24e7f4be2a6dcf7000d9d67421687e27dcf1f62554dbdeec78adb103aae6323"
         },
         {
-          "signature": "DebtRepaid(address indexed,uint256,uint256)",
+          "signature": "DebtRepaid(address user indexed,uint256 amountRepaid,uint256 remainingDebt)",
           "selector": "0x798353030d4251a345706609acf9ea7527f2ace26f73150a098c0fae89e5886d"
         },
         {
-          "signature": "LockSettled(address indexed,bytes32 indexed,uint256,uint256)",
+          "signature": "LockSettled(address user indexed,bytes32 opHash indexed,uint256 xBurned,uint256 aCharged)",
           "selector": "0x0db2e760de332f46e05e4200a1577fc713d3601c848f570fbbe50a4d281ecec1"
         },
         {
-          "signature": "Transfer(address indexed,address indexed,uint256)",
+          "signature": "Transfer(address from indexed,address to indexed,uint256 value)",
           "selector": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
         }
       ]

@@ -53,3 +53,17 @@ describe('scaleGas / scaleLimits', () => {
             .toEqual({ preVerificationGas: 3n, verificationGasLimit: 6n, callGasLimit: 9n, paymasterVerificationGasLimit: 12n, paymasterPostOpGasLimit: 15n });
     });
 });
+
+describe('resolveUserOpFees asks the chain only for what is missing', () => {
+    it('given priority + no feeHistory: no priority estimate is requested; the base fee still comes from the block', async () => {
+        const c = { getFeeHistory: vi.fn(async () => { throw new Error('no'); }), estimateMaxPriorityFeePerGas: vi.fn(async () => { throw new Error('unsupported'); }), getBlock: vi.fn(async () => ({ baseFeePerGas: 10n })) };
+        expect(await resolveUserOpFees(c, { maxPriorityFeePerGas: 3n })).toMatchObject({ maxPriorityFeePerGas: 3n, maxFeePerGas: 23n });
+        expect(c.estimateMaxPriorityFeePerGas).not.toHaveBeenCalled();
+    });
+
+    it('given maxFee + no feeHistory: no base fee is needed', async () => {
+        const c = { getFeeHistory: vi.fn(async () => { throw new Error('no'); }), estimateMaxPriorityFeePerGas: vi.fn(async () => 4n), getBlock: vi.fn(async () => { throw new Error('no block'); }) };
+        expect(await resolveUserOpFees(c, { maxFeePerGas: 50n })).toMatchObject({ maxPriorityFeePerGas: 4n, maxFeePerGas: 50n });
+        expect(c.getBlock).not.toHaveBeenCalled();
+    });
+});

@@ -16,8 +16,15 @@ All notable changes to this project will be documented in this file.
   (it used to replace even explicit fees on 31337 / Sepolia / OP Sepolia).
 - `frozenGas`: all five limits used exactly as given, for a data collection; refused instead of raised when below the
   on-chain minPostOpGas or `superPaymasterVerificationGasFloor`, or when a bundler says preVerificationGas is too low.
-- `onGasDecided`: the sent limits, fees and their sources (and whether a bundler's explicit requirement raised the
-  fees) before the call returns, so a collector can record them per row.
+- `onGasDecided`: the sent limits with a per-field source (frozen / explicit / tuned / estimate / floor / default /
+  computed / bundler-retry), the fees and their source, and whether a bundler's explicit requirement raised the fees.
+  It runs after the op is accepted; a throwing callback is reported and does not change the outcome.
+- Estimation now runs whenever any of the five limits is missing (unless `autoEstimate: false`), filling only the
+  missing ones; before, giving verificationGasLimit and callGasLimit skipped it and the paymaster limits got defaults.
+- Fees the caller gives are a price limit: the retry loop no longer raises them (replacement-underpriced and
+  "must be at least" answers are returned instead); fees taken from the chain are still raised on such answers.
+- `SuperPaymasterClient` and `UserClient.executeGasless` (Super) no longer pass their own `tuneEstimate` (it capped
+  paymasterVerificationGasLimit near 133k, below what SuperPaymaster 5.5.x validation needs); they use the policy above.
 - Evidence: `docs/onchain-evidence/gas-policy-local.md` (local SuperPaymaster DeployLive stack: credit branch, balance
   branch, frozen limits giving identical actualGas, and one-limit-at-a-time variants: only callGasLimit and
   paymasterPostOpGasLimit change actualGas, by 10% of the extra unused gas). `docs/onchain-evidence/paper-path-abi-equality.md`

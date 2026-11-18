@@ -27,7 +27,7 @@ describe('paper-path ABI entries in the vendored files equal SuperPaymaster at t
         });
     }
 
-    it('the comparison sees a change: an output type or an indexed flag differs', () => {
+    it('the comparison sees a change: an output type, an indexed flag, a parameter name or anonymity differs', () => {
         const sdk = abiOf(read('xPNTsTokenV2.full.json'));
         const debts = structuredClone(sdk.find((e: any) => e.type === 'function' && e.name === 'debts'));
         debts.outputs[0].type = 'uint128';
@@ -35,5 +35,11 @@ describe('paper-path ABI entries in the vendored files equal SuperPaymaster at t
         const repaid = structuredClone(sdk.find((e: any) => e.type === 'event' && e.name === 'DebtRepaid'));
         repaid.inputs[0].indexed = !repaid.inputs[0].indexed;
         expect(canonicalEntry([repaid], { type: 'event', name: 'DebtRepaid' })).not.toEqual(canonicalEntry(sdk, { type: 'event', name: 'DebtRepaid' }));
+        const renamed = structuredClone(sdk.find((e: any) => e.type === 'event' && e.name === 'DebtRepaid'));
+        renamed.inputs[1].name = 'amount';
+        expect(canonicalEntry([renamed], { type: 'event', name: 'DebtRepaid' })).not.toEqual(canonicalEntry(sdk, { type: 'event', name: 'DebtRepaid' }));
+        const anon = structuredClone(sdk.find((e: any) => e.type === 'event' && e.name === 'DebtRepaid'));
+        anon.anonymous = true;
+        expect(canonicalEntry([anon], { type: 'event', name: 'DebtRepaid' })).not.toEqual(canonicalEntry(sdk, { type: 'event', name: 'DebtRepaid' }));
     });
 });

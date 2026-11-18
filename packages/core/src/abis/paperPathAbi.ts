@@ -30,8 +30,15 @@ export const PAPER_PATH_ENTRIES: Record<string, { upstream: string; entries: Wan
 };
 
 const typeOf = (p: any): string => p.type.startsWith('tuple') ? `(${(p.components ?? []).map(typeOf).join(',')})${p.type.slice(5)}` : p.type;
+/** Type plus name, recursively: decoders that read named `args` / tuple fields depend on the names too. */
+const named = (p: any): string => p.type.startsWith('tuple')
+    ? `(${(p.components ?? []).map(named).join(',')})${p.type.slice(5)}${p.name ? ` ${p.name}` : ''}`
+    : `${p.type}${p.name ? ` ${p.name}` : ''}`;
 
-/** Full signature (function: inputs, outputs, mutability; event: inputs with indexed flags) and selector of one entry. */
+/**
+ * Full signature and selector of one entry. Functions: inputs and outputs with their names, state mutability.
+ * Events: inputs with names and indexed flags, and whether the event is anonymous (that changes the topic layout).
+ */
 export function canonicalEntry(abi: any[], want: Want): { signature: string; selector: string } | undefined {
     const matches = abi.filter((e) => e.type === want.type && e.name === want.name);
     if (matches.length !== 1) return undefined; // missing or overloaded: not comparable as one entry
@@ -39,12 +46,12 @@ export function canonicalEntry(abi: any[], want: Want): { signature: string; sel
     const inputs = (e.inputs ?? []).map(typeOf).join(',');
     if (want.type === 'function') {
         return {
-            signature: `${e.name}(${inputs}) returns (${(e.outputs ?? []).map(typeOf).join(',')}) ${e.stateMutability}`,
+            signature: `${e.name}(${(e.inputs ?? []).map(named).join(',')}) returns (${(e.outputs ?? []).map(named).join(',')}) ${e.stateMutability}`,
             selector: toFunctionSelector(`${e.name}(${inputs})`),
         };
     }
     return {
-        signature: `${e.name}(${(e.inputs ?? []).map((i: any) => `${typeOf(i)}${i.indexed ? ' indexed' : ''}`).join(',')})`,
+        signature: `${e.anonymous ? 'anonymous ' : ''}${e.name}(${(e.inputs ?? []).map((i: any) => `${named(i)}${i.indexed ? ' indexed' : ''}`).join(',')})`,
         selector: toEventSelector(`${e.name}(${inputs})`),
     };
 }

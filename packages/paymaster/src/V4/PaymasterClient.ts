@@ -1,7 +1,7 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters, decodeEventLog } from 'viem';
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
-import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type UserOpGasLimits } from './gasPolicy.js';
+import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 import { readUserOperationResult, userOperationNotYetValidFromRpc, UserOperationFailedError, type UserOperationExecutionResult, type WaitForUserOperationResultOptions } from './userOpOutcome.js';
@@ -678,21 +678,27 @@ export class PaymasterClient {
         const coefficientBps = options?.gasLimitCoefficientBps ?? DEFAULT_GAS_LIMIT_COEFFICIENT_BPS;
         const frozen = options?.frozenGas;
         let rawEstimate: GasEstimate | undefined;
-        let gasLimits: {
-            preVerificationGas?: bigint; verificationGasLimit?: bigint; callGasLimit?: bigint;
-            paymasterVerificationGasLimit?: bigint; paymasterPostOpGasLimit?: bigint;
-        } = frozen ? { ...frozen } : {
-            preVerificationGas: options?.preVerificationGas,
-            verificationGasLimit: options?.verificationGasLimit,
-            callGasLimit: options?.callGasLimit,
-            paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
-            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit
-        };
+        const FIELDS = ['preVerificationGas', 'verificationGasLimit', 'callGasLimit', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
+        type Field = typeof FIELDS[number];
+        // Where each sent limit came from, reported to onGasDecided (a collector must not record "estimate" for a default).
+        const limitSources: Partial<Record<Field, LimitSource>> = {};
+        let gasLimits: Partial<Record<Field, bigint>> = {};
         if (frozen) {
-            for (const [k, v] of Object.entries(frozen)) if (typeof v !== 'bigint' || v <= 0n) throw new Error(`frozenGas.${k} must be a positive bigint`);
+            for (const k of FIELDS) {
+                const v = (frozen as any)[k];
+                if (typeof v !== 'bigint' || v <= 0n || v >= 1n << 128n) throw new Error(`frozenGas.${k} must be a positive bigint below 2^128 (all five limits are required)`);
+                gasLimits[k] = v;
+                limitSources[k] = 'frozen';
+            }
+        } else {
+            for (const k of FIELDS) {
+                const v = options?.[k];
+                if (v !== undefined) { gasLimits[k] = v; limitSources[k] = 'explicit'; }
+            }
         }
 
-        if (!frozen && options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
+        // Estimate whenever a limit is still missing (unless estimation is switched off); fill only the missing ones.
+        if (!frozen && options?.autoEstimate !== false && FIELDS.some((k) => gasLimits[k] === undefined)) {
             const est = await this.estimateUserOperationGas(
                 client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData,
                 {
@@ -713,13 +719,11 @@ export class PaymasterClient {
             rawEstimate = est;
             const scaled = scaleLimits(est, coefficientBps);
             const tuned = options?.tuneEstimate?.(est) ?? {};
-            gasLimits.preVerificationGas = options?.preVerificationGas ?? tuned.preVerificationGas ?? scaled.preVerificationGas;
-            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? tuned.verificationGasLimit ?? scaled.verificationGasLimit;
-            gasLimits.callGasLimit = options?.callGasLimit ?? tuned.callGasLimit ?? scaled.callGasLimit;
-            gasLimits.paymasterVerificationGasLimit =
-                options?.paymasterVerificationGasLimit ?? tuned.paymasterVerificationGasLimit ?? scaled.paymasterVerificationGasLimit;
-            gasLimits.paymasterPostOpGasLimit =
-                options?.paymasterPostOpGasLimit ?? tuned.paymasterPostOpGasLimit ?? scaled.paymasterPostOpGasLimit;
+            for (const k of FIELDS) {
+                if (gasLimits[k] !== undefined) continue;
+                if (tuned[k] !== undefined) { gasLimits[k] = tuned[k]; limitSources[k] = 'tuned'; }
+                else { gasLimits[k] = scaled[k]; limitSources[k] = 'estimate'; }
+            }
         }
 
         // 1.5 Fees: caller's values, otherwise from the chain (eth_feeHistory). No per-chain floor.
@@ -745,11 +749,13 @@ export class PaymasterClient {
                     throw new Error(`frozenGas.paymasterVerificationGasLimit ${frozen.paymasterVerificationGasLimit} is below superPaymasterVerificationGasFloor ${floors.paymasterVerificationGasLimit}`);
                 }
             } else {
-                gasLimits.paymasterPostOpGasLimit = atLeast(gasLimits.paymasterPostOpGasLimit ?? 0n, spCtx.minPostOpGas);
-                gasLimits.paymasterVerificationGasLimit = atLeast(
-                    gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
-                    floors.paymasterVerificationGasLimit ?? 0n
-                );
+                const raise = (k: 'paymasterPostOpGasLimit' | 'paymasterVerificationGasLimit', floor: bigint, fallback: bigint) => {
+                    const cur = gasLimits[k];
+                    if (cur === undefined) { gasLimits[k] = atLeast(fallback, floor); limitSources[k] = 'default'; }
+                    else if (cur < floor) { gasLimits[k] = floor; limitSources[k] = 'floor'; }
+                };
+                raise('paymasterPostOpGasLimit', spCtx.minPostOpGas, 0n);
+                raise('paymasterVerificationGasLimit', floors.paymasterVerificationGasLimit ?? 0n, gasLimits.verificationGasLimit ?? 150000n);
             }
             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
                 verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
@@ -761,25 +767,29 @@ export class PaymasterClient {
             // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
             // Since PVG is ~100k, (VGL + PMVGL) must be <= 150k.
             // We set each to 75k to safely pass the 0.4 efficiency guard.
-            const pmVerGas = gasLimits.paymasterVerificationGasLimit ?? 75000n; 
-            
+            if (gasLimits.paymasterVerificationGasLimit === undefined) { gasLimits.paymasterVerificationGasLimit = 75000n; limitSources.paymasterVerificationGasLimit = 'default'; }
+            if (gasLimits.paymasterPostOpGasLimit === undefined) { gasLimits.paymasterPostOpGasLimit = 100000n; limitSources.paymasterPostOpGasLimit = 'default'; }
+
             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: pmVerGas,
-                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit
             });
         }
 
         // 3. Construct UserOp
         const initCode = ((options?.factory && options?.factoryData) ? concat([options.factory, options.factoryData]) : '0x') as Hex;
+        if (gasLimits.verificationGasLimit === undefined) { gasLimits.verificationGasLimit = 75000n; limitSources.verificationGasLimit = 'default'; }
+        if (gasLimits.callGasLimit === undefined) { gasLimits.callGasLimit = 500000n; limitSources.callGasLimit = 'default'; }
         const accountGasLimits = concat([
-            pad(toHex(gasLimits.verificationGasLimit ?? 75000n), { size: 16 }),
-            pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })
+            pad(toHex(gasLimits.verificationGasLimit), { size: 16 }),
+            pad(toHex(gasLimits.callGasLimit), { size: 16 })
         ]) as Hex;
         const gasFees = concat([
             pad(toHex(maxPriorityFeePerGas), { size: 16 }),
             pad(toHex(maxFeePerGas), { size: 16 })
         ]) as Hex;
+        if (gasLimits.preVerificationGas === undefined) limitSources.preVerificationGas = 'computed';
         const preVerificationGas =
             gasLimits.preVerificationGas ??
             (PaymasterClient.estimatePreVerificationGasV07({
@@ -850,10 +860,14 @@ export class PaymasterClient {
         // What was decided, read back from the op actually sent (fees may have been raised by a bundler's
         // explicit requirement in the retry loop below).
         const initialGasFees = userOp.gasFees;
+        // Fees the caller gave are a price limit: the retry loop below does not raise them.
+        const callerFees = options?.maxFeePerGas !== undefined || options?.maxPriorityFeePerGas !== undefined;
         const reportGas = () => {
             if (!options?.onGasDecided) return;
             const pmd = userOp.paymasterAndData;
-            options.onGasDecided({
+            const sources = limitSources as Record<keyof UserOpGasLimits, LimitSource>;
+            const all = Object.values(sources);
+            const decision: GasDecision = {
                 limits: {
                     preVerificationGas: BigInt(userOp.preVerificationGas),
                     verificationGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(2, 34)),
@@ -861,17 +875,23 @@ export class PaymasterClient {
                     paymasterVerificationGasLimit: BigInt('0x' + pmd.slice(42, 74)),
                     paymasterPostOpGasLimit: BigInt('0x' + pmd.slice(74, 106)),
                 },
+                limitSources: sources,
                 fees: {
                     ...fees,
                     maxPriorityFeePerGas: BigInt('0x' + userOp.gasFees.slice(2, 34)),
                     maxFeePerGas: BigInt('0x' + userOp.gasFees.slice(34)),
                 },
                 feesRaisedByBundler: userOp.gasFees !== initialGasFees,
-                limitsSource: frozen ? 'frozen' : 'estimate',
-                coefficientBps: frozen ? undefined : coefficientBps,
+                limitsSource: frozen ? 'frozen' : all.every((x) => x === 'estimate' || x === 'floor') ? 'estimate' : 'mixed',
+                coefficientBps: all.includes('estimate') ? coefficientBps : undefined,
                 estimate: rawEstimate,
                 floors,
-            });
+            };
+            // An observer must not change the outcome: the op is already accepted (and its in-flight slot recorded)
+            // when this runs, so a throwing callback is reported and swallowed rather than turned into a failure.
+            try { options.onGasDecided(decision); } catch (e) {
+                console.warn(`[PaymasterClient] onGasDecided threw (${(e as Error)?.message ?? e}); the op was submitted and its result stands`);
+            }
         };
 
         // 4. Final Hashing and Signing
@@ -917,6 +937,7 @@ export class PaymasterClient {
                 // Case A: Replacement Underpriced (Nonce collision in mempool)
                 // e.g. {"code":-32602,"message":"replacement underpriced","data":{"currentMaxPriorityFee":"0x5f5e100","currentMaxFee":"0xf6a44be"}}
                 if (result.error.code === -32602 || msg.includes('replacement underpriced')) {
+                     if (callerFees) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
                      console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Bumping fees to replace pending UserOp...`);
                      let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
                      let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
@@ -958,6 +979,7 @@ export class PaymasterClient {
                 const matchMaxFee = msg.match(/maxFeePerGas.*(?:at least|expected) (\d+)/i);
 
                 if (matchPriority || matchMaxFee) {
+                    if (callerFees) throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (fees were given by the caller and are not raised)`);
                     console.log(`[PaymasterClient] ⚠️  Fee Error: ${msg}. Retrying with higher fees...`);
                     
                     let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
@@ -1017,6 +1039,7 @@ export class PaymasterClient {
                         
                         // Update PVG and re-sign
                         userOp.preVerificationGas = bufferedPVG;
+                        limitSources.preVerificationGas = 'bundler-retry';
                         await resign();
                         
                         continue; // Retry
