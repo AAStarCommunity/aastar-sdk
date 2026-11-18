@@ -25,7 +25,7 @@ function channel(o: { reportedChainId?: bigint; separator?: Hex; typehash?: Hex 
             return encodeFunctionResult({ abi: READ_ABI, functionName, result: ['0x0f', DOMAIN.name, DOMAIN.version, o.reportedChainId ?? BigInt(CHAIN_ID), CHANNEL, '0x' + '00'.repeat(32), []] } as any);
         }
         if (o.separator) return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.separator } as any);
-        const e: any = new Error('execution reverted'); e.code = 3; throw e; // no DOMAIN_SEPARATOR() on this contract
+        const e: any = new Error('execution reverted'); e.code = 3; e.data = '0x'; throw e; // no DOMAIN_SEPARATOR() on this contract
     });
     const publicClient: any = {
         getChainId: vi.fn(async () => CHAIN_ID),

@@ -54,13 +54,14 @@ async function callAt<T>(client: PublicClient, to: Address, abi: Abi, functionNa
     return decodeFunctionResult({ abi, functionName, data: result } as any) as T;
 }
 
-// An execution revert with no revert data (what a call to a selector the contract does not have produces), decided
-// only from the structured JSON-RPC error (code 3), never from message text.
+// An execution revert whose revert data is explicitly empty ('0x', what a node returns for a selector the contract
+// does not have), decided only from the structured JSON-RPC error (code 3). Missing or unrecognised revert data is
+// not "empty": it refuses. (An empty revert still does not prove the selector is absent; that is the caller's
+// declared capability assumption, `mayLackSeparator`.)
 const isEmptyRevert = (e: unknown): boolean => {
     for (let x: any = e, i = 0; x && i < 8; x = x.cause, i++) {
         if (x.code !== 3) continue;
-        const d = typeof x.data === 'string' ? x.data : typeof x.data?.data === 'string' ? x.data.data : undefined;
-        return d === undefined || d === '0x';
+        return x.data === '0x';
     }
     return false;
 };
