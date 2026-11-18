@@ -13,12 +13,12 @@
  * Output: docs/onchain-evidence/usdc-domain-op-fork.md (no RPC URL, no key).
  */
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-    createPublicClient, createWalletClient, http, encodeFunctionData, parseSignature, type Address, type Hex,
+    createPublicClient, createWalletClient, http, encodeFunctionData, parseSignature, decodeErrorResult,
+    BaseError, ContractFunctionRevertedError, type Address, type Hex,
 } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { optimism } from 'viem/chains';
@@ -40,41 +40,51 @@ const RECEIVE_ABI = [{
     ],
 }] as const;
 
-// A port the OS just handed out on loopback, so the anvil we start is the only thing listening there.
-function freePort(): Promise<number> {
+// Anvil binds port 0 itself (an OS-assigned loopback port) and prints it only after the bind succeeded,
+// so the port read from its own stdout is one this child owns. Its stdout is parsed, never written out.
+function startAnvil(bin: string, args: string[]): Promise<{ child: ReturnType<typeof spawn>; port: number }> {
     return new Promise((resolve, reject) => {
-        const srv = createServer();
-        srv.once('error', reject);
-        srv.listen(0, '127.0.0.1', () => { const { port } = srv.address() as any; srv.close(() => resolve(port)); });
+        const child = spawn(bin, [...args, '--host', '127.0.0.1', '--port', '0'], { stdio: ['ignore', 'pipe', 'ignore'] });
+        let buf = '';
+        const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('anvil did not report a listening port')); }, 120_000);
+        child.stdout!.on('data', (d) => {
+            buf += String(d);
+            const m = buf.match(/Listening on 127\.0\.0\.1:(\d+)/);
+            if (m) { clearTimeout(timer); child.stdout!.removeAllListeners('data'); child.stdout!.resume(); resolve({ child, port: Number(m[1]) }); }
+        });
+        child.once('exit', () => { clearTimeout(timer); reject(new Error('anvil exited before it was listening')); });
+        child.once('error', (e) => { clearTimeout(timer); reject(e); });
     });
+}
+
+// A contract-level revert, as opposed to a transport failure: viem only builds
+// ContractFunctionRevertedError when the node answered with a revert.
+const isRevert = (e: unknown) => e instanceof BaseError && Boolean(e.walk((x) => x instanceof ContractFunctionRevertedError));
+
+// The Error(string) reason of a reverted eth_call, decoded from its return data (undefined if there is none).
+function revertReason(e: unknown): string | undefined {
+    if (!(e instanceof BaseError)) return undefined;
+    const raw = e.walk((x: any) => typeof x?.data === 'string' && x.data.startsWith('0x08c379a0')) as any;
+    if (!raw) return undefined;
+    const decoded = decodeErrorResult({ abi: [{ type: 'error', name: 'Error', inputs: [{ name: 'message', type: 'string' }] }], data: raw.data });
+    return decoded.args[0] as string;
 }
 
 // Error text for the report: first line only, with any URL removed.
 const clean = (e: unknown) => String((e as any)?.shortMessage ?? (e as any)?.message ?? e).split('\n')[0].replace(/https?:\/\/\S+/g, '<url>');
 
-async function waitForRpc(client: { getChainId: () => Promise<number> }, exited: () => boolean): Promise<void> {
-    for (let i = 0; i < 120; i++) {
-        if (exited()) throw new Error('anvil exited before it was ready');
-        try { await client.getChainId(); return; } catch { await new Promise((r) => setTimeout(r, 500)); }
-    }
-    throw new Error('anvil fork did not come up');
-}
+
 
 async function main() {
     const anvilBin = process.env.ANVIL_BIN ?? join(homedir(), '.foundry/bin/anvil');
-    const port = await freePort();
+    const { child: anvil, port } = await startAnvil(anvilBin, ['--fork-url', FORK_SOURCE, '--chain-id', '10']);
     const LOCAL = `http://127.0.0.1:${port}`;
-    const anvil = spawn(anvilBin, ['--fork-url', FORK_SOURCE, '--host', '127.0.0.1', '--port', String(port), '--chain-id', '10', '--silent'], { stdio: 'ignore' });
-    let exited = false;
-    anvil.once('exit', () => { exited = true; });
-    anvil.once('error', () => { exited = true; });
     const lines: string[] = [];
     try {
         const client = createPublicClient({ chain: optimism, transport: http(LOCAL) });
-        await waitForRpc(client, () => exited);
-        // Before any state change: the endpoint must be our own, still-running anvil, and it must be a fork.
+        // Before any state change: the endpoint (the port this child reported) must be a fork of chain 10.
         const info = await client.request({ method: 'anvil_nodeInfo' as any }) as any;
-        if (exited || !info?.forkConfig?.forkBlockNumber) throw new Error('the endpoint is not the anvil fork this script started');
+        if (!info?.forkConfig?.forkBlockNumber || (await client.getChainId()) !== 10) throw new Error('the endpoint is not the OP Mainnet fork this script started');
         const forkBlock = BigInt(info.forkConfig.forkBlockNumber);
 
         const payer = privateKeyToAccount(generatePrivateKey()); // in-memory, this run only
@@ -99,7 +109,7 @@ async function main() {
         };
         const simulate = async (data: Hex) => {
             try { await client.call({ account: recipient, to: OP_USDC, data }); return { ok: true as const }; }
-            catch (e) { return { ok: false as const, reason: clean(e) }; }
+            catch (e) { return { ok: false as const, reason: clean(e), decoded: revertReason(e) }; }
         };
 
         // One authorization (the SDK's, nonce unused), signed under two domains; only the domain differs.
@@ -114,7 +124,8 @@ async function main() {
         });
         // Old first: a rejection must be the contract's signature check, nothing else.
         const old = await simulate(calldata(nonce, oldSig));
-        const oldRejectedForSignature = !old.ok && /invalid signature/i.test(old.reason);
+        // Exactly FiatTokenV2's signature check, decoded from the revert data; any other failure is not evidence.
+        const oldRejectedForSignature = !old.ok && old.decoded === 'FiatTokenV2: invalid signature';
         const sdkSim = await simulate(calldata(nonce, payload.payload.signature as Hex));
         let sdk: { ok: boolean; detail: string } = { ok: false, detail: sdkSim.ok ? '' : `simulation rejected: ${sdkSim.reason}` };
         if (sdkSim.ok) {
@@ -123,16 +134,31 @@ async function main() {
             sdk = { ok: receipt.status === 'success', detail: `fork tx ${hash} status ${receipt.status}` };
         }
 
-        // Bridged USDC.e: the resolver must refuse because the getters are missing, not for any other reason.
+        // Bridged USDC.e: the resolver must refuse, and the reason must be missing getters, not the transport.
+        // Control read: name() answers, so the fork can read this contract. Then version() and
+        // DOMAIN_SEPARATOR() must each fail as contract-level reverts.
+        const ERC20_META = [
+            { type: 'function', name: 'name', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+            { type: 'function', name: 'version', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+            { type: 'function', name: 'DOMAIN_SEPARATOR', inputs: [], outputs: [{ type: 'bytes32' }], stateMutability: 'view' },
+        ] as const;
+        const probe = async (functionName: 'name' | 'version' | 'DOMAIN_SEPARATOR') => {
+            try { return { value: await client.readContract({ address: OP_USDC_E, abi: ERC20_META, functionName }) as string }; }
+            catch (e) { return { revert: isRevert(e), reason: clean(e) }; }
+        };
+        const [eName, eVersion, eSeparator] = [await probe('name'), await probe('version'), await probe('DOMAIN_SEPARATOR')];
+        const gettersMissing = 'value' in eName && (eVersion as any).revert === true && (eSeparator as any).revert === true;
         let usdcE: string;
-        let usdcERefusedForGetters = false;
+        let usdcERefused = false;
         try {
             await resolveEip712Domain(client as any, OP_USDC_E);
             usdcE = 'RESOLVED (unexpected)';
         } catch (e) {
             usdcE = `refused: ${clean(e)}`;
-            usdcERefusedForGetters = usdcE.includes('neither eip712Domain() nor name()/version() could be read');
+            usdcERefused = true;
         }
+        const usdcERefusedForGetters = gettersMissing && usdcERefused;
+        usdcE += ` — control name() = ${JSON.stringify((eName as any).value ?? null)}; version() ${(eVersion as any).revert ? 'reverts' : 'did NOT revert'}; DOMAIN_SEPARATOR() ${(eSeparator as any).revert ? 'reverts' : 'did NOT revert'}`;
 
         const pass = sdk.ok && oldRejectedForSignature && usdcERefusedForGetters;
         lines.push(
