@@ -54,24 +54,27 @@ async function callAt<T>(client: PublicClient, to: Address, abi: Abi, functionNa
     return decodeFunctionResult({ abi, functionName, data: result } as any) as T;
 }
 
-// A contract-level revert (the view does not exist), as opposed to a transport or node failure: decided only from
-// the structured JSON-RPC error (code 3 = execution reverted), never from message text.
-const isRevert = (e: unknown): boolean => {
+// An execution revert with no revert data (what a call to a selector the contract does not have produces), decided
+// only from the structured JSON-RPC error (code 3), never from message text.
+const isEmptyRevert = (e: unknown): boolean => {
     for (let x: any = e, i = 0; x && i < 8; x = x.cause, i++) {
-        if (x.code === 3) return true;
+        if (x.code !== 3) continue;
+        const d = typeof x.data === 'string' ? x.data : typeof x.data?.data === 'string' ? x.data.data : undefined;
+        return d === undefined || d === '0x';
     }
     return false;
 };
 
 /**
- * `DOMAIN_SEPARATOR()` at the pinned block, or undefined when the contract does not have it (the call reverts).
- * Any other failure refuses: a flaky node must not turn "checked" into "not present".
+ * `DOMAIN_SEPARATOR()` at the pinned block. "Absent" (undefined) only when the caller says the contract may lack the
+ * view AND the call is an execution revert with no revert data (a missing selector). A getter that exists and
+ * reverts (with data), any other failure, or a revert where absence was not allowed, refuses.
  */
-async function separatorIfPresent(client: PublicClient, contract: Address, pin: Pin): Promise<Hex | undefined> {
+async function separatorIfPresent(client: PublicClient, contract: Address, pin: Pin, mayLackSeparator: boolean): Promise<Hex | undefined> {
     try {
         return await callAt<Hex>(client, contract, READ_ABI, 'DOMAIN_SEPARATOR', pin);
     } catch (e) {
-        if (isRevert(e)) return undefined;
+        if (mayLackSeparator && isEmptyRevert(e)) return undefined;
         return fail('block-unavailable', `DOMAIN_SEPARATOR() of ${contract} could not be read at block ${pin.blockHash} (${firstLine(e)})`, { address: contract }, e);
     }
 }
@@ -91,15 +94,15 @@ export type ReportedDomain = { domain: TypedDataDomain; separator: Hex; separato
 
 /**
  * The domain a contract reports through `eip712Domain()` (EIP-5267): its `fields` bitmap honoured, its chainId and
- * verifyingContract, when present, required to be the live chain and the contract. `separatorChecked` is true only when the
- * contract also exposes `DOMAIN_SEPARATOR()` and it matched; when it does not, the domain is the contract's own
- * report and nothing independent confirms it. `blockHash` is the block every read was pinned to, for callers that
+ * verifyingContract, when present, required to be the live chain and the contract. `DOMAIN_SEPARATOR()` must be readable
+ * and match, unless the caller passes `mayLackSeparator` for a contract known not to have it (MicroPaymentChannel):
+ * then a missing selector (empty revert) gives `separatorChecked: false`, and the domain is the contract's own report. `blockHash` is the block every read was pinned to, for callers that
  * read more from the same contract (e.g. a type hash) and must read it from the same state.
  */
 export async function resolveReportedEip712Domain(
     client: PublicClient,
     contract: Address,
-    opts: { expectedChainId?: number } = {},
+    opts: { expectedChainId?: number; mayLackSeparator?: boolean } = {},
 ): Promise<ReportedDomain> {
     const { chainId, pin } = await pinLatest(client, opts.expectedChainId);
     await codeAt(client, contract, pin);
@@ -125,7 +128,7 @@ export async function resolveReportedEip712Domain(
     }
     if (bits & 0x10) domain.salt = salt;
     const separator = domainSeparator({ domain });
-    const onChain = await separatorIfPresent(client, contract, pin);
+    const onChain = await separatorIfPresent(client, contract, pin, opts.mayLackSeparator === true);
     if (onChain !== undefined && onChain.toLowerCase() !== separator.toLowerCase()) {
         fail('separator-mismatch', `${contract}: eip712Domain() gives separator ${separator} but DOMAIN_SEPARATOR() is ${onChain}`, { address: contract });
     }

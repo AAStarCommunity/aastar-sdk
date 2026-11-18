@@ -43,7 +43,7 @@ export class ChannelClient {
      * type the SDK signs. Either mismatch throws instead of producing a voucher the contract would reject.
      */
     async signVoucherOffline(channelId: Hex, cumulativeAmount: bigint): Promise<SignedVoucher> {
-        const { domain, blockHash } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId });
+        const { domain, blockHash } = await resolveReportedEip712Domain(this.config.publicClient, this.config.channelAddress, { expectedChainId: this.config.chainId, mayLackSeparator: true });
         // The type hash is read at the same block hash as the domain, so both describe one state of the contract.
         const data = encodeFunctionData({ abi: MicroPaymentChannelABI, functionName: 'VOUCHER_TYPEHASH', args: [] });
         const raw = await this.config.publicClient.request({

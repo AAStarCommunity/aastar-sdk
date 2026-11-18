@@ -37,7 +37,7 @@ async function main() {
         abi, functionName, data: await c.request({ method: 'eth_call', params: [{ to, data: encodeFunctionData({ abi, functionName, args: [] }) }, { blockHash, requireCanonical: true }] } as any) as Hex,
     } as any) as Hex;
 
-    const ch = await resolveReportedEip712Domain(c as any, channel, { expectedChainId: sepolia.id });
+    const ch = await resolveReportedEip712Domain(c as any, channel, { expectedChainId: sepolia.id, mayLackSeparator: true });
     const onChainTypeHash = await callAt(channel, MicroPaymentChannelABI, 'VOUCHER_TYPEHASH', ch.blockHash);
     const u128 = keccak256(toHex('Voucher(bytes32 channelId,uint128 cumulativeAmount)'));
     const u256 = keccak256(toHex('Voucher(bytes32 channelId,uint256 cumulativeAmount)'));
@@ -49,7 +49,8 @@ async function main() {
     rows.push(['KMS voucher digest vs the digest the channel verifies (same voucher, computed off-chain)', `KMS ${kms}; contract ${contract}`, kms !== contract]);
 
     const fac = await verifyFacilitatorDomain(c as any, FACILITATOR, sepolia.id);
-    rows.push([`X402Facilitator ${FACILITATOR}: verifier probe (simulated settle; a wrong-domain probe reverts InvalidX402Signature, the SDK-domain probe does not)`, json(fac), true]);
+    const { blockHash: facBlock, blockNumber: facNumber, ...facDomain } = fac;
+    rows.push([`X402Facilitator ${FACILITATOR}: verifier probe at block ${facNumber} (${facBlock}) — simulated settle: the wrong-domain probe reverts InvalidX402Signature, the SDK-domain probe reaches the role check (Unauthorized)`, json(facDomain), true]);
 
     const gBlock = (await c.getBlock()).hash as Hex;
     const token = book.gToken as Address;

@@ -190,9 +190,18 @@ describe('X402Client.createPayment — direct path asks the facilitator\'s verif
     await expect(pay(directClient({ kind: 'verifier', version: '2' }))).rejects.toThrow('its verifier rejects a probe signed under');
   });
 
+  it('a verifier that encodes from/to in the other order gets no signature (the probe uses distinct addresses)', async () => {
+    await expect(pay(directClient({ kind: 'verifier', swapFromTo: true }))).rejects.toThrow('its verifier rejects a probe');
+  });
+
+  it('a right-domain probe that ends in anything but the role check after the signature gets no signature', async () => {
+    await expect(pay(directClient({ kind: 'verifier', afterSignature: 'NonceAlreadyUsed' }))).rejects.toThrow('reverted with NonceAlreadyUsed, not the role check');
+    await expect(pay(directClient({ kind: 'transport-with-data' }))).rejects.toThrow('failed without an execution revert');
+  });
+
   it('a simulation that does not reach the signature check (roles first, no revert data, no code) cannot confirm the domain', async () => {
     await expect(pay(directClient({ kind: 'role-first' }))).rejects.toThrow('reverted with Unauthorized, not InvalidX402Signature');
-    await expect(pay(directClient({ kind: 'no-data' }))).rejects.toThrow('without revert data');
+    await expect(pay(directClient({ kind: 'no-data' }))).rejects.toThrow('reverted with revert-without-data');
     await expect(pay(directClient({ kind: 'no-code' }))).rejects.toThrow('reverted with no-revert');
   });
 });
