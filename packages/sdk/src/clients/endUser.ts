@@ -109,12 +109,15 @@ export function createEndUserClient({
     }
     const usedAddresses = { ...CORE_ADDRESSES, ...TOKEN_ADDRESSES, ...TEST_ACCOUNT_ADDRESSES, ...chainDefaults, ...addresses };
 
-    // The account factory: configured, else the address book's for this chain; on every call it must build
-    // accounts for the EntryPoint this client uses, whichever source it came from (including a SIMPLE_ACCOUNT_FACTORY
-    // env override of TEST_ACCOUNT_ADDRESSES, which used to default to the v0.6 factory 0x9406…).
+    // The account factory: the caller's `addresses.simpleAccountFactory`, else the address book's for the live chain;
+    // on every call it must build accounts for the EntryPoint this client uses.
     const checkedAccountFactory = async (): Promise<Address> => {
+        const liveChainId = await (client as any).getChainId();
+        if (liveChainId !== chain.id) throw new Error(`the RPC is on chain ${liveChainId}, the client is configured for ${chain.id}; refusing to create an account`);
         const entryPoint = (usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address;
-        const factory = resolveAccountFactoryAddress(chain.id, (usedAddresses as any).simpleAccountFactory);
+        // Only the caller's own override or the address book: not the merged usedAddresses, whose global
+        // TEST_ACCOUNT_ADDRESSES entry would otherwise pass as "explicit" on a chain outside the book.
+        const factory = resolveAccountFactoryAddress(liveChainId, (addresses as any)?.simpleAccountFactory);
         await verifyAccountFactory(client as any, factory, entryPoint);
         return factory;
     };

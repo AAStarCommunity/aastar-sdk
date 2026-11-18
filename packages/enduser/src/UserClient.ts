@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -70,10 +70,11 @@ export class UserClient extends BaseClient {
 
         // No cross-chain default: the caller's factory, else the address book's for this chain. The old default
         // 0x9406… is the EntryPoint v0.6 SimpleAccountFactory (it has code everywhere, so only its implementation's
-        // entryPoint() exposes that). A SimpleAccount factory is checked against the EntryPoint; a custom ABI is not.
-        const chainId: number = await readClient.getChainId();
+        // entryPoint() exposes that). The factory is checked against the EntryPoint unless the caller names another
+        // account type; passing an ABI alone does not skip it. Reader and signer must be on the same chain.
+        const chainId = await assertSameChain(readClient, client);
         const factoryAddr = resolveAccountFactoryAddress(chainId, params.factoryAddress);
-        if (!params.customAbi) {
+        if (params.accountType === undefined || params.accountType === 'simple') {
             const entryPoint = params.entryPointAddress ?? (getCanonicalAddresses(chainId)?.entryPoint as Address | undefined);
             if (!entryPoint) throw new Error(`deployAccount: no EntryPoint for chain ${chainId} in the address book; pass entryPointAddress`);
             await verifyAccountFactory(readClient, factoryAddr, entryPoint);

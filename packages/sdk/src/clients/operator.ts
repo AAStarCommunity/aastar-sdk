@@ -9,6 +9,8 @@ import {
     paymasterActions,
     PaymasterFactoryABI,
     verifyPaymasterDeployment,
+    verifyEthUsdFeed,
+    PaymasterABI,
     xPNTsTokenABI,
     type StakingActions,
     type RegistryActions,
@@ -114,6 +116,21 @@ export function createOperatorClient({
         },
         async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations }: { version?: string, initData?: Hex, confirmations?: number } = {}) {
             if (!account) throw new Error('Account required for deployPaymasterV4');
+            // initData is the caller's, so its price feed is decoded and checked on the live chain before anything is
+            // sent: initialize(entryPoint, owner, treasury, priceFeed, serviceFeeRate, maxGasCostCap, staleness).
+            const { decodeFunctionData } = await import('viem');
+            let feed: Address, staleness: bigint;
+            try {
+                const decoded = decodeFunctionData({ abi: PaymasterABI, data: initData });
+                if (decoded.functionName !== 'initialize') throw new Error(`not initialize() but ${decoded.functionName}()`);
+                feed = (decoded.args as readonly unknown[])[3] as Address;
+                staleness = (decoded.args as readonly unknown[])[6] as bigint;
+            } catch (e) {
+                throw new Error(`deployPaymasterV4: initData is not a PaymasterV4 initialize() call (${(e as Error).message.split('\n')[0]}); refusing to deploy`);
+            }
+            const liveChainId = await (client as any).getChainId();
+            if (liveChainId !== chain.id) throw new Error(`deployPaymasterV4: the RPC is on chain ${liveChainId}, the client is configured for ${chain.id}; refusing to deploy`);
+            await verifyEthUsdFeed(client as any, feed, { maxAgeSeconds: Number(staleness) });
             console.log(`   SDK: Deploying Paymaster V4 (${version})...`);
             const tx = await (client as any).writeContract({
                 address: usedAddresses.paymasterFactory,

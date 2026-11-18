@@ -1,6 +1,9 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed, assertSameChain } from '@aastar/core';
+
+/** priceStalenessThreshold written into a new PaymasterV4 (1 hour); the feed is checked against the same bound. */
+const PRICE_STALENESS_THRESHOLD = 3600n;
 
 export interface OperatorClientConfig extends ClientConfig {
     superPaymasterAddress: Address;
@@ -191,8 +194,11 @@ export class PaymasterOperatorClient extends BaseClient {
             } else {
                 // The feed is written into the paymaster's initialize(); it comes from the caller or the address book
                 // for this chain, and is checked on the chain (code, 8 decimals, "ETH / USD", fresh) before deploying.
-                const priceFeed = resolveEthUsdFeedAddress(await (publicClient as any).getChainId(), this.ethUsdPriceFeed);
-                await verifyEthUsdFeed(publicClient as any, priceFeed);
+                // The reading and the signing client must be on the same chain, so the check covers the chain the
+                // deployment is sent on; the feed must be fresh under the staleness threshold the paymaster will enforce.
+                const chainId = await assertSameChain(publicClient as any, this.client as any);
+                const priceFeed = resolveEthUsdFeedAddress(chainId, this.ethUsdPriceFeed);
+                await verifyEthUsdFeed(publicClient as any, priceFeed, { maxAgeSeconds: Number(PRICE_STALENESS_THRESHOLD) });
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {
                     entryPoint: this.requireEntryPoint(),
                     owner: accountAddr,
@@ -211,7 +217,7 @@ export class PaymasterOperatorClient extends BaseClient {
                         priceFeed,
                         200n, // serviceFeeRate (2%)
                         parseEther('0.1'), // maxGasCostCap
-                        3600n // priceStalenessThreshold (1 hour)
+                        PRICE_STALENESS_THRESHOLD
                     ]
                 });
 

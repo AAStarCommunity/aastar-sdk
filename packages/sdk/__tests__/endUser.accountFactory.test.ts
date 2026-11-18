@@ -14,8 +14,10 @@ const AA = '0x2222222222222222222222222222222222222222' as Address;
 // No request may reach the network: every chain call is stubbed on the client itself.
 const transport = custom({ request: async ({ method }) => { throw new Error(`unexpected RPC ${method}`); } });
 
-function client(addresses: Record<string, Address> = {}, implEntryPoint: Address = EP_V07) {
-    const c: any = createEndUserClient({ chain: sepolia, transport, account: { address: OWNER, type: 'json-rpc' } as any, addresses });
+function client(addresses: Record<string, Address> = {}, implEntryPoint: Address = EP_V07, chain: any = sepolia) {
+    const c: any = createEndUserClient({ chain, transport, account: { address: OWNER, type: 'json-rpc' } as any, addresses });
+    c.getChainId = vi.fn(async () => chain.id);
+    c.getBlockNumber = vi.fn(async () => 1n);
     c.getCode = vi.fn(async () => '0x6080');
     c.getBytecode = vi.fn(async () => undefined);
     c.readContract = vi.fn(async ({ functionName }: any) => {
@@ -38,6 +40,33 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
     it('a configured v0.6 factory is refused with the v0.7 EntryPoint, naming both', async () => {
         const c = client({ simpleAccountFactory: V06_FACTORY }, EP_V06);
         await expect(c.createSmartAccount({ owner: OWNER })).rejects.toThrow(`builds accounts for EntryPoint ${EP_V06}, but the SDK is configured for ${EP_V07}`);
+    });
+
+    it('an RPC on another chain than the client\'s is refused before any factory read', async () => {
+        const c = client();
+        c.getChainId = vi.fn(async () => 10);
+        await expect(c.createSmartAccount({ owner: OWNER })).rejects.toThrow('the RPC is on chain 10, the client is configured for 11155111');
+        expect(c.readContract).not.toHaveBeenCalled();
+    });
+
+    it('deploySmartAccount sends createAccount to the checked factory, and a v0.6 factory sends nothing', async () => {
+        const ok = client();
+        ok.writeContract = vi.fn(async () => '0xbeef');
+        ok.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success' }));
+        await ok.deploySmartAccount({ owner: OWNER });
+        expect(ok.writeContract).toHaveBeenCalledWith(expect.objectContaining({ address: V07_FACTORY, functionName: 'createAccount' }));
+        const bad = client({ simpleAccountFactory: V06_FACTORY }, EP_V06);
+        bad.writeContract = vi.fn(async () => '0xbeef');
+        await expect(bad.deploySmartAccount({ owner: OWNER })).rejects.toThrow('builds accounts for EntryPoint');
+        expect(bad.writeContract).not.toHaveBeenCalled();
+    });
+
+    it('a chain outside the address book needs its own factory: global defaults do not count as "explicit"', async () => {
+        const base = { ...sepolia, id: 8453, name: 'other' };
+        const c = client({ registry: '0x3333333333333333333333333333333333333333' }, EP_V07, base);
+        await expect(c.createSmartAccount({ owner: OWNER })).rejects.toThrow('no simpleAccountFactory for chain 8453');
+        const ok = client({ registry: '0x3333333333333333333333333333333333333333', simpleAccountFactory: V07_FACTORY }, EP_V07, base);
+        await expect(ok.createSmartAccount({ owner: OWNER })).resolves.toBeTruthy();
     });
 
     it('a factory with no code is refused', async () => {

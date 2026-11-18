@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => {
     mockVerifyPaymasterDeployment: vi.fn(),
     mockResolveEthUsdFeedAddress: vi.fn(),
     mockVerifyEthUsdFeed: vi.fn(),
+    mockAssertSameChain: vi.fn(),
   };
 });
 
@@ -41,6 +42,7 @@ vi.mock('@aastar/core', async () => {
     verifyPaymasterDeployment: mocks.mockVerifyPaymasterDeployment,
     resolveEthUsdFeedAddress: mocks.mockResolveEthUsdFeedAddress,
     verifyEthUsdFeed: mocks.mockVerifyEthUsdFeed,
+    assertSameChain: mocks.mockAssertSameChain,
   };
 });
 
@@ -105,7 +107,8 @@ describe('PaymasterOperatorClient', () => {
     mocks.mockResolveEthUsdFeedAddress.mockReturnValue('0x13e3Ee699D1909E989722E753853AE30b17e08c5');
     mocks.mockVerifyEthUsdFeed.mockReset();
     mocks.mockVerifyEthUsdFeed.mockResolvedValue({ decimals: 8, description: 'ETH / USD', answer: 1n, updatedAt: 1n });
-    (mockPublicClient as any).getChainId = vi.fn(async () => 10);
+    mocks.mockAssertSameChain.mockReset();
+    mocks.mockAssertSameChain.mockResolvedValue(10);
     mocks.mockPaymaster.setTokenPrice.mockResolvedValue('0xTxHash');
     mocks.mockPaymaster.tokenPrices.mockResolvedValue(100n);
     mocks.mockPaymaster.depositFor.mockResolvedValue('0xTxHash');
@@ -195,7 +198,17 @@ describe('PaymasterOperatorClient', () => {
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
         await client.deployAndRegisterPaymasterV4();
         expect(mocks.mockResolveEthUsdFeedAddress).toHaveBeenCalledWith(10, undefined); // no cross-chain default left
-        expect(mocks.mockVerifyEthUsdFeed).toHaveBeenCalledWith(expect.anything(), '0x13e3Ee699D1909E989722E753853AE30b17e08c5');
+        expect(mocks.mockVerifyEthUsdFeed).toHaveBeenCalledWith(expect.anything(), '0x13e3Ee699D1909E989722E753853AE30b17e08c5', { maxAgeSeconds: 3600 });
+      });
+
+      it('deployAndRegisterPaymasterV4: a reader and signer on different chains deploy nothing', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockAssertSameChain.mockRejectedValue(new Error('the reading client is on chain 11155111 but the signing client is on chain 10'));
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('signing client is on chain 10');
+        expect(mocks.mockVerifyEthUsdFeed).not.toHaveBeenCalled();
+        expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
       });
 
       it('deployAndRegisterPaymasterV4: a feed that fails the on-chain check deploys nothing', async () => {

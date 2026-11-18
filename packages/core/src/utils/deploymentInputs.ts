@@ -17,10 +17,20 @@ const fail = (msg: string): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg);
 };
 
-const hasCode = async (client: PublicClient, address: Address) => {
-    const code = await client.getCode({ address });
+const hasCode = async (client: PublicClient, address: Address, blockNumber?: bigint) => {
+    const code = await client.getCode({ address, blockNumber });
     return code !== undefined && code !== '0x';
 };
+
+/**
+ * The chain id both clients are on: the one that reads (and checks) and the one that signs. Different chains
+ * throw, so a check made on one chain can never approve a transaction sent on another.
+ */
+export async function assertSameChain(reader: { getChainId: () => Promise<number> }, writer: { getChainId: () => Promise<number> }): Promise<number> {
+    const [r, w] = await Promise.all([reader.getChainId(), writer.getChainId()]);
+    if (r !== w) fail(`the reading client is on chain ${r} but the signing client is on chain ${w}; refusing to continue`);
+    return r;
+}
 
 // Chainlink AggregatorV3Interface (third-party; no Chainlink ABI is vendored in @aastar/core).
 const AGGREGATOR_V3_ABI = [
@@ -36,7 +46,9 @@ const AGGREGATOR_V3_ABI = [
 ] as const;
 
 /** Default freshness bound for the ETH/USD feed: Chainlink's ETH/USD heartbeat is 3600 s or less on the supported chains. */
-export const ETH_USD_FEED_MAX_AGE_SECONDS = 7200;
+export const ETH_USD_FEED_MAX_AGE_SECONDS = 3600;
+/** How far the RPC's latest block may lag the wall clock before its state is not trusted for a live deployment. */
+export const MAX_HEAD_LAG_SECONDS = 600;
 
 /** The ETH/USD feed for `chainId`: the caller's value, else the address book's; neither → throws. */
 export function resolveEthUsdFeedAddress(chainId: number, explicit?: Address): Address {
@@ -48,23 +60,35 @@ export function resolveEthUsdFeedAddress(chainId: number, explicit?: Address): A
 
 /**
  * Check `feed` on the chain before it is written into a deployment: it has code, `decimals() == 8`,
- * `description() == "ETH / USD"`, a positive answer, and `updatedAt` within `maxAgeSeconds` of the
- * latest block's timestamp (block time, so forks and slow clocks are judged by the chain).
+ * `description() == "ETH / USD"`, a positive answer, and `updatedAt` within `maxAgeSeconds` of the latest
+ * block's timestamp. Pass the staleness threshold the deployment itself will enforce as `maxAgeSeconds`.
+ * All reads are pinned to that one block, and the block must be within `maxHeadLagSeconds` of the wall clock
+ * (`Infinity` for a deliberately historical fork).
+ *
+ * What this does not establish: that the contract IS Chainlink's feed (any contract can answer these reads),
+ * L2 sequencer health, or anything after this block. The address-book default is the trusted source; an
+ * address the caller passes is the caller's to trust.
  */
 export async function verifyEthUsdFeed(
     client: PublicClient,
     feed: Address,
-    opts: { maxAgeSeconds?: number } = {},
+    opts: { maxAgeSeconds?: number; maxHeadLagSeconds?: number; nowSeconds?: () => number } = {},
 ): Promise<{ decimals: number; description: string; answer: bigint; updatedAt: bigint }> {
     const maxAge = BigInt(opts.maxAgeSeconds ?? ETH_USD_FEED_MAX_AGE_SECONDS);
     const where = `ETH/USD feed ${feed}`;
-    if (!(await hasCode(client, feed))) fail(`${where} has no code on this chain; refusing to deploy`);
+    const block = await client.getBlock();
+    const wall = opts.nowSeconds ? opts.nowSeconds() : Math.floor(Date.now() / 1000);
+    const lag = wall - Number(block.timestamp);
+    const maxLag = opts.maxHeadLagSeconds ?? MAX_HEAD_LAG_SECONDS;
+    if (lag > maxLag) fail(`the RPC's latest block ${block.number} is ${lag}s behind the clock (max ${maxLag}s); refusing to deploy`);
+    const blockNumber = block.number!;
+    if (!(await hasCode(client, feed, blockNumber))) fail(`${where} has no code on this chain; refusing to deploy`);
     let decimals: number, description: string, round: readonly [bigint, bigint, bigint, bigint, bigint];
     try {
         [decimals, description, round] = await Promise.all([
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'decimals' }) as Promise<number>,
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'description' }) as Promise<string>,
-            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'latestRoundData' }) as Promise<readonly [bigint, bigint, bigint, bigint, bigint]>,
+            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'decimals', blockNumber }) as Promise<number>,
+            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'description', blockNumber }) as Promise<string>,
+            client.readContract({ address: feed, abi: AGGREGATOR_V3_ABI, functionName: 'latestRoundData', blockNumber }) as Promise<readonly [bigint, bigint, bigint, bigint, bigint]>,
         ]);
     } catch (e) {
         return fail(`${where} could not be read as a Chainlink aggregator (${(e as Error).message.split('\n')[0]}); refusing to deploy`);
@@ -73,7 +97,7 @@ export async function verifyEthUsdFeed(
     if (description !== 'ETH / USD') fail(`${where} reports description ${JSON.stringify(description)}, expected "ETH / USD"; refusing to deploy`);
     const [, answer, , updatedAt] = round;
     if (answer <= 0n) fail(`${where} reports a non-positive answer ${answer}; refusing to deploy`);
-    const now = (await client.getBlock()).timestamp;
+    const now = block.timestamp;
     if (updatedAt === 0n || updatedAt > now || now - updatedAt > maxAge) {
         fail(`${where} last updated at ${updatedAt}, block time ${now} (max age ${maxAge}s); refusing to deploy`);
     }
@@ -90,14 +114,16 @@ export function resolveAccountFactoryAddress(chainId: number, explicit?: Address
 
 /**
  * Check that `factory` builds accounts for `entryPoint`: it has code, and its `accountImplementation()`
- * reports `entryPoint()` equal to `entryPoint`. A v0.6 factory with a v0.7 EntryPoint throws, naming both.
+ * reports `entryPoint()` equal to `entryPoint`, all read at one block. A v0.6 factory with a v0.7 EntryPoint
+ * throws, naming both. This checks what the factory reports, not what `createAccount` will deploy.
  */
 export async function verifyAccountFactory(client: PublicClient, factory: Address, entryPoint: Address): Promise<{ implementation: Address }> {
-    if (!(await hasCode(client, factory))) fail(`account factory ${factory} has no code on this chain`);
+    const blockNumber = await client.getBlockNumber();
+    if (!(await hasCode(client, factory, blockNumber))) fail(`account factory ${factory} has no code on this chain`);
     let implementation: Address, implEntryPoint: Address;
     try {
-        implementation = await client.readContract({ address: factory, abi: SimpleAccountFactoryABI, functionName: 'accountImplementation' }) as Address;
-        implEntryPoint = await client.readContract({ address: implementation, abi: SimpleAccountABI, functionName: 'entryPoint' }) as Address;
+        implementation = await client.readContract({ address: factory, abi: SimpleAccountFactoryABI, functionName: 'accountImplementation', blockNumber }) as Address;
+        implEntryPoint = await client.readContract({ address: implementation, abi: SimpleAccountABI, functionName: 'entryPoint', blockNumber }) as Address;
     } catch (e) {
         return fail(`account factory ${factory}: accountImplementation().entryPoint() could not be read (${(e as Error).message.split('\n')[0]})`);
     }

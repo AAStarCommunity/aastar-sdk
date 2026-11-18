@@ -31,7 +31,13 @@ const OP_SEPOLIA_TYPO = '0x91E6060613810449d098b0b5EC8b51A0fe8C8985' as Address;
 const EP_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
 const OUT = 'docs/onchain-evidence/deploy-inputs-op-fork.md';
 
-const clean = (e: unknown) => String((e as any)?.shortMessage ?? (e as any)?.message ?? e).split('\n')[0].replace(/https?:\/\/\S+/g, '<url>');
+// Only the SDK's own refusal text (AAStarError, code E…) is written out; any other error is recorded by its class
+// name, so provider messages (which can carry endpoint details) never reach the report.
+const clean = (e: unknown) => {
+    const code = (e as any)?.code;
+    if (typeof code === 'string' && /^E\d{4}$/.test(code)) return String((e as Error).message).split('\n')[0];
+    return `unexpected ${(e as any)?.name ?? 'error'}`;
+};
 const outcome = async (f: () => Promise<unknown>) => {
     try { const v = await f(); return { ok: true as const, text: typeof v === 'object' ? JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)) : String(v) }; }
     catch (e) { return { ok: false as const, text: clean(e) }; }
@@ -57,7 +63,13 @@ async function main() {
     const lines: string[] = [];
     const checks: Array<{ what: string; expect: 'pass' | RegExp; got: { ok: boolean; text: string } }> = [];
 
-    // Part 1: OP Mainnet fork.
+    // Every endpoint must report the chain it is labelled with before anything is recorded under that label.
+    for (const id of [10, 11155111, 11155420] as const) {
+        const got = await createPublicClient({ chain: CHAINS[id], transport: http(PUBLIC[id]) }).getChainId();
+        if (got !== id) throw new Error(`the endpoint for chain ${id} reports chain ${got}`);
+    }
+
+    // Part 1: OP Mainnet fork (its upstream was just checked to be chain 10).
     const { child: anvil, port } = await startAnvil(process.env.ANVIL_BIN ?? join(homedir(), '.foundry/bin/anvil'), ['--fork-url', PUBLIC[10], '--chain-id', '10']);
     let forkBlock = 0n;
     try {

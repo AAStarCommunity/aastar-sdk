@@ -42,8 +42,24 @@ Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domai
   including one passed explicitly. `UserClient.deployAccount` takes an optional `entryPointAddress`.
 - Address book fix: OP Sepolia's `simpleAccountFactory` was `0x91E6060613…8985`, which has no code on any chain; it is
   now the v0.7 factory `0x91E60e0613…8985`, as on OP Mainnet and Sepolia (same in `config.op-sepolia.json`).
+- The checks run on the chain the transaction is sent on: the reading and the signing client must report the same
+  chain id (`assertSameChain`), and `createEndUserClient` / `createOperatorClient` compare the RPC's chain id with the
+  configured `chain`. Feed reads are pinned to one block, that block must be within 600 s of the wall clock, and
+  the feed must be fresh under the staleness threshold the new paymaster will enforce (3600 s).
+- `createOperatorClient().deployPaymasterV4` now decodes `initData` as `initialize(...)` and checks its price feed
+  before sending; `initData` that is not an `initialize()` call (including the old default `'0x'`, which the factory
+  rejects anyway) throws. `paymasterFactoryActions().deployPaymaster*` stay unchecked primitives (documented).
+- `UserClient.deployAccount` checks the factory unless `accountType` names a non-simple account; passing
+  `customAbi` alone no longer skips the check.
 - New in `@aastar/core`: `resolveEthUsdFeedAddress`, `verifyEthUsdFeed`, `resolveAccountFactoryAddress`,
-  `verifyAccountFactory`. Evidence: `docs/onchain-evidence/deploy-inputs-op-fork.md`.
+  `verifyAccountFactory`, `assertSameChain`. Evidence: `docs/onchain-evidence/deploy-inputs-op-fork.md`.
+- **Migration:** `ethUsdPriceFeed` is optional; a chain outside the address book needs `ethUsdPriceFeedAddress` and
+  a factory address. A different factory gives a different counterfactual account address for the same owner and
+  salt: an integration that already has accounts from a factory should keep passing that factory explicitly (it is
+  still checked against the EntryPoint). On OP Sepolia nothing changes for existing accounts: the old book entry had
+  no code, so no account was ever created through it.
+- Not covered (FU-120): L2 sequencer health, the identity of a caller-supplied feed or factory, and the unchecked
+  primitives `paymasterFactoryActions().deployPaymaster*`, `toSimpleSmartAccount`, `accountFactoryActions`.
 
 ### PaymasterV4 deploys are checked before the SDK registers them
 
