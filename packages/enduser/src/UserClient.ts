@@ -70,11 +70,16 @@ export class UserClient extends BaseClient {
 
         // No cross-chain default: the caller's factory, else the address book's for this chain. The old default
         // 0x9406… is the EntryPoint v0.6 SimpleAccountFactory (it has code everywhere, so only its implementation's
-        // entryPoint() exposes that). The factory is checked against the EntryPoint unless the caller names another
-        // account type; passing an ABI alone does not skip it. Reader and signer must be on the same chain.
+        // entryPoint() exposes that). A SimpleAccount factory is always checked against the EntryPoint. Another
+        // accountType is only accepted with its own customAbi, and is then deployed unchecked (the caller's factory).
+        // Reader and signer must be on the same, configured chain.
         const chainId = await assertSameChain(readClient, client);
         const factoryAddr = resolveAccountFactoryAddress(chainId, params.factoryAddress);
-        if (params.accountType === undefined || params.accountType === 'simple') {
+        const isSimple = params.accountType === undefined || params.accountType === 'simple';
+        if (!isSimple && !params.customAbi) {
+            throw new Error(`deployAccount: accountType ${JSON.stringify(params.accountType)} needs its own customAbi; refusing to deploy it as a SimpleAccount unchecked`);
+        }
+        if (isSimple) {
             const entryPoint = params.entryPointAddress ?? (getCanonicalAddresses(chainId)?.entryPoint as Address | undefined);
             if (!entryPoint) throw new Error(`deployAccount: no EntryPoint for chain ${chainId} in the address book; pass entryPointAddress`);
             await verifyAccountFactory(readClient, factoryAddr, entryPoint);

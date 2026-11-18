@@ -182,6 +182,10 @@ export class PaymasterOperatorClient extends BaseClient {
                 throw new Error('Must have ROLE_COMMUNITY before deploying Paymaster V4');
             }
 
+            // The reading and the signing client must be on the same, configured chain before either branch below
+            // sends anything (the reuse branch still approves and registers).
+            const chainId = await assertSameChain(publicClient as any, this.client as any);
+
             // 2. Deployment (Idempotent Check)
             const existingPaymaster = await factory(publicClient).getPaymaster({ owner: accountAddr });
             let deployHash: Hash = '0x0000000000000000000000000000000000000000000000000000000000000000';
@@ -194,9 +198,7 @@ export class PaymasterOperatorClient extends BaseClient {
             } else {
                 // The feed is written into the paymaster's initialize(); it comes from the caller or the address book
                 // for this chain, and is checked on the chain (code, 8 decimals, "ETH / USD", fresh) before deploying.
-                // The reading and the signing client must be on the same chain, so the check covers the chain the
-                // deployment is sent on; the feed must be fresh under the staleness threshold the paymaster will enforce.
-                const chainId = await assertSameChain(publicClient as any, this.client as any);
+                // The feed must be fresh under the staleness threshold the paymaster will enforce.
                 const priceFeed = resolveEthUsdFeedAddress(chainId, this.ethUsdPriceFeed);
                 await verifyEthUsdFeed(publicClient as any, priceFeed, { maxAgeSeconds: Number(PRICE_STALENESS_THRESHOLD) });
                 console.log('    🛠️ Deploying Paymaster V4 with args:', {

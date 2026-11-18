@@ -15,11 +15,13 @@ const IMPL = '0x68641DE71cfEa5a5d0D29712449Ee254bb1400C2' as Address;
 
 const NOW = 1_800_000_000n;
 const BLOCK = 123n;
+const HASH = ('0x' + 'aa'.repeat(32)) as `0x${string}`;
+const REORGED = ('0x' + 'bb'.repeat(32)) as `0x${string}`;
 const clock = { nowSeconds: () => Number(NOW) + 5 }; // wall clock 5 s ahead of the head
-function feedClient(o: { code?: string; decimals?: number; description?: string; answer?: bigint; updatedAt?: bigint; readError?: boolean } = {}) {
+function feedClient(o: { code?: string; decimals?: number; description?: string; answer?: bigint; updatedAt?: bigint; readError?: boolean; reorg?: boolean } = {}) {
     return {
         getCode: vi.fn(async ({ blockNumber }: any) => { if (blockNumber !== BLOCK) throw new Error('getCode not pinned'); return o.code ?? '0x6080'; }),
-        getBlock: vi.fn(async () => ({ timestamp: NOW, number: BLOCK })),
+        getBlock: vi.fn(async (args?: any) => ({ timestamp: NOW, number: BLOCK, hash: args?.blockNumber !== undefined && o.reorg ? REORGED : HASH })),
         readContract: vi.fn(async ({ functionName, blockNumber }: any) => {
             if (blockNumber !== BLOCK) throw new Error(`${functionName} not pinned to the checked block`);
             if (o.readError) throw new Error('execution reverted');
@@ -65,15 +67,19 @@ describe('ETH/USD feed', () => {
         await expect(verifyEthUsdFeed(feedClient({ updatedAt: NOW - 3600n }), OP_FEED, clock)).resolves.toBeTruthy(); // exactly at the bound
     });
 
+    it('a reorg at the checked height during the check is refused', async () => {
+        await expect(verifyEthUsdFeed(feedClient({ reorg: true }), OP_FEED, clock)).rejects.toThrow(`changed from ${HASH} to ${REORGED}`);
+    });
+
     it('an RPC whose latest block lags the wall clock is refused (its "fresh" feed may be hours old)', async () => {
         await expect(verifyEthUsdFeed(feedClient(), OP_FEED, { nowSeconds: () => Number(NOW) + 601 })).rejects.toThrow('601s behind the clock (max 600s)');
         await expect(verifyEthUsdFeed(feedClient(), OP_FEED, { nowSeconds: () => Number(NOW) + 601, maxHeadLagSeconds: Infinity })).resolves.toBeTruthy();
     });
 });
 
-function factoryClient(o: { code?: string; implEntryPoint?: Address; readError?: boolean } = {}) {
+function factoryClient(o: { code?: string; implEntryPoint?: Address; readError?: boolean; reorg?: boolean } = {}) {
     return {
-        getBlockNumber: vi.fn(async () => BLOCK),
+        getBlock: vi.fn(async (args?: any) => ({ number: BLOCK, hash: args?.blockNumber !== undefined && o.reorg ? REORGED : HASH })),
         getCode: vi.fn(async ({ blockNumber }: any) => { if (blockNumber !== BLOCK) throw new Error('getCode not pinned'); return o.code ?? '0x6080'; }),
         readContract: vi.fn(async ({ functionName, blockNumber }: any) => {
             if (blockNumber !== BLOCK) throw new Error(`${functionName} not pinned to the checked block`);
@@ -106,6 +112,10 @@ describe('account factory', () => {
             .rejects.toThrow(`builds accounts for EntryPoint ${EP_V06}, but the SDK is configured for ${EP_V07}`);
     });
 
+    it('a reorg at the checked height while checking the factory is refused', async () => {
+        await expect(verifyAccountFactory(factoryClient({ reorg: true }), V07_FACTORY, EP_V07)).rejects.toThrow('changed from');
+    });
+
     it('no code, or no accountImplementation().entryPoint(), is refused', async () => {
         await expect(verifyAccountFactory(factoryClient({ code: '0x' }), V07_FACTORY, EP_V07)).rejects.toThrow('has no code');
         await expect(verifyAccountFactory(factoryClient({ readError: true }), V07_FACTORY, EP_V07)).rejects.toThrow('could not be read');
@@ -114,8 +124,14 @@ describe('account factory', () => {
 
 describe('assertSameChain', () => {
     it('returns the shared chain id, and throws when the reader and the signer are on different chains', async () => {
-        const on = (id: number) => ({ getChainId: async () => id });
+        const on = (id: number, configured: number | undefined = id) => ({ getChainId: async () => id, chain: configured === undefined ? undefined : { id: configured } });
         await expect(assertSameChain(on(10), on(10))).resolves.toBe(10);
         await expect(assertSameChain(on(11155111), on(10))).rejects.toThrow('reading client is on chain 11155111 but the signing client is on chain 10');
+    });
+
+    it('a signing client with no configured chain (so viem would not re-check it at send time) is refused', async () => {
+        const reader = { getChainId: async () => 10 };
+        await expect(assertSameChain(reader, { getChainId: async () => 10 })).rejects.toThrow('has no configured chain 10 (it has none)');
+        await expect(assertSameChain(reader, { getChainId: async () => 10, chain: { id: 11155111 } })).rejects.toThrow('(it has 11155111)');
     });
 });

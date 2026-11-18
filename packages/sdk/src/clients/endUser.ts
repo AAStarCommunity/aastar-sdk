@@ -111,13 +111,15 @@ export function createEndUserClient({
 
     // The account factory: the caller's `addresses.simpleAccountFactory`, else the address book's for the live chain;
     // on every call it must build accounts for the EntryPoint this client uses.
+    // Captured once: later changes to the caller's `addresses` object cannot swap the factory between calls.
+    const factoryOverride = (addresses as any)?.simpleAccountFactory as Address | undefined;
     const checkedAccountFactory = async (): Promise<Address> => {
         const liveChainId = await (client as any).getChainId();
         if (liveChainId !== chain.id) throw new Error(`the RPC is on chain ${liveChainId}, the client is configured for ${chain.id}; refusing to create an account`);
         const entryPoint = (usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032') as Address;
         // Only the caller's own override or the address book: not the merged usedAddresses, whose global
         // TEST_ACCOUNT_ADDRESSES entry would otherwise pass as "explicit" on a chain outside the book.
-        const factory = resolveAccountFactoryAddress(liveChainId, (addresses as any)?.simpleAccountFactory);
+        const factory = resolveAccountFactoryAddress(liveChainId, factoryOverride);
         await verifyAccountFactory(client as any, factory, entryPoint);
         return factory;
     };
@@ -411,7 +413,7 @@ export function createEndUserClient({
             return { accountAddress, initCode, isDeployed };
         },
         async deploySmartAccount({ owner, salt = 0n, fundWithETH = 0n }: { owner: Address, salt?: bigint, fundWithETH?: bigint }) {
-            const { accountAddress, isDeployed } = await (this as any).createSmartAccount({ owner, salt });
+            const { accountAddress, isDeployed, initCode } = await (this as any).createSmartAccount({ owner, salt });
             const { formatEther } = await import('viem');
 
             let deployHash: Hash = '0x0';
@@ -420,7 +422,10 @@ export function createEndUserClient({
                 console.log(`   ℹ️ Account ${accountAddress} already deployed.`);
             } else {
                 const { SimpleAccountFactoryABI } = await import('@aastar/core');
-                const factoryAddress = await checkedAccountFactory();
+                // The factory the address was predicted with (the first 20 bytes of its initCode, already checked),
+                // not a second resolution: the account deployed and funded must be the one returned.
+                const { getAddress } = await import('viem');
+                const factoryAddress = getAddress(('0x' + (initCode as string).slice(2, 42)) as Address);
 
                 console.log(`   🏭 Deploying Smart Account for ${owner}...`);
                 deployHash = await (client as any).writeContract({

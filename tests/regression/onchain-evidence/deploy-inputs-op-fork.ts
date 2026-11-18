@@ -31,12 +31,27 @@ const OP_SEPOLIA_TYPO = '0x91E6060613810449d098b0b5EC8b51A0fe8C8985' as Address;
 const EP_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as Address;
 const OUT = 'docs/onchain-evidence/deploy-inputs-op-fork.md';
 
-// Only the SDK's own refusal text (AAStarError, code E…) is written out; any other error is recorded by its class
-// name, so provider messages (which can carry endpoint details) never reach the report.
+// Errors are written out only as fixed reason identifiers (plus the EntryPoint address a factory reported, which is
+// an on-chain value). No error text is copied: SDK messages can embed provider text, and provider text can carry
+// endpoint details or credentials.
+const REASONS: Array<[RegExp, string]> = [
+    [/has no code/, 'no-code'],
+    [/could not be read as a Chainlink aggregator/, 'not-an-aggregator'],
+    [/accountImplementation\(\)\.entryPoint\(\) could not be read/, 'no-account-implementation'],
+    [/reports decimals/, 'wrong-decimals'],
+    [/expected "ETH \/ USD"/, 'wrong-description'],
+    [/non-positive answer/, 'non-positive-answer'],
+    [/last updated at/, 'stale-feed'],
+    [/behind the clock/, 'stale-head'],
+    [/changed from 0x/, 'reorg-during-check'],
+];
 const clean = (e: unknown) => {
     const code = (e as any)?.code;
-    if (typeof code === 'string' && /^E\d{4}$/.test(code)) return String((e as Error).message).split('\n')[0];
-    return `unexpected ${(e as any)?.name ?? 'error'}`;
+    if (!(typeof code === 'string' && /^E\d{4}$/.test(code))) return `unexpected-${(e as any)?.name ?? 'error'}`;
+    const msg = String((e as Error).message);
+    const ep = msg.match(/builds accounts for EntryPoint (0x[0-9a-fA-F]{40}), but/);
+    if (ep) return `entrypoint-mismatch (factory reports ${ep[1]})`;
+    return REASONS.find(([re]) => re.test(msg))?.[1] ?? 'other-sdk-refusal';
 };
 const outcome = async (f: () => Promise<unknown>) => {
     try { const v = await f(); return { ok: true as const, text: typeof v === 'object' ? JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x)) : String(v) }; }
@@ -80,10 +95,10 @@ async function main() {
 
         const bookFeed = resolveEthUsdFeedAddress(10);
         checks.push({ what: `fork: no feed given → address book feed ${bookFeed}, verifyEthUsdFeed`, expect: 'pass', got: await outcome(() => verifyEthUsdFeed(fork as any, bookFeed)) });
-        checks.push({ what: `fork: the old default ${SEPOLIA_FEED} (Sepolia's feed), verifyEthUsdFeed`, expect: /has no code/, got: await outcome(() => verifyEthUsdFeed(fork as any, SEPOLIA_FEED)) });
+        checks.push({ what: `fork: the old default ${SEPOLIA_FEED} (Sepolia's feed), verifyEthUsdFeed`, expect: /^no-code$/, got: await outcome(() => verifyEthUsdFeed(fork as any, SEPOLIA_FEED)) });
         const bookFactory = resolveAccountFactoryAddress(10);
         checks.push({ what: `fork: address book factory ${bookFactory} with EntryPoint v0.7`, expect: 'pass', got: await outcome(() => verifyAccountFactory(fork as any, bookFactory, EP_V07)) });
-        checks.push({ what: `fork: the old default factory ${V06_FACTORY} with EntryPoint v0.7`, expect: /builds accounts for EntryPoint 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789/i, got: await outcome(() => verifyAccountFactory(fork as any, V06_FACTORY, EP_V07)) });
+        checks.push({ what: `fork: the old default factory ${V06_FACTORY} with EntryPoint v0.7`, expect: /^entrypoint-mismatch \(factory reports 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789\)$/i, got: await outcome(() => verifyAccountFactory(fork as any, V06_FACTORY, EP_V07)) });
     } finally {
         anvil.kill('SIGTERM');
     }
@@ -93,8 +108,8 @@ async function main() {
         const c = createPublicClient({ chain: CHAINS[id], transport: http(PUBLIC[id]) });
         const book = getCanonicalAddresses(id)!;
         checks.push({ what: `chain ${id}: address book factory ${book.simpleAccountFactory}`, expect: 'pass', got: await outcome(() => verifyAccountFactory(c as any, book.simpleAccountFactory as Address, EP_V07)) });
-        checks.push({ what: `chain ${id}: old default factory ${V06_FACTORY}`, expect: /builds accounts for EntryPoint 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789/i, got: await outcome(() => verifyAccountFactory(c as any, V06_FACTORY, EP_V07)) });
-        checks.push({ what: `chain ${id}: old OP Sepolia book entry ${OP_SEPOLIA_TYPO}`, expect: /has no code/, got: await outcome(() => verifyAccountFactory(c as any, OP_SEPOLIA_TYPO, EP_V07)) });
+        checks.push({ what: `chain ${id}: old default factory ${V06_FACTORY}`, expect: /^entrypoint-mismatch \(factory reports 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789\)$/i, got: await outcome(() => verifyAccountFactory(c as any, V06_FACTORY, EP_V07)) });
+        checks.push({ what: `chain ${id}: old OP Sepolia book entry ${OP_SEPOLIA_TYPO}`, expect: /^no-code$/, got: await outcome(() => verifyAccountFactory(c as any, OP_SEPOLIA_TYPO, EP_V07)) });
         checks.push({ what: `chain ${id}: address book feed ${book.priceFeed}`, expect: 'pass', got: await outcome(() => verifyEthUsdFeed(c as any, book.priceFeed as Address)) });
     }
 

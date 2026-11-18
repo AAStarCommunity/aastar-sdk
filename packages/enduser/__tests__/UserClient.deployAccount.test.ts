@@ -14,7 +14,7 @@ function client(chainId: number, implEntryPoint: Address = EP_V07) {
         account: { address: OWNER },
         chain: { id: chainId },
         getChainId: vi.fn(async () => chainId),
-        getBlockNumber: vi.fn(async () => 1n),
+        getBlock: vi.fn(async () => ({ number: 1n, hash: '0x' + '11'.repeat(32) })),
         getCode: vi.fn(async () => '0x6080'),
         readContract: vi.fn(async ({ functionName }: any) => {
             if (functionName === 'accountImplementation') return '0x68641DE71cfEa5a5d0D29712449Ee254bb1400C2';
@@ -42,6 +42,19 @@ describe('UserClient.deployAccount — account factory', () => {
     it('passing an ABI no longer skips the check: a v0.6 factory with customAbi is still refused', async () => {
         const c = client(10, EP_V06);
         await expect(UserClient.deployAccount(c, { owner: OWNER, factoryAddress: V06_FACTORY, customAbi: [] as any })).rejects.toThrow('builds accounts for EntryPoint');
+        expect(c.writeContract).not.toHaveBeenCalled();
+    });
+
+    it('a non-simple accountType without its own ABI is refused, not deployed unchecked as a SimpleAccount', async () => {
+        const c = client(10, EP_V06);
+        await expect(UserClient.deployAccount(c, { owner: OWNER, factoryAddress: V06_FACTORY, accountType: 'kernel' })).rejects.toThrow('needs its own customAbi');
+        expect(c.writeContract).not.toHaveBeenCalled();
+    });
+
+    it('a signing client with no configured chain is refused', async () => {
+        const c = client(10);
+        delete c.chain;
+        await expect(UserClient.deployAccount(c, { owner: OWNER })).rejects.toThrow('has no configured chain');
         expect(c.writeContract).not.toHaveBeenCalled();
     });
 

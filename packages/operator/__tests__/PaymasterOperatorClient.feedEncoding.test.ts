@@ -29,7 +29,7 @@ const ACCOUNT = '0x1111111111111111111111111111111111111111';
 function client(chainId: number) {
     const chain = { getChainId: vi.fn(async () => chainId), waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })) };
     const c = new PaymasterOperatorClient({
-        client: { ...chain, account: { address: ACCOUNT } } as any,
+        client: { ...chain, account: { address: ACCOUNT }, chain: { id: chainId } } as any,
         publicClient: chain as any,
         superPaymasterAddress: '0x2222222222222222222222222222222222222222',
         registryAddress: '0x3333333333333333333333333333333333333333',

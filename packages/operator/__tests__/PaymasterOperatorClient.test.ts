@@ -201,14 +201,16 @@ describe('PaymasterOperatorClient', () => {
         expect(mocks.mockVerifyEthUsdFeed).toHaveBeenCalledWith(expect.anything(), '0x13e3Ee699D1909E989722E753853AE30b17e08c5', { maxAgeSeconds: 3600 });
       });
 
-      it('deployAndRegisterPaymasterV4: a reader and signer on different chains deploy nothing', async () => {
+      it('deployAndRegisterPaymasterV4: a reader and signer on different chains deploy nothing, on either branch', async () => {
         mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
             roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
-        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
         mocks.mockAssertSameChain.mockRejectedValue(new Error('the reading client is on chain 11155111 but the signing client is on chain 10'));
         await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('signing client is on chain 10');
         expect(mocks.mockVerifyEthUsdFeed).not.toHaveBeenCalled();
         expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
+        // The check precedes the branch: the reuse path (approve + register) is not reached either.
+        expect(mocks.mockPaymasterFactory.getPaymaster).not.toHaveBeenCalled();
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
       });
 
       it('deployAndRegisterPaymasterV4: a feed that fails the on-chain check deploys nothing', async () => {

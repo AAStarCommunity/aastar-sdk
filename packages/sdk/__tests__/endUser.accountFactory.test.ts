@@ -17,7 +17,7 @@ const transport = custom({ request: async ({ method }) => { throw new Error(`une
 function client(addresses: Record<string, Address> = {}, implEntryPoint: Address = EP_V07, chain: any = sepolia) {
     const c: any = createEndUserClient({ chain, transport, account: { address: OWNER, type: 'json-rpc' } as any, addresses });
     c.getChainId = vi.fn(async () => chain.id);
-    c.getBlockNumber = vi.fn(async () => 1n);
+    c.getBlock = vi.fn(async () => ({ number: 1n, hash: '0x' + '11'.repeat(32) }));
     c.getCode = vi.fn(async () => '0x6080');
     c.getBytecode = vi.fn(async () => undefined);
     c.readContract = vi.fn(async ({ functionName }: any) => {
@@ -67,6 +67,18 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
         await expect(c.createSmartAccount({ owner: OWNER })).rejects.toThrow('no simpleAccountFactory for chain 8453');
         const ok = client({ registry: '0x3333333333333333333333333333333333333333', simpleAccountFactory: V07_FACTORY }, EP_V07, base);
         await expect(ok.createSmartAccount({ owner: OWNER })).resolves.toBeTruthy();
+    });
+
+    it('changing the caller\'s addresses object after construction does not swap the factory between prediction and deploy', async () => {
+        const OTHER_FACTORY = '0x5555555555555555555555555555555555555555' as Address;
+        const addresses: Record<string, Address> = { simpleAccountFactory: V07_FACTORY };
+        const c = client(addresses);
+        c.writeContract = vi.fn(async () => '0xbeef');
+        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success' }));
+        const read = c.readContract.getMockImplementation();
+        c.readContract = vi.fn(async (args: any) => { if (args.functionName === 'getAddress') addresses.simpleAccountFactory = OTHER_FACTORY; return read(args); });
+        await c.deploySmartAccount({ owner: OWNER });
+        expect(c.writeContract).toHaveBeenCalledWith(expect.objectContaining({ address: V07_FACTORY, functionName: 'createAccount' }));
     });
 
     it('a factory with no code is refused', async () => {
