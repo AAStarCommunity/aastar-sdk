@@ -152,3 +152,18 @@ describe('X402Client.createPayment — the asset domain comes from the chain (OP
     await expect(pay(opClient({ chainId: 11155420 }))).rejects.toThrow('config chainId 11155420');
   });
 });
+
+describe('X402Client.createPayment — direct path does not depend on the asset exposing an EIP-712 domain', () => {
+  it('a plain ERC-20 asset (no version(), no DOMAIN_SEPARATOR()) still gets a direct-path payment', async () => {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    const reads: string[] = [];
+    const plainErc20 = {
+      getChainId: async () => CHAIN_ID,
+      readContract: async ({ functionName }: { functionName: string }) => { reads.push(functionName); throw new Error('execution reverted'); },
+    } as never;
+    const c = new X402Client({ publicClient: plainErc20, walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+    const { payload } = await c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
+    expect(payload.accepted.extra.settlement).toBe('direct');
+    expect(reads).toEqual([]);
+  });
+});

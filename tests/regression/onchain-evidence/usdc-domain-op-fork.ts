@@ -13,6 +13,7 @@
  * Output: docs/onchain-evidence/usdc-domain-op-fork.md (no RPC URL, no key).
  */
 import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -27,8 +28,6 @@ import { X402Client, EIP3009_TYPES } from '@aastar/x402';
 const FORK_SOURCE = process.env.OP_FORK_RPC ?? 'https://mainnet.optimism.io'; // public, read-only; never written out
 const OP_USDC = '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85' as Address;
 const OP_USDC_E = '0x7F5c764cBc14f9669B88837ca1490cCa17c31607' as Address;
-const PORT = 18545 + Math.floor(Math.random() * 1000);
-const LOCAL = `http://127.0.0.1:${PORT}`;
 const OUT = 'docs/onchain-evidence/usdc-domain-op-fork.md';
 
 // FiatTokenV2 receiveWithAuthorization (v, r, s variant), as deployed for native USDC.
@@ -41,8 +40,21 @@ const RECEIVE_ABI = [{
     ],
 }] as const;
 
-async function waitForRpc(client: { getChainId: () => Promise<number> }): Promise<void> {
+// A port the OS just handed out on loopback, so the anvil we start is the only thing listening there.
+function freePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+        const srv = createServer();
+        srv.once('error', reject);
+        srv.listen(0, '127.0.0.1', () => { const { port } = srv.address() as any; srv.close(() => resolve(port)); });
+    });
+}
+
+// Error text for the report: first line only, with any URL removed.
+const clean = (e: unknown) => String((e as any)?.shortMessage ?? (e as any)?.message ?? e).split('\n')[0].replace(/https?:\/\/\S+/g, '<url>');
+
+async function waitForRpc(client: { getChainId: () => Promise<number> }, exited: () => boolean): Promise<void> {
     for (let i = 0; i < 120; i++) {
+        if (exited()) throw new Error('anvil exited before it was ready');
         try { await client.getChainId(); return; } catch { await new Promise((r) => setTimeout(r, 500)); }
     }
     throw new Error('anvil fork did not come up');
@@ -50,12 +62,20 @@ async function waitForRpc(client: { getChainId: () => Promise<number> }): Promis
 
 async function main() {
     const anvilBin = process.env.ANVIL_BIN ?? join(homedir(), '.foundry/bin/anvil');
-    const anvil = spawn(anvilBin, ['--fork-url', FORK_SOURCE, '--port', String(PORT), '--chain-id', '10', '--silent'], { stdio: 'ignore' });
+    const port = await freePort();
+    const LOCAL = `http://127.0.0.1:${port}`;
+    const anvil = spawn(anvilBin, ['--fork-url', FORK_SOURCE, '--host', '127.0.0.1', '--port', String(port), '--chain-id', '10', '--silent'], { stdio: 'ignore' });
+    let exited = false;
+    anvil.once('exit', () => { exited = true; });
+    anvil.once('error', () => { exited = true; });
     const lines: string[] = [];
     try {
         const client = createPublicClient({ chain: optimism, transport: http(LOCAL) });
-        await waitForRpc(client);
-        const forkBlock = await client.getBlockNumber();
+        await waitForRpc(client, () => exited);
+        // Before any state change: the endpoint must be our own, still-running anvil, and it must be a fork.
+        const info = await client.request({ method: 'anvil_nodeInfo' as any }) as any;
+        if (exited || !info?.forkConfig?.forkBlockNumber) throw new Error('the endpoint is not the anvil fork this script started');
+        const forkBlock = BigInt(info.forkConfig.forkBlockNumber);
 
         const payer = privateKeyToAccount(generatePrivateKey()); // in-memory, this run only
         const recipient = privateKeyToAccount(generatePrivateKey()).address; // impersonated msg.sender
@@ -70,48 +90,51 @@ async function main() {
             publicClient: client as any, walletClient, superPaymasterAddress: recipient, chainId: 10, facilitatorContract: recipient,
         });
         const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
-        const submit = async (nonce: Hex, signature: Hex) => {
+        const calldata = (nonce: Hex, signature: Hex) => {
             const { v, r, s } = parseSignature(signature);
-            const data = encodeFunctionData({
+            return encodeFunctionData({
                 abi: RECEIVE_ABI, functionName: 'receiveWithAuthorization',
                 args: [payer.address, recipient, 0n, 0n, validBefore, nonce, Number(v), r, s],
             });
-            try {
-                await client.call({ account: recipient, to: OP_USDC, data });
-            } catch (e) {
-                return { ok: false as const, reason: (e as any).shortMessage?.split('\n')[0] ?? String(e) };
-            }
-            const hash = await client.request({ method: 'eth_sendTransaction' as any, params: [{ from: recipient, to: OP_USDC, data }] as any }) as Hex;
-            const receipt = await client.waitForTransactionReceipt({ hash });
-            return { ok: receipt.status === 'success', hash, status: receipt.status };
+        };
+        const simulate = async (data: Hex) => {
+            try { await client.call({ account: recipient, to: OP_USDC, data }); return { ok: true as const }; }
+            catch (e) { return { ok: false as const, reason: clean(e) }; }
         };
 
-        // 1. The SDK path: X402Client reads the domain from the fork and signs.
+        // One authorization (the SDK's, nonce unused), signed under two domains; only the domain differs.
         const { payload, nonce } = await x402.createPayment({
             from: payer.address, to: recipient, asset: OP_USDC, amount: 0n, maxFee: 0n,
             settlement: 'eip-3009', validAfter: 0n, validBefore,
         });
-        const sdk = await submit(nonce, payload.payload.signature as Hex);
-
-        // 2. The old default domain, same message shape, fresh nonce.
-        const oldNonce = ('0x' + 'ee'.repeat(32)) as Hex;
         const oldSig = await walletClient.signTypedData({
             account: payer, domain: { name: 'USDC', version: '2', chainId: 10, verifyingContract: OP_USDC },
             types: EIP3009_TYPES, primaryType: 'ReceiveWithAuthorization',
-            message: { from: payer.address, to: recipient, value: 0n, validAfter: 0n, validBefore, nonce: oldNonce },
+            message: { from: payer.address, to: recipient, value: 0n, validAfter: 0n, validBefore, nonce },
         });
-        const old = await submit(oldNonce, oldSig);
+        // Old first: a rejection must be the contract's signature check, nothing else.
+        const old = await simulate(calldata(nonce, oldSig));
+        const oldRejectedForSignature = !old.ok && /invalid signature/i.test(old.reason);
+        const sdkSim = await simulate(calldata(nonce, payload.payload.signature as Hex));
+        let sdk: { ok: boolean; detail: string } = { ok: false, detail: sdkSim.ok ? '' : `simulation rejected: ${sdkSim.reason}` };
+        if (sdkSim.ok) {
+            const hash = await client.request({ method: 'eth_sendTransaction' as any, params: [{ from: recipient, to: OP_USDC, data: calldata(nonce, payload.payload.signature as Hex) }] as any }) as Hex;
+            const receipt = await client.waitForTransactionReceipt({ hash });
+            sdk = { ok: receipt.status === 'success', detail: `fork tx ${hash} status ${receipt.status}` };
+        }
 
-        // 3. Bridged USDC.e: the resolver must refuse.
+        // Bridged USDC.e: the resolver must refuse because the getters are missing, not for any other reason.
         let usdcE: string;
+        let usdcERefusedForGetters = false;
         try {
             await resolveEip712Domain(client as any, OP_USDC_E);
             usdcE = 'RESOLVED (unexpected)';
         } catch (e) {
-            usdcE = `refused: ${(e as Error).message}`;
+            usdcE = `refused: ${clean(e)}`;
+            usdcERefusedForGetters = usdcE.includes('neither eip712Domain() nor name()/version() could be read');
         }
 
-        const pass = sdk.ok && !old.ok && usdcE.startsWith('refused');
+        const pass = sdk.ok && oldRejectedForSignature && usdcERefusedForGetters;
         lines.push(
             '# USDC EIP-712 domain on an OP Mainnet fork',
             '',
@@ -123,8 +146,8 @@ async function main() {
             '|---|---|',
             `| Domain read by \`resolveEip712Domain\` for native USDC ${OP_USDC} | \`${JSON.stringify(resolved.domain)}\` (source: ${resolved.source}) |`,
             `| Its separator equals the contract's \`DOMAIN_SEPARATOR()\` | ${resolved.separator} (checked inside the resolver) |`,
-            `| \`X402Client.createPayment\` → \`receiveWithAuthorization\` on the fork | ${sdk.ok ? `accepted, fork tx ${sdk.hash} status ${sdk.status}` : `REJECTED: ${(sdk as any).reason}`} |`,
-            `| Same authorization signed under the old default \`{ name: 'USDC', version: '2' }\` | ${old.ok ? 'ACCEPTED (unexpected)' : `rejected: ${(old as any).reason}`} |`,
+            `| Same authorization (same nonce) under the old default \`{ name: 'USDC', version: '2' }\`, simulated first | ${old.ok ? 'ACCEPTED (unexpected)' : `rejected: ${old.reason}`}${oldRejectedForSignature ? '' : ' (NOT the expected invalid-signature revert)'} |`,
+            `| \`X402Client.createPayment\` → \`receiveWithAuthorization\` on the fork | ${sdk.ok ? `accepted, ${sdk.detail}` : `REJECTED: ${sdk.detail}`} |`,
             `| Bridged USDC.e ${OP_USDC_E} | ${usdcE} |`,
             '',
             `Verdict: ${pass ? 'PASS' : 'FAIL'}`,

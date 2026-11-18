@@ -107,22 +107,80 @@ describe('resolveEip712Domain', () => {
         expect((await resolveEip712Domain(client, HELPER, { getters: 'constants' })).domain).toEqual(domain);
     });
 
-    it('caches only a checked domain, and hands out copies', async () => {
+    it('caches only a checked domain, re-checks DOMAIN_SEPARATOR() on every use, and hands out copies', async () => {
         const bad = fakeClient(10, { name: 'USDC', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
         await expect(resolveEip712Domain(bad.client, OP_USDC)).rejects.toThrow();
         const good = fakeClient(10, { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
-        const first = await resolveEip712Domain(good.client, OP_USDC); // the failure above was not cached
+        const first = await resolveEip712Domain(good.client, OP_USDC);
         first.domain.name = 'tampered';
-        const calls = good.readContract.mock.calls.length;
+        good.readContract.mockClear();
         const second = await resolveEip712Domain(good.client, OP_USDC);
-        expect(good.readContract.mock.calls.length).toBe(calls); // served from the cache
+        // A warm hit reads exactly DOMAIN_SEPARATOR() again, and nothing else.
+        expect(good.readContract.mock.calls.map(([c]: any) => c.functionName)).toEqual(['DOMAIN_SEPARATOR']);
         expect(second.domain.name).toBe('USD Coin');
     });
 
-    it('the cache is keyed by chain: the same address on another chain is read again', async () => {
-        const op = fakeClient(10, { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
-        await resolveEip712Domain(op.client, OP_USDC);
-        const other = fakeClient(11155420, { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
-        await expect(resolveEip712Domain(other.client, OP_USDC)).rejects.toThrow('does not match');
+    it('a domain that failed the check is refused again on the next call through the same client', async () => {
+        const { client } = fakeClient(10, { name: 'USDC', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
+        await expect(resolveEip712Domain(client, OP_USDC)).rejects.toThrow('does not match');
+        await expect(resolveEip712Domain(client, OP_USDC)).rejects.toThrow('does not match');
+    });
+
+    it('a warm cache whose DOMAIN_SEPARATOR() has become unreadable throws', async () => {
+        const reads: Reads = { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR };
+        const { client } = fakeClient(10, reads);
+        await resolveEip712Domain(client, OP_USDC);
+        reads.DOMAIN_SEPARATOR = new Error('execution reverted');
+        await expect(resolveEip712Domain(client, OP_USDC)).rejects.toThrow('cached domain cannot be checked');
+    });
+
+    it('an upgrade that changes the domain is picked up on the next call, not served from the cache', async () => {
+        const reads: Reads = { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR };
+        const { client } = fakeClient(10, reads);
+        await resolveEip712Domain(client, OP_USDC);
+        const upgraded = { name: 'USD Coin', version: '3', chainId: 10, verifyingContract: OP_USDC };
+        reads.version = '3';
+        reads.DOMAIN_SEPARATOR = domainSeparator({ domain: upgraded });
+        expect((await resolveEip712Domain(client, OP_USDC)).domain).toEqual(upgraded);
+    });
+
+    it('one client cannot supply another client\'s domain (e.g. a fork seeding production)', async () => {
+        const fork = fakeClient(10, { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
+        await resolveEip712Domain(fork.client, OP_USDC);
+        const prod = fakeClient(10, {}); // every read reverts
+        await expect(resolveEip712Domain(prod.client, OP_USDC)).rejects.toThrow('refusing to sign');
+    });
+
+    it('the cache is keyed by chain: the same client on another chain reads again', async () => {
+        const { client } = fakeClient(10, { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR });
+        await resolveEip712Domain(client, OP_USDC);
+        client.getChainId.mockResolvedValue(11155420);
+        await expect(resolveEip712Domain(client, OP_USDC)).rejects.toThrow('does not match');
+    });
+
+    it('a resolution still in flight when the cache is cleared does not repopulate it', async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((r) => { release = r; });
+        const reads: Reads = { name: 'USD Coin', version: '2', DOMAIN_SEPARATOR: OP_USDC_SEPARATOR };
+        const { client, readContract } = fakeClient(10, reads);
+        const inner = readContract.getMockImplementation()!;
+        readContract.mockImplementation(async (args: any) => { if (args.functionName === 'name') await gate; return inner(args); });
+        const pending = resolveEip712Domain(client, OP_USDC);
+        clearEip712DomainCache();
+        release();
+        await pending;
+        readContract.mockClear();
+        await resolveEip712Domain(client, OP_USDC);
+        expect(readContract.mock.calls.map(([c]: any) => c.functionName)).toContain('name'); // resolved afresh
+    });
+
+    it('EIP-5267: omitted fields stay out of the domain, and a salt is included', async () => {
+        const salt = ('0x' + '5a'.repeat(32)) as Hex;
+        const d = { name: 'X', chainId: 11155111, verifyingContract: HELPER, salt }; // fields 0x1d: no version
+        const { client } = fakeClient(11155111, {
+            eip712Domain: ['0x1d', 'X', 'ignored', 11155111n, HELPER, salt, []],
+            DOMAIN_SEPARATOR: domainSeparator({ domain: d }),
+        });
+        expect((await resolveEip712Domain(client, HELPER)).domain).toEqual(d);
     });
 });

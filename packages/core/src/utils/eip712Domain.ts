@@ -19,9 +19,10 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
  * `expected` (e.g. a configured token name) is checked against what the chain reports and throws on
  * a difference; it never replaces the chain's value.
  *
- * Results are cached per (chainId, contract, getters) only after the separator check passed. The cache
- * lives for the process; a proxy upgrade that renames a token is picked up after a restart or
- * {@link clearEip712DomainCache}.
+ * Results are cached per client and (chainId, contract, getters), only after the separator check passed.
+ * A cached domain is never used unchecked: every call reads `DOMAIN_SEPARATOR()` again through the
+ * caller's own client. If it changed (e.g. a proxy upgrade renamed the token) the domain is resolved again;
+ * if it cannot be read, the call throws. The cache only saves the name/version reads.
  */
 export type ResolvedEip712Domain = {
     domain: TypedDataDomain;
@@ -52,11 +53,12 @@ const DOMAIN_READ_ABI = [
     pick(BuyHelperABI, 'VERSION'),
 ] as const;
 
-const cache = new Map<string, ResolvedEip712Domain>();
+// Keyed by the client object first, so one client (a fork, a mock) can never supply another's domain.
+let cache = new WeakMap<object, Map<string, ResolvedEip712Domain>>();
 
-/** Drop every cached domain (tests, or after a known proxy upgrade). */
+/** Drop every cached domain. A resolution still in flight writes into the old, discarded cache. */
 export function clearEip712DomainCache(): void {
-    cache.clear();
+    cache = new WeakMap();
 }
 
 export async function resolveEip712Domain(
@@ -65,6 +67,7 @@ export async function resolveEip712Domain(
     opts: ResolveEip712DomainOptions = {},
 ): Promise<ResolvedEip712Domain> {
     const getters = opts.getters ?? 'erc20';
+    const store = cache; // taken before any await: a clear during this call leaves the result in the discarded cache
     const chainId = await client.getChainId();
     const key = `${chainId}:${contract.toLowerCase()}:${getters}`;
     const fail = (msg: string, cause?: unknown): never => {
@@ -74,7 +77,23 @@ export async function resolveEip712Domain(
     const read = <T>(functionName: string) =>
         client.readContract({ address: contract, abi: DOMAIN_READ_ABI as any, functionName, args: [] }) as Promise<T>;
 
-    let resolved = cache.get(key);
+    let perClient = store.get(client);
+    if (!perClient) { perClient = new Map(); store.set(client, perClient); }
+
+    let resolved = perClient.get(key);
+    if (resolved) {
+        // Re-check on every use: the cache must not outlive a changed or unreadable DOMAIN_SEPARATOR().
+        let now: Hex;
+        try {
+            now = await read<Hex>('DOMAIN_SEPARATOR');
+        } catch (e) {
+            return fail('DOMAIN_SEPARATOR() could not be read, so the cached domain cannot be checked', e);
+        }
+        if (now.toLowerCase() !== resolved.separator.toLowerCase()) {
+            perClient.delete(key);
+            resolved = undefined;
+        }
+    }
     if (!resolved) {
         let domain: TypedDataDomain;
         let source: ResolvedEip712Domain['source'];
@@ -125,7 +144,7 @@ export async function resolveEip712Domain(
             fail(`local separator ${separator} for ${JSON.stringify(domain)} does not match DOMAIN_SEPARATOR() ${onChain}`);
         }
         resolved = { domain, separator, source };
-        cache.set(key, resolved);
+        perClient.set(key, resolved);
     }
 
     const { expected } = opts;
