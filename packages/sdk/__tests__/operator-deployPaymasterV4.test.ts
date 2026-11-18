@@ -30,7 +30,7 @@ function operatorClient(owner: Address) {
     const oc: any = createOperatorClient({
         chain: sepolia,
         transport,
-        account: { address: OPERATOR, type: 'json-rpc' } as any,
+        account: { address: OPERATOR, type: 'local' } as any,
         addresses: { paymasterFactory: FACTORY },
     });
     oc.writeContract = vi.fn(async () => TX);
@@ -121,5 +121,19 @@ describe('createOperatorClient().deployPaymasterV4 — the price feed inside ini
         oc.getChainId = vi.fn(async () => 10);
         await expect(oc.deployPaymasterV4({ initData: initFor(FEED) })).rejects.toThrow('the RPC is on chain 10');
         expect(oc.writeContract).not.toHaveBeenCalled();
+    });
+});
+
+describe('createOperatorClient().deployPaymasterV4 — signer and post-send confirmation', () => {
+    it('a JSON-RPC signer is refused by default and accepted with allowJsonRpcAccount', async () => {
+        const oc: any = createOperatorClient({ chain: sepolia, transport, account: { address: OPERATOR, type: 'json-rpc' } as any, addresses: { paymasterFactory: FACTORY } });
+        await expect(oc.deployPaymasterV4({ initData: initFor(FEED) })).rejects.toThrow('allowJsonRpcAccount');
+    });
+
+    it('a deploy whose receipt is not on the checked chain stops before the ownership check', async () => {
+        const oc = operatorClient(OPERATOR);
+        oc.waitForTransactionReceipt = vi.fn(async () => { throw new Error('timeout'); });
+        await expect(oc.deployPaymasterV4({ initData: initFor(FEED) })).rejects.toThrow('may have been sent on another chain');
+        expect(oc.request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_call', params: [expect.objectContaining({ to: FACTORY }), expect.anything()] }));
     });
 });

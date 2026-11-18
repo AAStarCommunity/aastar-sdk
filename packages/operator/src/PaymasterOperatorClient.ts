@@ -1,6 +1,6 @@
 import { type Address, type Hash, parseEther } from 'viem';
 import { BaseClient, type ClientConfig, type TransactionOptions, PaymasterABI } from '@aastar/core';
-import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed, assertSameChain } from '@aastar/core';
+import { superPaymasterActions, tokenActions, paymasterActions, registryActions, paymasterFactoryActions, verifyPaymasterDeployment, resolveEthUsdFeedAddress, verifyEthUsdFeed, assertSameChain, requireLocalSigner, confirmSentOnChain } from '@aastar/core';
 
 /** priceStalenessThreshold written into a new PaymasterV4 (1 hour); the feed is checked against the same bound. */
 const PRICE_STALENESS_THRESHOLD = 3600n;
@@ -151,6 +151,8 @@ export class PaymasterOperatorClient extends BaseClient {
         version?: string; // Optional, defaults to Factory default or V4.0.0
         salt?: bigint; // Optional, for deterministic deployment
         confirmations?: number; // Optional, deploy receipt confirmations before the check (viem default if omitted); a reused deploy waits for none
+        /** Accept a JSON-RPC (browser / node-managed) signer; by default only a local account is accepted. See requireLocalSigner. */
+        allowJsonRpcAccount?: boolean;
         priceFeed?: Address;
     }, options?: TransactionOptions): Promise<{ 
         paymasterAddress: Address; 
@@ -185,6 +187,16 @@ export class PaymasterOperatorClient extends BaseClient {
             // The reading and the signing client must be on the same, configured chain before either branch below
             // sends anything (the reuse branch still approves and registers).
             const chainId = await assertSameChain(publicClient as any, this.client as any);
+            requireLocalSigner(account as any, { allowJsonRpcAccount: params?.allowJsonRpcAccount, path: 'deployAndRegisterPaymasterV4' });
+            // Every send below is confirmed on the checked chain before the next step (see confirmSentOnChain).
+            const confirmed = async (hash: Hash, what: string, note = '') => {
+                try {
+                    await confirmSentOnChain(publicClient as any, hash, chainId, { confirmations: params?.confirmations });
+                } catch (e: any) {
+                    if (e?.data?.reason === 'tx-reverted') throw new Error(`${what} ${hash} reverted${note}`);
+                    throw e;
+                }
+            };
 
             // 2. Deployment (Idempotent Check)
             const existingPaymaster = await factory(publicClient).getPaymaster({ owner: accountAddr });
@@ -231,6 +243,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 
                 // The address comes from the successful receipt, and is checked against the mapping and owner()
                 // before the approve and role registration below.
+                await confirmed(deployHash, 'deployPaymaster');
                 paymasterAddress = await verifyPaymasterDeployment(publicClient as any, { factory: factoryAddr, operator: accountAddr, deployHash, confirmations: params?.confirmations });
             }
 
@@ -260,10 +273,7 @@ export class PaymasterOperatorClient extends BaseClient {
                     amount: stakeAmount * 2n,
                     account: account
                 });
-                const approveReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: approveHash });
-                if (approveReceipt.status !== 'success') {
-                    throw new Error(`GToken approve ${approveHash} reverted; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
-                }
+                await confirmed(approveHash, 'GToken approve', `; paymaster ${paymasterAddress} is deployed but ROLE_PAYMASTER_AOA was not registered`);
             }
 
             const { encodeAbiParameters, parseAbiParameters } = await import('viem');
@@ -281,10 +291,7 @@ export class PaymasterOperatorClient extends BaseClient {
                 account: account
             });
             
-            const registerReceipt = await (publicClient as any).waitForTransactionReceipt({ hash: registerHash });
-            if (registerReceipt.status !== 'success') {
-                throw new Error(`registerRoleSelf(ROLE_PAYMASTER_AOA) ${registerHash} reverted; paymaster ${paymasterAddress} is deployed but not registered`);
-            }
+            await confirmed(registerHash, 'registerRoleSelf(ROLE_PAYMASTER_AOA)', `; paymaster ${paymasterAddress} is deployed but not registered`);
 
             return {
                 paymasterAddress,

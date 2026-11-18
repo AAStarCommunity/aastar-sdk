@@ -10,6 +10,8 @@ import {
     PaymasterFactoryABI,
     verifyPaymasterDeployment,
     verifyEthUsdFeed,
+    requireLocalSigner,
+    confirmSentOnChain,
     PaymasterABI,
     xPNTsTokenABI,
     type StakingActions,
@@ -31,7 +33,7 @@ export type OperatorClient = Client<Transport, Chain, Account | undefined> & Pub
      */
     setup: (args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) => Promise<{ txs: Hash[] }>;
     /** Deploys through the factory and throws unless verifyPaymasterDeployment accepts the deploy for this account. */
-    deployPaymasterV4: (args?: { version?: string, initData?: Hex, confirmations?: number }) => Promise<Hash>;
+    deployPaymasterV4: (args?: { version?: string, initData?: Hex, confirmations?: number, allowJsonRpcAccount?: boolean }) => Promise<Hash>;
     /**
      * Orchestrates the full onboarding flow:
      * 1. Approve GToken (Stake)
@@ -114,8 +116,9 @@ export function createOperatorClient({
         async onboardFully(args: { stakeAmount: bigint, depositAmount: bigint, roleId: Hex, roleData?: Hex }) {
             return (this as any)._onboardOperator(args);
         },
-        async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations }: { version?: string, initData?: Hex, confirmations?: number } = {}) {
+        async deployPaymasterV4({ version = 'v4.1', initData = '0x', confirmations, allowJsonRpcAccount }: { version?: string, initData?: Hex, confirmations?: number, allowJsonRpcAccount?: boolean } = {}) {
             if (!account) throw new Error('Account required for deployPaymasterV4');
+            requireLocalSigner(account as any, { allowJsonRpcAccount, path: 'deployPaymasterV4' });
             // initData is the caller's, so its price feed is decoded and checked on the live chain before anything is
             // sent: initialize(entryPoint, owner, treasury, priceFeed, serviceFeeRate, maxGasCostCap, staleness).
             const { decodeFunctionData } = await import('viem');
@@ -140,7 +143,9 @@ export function createOperatorClient({
                 account,
                 chain
             });
-            // Throws unless the receipt succeeded and the factory mapping and the clone's owner() both name this account.
+            // Confirmed on the checked chain (receipt, still that chain, canonical block), then the factory mapping
+            // and the clone's owner() must both name this account.
+            await confirmSentOnChain(client as any, tx, chain.id, { confirmations });
             await verifyPaymasterDeployment(client as any, { factory: usedAddresses.paymasterFactory, operator: account.address, deployHash: tx, confirmations });
             return tx;
         },

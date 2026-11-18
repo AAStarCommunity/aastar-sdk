@@ -58,8 +58,25 @@ Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domai
   salt: an integration that already has accounts from a factory should keep passing that factory explicitly (it is
   still checked against the EntryPoint). On OP Sepolia nothing changes for existing accounts: the old book entry had
   no code, so no account was ever created through it.
-- Not covered (FU-120): L2 sequencer health, the identity of a caller-supplied feed or factory, and the unchecked
-  primitives `paymasterFactoryActions().deployPaymaster*`, `toSimpleSmartAccount`, `accountFactoryActions`.
+- **Signer (behaviour change):** the two paymaster deploy paths (`deployAndRegisterPaymasterV4`, also through
+  `OperatorLifecycle.setupNode`, and `createOperatorClient().deployPaymasterV4`) accept a local account (private key /
+  keystore) by default and refuse a JSON-RPC account with an error naming `allowJsonRpcAccount`. Passing
+  `allowJsonRpcAccount: true` accepts it and logs a one-time warning. The account-creation paths keep accepting
+  JSON-RPC wallets.
+- **Every send is confirmed before the next step:** deploy, approve, registration, account creation and funding. The
+  receipt must be found through the client of the checked chain, that client must still report the checked chain, the
+  receipt must be successful and its block canonical (`confirmSentOnChain`); otherwise the flow stops with "may have
+  been sent on another chain" and nothing further is sent. `deploySmartAccount` funds only after the deploy is
+  confirmed and only an address that has code on that chain. `UserClient.deployAccount` now waits for that receipt.
+- **Remaining window, stated as it is:** viem 2.43.3 sends `eth_sendTransaction` without a chainId. A JSON-RPC wallet
+  that switches chains between viem's chain-id read and the send puts that one transaction on the new chain. The
+  post-send confirmation detects this and stops the flow, but cannot prevent that transaction. A local account is not
+  affected (the chain id is signed into the transaction).
+- **On OP:** the feed freshness check is not a sequencer-uptime check; the SDK does not read Chainlink's L2 sequencer
+  uptime feed.
+- Not covered (FU-120): L2 sequencer health, the identity of a caller-supplied feed or factory, binding a JSON-RPC
+  send to the chain, and the unchecked primitives `paymasterFactoryActions().deployPaymaster*`,
+  `toSimpleSmartAccount`, `accountFactoryActions`.
 
 ### PaymasterV4 deploys are checked before the SDK registers them
 

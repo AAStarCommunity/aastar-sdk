@@ -16,6 +16,7 @@ import {
     RegistryABI,
     resolveAccountFactoryAddress,
     verifyAccountFactory,
+    confirmSentOnChain,
 } from '@aastar/core';
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
@@ -436,11 +437,16 @@ export function createEndUserClient({
                     account,
                     chain
                 }) as Hash;
-                await (client as any).waitForTransactionReceipt({ hash: deployHash });
+                // Confirmed on this client's chain before anything else is sent (a JSON-RPC wallet that switched chains
+                // would have sent it elsewhere: the flow stops here instead of funding).
+                await confirmSentOnChain(client as any, deployHash, chain.id);
                 console.log(`   ✅ Deployed at ${accountAddress}`);
             }
 
             if (fundWithETH > 0n) {
+                // ETH goes only to an account that exists on this chain now, never to a predicted address.
+                const code = await (client as any).getCode({ address: accountAddress });
+                if (!code || code === '0x') throw new Error(`deploySmartAccount: ${accountAddress} has no code on chain ${chain.id}; not funding it`);
                 console.log(`   ⛽ Funding account with ${formatEther(fundWithETH)} ETH...`);
                 const tx = await (client as any).sendTransaction({
                     to: accountAddress,
@@ -448,7 +454,7 @@ export function createEndUserClient({
                     account,
                     chain
                 });
-                await (client as any).waitForTransactionReceipt({ hash: tx });
+                await confirmSentOnChain(client as any, tx, chain.id);
             }
 
             return { accountAddress, deployTxHash: deployHash, isDeployed: true }; 

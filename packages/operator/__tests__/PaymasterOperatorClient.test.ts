@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => {
     mockResolveEthUsdFeedAddress: vi.fn(),
     mockVerifyEthUsdFeed: vi.fn(),
     mockAssertSameChain: vi.fn(),
+    mockRequireLocalSigner: vi.fn(),
+    mockConfirmSentOnChain: vi.fn(),
   };
 });
 
@@ -43,6 +45,8 @@ vi.mock('@aastar/core', async () => {
     resolveEthUsdFeedAddress: mocks.mockResolveEthUsdFeedAddress,
     verifyEthUsdFeed: mocks.mockVerifyEthUsdFeed,
     assertSameChain: mocks.mockAssertSameChain,
+    requireLocalSigner: mocks.mockRequireLocalSigner,
+    confirmSentOnChain: mocks.mockConfirmSentOnChain,
   };
 });
 
@@ -109,6 +113,14 @@ describe('PaymasterOperatorClient', () => {
     mocks.mockVerifyEthUsdFeed.mockResolvedValue({ decimals: 8, description: 'ETH / USD', answer: 1n, updatedAt: 1n });
     mocks.mockAssertSameChain.mockReset();
     mocks.mockAssertSameChain.mockResolvedValue(10);
+    mocks.mockRequireLocalSigner.mockReset();
+    mocks.mockConfirmSentOnChain.mockReset();
+    // By default every send confirms; the reverted-receipt tests below make it report tx-reverted.
+    mocks.mockConfirmSentOnChain.mockImplementation(async (pc: any, hash: string) => {
+      const r = await pc.waitForTransactionReceipt({ hash });
+      if (r.status !== 'success') { const e: any = new Error('reverted'); e.data = { reason: 'tx-reverted' }; throw e; }
+      return { blockNumber: 1n, blockHash: '0x' };
+    });
     mocks.mockPaymaster.setTokenPrice.mockResolvedValue('0xTxHash');
     mocks.mockPaymaster.tokenPrices.mockResolvedValue(100n);
     mocks.mockPaymaster.depositFor.mockResolvedValue('0xTxHash');
@@ -213,6 +225,32 @@ describe('PaymasterOperatorClient', () => {
         expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
       });
 
+      it('deployAndRegisterPaymasterV4: a JSON-RPC signer is refused unless allowJsonRpcAccount is set', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockRequireLocalSigner.mockImplementation((_a: any, o: any) => { if (!o.allowJsonRpcAccount) throw new Error('not a local account; pass allowJsonRpcAccount: true'); });
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('allowJsonRpcAccount');
+        expect(mocks.mockPaymasterFactory.getPaymaster).not.toHaveBeenCalled();
+        expect(mocks.mockPaymasterFactory.deployPaymaster).not.toHaveBeenCalled();
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        await client.deployAndRegisterPaymasterV4({ allowJsonRpcAccount: true });
+        expect(mocks.mockRequireLocalSigner).toHaveBeenLastCalledWith(expect.anything(), { allowJsonRpcAccount: true, path: 'deployAndRegisterPaymasterV4' });
+        expect(mocks.mockPaymasterFactory.deployPaymaster).toHaveBeenCalled();
+      });
+
+      it('deployAndRegisterPaymasterV4: a deploy that cannot be confirmed on the checked chain stops before any approve or registration', async () => {
+        mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
+            roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
+        mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
+        mocks.mockToken.allowance.mockResolvedValue(0n);
+        mocks.mockConfirmSentOnChain.mockRejectedValue(new Error('transaction 0xTxHash has no receipt on chain 10; stopping (it may have been sent on another chain)'));
+        await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('may have been sent on another chain');
+        expect(mocks.mockConfirmSentOnChain).toHaveBeenCalledWith(expect.anything(), '0xTxHash', 10, expect.anything());
+        expect(mocks.mockVerifyPaymasterDeployment).not.toHaveBeenCalled();
+        expect(mocks.mockToken.approve).not.toHaveBeenCalled();
+        expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
+      });
+
       it('deployAndRegisterPaymasterV4: a feed that fails the on-chain check deploys nothing', async () => {
         mocks.mockRegistry.hasRole.mockImplementation(async ({ roleId }: any) =>
             roleId === '0x1111111111111111111111111111111111111111111111111111111111111111');
@@ -255,7 +293,9 @@ describe('PaymasterOperatorClient', () => {
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
         mocks.mockToken.allowance.mockResolvedValue(0n);
         mocks.mockToken.approve.mockResolvedValue('0xApproveHash');
-        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+        mockPublicClient.waitForTransactionReceipt
+            .mockResolvedValueOnce({ status: 'success' }) // the deploy
+            .mockResolvedValueOnce({ status: 'reverted' }); // the approve
 
         await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('approve 0xApproveHash reverted');
         expect(mocks.mockRegistry.registerRoleSelf).not.toHaveBeenCalled();
@@ -267,7 +307,9 @@ describe('PaymasterOperatorClient', () => {
         mocks.mockPaymasterFactory.getPaymaster.mockResolvedValueOnce('0x0000000000000000000000000000000000000000');
         mocks.mockToken.allowance.mockResolvedValue(parseEther('1000'));
         mocks.mockRegistry.registerRoleSelf.mockResolvedValue('0xRegisterHash');
-        mockPublicClient.waitForTransactionReceipt.mockResolvedValueOnce({ status: 'reverted' });
+        mockPublicClient.waitForTransactionReceipt
+            .mockResolvedValueOnce({ status: 'success' }) // the deploy
+            .mockResolvedValueOnce({ status: 'reverted' }); // the registration
 
         await expect(client.deployAndRegisterPaymasterV4()).rejects.toThrow('0xRegisterHash reverted');
       });

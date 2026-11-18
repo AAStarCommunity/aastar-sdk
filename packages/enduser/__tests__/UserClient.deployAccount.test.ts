@@ -25,6 +25,7 @@ function client(chainId: number, implEntryPoint: Address = EP_V07) {
             throw new Error(`unexpected read ${functionName}`);
         }),
         writeContract: vi.fn(async () => '0xbeef'),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) })),
     };
     // The factory check reads through pinned raw eth_getCode / eth_call; answer them through the stubs above.
     c.request = vi.fn(async ({ method, params }: any) => {
@@ -73,6 +74,12 @@ describe('UserClient.deployAccount — account factory', () => {
         const reader = client(11155111);
         await expect(UserClient.deployAccount(c, { owner: OWNER, publicClient: reader })).rejects.toThrow('signing client is on chain 10');
         expect(c.writeContract).not.toHaveBeenCalled();
+    });
+
+    it('the createAccount send is confirmed on the checked chain before returning', async () => {
+        const c = client(10);
+        c.waitForTransactionReceipt = vi.fn(async () => { throw new Error('timeout'); });
+        await expect(UserClient.deployAccount(c, { owner: OWNER })).rejects.toThrow('may have been sent on another chain');
     });
 
     it('a chain outside the address book with no factory given throws', async () => {

@@ -20,7 +20,8 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
 export type DeploymentInputRefusal =
     | 'chain-mismatch' | 'signing-chain-unbound' | 'no-feed-in-book' | 'no-factory-in-book' | 'stale-head'
     | 'no-code' | 'not-an-aggregator' | 'wrong-decimals' | 'wrong-description' | 'non-positive-answer' | 'stale-feed'
-    | 'no-account-implementation' | 'entrypoint-mismatch' | 'block-unavailable';
+    | 'no-account-implementation' | 'entrypoint-mismatch' | 'block-unavailable'
+    | 'json-rpc-account' | 'tx-chain-unconfirmed' | 'tx-reverted' | 'tx-not-canonical';
 
 const fail = (reason: DeploymentInputRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg, cause instanceof Error ? cause : undefined, { reason, ...extra });
@@ -164,4 +165,57 @@ export async function verifyAccountFactory(client: PublicClient, factory: Addres
         fail('entrypoint-mismatch', `account factory ${factory} builds accounts for EntryPoint ${implEntryPoint}, but the SDK is configured for ${entryPoint}`, { address: factory, reported: implEntryPoint, expected: entryPoint });
     }
     return { implementation };
+}
+
+/**
+ * Live-key deployment paths accept a local account (private key / keystore) by default. A JSON-RPC account (a
+ * browser or node-managed wallet) is refused unless the caller opts in with `allowJsonRpcAccount: true`, because viem
+ * 2.43.3 sends `eth_sendTransaction` without a chainId: a wallet that switches chains between viem's eth_chainId read
+ * and the send puts the transaction on the new chain. {@link confirmSentOnChain} then stops the flow, but cannot undo
+ * that transaction. Opting in logs this once per process.
+ */
+let jsonRpcWarned = false;
+export function requireLocalSigner(
+    account: { type?: string } | string | undefined,
+    opts: { allowJsonRpcAccount?: boolean; path: string },
+): void {
+    const isLocal = typeof account === 'object' && account?.type === 'local';
+    if (isLocal) return;
+    if (!opts.allowJsonRpcAccount) {
+        fail('json-rpc-account', `${opts.path}: the signer is not a local account; a JSON-RPC wallet's send is not bound to the checked chain (viem sends eth_sendTransaction without a chainId). Use a local/keystore account, or pass allowJsonRpcAccount: true to accept that window`, { path: opts.path });
+    }
+    if (!jsonRpcWarned) {
+        jsonRpcWarned = true;
+        console.warn(`[aastar] ${opts.path}: allowJsonRpcAccount is set. A wallet that switches chains between the chain check and eth_sendTransaction can send on another chain; the SDK stops after such a send but cannot prevent it.`);
+    }
+}
+
+/**
+ * After every send, before the next step: the transaction's receipt must be found through the client of the
+ * checked chain, that client must still report `chainId`, the receipt must be successful, and its block must be
+ * the canonical one at that height. Otherwise the flow stops: the transaction may have gone to another chain, or
+ * may not be final there.
+ */
+export async function confirmSentOnChain(
+    client: PublicClient,
+    hash: Hash,
+    chainId: number,
+    opts: { timeoutMs?: number; confirmations?: number } = {},
+): Promise<{ blockNumber: bigint; blockHash: Hash }> {
+    const onChain = async () => {
+        const now = await client.getChainId();
+        if (now !== chainId) fail('tx-chain-unconfirmed', `transaction ${hash}: the checked client is now on chain ${now}, not ${chainId}; stopping (it may have been sent on another chain)`, { hash, chainId, now });
+    };
+    await onChain();
+    let receipt: { status: string; blockNumber: bigint; blockHash: Hash };
+    try {
+        receipt = await client.waitForTransactionReceipt({ hash, timeout: opts.timeoutMs ?? 300_000, confirmations: opts.confirmations }) as any;
+    } catch (e) {
+        return fail('tx-chain-unconfirmed', `transaction ${hash} has no receipt on chain ${chainId}; stopping (it may have been sent on another chain)`, { hash, chainId }, e);
+    }
+    if (receipt.status !== 'success') fail('tx-reverted', `transaction ${hash} reverted on chain ${chainId}; stopping`, { hash, chainId });
+    const block = await client.getBlock({ blockNumber: receipt.blockNumber });
+    if (block.hash !== receipt.blockHash) fail('tx-not-canonical', `transaction ${hash}'s block ${receipt.blockNumber} is no longer canonical on chain ${chainId}; stopping`, { hash, chainId });
+    await onChain();
+    return { blockNumber: receipt.blockNumber, blockHash: receipt.blockHash };
 }

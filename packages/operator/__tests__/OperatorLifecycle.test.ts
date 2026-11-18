@@ -125,7 +125,9 @@ describe('OperatorLifecycle', () => {
           const hashes = await lifecycle.setupNode({ type: 'V4', stakeAmount: 100n });
 
           expect(hashes).toEqual(['0xDeploy', '0xRegister']);
-          expect(spyDeploy).toHaveBeenCalledWith({ stakeAmount: 100n }, undefined);
+          expect(spyDeploy).toHaveBeenCalledWith({ stakeAmount: 100n, allowJsonRpcAccount: undefined }, undefined);
+          await lifecycle.setupNode({ type: 'V4', stakeAmount: 100n, allowJsonRpcAccount: true });
+          expect(spyDeploy).toHaveBeenLastCalledWith({ stakeAmount: 100n, allowJsonRpcAccount: true }, undefined);
       });
 
       it('setupNode (SUPER) should register as super operator', async () => {

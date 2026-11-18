@@ -3,6 +3,7 @@ import { type Abi, type Address, decodeFunctionData, encodeFunctionResult } from
 import { SimpleAccountFactoryABI, SimpleAccountABI } from '../abis/index.js';
 import {
     resolveEthUsdFeedAddress, verifyEthUsdFeed, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain,
+    requireLocalSigner, confirmSentOnChain,
 } from './deploymentInputs.js';
 import { getCanonicalAddresses } from '../addresses.js';
 
@@ -161,5 +162,43 @@ describe('assertSameChain', () => {
         const reader = { getChainId: async () => 10 };
         await expect(assertSameChain(reader, { getChainId: async () => 10 })).rejects.toThrow('has no configured chain 10 (it has none)');
         await expect(assertSameChain(reader, { getChainId: async () => 10, chain: { id: 11155111 } })).rejects.toThrow('(it has 11155111)');
+    });
+});
+
+describe('requireLocalSigner', () => {
+    it('accepts a local account; refuses a JSON-RPC account or a bare address unless allowJsonRpcAccount is set (warning once)', () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        expect(() => requireLocalSigner({ type: 'local' }, { path: 'p' })).not.toThrow();
+        expect(() => requireLocalSigner({ type: 'json-rpc' }, { path: 'p' })).toThrow('pass allowJsonRpcAccount: true');
+        expect(() => requireLocalSigner('0x1111111111111111111111111111111111111111', { path: 'p' })).toThrow('not a local account');
+        try { requireLocalSigner({ type: 'json-rpc' }, { path: 'p' }); } catch (e: any) { expect(e.data).toEqual({ reason: 'json-rpc-account', path: 'p' }); }
+        requireLocalSigner({ type: 'json-rpc' }, { path: 'p', allowJsonRpcAccount: true });
+        requireLocalSigner({ type: 'json-rpc' }, { path: 'p', allowJsonRpcAccount: true });
+        expect(warn).toHaveBeenCalledTimes(1);
+        warn.mockRestore();
+    });
+});
+
+describe('confirmSentOnChain', () => {
+    const TX = ('0x' + 'cd'.repeat(32)) as `0x${string}`;
+    function sendClient(o: { chainIds?: number[]; receipt?: any; receiptError?: boolean; canonical?: string } = {}) {
+        const ids = [...(o.chainIds ?? [10, 10])];
+        return {
+            getChainId: vi.fn(async () => ids.shift() ?? 10),
+            waitForTransactionReceipt: vi.fn(async () => { if (o.receiptError) throw new Error('timeout'); return o.receipt ?? { status: 'success', blockNumber: BLOCK, blockHash: HASH }; }),
+            getBlock: vi.fn(async () => ({ number: BLOCK, hash: o.canonical ?? HASH })),
+        } as any;
+    }
+    it('passes when the receipt is on the checked chain, successful, and in the canonical block', async () => {
+        await expect(confirmSentOnChain(sendClient(), TX, 10)).resolves.toEqual({ blockNumber: BLOCK, blockHash: HASH });
+    });
+    it.each([
+        ['the client is on another chain before waiting', { chainIds: [11155111] }, 'tx-chain-unconfirmed'],
+        ['no receipt on the checked chain', { receiptError: true }, 'tx-chain-unconfirmed'],
+        ['a reverted receipt', { receipt: { status: 'reverted', blockNumber: BLOCK, blockHash: HASH } }, 'tx-reverted'],
+        ['a receipt block that is no longer canonical', { canonical: ('0x' + 'ee'.repeat(32)) }, 'tx-not-canonical'],
+        ['the client switched chain while waiting', { chainIds: [10, 11155111] }, 'tx-chain-unconfirmed'],
+    ])('stops on %s', async (_l, o, reason) => {
+        await expect(confirmSentOnChain(sendClient(o as any), TX, 10)).rejects.toMatchObject({ data: { reason } });
     });
 });

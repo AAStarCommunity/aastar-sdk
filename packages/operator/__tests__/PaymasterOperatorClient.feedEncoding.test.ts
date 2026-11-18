@@ -27,9 +27,13 @@ const OP_FEED = '0x13e3Ee699D1909E989722E753853AE30b17e08c5';
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 
 function client(chainId: number) {
-    const chain = { getChainId: vi.fn(async () => chainId), waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })) };
+    const chain = {
+        getChainId: vi.fn(async () => chainId),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success', blockNumber: 5n, blockHash: '0x' + '55'.repeat(32) })),
+        getBlock: vi.fn(async () => ({ number: 5n, hash: '0x' + '55'.repeat(32) })),
+    };
     const c = new PaymasterOperatorClient({
-        client: { ...chain, account: { address: ACCOUNT }, chain: { id: chainId } } as any,
+        client: { ...chain, account: { address: ACCOUNT, type: 'local' }, chain: { id: chainId } } as any,
         publicClient: chain as any,
         superPaymasterAddress: '0x2222222222222222222222222222222222222222',
         registryAddress: '0x3333333333333333333333333333333333333333',

@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain } from '@aastar/core';
+import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -96,13 +96,13 @@ export class UserClient extends BaseClient {
         });
 
         // 2. Deploy
+        let hash: Hash;
         try {
-            const hash = await factoryWrite.createAccount({
+            hash = await factoryWrite.createAccount({
                 owner: params.owner,
                 salt,
                 account: client.account
             });
-            return { accountAddress, hash };
         } catch (error: any) {
             const messageParts = [
                 error?.shortMessage,
@@ -115,22 +115,23 @@ export class UserClient extends BaseClient {
                 error?.cause?.cause?.message
             ].filter(Boolean);
             const message = messageParts.join(' ');
-            if (message.includes('gas required exceeds allowance') || message.includes('intrinsic gas too low')) {
-                const data = encodeFunctionData({
-                    abi,
-                    functionName: 'createAccount',
-                    args: [params.owner, salt]
-                });
-                const hash = await client.sendTransaction({
-                    to: factoryAddr,
-                    data,
-                    gas: 2_000_000n,
-                    account: client.account
-                });
-                return { accountAddress, hash };
-            }
-            throw error;
+            if (!(message.includes('gas required exceeds allowance') || message.includes('intrinsic gas too low'))) throw error;
+            const data = encodeFunctionData({
+                abi,
+                functionName: 'createAccount',
+                args: [params.owner, salt]
+            });
+            hash = await client.sendTransaction({
+                to: factoryAddr,
+                data,
+                gas: 2_000_000n,
+                account: client.account,
+                chain: client.chain
+            });
         }
+        // Either send is confirmed through the reading (checked-chain) client before the caller uses the account.
+        await confirmSentOnChain(readClient, hash, chainId);
+        return { accountAddress, hash };
     }
 
     // ========================================

@@ -61,7 +61,7 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
     it('deploySmartAccount sends createAccount to the checked factory, and a v0.6 factory sends nothing', async () => {
         const ok = client();
         ok.writeContract = vi.fn(async () => '0xbeef');
-        ok.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success' }));
+        ok.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
         await ok.deploySmartAccount({ owner: OWNER });
         expect(ok.writeContract).toHaveBeenCalledWith(expect.objectContaining({ address: V07_FACTORY, functionName: 'createAccount' }));
         const bad = client({ simpleAccountFactory: V06_FACTORY }, EP_V06);
@@ -83,11 +83,29 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
         const addresses: Record<string, Address> = { simpleAccountFactory: V07_FACTORY };
         const c = client(addresses);
         c.writeContract = vi.fn(async () => '0xbeef');
-        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success' }));
+        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
         const read = c.readContract.getMockImplementation();
         c.readContract = vi.fn(async (args: any) => { if (args.functionName === 'getAddress') addresses.simpleAccountFactory = OTHER_FACTORY; return read(args); });
         await c.deploySmartAccount({ owner: OWNER });
         expect(c.writeContract).toHaveBeenCalledWith(expect.objectContaining({ address: V07_FACTORY, functionName: 'createAccount' }));
+    });
+
+    it('funding happens only after the deploy is confirmed on this chain and the account has code here', async () => {
+        const c = client();
+        c.writeContract = vi.fn(async () => '0xdeploy');
+        c.sendTransaction = vi.fn(async () => '0xfund');
+        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
+        // The account address (AA) has no code yet: the deploy confirms, but funding is refused.
+        c.getCode = vi.fn(async ({ address }: any) => (address === AA ? '0x' : '0x6080'));
+        await expect(c.deploySmartAccount({ owner: OWNER, fundWithETH: 1n })).rejects.toThrow('has no code on chain 11155111; not funding it');
+        expect(c.sendTransaction).not.toHaveBeenCalled();
+        // A deploy receipt that cannot be found on this chain stops before funding.
+        const d = client();
+        d.writeContract = vi.fn(async () => '0xdeploy');
+        d.sendTransaction = vi.fn(async () => '0xfund');
+        d.waitForTransactionReceipt = vi.fn(async () => { throw new Error('timeout'); });
+        await expect(d.deploySmartAccount({ owner: OWNER, fundWithETH: 1n })).rejects.toThrow('may have been sent on another chain');
+        expect(d.sendTransaction).not.toHaveBeenCalled();
     });
 
     it('a factory with no code is refused', async () => {
