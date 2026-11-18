@@ -5,10 +5,11 @@ import { X402_PAYMENT_AUTHORIZATION_TYPES } from '../x402auth.js';
 const BLOCK_HASH = ('0x' + 'ab'.repeat(32)) as `0x${string}`;
 
 export type FacilitatorBehaviour =
-    | { kind: 'verifier'; version?: string } // checks the signature first, under { X402Facilitator, version }
+    | { kind: 'verifier'; version?: string; swapFromTo?: boolean; afterSignature?: string } // signature first, under { X402Facilitator, version }; then reverts `afterSignature` (default Unauthorized)
     | { kind: 'role-first' }                  // reverts Unauthorized before looking at the signature
     | { kind: 'no-data' }                     // reverts without revert data
-    | { kind: 'no-code' };                    // an address with no code: eth_call returns 0x
+    | { kind: 'no-code' }                     // an address with no code: eth_call returns 0x
+    | { kind: 'transport-with-data' };        // the right-domain probe fails at the node, with hex data but no code 3
 
 /**
  * A publicClient stand-in for X402Client tests.
@@ -37,12 +38,15 @@ export function domainClient(chainId: number, name: string, version: string, opt
             if (behaviour.kind === 'role-first') return revert('Unauthorized');
             const { args } = decodeFunctionData({ abi: X402FacilitatorABI, data: params[0].data }) as any;
             const [from, to, asset, amount, maxFee, validBefore, nonce, signature] = args;
+            const v = behaviour.kind === 'verifier' ? behaviour : { version: '1' } as any;
             const signer = await recoverTypedDataAddress({
-                domain: { name: 'X402Facilitator', version: behaviour.version ?? '1', chainId, verifyingContract: params[0].to },
+                domain: { name: 'X402Facilitator', version: v.version ?? '1', chainId, verifyingContract: params[0].to },
                 types: X402_PAYMENT_AUTHORIZATION_TYPES, primaryType: 'X402PaymentAuthorization',
-                message: { from, to, asset, amount, maxFee, validBefore, nonce }, signature,
+                message: v.swapFromTo ? { from: to, to: from, asset, amount, maxFee, validBefore, nonce } : { from, to, asset, amount, maxFee, validBefore, nonce }, signature,
             });
-            return revert(signer.toLowerCase() === from.toLowerCase() ? 'Unauthorized' : 'InvalidX402Signature');
+            if (signer.toLowerCase() !== from.toLowerCase()) return revert('InvalidX402Signature');
+            if (behaviour.kind === 'transport-with-data') { const e: any = new Error('upstream error'); e.code = -32603; e.data = '0x' + 'de'.repeat(40); throw e; }
+            return revert(v.afterSignature ?? 'Unauthorized');
         },
         readContract: async ({ address, functionName }: { address: Address; functionName: string }) => {
             if (functionName === 'name') return name;

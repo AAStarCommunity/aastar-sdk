@@ -22,6 +22,7 @@ function client(o: O = {}) {
             return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.report ?? ['0x0f', DOMAIN.name, DOMAIN.version, 11155111n, C, '0x' + '00'.repeat(32), []] } as any);
         }
         if (o.separator === 'transport') throw new Error('fetch failed: socket hang up');
+        if ((o.separator as any) === 'revert-with-data') { const e: any = new Error('execution reverted'); e.code = 3; e.data = '0x08c379a0' + '00'.repeat(96); throw e; }
         if ((o.separator as any) === 'transport-revert') throw new Error('upstream proxy: request reverted by gateway');
         if (o.separator === undefined || o.separator === 'revert') revert();
         return encodeFunctionResult({ abi: READ_ABI, functionName, result: o.separator } as any);
@@ -35,7 +36,15 @@ function client(o: O = {}) {
 
 describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', () => {
     it('returns the reported domain, marked unchecked when there is no DOMAIN_SEPARATOR()', async () => {
-        await expect(resolveReportedEip712Domain(client(), C, { expectedChainId: 11155111 })).resolves.toEqual({ domain: DOMAIN, separator: domainSeparator({ domain: DOMAIN }), separatorChecked: false, blockHash: HASH });
+        await expect(resolveReportedEip712Domain(client(), C, { expectedChainId: 11155111, mayLackSeparator: true })).resolves.toEqual({ domain: DOMAIN, separator: domainSeparator({ domain: DOMAIN }), separatorChecked: false, blockHash: HASH });
+    });
+
+    it('a missing DOMAIN_SEPARATOR() refuses unless the caller says the contract may lack it', async () => {
+        await expect(resolveReportedEip712Domain(client(), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+    });
+
+    it('a DOMAIN_SEPARATOR() that exists but reverts (revert data) is not "absent", even with mayLackSeparator', async () => {
+        await expect(resolveReportedEip712Domain(client({ separator: 'revert-with-data' as any }), C, { mayLackSeparator: true })).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
     });
 
     it('a matching DOMAIN_SEPARATOR() marks it checked; a different one refuses', async () => {
@@ -44,8 +53,8 @@ describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', 
     });
 
     it('a transport failure on DOMAIN_SEPARATOR() refuses instead of counting as "not present", even if its text says "revert"', async () => {
-        await expect(resolveReportedEip712Domain(client({ separator: 'transport' }), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
-        await expect(resolveReportedEip712Domain(client({ separator: 'transport-revert' as any }), C)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        await expect(resolveReportedEip712Domain(client({ separator: 'transport' }), C, { mayLackSeparator: true })).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        await expect(resolveReportedEip712Domain(client({ separator: 'transport-revert' as any }), C, { mayLackSeparator: true })).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
     });
 
     it.each([
@@ -57,6 +66,6 @@ describe('resolveReportedEip712Domain (EIP-5267, DOMAIN_SEPARATOR() optional)', 
         ['extensions', { report: ['0x0f', 'X', '1', 11155111n, C, '0x' + '00'.repeat(32), [1n]] }, 'unsupported-fields'],
         ['a latest-block read that rejects with a non-Error', { blockFails: true }, 'block-unavailable'],
     ])('refuses when %s', async (_l, o, reason) => {
-        await expect(resolveReportedEip712Domain(client(o as O), C, { expectedChainId: 11155111 })).rejects.toMatchObject({ data: { reason } });
+        await expect(resolveReportedEip712Domain(client(o as O), C, { expectedChainId: 11155111, mayLackSeparator: true })).rejects.toMatchObject({ data: { reason } });
     });
 });

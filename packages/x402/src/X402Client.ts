@@ -113,7 +113,7 @@ export class X402Client {
             // verifying contract here, so its domain is not read; name/version below are payload metadata only.
             // The facilitator exposes no domain getter: its verifier is asked instead (a simulated settle with a probe
             // signature under this domain, and one under a wrong domain), on the configured chain, before signing.
-            const facilitatorDomain = await verifyFacilitatorDomain(this.config.publicClient, facilitator, chainId);
+            const { blockHash: _b, blockNumber: _n, ...facilitatorDomain } = await verifyFacilitatorDomain(this.config.publicClient, facilitator, chainId);
             const tokenName = this.config.tokenName || 'USDC';
             const tokenVersion = this.config.tokenVersion || '2';
             const nonce = params.nonce || generateNonce();

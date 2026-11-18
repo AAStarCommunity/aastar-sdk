@@ -113,7 +113,7 @@ export class KmsPaymentSigner {
         );
       }
       if (!pc) throw new Error("signMicropaymentVoucher: pass publicClient to KmsPaymentSigner so the channel's domain can be checked; refusing");
-      const { domain } = await resolveReportedEip712Domain(pc, p.verifyingContract as Address, { expectedChainId: p.chainId });
+      const { domain } = await resolveReportedEip712Domain(pc, p.verifyingContract as Address, { expectedChainId: p.chainId, mayLackSeparator: true });
       if (domain.name !== "MicroPaymentChannel" || domain.version !== "1.0.0") {
         throw new Error(`signMicropaymentVoucher: the channel reports domain ${domain.name}/${domain.version}, the KMS signs MicroPaymentChannel/1.0.0; refusing`);
       }
