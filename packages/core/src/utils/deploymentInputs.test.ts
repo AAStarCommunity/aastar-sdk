@@ -93,6 +93,15 @@ describe('ETH/USD feed', () => {
         await expect(verifyEthUsdFeed(feedClient({ unavailable: true }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
     });
 
+    it('a failing latest-block read is a controlled refusal, not the provider error passed through', async () => {
+        const c = feedClient();
+        c.getBlock = vi.fn(async () => { const e: any = new Error('provider says no'); e.data = { reason: 'entrypoint-mismatch' }; throw e; });
+        await expect(verifyEthUsdFeed(c, OP_FEED, clock)).rejects.toMatchObject({ name: 'AAStarError', data: { reason: 'block-unavailable' } });
+        const f = factoryClient();
+        f.getBlock = c.getBlock;
+        await expect(verifyAccountFactory(f, V07_FACTORY, EP_V07)).rejects.toMatchObject({ name: 'AAStarError', data: { reason: 'block-unavailable' } });
+    });
+
     it('refusals carry a fixed data.reason', async () => {
         await expect(verifyEthUsdFeed(feedClient({ code: '0x' }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'no-code', address: OP_FEED } });
         await expect(verifyEthUsdFeed(feedClient({ decimals: 18 }), OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'wrong-decimals' } });
@@ -181,12 +190,13 @@ describe('requireLocalSigner', () => {
 
 describe('confirmSentOnChain', () => {
     const TX = ('0x' + 'cd'.repeat(32)) as `0x${string}`;
-    function sendClient(o: { chainIds?: number[]; receipt?: any; receiptError?: boolean; canonical?: string } = {}) {
+    function sendClient(o: { chainIds?: number[]; receipt?: any; receiptError?: boolean; canonical?: string; signedChainId?: number | null } = {}) {
         const ids = [...(o.chainIds ?? [10, 10])];
         return {
             getChainId: vi.fn(async () => ids.shift() ?? 10),
-            waitForTransactionReceipt: vi.fn(async () => { if (o.receiptError) throw new Error('timeout'); return o.receipt ?? { status: 'success', blockNumber: BLOCK, blockHash: HASH }; }),
+            waitForTransactionReceipt: vi.fn(async () => { if (o.receiptError) throw new Error('timeout'); return o.receipt ?? { status: 'success', blockNumber: BLOCK, blockHash: HASH, transactionHash: TX }; }),
             getBlock: vi.fn(async () => ({ number: BLOCK, hash: o.canonical ?? HASH })),
+            getTransaction: vi.fn(async () => ({ hash: TX, chainId: o.signedChainId === null ? undefined : (o.signedChainId ?? 10) })),
         } as any;
     }
     it('passes when the receipt is on the checked chain, successful, and in the canonical block', async () => {
@@ -195,7 +205,10 @@ describe('confirmSentOnChain', () => {
     it.each([
         ['the client is on another chain before waiting', { chainIds: [11155111] }, 'tx-chain-unconfirmed'],
         ['no receipt on the checked chain', { receiptError: true }, 'tx-chain-unconfirmed'],
-        ['a reverted receipt', { receipt: { status: 'reverted', blockNumber: BLOCK, blockHash: HASH } }, 'tx-reverted'],
+        ['a reverted receipt', { receipt: { status: 'reverted', blockNumber: BLOCK, blockHash: HASH, transactionHash: TX } }, 'tx-reverted'],
+        ['a replacement or cancellation receipt (another hash)', { receipt: { status: 'success', blockNumber: BLOCK, blockHash: HASH, transactionHash: ('0x' + 'ab'.repeat(32)) } }, 'tx-replaced'],
+        ['a wallet that switched to chain B and back: B\'s receipt and block, signed for B', { signedChainId: 11155111 }, 'tx-wrong-chain'],
+        ['a transaction with no EIP-155 chain id', { signedChainId: null }, 'tx-wrong-chain'],
         ['a receipt block that is no longer canonical', { canonical: ('0x' + 'ee'.repeat(32)) }, 'tx-not-canonical'],
         ['the client switched chain while waiting', { chainIds: [10, 11155111] }, 'tx-chain-unconfirmed'],
     ])('stops on %s', async (_l, o, reason) => {

@@ -25,7 +25,8 @@ function client(chainId: number, implEntryPoint: Address = EP_V07) {
             throw new Error(`unexpected read ${functionName}`);
         }),
         writeContract: vi.fn(async () => '0xbeef'),
-        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) })),
+        waitForTransactionReceipt: vi.fn(async ({ hash }: any) => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: hash })),
+        getTransaction: vi.fn(async ({ hash }: any) => ({ hash, chainId })),
     };
     // The factory check reads through pinned raw eth_getCode / eth_call; answer them through the stubs above.
     c.request = vi.fn(async ({ method, params }: any) => {
@@ -80,6 +81,15 @@ describe('UserClient.deployAccount — account factory', () => {
         const c = client(10);
         c.waitForTransactionReceipt = vi.fn(async () => { throw new Error('timeout'); });
         await expect(UserClient.deployAccount(c, { owner: OWNER })).rejects.toThrow('may have been sent on another chain');
+    });
+
+    it('a cancelled or wrong-chain createAccount is not returned as deployed', async () => {
+        const replaced = client(10);
+        replaced.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: '0xother' }));
+        await expect(UserClient.deployAccount(replaced, { owner: OWNER })).rejects.toThrow('was replaced or cancelled');
+        const elsewhere = client(10);
+        elsewhere.getTransaction = vi.fn(async ({ hash }: any) => ({ hash, chainId: 11155111 }));
+        await expect(UserClient.deployAccount(elsewhere, { owner: OWNER })).rejects.toThrow('is signed for chain 11155111, not 10');
     });
 
     it('a chain outside the address book with no factory given throws', async () => {

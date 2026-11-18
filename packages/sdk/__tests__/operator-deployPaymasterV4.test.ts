@@ -34,8 +34,10 @@ function operatorClient(owner: Address) {
         addresses: { paymasterFactory: FACTORY },
     });
     oc.writeContract = vi.fn(async () => TX);
+    oc.getTransaction = vi.fn(async ({ hash }: any) => ({ hash, chainId: sepolia.id }));
     oc.waitForTransactionReceipt = vi.fn(async () => ({
         status: 'success',
+        transactionHash: TX,
         blockNumber: 100n,
         blockHash: BLOCK_HASH,
         logs: [{

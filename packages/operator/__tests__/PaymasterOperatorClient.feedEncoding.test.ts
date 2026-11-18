@@ -29,7 +29,8 @@ const ACCOUNT = '0x1111111111111111111111111111111111111111';
 function client(chainId: number) {
     const chain = {
         getChainId: vi.fn(async () => chainId),
-        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success', blockNumber: 5n, blockHash: '0x' + '55'.repeat(32) })),
+        waitForTransactionReceipt: vi.fn(async ({ hash }: any) => ({ status: 'success', blockNumber: 5n, blockHash: '0x' + '55'.repeat(32), transactionHash: hash })),
+        getTransaction: vi.fn(async ({ hash }: any) => ({ hash, chainId })),
         getBlock: vi.fn(async () => ({ number: 5n, hash: '0x' + '55'.repeat(32) })),
     };
     const c = new PaymasterOperatorClient({

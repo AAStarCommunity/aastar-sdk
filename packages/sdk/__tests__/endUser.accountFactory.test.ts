@@ -19,6 +19,7 @@ function client(addresses: Record<string, Address> = {}, implEntryPoint: Address
     const c: any = createEndUserClient({ chain, transport, account: { address: OWNER, type: 'json-rpc' } as any, addresses });
     c.getChainId = vi.fn(async () => chain.id);
     c.getBlock = vi.fn(async () => ({ number: 1n, hash: '0x' + '11'.repeat(32) }));
+    c.getTransaction = vi.fn(async ({ hash }: any) => ({ hash, chainId: chain.id }));
     // The factory check reads through pinned raw eth_getCode / eth_call; answer them through the stubs below.
     const ALL = [...(SimpleAccountFactoryABI as any[]), ...(SimpleAccountABI as any[])] as Abi;
     c.request = vi.fn(async ({ method, params }: any) => {
@@ -61,7 +62,7 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
     it('deploySmartAccount sends createAccount to the checked factory, and a v0.6 factory sends nothing', async () => {
         const ok = client();
         ok.writeContract = vi.fn(async () => '0xbeef');
-        ok.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
+        ok.waitForTransactionReceipt = vi.fn(async ({ hash }: any) => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: hash }));
         await ok.deploySmartAccount({ owner: OWNER });
         expect(ok.writeContract).toHaveBeenCalledWith(expect.objectContaining({ address: V07_FACTORY, functionName: 'createAccount' }));
         const bad = client({ simpleAccountFactory: V06_FACTORY }, EP_V06);
@@ -83,7 +84,7 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
         const addresses: Record<string, Address> = { simpleAccountFactory: V07_FACTORY };
         const c = client(addresses);
         c.writeContract = vi.fn(async () => '0xbeef');
-        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
+        c.waitForTransactionReceipt = vi.fn(async ({ hash }: any) => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: hash }));
         const read = c.readContract.getMockImplementation();
         c.readContract = vi.fn(async (args: any) => { if (args.functionName === 'getAddress') addresses.simpleAccountFactory = OTHER_FACTORY; return read(args); });
         await c.deploySmartAccount({ owner: OWNER });
@@ -94,7 +95,7 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
         const c = client();
         c.writeContract = vi.fn(async () => '0xdeploy');
         c.sendTransaction = vi.fn(async () => '0xfund');
-        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32) }));
+        c.waitForTransactionReceipt = vi.fn(async ({ hash }: any) => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: hash }));
         // The account address (AA) has no code yet: the deploy confirms, but funding is refused.
         c.getCode = vi.fn(async ({ address }: any) => (address === AA ? '0x' : '0x6080'));
         await expect(c.deploySmartAccount({ owner: OWNER, fundWithETH: 1n })).rejects.toThrow('has no code on chain 11155111; not funding it');
@@ -106,6 +107,14 @@ describe('createEndUserClient().createSmartAccount — account factory', () => {
         d.waitForTransactionReceipt = vi.fn(async () => { throw new Error('timeout'); });
         await expect(d.deploySmartAccount({ owner: OWNER, fundWithETH: 1n })).rejects.toThrow('may have been sent on another chain');
         expect(d.sendTransaction).not.toHaveBeenCalled();
+    });
+
+    it('a cancelled funding transaction (the receipt is for another hash) is reported, not returned as funded', async () => {
+        const c = client();
+        c.getBytecode = vi.fn(async () => '0x6080'); // already deployed
+        c.sendTransaction = vi.fn(async () => '0xfund');
+        c.waitForTransactionReceipt = vi.fn(async () => ({ status: 'success', blockNumber: 1n, blockHash: '0x' + '11'.repeat(32), transactionHash: '0xcancel' }));
+        await expect(c.deploySmartAccount({ owner: OWNER, fundWithETH: 1n })).rejects.toThrow('was replaced or cancelled');
     });
 
     it('a factory with no code is refused', async () => {

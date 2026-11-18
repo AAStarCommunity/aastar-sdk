@@ -65,8 +65,10 @@ Mainnet (`FiatTokenV2: invalid signature`; see `docs/onchain-evidence/usdc-domai
   JSON-RPC wallets.
 - **Every send is confirmed before the next step:** deploy, approve, registration, account creation and funding. The
   receipt must be found through the client of the checked chain, that client must still report the checked chain, the
-  receipt must be successful and its block canonical (`confirmSentOnChain`); otherwise the flow stops with "may have
-  been sent on another chain" and nothing further is sent. `deploySmartAccount` funds only after the deploy is
+  receipt must be for exactly that hash (a replacement or cancellation stops the flow), successful and in the
+  canonical block, and the transaction must carry the checked chain's signed `chainId` (`confirmSentOnChain`);
+  otherwise the flow stops with "may have been sent on another chain" (or "replaced or cancelled") and nothing
+  further is sent. `deploySmartAccount` funds only after the deploy is
   confirmed and only an address that has code on that chain. `UserClient.deployAccount` now waits for that receipt.
 - **Remaining window, stated as it is:** viem 2.43.3 sends `eth_sendTransaction` without a chainId. A JSON-RPC wallet
   that switches chains between viem's chain-id read and the send puts that one transaction on the new chain. The

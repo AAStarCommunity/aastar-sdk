@@ -21,7 +21,15 @@ export type DeploymentInputRefusal =
     | 'chain-mismatch' | 'signing-chain-unbound' | 'no-feed-in-book' | 'no-factory-in-book' | 'stale-head'
     | 'no-code' | 'not-an-aggregator' | 'wrong-decimals' | 'wrong-description' | 'non-positive-answer' | 'stale-feed'
     | 'no-account-implementation' | 'entrypoint-mismatch' | 'block-unavailable'
-    | 'json-rpc-account' | 'tx-chain-unconfirmed' | 'tx-reverted' | 'tx-not-canonical';
+    | 'json-rpc-account' | 'tx-chain-unconfirmed' | 'tx-reverted' | 'tx-not-canonical' | 'tx-replaced' | 'tx-wrong-chain';
+
+/** Every reason above, for code that must recognise an SDK refusal (e.g. a report) without trusting other errors. */
+export const DEPLOYMENT_INPUT_REFUSALS: readonly DeploymentInputRefusal[] = [
+    'chain-mismatch', 'signing-chain-unbound', 'no-feed-in-book', 'no-factory-in-book', 'stale-head', 'no-code',
+    'not-an-aggregator', 'wrong-decimals', 'wrong-description', 'non-positive-answer', 'stale-feed',
+    'no-account-implementation', 'entrypoint-mismatch', 'block-unavailable', 'json-rpc-account',
+    'tx-chain-unconfirmed', 'tx-reverted', 'tx-not-canonical', 'tx-replaced', 'tx-wrong-chain',
+];
 
 const fail = (reason: DeploymentInputRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg, cause instanceof Error ? cause : undefined, { reason, ...extra });
@@ -36,6 +44,13 @@ const callAt = async <T>(client: PublicClient, to: Address, abi: Abi, functionNa
     const data = encodeFunctionData({ abi, functionName, args: [] } as any);
     const result = await client.request({ method: 'eth_call', params: [{ to, data }, pin] } as any) as Hex;
     return decodeFunctionResult({ abi, functionName, data: result } as any) as T;
+};
+const latestBlock = async (client: PublicClient) => {
+    try {
+        return await client.getBlock();
+    } catch (e) {
+        return fail('block-unavailable', `the latest block could not be read (${(e as Error).message.split('\n')[0]})`, {}, e);
+    }
 };
 const hasCode = async (client: PublicClient, address: Address, pin: Pin) => {
     let code: Hex;
@@ -109,7 +124,7 @@ export async function verifyEthUsdFeed(
 ): Promise<{ decimals: number; description: string; answer: bigint; updatedAt: bigint }> {
     const maxAge = BigInt(opts.maxAgeSeconds ?? ETH_USD_FEED_MAX_AGE_SECONDS);
     const where = `ETH/USD feed ${feed}`;
-    const block = await client.getBlock();
+    const block = await latestBlock(client);
     const wall = opts.nowSeconds ? opts.nowSeconds() : Math.floor(Date.now() / 1000);
     const lag = wall - Number(block.timestamp);
     const maxLag = opts.maxHeadLagSeconds ?? MAX_HEAD_LAG_SECONDS;
@@ -151,7 +166,7 @@ export function resolveAccountFactoryAddress(chainId: number, explicit?: Address
  * throws, naming both. This checks what the factory reports, not what `createAccount` will deploy.
  */
 export async function verifyAccountFactory(client: PublicClient, factory: Address, entryPoint: Address): Promise<{ implementation: Address }> {
-    const block = await client.getBlock();
+    const block = await latestBlock(client);
     const pin: Pin = { blockHash: block.hash!, requireCanonical: true };
     if (!(await hasCode(client, factory, pin))) fail('no-code', `account factory ${factory} has no code on this chain`, { address: factory });
     let implementation: Address, implEntryPoint: Address;
@@ -192,9 +207,10 @@ export function requireLocalSigner(
 
 /**
  * After every send, before the next step: the transaction's receipt must be found through the client of the
- * checked chain, that client must still report `chainId`, the receipt must be successful, and its block must be
- * the canonical one at that height. Otherwise the flow stops: the transaction may have gone to another chain, or
- * may not be final there.
+ * checked chain, be for exactly this hash (not a replacement or cancellation), be successful and sit in the
+ * canonical block at its height; the transaction itself must carry the signed `chainId` of the checked chain
+ * (which a wallet switching chains around these reads cannot change); and the client must still report that
+ * chain. Otherwise the flow stops: the transaction may have gone to another chain, or may not be final there.
  */
 export async function confirmSentOnChain(
     client: PublicClient,
@@ -210,10 +226,24 @@ export async function confirmSentOnChain(
     let receipt: { status: string; blockNumber: bigint; blockHash: Hash };
     try {
         receipt = await client.waitForTransactionReceipt({ hash, timeout: opts.timeoutMs ?? 300_000, confirmations: opts.confirmations }) as any;
+        // viem may resolve with a replacement's receipt (repriced or cancelled); only this hash counts (checked below).
     } catch (e) {
         return fail('tx-chain-unconfirmed', `transaction ${hash} has no receipt on chain ${chainId}; stopping (it may have been sent on another chain)`, { hash, chainId }, e);
     }
+    const receiptHash = (receipt as any).transactionHash as Hash | undefined;
+    if (!receiptHash || receiptHash.toLowerCase() !== hash.toLowerCase()) {
+        fail('tx-replaced', `transaction ${hash} was replaced or cancelled (receipt is for ${receiptHash ?? 'nothing'}); stopping`, { hash, chainId });
+    }
     if (receipt.status !== 'success') fail('tx-reverted', `transaction ${hash} reverted on chain ${chainId}; stopping`, { hash, chainId });
+    let signedChainId: number | undefined;
+    try {
+        signedChainId = (await client.getTransaction({ hash }) as any).chainId as number | undefined;
+    } catch (e) {
+        return fail('tx-chain-unconfirmed', `transaction ${hash} could not be read on chain ${chainId}; stopping`, { hash, chainId }, e);
+    }
+    if (signedChainId !== chainId) {
+        fail('tx-wrong-chain', `transaction ${hash} is signed for chain ${signedChainId ?? 'none (no EIP-155 chain id)'}, not ${chainId}; stopping`, { hash, chainId });
+    }
     const block = await client.getBlock({ blockNumber: receipt.blockNumber });
     if (block.hash !== receipt.blockHash) fail('tx-not-canonical', `transaction ${hash}'s block ${receipt.blockNumber} is no longer canonical on chain ${chainId}; stopping`, { hash, chainId });
     await onChain();
