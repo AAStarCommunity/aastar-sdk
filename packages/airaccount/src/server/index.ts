@@ -206,6 +206,7 @@ export type {
 export {
   KmsPaymentSigner,
   micropaymentVoucherDigest,
+  micropaymentVoucherContractDigest,
   gTokenAuthorizationDigest,
   x402PaymentDigest,
 } from "./services/kms-payment-signer";

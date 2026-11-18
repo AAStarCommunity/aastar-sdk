@@ -1,5 +1,5 @@
 import {
-  type Address, type Hex, type WalletClient,
+  type Address, type Hex, type TypedDataDomain, type WalletClient,
   encodeAbiParameters, keccak256,
 } from 'viem';
 
@@ -29,6 +29,16 @@ export const X402_PAYMENT_AUTHORIZATION_TYPES = {
 } as const;
 
 /**
+ * X402Facilitator's EIP-712 name/version. The contract exposes no domain getter: these are pinned to SP
+ * `contracts/src/paymasters/superpaymaster/v3/X402Facilitator.sol` `_x402DomainSeparator()` (keccak256("X402Facilitator"),
+ * keccak256("1")), and `verifyPinnedEip712Domain` checks that the deployed code contains them before signing.
+ */
+export const X402_FACILITATOR_DOMAIN = { name: 'X402Facilitator', version: '1' } as const;
+/** The signed struct's EIP-712 type string (X402Facilitator `X402_AUTH_TYPEHASH`). */
+export const X402_PAYMENT_AUTHORIZATION_TYPE_STRING =
+  `X402PaymentAuthorization(${X402_PAYMENT_AUTHORIZATION_TYPES.X402PaymentAuthorization.map((f) => `${f.type} ${f.name}`).join(',')})`;
+
+/**
  * Derived EIP-3009 nonce for the USDC settle path — MUST equal the contract's
  * `keccak256(abi.encode(to, maxFee, salt))` (`X402Facilitator.settleX402Payment`), where
  * `to` is the FINAL recipient (payTo). Binding the recipient into the nonce is the C-03 fix
@@ -55,6 +65,8 @@ export async function signX402PaymentAuthorization(
     from: Address; to: Address; asset: Address; amount: bigint;
     maxFee: bigint; validBefore: bigint; nonce: Hex;
     chainId: number; facilitator: Address;
+    /** The domain checked on the chain (X402Client passes it). Without it, the pinned domain is used unchecked. */
+    domain?: TypedDataDomain;
   },
 ): Promise<Hex> {
   const account = walletClient.account;
@@ -64,7 +76,7 @@ export async function signX402PaymentAuthorization(
   }
   return walletClient.signTypedData({
     account,
-    domain: { name: 'X402Facilitator', version: '1', chainId: params.chainId, verifyingContract: params.facilitator },
+    domain: params.domain ?? { ...X402_FACILITATOR_DOMAIN, chainId: params.chainId, verifyingContract: params.facilitator },
     types: X402_PAYMENT_AUTHORIZATION_TYPES,
     primaryType: 'X402PaymentAuthorization',
     message: {
