@@ -16,7 +16,15 @@ All notable changes to this project will be documented in this file.
   `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
 - `requireDeployedAddress(set, key, deployment)`: the address of a key, or a named `Sp550NotDeployedError` when it is
   zero (not deployed), missing or malformed — for every path that signs, sends or encodes an address (the rc.8 live
-  cells route their keys through it). Client factories do not check this uniformly yet (FU-123).
+  cells route their keys through it).
+- `zeroDestinationGuard` (viem client extension, `ZeroAddressDestinationError`): `createOperatorClient` /
+  `createAdminClient` / `createEndUserClient` / `createCommunityClient` refuse a `writeContract` / `sendTransaction`
+  to the zero address before signing, so an action bound to a declared-absent entry cannot burn value there.
+- The cutover gate also reads the token / staking / SBT wiring of a fresh stack (Registry.GTOKEN_STAKING / MYSBT,
+  GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN) against the pins.
+- One network-aware validation (`sp550NetworkPinProblems`: tag policy, coexist overlap, hold) for the gate, the
+  read-back comparator and `sp550AddressSet`; `requireSp550FreshDeployPins(chainId)` refuses a chain that hosts a
+  coexisting stack.
 - A coexisting stack may not reuse an SP-owned address of the chain's shipped stack (`sp550CoexistOverlapProblems`;
   a deliberate share is a reviewed `SP550_COEXIST_SHARED_KEYS` entry). Its release holds are its own
   (`SP550_COEXIST_HOLDS`, `sp550HoldFor`), so holding one Sepolia deployment never holds or releases the other.

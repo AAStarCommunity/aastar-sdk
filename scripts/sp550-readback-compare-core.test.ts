@@ -536,3 +536,20 @@ describe('disclosureRegistry rolesSource, aligned with DVT a7-fork VERIFIED-ABSE
         for (const book of Object.values(CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)) expect(Object.keys(book)).not.toContain('disclosureRegistry');
     });
 });
+
+describe('the comparator validates by network: a coexisting stack\'s overlap and hold are refused (Codex r3 M4)', () => {
+    it('sepolia-rc8 pins naming the shipped staking contract, or under a hold, are pins problems before any comparison', async () => {
+        const { SP550_COEXIST_HOLDS } = await import('../packages/core/src/sp550Deployments.js');
+        const { CANONICAL_ADDRESSES } = await import('../packages/core/src/addresses.js');
+        const old = (CANONICAL_ADDRESSES as any)[11155111].staking;
+        const pins = { ...PINS, addresses: { ...(PINS.addresses ?? {}), staking: old } };
+        const ctx = { ...CTX, mode: 'fresh' as const, network: 'sepolia-rc8' as const };
+        const without = await readbackProblems({}, pins, { ...CTX, mode: 'fresh' as const }, reader());
+        expect(without.some((x) => /shipped stack's staking/.test(x))).toBe(false); // by mode alone: not seen
+        const got = await readbackProblems({}, pins, ctx, reader());
+        expect(got).toContainEqual(expect.stringMatching(/^pins: addresses\.staking .* is the shipped stack's staking/));
+        SP550_COEXIST_HOLDS['sepolia-rc8'] = 'held for test';
+        try { expect(await readbackProblems({}, PINS, ctx, reader())).toContainEqual('pins: release hold: held for test'); }
+        finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
+    });
+});

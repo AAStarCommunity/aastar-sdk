@@ -20,7 +20,7 @@ import {
     BaseError, ContractFunctionRevertedError, ContractFunctionZeroDataError,
 } from 'viem';
 import { sp550PinnedAddressEntries, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
-import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550UpgradePinProblems, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { SP550_PIN_ALIASES, sp550FreshPinProblems, sp550NetworkPinProblems, sp550UpgradePinProblems, type Sp550FreshDeployPins, type Sp550Network } from '../packages/core/src/sp550Deployments.js';
 
 export const READBACK_SCHEMA = 'aoa-a7-readback/1';
 /**
@@ -111,6 +111,8 @@ export interface ReadbackContext {
     /** fork = the A7 dump this run loaded (forkBlock, dumpSha256, anvilCommit required); live = after SEND. */
     source: 'fork' | 'live';
     allowRc?: boolean;
+    /** The selected network: its validation (tag policy, coexist overlap, hold) is the gate's. Without it, by mode only. */
+    network?: Sp550Network;
     forkBlock?: bigint;
     dumpSha256?: string;
     hardfork?: string;
@@ -157,7 +159,9 @@ const OWNED: Record<string, ReadonlyArray<'owner' | 'pendingOwner'>> = {
 export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader,
     validate: (x: unknown) => string[] = loadReadbackValidator()): Promise<string[]> {
     // The pins must be complete first: the comparison set is derived from them.
-    const pinIssues = ctx.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc: ctx.allowRc }) : sp550UpgradePinProblems(pins, { allowRc: ctx.allowRc });
+    const pinIssues = ctx.network !== undefined
+        ? (({ problems, hold }) => [...problems, ...(hold ? [`release hold: ${hold}`] : [])])(sp550NetworkPinProblems(ctx.network, pins, { allowRc: ctx.allowRc }))
+        : ctx.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc: ctx.allowRc }) : sp550UpgradePinProblems(pins, { allowRc: ctx.allowRc });
     if (pinIssues.length) return pinIssues.map((x) => `pins: ${x}`);
     if (ctx.source === 'fork' && (ctx.forkBlock === undefined || ctx.dumpSha256 === undefined || ctx.anvilCommit === undefined)) {
         return ['context: a fork read-back is compared against the loaded dump: forkBlock, dumpSha256 and anvilCommit are required'];

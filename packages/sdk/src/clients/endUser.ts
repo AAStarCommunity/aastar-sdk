@@ -1,5 +1,5 @@
 import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseAbi } from 'viem';
-import { 
+import { zeroDestinationGuard, 
     registryActions, 
     sbtActions,
     superPaymasterActions,
@@ -98,7 +98,9 @@ export function createEndUserClient({
         account
     })
     .extend(publicActions)
-    .extend(walletActions);
+    .extend(walletActions)
+    // A destination of address zero (a contract the selected deployment does not include) is refused before signing.
+    .extend(zeroDestinationGuard);
 
     // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
     // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.

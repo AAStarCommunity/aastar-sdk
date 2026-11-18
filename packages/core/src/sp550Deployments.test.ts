@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import {
-    sp550PinsFor,
+    sp550PinsFor, sp550NetworkPinProblems,
     SP550_ADDRESS_OWNER, SP550_FRESH_DEPLOY_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_NETWORKS, SP550_RELEASE_HOLDS,
     assertSp550ChainId, requireSp550FreshDeployPins, resolveSp550Network, sp550FreshPinProblems,
 } from './sp550Deployments.js';
@@ -52,7 +52,8 @@ describe('SP 5.5.0 network selection', () => {
             const { pins } = sp550PinsFor(name as keyof typeof SP550_NETWORKS);
             expect(pins).toEqual({});
             if (!n.coexist) expect(pins).toBe(SP550_FRESH_DEPLOY_PINS[n.chainId]);
-            expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/addresses\.registry: unpinned/);
+            if (n.coexist) expect(sp550NetworkPinProblems(name as keyof typeof SP550_NETWORKS, pins).problems).toContain('addresses.registry: unpinned');
+            else expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/addresses\.registry: unpinned/);
         }
     });
 });

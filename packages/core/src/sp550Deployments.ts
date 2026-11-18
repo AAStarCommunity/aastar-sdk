@@ -195,7 +195,8 @@ export type Sp550AddressSet = Record<AddressBookKey | 'gTokenStaking' | 'mySBT',
 export function sp550AddressSet(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined = SP550_COEXIST_PINS[network]): { chainId: number; pins: Sp550ValidatedPins<Sp550FreshDeployPins>; absent: string[]; addresses: Sp550AddressSet } {
     const n = SP550_NETWORKS[network] as { chainId: number; coexist: boolean; allowRc: boolean } | undefined;
     if (!n?.coexist) throw new Error(`${JSON.stringify(network)} is not a coexisting SP 5.5.0 network`);
-    const valid = freshPinsOrThrow(n.chainId, pins, { allowRc: n.allowRc }, sp550HoldFor(network), sp550CoexistOverlapProblems(network, pins));
+    const { problems, hold } = sp550NetworkPinProblems(network, pins);
+    const valid = freshPinsOrThrow(n.chainId, pins, {}, hold, problems, true);
     const book = sp550OverlayBook((CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[n.chainId] ?? {}, valid);
     const keys = [...Object.keys(SP550_ADDRESS_OWNER), 'gTokenStaking', 'mySBT'];
     const missing = keys.filter((k) => typeof book[k] !== 'string' || !isAddress(book[k] as string, { strict: false }));
@@ -257,6 +258,19 @@ export const SP550_COEXIST_HOLDS: Partial<Record<Sp550CoexistNetwork, string>> =
 export function sp550HoldFor(network: Sp550Network): string | undefined {
     const n = SP550_NETWORKS[network];
     return n.coexist ? SP550_COEXIST_HOLDS[network as Sp550CoexistNetwork] : SP550_RELEASE_HOLDS[n.chainId];
+}
+
+/**
+ * Everything wrong with a network's pins, by NETWORK (not chain): its mode's rule set with its tag policy, and for a
+ * coexisting stack the overlap with the chain's shipped stack; plus the hold that applies to it. The one validation the
+ * gate, the read-back comparator and sp550AddressSet share.
+ */
+export function sp550NetworkPinProblems(network: Sp550Network, pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean } = {}): { problems: string[]; hold: string | undefined } {
+    const n = SP550_NETWORKS[network];
+    const allowRc = !!opts.allowRc || n.allowRc;
+    const problems = n.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc }) : sp550UpgradePinProblems(pins, { allowRc });
+    if (n.coexist) problems.push(...sp550CoexistOverlapProblems(network as Sp550CoexistNetwork, pins));
+    return { problems, hold: sp550HoldFor(network) };
 }
 
 /** Chains whose 5.5.0 pins must not ship in a release even when complete, with the reason. */
@@ -369,11 +383,17 @@ export function requireSp550FreshDeployPins(
     pins = SP550_FRESH_DEPLOY_PINS[chainId],
     opts: { allowRc?: boolean } = {},
 ): Sp550ValidatedPins<Sp550FreshDeployPins> {
+    // By chain only for a chain whose fresh stack is its own: a chain that also hosts a coexisting stack is validated by
+    // network (sp550AddressSet), or its holds and overlap rules would be skipped.
+    const hosts = Object.values(SP550_NETWORKS).filter((x) => x.chainId === chainId);
+    if (hosts.some((x) => x.coexist) || !hosts.some((x) => x.mode === 'fresh' && !x.coexist)) {
+        throw new Error(`chain ${chainId} has no chain-keyed fresh SP 5.5.0 stack; validate a coexisting stack by network (sp550AddressSet / sp550NetworkPinProblems)`);
+    }
     return freshPinsOrThrow(chainId, pins, opts, SP550_RELEASE_HOLDS[chainId], []);
 }
 
-function freshPinsOrThrow(chainId: number, pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean }, hold: string | undefined, extra: string[]): Sp550ValidatedPins<Sp550FreshDeployPins> {
-    const problems = [...sp550FreshPinProblems(pins, opts), ...extra];
+function freshPinsOrThrow(chainId: number, pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean }, hold: string | undefined, extra: string[], extraIsComplete = false): Sp550ValidatedPins<Sp550FreshDeployPins> {
+    const problems = extraIsComplete ? [...extra] : [...sp550FreshPinProblems(pins, opts), ...extra];
     if (hold) problems.push(`release hold: ${hold}`);
     if (problems.length) {
         throw new Error(

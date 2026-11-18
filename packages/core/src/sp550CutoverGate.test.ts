@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
-import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -54,6 +54,10 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${book.dvtValidator}.BLS_AGGREGATOR`]: book.blsAggregator, [`${book.dvtValidator}.REGISTRY`]: book.registry,
         [`${book.blsAggregator}.DVT_VALIDATOR`]: book.dvtValidator, [`${book.blsAggregator}.REGISTRY`]: book.registry,
         [`${book.blsAggregator}.SUPERPAYMASTER`]: p.sp, [`${book.reputationSystem}.REGISTRY`]: book.registry,
+        // The token / staking / SBT legs (checked for a fresh stack).
+        [`${book.registry}.GTOKEN_STAKING`]: book.staking, [`${book.registry}.MYSBT`]: book.sbt,
+        [`${book.staking}.REGISTRY`]: book.registry, [`${book.staking}.GTOKEN`]: book.gToken,
+        [`${book.sbt}.REGISTRY`]: book.registry, [`${book.sbt}.GTOKEN_STAKING`]: book.staking, [`${book.sbt}.GTOKEN`]: book.gToken,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -741,5 +745,28 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         const book = sp550OverlayBook({ ...shippedSepolia, timelockControllerLegacy: A(0x777) }, m.pins);
         expect(book.timelockControllerLegacy).toBe('0x0000000000000000000000000000000000000000');
         expect(book.entryPoint).toBe(shippedSepolia.entryPoint);
+    });
+
+    it.each([
+        ['Registry.GTOKEN_STAKING', 'registry', 'GTOKEN_STAKING', 'staking'],
+        ['Registry.MYSBT', 'registry', 'MYSBT', 'sbt'],
+        ['GTokenStaking.GTOKEN', 'staking', 'GTOKEN', 'gToken'],
+        ['MySBT.GTOKEN_STAKING', 'sbt', 'GTOKEN_STAKING', 'staking'],
+    ] as const)('every pin new and correct, but %s() still names the shipped stack → the gate fails (Codex r3 H2)', async (label, holder, fn, oldKey) => {
+        const m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.addresses[holder]}.${fn}`] = shippedSepolia[oldKey];
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual([expect.stringContaining(label.split('.')[1])]);
+    });
+
+    it('the chain-keyed validator refuses a chain that hosts a coexisting stack (Codex r3 M3)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        expect(() => requireSp550FreshDeployPins(sepolia.id, m.pins, { allowRc: true })).toThrow(/no chain-keyed fresh SP 5.5.0 stack/);
+        const old = shippedSepolia.staking as Address;
+        const overlap = { ...m.pins, addresses: { ...m.pins.addresses, staking: old }, codehashes: { ...m.pins.codehashes, 'addresses.staking': keccak256(codeOf(old)) } };
+        expect(sp550NetworkPinProblems('sepolia-rc8', overlap).problems).toEqual([expect.stringMatching(/shipped stack's staking/)]);
+        SP550_COEXIST_HOLDS['sepolia-rc8'] = 'held';
+        try { expect(sp550NetworkPinProblems('sepolia-rc8', m.pins).hold).toBe('held'); } finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
     });
 });

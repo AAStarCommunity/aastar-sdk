@@ -19,12 +19,12 @@
  */
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import {
-    APNTsCappedABI, BLSAggregatorABI, DVTValidatorABI, RegistryABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+    APNTsCappedABI, BLSAggregatorABI, DVTValidatorABI, GTokenStakingABI, MySBTABI, RegistryABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
 } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    assertSp550ChainId, sp550CoexistOverlapProblems, sp550HoldFor, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
+    assertSp550ChainId, sp550NetworkPinProblems, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -129,12 +129,8 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const entry = sp550PinsFor(net.network);
     const pins: Sp550FreshDeployPins = input.pins ?? entry.pins ?? {};
     const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}${net.coexist ? ', coexisting stack' : ''}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${entry.table}[${JSON.stringify(entry.key)}]`} ===`;
-    const problems = net.mode === 'fresh'
-        ? sp550FreshPinProblems(pins, { allowRc: input.allowRc || net.allowRc })
-        : sp550UpgradePinProblems(pins, { allowRc: input.allowRc || net.allowRc });
-    if (net.coexist) problems.push(...sp550CoexistOverlapProblems(net.network, pins));
+    const { problems, hold } = sp550NetworkPinProblems(net.network, pins, { allowRc: input.allowRc });
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
-    const hold = sp550HoldFor(net.network);
     if (hold) record('no release hold on this chain', false, hold);
 
     // 5. State reads on every RPC; a disagreement is returned as a Diverge object, which fails any comparison.
@@ -258,6 +254,16 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed, 'SDK book');
         // Not deployed = no entry or the zero address (a coexisting set keeps every key, zeroed, so a client merge
         // cannot fall back to the chain's other stack).
+        // The token / staking / SBT legs name the pinned contracts, so pins that are each new and correct cannot hide a
+        // contract still wired into another stack (e.g. a fresh Registry whose GTOKEN_STAKING is the old staking).
+        const stk = book.staking as Address | undefined, sbt = book.sbt as Address | undefined;
+        cmp('Registry.GTOKEN_STAKING() == addresses.staking', await read(reg, RegistryABI, 'GTOKEN_STAKING'), stk);
+        cmp('Registry.MYSBT() == addresses.sbt', await read(reg, RegistryABI, 'MYSBT'), sbt);
+        cmp('GTokenStaking.REGISTRY() == addresses.registry', await read(stk, GTokenStakingABI, 'REGISTRY'), reg);
+        cmp('GTokenStaking.GTOKEN() == addresses.gToken', await read(stk, GTokenStakingABI, 'GTOKEN'), book.gToken);
+        cmp('MySBT.REGISTRY() == addresses.registry', await read(sbt, MySBTABI, 'REGISTRY'), reg);
+        cmp('MySBT.GTOKEN_STAKING() == addresses.staking', await read(sbt, MySBTABI, 'GTOKEN_STAKING'), stk);
+        cmp('MySBT.GTOKEN() == addresses.gToken', await read(sbt, MySBTABI, 'GTOKEN'), book.gToken);
         for (const k of pins.absent ?? []) {
             if (k === 'disclosureRegistry') continue; // a top-level pin, not a book entry
             const v = canonical[k];
