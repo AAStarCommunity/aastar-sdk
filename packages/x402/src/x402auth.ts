@@ -29,9 +29,9 @@ export const X402_PAYMENT_AUTHORIZATION_TYPES = {
 } as const;
 
 /**
- * X402Facilitator's EIP-712 name/version. The contract exposes no domain getter: these are pinned to SP
- * `contracts/src/paymasters/superpaymaster/v3/X402Facilitator.sol` `_x402DomainSeparator()` (keccak256("X402Facilitator"),
- * keccak256("1")), and `verifyPinnedEip712Domain` checks that the deployed code contains them before signing.
+ * X402Facilitator's EIP-712 name/version, pinned to SP `contracts/src/paymasters/superpaymaster/v3/X402Facilitator.sol`
+ * `_x402DomainSeparator()`. The contract exposes no domain getter; `verifyFacilitatorDomain` asks its verifier (a
+ * simulated settle) whether a signature under this domain passes before X402Client signs.
  */
 export const X402_FACILITATOR_DOMAIN = { name: 'X402Facilitator', version: '1' } as const;
 /** The signed struct's EIP-712 type string (X402Facilitator `X402_AUTH_TYPEHASH`). */

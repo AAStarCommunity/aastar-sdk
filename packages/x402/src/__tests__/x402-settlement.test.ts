@@ -9,7 +9,7 @@ import { X402Client } from '../X402Client.js';
 import { deriveEip3009Nonce, X402_PAYMENT_AUTHORIZATION_TYPES } from '../x402auth.js';
 import { EIP3009_TYPES, getEIP3009Domain } from '../eip3009.js';
 import { getX402FacilitatorContract } from '../facilitators.js';
-import { domainClient } from './domainClient.js';
+import { domainClient, type FacilitatorBehaviour } from './domainClient.js';
 
 const PK = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d'; // anvil #1 (test only)
 const account = privateKeyToAccount(PK);
@@ -169,18 +169,30 @@ describe('X402Client.createPayment — direct path does not depend on the asset 
   });
 });
 
-describe('X402Client.createPayment — direct path checks the facilitator\'s pinned domain on the chain', () => {
-  const directClient = (facilitatorCode?: `0x${string}`) => {
+describe('X402Client.createPayment — direct path asks the facilitator\'s verifier before signing', () => {
+  const directClient = (facilitator?: FacilitatorBehaviour) => {
     const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
-    return new X402Client({ publicClient: domainClient(CHAIN_ID, 'USDC', '2', { facilitatorCode }), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+    return new X402Client({ publicClient: domainClient(CHAIN_ID, 'USDC', '2', { facilitator }), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
   };
   const pay = (c: X402Client) => c.createPayment({ from: account.address, to: PAYTO, asset: ASSET, amount: 1n, settlement: 'direct', maxFee: 0n });
 
-  it('a facilitator address with no code gets no signature', async () => {
-    await expect(pay(directClient('0x'))).rejects.toThrow('has no code on this chain');
+  it('a facilitator whose verifier accepts { X402Facilitator, 1 } gets the payment signed', async () => {
+    await expect(pay(directClient())).resolves.toBeTruthy();
   });
 
-  it('a contract whose code lacks the X402Facilitator domain constants gets no signature', async () => {
-    await expect(pay(directClient('0x6080604052'))).rejects.toThrow('does not contain keccak256 of "X402Facilitator"');
+  it('an RPC on another chain than the payment\'s gets no signature (checked before the probe)', async () => {
+    const walletClient = createWalletClient({ account, chain: sepolia, transport: http('http://localhost:8545') });
+    const c = new X402Client({ publicClient: domainClient(10, 'USDC', '2'), walletClient, superPaymasterAddress: FACILITATOR, chainId: CHAIN_ID });
+    await expect(pay(c)).rejects.toThrow(`the RPC is on chain 10, the payment is for chain ${CHAIN_ID}`);
+  });
+
+  it('a facilitator verifying under another domain (version "2") gets no signature', async () => {
+    await expect(pay(directClient({ kind: 'verifier', version: '2' }))).rejects.toThrow('its verifier rejects a probe signed under');
+  });
+
+  it('a simulation that does not reach the signature check (roles first, no revert data, no code) cannot confirm the domain', async () => {
+    await expect(pay(directClient({ kind: 'role-first' }))).rejects.toThrow('reverted with Unauthorized, not InvalidX402Signature');
+    await expect(pay(directClient({ kind: 'no-data' }))).rejects.toThrow('without revert data');
+    await expect(pay(directClient({ kind: 'no-code' }))).rejects.toThrow('reverted with no-revert');
   });
 });

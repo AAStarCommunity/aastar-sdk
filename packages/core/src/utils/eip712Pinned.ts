@@ -12,18 +12,14 @@ import { AAStarError, ErrorCode } from '../errors/index.js';
  * not have it today:
  * - MicroPaymentChannel exposes `eip712Domain()` only: its domain is taken as the contract reports it (EIP-5267),
  *   and checked against `DOMAIN_SEPARATOR()` only if that view exists.
- * - X402Facilitator exposes neither; its separator is computed in an internal function. Its domain is pinned
- *   ({ name: "X402Facilitator", version: "1" }, SP X402Facilitator.sol `_x402DomainSeparator`), and the deployed
- *   code at the address must contain the keccak256 of that name, that version, the EIP712Domain type string and the
- *   signed struct's type string. If the contract exposes `DOMAIN_SEPARATOR()` (SP plans to add it), that is compared
- *   as well.
+ * (X402Facilitator exposes neither getter; @aastar/x402's verifyFacilitatorDomain asks its verifier instead.)
  *
  * Every read is pinned to one block hash (EIP-1898, `requireCanonical`). Refusals carry `data.reason`.
  */
 
 export type PinnedDomainRefusal =
     | 'chain-mismatch' | 'no-code' | 'block-unavailable' | 'no-eip712-domain' | 'unsupported-fields'
-    | 'reported-chain-mismatch' | 'reported-contract-mismatch' | 'separator-mismatch' | 'code-lacks-domain-constants';
+    | 'reported-chain-mismatch' | 'reported-contract-mismatch' | 'separator-mismatch';
 
 const fail = (reason: PinnedDomainRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, `${msg}; refusing to sign`, cause instanceof Error ? cause : undefined, { reason, ...extra });
@@ -34,7 +30,6 @@ const firstLine = (e: unknown) => {
 };
 
 type Pin = { blockHash: Hash; requireCanonical: true };
-const DOMAIN_TYPE = 'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)';
 const pick = (name: string) => (GTokenAuthorizationABI as any[]).find((e) => e.type === 'function' && e.name === name);
 // eip712Domain() / DOMAIN_SEPARATOR() fragments from a vendored ABI (OpenZeppelin EIP712).
 const READ_ABI = [pick('eip712Domain'), pick('DOMAIN_SEPARATOR')] as Abi;
@@ -59,10 +54,11 @@ async function callAt<T>(client: PublicClient, to: Address, abi: Abi, functionNa
     return decodeFunctionResult({ abi, functionName, data: result } as any) as T;
 }
 
-// A contract-level revert (the view does not exist), as opposed to a transport or node failure.
+// A contract-level revert (the view does not exist), as opposed to a transport or node failure: decided only from
+// the structured JSON-RPC error (code 3 = execution reverted), never from message text.
 const isRevert = (e: unknown): boolean => {
-    for (let x: any = e, i = 0; x && i < 6; x = x.cause, i++) {
-        if (x.code === 3 || /execution reverted|revert/i.test(String(x.message ?? ''))) return true;
+    for (let x: any = e, i = 0; x && i < 8; x = x.cause, i++) {
+        if (x.code === 3) return true;
     }
     return false;
 };
@@ -91,13 +87,14 @@ async function codeAt(client: PublicClient, contract: Address, pin: Pin): Promis
     return code;
 }
 
-export type ReportedDomain = { domain: TypedDataDomain; separator: Hex; separatorChecked: boolean };
+export type ReportedDomain = { domain: TypedDataDomain; separator: Hex; separatorChecked: boolean; blockHash: Hash };
 
 /**
  * The domain a contract reports through `eip712Domain()` (EIP-5267): its `fields` bitmap honoured, its chainId and
- * verifyingContract required to be the live chain and the contract. `separatorChecked` is true only when the
+ * verifyingContract, when present, required to be the live chain and the contract. `separatorChecked` is true only when the
  * contract also exposes `DOMAIN_SEPARATOR()` and it matched; when it does not, the domain is the contract's own
- * report and nothing independent confirms it.
+ * report and nothing independent confirms it. `blockHash` is the block every read was pinned to, for callers that
+ * read more from the same contract (e.g. a type hash) and must read it from the same state.
  */
 export async function resolveReportedEip712Domain(
     client: PublicClient,
@@ -132,33 +129,5 @@ export async function resolveReportedEip712Domain(
     if (onChain !== undefined && onChain.toLowerCase() !== separator.toLowerCase()) {
         fail('separator-mismatch', `${contract}: eip712Domain() gives separator ${separator} but DOMAIN_SEPARATOR() is ${onChain}`, { address: contract });
     }
-    return { domain, separator, separatorChecked: onChain !== undefined };
-}
-
-/**
- * A pinned { name, version } domain for a contract with no domain getters, checked against the deployed code: the
- * code must contain keccak256(name), keccak256(version), keccak256 of the EIP712Domain type string and keccak256 of
- * each of `typeStrings` (the signed structs). When the contract exposes `DOMAIN_SEPARATOR()`, it must equal the
- * pinned domain's separator. This shows the code commits to those constants; it does not prove how it uses them.
- */
-export async function verifyPinnedEip712Domain(
-    client: PublicClient,
-    contract: Address,
-    pinned: { name: string; version: string; typeStrings: readonly string[] },
-    opts: { expectedChainId?: number } = {},
-): Promise<{ domain: TypedDataDomain; separator: Hex; separatorChecked: boolean }> {
-    const { chainId, pin } = await pinLatest(client, opts.expectedChainId);
-    const code = (await codeAt(client, contract, pin)).toLowerCase();
-    const constants = [pinned.name, pinned.version, DOMAIN_TYPE, ...pinned.typeStrings];
-    const missing = constants.filter((c) => !code.includes(keccak256(toHex(c)).slice(2)));
-    if (missing.length > 0) {
-        fail('code-lacks-domain-constants', `the code at ${contract} does not contain keccak256 of ${missing.map((m) => JSON.stringify(m)).join(', ')}`, { address: contract });
-    }
-    const domain: TypedDataDomain = { name: pinned.name, version: pinned.version, chainId, verifyingContract: contract };
-    const separator = domainSeparator({ domain });
-    const onChain = await separatorIfPresent(client, contract, pin);
-    if (onChain !== undefined && onChain.toLowerCase() !== separator.toLowerCase()) {
-        fail('separator-mismatch', `${contract}: the pinned domain gives separator ${separator} but DOMAIN_SEPARATOR() is ${onChain}`, { address: contract });
-    }
-    return { domain, separator, separatorChecked: onChain !== undefined };
+    return { domain, separator, separatorChecked: onChain !== undefined, blockHash: pin.blockHash };
 }
