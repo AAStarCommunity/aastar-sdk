@@ -553,4 +553,12 @@ describe('sp550-pin-fill --deploylive-archive refuses until SP names the runtime
         expect(r.status).toBe(2);
         expect(r.stderr).toContain(DEPLOYLIVE_ARCHIVE_PENDING);
     });
+    it.each([['trailing, no value', ['--manifest', './nonexistent.json', '--deploylive-archive']], ['--flag=value', ['--deploylive-archive=/x', '--manifest', './nonexistent.json']]])('%s also refuses before the manifest is read (Codex r1 M6)', async (_l, extra) => {
+        const { spawnSync } = await import('child_process');
+        const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', 'sepolia-rc8', ...extra],
+            { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+        expect(r.status).toBe(2);
+        expect(r.stderr).toContain(DEPLOYLIVE_ARCHIVE_PENDING);
+        expect(r.stderr).not.toContain('ENOENT');
+    });
 });

@@ -9,9 +9,16 @@ All notable changes to this project will be documented in this file.
 - New SP 5.5.0 network `sepolia-rc8` (chain 11155111, `fresh`, `coexist: true`). Its pins live in
   `SP550_COEXIST_PINS['sepolia-rc8']` (empty until the post-deploy read-back, so every consumer fails closed); it never
   switches `CANONICAL_ADDRESSES`, which stays the 5.4.2 stack. `sepolia` (the in-place upgrade entry) is unchanged.
-- `sp550AddressSet('sepolia-rc8')`: the stack's full address set after the complete fresh-deploy validation (SP
-  entries from the pins, external ones from the shipped book, declared-absent ones removed) — what a caller passes
-  explicitly. `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
+- `sp550AddressSet('sepolia-rc8')`: the stack's complete address set after the full fresh-deploy validation — what
+  a caller passes as a client's `addresses`. Every book key is present: SP entries and the client aliases
+  (`gTokenStaking`, `mySBT`) from the pins, external ones from the shipped book, declared-absent ones as the zero
+  address, so a client's `{ ...chainDefaults, ...addresses }` merge cannot fall back to the 5.4.2 stack.
+  `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
+- A network's release-tag policy (`allowRc`) applies alike to the writer, the gate and `sp550AddressSet`; only
+  `sepolia-rc8` accepts `v5.5.0-rc.N` without `--allow-rc`. `resolveSp550Network` returns a discriminated union.
+- Fresh pins (every fresh network): the book's `aPNTs` / `xPNTsFactory` must be the `aPNTsCapped` / `xPNTsFactoryV2`
+  contracts (neither different nor declared absent), as an upgrade derives them. The gate accepts the zero address
+  as "not deployed" for a declared-absent key in fresh mode too (as it already did for an upgrade).
 - The cutover gate holds a coexisting stack against that overlay; `scripts/sp550-pin-fill.ts --network sepolia-rc8`
   fills only its pin table entry. Its input will be a DeployLive release archive (`--deploylive-archive`), which
   refuses until SP names the source of the expected runtime codehashes.

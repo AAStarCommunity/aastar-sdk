@@ -57,7 +57,8 @@ const refuse = (m: string): never => { console.error(`${m}\n${USAGE}`); process.
 
 async function main() {
     const net = (() => { try { return resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); } })();
-    if (arg('--deploylive-archive') !== undefined) refuse(DEPLOYLIVE_ARCHIVE_PENDING);
+    // Any spelling of the flag, with or without a value, refuses before anything is read.
+    if (args.some((x) => x === '--deploylive-archive' || x.startsWith('--deploylive-archive='))) refuse(DEPLOYLIVE_ARCHIVE_PENDING);
     const file = arg('--manifest') ?? refuse('--manifest <pins.json> is required');
     let pins;
     try { pins = parseManifestPins(JSON.parse(fs.readFileSync(file, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }

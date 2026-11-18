@@ -130,8 +130,8 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     const pins: Sp550FreshDeployPins = input.pins ?? entry.pins ?? {};
     const header = `=== SP 5.5.0 cutover gate — ${net.network} (chain ${chainId}, ${net.mode}${net.coexist ? ', coexisting stack' : ''}), all reads at block ${blockNumber}${typeof at === 'bigint' ? '' : ` (lowest ${at})`}, pins from ${input.pinsSource ?? `${entry.table}[${JSON.stringify(entry.key)}]`} ===`;
     const problems = net.mode === 'fresh'
-        ? sp550FreshPinProblems(pins, { allowRc: input.allowRc })
-        : sp550UpgradePinProblems(pins, { allowRc: input.allowRc });
+        ? sp550FreshPinProblems(pins, { allowRc: input.allowRc || net.allowRc })
+        : sp550UpgradePinProblems(pins, { allowRc: input.allowRc || net.allowRc });
     record('pins complete and well-formed', problems.length === 0, problems.length ? problems.join('; ') : 'ok');
     const hold = SP550_RELEASE_HOLDS[chainId];
     if (hold) record('no release hold on this chain', false, hold);
@@ -255,7 +255,13 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
         cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint, 'SDK book');
         cmp('SP.ETH_USD_PRICE_FEED() == SDK book priceFeed', await read(sp, SuperPaymasterV550ABI, 'ETH_USD_PRICE_FEED'), canonical.priceFeed, 'SDK book');
-        for (const k of pins.absent ?? []) record(`SDK book has no ${k} (declared absent)`, canonical[k] === undefined, `SDK book ${str(canonical[k] ?? '(none)')}`);
+        // Not deployed = no entry or the zero address (a coexisting set keeps every key, zeroed, so a client merge
+        // cannot fall back to the chain's other stack).
+        for (const k of pins.absent ?? []) {
+            if (k === 'disclosureRegistry') continue; // a top-level pin, not a book entry
+            const v = canonical[k];
+            record(`SDK book has no ${k} (declared absent)`, v === undefined || (typeof v === 'string' && /^0x0{40}$/i.test(v)), `SDK book ${str(v ?? '(none)')}`);
+        }
     }
 
     // 5f. Every pinned address, top-level and address book, is real code and the same code on every RPC.

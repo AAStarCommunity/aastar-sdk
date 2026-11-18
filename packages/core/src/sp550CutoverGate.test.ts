@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
-import { CANONICAL_ADDRESSES } from './addresses.js';
-import { SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
+import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -27,14 +27,15 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         admin: A(0xa), registryImpl: A(0xb), disclosure: A(0xc),
     };
     // An upgrade certifies the SP-owned entries every read-back names; a fresh deploy the whole SP-owned book.
-    const certified = mode === 'fresh' ? book : Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k) => [k, book[k]])) as Record<string, Address>;
+    // A fresh book's xPNTsFactory IS the V2 factory (sp550FreshPinProblems), so the fixture pins it rather than declaring it absent.
+    const certified = mode === 'fresh' ? { ...book, xPNTsFactory: p.factory } : Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k) => [k, book[k]])) as Record<string, Address>;
     const canonical = (CANONICAL_ADDRESSES as Record<number, any>)[chainId];
     const base = {
         tag: 'v5.5.0', spVersion: SP_VERSION, superPaymaster: p.sp, spImpl: p.impl, spImplCodehash: keccak256(codeOf(p.impl)), superPaymasterLens: p.lens,
         xPNTsFactoryV2: p.factory, xPNTsTokenV2Impl: p.tokenImpl, xPNTsTokenV2Ext: p.ext, aoaProtocolRegistry: p.aoa,
         globalTierSource: p.tier, aPNTsCapped: p.apnts, readbackBlock: HEAD - 10n,
         spAdminExtension: p.admin, lensVersion: LENS_VERSION, registryImpl: p.registryImpl, disclosureRegistry: p.disclosure,
-        addresses: certified, ...(mode === 'fresh' ? { absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS] } : {}),
+        addresses: certified, ...(mode === 'fresh' ? { absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory') } : {}),
     };
     // The read-back runtime codehash of every pinned address (the model serves codeOf(address)).
     const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
@@ -57,7 +58,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
     const sdkBook: Record<string, unknown> = mode === 'fresh'
-        ? { ...book, entryPoint: canonical.entryPoint, priceFeed: canonical.priceFeed }
+        ? { ...certified, entryPoint: canonical.entryPoint, priceFeed: canonical.priceFeed }
         : { ...canonical, ...certified, superPaymaster: p.sp, aPNTs: p.apnts, xPNTsFactory: p.factory };
     BOOKS.set(pins, sdkBook);
     return { chainId, pins, p, reads, slot: pad(p.impl, { size: 32 }) as Hex,
@@ -420,7 +421,7 @@ describe('the SDK book names what the gate certified (clestons B1 / N1 / N2)', (
     });
     it('fresh: addresses.xPNTsFactory = the SP proxy is an alias, refused (Codex repro of N2)', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
-        const pins = { ...m.pins, addresses: { ...m.pins.addresses!, xPNTsFactory: m.p.sp }, absent: m.pins.absent!.filter((k) => k !== 'xPNTsFactory') };
+        const pins = { ...m.pins, addresses: { ...m.pins.addresses!, xPNTsFactory: m.p.sp }, absent: m.pins.absent };
         BOOKS.set(pins, { ...BOOKS.get(m.pins)!, xPNTsFactory: m.p.sp });
         const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m), pins });
         expect(r.exitCode).toBe(1);
@@ -597,7 +598,7 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
     const shippedSepolia = (CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id];
 
     it('resolves as fresh + coexist on chain 11155111, next to the sepolia upgrade entry', () => {
-        expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true });
+        expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true });
         expect(resolveSp550Network('sepolia').coexist).toBe(false);
         expect(sp550PinsFor('sepolia-rc8')).toMatchObject({ table: 'SP550_COEXIST_PINS', key: 'sepolia-rc8' });
         expect(sp550PinsFor('sepolia')).toMatchObject({ table: 'SP550_CUTOVER_PINS', key: String(sepolia.id) });
@@ -625,17 +626,68 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m) })).exitCode).toBe(1);
     });
 
-    it('sp550AddressSet: SP entries from the pins, external ones shipped, declared-absent ones gone; the default book unchanged', () => {
+    it('sp550AddressSet: a complete set — SP entries and client aliases from the pins, external ones shipped, absent ones zero', () => {
         const m = deployment(sepolia.id, 'fresh');
         const set = sp550AddressSet('sepolia-rc8', m.pins);
+        const a = set.addresses as Record<string, string>;
         expect(set.chainId).toBe(sepolia.id);
-        for (const [k, a] of Object.entries(m.pins.addresses)) expect(set.addresses[k]).toBe(a);
-        expect(set.addresses.entryPoint).toBe(shippedSepolia.entryPoint);
-        expect(set.addresses.priceFeed).toBe(shippedSepolia.priceFeed);
-        for (const k of SP550_FRESH_OPTIONAL_ADDRESS_KEYS) expect(set.addresses[k]).toBeUndefined(); // the fixture declares them all absent
-        expect(set.addresses.timelockControllerLegacy).toBeUndefined();
-        expect(set.addresses.superPaymaster).not.toBe(shippedSepolia.superPaymaster);
+        for (const [k, v] of Object.entries(m.pins.addresses)) expect(a[k]).toBe(v);
+        expect(a.gTokenStaking).toBe(m.pins.addresses.staking);
+        expect(a.mySBT).toBe(m.pins.addresses.sbt);
+        expect(a.entryPoint).toBe(shippedSepolia.entryPoint);
+        expect(a.priceFeed).toBe(shippedSepolia.priceFeed);
+        expect(set.absent.length).toBeGreaterThan(0);
+        for (const k of set.absent) expect(a[k]).toBe('0x0000000000000000000000000000000000000000');
+        expect(a.timelockControllerLegacy).toBeUndefined();
         expect((CANONICAL_ADDRESSES as Record<number, any>)[sepolia.id].superPaymaster).toBe(shippedSepolia.superPaymaster);
         expect(() => sp550AddressSet('sepolia' as any, m.pins)).toThrow('is not a coexisting');
+    });
+
+    it('merged the way the client factories merge, no entry of the shipped Sepolia stack survives (Codex r1 H1/H2)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const set = sp550AddressSet('sepolia-rc8', m.pins).addresses as Record<string, string>;
+        const used = { ...getCanonicalAddresses(sepolia.id), ...set } as Record<string, string>; // createXClient: { ...chainDefaults, ...addresses }
+        const shipped = getCanonicalAddresses(sepolia.id) as Record<string, string>;
+        const external = new Set(Object.entries(SP550_ADDRESS_OWNER).filter(([, o]) => o === 'external').map(([k]) => k));
+        for (const [k, v] of Object.entries(used)) {
+            if (external.has(k)) continue;
+            if (v === '0x0000000000000000000000000000000000000000') continue;
+            expect(v.toLowerCase(), k).not.toBe(String(shipped[k]).toLowerCase());
+        }
+        expect(used.gTokenStaking).toBe(m.pins.addresses.staking);
+        expect(used.mySBT).toBe(m.pins.addresses.sbt);
+        expect(used.paymasterV4).toBe('0x0000000000000000000000000000000000000000');
+    });
+
+    it('book aPNTs / xPNTsFactory must be the aPNTsCapped / xPNTsFactoryV2 contracts: a mismatch or an absence is refused (Codex r1 H3/M5)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const wrongFactory = { ...m.pins, addresses: { ...m.pins.addresses, xPNTsFactory: A(0x999) }, codehashes: { ...m.pins.codehashes, 'addresses.xPNTsFactory': keccak256(codeOf(A(0x999))) } };
+        expect(() => sp550AddressSet('sepolia-rc8', wrongFactory)).toThrow(/addresses.xPNTsFactory .* != xPNTsFactoryV2/);
+        expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: wrongFactory })).exitCode).toBe(1);
+        const { xPNTsFactory: _f, ...noFactory } = m.pins.addresses;
+        const { ['addresses.xPNTsFactory']: _h, ...hashes } = m.pins.codehashes;
+        const absentFactory = { ...m.pins, addresses: noFactory, codehashes: hashes, absent: [...m.pins.absent!, 'xPNTsFactory'] };
+        expect(() => sp550AddressSet('sepolia-rc8', absentFactory as any)).toThrow(/addresses.xPNTsFactory: declared absent, but xPNTsFactoryV2 is pinned/);
+        expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: absentFactory as any })).exitCode).toBe(1);
+        const wrongApnts = { ...m.pins, aPNTsCapped: A(0x998), codehashes: { ...m.pins.codehashes, aPNTsCapped: keccak256(codeOf(A(0x998))) } };
+        expect(() => sp550AddressSet('sepolia-rc8', wrongApnts)).toThrow(/addresses.aPNTs .* != aPNTsCapped/);
+    });
+
+    it('the rc.8 stack accepts its v5.5.0-rc.N tag in the gate and the consumer alike; other networks still need --allow-rc (Codex r1 M4)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const rc = { ...m.pins, tag: 'v5.5.0-rc.8' };
+        expect(sp550AddressSet('sepolia-rc8', rc).pins.tag).toBe('v5.5.0-rc.8');
+        expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: rc })).exitCode).toBe(0);
+        const op = deployment(optimismSepolia.id, 'fresh');
+        const opRc = { ...op.pins, tag: 'v5.5.0-rc.8' };
+        BOOKS.set(opRc, BOOKS.get(op.pins)!);
+        expect((await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(op), pins: opRc })).exitCode).toBe(1);
+        expect((await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(op), pins: opRc, allowRc: true })).exitCode).toBe(0);
+    });
+
+    it('resolveSp550Network narrows: a coexist check makes the name usable with sp550AddressSet (Codex r1 L8)', () => {
+        const net = resolveSp550Network('sepolia-rc8');
+        if (net.coexist) expect(() => sp550AddressSet(net.network)).toThrow(/not usable/); // compiles without a cast
+        else throw new Error('sepolia-rc8 must be coexisting');
     });
 });

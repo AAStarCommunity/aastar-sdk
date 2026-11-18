@@ -27,23 +27,30 @@ export type Sp550DeployMode = 'upgrade' | 'fresh';
  * switches CANONICAL_ADDRESSES, and callers select it explicitly (sp550AddressSet), so the default book stays
  * the existing stack.
  */
+/**
+ * `allowRc`: the network's release-tag policy, applied alike by the writer, the gate and the consumers. Only the rc.8
+ * stack accepts `v5.5.0-rc.N` without the operator's --allow-rc (it IS the release candidate).
+ */
 export const SP550_NETWORKS = {
-    sepolia: { chainId: sepolia.id, mode: 'upgrade', coexist: false },
-    'sepolia-rc8': { chainId: sepolia.id, mode: 'fresh', coexist: true },
-    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh', coexist: false },
-    'op-mainnet': { chainId: optimism.id, mode: 'fresh', coexist: false },
-} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode; coexist: boolean }>;
+    sepolia: { chainId: sepolia.id, mode: 'upgrade', coexist: false, allowRc: false },
+    'sepolia-rc8': { chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true },
+    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh', coexist: false, allowRc: false },
+    'op-mainnet': { chainId: optimism.id, mode: 'fresh', coexist: false, allowRc: false },
+} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode; coexist: boolean; allowRc: boolean }>;
 
 export type Sp550Network = keyof typeof SP550_NETWORKS;
 export type Sp550CoexistNetwork = { [K in Sp550Network]: (typeof SP550_NETWORKS)[K]['coexist'] extends true ? K : never }[Sp550Network];
 
+/** One network's entry with its name; a union over the networks, so `if (net.coexist)` narrows `net.network`. */
+export type Sp550NetworkEntry = { [K in Sp550Network]: { network: K } & (typeof SP550_NETWORKS)[K] }[Sp550Network];
+
 /** The network entry for a name, or throw listing the accepted names. */
-export function resolveSp550Network(name: string | undefined): { network: Sp550Network; chainId: number; mode: Sp550DeployMode; coexist: boolean } {
+export function resolveSp550Network(name: string | undefined): Sp550NetworkEntry {
     if (!name || !Object.prototype.hasOwnProperty.call(SP550_NETWORKS, name)) {
         throw new Error(`unknown SP 5.5.0 network ${JSON.stringify(name)}; expected one of ${Object.keys(SP550_NETWORKS).join(', ')}`);
     }
     const n = name as Sp550Network;
-    return { network: n, ...SP550_NETWORKS[n] };
+    return { network: n, ...SP550_NETWORKS[n] } as Sp550NetworkEntry;
 }
 
 /** Throw unless the chainId an RPC reports is the one the selected network stands for. */
@@ -154,29 +161,42 @@ export function sp550PinsFor(network: Sp550Network): { table: string; key: strin
 
 /**
  * The address book a fresh pin set stands for: the chain's shipped book with every SP-owned entry taken from the
- * pins, and the keys the pins declare absent removed. External entries (EntryPoint, price feed, AirAccount) stay
- * the shipped ones; the gate checks SP's wiring against them.
+ * pins and each key the pins declare absent set to the zero address (the book's "not deployed", so it overrides a
+ * chain default in a `{ ...defaults, ...addresses }` merge instead of letting the old stack's entry through), and
+ * the client-factory aliases (gTokenStaking = staking, mySBT = sbt) taken from the same set. External entries
+ * (EntryPoint, price feed, AirAccount) stay the shipped ones; the gate checks SP's wiring against them.
  */
 export function sp550OverlayBook(shipped: Record<string, unknown>, pins: Sp550FreshDeployPins): Record<string, unknown> {
     const out: Record<string, unknown> = { ...shipped };
     for (const [k, owner] of Object.entries(SP550_ADDRESS_OWNER)) {
-        if (owner !== 'external' && k !== 'timelockControllerLegacy') delete out[k];
+        if (owner !== 'external' || k === 'timelockControllerLegacy') delete out[k]; // legacy = the shipped stack's history
     }
-    delete out.timelockControllerLegacy; // history of the shipped stack, not this one
-    return { ...out, ...(pins.addresses ?? {}) };
+    for (const k of pins.absent ?? []) if (k !== 'disclosureRegistry') out[k] = ZERO;
+    Object.assign(out, pins.addresses ?? {});
+    out.gTokenStaking = out.staking;
+    out.mySBT = out.sbt;
+    return out;
 }
 
+/** A coexisting stack's complete address set: every book key (zero address = not deployed) plus the client aliases. */
+export type Sp550AddressSet = Record<AddressBookKey | 'gTokenStaking' | 'mySBT', Address>;
+
 /**
- * The full address set of a coexisting stack, after the complete fresh-deploy validation and any release hold:
- * what a caller passes explicitly to select it (e.g. `--network sepolia-rc8`). Throws until its pins are read back.
+ * The full address set of a coexisting stack, after the complete fresh-deploy validation (with the network's tag
+ * policy) and any release hold: what a caller passes as a client's `addresses` to select it (e.g. `--network
+ * sepolia-rc8`). Every key is present, so nothing falls back to the chain's default stack. Throws until its pins
+ * are read back.
  */
-export function sp550AddressSet(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined = SP550_COEXIST_PINS[network]): { chainId: number; pins: Sp550ValidatedPins<Sp550FreshDeployPins>; addresses: Record<string, Address> } {
-    const n = SP550_NETWORKS[network] as { chainId: number; coexist: boolean };
+export function sp550AddressSet(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined = SP550_COEXIST_PINS[network]): { chainId: number; pins: Sp550ValidatedPins<Sp550FreshDeployPins>; absent: string[]; addresses: Sp550AddressSet } {
+    const n = SP550_NETWORKS[network] as { chainId: number; coexist: boolean; allowRc: boolean } | undefined;
     if (!n?.coexist) throw new Error(`${JSON.stringify(network)} is not a coexisting SP 5.5.0 network`);
-    const valid = requireSp550FreshDeployPins(n.chainId, pins);
+    const valid = requireSp550FreshDeployPins(n.chainId, pins, { allowRc: n.allowRc });
     const book = sp550OverlayBook((CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[n.chainId] ?? {}, valid);
-    const addresses = Object.fromEntries(Object.entries(book).filter((e): e is [string, Address] => typeof e[1] === 'string' && isAddress(e[1], { strict: false }))) as Record<string, Address>;
-    return { chainId: n.chainId, pins: valid, addresses };
+    const keys = [...Object.keys(SP550_ADDRESS_OWNER).filter((k) => k !== 'timelockControllerLegacy'), 'gTokenStaking', 'mySBT'];
+    const missing = keys.filter((k) => typeof book[k] !== 'string' || !isAddress(book[k] as string, { strict: false }));
+    if (missing.length) throw new Error(`${network}: address set incomplete (${missing.join(', ')}); refusing a partial set`);
+    const addresses = Object.fromEntries(keys.map((k) => [k, book[k]])) as Sp550AddressSet;
+    return { chainId: n.chainId, pins: valid, absent: [...(valid.absent ?? [])].filter((k) => k !== 'disclosureRegistry'), addresses };
 }
 
 /** Chains whose 5.5.0 pins must not ship in a release even when complete, with the reason. */
@@ -207,6 +227,14 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     problems.push(...sp550BookOwnershipProblems(pins));
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
+    }
+    // The book entries an upgrade derives from top-level pins are the same contracts in a fresh set:
+    // aPNTs = aPNTsCapped, xPNTsFactory = xPNTsFactoryV2 (the factory the SDK uses is the V2 one).
+    for (const [k, top] of [['aPNTs', 'aPNTsCapped'], ['xPNTsFactory', 'xPNTsFactoryV2']] as const) {
+        const t = pins?.[top];
+        if (t === undefined) continue; // the missing top-level pin is reported by sp550PinProblems
+        if (absent.has(k)) problems.push(`addresses.${k}: declared absent, but ${top} is pinned (${t})`);
+        else if (book[k] !== undefined && String(book[k]).toLowerCase() !== String(t).toLowerCase()) problems.push(`addresses.${k} ${book[k]} != ${top} ${t} (one contract)`);
     }
     problems.push(...sp550PinAliasProblems(pins));
     return problems;
