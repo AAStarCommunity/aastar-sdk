@@ -190,15 +190,27 @@ describe('requireLocalSigner', () => {
 
 describe('confirmSentOnChain', () => {
     const TX = ('0x' + 'cd'.repeat(32)) as `0x${string}`;
-    function sendClient(o: { chainIds?: number[]; receipt?: any; receiptError?: boolean; canonical?: string; signedChainId?: number | null } = {}) {
+    function sendClient(o: { chainIds?: number[]; receipt?: any; receiptError?: boolean; canonical?: string; signedChainId?: number | null; tx?: any } = {}) {
         const ids = [...(o.chainIds ?? [10, 10])];
         return {
             getChainId: vi.fn(async () => ids.shift() ?? 10),
             waitForTransactionReceipt: vi.fn(async () => { if (o.receiptError) throw new Error('timeout'); return o.receipt ?? { status: 'success', blockNumber: BLOCK, blockHash: HASH, transactionHash: TX }; }),
             getBlock: vi.fn(async () => ({ number: BLOCK, hash: o.canonical ?? HASH })),
-            getTransaction: vi.fn(async () => ({ hash: TX, chainId: o.signedChainId === null ? undefined : (o.signedChainId ?? 10) })),
+            getTransaction: vi.fn(async () => (o.tx ?? { hash: TX, chainId: o.signedChainId === null ? undefined : (o.signedChainId ?? 10) })),
         } as any;
     }
+    it('a protected legacy transaction without a chainId field is judged by its v (v = 55 → chain 10)', async () => {
+        await expect(confirmSentOnChain(sendClient({ tx: { hash: TX, type: 'legacy', v: 55n } }), TX, 10)).resolves.toBeTruthy();
+    });
+
+    it('a client rejecting with a non-Error still gives the controlled refusal', async () => {
+        for (const rejection of [null, 'nope', { code: -32000 }]) {
+            const c = feedClient();
+            c.getBlock = vi.fn(async () => { throw rejection; });
+            await expect(verifyEthUsdFeed(c, OP_FEED, clock)).rejects.toMatchObject({ data: { reason: 'block-unavailable' } });
+        }
+    });
+
     it('passes when the receipt is on the checked chain, successful, and in the canonical block', async () => {
         await expect(confirmSentOnChain(sendClient(), TX, 10)).resolves.toEqual({ blockNumber: BLOCK, blockHash: HASH });
     });
@@ -209,6 +221,8 @@ describe('confirmSentOnChain', () => {
         ['a replacement or cancellation receipt (another hash)', { receipt: { status: 'success', blockNumber: BLOCK, blockHash: HASH, transactionHash: ('0x' + 'ab'.repeat(32)) } }, 'tx-replaced'],
         ['a wallet that switched to chain B and back: B\'s receipt and block, signed for B', { signedChainId: 11155111 }, 'tx-wrong-chain'],
         ['a transaction with no EIP-155 chain id', { signedChainId: null }, 'tx-wrong-chain'],
+        ['an unprotected legacy signature (v = 27)', { tx: { hash: TX, type: 'legacy', v: 27n } }, 'tx-wrong-chain'],
+        ['a protected legacy transaction signed for another chain (v = 22310258)', { tx: { hash: TX, type: 'legacy', v: 22310258n } }, 'tx-wrong-chain'],
         ['a receipt block that is no longer canonical', { canonical: ('0x' + 'ee'.repeat(32)) }, 'tx-not-canonical'],
         ['the client switched chain while waiting', { chainIds: [10, 11155111] }, 'tx-chain-unconfirmed'],
     ])('stops on %s', async (_l, o, reason) => {

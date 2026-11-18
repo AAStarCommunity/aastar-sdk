@@ -41,6 +41,23 @@ export function isDeploymentInputRefusal(e: unknown): e is AAStarError & { data:
         && DEPLOYMENT_INPUT_REFUSALS.includes((e.data as { reason?: DeploymentInputRefusal } | undefined)?.reason as DeploymentInputRefusal);
 }
 
+// The first line of an error's message, for any rejection value (a client may reject with a non-Error).
+const firstLine = (e: unknown): string => {
+    const m = (e as { message?: unknown } | null | undefined)?.message;
+    return typeof m === 'string' ? m.split('\n')[0] : 'a non-Error rejection';
+};
+
+/**
+ * The chain id a transaction was signed for: its `chainId` field, or, for a legacy (type 0) transaction whose RPC
+ * response omits it, the EIP-155 chain id encoded in `v` (v = chainId * 2 + 35/36). An unprotected legacy signature
+ * (v = 27/28) has no chain id.
+ */
+const signedChainIdOf = (tx: { chainId?: number; v?: bigint; type?: string }): number | undefined => {
+    if (typeof tx.chainId === 'number') return tx.chainId;
+    if (typeof tx.v === 'bigint' && tx.v >= 35n) return Number((tx.v - 35n) / 2n);
+    return undefined;
+};
+
 const fail = (reason: DeploymentInputRefusal, msg: string, extra: Record<string, unknown> = {}, cause?: unknown): never => {
     throw new AAStarError(ErrorCode.INVALID_CONFIGURATION, msg, cause instanceof Error ? cause : undefined, { reason, ...extra });
 };
@@ -59,7 +76,7 @@ const latestBlock = async (client: PublicClient) => {
     try {
         return await client.getBlock();
     } catch (e) {
-        return fail('block-unavailable', `the latest block could not be read (${(e as Error).message.split('\n')[0]})`, {}, e);
+        return fail('block-unavailable', `the latest block could not be read (${firstLine(e)})`, {}, e);
     }
 };
 const hasCode = async (client: PublicClient, address: Address, pin: Pin) => {
@@ -68,7 +85,7 @@ const hasCode = async (client: PublicClient, address: Address, pin: Pin) => {
         code = await codeAt(client, address, pin);
     } catch (e) {
         // An orphaned block (requireCanonical), a pruned state, or no EIP-1898 support: nothing can be checked.
-        return fail('block-unavailable', `state at block ${pin.blockHash} could not be read for ${address} (${(e as Error).message.split('\n')[0]})`, { address }, e);
+        return fail('block-unavailable', `state at block ${pin.blockHash} could not be read for ${address} (${firstLine(e)})`, { address }, e);
     }
     return code !== undefined && code !== '0x';
 };
@@ -149,7 +166,7 @@ export async function verifyEthUsdFeed(
             callAt<readonly [bigint, bigint, bigint, bigint, bigint]>(client, feed, AGGREGATOR_V3_ABI as unknown as Abi, 'latestRoundData', pin),
         ]);
     } catch (e) {
-        return fail('not-an-aggregator', `${where} could not be read as a Chainlink aggregator at block ${block.hash} (${(e as Error).message.split('\n')[0]}); refusing to deploy`, { address: feed }, e);
+        return fail('not-an-aggregator', `${where} could not be read as a Chainlink aggregator at block ${block.hash} (${firstLine(e)}); refusing to deploy`, { address: feed }, e);
     }
     if (Number(decimals) !== 8) fail('wrong-decimals', `${where} reports decimals ${decimals}, expected 8; refusing to deploy`);
     if (description !== 'ETH / USD') fail('wrong-description', `${where} reports description ${JSON.stringify(description)}, expected "ETH / USD"; refusing to deploy`);
@@ -184,7 +201,7 @@ export async function verifyAccountFactory(client: PublicClient, factory: Addres
         implementation = await callAt<Address>(client, factory, SimpleAccountFactoryABI as Abi, 'accountImplementation', pin);
         implEntryPoint = await callAt<Address>(client, implementation, SimpleAccountABI as Abi, 'entryPoint', pin);
     } catch (e) {
-        return fail('no-account-implementation', `account factory ${factory}: accountImplementation().entryPoint() could not be read at block ${block.hash} (${(e as Error).message.split('\n')[0]})`, { address: factory }, e);
+        return fail('no-account-implementation', `account factory ${factory}: accountImplementation().entryPoint() could not be read at block ${block.hash} (${firstLine(e)})`, { address: factory }, e);
     }
     if (!isAddressEqual(implEntryPoint, entryPoint)) {
         fail('entrypoint-mismatch', `account factory ${factory} builds accounts for EntryPoint ${implEntryPoint}, but the SDK is configured for ${entryPoint}`, { address: factory, reported: implEntryPoint, expected: entryPoint });
@@ -247,7 +264,7 @@ export async function confirmSentOnChain(
     if (receipt.status !== 'success') fail('tx-reverted', `transaction ${hash} reverted on chain ${chainId}; stopping`, { hash, chainId });
     let signedChainId: number | undefined;
     try {
-        signedChainId = (await client.getTransaction({ hash }) as any).chainId as number | undefined;
+        signedChainId = signedChainIdOf(await client.getTransaction({ hash }) as any);
     } catch (e) {
         return fail('tx-chain-unconfirmed', `transaction ${hash} could not be read on chain ${chainId}; stopping`, { hash, chainId }, e);
     }
