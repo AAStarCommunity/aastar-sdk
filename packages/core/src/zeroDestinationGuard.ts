@@ -63,7 +63,7 @@ export function zeroDestinationGuard(client: Client) {
         if (copy.calls !== undefined) {
             if (!Array.isArray(copy.calls)) throw new ZeroAddressDestinationError(method, 'calls must be an array', 'not-plain');
             copy.calls = Array.from(copy.calls, (c: any, i: number) => {
-                if (!c || typeof c !== 'object' || !plain(c)) throw new ZeroAddressDestinationError(method, `call ${i}: pass a plain object`, 'not-plain');
+                if (!c || typeof c !== 'object' || !plain(c)) throw new ZeroAddressDestinationError(method, `call ${i}`, 'not-plain');
                 return { ...c };
             });
         }
@@ -74,7 +74,9 @@ export function zeroDestinationGuard(client: Client) {
     const byAddress = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
-        if (args?.to !== undefined) return Promise.reject(new ZeroAddressDestinationError(method, `${args.functionName ?? 'call'}: a contract call takes its destination from address`, 'conflicting-to'));
+        // ANY own `to` key, whatever its value: viem builds { to: address, ...request }, so even `to: undefined` would
+        // overwrite the checked address and turn the call into a creation (clestons #466 N1).
+        if (args && Object.prototype.hasOwnProperty.call(args, 'to')) return Promise.reject(new ZeroAddressDestinationError(method, `${args.functionName ?? 'call'}: a contract call takes its destination from address`, 'conflicting-to'));
         // A missing address (a book key absent) would make viem send a contract creation: refused like zero.
         if (typeof args?.address !== 'string') return Promise.reject(new ZeroAddressDestinationError(method, args?.functionName, 'no-destination'));
         return isZeroAddress(args.address) ? Promise.reject(new ZeroAddressDestinationError(method, args?.functionName)) : run(client, args);
@@ -85,9 +87,12 @@ export function zeroDestinationGuard(client: Client) {
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
         return args?.to !== undefined ? Promise.reject(new ZeroAddressDestinationError(method, 'a deployment carries no to', 'conflicting-to')) : run(client, args);
     };
+    // A request that names `to` must name a real one: an own `to` of undefined / null is a missing book entry (a send
+    // without any `to` field stays allowed: that is a deployment, as viem defines it).
     const byTo = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
+        if (args && Object.prototype.hasOwnProperty.call(args, 'to') && (args.to === undefined || args.to === null)) return Promise.reject(new ZeroAddressDestinationError(method, undefined, 'no-destination'));
         return isZeroAddress(args?.to) ? Promise.reject(new ZeroAddressDestinationError(method)) : run(client, args);
     };
     const byCalls = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {

@@ -318,3 +318,55 @@ describe('clestons #466 B2 and follow-ups: non-enumerable fields, calls without 
         }
     });
 });
+
+describe('clestons #466 N1 and follow-ups: an own `to` key on a contract write, batch copies, explicit empty destinations', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+
+    it('writeContract / writeContractSync / a simulate-shaped request with an own `to: undefined`: refused (would overwrite the address), nothing signed or sent', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const req = { address: NONZERO, to: undefined, abi: payable, functionName: 'f', value: 7n, account, chain: sepolia };
+        for (const m of ['writeContract', 'writeContractSync']) expect(named(await client[m](req).catch((e: unknown) => e))?.reason, m).toBe('conflicting-to');
+        // simulateContract(...).request keeps the caller's own keys: the same shape reaching writeContract.
+        const simulated = { ...{ address: NONZERO, abi: payable, functionName: 'f', args: [], value: 7n }, to: undefined, account, chain: sepolia };
+        expect(named(await client.writeContract(simulated).catch((e: unknown) => e))?.reason).toBe('conflicting-to');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('the batch is forwarded from its copy: a call whose `to` getter changes after the check still goes to the checked address', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        let reads = 0;
+        const call = { value: 1n, get to() { return ++reads === 1 ? NONZERO : zeroAddress; } };
+        await client.sendCalls({ account, chain: sepolia, calls: [call], experimental_fallback: true });
+        expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
+    });
+
+    it.each([[null], [0], [123n]] as const)('a batch call whose `to` is %s: refused as no-destination', async (to) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('no-destination');
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a top-level send with an own `to` of undefined / null is refused; a deployment with no `to` field passes the guard', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const to of [undefined, null]) {
+            for (const m of ['sendTransaction', 'signTransaction', 'prepareTransactionRequest']) {
+                expect(named(await client[m]({ to, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, `${m} ${to}`).toBe('no-destination');
+            }
+        }
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+        const deploy = await client.sendTransaction({ data: '0x6000', account, chain: sepolia }).catch((e: unknown) => e);
+        expect(named(deploy)).toBeUndefined();
+    });
+});

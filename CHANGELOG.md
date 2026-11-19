@@ -11,13 +11,15 @@ All notable changes to this project will be documented in this file.
   "FU-124 before any write" (DSR 2026-11-19) is a code check, not a document. Preview without `--write` still works.
 - `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync`, `signTransaction`,
   `prepareTransactionRequest` and `fillTransaction` to the zero address before signing (clestons on #465). A contract
-  write carrying a `to` field is refused (viem would send to it instead of the checked `address`), and so is a
+  write carrying an own `to` key is refused whatever its value (viem builds `{ to: address, ...request }`, so even
+  `to: undefined` would overwrite the checked `address`), and so is a
   `deployContract` carrying one (viem spreads it into a direct send). `sendRawTransaction(Sync)` decodes the bytes and refuses a zero
   destination. Requests must be plain objects — prototype `Object.prototype` or `null` and every own field enumerable (a class
   instance, an `Object.create(...)` request or a non-enumerable field is refused: copying it would drop fields viem
   reads and turn a call into a contract creation; an object from another realm, e.g. `node:vm`, is refused too); for a plain
   object the one copy that is checked is the one passed on. A contract write without a string address (a missing book key)
-  and a batch call without a `to` are refused. Each refusal names its reason; only a zero destination is worded as a
+  and a batch call without a string `to` are refused; a top-level send with an own `to` of
+  undefined / null is refused (a send without any `to` field is a deployment and stays allowed). Each refusal names its reason; only a zero destination is worded as a
   contract the deployment does not include. Raw transactions viem's generic parser cannot read (e.g. ZKsync 0x71) are refused, not sent. Trusted, not guarded: the client's chain configuration (a custom
   `chain.prepareTransactionRequest` can rewrite a request), and `signAuthorization` (EIP-7702; zero means revoke).
 - Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
