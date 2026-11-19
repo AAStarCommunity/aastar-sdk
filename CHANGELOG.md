@@ -18,14 +18,26 @@ All notable changes to this project will be documented in this file.
 - S1r: a second op straight after S1, inside minTxInterval, must be refused as not yet valid (-32503) with one send and
   one signature (the SDK neither waits nor retries). C12: `createEndUserClient().executeGasless`, self-bundled handleOps
   from the user's EOA; asserted success, sender = the EOA, one signature, xPNTs charged.
-- `createEndUserClient().executeGasless` has no gas literals left: limits are the caller's `gas`, else the estimate of
-  `estimateBundlerUrl` × `gasLimitCoefficientBps` (preVerificationGas × 1.0), refused before signing with neither; the
-  chain's minPostOpGas only raises; fees from eth_feeHistory; the handleOps transaction's gas is the node's
-  eth_estimateGas × the coefficient. `onGasDecided` reports it with PaymasterClient's field names and source labels.
+- C12's `executeGasless` gas policy: see the entry above (separate PR).
 - Fork mode for the joint rehearsal: `gate.deployLiveConfig` (fork only) holds a DeployLive config's addresses to fork
   checks (anvil client on the network's chain id, code at every address, SuperPaymaster's wiring) instead of the
   read-back gate, and `taskPlan` (SP's three-arm plan, pinned by sha256) supplies T and must match the run's chain,
   SuperPaymaster and call bytes.
+### `executeGasless` (self-bundled) takes its gas from an estimate or the caller, never constants; PaymasterClient strict options
+
+- `createEndUserClient().executeGasless` has no gas literals left (it signed VGL / callGas 100k, 2 gwei fees, PVG 50k,
+  pmVGL 250k, postOp 300k): limits are the caller's `gas`, else the usable fields of `estimateBundlerUrl`'s estimate ×
+  `gasLimitCoefficientBps` (preVerificationGas × 1.0), merged field by field; with a field neither gives it refuses
+  before signing. The estimate is requested for the op that is signed (same nonce, same fees, flags 0). The chain's
+  minPostOpGas raises an estimated postOp; an explicit one below it is refused (never silently rewritten). Fees come
+  from eth_feeHistory unless given. The handleOps transaction's gas is the node's eth_estimateGas × the coefficient.
+  An unreadable EntryPoint nonce is refused (it used to fall back to 0). `onGasDecided` receives a detached copy of the
+  decision, with PaymasterClient's field names and source labels plus `handleOps: { estimate, gasLimit }`.
+- `PaymasterClient.submitGaslessUserOperation`: `requireEstimate` refuses the local defaults when the endpoint cannot
+  estimate; `noDirectSendFallback` refuses to send handleOps from the wallet itself when the endpoint has no
+  eth_sendUserOperation (that fallback pays from the wallet's own balance). `estimateUserOperationGasFields` returns
+  only the bundler's usable fields and throws when the endpoint cannot estimate; `estimateUserOperationGas` takes
+  `requireEstimate` too.
 
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 

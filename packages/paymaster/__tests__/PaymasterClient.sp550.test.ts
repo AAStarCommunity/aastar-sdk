@@ -1623,3 +1623,33 @@ describe('clestons #464 B2 and the floor-raise branch', () => {
         expect(decisions[0].limitSources.paymasterVerificationGasLimit).toBe('floor');
     });
 });
+
+describe('requireEstimate / noDirectSendFallback (the live E2E\'s strict submit)', () => {
+    const NOT_FOUND = { error: { code: -32601, message: 'Method not found' } };
+    it('requireEstimate: an endpoint without eth_estimateUserOperationGas is refused before anything is signed', async () => {
+        const { submit, calls, signs } = harness(async (m) => (m === 'eth_estimateUserOperationGas' ? NOT_FOUND : { result: OP_HASH }));
+        await expect(submit({ requireEstimate: true })).rejects.toThrow(/refusing the local defaults \(requireEstimate\); nothing was signed/);
+        expect(signs[0] ?? []).toEqual([]);
+        expect(calls.filter((c) => c.method === 'eth_sendUserOperation')).toEqual([]);
+    });
+    it('without requireEstimate the same endpoint still falls back to the local defaults (unchanged default)', async () => {
+        const { submit } = harness(async (m) => (m === 'eth_estimateUserOperationGas' ? NOT_FOUND : { result: OP_HASH }));
+        await expect(submit()).resolves.toBe(OP_HASH);
+    });
+    it('noDirectSendFallback: an endpoint without eth_sendUserOperation is refused; the wallet sends no handleOps', async () => {
+        const writes: unknown[] = [];
+        const { submit } = harness(async (m) => (m === 'eth_estimateUserOperationGas' ? ESTIMATE : NOT_FOUND), {
+            writeContract: async (a: any) => { writes.push(a); return ('0x' + 'ee'.repeat(32)) as Hex; },
+        });
+        await expect(submit({ noDirectSendFallback: true })).rejects.toThrow(/direct handleOps fallback is off \(noDirectSendFallback\)/);
+        expect(writes).toEqual([]);
+    });
+    it('without noDirectSendFallback the wallet does send handleOps itself (the default fallback, unchanged)', async () => {
+        const writes: unknown[] = [];
+        const { submit } = harness(async (m) => (m === 'eth_estimateUserOperationGas' ? ESTIMATE : NOT_FOUND), {
+            writeContract: async (a: any) => { writes.push(a); return ('0x' + 'ee'.repeat(32)) as Hex; },
+        });
+        await submit().catch(() => undefined);
+        expect(writes.length).toBe(1);
+    });
+});
