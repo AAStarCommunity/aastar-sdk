@@ -16,6 +16,13 @@ export type SubmitGaslessOptions = {
     maxFeePerGas?: bigint;
     maxPriorityFeePerGas?: bigint;
     autoEstimate?: boolean;
+    /** Refuse (before signing) instead of using the local defaults when the endpoint cannot estimate. */
+    requireEstimate?: boolean;
+    /**
+     * Refuse instead of sending handleOps from `wallet` itself when the endpoint has no eth_sendUserOperation (that
+     * direct send pays the transaction from the wallet's own balance).
+     */
+    noDirectSendFallback?: boolean;
     operator?: Address; // For SuperPaymaster
     paymasterVerificationGasLimit?: bigint;
     paymasterPostOpGasLimit?: bigint;
@@ -87,6 +94,8 @@ export type EstimateGasOptions = {
      * upgrade between submit's read and this one would otherwise build two generations.
      */
     sponsorship?: SuperPaymasterSponsorshipContext;
+    /** Refuse (throw) instead of returning the local defaults when the endpoint has no eth_estimateUserOperationGas. */
+    requireEstimate?: boolean;
     /**
      * Nonce already chosen for this op. Submit passes the reconciled value
      * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
@@ -381,7 +390,8 @@ export class PaymasterClient {
      */
     /**
      * The bundler's estimate for one op, all five limits (unscaled). Throws when the bundler leaves a limit out or returns a
-     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults.
+     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults, unless
+     * `requireEstimate` is set, then it throws.
      */
     static async estimateUserOperationGas(
         client: any,
@@ -398,7 +408,22 @@ export class PaymasterClient {
             client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
         const missing = (Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]).filter((k) => fields[k] === undefined);
         if (missing.length > 0 && !fallback) throw new Error(`Estimation Error: the bundler returned no usable ${missing.join(', ')}`);
+        if (fallback && options?.requireEstimate) throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; refusing the local defaults (requireEstimate)');
         return fields as GasEstimate;
+    }
+
+    /**
+     * The bundler's usable estimate fields only (a field it left out or answered with a sentinel is absent), for a caller
+     * that fills the rest itself. Throws when the endpoint cannot estimate (it never returns the local defaults).
+     */
+    static async estimateUserOperationGasFields(
+        client: any, wallet: any, aaAddress: Address, entryPoint: Address, paymasterAddress: Address, token: Address,
+        bundlerUrl: string, callData: `0x${string}`, options?: EstimateGasOptions,
+    ): Promise<Partial<GasEstimate>> {
+        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(
+            client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
+        if (fallback) throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; no estimate to use');
+        return fields;
     }
 
     /**
@@ -753,6 +778,9 @@ export class PaymasterClient {
                     feePolicy: options?.feePolicy,
                 }
             );
+            if (fallback && options?.requireEstimate) {
+                throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; refusing the local defaults (requireEstimate); nothing was signed');
+            }
             // A fallback (no estimation endpoint) yields local defaults: used as they are and labelled 'default'.
             if (!fallback) rawEstimate = FIELDS.every((k) => est[k] !== undefined) ? est as GasEstimate : undefined;
             if (options?.tuneEstimate && !fallback && !rawEstimate) {
@@ -1115,6 +1143,9 @@ export class PaymasterClient {
             }
 
             if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+                 if (options?.noDirectSendFallback) {
+                     throw new Error('Bundler Error: the endpoint has no eth_sendUserOperation, and the direct handleOps fallback is off (noDirectSendFallback); the signed op was not sent');
+                 }
                  console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
                  
                  const caller = wallet.account?.address ? wallet.account.address : wallet.account;
