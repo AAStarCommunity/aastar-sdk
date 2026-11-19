@@ -1,7 +1,7 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters, decodeEventLog } from 'viem';
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
-import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, DEFAULT_PVG_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
+import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, DEFAULT_PVG_COEFFICIENT_BPS, guardUserOpSignature, resolveUserOpFees, scaleLimits, userOpCostCeilingWei, type UserOpSignGuardOptions, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 import { readUserOperationResult, userOperationNotYetValidFromRpc, UserOperationFailedError, type UserOperationExecutionResult, type WaitForUserOperationResultOptions } from './userOpOutcome.js';
@@ -62,9 +62,9 @@ export type SubmitGaslessOptions = {
     preVerificationGasCoefficientBps?: bigint;
     /** How fees are taken from the chain when maxFeePerGas / maxPriorityFeePerGas are not both given. */
     feePolicy?: FeePolicy;
-    /** Called with the limits, fees and their sources before the op is signed, so a collector can record them. */
+    /** Called with the limits, fees and their sources once the op was accepted (after signing), so a collector can record them. */
     onGasDecided?: (decision: GasDecision) => void;
-};
+} & UserOpSignGuardOptions;
 
 /** The limits used when the endpoint cannot estimate at all (eth_estimateUserOperationGas missing): defaults, not estimates. */
 /**
@@ -935,9 +935,24 @@ export class PaymasterClient {
                 flags: d.spRenew ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0
             });
         };
+        // The one place this client signs (first signature and every re-sign of a retry): the cost ceiling and the
+        // caller's hook see the op exactly as it is about to be signed, after the SP_RENEW refresh, and can refuse it.
         const resign = async () => {
             await refreshSpRenew();
             const h = getUserOpHashV07(userOp, entryPoint, BigInt(client.chain.id));
+            const limits = {
+                preVerificationGas: BigInt(userOp.preVerificationGas),
+                verificationGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(2, 34)),
+                callGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(34)),
+                paymasterVerificationGasLimit: BigInt('0x' + userOp.paymasterAndData.slice(42, 74)),
+                paymasterPostOpGasLimit: BigInt('0x' + userOp.paymasterAndData.slice(74, 106)),
+            };
+            const maxFeePerGas = BigInt('0x' + userOp.gasFees.slice(34));
+            await guardUserOpSignature({
+                userOpHash: h, sender: userOp.sender as Hex, nonce: BigInt(userOp.nonce), limits, maxFeePerGas,
+                maxPriorityFeePerGas: BigInt('0x' + userOp.gasFees.slice(2, 34)), maxCostWei: userOpCostCeilingWei(limits, maxFeePerGas),
+                paymasterAndData: userOp.paymasterAndData as Hex,
+            }, options);
             userOp.signature = await PaymasterClient.signUserOpHash(wallet, h, options?.airAccountSig);
         };
 

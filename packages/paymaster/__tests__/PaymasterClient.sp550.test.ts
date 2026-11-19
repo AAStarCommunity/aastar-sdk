@@ -4,6 +4,8 @@ import { mnemonicToAccount } from 'viem/accounts';
 import { SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { PaymasterClient, V4_DEFAULT_POSTOP_GAS } from '../src/V4/PaymasterClient';
 import { getUserOpHashV07 } from '../src/V4/PaymasterUtils';
+import { UserOpCostCapError, userOpCostCeilingWei } from '../src/V4/gasPolicy';
+import { superPaymasterLock } from '../src/SuperPaymaster/v550';
 import { UserOperationNotYetValidError } from '../src/V4/userOpOutcome';
 import { SuperPaymasterClient } from '../src/V4/SuperPaymasterClient';
 import { SuperPaymasterInflightGuard } from '../src/SuperPaymaster/v550';
@@ -100,8 +102,9 @@ function harness(
             ...options,
         });
     /** The same flow through SuperPaymasterClient (it used to estimate BEFORE submit reserved the slot). */
-    const submitViaSuperClient = (walletIdx = 0) =>
+    const submitViaSuperClient = (walletIdx = 0, guard: Record<string, unknown> = {}) =>
         SuperPaymasterClient.submitGaslessTransaction(client, makeWallet(walletIdx), SENDER, EP, 'http://bundler.stub', {
+            ...guard,
             token: TOKEN, recipient: OPERATOR, amount: 1n, operator: OPERATOR, paymasterAddress: SP,
         });
     return { submit, submitViaSuperClient, calls, signs };
@@ -1651,5 +1654,70 @@ describe('requireEstimate / noDirectSendFallback (the live E2E\'s strict submit)
         });
         await submit().catch(() => undefined);
         expect(writes.length).toBe(1);
+    });
+});
+
+describe('cost ceiling on what is signed (DSR: the missing upper bound at the signing boundary)', () => {
+    const FROZEN = { preVerificationGas: 60_000n, verificationGasLimit: 210_000n, callGasLimit: 110_000n, paymasterVerificationGasLimit: 450_000n, paymasterPostOpGasLimit: 500_000n };
+    const SUM = 60_000n + 210_000n + 110_000n + 450_000n + 500_000n;
+    const FEE = { maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n };
+    const sends = (seen: any[]) => seen.filter((x) => x.method === 'eth_sendUserOperation');
+    const bundler = (seen: any[]) => async (method: string, op: any) => { seen.push({ method, op }); return { result: OP_HASH }; };
+
+    it('an op whose (PVG + VGL + CGL + pmVGL + pmPostOp) x maxFeePerGas exceeds maxUserOpCostWei is refused before signing', async () => {
+        const seen: any[] = [];
+        const { submit, signs } = harness(bundler(seen));
+        await expect(submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: SUM * FEE.maxFeePerGas - 1n })).rejects.toThrow(UserOpCostCapError);
+        expect(signs.flat()).toHaveLength(0);
+        expect(sends(seen)).toHaveLength(0);
+    });
+    it('exactly at the ceiling it signs once; the hook sees the five limits, the fee and the cost of the op it signs', async () => {
+        const seen: any[] = [];
+        const views: any[] = [];
+        const { submit, signs } = harness(bundler(seen));
+        await submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: SUM * FEE.maxFeePerGas, beforeSignUserOp: (v: any) => { views.push(v); } });
+        expect(signs.flat()).toHaveLength(1);
+        expect(views).toHaveLength(1);
+        expect(views[0]).toMatchObject({ limits: FROZEN, maxFeePerGas: FEE.maxFeePerGas, maxPriorityFeePerGas: FEE.maxPriorityFeePerGas, maxCostWei: SUM * FEE.maxFeePerGas });
+        expect(views[0].maxCostWei).toBe(userOpCostCeilingWei(FROZEN, FEE.maxFeePerGas));
+    });
+    it('a hook that throws refuses the op: nothing signed, nothing sent', async () => {
+        const seen: any[] = [];
+        const { submit, signs } = harness(bundler(seen));
+        await expect(submit({ frozenGas: FROZEN, ...FEE, beforeSignUserOp: () => { throw new Error('plan says no'); } })).rejects.toThrow('plan says no');
+        expect(signs.flat()).toHaveLength(0);
+        expect(sends(seen)).toHaveLength(0);
+    });
+    it('a fee re-sign in the retry loop goes through the ceiling again: the bumped op above the cap is refused before its signature', async () => {
+        const seen: any[] = [];
+        let n = 0;
+        const { submit, signs } = harness(async (method: string, op: any) => {
+            seen.push({ method, op });
+            if (method === 'eth_sendUserOperation' && n++ === 0) return { error: { code: -32602, message: 'maxFeePerGas must be at least 6000000000' } };
+            return { result: OP_HASH };
+        });
+        const views: any[] = [];
+        await expect(submit({ frozenGas: FROZEN, maxPriorityFeePerGas: FEE.maxPriorityFeePerGas, maxUserOpCostWei: SUM * 4_000_000_000n, beforeSignUserOp: (v: any) => { views.push(v); } }))
+            .rejects.toThrow(UserOpCostCapError);
+        expect(signs.flat()).toHaveLength(1); // the first op only; the bumped one was never signed
+        expect(sends(seen)).toHaveLength(1);
+    });
+    it('SuperPaymasterClient forwards the ceiling and the hook to the signing site (Codex cost-cap H1)', async () => {
+        const seen: any[] = [];
+        const views: any[] = [];
+        const { submitViaSuperClient, signs } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+        await expect(submitViaSuperClient(0, { maxUserOpCostWei: 1n, beforeSignUserOp: (v: any) => { views.push(v); } })).rejects.toThrow(UserOpCostCapError);
+        expect(signs.flat()).toHaveLength(0);
+        expect(views).toHaveLength(0); // the ceiling refuses before the hook
+    });
+    it('a non-positive ceiling is refused, not read as "off"', async () => {
+        await expect(harness(bundler([])).submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: 0n })).rejects.toThrow(/maxUserOpCostWei must be a positive bigint/);
+    });
+});
+
+describe('superPaymasterLock: the planner\'s three ceil steps (shared test vector with SP plan_three_arm.py)', () => {
+    it('SP\'s vector: every division non-exact, every step rounds up', () => {
+        const r = superPaymasterLock({ maxCost: 1234567890123457n, ethUsdPrice: 350000000000n, priceDecimals: 8n, aPNTsPriceUSD: 29999999999999999n, protocolFeeBPS: 137n, exchangeRate: 1333333333333333333n });
+        expect(r).toEqual({ a0: 144032920514403321468n, Amax: 160409463576890979119n, X: 213879284769187972106n });
     });
 });

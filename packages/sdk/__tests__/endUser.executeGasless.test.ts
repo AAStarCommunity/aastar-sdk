@@ -14,6 +14,7 @@ import { sepolia } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import { SuperPaymasterV550ABI } from '@aastar/core';
 import { createEndUserClient } from '../src/clients/endUser';
+import { getUserOpHashV07 } from '@aastar/paymaster';
 
 // DSR C12: createEndUserClient().executeGasless hand-rolled a 72-byte paymasterAndData (no token)
 // with a 50k postOp — sigFailed by SuperPaymaster 5.5.0 (token REQUIRED, postOp below minPostOpGas)
@@ -31,11 +32,12 @@ const reads = parseAbi([
     'function operators(address) view returns (uint128,bool,bool,address,uint32,uint48,address,uint256,uint256)',
     'function getNonce(address,uint192) view returns (uint256)',
 ]);
+const getUserOpHashAbi = parseAbi(['function getUserOpHash((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature) userOp) view returns (bytes32)']);
 const handleOpsAbi = parseAbi([
     'function handleOps((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature)[] ops, address beneficiary)',
 ]);
 
-function harness(version: string, opts: { minPostOpGas?: bigint; configured?: boolean } = {}) {
+function harness(version: string, opts: { minPostOpGas?: bigint; configured?: boolean; lyingHash?: boolean } = {}) {
     let sentRaw: Hex | undefined;
     const sel = (sig: string) => toFunctionSelector(sig);
     const request = vi.fn(async ({ method, params }: { method: string; params?: any[] }) => {
@@ -62,7 +64,12 @@ function harness(version: string, opts: { minPostOpGas?: bigint; configured?: bo
                     return encodeFunctionResult({ abi: SuperPaymasterV550ABI as any, functionName: 'gasParams', result: [g, { ...g, eta: 0n }] as any });
                 }
                 if (data === sel('function getNonce(address,uint192)')) return encodeFunctionResult({ abi: reads, functionName: 'getNonce', result: 7n });
-                if (data === toFunctionSelector('function getUserOpHash((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes))')) return '0x' + 'ab'.repeat(32);
+                if (data === toFunctionSelector('function getUserOpHash((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes))')) {
+                    // A real EntryPoint's answer (the op's v0.7 hash), unless the test makes the node lie.
+                    if (opts.lyingHash) return '0x' + 'ab'.repeat(32);
+                    const op = decodeFunctionData({ abi: getUserOpHashAbi, data: params![0].data ?? params![0].input }).args[0] as any;
+                    return encodeFunctionResult({ abi: getUserOpHashAbi, functionName: 'getUserOpHash', result: getUserOpHashV07(op, EP, 11155111n) });
+                }
                 throw Object.assign(new Error(`unexpected eth_call ${data}`), { code: -32000 });
             }
             default: throw Object.assign(new Error(`unexpected ${method}`), { code: -32601 });
@@ -164,6 +171,40 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
         await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: { ...EXPLICIT, paymasterPostOpGasLimit: 150_000n } }))
             .rejects.toThrow(/gas.paymasterPostOpGasLimit 150000 is below .* minPostOpGas 500000; nothing was signed/);
+        untouched();
+    });
+
+    it('maxUserOpCostWei below the op\'s (5 gas terms) x maxFeePerGas: refused before the UserOp signature and the handleOps tx (DSR cost ceiling)', async () => {
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        const fee = 2_000_000_000n;
+        const sum = EXPLICIT.preVerificationGas + EXPLICIT.verificationGasLimit + EXPLICIT.callGasLimit + EXPLICIT.paymasterVerificationGasLimit + EXPLICIT.paymasterPostOpGasLimit;
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: fee, maxPriorityFeePerGas: 1n, maxUserOpCostWei: sum * fee - 1n }))
+            .rejects.toThrow(/above maxUserOpCostWei/);
+        untouched();
+    });
+
+    it('a node whose getUserOpHash is not the op\'s own hash is refused: nothing signed, nothing sent (clestons #470 B1)', async () => {
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n, lyingHash: true });
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1n }))
+            .rejects.toThrow(/getUserOpHash .* is not the hash of this op/);
+        untouched();
+    });
+
+    it('the key signs the locally computed hash of the op the guard checked', async () => {
+        const { c, signMessage, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        const views: any[] = [];
+        await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1n, beforeSignUserOp: (v: any) => { views.push(v); } });
+        const op = sentOp();
+        expect(views[0].userOpHash).toBe(getUserOpHashV07({ ...op, signature: '0x' }, EP, 11155111n));
+        expect(signMessage.mock.calls[0][0]).toEqual({ message: { raw: views[0].userOpHash } });
+    });
+
+    it('beforeSignUserOp sees the op about to be signed and a throw refuses it (nothing signed, nothing sent)', async () => {
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        const views: any[] = [];
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1n,
+            beforeSignUserOp: (v: any) => { views.push(v); throw new Error('plan refuses'); } })).rejects.toThrow('plan refuses');
+        expect(views[0]).toMatchObject({ limits: EXPLICIT, maxFeePerGas: 2_000_000_000n });
         untouched();
     });
 

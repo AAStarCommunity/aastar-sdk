@@ -11,6 +11,7 @@
  *   - SP_RENEW is chosen by the SDK per op: an op that carries it must renew inline on-chain
  *     (AllowanceRenewed(bySP=true), autoRenewUsed +1), and an op without it must not renew at all.
  */
+import { createHash } from 'crypto';
 import { type Abi, type Address, type Hex, decodeEventLog, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, size, slice } from 'viem';
 import { SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS } from '../packages/core/src/superPaymasterData.js';
 
@@ -280,6 +281,10 @@ export type C12SignState = {
     beforeSign?: () => Promise<void>;
     /** The EOA's pending nonce now (Daybreak #468 re-run): re-read at the boundary, it must still equal the snapshot. */
     txNonceNow?: () => Promise<number>;
+    /** The plan's pricing check for the UserOp this transaction carries, at the transaction's own re-check block. */
+    costAtKey?: () => Promise<void>;
+    /** The head re-read last before the key (see guardedSignMessage). */
+    fresh?: () => Promise<void>;
 };
 
 /**
@@ -304,6 +309,12 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     if (!st.txNonceNow) throw new Error('C12: no pending-nonce re-read is wired (txNonceNow); refused before signing');
     const now = await st.txNonceNow();
     if (now !== st.expect.txNonce) throw new Error(`C12: the EOA's pending nonce moved ${st.expect.txNonce} -> ${now} since the snapshot; refused before signing`);
+    // The UserOp inside passed the plan at its own signature; the chain may have moved since (Codex cost-cap r2 H2):
+    // held to the plan again here, at this transaction's re-check block. Required: none wired => refused.
+    if (!st.costAtKey) throw new Error('C12: no plan pricing check is wired for the transaction (costAtKey); refused before signing');
+    await st.costAtKey();
+    if (!st.fresh) throw new Error('C12: no head-freshness check is wired for the transaction; refused before signing');
+    await st.fresh();
     return sign();
 }
 
@@ -330,3 +341,344 @@ export const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
     const { SP550_FORK_URL: _drop, ...rest } = env;
     return rest;
 };
+
+/**
+ * SP's frozen three-arm plan, the block the SDK runner reads (`shared.sdkLive`, SP #654 round 3; field names as
+ * proposed by SP 2026-11-19). The per-op cost cap and Xmax_sdk come only from these bytes (pinned by sha256), never
+ * from a separate config field.
+ */
+export type SdkLivePlan = {
+    maxCostPerOpWei: bigint; priceCap: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint;
+    validationBufferBPS: bigint; exchangeRate: bigint; a0: bigint; Amax: bigint; Xmax: bigint; status: string;
+    /** Required, 0..9999 (SP): sign only while cachedPrice x 10000 <= priceCap x (10000 - priceHeadroomBPS). */
+    priceHeadroomBPS: bigint;
+    /** From plans[*]: the one genesis operator and X token every plan names. */
+    operator?: Address; X?: Address;
+    /** This run's account's entry in shared.extraEndUsers. */
+    xAmount?: bigint;
+    /** The SDK commit the planner was told the cost cap merged at (recorded next to status "cleared"). */
+    sdkCostCapCommit?: string;
+};
+/** The only status that lets a live run start (SP 2026-11-19); every other value, "provisional…" included, refuses. */
+export const SDK_LIVE_CLEARED = 'cleared';
+const SDK_LIVE_UINTS = ['maxCostPerOpWei', 'priceCap', 'priceDecimals', 'aPNTsPriceUSD', 'protocolFeeBPS', 'validationBufferBPS', 'exchangeRate', 'a0', 'Amax', 'Xmax'] as const;
+/** The pricing fields each plans[<S>].phaseC must repeat with the same value (SP asserts it; the runner checks it). */
+const PHASE_C_PRICING = ['priceCap', 'priceDecimals', 'aPNTsPriceUSD', 'protocolFeeBPS', 'exchangeRate'] as const;
+
+/**
+ * Why SP's plan cannot bound this run: shared.sdkLive is required and complete, its cost cap equals the run's
+ * opMaxCostWei, its buffer is SP's VALIDATION_BUFFER_BPS, its a0 / Amax / Xmax are what the formula gives on its own
+ * fields (superPaymasterLock), and this account's phaseC repeats the same pricing. Returns the parsed plan when clean.
+ */
+export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; account: Address; lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }; validationBufferBPS: bigint }): { problems: string[]; plan?: SdkLivePlan } {
+    const p: string[] = [];
+    const sl = bundle?.shared?.sdkLive;
+    if (!sl || typeof sl !== 'object') return { problems: ['taskPlan: shared.sdkLive is missing (the cost cap and Xmax_sdk come only from SP\'s frozen plan)'] };
+    const out: any = {};
+    for (const k of SDK_LIVE_UINTS) {
+        const v = sl[k];
+        // bigint (a lossless parse of a large number), a safe non-negative number, or a decimal string; an UNSAFE number
+        // means the plan was parsed lossily (SP 2026-11-19) and is refused.
+        if (typeof v === 'number' && !Number.isSafeInteger(v)) { p.push(`taskPlan: shared.sdkLive.${k} arrived as an unsafe number ${v} (a lossy parse); refused`); continue; }
+        if (!((typeof v === 'bigint' && v >= 0n) || (typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v)) || (typeof v === 'number' && v >= 0))) { p.push(`taskPlan: shared.sdkLive.${k} is not a non-negative integer (got ${typeof v === 'bigint' ? v.toString() : JSON.stringify(v)})`); continue; }
+        out[k] = BigInt(v);
+    }
+    out.status = typeof sl.status === 'string' ? sl.status : '';
+    // A JSON integer 0..9999, required: missing, a string, a boolean, a fraction or out of range is refused, never
+    // defaulted (SP: the value is the author's / DSR's to choose).
+    const h = sl.priceHeadroomBPS;
+    if (!((typeof h === 'number' && Number.isSafeInteger(h) && h >= 0 && h <= 9999))) p.push(`taskPlan: shared.sdkLive.priceHeadroomBPS must be a JSON integer 0..9999 (got ${typeof h === 'bigint' ? h.toString() : JSON.stringify(h)})`);
+    else out.priceHeadroomBPS = BigInt(h);
+    if (p.length) return { problems: p };
+    if (out.maxCostPerOpWei !== w.opMaxCostWei) p.push(`config.opMaxCostWei ${w.opMaxCostWei} != plan shared.sdkLive.maxCostPerOpWei ${out.maxCostPerOpWei} (one value, set once in SP's plan)`);
+    if (out.validationBufferBPS !== w.validationBufferBPS) p.push(`plan validationBufferBPS ${out.validationBufferBPS} != SuperPaymaster's VALIDATION_BUFFER_BPS ${w.validationBufferBPS}`);
+    if (out.priceCap <= 0n || out.aPNTsPriceUSD <= 0n) p.push('plan priceCap / aPNTsPriceUSD must be positive');
+    else {
+        const r = w.lock({ maxCost: out.maxCostPerOpWei, ethUsdPrice: out.priceCap, priceDecimals: out.priceDecimals, aPNTsPriceUSD: out.aPNTsPriceUSD, protocolFeeBPS: out.protocolFeeBPS, exchangeRate: out.exchangeRate, validationBufferBPS: out.validationBufferBPS });
+        if (r.a0 !== out.a0 || r.Amax !== out.Amax || r.X !== out.Xmax) p.push(`plan a0/Amax/Xmax ${out.a0}/${out.Amax}/${out.Xmax} are not the formula on its own fields (${r.a0}/${r.Amax}/${r.X})`);
+    }
+    // plans is keyed by SP's three-arm accounts S (not this run's account): every plan repeats sdkLive's pricing, and
+    // all name one operator and one X token; this run's account must be one of shared.extraEndUsers (SP 2026-11-19).
+    const plans = Object.values(bundle?.plans ?? {}) as any[];
+    if (!plans.length) p.push('taskPlan: plans is empty');
+    for (const [s, pl] of Object.entries(bundle?.plans ?? {}) as [string, any][]) {
+        for (const k of PHASE_C_PRICING) {
+            const v = planUint(pl?.phaseC?.[k]);
+            if (v === undefined || v !== out[k]) p.push(`plans[${s}].phaseC.${k} ${String(pl?.phaseC?.[k])} != shared.sdkLive.${k} ${out[k]}`);
+        }
+    }
+    const one = (vals: unknown[], what: string): string | undefined => {
+        const set = new Set(vals.map((v) => (typeof v === 'string' && isAddressLike(v) ? getAddress(v) : `(bad ${JSON.stringify(v)})`)));
+        if (set.size !== 1 || [...set][0].startsWith('(bad')) { p.push(`taskPlan: plans do not name one ${what} (${[...set].join(', ')})`); return undefined; }
+        return [...set][0];
+    };
+    out.operator = plans.length ? one(plans.map((pl) => pl?.deploymentContext?.operator), 'operator') : undefined;
+    out.X = plans.length ? one(plans.map((pl) => pl?.phaseC?.addresses?.X), 'X token') : undefined;
+    const users = Array.isArray(bundle?.shared?.extraEndUsers) ? bundle.shared.extraEndUsers : [];
+    const me = users.find((u: any) => typeof u?.address === 'string' && isAddressLike(u.address) && getAddress(u.address) === getAddress(w.account));
+    if (!me) p.push(`taskPlan: this run's account ${w.account} is not in shared.extraEndUsers`);
+    out.xAmount = me ? planUint(me.xAmount) : undefined;
+    if (me && out.xAmount === undefined) p.push(`taskPlan: shared.extraEndUsers[${w.account}].xAmount is not an integer`);
+    out.sdkCostCapCommit = typeof sl.sdkCostCapCommit === 'string' ? sl.sdkCostCapCommit : undefined;
+    return p.length ? { problems: p } : { problems: [], plan: out as SdkLivePlan };
+}
+const isAddressLike = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
+/** A plan integer as bigint, or undefined: a bigint, a safe non-negative integer number, or a decimal string — nothing
+ *  else (an array, an object marker or a fraction never compares equal by coercion; clestons #470 info). */
+const planUint = (v: unknown): bigint | undefined =>
+    typeof v === 'bigint' ? (v >= 0n ? v : undefined)
+        : typeof v === 'number' ? (Number.isSafeInteger(v) && v >= 0 ? BigInt(v) : undefined)
+            : typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v) ? BigInt(v) : undefined;
+
+/** SP and token state read at signing time (latest block). */
+export type SignTimePricing = { ethUsdPrice: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint; exchangeRate: bigint };
+
+/**
+ * Why this op may not be signed under the plan (DSR ruling 2026-11-19). The X lock is compared AT THE PLAN'S priceCap,
+ * not at today's price: the bound holds iff, at validation, cachedPrice <= priceCap and protocolFeeBPS, the validation
+ * buffer and exchangeRate equal the plan's (each of which this check holds at the signing block). Today's price only
+ * gates signing, with the plan's headroom: cachedPrice x 10000 <= priceCap x (10000 - priceHeadroomBPS), integers, no
+ * division. A price that crosses priceCap after signing is a funding residual (FU-129), not a safety one.
+ */
+export function signTimeCostProblems(maxCostWei: bigint, now: SignTimePricing, plan: SdkLivePlan, lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }): string[] {
+    const p: string[] = [];
+    if (now.priceDecimals !== plan.priceDecimals) p.push(`SP cachedPrice decimals ${now.priceDecimals} != plan priceDecimals ${plan.priceDecimals}`);
+    if (now.ethUsdPrice * 10_000n > plan.priceCap * (10_000n - plan.priceHeadroomBPS)) p.push(`SP cachedPrice ${now.ethUsdPrice} is not within the plan's headroom: needs cachedPrice x 10000 <= priceCap ${plan.priceCap} x (10000 - ${plan.priceHeadroomBPS})`);
+    if (now.aPNTsPriceUSD !== plan.aPNTsPriceUSD) p.push(`SP aPNTsPriceUSD ${now.aPNTsPriceUSD} != plan ${plan.aPNTsPriceUSD}`);
+    if (now.protocolFeeBPS !== plan.protocolFeeBPS) p.push(`SP protocolFeeBPS ${now.protocolFeeBPS} != plan ${plan.protocolFeeBPS}`);
+    if (now.exchangeRate !== plan.exchangeRate) p.push(`token exchangeRate ${now.exchangeRate} != plan ${plan.exchangeRate}`);
+    if (maxCostWei > plan.maxCostPerOpWei) p.push(`op maxCost ${maxCostWei} > plan maxCostPerOpWei ${plan.maxCostPerOpWei}`);
+    if (p.length) return p;
+    // At priceCap with the plan's (= today's, checked above) fee, buffer and rate: the bound on the validation lock.
+    const r = lock({ maxCost: maxCostWei, ethUsdPrice: plan.priceCap, priceDecimals: plan.priceDecimals, aPNTsPriceUSD: plan.aPNTsPriceUSD, protocolFeeBPS: plan.protocolFeeBPS, exchangeRate: plan.exchangeRate, validationBufferBPS: plan.validationBufferBPS });
+    if (r.X > plan.Xmax) p.push(`this op would lock up to ${r.X} X at the plan's priceCap, above the plan's Xmax_sdk ${plan.Xmax}`);
+    return p;
+}
+
+/**
+ * Fail closed (DSR): the signer signs a UserOp hash only if the cost check approved exactly that hash, once. A path
+ * that skips the check (a missing option, a refactor) is refused at the key instead of silently unchecked.
+ */
+export class CostApprovals {
+    private readonly ok = new Map<string, bigint>();
+    /** The cost check approved this hash for an op whose maxCost (all five gas terms x maxFeePerGas) is maxCostWei. */
+    approve(userOpHash: Hex, maxCostWei: bigint) { this.ok.set(userOpHash.toLowerCase(), maxCostWei); }
+    /** The approved maxCost, once; undefined if never approved or already used. */
+    take(userOpHash: Hex | undefined): bigint | undefined {
+        const k = String(userOpHash ?? '').toLowerCase();
+        const v = this.ok.get(k);
+        this.ok.delete(k);
+        return v;
+    }
+}
+
+/**
+ * The user's signMessage, in the order the key boundary needs (DSR + Codex cost-cap H2):
+ *   1. the cost approval for exactly this hash (fail closed: a path that skipped the hook is refused here);
+ *   2. the per-op budget, then the slot taken before any await;
+ *   3. beforeSign (the one-block wiring re-check; it records the block it read) and the cell's deadline;
+ *   4. costAtKey: SP pricing read AT THAT SAME BLOCK, held to the plan with the approved maxCost;
+ *   5. fresh: the head re-read last; more than MAX_BLOCKS_SINCE_CHECK past the check block => refused (Daybreak #470);
+ *   6. the key.
+ * Any throw before 6 leaves the key unused. What changes between the key and inclusion stays a residual (FU-129).
+ */
+export async function guardedSignMessage(a: any, io: {
+    approvals: CostApprovals;
+    budget: () => { used: number; limit: number };
+    takeSlot: () => void;
+    beforeSign: (() => Promise<void>) | undefined;
+    deadline?: () => Promise<void>;
+    costAtKey: (maxCostWei: bigint) => Promise<void>;
+    /** Last, right before the key: refuses when the head has moved more than MAX_BLOCKS_SINCE_CHECK past the check block. */
+    fresh: (() => Promise<void>) | undefined;
+    sign: (a: any) => Promise<Hex>;
+    after?: (userOpHash: Hex | undefined, sig: Hex, maxCostWei: bigint) => void;
+}): Promise<Hex> {
+    const raw = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
+    const maxCost = io.approvals.take(raw);
+    if (maxCost === undefined) throw new Error('no cost check approved this UserOp hash (maxUserOpCostWei + the plan check run before every signature); refused');
+    const b = io.budget();
+    if (b.used >= b.limit) throw new Error(`signature budget exhausted (${b.limit}) — a retry would sign again; refused`);
+    // The pricing read at the key uses the block the wiring re-check recorded: without that re-check the block would
+    // be stale, so a signature with no beforeSign wired is refused (fail closed).
+    if (!io.beforeSign) throw new Error('no wiring re-check (beforeSign) is wired for this signature; refused');
+    io.takeSlot();
+    await io.beforeSign();
+    if (io.deadline) await io.deadline();
+    await io.costAtKey(maxCost);
+    if (!io.fresh) throw new Error('no head-freshness check is wired for this signature; refused');
+    await io.fresh();
+    // The key gets a fresh object built from the approved hash, never the caller's (which could change after approval).
+    const sig = await io.sign({ message: { raw } });
+    io.after?.(raw, sig, maxCost);
+    return sig;
+}
+
+/**
+ * One pass over (already valid) JSON text: every value's exact source token by path (the JSON array of its segments,
+ * e.g. '["shared","sdkLive","maxCostPerOpWei"]', so a key containing a dot cannot collide), duplicate keys, and
+ * number tokens a plan may not use (an exponent, or negative zero). JSON.parse keeps the last of two equal keys and
+ * rounds exponents silently; the plan's integers must be what its bytes say (Codex cost-cap r2).
+ */
+export const PLAN_JSON_MAX_DEPTH = 256;
+export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: string[]; source: Map<string, string> } {
+    // Limits, stated: nesting deeper than PLAN_JSON_MAX_DEPTH is refused with a clear error (a plan is shallow);
+    // number tokens are read whole, however long.
+    let i = 0;
+    const duplicates: string[] = [], badNumbers: string[] = [], source = new Map<string, string>();
+    const ws = () => { while (i < text.length && ' \t\n\r'.includes(text[i])) i++; };
+    const fail = (what: string): never => { throw new Error(`plan: ${what} at offset ${i}`); };
+    const str = (): string => {
+        const s0 = i++;
+        while (i < text.length && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
+        if (i >= text.length) fail('unterminated string');
+        i++;
+        return JSON.parse(text.slice(s0, i));
+    };
+    const key = (segs: (string | number)[]) => JSON.stringify(segs);
+    const NUM = /-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/y;
+    const value = (segs: (string | number)[]): void => {
+        if (segs.length > PLAN_JSON_MAX_DEPTH) fail(`nesting deeper than ${PLAN_JSON_MAX_DEPTH}`);
+        const path = key(segs);
+        ws();
+        const c = text[i];
+        if (c === '{') {
+            i++; ws();
+            const keys = new Set<string>();
+            if (text[i] === '}') { i++; return; }
+            for (;;) {
+                ws();
+                if (text[i] !== '"') fail('expected a key');
+                const k = str();
+                if (keys.has(k)) duplicates.push(key([...segs, k]));
+                keys.add(k);
+                ws();
+                if (text[i++] !== ':') fail('expected ":"');
+                value([...segs, k]);
+                ws();
+                if (text[i] === ',') { i++; continue; }
+                if (text[i] === '}') { i++; return; }
+                fail('expected "," or "}"');
+            }
+        }
+        if (c === '[') {
+            i++; ws();
+            let n = 0;
+            if (text[i] === ']') { i++; return; }
+            for (;;) {
+                value([...segs, n++]);
+                ws();
+                if (text[i] === ',') { i++; continue; }
+                if (text[i] === ']') { i++; return; }
+                fail('expected "," or "]"');
+            }
+        }
+        if (c === '"') { const s0 = i; str(); source.set(path, text.slice(s0, i)); return; }
+        NUM.lastIndex = i;
+        const m = NUM.exec(text);
+        if (m && m[0]) {
+            source.set(path, m[0]);
+            if (m[3]) badNumbers.push(`${path}: exponent form ${m[0]}`);
+            if (/^-0(\.0+)?$/.test(m[0])) badNumbers.push(`${path}: negative zero`);
+            i += m[0].length;
+            return;
+        }
+        for (const lit of ['true', 'false', 'null']) if (text.startsWith(lit, i)) { source.set(path, lit); i += lit.length; return; }
+        fail('unexpected token');
+    };
+    value([]);
+    ws();
+    if (i !== text.length) fail('trailing data');
+    return { duplicates, badNumbers, source };
+}
+
+/** A JSON number token with a fraction, kept as its source text (never rounded into an integer field). */
+export type NonIntegerNumber = { readonly nonIntegerNumber: string };
+
+/**
+ * SP's frozen plan, parsed losslessly (SP 2026-11-19) and strictly (Codex cost-cap r2): integer tokens above 2^53
+ * become BigInt from their digits; a fraction token becomes a NonIntegerNumber marker (so no integer field can take a
+ * rounded value); duplicate keys, exponent forms and negative zero are refused. Needs Node >= 21 (context.source).
+ */
+export function parsePlanJson(text: string): any {
+    JSON.parse(text); // structure first: the scan below assumes valid JSON
+    const scan = scanPlanJson(text);
+    if (scan.duplicates.length) throw new Error(`plan: duplicate key(s) ${scan.duplicates.join(', ')}`);
+    if (scan.badNumbers.length) throw new Error(`plan: number form(s) a plan may not use: ${scan.badNumbers.join('; ')}`);
+    let numbers = 0, withSource = 0;
+    const v = JSON.parse(text, function (_k, val, ctx?: { source?: string }) {
+        if (typeof val !== 'number') return val;
+        numbers++;
+        const src = ctx?.source;
+        if (typeof src !== 'string') return val;
+        withSource++;
+        if (/^-?(0|[1-9][0-9]*)$/.test(src)) return Number.isSafeInteger(val) ? val : BigInt(src);
+        return Object.freeze({ nonIntegerNumber: src }) as NonIntegerNumber;
+    } as any);
+    if (numbers > 0 && withSource !== numbers) throw new Error('plan: this runtime gives no reviver context.source; refusing a lossy parse (needs Node >= 21)');
+    return v;
+}
+
+/**
+ * The cost cap read from the plan must be the digits in the plan's own bytes AT ITS PATH (DSR; Codex cost-cap r2):
+ * the source token of shared.sdkLive.maxCostPerOpWei is exactly its decimal form (a number token, or that string).
+ */
+export function maxCostDigitsProblem(raw: string, value: bigint): string | undefined {
+    const tok = scanPlanJson(raw).source.get(JSON.stringify(['shared', 'sdkLive', 'maxCostPerOpWei']));
+    const d = value.toString();
+    return tok === d || tok === `"${d}"` ? undefined : `plan: shared.sdkLive.maxCostPerOpWei's bytes ${JSON.stringify(tok ?? '(absent)')} are not ${d}`;
+}
+
+/** Why a live run may not start under this plan (DSR / SP): exact "cleared", this run's operator / X, cost-cap commit included. */
+export function livePlanGateProblems(plan: SdkLivePlan, w: { mode: string; operator: Address; token: Address; isAncestor: (commit: string) => boolean }): string[] {
+    const p: string[] = [];
+    if (plan.operator !== getAddress(w.operator)) p.push(`taskPlan: the plans' operator ${plan.operator} is not this run's ${w.operator}`);
+    if (plan.X !== getAddress(w.token)) p.push(`taskPlan: the plans' X token ${plan.X} is not the operator's xPNTs ${w.token}`);
+    if (w.mode === 'live') {
+        if (plan.status !== SDK_LIVE_CLEARED) p.push(`mode live: SP's plan status is ${JSON.stringify(plan.status)}, not "${SDK_LIVE_CLEARED}": the live cells are not cleared to run`);
+        const c = plan.sdkCostCapCommit;
+        if (!c || !/^[0-9a-f]{40}$/.test(c)) p.push('mode live: the plan names no sdkCostCapCommit (40 lowercase hex)');
+        else if (!w.isAncestor(c)) p.push(`mode live: this checkout does not contain the plan's sdkCostCapCommit ${c}`);
+    }
+    return p;
+}
+
+/**
+ * How far the head may move between the block the checks read and the key (Daybreak #470): 1 block. Pricing and
+ * wiring are read at the check block; one more block is tolerated (a new head can land while the reads run), more is
+ * refused and the cell fails rather than sign on stale reads.
+ */
+export const MAX_BLOCKS_SINCE_CHECK = 1n;
+export function headFreshnessProblem(checkBlock: bigint, head: bigint): string | undefined {
+    return head > checkBlock + MAX_BLOCKS_SINCE_CHECK ? `the head moved to ${head}, more than ${MAX_BLOCKS_SINCE_CHECK} block(s) past the check block ${checkBlock}; refused before the key` : undefined;
+}
+
+/**
+ * SP's plan file, read as on disk (Daybreak #470 L1): the sha256 is taken over the raw bytes, then the bytes are
+ * decoded as UTF-8 with fatal errors (no silent replacement characters) before parsing.
+ */
+export function readPlanFile(file: string, sha256: string, read: (f: string) => Uint8Array): { raw: string } | { problem: string } {
+    if (!/^[0-9a-f]{64}$/i.test(sha256)) return { problem: 'taskPlan needs { file, sha256 (64 hex) }' };
+    const bytes = read(file);
+    const got = createHash('sha256').update(bytes).digest('hex');
+    if (got.toLowerCase() !== sha256.toLowerCase()) return { problem: `taskPlan ${file}: sha256 ${got} != the given ${sha256}` };
+    try { return { raw: new TextDecoder('utf-8', { fatal: true }).decode(bytes) }; } catch { return { problem: `taskPlan ${file}: not valid UTF-8` }; }
+}
+
+/** The four pricing reads, all pinned to one block (Daybreak #470 L3: provable by an injected client). */
+export async function readPricingAt(client: { readContract: (a: any) => Promise<any> }, w: { sp: Address; token: Address; spAbi: unknown; tokenAbi: unknown; blockNumber: bigint }): Promise<SignTimePricing> {
+    const at = { blockNumber: w.blockNumber };
+    const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'cachedPrice', ...at }),
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'aPNTsPriceUSD', ...at }),
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'protocolFeeBPS', ...at }),
+        client.readContract({ address: w.token, abi: w.tokenAbi, functionName: 'exchangeRate', ...at }),
+    ]);
+    return { ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]), aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate) };
+}
+
+/** Whether `commit` is contained in the checkout at `repoDir` (real git; no metadata, a shallow clone without it => false). */
+export function checkoutContains(repoDir: string, commit: string, git: (args: string[], cwd: string) => number): boolean {
+    if (!/^[0-9a-f]{40}$/.test(commit)) return false;
+    return git(['merge-base', '--is-ancestor', commit, 'HEAD'], repoDir) === 0;
+}
