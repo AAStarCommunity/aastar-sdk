@@ -102,10 +102,16 @@ export const SP550_WIRING_SCAN_EXEMPT: Record<string, string> = {
  * while it is empty the exhaustive scan can only refuse the shipped stack, not prove each getter points at the right
  * contract, so no network's pins may be written (DSR 2026-11-19; scripts/sp550-pin-fill.ts --write refuses).
  */
-export const SP550_WIRING_EXPECTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {};
+export const SP550_WIRING_EXPECTED: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.freeze({});
 
-/** True once the getter allow-list (FU-124) exists; until then pin writing is refused. */
-export const sp550WiringAllowListReady = (): boolean => Object.keys(SP550_WIRING_EXPECTED).length > 0;
+/**
+ * Set to true ONLY by the change that makes the gate compare every scanned getter with SP550_WIRING_EXPECTED (FU-124).
+ * A filled table alone does not unlock writing: the gate must also enforce it.
+ */
+export const SP550_WIRING_ALLOWLIST_ENFORCED = false;
+
+/** True once the getter allow-list (FU-124) exists AND the gate enforces it; until then pin writing is refused. */
+export const sp550WiringAllowListReady = (): boolean => SP550_WIRING_ALLOWLIST_ENFORCED && Object.keys(SP550_WIRING_EXPECTED).length > 0;
 
 /**
  * Getters a vendored ABI lists that this release's contract does not implement (they revert): reviewed per release

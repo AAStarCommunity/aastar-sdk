@@ -601,12 +601,28 @@ describe('sp550-pin-fill --write refuses until the FU-124 getter allow-list exis
         const { SP550_WIRING_EXPECTED, sp550WiringAllowListReady } = await import('../packages/core/src/sp550CutoverGate.js');
         expect(Object.keys(SP550_WIRING_EXPECTED)).toEqual([]);
         expect(sp550WiringAllowListReady()).toBe(false);
-        for (const network of ['sepolia', 'sepolia-rc8', 'op-sepolia']) {
+        for (const network of ['sepolia', 'sepolia-rc8', 'op-sepolia', 'op-mainnet']) {
             const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', network, '--manifest', '/nonexistent.json', '--write'],
                 { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
             expect(r.status, network).toBe(2);
             expect(r.stderr).toContain(PIN_WRITE_BEFORE_ALLOWLIST);
             expect(r.stderr).not.toContain('ENOENT');
         }
+        // A value on --write is refused too, before anything is read (Codex r1 M4).
+        for (const spelling of ['--write=true', '--write=1', '--write=']) {
+            const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', 'sepolia', '--manifest', '/nonexistent.json', spelling],
+                { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+            expect(r.status, spelling).toBe(2);
+            expect(r.stderr).toContain('--write takes no value');
+            expect(r.stderr).not.toContain('ENOENT');
+        }
+    });
+
+    it('readiness needs the enforcement flag AND a non-empty, frozen table: a filled table alone does not unlock writing', async () => {
+        const g = await import('../packages/core/src/sp550CutoverGate.js');
+        expect(g.SP550_WIRING_ALLOWLIST_ENFORCED).toBe(false);
+        expect(Object.isFrozen(g.SP550_WIRING_EXPECTED)).toBe(true);
+        expect(() => { (g.SP550_WIRING_EXPECTED as any).placeholder = {}; }).toThrow();
+        expect(g.sp550WiringAllowListReady()).toBe(false);
     });
 });

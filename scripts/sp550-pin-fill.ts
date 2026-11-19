@@ -61,6 +61,7 @@ async function main() {
     if (args.some((x) => x === '--deploylive-archive' || x.startsWith('--deploylive-archive='))) refuse(DEPLOYLIVE_ARCHIVE_PENDING);
     // FU-124 (DSR 2026-11-19): no network's pins are written before the getter allow-list exists. A code check, not a
     // document: --write refuses here, before anything is read.
+    if (args.some((x) => x.startsWith('--write='))) refuse('--write takes no value (write intent is the bare --write flag); nothing was read');
     if (args.includes('--write') && !sp550WiringAllowListReady()) refuse(PIN_WRITE_BEFORE_ALLOWLIST);
     const file = arg('--manifest') ?? refuse('--manifest <pins.json> is required');
     let pins;

@@ -9,8 +9,12 @@ All notable changes to this project will be documented in this file.
 - `scripts/sp550-pin-fill.ts --write` refuses (exit 2, before anything is read) on every network while
   `SP550_WIRING_EXPECTED` (the FU-124 getter allow-list) is empty — `sp550WiringAllowListReady()`. The ordering rule
   "FU-124 before any write" (DSR 2026-11-19) is a code check, not a document. Preview without `--write` still works.
-- `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync` and
-  `signTransaction` to the zero address before signing (clestons on #465).
+- `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync`, `signTransaction`,
+  `prepareTransactionRequest` and `fillTransaction` to the zero address before signing (clestons on #465). A contract
+  write carrying a `to` field is refused (viem would send to it instead of the checked `address`), and so is a
+  `deployContract` carrying one (viem spreads it into a direct send).
+- Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
+  with the table) and a non-empty, frozen `SP550_WIRING_EXPECTED`; `--write=<value>` is refused before anything is read.
 
 ### `sepolia-rc8`: SuperPaymaster rc.8 as a fresh stack next to Sepolia's 5.4.2 one
 

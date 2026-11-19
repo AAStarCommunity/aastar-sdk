@@ -22,6 +22,7 @@ function recording() {
                 case 'eth_gasPrice': return '0x1';
                 case 'eth_getBlockByNumber': return { baseFeePerGas: '0x1', number: '0x1', hash: '0x' + '11'.repeat(32), timestamp: '0x1' };
                 case 'eth_sendRawTransaction': return '0x' + '22'.repeat(32);
+                case 'eth_sendRawTransactionSync': return { transactionHash: '0x' + '22'.repeat(32), status: '0x1', blockNumber: '0x1', blockHash: '0x' + '11'.repeat(32), logs: [], cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: '0x1', from: '0x' + '00'.repeat(20), to: null, transactionIndex: '0x0', type: '0x2', logsBloom: '0x' + '00'.repeat(256), contractAddress: null };
                 default: throw new Error(`unexpected ${method}`);
             }
         },
@@ -135,5 +136,59 @@ describe('the Sync variants and signTransaction are guarded too (clestons #465 f
         await expect(client.signTransaction({ to: zeroAddress, value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
         expect(sign).not.toHaveBeenCalled();
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+});
+
+describe('Codex r1 on the guard: conflicting destinations, deployments, request building, positive controls', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+
+    it('writeContract / writeContractSync with a non-zero address but a `to` field: refused, nothing sent (viem would send to `to`)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const m of ['writeContract', 'writeContractSync']) {
+            expect(named(await client[m]({ address: NONZERO, to: zeroAddress, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e)), m).toBe(true);
+        }
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+    });
+
+    it('deployContract carrying a `to`: refused, nothing sent (viem spreads it into a direct send)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.deployContract({ abi: [], bytecode: '0x00', to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+    });
+
+    it('prepareTransactionRequest / fillTransaction to address zero: refused before anything is built', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.prepareTransactionRequest({ to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.fillTransaction({ to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods).toEqual([]);
+    });
+
+    it('positive controls: each newly guarded action with a non-zero destination goes past the guard to the signer / node', async () => {
+        const account = mnemonicToAccount(MNEMONIC);
+        const run = async (fn: (c: any) => Promise<unknown>) => {
+            const { methods, transport } = recording();
+            const sign = vi.spyOn(account, 'signTransaction');
+            const c: any = createOperatorClient({ chain: sepolia, transport, account });
+            const err = await fn(c).then(() => undefined, (e) => e);
+            const r = { named: named(err), signed: sign.mock.calls.length, methods };
+            sign.mockRestore();
+            return r;
+        };
+        const wcs = await run((c) => c.writeContractSync({ address: NONZERO, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }));
+        expect(wcs.named).toBe(false); expect(wcs.signed).toBe(1); expect(wcs.methods).toContain('eth_sendRawTransactionSync');
+        const sts = await run((c) => c.sendTransactionSync({ to: NONZERO, value: 1n, account, chain: sepolia }));
+        expect(sts.named).toBe(false); expect(sts.signed).toBe(1); expect(sts.methods).toContain('eth_sendRawTransactionSync');
+        const st = await run((c) => c.signTransaction({ to: NONZERO, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, account, chain: sepolia }));
+        expect(st.named).toBe(false); expect(st.signed).toBe(1);
+        const ptr = await run((c) => c.prepareTransactionRequest({ to: NONZERO, value: 1n, account, chain: sepolia }));
+        expect(ptr.named).toBe(false); expect(ptr.methods).toContain('eth_estimateGas');
     });
 });
