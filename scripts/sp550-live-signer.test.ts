@@ -62,9 +62,11 @@ async function captured(fn: () => Promise<unknown>) {
 }
 const leaks = (text: string) => [KEY, KEY.slice(2), PASSWORD].filter((s) => text.toLowerCase().includes(s.toLowerCase()));
 
-afterEach(() => { delete process.env.SP550_TEST_LEAKED_KEY; delete process.env.PRIVATE_KEY; });
+// This file spawns the E2E script (execFileSync blocks vitest's timer loop): every hook and suite names its timeout.
+const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
+afterEach(() => { delete process.env.SP550_TEST_LEAKED_KEY; delete process.env.PRIVATE_KEY; }, SPAWN_VERDICT_TIMEOUT_MS);
 
-describe('keystore v3 decryption', () => {
+describe('keystore v3 decryption', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('decrypts the published Web3 Secret Storage PBKDF2 test vector', () => {
         expect(privateKeyToAccount(decryptKeystoreV3(SPEC_VECTOR, 'testpassword')).address).toBe(SPEC_ADDRESS);
     });
@@ -94,7 +96,7 @@ describe('keystore v3 decryption', () => {
     });
 });
 
-describe('live key source: an encrypted keystore and nothing else', () => {
+describe('live key source: an encrypted keystore and nothing else', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([
         [{ env: 'SP550_TEST_LEAKED_KEY' }, /refusing field\(s\) "env"/],
         [{ keystore: '/k.json', privateKey: KEY }, /refusing field\(s\) "privateKey"/],
@@ -113,7 +115,7 @@ describe('live key source: an encrypted keystore and nothing else', () => {
     });
 });
 
-describe('password prompt: interactive only', () => {
+describe('password prompt: interactive only', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('a non-TTY stdin is refused — there is no non-interactive password path', async () => {
         const input = { isTTY: false, on() {}, removeListener() {}, resume() {}, pause() {} };
         await expect(promptHidden('pw: ', { input, output: { write: () => true } } as any)).rejects.toThrow(/no non-interactive path/);
@@ -139,7 +141,7 @@ describe('password prompt: interactive only', () => {
     });
 });
 
-describe('loadLiveSigner', () => {
+describe('loadLiveSigner', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('returns the keystore account; a key in an env var is ignored', async () => {
         process.env.PRIVATE_KEY = bytesToHex(randomBytes(32));
         process.env.SP550_TEST_LEAKED_KEY = bytesToHex(randomBytes(32));
@@ -165,7 +167,7 @@ describe('loadLiveSigner', () => {
     });
 });
 
-describe('sp550-live-e2e.ts live mode refuses a key from an env var (exit 2, nothing printed)', () => {
+describe('sp550-live-e2e.ts live mode refuses a key from an env var (exit 2, nothing printed)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('userKey { env } with the key set in that env var exits 2 and the key never appears in output', () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
         const cfg = path.join(dir, 'run.json');
@@ -185,7 +187,7 @@ describe('sp550-live-e2e.ts live mode refuses a key from an env var (exit 2, not
     }, 60_000);
 });
 
-describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, before any network read)', () => {
+describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, before any network read)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const run = (extra: Record<string, unknown>, flags: string[]) => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
         const cfg = path.join(dir, 'run.json');
@@ -227,7 +229,7 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
     }, 60_000);
 });
 
-describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)', () => {
+describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const run = (cfgOver: Record<string, unknown>, flags: string[]) => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
         const cfg = path.join(dir, 'run.json');

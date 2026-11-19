@@ -45,6 +45,7 @@ function harness(version: string, opts: { minPostOpGas?: bigint; configured?: bo
             case 'eth_estimateGas': return '0x30d40';
             case 'eth_maxPriorityFeePerGas': return '0x3b9aca00';
             case 'eth_gasPrice': return '0x3b9aca00';
+            case 'eth_feeHistory': return { oldestBlock: '0x10', baseFeePerGas: ['0x3b9aca00', '0x3b9aca00'], gasUsedRatio: [0.5], reward: [['0x77359400']] };
             case 'eth_blockNumber': return '0x10';
             case 'eth_getBlockByNumber': return { number: '0x10', baseFeePerGas: '0x3b9aca00', timestamp: '0x1', hash: '0x' + '11'.repeat(32), transactions: [] };
             case 'eth_sendRawTransaction': sentRaw = params![0]; return keccak256(params![0]);
@@ -74,27 +75,26 @@ function harness(version: string, opts: { minPostOpGas?: bigint; configured?: bo
         addresses: { superPaymaster: SP, entryPoint: EP },
     });
     c.createSmartAccount = async () => ({ accountAddress: AA, initCode: '0x', isDeployed: true });
-    const paymasterAndData = (): Hex => {
-        const tx = parseTransaction(sentRaw!);
-        const { args } = decodeFunctionData({ abi: handleOpsAbi, data: tx.data! });
-        return (args[0] as any)[0].paymasterAndData as Hex;
-    };
-    return { c, paymasterAndData };
+    const sentTx = () => parseTransaction(sentRaw!);
+    const sentOp = () => (decodeFunctionData({ abi: handleOpsAbi, data: sentTx().data! }).args[0] as any)[0];
+    const paymasterAndData = (): Hex => sentOp().paymasterAndData as Hex;
+    return { c, paymasterAndData, sentTx, sentOp, request, sent: () => sentRaw };
 }
 
+const EXPLICIT = { verificationGasLimit: 90_000n, callGasLimit: 80_000n, preVerificationGas: 60_000n, paymasterVerificationGasLimit: 210_000n, paymasterPostOpGasLimit: 150_000n };
 const at = (hex: Hex, a: number, b: number) => '0x' + hex.slice(2 + a * 2, 2 + b * 2);
 
 describe('createEndUserClient().executeGasless builds a paymasterAndData the deployed SP accepts', () => {
     it.each([
         ['SuperPaymaster-5.5.0', 350_000n, 350_000n],
-        ['SuperPaymaster-5.4.2', undefined, 300_000n],
+        ['SuperPaymaster-5.4.2', undefined, 200_000n], // the explicit 150k raised to 5.4.2's 200k floor
     ])('%s: 125-byte layout with the operator token, postOp at the contract floor', async (version, minPostOpGas, expectedPostOp) => {
         const { c, paymasterAndData } = harness(version, { minPostOpGas });
-        await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR });
+        await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT });
         const pmd = paymasterAndData();
         expect((pmd.length - 2) / 2).toBe(125);
         expect(at(pmd, 0, 20)).toBe(SP.toLowerCase());
-        expect(BigInt(at(pmd, 20, 36))).toBe(250_000n);
+        expect(BigInt(at(pmd, 20, 36))).toBe(EXPLICIT.paymasterVerificationGasLimit); // the caller's, no SDK constant
         expect(BigInt(at(pmd, 36, 52))).toBe(expectedPostOp);
         expect(at(pmd, 52, 72)).toBe(OPERATOR.toLowerCase());
         expect(at(pmd, 104, 124)).toBe(TOKEN.toLowerCase());
@@ -103,6 +103,51 @@ describe('createEndUserClient().executeGasless builds a paymasterAndData the dep
 
     it('an unconfigured operator fails before anything is signed or sent', async () => {
         const { c } = harness('SuperPaymaster-5.5.0', { configured: false });
-        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR })).rejects.toThrow(/not configured/);
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT })).rejects.toThrow(/not configured/);
+    });
+});
+
+describe('executeGasless gas: explicit or estimate x coefficient, never an SDK constant (DSR D14)', () => {
+    it('no gas and no estimateBundlerUrl: refused before anything is signed or sent', async () => {
+        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 350_000n });
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR })).rejects.toThrow(/no gas source for .*pass gas or estimateBundlerUrl/);
+        expect(sent()).toBeUndefined();
+    });
+
+    it('estimate x 1.5 per field (labelled estimate), postOp raised to the chain floor (floor), fees from eth_feeHistory, handleOps gas = node estimate x 1.5', async () => {
+        const { c, sentTx, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        const est = { preVerificationGas: '0xea60', verificationGasLimit: '0x11170', callGasLimit: '0x9c40', paymasterVerificationGasLimit: '0x30d40', paymasterPostOpGasLimit: '0x186a0' };
+        const fetchMock = vi.fn(async (_u: string, init: any) => {
+            const body = JSON.parse(init.body);
+            if (body.method !== 'eth_estimateUserOperationGas') throw new Error(`unexpected bundler ${body.method}`);
+            return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: est }), { status: 200, headers: { 'content-type': 'application/json' } });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const decisions: any[] = [];
+        try {
+            await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337', onGasDecided: (d: any) => decisions.push(d) });
+        } finally { vi.unstubAllGlobals(); }
+        const d = decisions[0];
+        expect(d.limits).toEqual({ verificationGasLimit: 105_000n, callGasLimit: 60_000n, preVerificationGas: 90_000n, paymasterVerificationGasLimit: 300_000n, paymasterPostOpGasLimit: 500_000n });
+        expect(d.limitSources).toEqual({ verificationGasLimit: 'estimate', callGasLimit: 'estimate', preVerificationGas: 'estimate', paymasterVerificationGasLimit: 'estimate', paymasterPostOpGasLimit: 'floor' });
+        expect(d.coefficientBps).toBe(15_000n);
+        expect(d.fees.source).toBe('feeHistory');
+        expect(d.handleOps).toEqual({ estimate: 200_000n, gasLimit: 300_000n, source: 'estimate' });
+        // What was signed and sent is exactly the decision.
+        const op = sentOp();
+        expect(BigInt(op.preVerificationGas)).toBe(90_000n);
+        expect(BigInt('0x' + (op.accountGasLimits as string).slice(2, 34))).toBe(105_000n);
+        expect(BigInt('0x' + (op.accountGasLimits as string).slice(34))).toBe(60_000n);
+        expect(sentTx().gas).toBe(300_000n);
+        expect(sentTx().maxFeePerGas).toBe(d.fees.maxFeePerGas);
+    });
+
+    it('explicit fields win over the estimate and are labelled explicit', async () => {
+        const { c } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 100_000n });
+        const decisions: any[] = [];
+        await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, onGasDecided: (d: any) => decisions.push(d) });
+        expect(decisions[0].limits).toEqual(EXPLICIT);
+        expect(Object.values(decisions[0].limitSources)).toEqual(['explicit', 'explicit', 'explicit', 'explicit', 'explicit']);
+        expect(decisions[0].estimate).toBeUndefined();
     });
 });

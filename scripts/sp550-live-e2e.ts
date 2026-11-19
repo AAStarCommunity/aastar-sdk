@@ -17,7 +17,7 @@
  * Everything chain-specific comes from the config file and the SDK pins — nothing here names a
  * chain, an RPC, or an address:
  *   {
- *     "network": "sepolia" | "op-sepolia" | "op-mainnet",
+ *     "network": "sepolia" | "sepolia-rc8" | "op-sepolia" | "op-mainnet",   // sepolia-rc8: the coexisting rc.8 stack
  *     "mode": "fork" | "live",
  *     "rpcUrls": ["<rpc>", "<rpc2>"],     // the read-back gate's RPCs; the first one sends
  *     "bundlerUrl": "<bundler>",
@@ -29,6 +29,10 @@
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
  *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
  *     "expectMinPostOpGas": "500000",       // gasParams().minPostOpGas must equal the release tuple's value
+ *     "expectMinTxInterval": "60",          // operators(operator).minTxInterval must equal it (S1r needs it; SP's setup sets it)
+ *     "taskToken"?: "0x…",                  // T: each op calls execute(T, 0, transfer(0x…dEaD, 1)); its balance is a precondition
+ *     "frozenGas"?: { "verificationGasLimit": "…", … all five },  // a data collection: limits used verbatim, recorded per row
+ *     "gasLimitCoefficientBps"?: 15000,     // the SDK's default when omitted; recorded per row
  *     "requireFreshAccount"?: true          // mode fork (A7): the account must not exist before the run, and S1
  *                                            // (its first sponsored op: fresh lock / allowance slots) must succeed
  *   }
@@ -64,15 +68,15 @@
 import * as fs from 'fs';
 import {
     type Abi, type Address, type Hex, createPublicClient, createWalletClient, decodeFunctionData,
-    encodeFunctionData, extractChain, getAddress, http, isAddress, keccak256, toHex,
+    decodeEventLog, encodeFunctionData, extractChain, getAddress, http, isAddress, keccak256, toHex,
 } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import {
-    CANONICAL_ADDRESSES, EntryPointABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
-    SP550_CUTOVER_PINS, SP550_FRESH_DEPLOY_PINS, SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, getSuperPaymasterGasParams,
+    CANONICAL_ADDRESSES, ERC20ABI, EntryPointABI, MySBTABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
+    SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, getSuperPaymasterGasParams, requireDeployedAddress, sp550PinsFor,
 } from '@aastar/core';
-import { PaymasterClient, SuperPaymasterInflightGuard } from '@aastar/paymaster';
+import { PaymasterClient, SuperPaymasterInflightGuard, UserOperationNotYetValidError, type GasDecision } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
@@ -157,8 +161,10 @@ async function main() {
     for (const c of gate.results) console.log(`  gate ✅ ${c.check} — ${c.detail}`);
     // The SuperPaymaster the gate just passed: the --pins file, else the network's pin table — the
     // same source the gate read, so the E2E cannot drift onto an address the read-back did not check.
-    const pinned = pins ?? (net.mode === 'fresh' ? SP550_FRESH_DEPLOY_PINS : SP550_CUTOVER_PINS)[net.chainId];
-    const sp = getAddress(pinned?.superPaymaster ?? fail('no pinned superPaymaster (the gate should have refused)'));
+    // By network (sp550PinsFor), so sepolia-rc8 reads its own coexisting entry, never the chain's other stack.
+    const pinned = pins ?? sp550PinsFor(net.network).pins;
+    const deployment = net.network;
+    const sp = getAddress(requireDeployedAddress(pinned as Record<string, unknown> | undefined, 'superPaymaster', deployment));
     // The SDK hashes the op with client.chain.id, so the clients carry the network's chain, and the
     // sending RPC must report that chain id (an anvil fork keeps the forked chain's id).
     const chain = extractChain({ chains: [sepolia, optimismSepolia, optimism], id: net.chainId as 11155111 | 11155420 | 10 });
@@ -166,12 +172,13 @@ async function main() {
     const pub = createPublicClient({ chain, transport: http(rpcUrls[0]) });
     const rpcChainId = await pub.getChainId();
     if (rpcChainId !== net.chainId) refuse(`${rpcUrls[0]} reports chain ${rpcChainId}, not ${net.network} (${net.chainId})`);
-    const ep = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'entryPoint' })) as Address;
-    const registry = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'REGISTRY' })) as Address;
+    // Every address this run signs, sends or encodes goes through requireDeployedAddress (zero / missing -> refused).
+    const ep = requireDeployedAddress({ entryPoint: await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'entryPoint' }) }, 'entryPoint', `${deployment} SP.entryPoint()`);
+    const registry = requireDeployedAddress({ registry: await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'REGISTRY' }) }, 'registry', `${deployment} SP.REGISTRY()`);
     // operators(): (aPNTsBalance, isConfigured, isPaused, xPNTsToken, reputation, minTxInterval, …)
     const opCfg = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'operators', args: [operator] })) as readonly any[];
     if (!opCfg[1] || opCfg[2]) refuse(`operator ${operator} is not configured or is paused on ${sp}`);
-    const token = getAddress(opCfg[3]) as Address;
+    const token = getAddress(requireDeployedAddress({ xPNTsToken: opCfg[3] }, 'xPNTsToken', `${deployment} operators(${operator})`));
     const minTxInterval = BigInt(opCfg[5]);
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
     // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
@@ -181,6 +188,19 @@ async function main() {
         refuse('expectMinPostOpGas must be set to the release tuple\'s minPostOpGas as a positive decimal string (rc.8: "500000")');
     }
     const expectMinPostOpGas = BigInt(cfg.expectMinPostOpGas);
+    if (typeof cfg.expectMinTxInterval !== 'string' || !/^[0-9]+$/.test(cfg.expectMinTxInterval)) {
+        refuse('expectMinTxInterval must be the operator\'s minTxInterval in seconds as a decimal string (the paper cells: "60")');
+    }
+    const taskToken = cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
+    const FIELDS = ['verificationGasLimit', 'callGasLimit', 'preVerificationGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
+    let frozenGas: Record<(typeof FIELDS)[number], bigint> | undefined;
+    if (cfg.frozenGas !== undefined) {
+        const f = cfg.frozenGas ?? {};
+        const bad = FIELDS.filter((k) => typeof f[k] !== 'string' || !/^[1-9][0-9]*$/.test(f[k]));
+        if (bad.length || Object.keys(f).some((k) => !(FIELDS as readonly string[]).includes(k))) refuse(`frozenGas needs exactly the five limits as positive decimal strings (bad or missing: ${bad.join(', ') || 'unknown keys'})`);
+        frozenGas = Object.fromEntries(FIELDS.map((k) => [k, BigInt(f[k])])) as any;
+    }
+    const gasLimitCoefficientBps = cfg.gasLimitCoefficientBps === undefined ? undefined : BigInt(cfg.gasLimitCoefficientBps);
     const gp = await getSuperPaymasterGasParams(pub as any, sp);
     console.log(`SP gasParams: minPostOpGas ${gp.minPostOpGas} (${gp.source}) · settleGasBound ${gp.settleGasBound ?? '-'} · cPostop ${gp.cPostop ?? '-'}`);
     if (gp.minPostOpGas !== expectMinPostOpGas) {
@@ -249,6 +269,19 @@ async function main() {
     if (s0.locked !== 0n || s0.credit !== 0n) missing.push('no live lock / credit reservation');
     const K = BigInt(await tok('K'));
     if (s0.renewUsed >= K) missing.push(`autoRenewUsed < K (${s0.renewUsed}/${K}; the user can renewForSelf first)`);
+    // C7 (DSR): SP's three-arm setup provides these (SBT via safeMintForRole, X and T minted, minTxInterval 60); the
+    // SDK only checks and reports what is missing — it sends no operator- or community-side transaction.
+    const sbt = requireDeployedAddress({ MYSBT: await pub.readContract({ address: registry, abi: RegistryABI, functionName: 'MYSBT' }) }, 'MYSBT', `${deployment} Registry.MYSBT()`);
+    if (BigInt(await pub.readContract({ address: sbt, abi: MySBTABI, functionName: 'balanceOf', args: [account] }) as bigint) === 0n) missing.push('SBT (Registry.MYSBT().balanceOf(account) > 0)');
+    if (taskToken && BigInt(await pub.readContract({ address: taskToken, abi: ERC20ABI, functionName: 'balanceOf', args: [account] }) as bigint) === 0n) missing.push(`task token T ${taskToken} balance`);
+    if (minTxInterval !== BigInt(cfg.expectMinTxInterval)) missing.push(`operators(${operator}).minTxInterval == ${cfg.expectMinTxInterval} (is ${minTxInterval})`);
+    if ((await pub.getBalance({ address: base.address })) === 0n) missing.push(`ETH on the user's EOA ${base.address} (C12 sends its own handleOps)`);
+    {
+        const { createEndUserClient } = await import('@aastar/sdk');
+        const eu: any = createEndUserClient({ chain, transport: http(rpcUrls[0]), account: base as any, addresses: { superPaymaster: sp, entryPoint: ep } as any });
+        const predicted = (await eu.createSmartAccount({ owner: base.address })).accountAddress as Address;
+        if (getAddress(predicted) !== account) missing.push(`C12's account (createSmartAccount(owner) = ${predicted}) == config.account ${account}`);
+    }
     if (missing.length) refuse(`preconditions not met for ${account}: ${missing.join(', ')}`);
     if (args.includes('--preflight')) {
         result(`preflight: gate passed, preconditions met for ${account} (allowance ${s0.used}/${s0.cap}, autoRenewUsed ${s0.renewUsed}/${K}); no op sent`);
@@ -287,14 +320,28 @@ async function main() {
         const wait = lastSent + (Number(minTxInterval) + 2) * 1000 - Date.now();
         if (lastSent && wait > 0) await new Promise((r) => setTimeout(r, wait));
     };
-    const op = async (label: string, callData: Hex) => {
-        await spaced();
+    /** One row's gas record (B5/B6): the limits sent with their per-field source, the fees and their source. */
+    const gasRow = (d: GasDecision | undefined) => d === undefined ? 'gas=(no decision reported)'
+        : `gas=${FIELDS.map((k) => `${k}:${d.limits[k]}(${d.limitSources[k]})`).join(',')} limitsSource=${d.limitsSource}` +
+          `${d.coefficientBps !== undefined ? ` coefficientBps=${d.coefficientBps}` : ''} maxFee=${d.fees.maxFeePerGas} priority=${d.fees.maxPriorityFeePerGas} feeSource=${d.fees.source}` +
+          `${d.feesRaisedByBundler ? ' feesRaisedByBundler' : ''}`;
+    const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
+    const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
+        if (o.spaced !== false) await spaced();
         SuperPaymasterInflightGuard.clearAll();
         signs = 0;
         const before = await state();
         const first = bundlerCalls.length;
+        let decision: GasDecision | undefined;
         // No superPaymasterFlags: SP_RENEW is the SDK's per-op decision, which is what is under test.
-        const opHash = (await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, callData, { operator })) as Hex;
+        let opHash: Hex;
+        try {
+            opHash = (await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, callData, submitOpts((d) => { decision = d; }))) as Hex;
+        } catch (e: any) {
+            // B5 (DSR): a bundler rejection (e.g. an efficiency check) is reported with its reason and the numbers.
+            result(`${label}: REJECTED before inclusion — ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 300)} · ${gasRow(decision)}`);
+            throw e;
+        }
         lastSent = Date.now();
         const submitted = bundlerCalls.slice(first);
         const signsForOp = signs;
@@ -302,6 +349,10 @@ async function main() {
         const txHash = rc.receipt?.transactionHash as Hex;
         const { flags, postOpGasLimit } = await onChainOp(txHash, BigInt(rc.nonce));
         const logs = (rc.receipt?.logs ?? []) as any[];
+        // Efficiency (B5): the bundler's own check compares actual use with the limits it was given.
+        const actualGasUsed = BigInt(rc.actualGasUsed ?? 0);
+        const limitSum = decision ? FIELDS.reduce((t, k) => t + decision!.limits[k], 0n) : 0n;
+        const efficiency = limitSum > 0n ? Number((actualGasUsed * 10_000n) / limitSum) / 10_000 : NaN;
         const renewedInline = logs.some((l) => isSpRelayedRenewal(l, xPNTsTokenV2ABI as Abi, { token, user: account, sp }));
         const after = await state();
         const estimates = submitted.filter((c) => c.method === 'eth_estimateUserOperationGas').length;
@@ -309,7 +360,9 @@ async function main() {
         result(`${label}: success=${rc.success} S_user signMessage=${signsForOp} estimates=${estimates} (placeholder sig) sends=${sends.length} ` +
             `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
-            `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} · tx ${txHash}`);
+            `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} actualGasUsed=${actualGasUsed} efficiency=${efficiency} · ${gasRow(decision)} · tx ${txHash}`);
+        if (decision === undefined) fail(`${label}: the SDK reported no gas decision (onGasDecided) for a sent op`);
+        if (frozenGas && FIELDS.some((k) => decision!.limits[k] !== frozenGas![k])) fail(`${label}: frozenGas was not used verbatim (${gasRow(decision)})`);
         if (rc.success !== true) fail(`${label}: UserOperationEvent.success=${rc.success}`);
         // The floor the SDK applies, held on what was actually bundled (not on the getter alone).
         if (postOpGasLimit < expectMinPostOpGas) fail(`${label}: bundled paymasterPostOpGasLimit ${postOpGasLimit} < minPostOpGas ${expectMinPostOpGas}`);
@@ -321,9 +374,13 @@ async function main() {
             }),
         ];
         if (problems.length) fail(`${label}: ${problems.join('; ')}`);
-        return { flags, renewedInline, before, after, txHash };
+        return { flags, renewedInline, before, after, txHash, decision };
     };
-    const noop = encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
+    // The task call: SP's three-arm execute(T, 0, transfer(0x…dEaD, 1)) when T is configured, else a no-op call.
+    const DEAD = '0x000000000000000000000000000000000000dEaD' as Address;
+    const noop = taskToken
+        ? encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [taskToken, 0n, encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] })] })
+        : encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
 
     try {
         // ---- 4. S1 ----
@@ -334,6 +391,24 @@ async function main() {
                 fail(`requireFreshAccount: S1 was not the account's first sponsored op (allowance used ${s1.before.used}, lockedOf ${s1.before.locked}, autoRenewUsed ${s1.before.renewUsed})`);
             }
             result(`A7 FRESH ACCOUNT: account ${account} created in this run (no code before it), S1 is its first sponsored op (allowance used 0, lockedOf 0, autoRenewUsed 0) and succeeded · tx ${s1.txHash}`);
+        }
+
+        // ---- 4r. S1r (D9): a second op straight after S1, inside minTxInterval ----
+        // The bundler must refuse it as not yet valid (-32503); the SDK neither waits nor retries: one send.
+        {
+            const first = bundlerCalls.length;
+            SuperPaymasterInflightGuard.clearAll();
+            signs = 0;
+            let rejected: unknown;
+            try { await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, noop, submitOpts(() => {})); }
+            catch (e) { rejected = e; }
+            const sends = bundlerCalls.slice(first).filter((c) => c.method === 'eth_sendUserOperation').length;
+            const elapsed = Math.round((Date.now() - lastSent) / 1000);
+            result(`S1r second op ${elapsed}s after S1 (minTxInterval ${minTxInterval}s): ${rejected instanceof UserOperationNotYetValidError ? `rejected -32503 not valid yet${(rejected as UserOperationNotYetValidError).secondsToWait !== undefined ? ` (wait ${(rejected as UserOperationNotYetValidError).secondsToWait}s)` : ''}` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends} S_user signMessage=${signs}`);
+            if (!(rejected instanceof UserOperationNotYetValidError)) fail('S1r: the second op inside minTxInterval was not refused as not yet valid (-32503)');
+            if (sends !== 1) fail(`S1r: ${sends} eth_sendUserOperation calls; the SDK must not retry a not-yet-valid op`);
+            if (signs !== 1) fail(`S1r: signMessage ${signs} times; one signature for the one send`);
+            lastSent = Date.now(); // the next op waits a full interval
         }
 
         // ---- 5. S3b inline renewal ----
@@ -354,6 +429,39 @@ async function main() {
         if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
         // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
         result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
+
+        // ---- 6. C12: createEndUserClient().executeGasless, self-bundled handleOps from the user's EOA (paid in ETH) ----
+        await spaced();
+        SuperPaymasterInflightGuard.clearAll();
+        signs = 0;
+        {
+            const { createEndUserClient } = await import('@aastar/sdk');
+            const c0 = await state();
+            const eth0 = await pub.getBalance({ address: base.address });
+            const eu: any = createEndUserClient({ chain, transport: http(rpcUrls[0]), account: user as any, addresses: { superPaymaster: sp, entryPoint: ep } as any });
+            // D14 (DSR): the limits are this bundler's estimate x the coefficient (or frozenGas, explicit), the EOA sends
+            // handleOps with the node's eth_estimateGas x the coefficient; the decision is recorded like every other row.
+            let c12: any;
+            const tx = (await eu.executeGasless({
+                target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
+                estimateBundlerUrl: cfg.bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
+                onGasDecided: (d: any) => { c12 = d; },
+            })) as Hex;
+            const rc = await pub.waitForTransactionReceipt({ hash: tx });
+            let ev: any;
+            for (const l of rc.logs as any[]) { try { const d: any = decodeEventLog({ abi: EntryPointABI as Abi, data: l.data, topics: l.topics }); if (d.eventName === 'UserOperationEvent' && getAddress(d.args.sender) === account) ev = d.args; } catch { /* other logs */ } }
+            const c1 = await state();
+            const eth1 = await pub.getBalance({ address: base.address });
+            const c12Gas = c12 === undefined ? 'gas=(no decision reported)'
+                : `gas=${FIELDS.map((k) => `${k}:${c12.limits[k]}(${c12.limitSources[k]})`).join(',')} coefficientBps=${c12.coefficientBps} maxFee=${c12.fees.maxFeePerGas} priority=${c12.fees.maxPriorityFeePerGas} feeSource=${c12.fees.source} handleOpsGas:${c12.handleOps.gasLimit}(estimate ${c12.handleOps.estimate})`;
+            result(`C12 createEndUserClient().executeGasless: tx ${rc.status} from ${rc.from} UserOperationEvent.success=${ev?.success} actualGasUsed=${ev?.actualGasUsed} · user xPNTs -${c0.bal - c1.bal} · EOA ETH -${eth0 - eth1} · S_user signMessage=${signs} · handleOps gasUsed=${rc.gasUsed} · ${c12Gas} · tx ${tx}`);
+            if (c12 === undefined) fail('C12: executeGasless reported no gas decision');
+            if (rc.status !== 'success' || ev?.success !== true) fail('C12: the self-bundled op did not succeed');
+            if (getAddress(rc.from) !== getAddress(base.address)) fail(`C12: handleOps was sent by ${rc.from}, not the user's EOA`);
+            if (signs !== 1) fail(`C12: signMessage ${signs} times; one signature for the op`);
+            if (!(c1.bal < c0.bal)) fail('C12: the user was not charged in xPNTs (not sponsored)');
+            lastSent = Date.now();
+        }
     } finally {
         // fail() exits the process; this covers the normal path and a thrown error.
         untapBundler();
