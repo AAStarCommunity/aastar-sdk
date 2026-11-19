@@ -300,10 +300,10 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     if (st.beforeSign) await st.beforeSign();
     // Last, right before the key: another honest transaction from this EOA during C12's estimate would have taken the
     // snapshotted nonce; signing it again would replace that pending transaction.
-    if (st.txNonceNow) {
-        const now = await st.txNonceNow();
-        if (now !== st.expect.txNonce) throw new Error(`C12: the EOA's pending nonce moved ${st.expect.txNonce} -> ${now} since the snapshot; refused before signing`);
-    }
+    // Required, not optional (DSR): an armed C12 without a nonce re-read refuses instead of silently skipping it.
+    if (!st.txNonceNow) throw new Error('C12: no pending-nonce re-read is wired (txNonceNow); refused before signing');
+    const now = await st.txNonceNow();
+    if (now !== st.expect.txNonce) throw new Error(`C12: the EOA's pending nonce moved ${st.expect.txNonce} -> ${now} since the snapshot; refused before signing`);
     return sign();
 }
 

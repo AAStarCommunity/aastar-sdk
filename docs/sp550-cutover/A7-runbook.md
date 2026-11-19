@@ -89,6 +89,7 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 - 把 `<out>/run.log` 和 `<out>/e2e.log` 拷进 `docs/sp550-cutover/a7/`，在 #434 里提交，PR 正文贴出 `run.log` 第一行和全部 `RESULT` 行。
 - **不提交** `deploy.log` 和 `anvil.log`。它们落盘前已经过 `scrub_log`（`scripts/sp550-fork/scrub-url.sh`：fork 源 URL 的原样、去 scheme、去尾斜杠、单独的 path+query 都换成 `<fork-url>`，用 bash 自己的替换，不经任何持有 URL 的子进程），但节点报错原文仍可能以别的编码形式带出凭据，所以照旧不进证据。
+- **换 fork 源服务商时**先查一项：`scrub_log` 只认 URL 的字面形式（原样、去 scheme、去尾斜杠、path+query），不认百分号解码或重新编码后的形式。如果新服务商把 key 放在路径里、且 key 含会被编码的字符，先确认它的报错不会以编码形式回显 URL；做不到就别用它跑分叉演练。
 - 单独跑 `setup-fork.sh` 成功后，它起的 anvil 会继续运行（给后面的 E2E 用），最后一行打印它的 pid 和关闭命令（`kill <pid>`）；用完就关。
 
 ## 二、实链：部署之后立刻跑

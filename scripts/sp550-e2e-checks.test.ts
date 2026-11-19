@@ -182,7 +182,7 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
     const data = (ops = [packed], ben: `0x${string}` = EOA) => encodeFunctionData({ abi: HANDLE, functionName: 'handleOps', args: [ops as any, ben] });
     const good = () => ({ type: 'eip1559', chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n, nonce: 3 });
     const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n, txNonce: 3 });
-    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, ...over });
+    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, txNonceNow: async () => 3, ...over });
 
     it('the off-chain hash of the packed op equals viem\'s v0.7 getUserOperationHash', () => {
         expect(packedUserOpHashV07(packed, EP, CHAIN)).toBe(HASH);
@@ -194,6 +194,11 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
         expect(n).toBe(1); expect(st.txSigns).toBe(1);
         await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).rejects.toThrow(/exactly one transaction/);
         expect(n).toBe(1);
+    });
+    it('an armed C12 without a nonce re-read wired (txNonceNow) is refused, nothing signed (fail closed, DSR)', async () => {
+        let n = 0;
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), state({ txNonceNow: undefined }))).rejects.toThrow(/no pending-nonce re-read is wired/);
+        expect(n).toBe(0);
     });
     it('the EOA pending nonce re-read at the boundary: unchanged signs, moved is refused with no signature', async () => {
         let n = 0;
