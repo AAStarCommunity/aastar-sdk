@@ -280,6 +280,8 @@ export type C12SignState = {
     beforeSign?: () => Promise<void>;
     /** The EOA's pending nonce now (Daybreak #468 re-run): re-read at the boundary, it must still equal the snapshot. */
     txNonceNow?: () => Promise<number>;
+    /** The plan's pricing check for the UserOp this transaction carries, at the transaction's own re-check block. */
+    costAtKey?: () => Promise<void>;
 };
 
 /**
@@ -304,6 +306,10 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     if (!st.txNonceNow) throw new Error('C12: no pending-nonce re-read is wired (txNonceNow); refused before signing');
     const now = await st.txNonceNow();
     if (now !== st.expect.txNonce) throw new Error(`C12: the EOA's pending nonce moved ${st.expect.txNonce} -> ${now} since the snapshot; refused before signing`);
+    // The UserOp inside passed the plan at its own signature; the chain may have moved since (Codex cost-cap r2 H2):
+    // held to the plan again here, at this transaction's re-check block. Required: none wired => refused.
+    if (!st.costAtKey) throw new Error('C12: no plan pricing check is wired for the transaction (costAtKey); refused before signing');
+    await st.costAtKey();
     return sign();
 }
 
@@ -459,7 +465,7 @@ export async function guardedSignMessage(a: any, io: {
     deadline?: () => Promise<void>;
     costAtKey: (maxCostWei: bigint) => Promise<void>;
     sign: (a: any) => Promise<Hex>;
-    after?: (userOpHash: Hex | undefined, sig: Hex) => void;
+    after?: (userOpHash: Hex | undefined, sig: Hex, maxCostWei: bigint) => void;
 }): Promise<Hex> {
     const raw = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
     const maxCost = io.approvals.take(raw);
@@ -474,35 +480,115 @@ export async function guardedSignMessage(a: any, io: {
     if (io.deadline) await io.deadline();
     await io.costAtKey(maxCost);
     const sig = await io.sign(a);
-    io.after?.(raw, sig);
+    io.after?.(raw, sig, maxCost);
     return sig;
 }
 
 /**
- * SP's frozen plan, parsed losslessly (SP 2026-11-19): integers above 2^53 (a0, Amax, Xmax, wei amounts) become
- * BigInt from their source digits instead of a rounded number. Needs Node >= 21 (reviver context.source).
+ * One pass over (already valid) JSON text: every value's exact source token by path ("a.b[0].c"), duplicate keys, and
+ * number tokens a plan may not use (an exponent, or negative zero). JSON.parse keeps the last of two equal keys and
+ * rounds exponents silently; the plan's integers must be what its bytes say (Codex cost-cap r2).
+ */
+export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: string[]; source: Map<string, string> } {
+    let i = 0;
+    const duplicates: string[] = [], badNumbers: string[] = [], source = new Map<string, string>();
+    const ws = () => { while (i < text.length && ' \t\n\r'.includes(text[i])) i++; };
+    const fail = (what: string): never => { throw new Error(`plan: ${what} at offset ${i}`); };
+    const str = (): string => {
+        const s0 = i++;
+        while (i < text.length && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
+        if (i >= text.length) fail('unterminated string');
+        i++;
+        return JSON.parse(text.slice(s0, i));
+    };
+    const at = (base: string, k: string) => (base ? `${base}.${k}` : k);
+    const value = (path: string): void => {
+        ws();
+        const c = text[i];
+        if (c === '{') {
+            i++; ws();
+            const keys = new Set<string>();
+            if (text[i] === '}') { i++; return; }
+            for (;;) {
+                ws();
+                if (text[i] !== '"') fail('expected a key');
+                const k = str();
+                if (keys.has(k)) duplicates.push(at(path, k));
+                keys.add(k);
+                ws();
+                if (text[i++] !== ':') fail('expected ":"');
+                value(at(path, k));
+                ws();
+                if (text[i] === ',') { i++; continue; }
+                if (text[i] === '}') { i++; return; }
+                fail('expected "," or "}"');
+            }
+        }
+        if (c === '[') {
+            i++; ws();
+            let n = 0;
+            if (text[i] === ']') { i++; return; }
+            for (;;) {
+                value(`${path}[${n++}]`);
+                ws();
+                if (text[i] === ',') { i++; continue; }
+                if (text[i] === ']') { i++; return; }
+                fail('expected "," or "]"');
+            }
+        }
+        if (c === '"') { const s0 = i; str(); source.set(path, text.slice(s0, i)); return; }
+        const m = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/.exec(text.slice(i, i + 4096));
+        if (m && m[0]) {
+            source.set(path, m[0]);
+            if (m[3]) badNumbers.push(`${path}: exponent form ${m[0]}`);
+            if (/^-0(\.0+)?$/.test(m[0])) badNumbers.push(`${path}: negative zero`);
+            i += m[0].length;
+            return;
+        }
+        for (const lit of ['true', 'false', 'null']) if (text.startsWith(lit, i)) { source.set(path, lit); i += lit.length; return; }
+        fail('unexpected token');
+    };
+    value('');
+    ws();
+    if (i !== text.length) fail('trailing data');
+    return { duplicates, badNumbers, source };
+}
+
+/** A JSON number token with a fraction, kept as its source text (never rounded into an integer field). */
+export type NonIntegerNumber = { readonly nonIntegerNumber: string };
+
+/**
+ * SP's frozen plan, parsed losslessly (SP 2026-11-19) and strictly (Codex cost-cap r2): integer tokens above 2^53
+ * become BigInt from their digits; a fraction token becomes a NonIntegerNumber marker (so no integer field can take a
+ * rounded value); duplicate keys, exponent forms and negative zero are refused. Needs Node >= 21 (context.source).
  */
 export function parsePlanJson(text: string): any {
-    let sawContext = false;
+    JSON.parse(text); // structure first: the scan below assumes valid JSON
+    const scan = scanPlanJson(text);
+    if (scan.duplicates.length) throw new Error(`plan: duplicate key(s) ${scan.duplicates.join(', ')}`);
+    if (scan.badNumbers.length) throw new Error(`plan: number form(s) a plan may not use: ${scan.badNumbers.join('; ')}`);
+    let numbers = 0, withSource = 0;
     const v = JSON.parse(text, function (_k, val, ctx?: { source?: string }) {
-        if (ctx && typeof ctx.source === 'string') sawContext = true;
-        if (typeof val === 'number' && !Number.isSafeInteger(val) && Number.isInteger(val)) {
-            if (!ctx || typeof ctx.source !== 'string' || !/^-?[0-9]+$/.test(ctx.source)) throw new Error('plan: an integer above 2^53 cannot be read losslessly here (needs Node >= 21)');
-            return BigInt(ctx.source);
-        }
-        return val;
+        if (typeof val !== 'number') return val;
+        numbers++;
+        const src = ctx?.source;
+        if (typeof src !== 'string') return val;
+        withSource++;
+        if (/^-?(0|[1-9][0-9]*)$/.test(src)) return Number.isSafeInteger(val) ? val : BigInt(src);
+        return Object.freeze({ nonIntegerNumber: src }) as NonIntegerNumber;
     } as any);
-    if (!sawContext && /[0-9]{16,}/.test(text)) throw new Error('plan: this runtime gives no reviver context.source; refusing a lossy parse (needs Node >= 21)');
+    if (numbers > 0 && withSource !== numbers) throw new Error('plan: this runtime gives no reviver context.source; refusing a lossy parse (needs Node >= 21)');
     return v;
 }
 
 /**
- * The cost cap read from the plan must be the digits in the plan's own bytes (DSR): its decimal form appears exactly
- * as the value of "maxCostPerOpWei" in the raw text (a number or a string).
+ * The cost cap read from the plan must be the digits in the plan's own bytes AT ITS PATH (DSR; Codex cost-cap r2):
+ * the source token of shared.sdkLive.maxCostPerOpWei is exactly its decimal form (a number token, or that string).
  */
 export function maxCostDigitsProblem(raw: string, value: bigint): string | undefined {
-    const re = new RegExp(`"maxCostPerOpWei"\\s*:\\s*"?${value.toString()}"?\\s*[,}]`);
-    return re.test(raw) ? undefined : `plan: maxCostPerOpWei ${value} is not the digit string in the plan's bytes`;
+    const tok = scanPlanJson(raw).source.get('shared.sdkLive.maxCostPerOpWei');
+    const d = value.toString();
+    return tok === d || tok === `"${d}"` ? undefined : `plan: shared.sdkLive.maxCostPerOpWei's bytes ${JSON.stringify(tok ?? '(absent)')} are not ${d}`;
 }
 
 /** Why a live run may not start under this plan (DSR / SP): exact "cleared", this run's operator / X, cost-cap commit included. */

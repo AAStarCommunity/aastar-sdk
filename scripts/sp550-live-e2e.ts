@@ -479,11 +479,30 @@ async function main() {
     // M4: a cell that must name every signed op before it can be lost (S1r) sets this; it runs as the signature returns.
     let onSigned: ((userOpHash: Hex | undefined) => void) | undefined;
     const costApprovals = new CostApprovals();
+    // The maxCost of the UserOp the key last signed: C12's outer transaction is held to the plan for that op again,
+    // at its own re-check block (Codex cost-cap r2 H2).
+    let lastSignedMaxCost: bigint | undefined;
     // M2 (Daybreak): C12's transaction is checked field by field BEFORE the key signs it, exactly once, inside the budget
     // (signC12Transaction, checks module). The wrapper copies allowTx / signs / signBudget / beforeSign into st per call.
     const st: C12SignState = { allowTx: false, signs: 0, txSigns: 0, signBudget: Infinity };
+    const costAtKey = async (maxCost: bigint) => {
+        if (!sdkPlan) return;
+        const at = { blockNumber: lastCheckBlock } as const;
+        const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
+            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice', ...at } as any) as Promise<any>,
+            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD', ...at } as any) as Promise<any>,
+            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS', ...at } as any) as Promise<any>,
+            pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate', ...at } as any) as Promise<any>,
+        ]);
+        const bad = signTimeCostProblems(maxCost, {
+            ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
+            aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
+        }, sdkPlan, superPaymasterLock);
+        if (bad.length) throw new Error(`cost check at the key (block ${lastCheckBlock}) refused: ${bad.join('; ')}`);
+    };
     const user = { ...base, signTransaction: async (t: any, o?: any) => {
         st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
+        st.costAtKey = lastSignedMaxCost === undefined ? undefined : () => costAtKey(lastSignedMaxCost!);
         return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
     }, signMessage: (a: any) => guardedSignMessage(a, {
         approvals: costApprovals,
@@ -495,24 +514,10 @@ async function main() {
             const now = (await pub.getBlock({ blockTag: 'latest' })).timestamp;
             if (now >= signDeadline!) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
         },
-        costAtKey: async (maxCost) => {
-            if (!sdkPlan) return;
-            const at = { blockNumber: lastCheckBlock } as const;
-            const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice', ...at } as any) as Promise<any>,
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD', ...at } as any) as Promise<any>,
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS', ...at } as any) as Promise<any>,
-                pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate', ...at } as any) as Promise<any>,
-            ]);
-            const bad = signTimeCostProblems(maxCost, {
-                ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
-                aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
-            }, sdkPlan, superPaymasterLock);
-            if (bad.length) throw new Error(`cost check at the key (block ${lastCheckBlock}) refused: ${bad.join('; ')}`);
-        },
+        costAtKey,
         sign: (x) => base.signMessage(x),
-        after: (h, sig) => { st.lastSignedHash = h; st.lastSignature = sig; onSigned?.(h); },
-    })    } };
+        after: (h, sig, maxCost) => { st.lastSignedHash = h; st.lastSignature = sig; lastSignedMaxCost = maxCost; onSigned?.(h); },
+    }) };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
     // Whether the account exists before this run: A7 must prove the FIRST sponsored op of a brand-new
     // account (fresh lock / allowance slots: the Amsterdam state-gas case, DSR) succeeds.

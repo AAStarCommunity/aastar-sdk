@@ -183,7 +183,7 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
     const data = (ops = [packed], ben: `0x${string}` = EOA) => encodeFunctionData({ abi: HANDLE, functionName: 'handleOps', args: [ops as any, ben] });
     const good = () => ({ type: 'eip1559', chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n, nonce: 3 });
     const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n, txNonce: 3 });
-    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, txNonceNow: async () => 3, ...over });
+    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, txNonceNow: async () => 3, costAtKey: async () => {}, ...over });
 
     it('the off-chain hash of the packed op equals viem\'s v0.7 getUserOperationHash', () => {
         expect(packedUserOpHashV07(packed, EP, CHAIN)).toBe(HASH);
@@ -195,6 +195,15 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
         expect(n).toBe(1); expect(st.txSigns).toBe(1);
         await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).rejects.toThrow(/exactly one transaction/);
         expect(n).toBe(1);
+    });
+    it('C12\'s transaction is held to the plan again at its own re-check (pricing moved since the UserOp): refused, nothing signed (Codex cost-cap r2 H2)', async () => {
+        let n = 0, order: string[] = [];
+        const st = state({ beforeSign: async () => { order.push('recheck'); }, txNonceNow: async () => { order.push('nonce'); return 3; }, costAtKey: async () => { order.push('cost'); throw new Error('exchangeRate != plan'); } });
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).rejects.toThrow('exchangeRate != plan');
+        expect(n).toBe(0);
+        expect(order).toEqual(['recheck', 'nonce', 'cost']);
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), state({ costAtKey: undefined }))).rejects.toThrow(/no plan pricing check is wired/);
+        expect(n).toBe(0);
     });
     it('an armed C12 without a nonce re-read wired (txNonceNow) is refused, nothing signed (fail closed, DSR)', async () => {
         let n = 0;
@@ -473,11 +482,33 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
         // The same text through a plain JSON.parse is refused (lossy).
         expect(sdkLivePlanProblems(JSON.parse(text), { opMaxCostWei: 9007199254740993n, account: acct, lock: superPaymasterLock, validationBufferBPS: 1000n }).problems.length).toBeGreaterThan(0);
     });
-    it('the runner\'s cap must be the digit string in the plan bytes', () => {
-        expect(maxCostDigitsProblem(V2, 9007199254740993n)).toBeUndefined();
-        expect(maxCostDigitsProblem('{"maxCostPerOpWei": "9007199254740993" }', 9007199254740993n)).toBeUndefined();
-        expect(maxCostDigitsProblem(V2, 9007199254740992n)).toMatch(/is not the digit string/);
-        expect(maxCostDigitsProblem('{"maxCostPerOpWei":90071992547409931}', 9007199254740993n)).toMatch(/is not the digit string/);
+    const wrap = (tok: string, extra = '') => `{"shared":{"sdkLive":{"maxCostPerOpWei":${tok}}}${extra}}`;
+    it('the runner\'s cap must be the source token AT shared.sdkLive.maxCostPerOpWei (not anywhere in the bytes)', () => {
+        expect(maxCostDigitsProblem(wrap('9007199254740993'), 9007199254740993n)).toBeUndefined();
+        expect(maxCostDigitsProblem(wrap('"9007199254740993"'), 9007199254740993n)).toBeUndefined();
+        expect(maxCostDigitsProblem(wrap('9007199254740992'), 9007199254740993n)).toMatch(/are not 9007199254740993/);
+        // Codex r2: the real cap is a fraction / exponent while an unrelated field carries the digits.
+        expect(maxCostDigitsProblem(wrap('1.00000000000000001', ',"other":{"maxCostPerOpWei":1}'), 1n)).toMatch(/are not 1/);
+        expect(maxCostDigitsProblem(wrap('1e0', ',"other":{"maxCostPerOpWei":1}'), 1n)).toMatch(/are not 1/);
+        expect(maxCostDigitsProblem('{"other":{"maxCostPerOpWei":5}}', 5n)).toMatch(/\(absent\)/);
+    });
+    it.each([
+        ['an exponent', '{"a":1e3}', /exponent form 1e3/],
+        ['a large exponent', '{"a":1e16}', /exponent form/],
+        ['an underflowing exponent', '{"a":-1e-400}', /exponent form/],
+        ['negative zero', '{"a":-0}', /negative zero/],
+        ['a duplicate key', '{"n":1,"n":2}', /duplicate key\(s\) n/],
+        ['a nested duplicate key', '{"shared":{"sdkLive":{"status":"cleared","status":"x"}}}', /duplicate key\(s\) shared.sdkLive.status/],
+    ])('parsePlanJson refuses %s', (_n, text, why) => {
+        expect(() => parsePlanJson(text as string)).toThrow(why as RegExp);
+    });
+    it('a fraction becomes a non-integer marker (never a rounded integer); the plan check refuses it in an integer field', () => {
+        const v = parsePlanJson('{"a":1.00000000000000001,"b":-9007199254740993,"c":0.5}');
+        expect(v.a).toEqual({ nonIntegerNumber: '1.00000000000000001' });
+        expect(v.b).toBe(-9007199254740993n);
+        expect(v.c).toEqual({ nonIntegerNumber: '0.5' });
+        const r = sdkLivePlanProblems({ shared: { sdkLive: { ...v, maxCostPerOpWei: v.a } }, plans: {} }, { opMaxCostWei: 1n, account: A(1), lock: superPaymasterLock, validationBufferBPS: 1000n });
+        expect(r.problems).toContainEqual(expect.stringMatching(/maxCostPerOpWei is not a non-negative integer/));
     });
 });
 
@@ -485,7 +516,10 @@ describe('the cost check is wired into every signing path of sp550-live-e2e.ts (
     const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
     it('the user signer IS guardedSignMessage, with the key-time pricing read at the re-check block', () => {
         expect(src).toMatch(/signMessage: \(a: any\) => guardedSignMessage\(a, \{/);
-        expect(src).toMatch(/costAtKey: async \(maxCost\) => \{[\s\S]{0,120}const at = \{ blockNumber: lastCheckBlock \}/);
+        expect(src).toMatch(/const costAtKey = async \(maxCost: bigint\) => \{[\s\S]{0,120}const at = \{ blockNumber: lastCheckBlock \}/);
+        expect(src).toMatch(/guardedSignMessage\(a, \{[\s\S]{0,800}\n\s*costAtKey,\n/);
+        // C12's outer transaction runs the same check for the UserOp it carries.
+        expect(src).toMatch(/st\.costAtKey = lastSignedMaxCost === undefined \? undefined : \(\) => costAtKey\(lastSignedMaxCost!\);/);
         expect(src).not.toMatch(/signMessage: async \(a: any\) =>/);
     });
     it('every UserOp submission passes the ceiling and the hook: PaymasterClient (S1 / S1r / S3b via submitOpts) and C12 executeGasless', () => {
