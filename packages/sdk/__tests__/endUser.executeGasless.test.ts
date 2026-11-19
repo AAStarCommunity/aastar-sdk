@@ -142,6 +142,19 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         expect(sentTx().maxFeePerGas).toBe(d.fees.maxFeePerGas);
     });
 
+    it('an endpoint that cannot estimate (-32601): refused before signing, the local defaults are never used (Codex H2)', async () => {
+        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        const fetchMock = vi.fn(async (_u: string, init: any) => {
+            const body = JSON.parse(init.body);
+            return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'Method not found' } }), { status: 200, headers: { 'content-type': 'application/json' } });
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        try {
+            await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337' })).rejects.toThrow(/requireEstimate/);
+        } finally { vi.unstubAllGlobals(); }
+        expect(sent()).toBeUndefined();
+    });
+
     it('explicit fields win over the estimate and are labelled explicit', async () => {
         const { c } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 100_000n });
         const decisions: any[] = [];

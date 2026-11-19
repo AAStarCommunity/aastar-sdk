@@ -157,11 +157,11 @@ ACCOUNT=$(cast call "$FACTORY" 'getAddress(address,uint256)(address)' "$OWNER3" 
 # The release tuple's postOp floor (rc.8: 500,000, DSR); deploy-mode rehearsals of older rcs set it to theirs.
 MIN_POST_OP_GAS="${SP550_A7_MIN_POST_OP_GAS:-500000}"
 # switchBook: the E2E gate derives the book from the pins with pin-fill's bookSwitch, as stage 2a did.
-jq -n --arg mpg "$MIN_POST_OP_GAS" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" '{
+jq -n --arg mpg "$MIN_POST_OP_GAS" --arg mti "${MIN_TX_INTERVAL:-60}" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" '{
     network: "sepolia", mode: "fork", rpcUrls: [$rpc], bundlerUrl: $bundler,
     gate: { pinsFile: $pins, block: "latest", allowRc: true, switchBook: true },
     operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8,
-    forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true, expectMinPostOpGas: $mpg }' > "$OUT/e2e.json"
+    forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true, expectMinPostOpGas: $mpg, expectMinTxInterval: $mti }' > "$OUT/e2e.json"
 set +e
 (cd "$SDK" && pnpm exec tsx scripts/sp550-live-e2e.ts --config "$OUT/e2e.json" --fork-setup) 2>&1 | tee "$OUT/e2e.log"
 rc=${PIPESTATUS[0]}

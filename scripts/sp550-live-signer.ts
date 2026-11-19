@@ -145,11 +145,20 @@ export async function loadLiveSigner(
 const PUBLIC_TEST_MNEMONIC = 'test test test test test test test test test test test junk';
 /** Indices checked: anvil and hardhat fund the first 10 / 20 by default; 50 leaves headroom. */
 const PUBLIC_TEST_ACCOUNTS = 50;
+/**
+ * Keys this repository publishes as fixtures (their passwords / private keys are in the tests): the scrypt keystore
+ * fixture (pinned by address in sp550-live-signer.test.ts) and the tests' throwaway KEY. A second line only: a live run
+ * is bound to config.expectSigner; no address list can prove a key is private.
+ */
+const REPO_FIXTURE_ADDRESSES = ['0x2435BfEfe5225Ce043f26449d6c3FE42248CF3aB'];
 let publicTestAddresses: Set<string> | undefined;
 export async function isPublicTestAccount(address: string): Promise<boolean> {
     if (!publicTestAddresses) {
         const { mnemonicToAccount } = await import('viem/accounts');
-        publicTestAddresses = new Set(Array.from({ length: PUBLIC_TEST_ACCOUNTS }, (_, i) => mnemonicToAccount(PUBLIC_TEST_MNEMONIC, { addressIndex: i }).address.toLowerCase()));
+        publicTestAddresses = new Set([
+            ...Array.from({ length: PUBLIC_TEST_ACCOUNTS }, (_, i) => mnemonicToAccount(PUBLIC_TEST_MNEMONIC, { addressIndex: i }).address.toLowerCase()),
+            ...REPO_FIXTURE_ADDRESSES.map((a) => a.toLowerCase()),
+        ]);
     }
     return publicTestAddresses.has(address.toLowerCase());
 }

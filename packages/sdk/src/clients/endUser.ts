@@ -293,7 +293,10 @@ export function createEndUserClient({
             if (missing.length) {
                 if (!estimateBundlerUrl) throw new Error(`executeGasless: no gas source for ${missing.join(', ')}; pass gas or estimateBundlerUrl`);
                 const est = await PaymasterClient.estimateUserOperationGas(client as any, client as any, accountAddress, entryPointAddress,
-                    usedAddresses.superPaymaster, '0x0000000000000000000000000000000000000000', estimateBundlerUrl, executeData, { operator, sponsorship: sp });
+                    usedAddresses.superPaymaster, '0x0000000000000000000000000000000000000000', estimateBundlerUrl, executeData,
+                    // requireEstimate: an endpoint that cannot estimate yields local defaults, never signed as an estimate.
+                    // superPaymasterFlags 0: the op signed below carries no flags, so the estimate is for that same op.
+                    { operator, sponsorship: sp, requireEstimate: true, superPaymasterFlags: 0, superPaymasterAutoRenew: false });
                 estimate = { ...est };
                 const scaled = scaleLimits(est, coefficientBps);
                 for (const k of missing) { limits[k] = scaled[k]; limitSources[k] = 'estimate'; }

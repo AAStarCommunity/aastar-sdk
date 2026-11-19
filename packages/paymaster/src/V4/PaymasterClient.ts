@@ -87,6 +87,8 @@ export type EstimateGasOptions = {
      * upgrade between submit's read and this one would otherwise build two generations.
      */
     sponsorship?: SuperPaymasterSponsorshipContext;
+    /** Refuse (throw) instead of returning the local defaults when the endpoint has no eth_estimateUserOperationGas. */
+    requireEstimate?: boolean;
     /**
      * Nonce already chosen for this op. Submit passes the reconciled value
      * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
@@ -381,7 +383,8 @@ export class PaymasterClient {
      */
     /**
      * The bundler's estimate for one op, all five limits (unscaled). Throws when the bundler leaves a limit out or returns a
-     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults.
+     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults, unless
+     * `requireEstimate` is set, then it throws.
      */
     static async estimateUserOperationGas(
         client: any,
@@ -398,6 +401,7 @@ export class PaymasterClient {
             client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
         const missing = (Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]).filter((k) => fields[k] === undefined);
         if (missing.length > 0 && !fallback) throw new Error(`Estimation Error: the bundler returned no usable ${missing.join(', ')}`);
+        if (fallback && options?.requireEstimate) throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; refusing the local defaults (requireEstimate)');
         return fields as GasEstimate;
     }
 

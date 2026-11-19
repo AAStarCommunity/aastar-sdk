@@ -42,7 +42,10 @@ export async function forkSetup(i: ForkSetupInput): Promise<void> {
     const client = String(await pub.request({ method: 'web3_clientVersion' as any }));
     if (!/^anvil\//i.test(client)) throw new Error(`--fork-setup impersonates accounts and needs anvil; this RPC is "${client}"`);
     const fund = (a: Address) => pub.request({ method: 'anvil_setBalance' as any, params: [a, '0xDE0B6B3A7640000'] as any });
+    // Every impersonated account is released in finally, on success and on any failure (a shared fork must not be left unlocked).
+    const impersonated = new Set<Address>();
     const as = async (from: Address, req: { address: Address; abi: any; functionName: string; args: unknown[] }, step: string) => {
+        impersonated.add(from);
         await pub.request({ method: 'anvil_impersonateAccount' as any, params: [from] as any });
         await fund(from);
         const w = createWalletClient({ account: from, transport: http(i.rpcUrl) });
@@ -51,33 +54,35 @@ export async function forkSetup(i: ForkSetupInput): Promise<void> {
         if (rc.status !== 'success') throw new Error(`fork setup "${step}" reverted (${hash})`);
         i.log(`fork setup: ${step} · tx ${hash}`);
     };
-    const community = getAddress((await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'communityOwner' })) as Address);
+    try {
+        const community = getAddress((await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'communityOwner' })) as Address);
 
-    if (((await pub.getCode({ address: i.account })) ?? '0x') === '0x') {
-        const factory = i.simpleAccountFactory ?? (() => { throw new Error(`account ${i.account} has no code and no simpleAccountFactory was given`); })();
-        const salt = i.salt ?? 0n;
-        const predicted = getAddress((await pub.readContract({ address: factory, abi: SimpleAccountFactoryABI, functionName: 'getAddress', args: [i.owner, salt] })) as Address);
-        if (predicted !== getAddress(i.account)) throw new Error(`factory ${factory} predicts ${predicted} for (${i.owner}, ${salt}), not the configured account ${i.account}`);
-        await as(community, { address: factory, abi: SimpleAccountFactoryABI, functionName: 'createAccount', args: [i.owner, salt] }, 'createAccount');
-    }
+        if (((await pub.getCode({ address: i.account })) ?? '0x') === '0x') {
+            const factory = i.simpleAccountFactory ?? (() => { throw new Error(`account ${i.account} has no code and no simpleAccountFactory was given`); })();
+            const salt = i.salt ?? 0n;
+            const predicted = getAddress((await pub.readContract({ address: factory, abi: SimpleAccountFactoryABI, functionName: 'getAddress', args: [i.owner, salt] })) as Address);
+            if (predicted !== getAddress(i.account)) throw new Error(`factory ${factory} predicts ${predicted} for (${i.owner}, ${salt}), not the configured account ${i.account}`);
+            await as(community, { address: factory, abi: SimpleAccountFactoryABI, functionName: 'createAccount', args: [i.owner, salt] }, 'createAccount');
+        }
 
-    if (!(await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'hasRole', args: [i.roleEnduser, i.account] }))) {
-        const staking = (await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'GTOKEN_STAKING' })) as Address;
-        const gToken = (await pub.readContract({ address: staking, abi: GTokenStakingABI, functionName: 'GTOKEN' })) as Address;
-        const cfg = (await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'getRoleConfig', args: [i.roleEnduser] })) as any;
-        const minStake = BigInt(cfg.minStake), ticket = BigInt(cfg.ticketPrice);
-        await as(community, { address: gToken, abi: GTokenABI, functionName: 'approve', args: [staking, minStake + ticket] }, `GToken.approve(staking, ${minStake + ticket})`);
-        const data = encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [community, minStake]);
-        await as(community, { address: i.registry, abi: RegistryABI, functionName: 'safeMintForRole', args: [i.roleEnduser, i.account, data] }, 'Registry.safeMintForRole(ENDUSER)');
-    }
+        if (!(await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'hasRole', args: [i.roleEnduser, i.account] }))) {
+            const staking = (await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'GTOKEN_STAKING' })) as Address;
+            const gToken = (await pub.readContract({ address: staking, abi: GTokenStakingABI, functionName: 'GTOKEN' })) as Address;
+            const cfg = (await pub.readContract({ address: i.registry, abi: RegistryABI, functionName: 'getRoleConfig', args: [i.roleEnduser] })) as any;
+            const minStake = BigInt(cfg.minStake), ticket = BigInt(cfg.ticketPrice);
+            await as(community, { address: gToken, abi: GTokenABI, functionName: 'approve', args: [staking, minStake + ticket] }, `GToken.approve(staking, ${minStake + ticket})`);
+            const data = encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [community, minStake]);
+            await as(community, { address: i.registry, abi: RegistryABI, functionName: 'safeMintForRole', args: [i.roleEnduser, i.account, data] }, 'Registry.safeMintForRole(ENDUSER)');
+        }
 
-    if (((await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'balanceOf', args: [i.account] })) as bigint) === 0n) {
-        await as(community, { address: i.token, abi: xPNTsTokenV2ABI, functionName: 'mint', args: [i.account, i.mintAmount ?? parseEther('1000')] }, 'xPNTs.mint');
-    }
+        if (((await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'balanceOf', args: [i.account] })) as bigint) === 0n) {
+            await as(community, { address: i.token, abi: xPNTsTokenV2ABI, functionName: 'mint', args: [i.account, i.mintAmount ?? parseEther('1000')] }, 'xPNTs.mint');
+        }
 
-    if (Number(await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'renewalMode', args: [i.account] })) !== i.modeSpK) {
-        await as(i.account, { address: i.token, abi: xPNTsTokenV2ABI, functionName: 'setRenewalMode', args: [i.modeSpK] }, 'xPNTs.setRenewalMode(SP_K) by the account');
+        if (Number(await pub.readContract({ address: i.token, abi: xPNTsTokenV2ABI, functionName: 'renewalMode', args: [i.account] })) !== i.modeSpK) {
+            await as(i.account, { address: i.token, abi: xPNTsTokenV2ABI, functionName: 'setRenewalMode', args: [i.modeSpK] }, 'xPNTs.setRenewalMode(SP_K) by the account');
+        }
+    } finally {
+        for (const a of impersonated) await pub.request({ method: 'anvil_stopImpersonatingAccount' as any, params: [a] as any }).catch(() => undefined);
     }
-    await pub.request({ method: 'anvil_stopImpersonatingAccount' as any, params: [community] as any });
-    await pub.request({ method: 'anvil_stopImpersonatingAccount' as any, params: [i.account] as any });
 }

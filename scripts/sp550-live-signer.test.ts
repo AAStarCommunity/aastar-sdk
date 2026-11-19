@@ -211,6 +211,12 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         expect(r.status).toBe(2);
         expect(r.output).toMatch(/refused: gate.deployLiveConfig is fork-only/);
     }, 60_000);
+    it('a live run without config.expectSigner, or gated at a historical block, is refused (Codex H4 / H3)', () => {
+        expect(run({}, []).output).toMatch(/refused: mode live: config.expectSigner \(the author's signer address\) is required/);
+        const r = run({ expectSigner: '0x' + '33'.repeat(20), gate: { block: 12345 } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode live: gate.block must be "finalized"/);
+    }, 60_000);
     it('gate.switchBook alone in a live config is refused', () => {
         const r = run({ gate: { switchBook: true } }, []);
         expect(r.status).toBe(2);
@@ -272,6 +278,37 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
         expect(run({ ...fork, gate: { deployLiveConfig: 'c.json', pinsFile: 'p.json' } }, []).output).toMatch(/refused: gate.deployLiveConfig replaces gate.pinsFile/);
         expect(run({ ...fork, taskPlan: { file: 'x', sha256: '0'.repeat(64) }, taskToken: '0x' + '11'.repeat(20) }, []).output).toMatch(/refused: taskPlan and taskToken/);
     }, 60_000);
+    it('--preflight with --fork-setup is refused (preflight reads only; Codex M12)', () => {
+        const r = run(fork, ['--preflight', '--fork-setup']);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: --preflight reads only; run --fork-setup as its own step/);
+    }, 60_000);
+    it('fork mode with a loopback RPC that is not anvil is refused before any op (Codex H1)', async () => {
+        const http = await import('http');
+        const srv = http.createServer((req, res) => {
+            let body = ''; req.on('data', (c) => { body += c; }); req.on('end', () => {
+                const { id, method } = JSON.parse(body || '{}');
+                res.setHeader('content-type', 'application/json');
+                res.end(JSON.stringify(method === 'web3_clientVersion' ? { jsonrpc: '2.0', id, result: 'Geth/v1.14.0' } : method === 'eth_chainId' ? { jsonrpc: '2.0', id, result: '0xaa36a7' } : { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } }));
+            });
+        });
+        await new Promise<void>((ok) => srv.listen(0, '127.0.0.1', ok));
+        try {
+            const port = (srv.address() as any).port;
+            const { spawn } = await import('child_process');
+            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
+            const cfg = path.join(dir, 'run.json');
+            fs.writeFileSync(cfg, JSON.stringify({ network: 'sepolia', operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20), ...fork, rpcUrls: [`http://127.0.0.1:${port}`] }));
+            // async spawn: the in-process fake RPC must keep answering while the script runs.
+            const r = await new Promise<{ status: number; output: string }>((ok) => {
+                const ch = spawn('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg], { stdio: ['ignore', 'pipe', 'pipe'] });
+                let out = ''; ch.stdout.on('data', (d) => { out += d; }); ch.stderr.on('data', (d) => { out += d; });
+                ch.on('close', (code) => ok({ status: code ?? -1, output: out }));
+            });
+            expect(r.status).toBe(2);
+            expect(r.output).toMatch(/refused: mode fork: 127\.0\.0\.1:\d+ does not prove it is anvil \(client Geth/);
+        } finally { await new Promise<void>((ok) => srv.close(() => ok())); }
+    }, 60_000);
     it('fork mode with a key other than { anvilIndex } is refused', () => {
         const r = run({ ...fork, userKey: { keystore: 'k.json' } }, []);
         expect(r.status).toBe(2);
@@ -285,5 +322,6 @@ describe('public development keys are recognised (a live run refuses to sign wit
         expect(await isPublicTestAccount('0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266')).toBe(true);  // index 0
         expect(await isPublicTestAccount('0x70997970C51812dc3A010C7d01b50e0d17dc79C8')).toBe(true);  // index 1: the rehearsal owner
         expect(await isPublicTestAccount(privateKeyToAccount(bytesToHex(randomBytes(32))).address)).toBe(false);
+        expect(await isPublicTestAccount('0x2435BfEfe5225Ce043f26449d6c3FE42248CF3aB')).toBe(true); // the repo keystore fixture
     });
 });

@@ -78,11 +78,13 @@ export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: Bun
 }
 
 /** Placeholder-signature estimation and one signature per op, from one op's recorded bundler calls. */
-export function opSigningProblems(calls: BundlerCall[], signsTotal: number, dummySignature: Hex): string[] {
+export function opSigningProblems(calls: BundlerCall[], signsTotal: number, dummySignature: Hex, opts: { expectEstimate?: boolean } = {}): string[] {
     const problems: string[] = [];
     const estimates = calls.filter((c) => c.method === 'eth_estimateUserOperationGas');
     const sends = calls.filter((c) => c.method === 'eth_sendUserOperation');
-    if (estimates.length === 0) problems.push('no eth_estimateUserOperationGas call: placeholder-signature estimation was not exercised');
+    // frozenGas: the SDK does not estimate at all, so an estimate is a problem, not a requirement.
+    if (opts.expectEstimate === false) { if (estimates.length) problems.push(`${estimates.length} eth_estimateUserOperationGas call(s) with frozenGas; frozen limits are not estimated`); }
+    else if (estimates.length === 0) problems.push('no eth_estimateUserOperationGas call: placeholder-signature estimation was not exercised');
     estimates.forEach((e, i) => {
         if (e.signature?.toLowerCase() !== dummySignature.toLowerCase()) problems.push(`estimate #${i + 1} carried a signature that is not the placeholder`);
         if (e.signsBefore !== 0) problems.push(`estimate #${i + 1} left after the signer had been asked ${e.signsBefore} time(s); estimation must not ask the signer`);
