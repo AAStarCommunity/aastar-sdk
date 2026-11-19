@@ -8,6 +8,7 @@ import { bytesToHex, keccak256 } from 'viem';
 import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { decryptKeystoreV3, isPublicTestAccount, liveKeySourceProblem, loadLiveSigner, promptHidden } from './sp550-live-signer.js';
 import { SP550_LIVE_APPROVED_SIGNERS, liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
+import { childEnv } from './sp550-e2e-checks.js';
 
 // Web3 Secret Storage Definition, the published PBKDF2-SHA-256 test vector (password "testpassword").
 const SPEC_VECTOR = {
@@ -405,89 +406,33 @@ describe('sp550-live-e2e.ts config: the release gasParams tuple and C12 caps are
     }, 60_000);
 });
 
-describe('fork source behind the loopback forwarder (Daybreak M3): no child argv, env or log carries the URL', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('upstream-proxy.sh unsets SP550_FORK_URL, the proxy forwards JSON-RPC, and the secret is in no argv / env / log', async () => {
-        const http = await import('node:http');
-        const up = http.createServer((req, res) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => res.end(JSON.stringify({ jsonrpc: '2.0', id: JSON.parse(b).id, result: '0xaa36a7' }))); });
-        await new Promise<void>((ok) => up.listen(0, '127.0.0.1', () => ok()));
-        const upPort = (up.address() as any).port;
+describe('fork source URL (Daybreak #468 M3, option b): in no child env, read-back on stdin, never printed', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('run-a7.sh and setup-fork.sh unset SP550_FORK_URL before launching any child, and feed the read-back on stdin', () => {
+        for (const f of ['scripts/sp550-fork/run-a7.sh', 'scripts/sp550-fork/setup-fork.sh']) {
+            const lines = fs.readFileSync(f, 'utf8').split('\n');
+            const unset = lines.findIndex((l) => /^FORK_URL=.*; unset SP550_FORK_URL$/.test(l));
+            expect(unset, `${f}: FORK_URL read then SP550_FORK_URL unset on one line`).toBeGreaterThan(0);
+            const firstChild = lines.findIndex((l) => /^\s*[^#]*\b(anvil|"\$ANVIL"|pnpm exec|cast |forge )/.test(l));
+            expect(firstChild, f).toBeGreaterThan(unset);
+            expect(lines.filter((l) => /SP550_FORK_URL=/.test(l) && !l.trim().startsWith('#'))).toEqual([]); // never re-exported to a child
+        }
+        const a7 = fs.readFileSync('scripts/sp550-fork/run-a7.sh', 'utf8');
+        expect(a7).toMatch(/printf '%s\\n' "\$FORK_URL" \| pnpm exec tsx scripts\/sp550-readback-compare\.ts --fork-url-stdin/);
+    });
+    it('the read-back reads --fork-url-stdin and does not print it, with no SP550_FORK_URL in its environment', () => {
         const SECRET = 'SECRETKEY' + Date.now();
-        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proxy-'));
-        const port = 29000 + Math.floor(Math.random() * 900);
-        // The real helper, called as the scripts call it, plus the test-only loopback switch as its optional third argument.
-        const script = `set -e
-. scripts/sp550-fork/upstream-proxy.sh
-start_upstream_proxy ${port} "${dir}" --test-loopback-upstream
-echo "ENV_AFTER=[\${SP550_FORK_URL:-}]"
-echo "CHILD_ENV=[$(env | grep -c SP550_FORK_URL || true)]"
-curl -s -X POST "$UPSTREAM" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":7,"method":"eth_chainId","params":[]}'; echo
-ps -o command= -p "$(cat "${dir}/upstream-proxy.pid")"
-if start_upstream_proxy ${port} "${dir}" --test-loopback-upstream 2>/dev/null; then echo SECOND=started; else echo SECOND=refused; fi
-kill "$(cat "${dir}/upstream-proxy.pid")"`;
-        const { spawn } = await import('node:child_process');
-        const out = await new Promise<string>((ok, no) => {
-            const ch = spawn('bash', ['-c', script], { env: { ...process.env, SP550_FORK_URL: `http://127.0.0.1:${upPort}/v2/${SECRET}` }, stdio: ['ignore', 'pipe', 'pipe'] });
-            let o = ''; ch.stdout.on('data', (d) => (o += d)); ch.stderr.on('data', (d) => (o += d));
-            ch.on('close', (code) => (code === 0 ? ok(o) : no(new Error(`exit ${code}: ${o}`))));
-        });
-        up.close();
-        expect(out).toContain('ENV_AFTER=[]');
-        expect(out).toContain('CHILD_ENV=[0]');
-        expect(out).toMatch(/"id":7,"result":"0xaa36a7"/);
-        expect(out).not.toContain(SECRET); // the proxy's argv (ps) included
-        expect(out).toContain('SECOND=refused'); // a port already in use is refused, the running proxy's pid file kept
-        expect(fs.readFileSync(path.join(dir, 'upstream-proxy.log'), 'utf8')).not.toContain(SECRET);
-    }, 60_000);
-    it('a failing upstream answers 502 without the URL, and a loopback upstream is refused without the test switch', async () => {
-        const SECRET = 'SECRETKEY' + Date.now();
-        const port = 29900 + Math.floor(Math.random() * 90);
-        const { spawn } = await import('node:child_process');
-        const p = spawn('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port), '--test-loopback-upstream'], { stdio: ['pipe', 'pipe', 'pipe'] });
-        let log = ''; p.stdout.on('data', (c) => (log += c)); p.stderr.on('data', (c) => (log += c));
-        p.stdin.end(`http://127.0.0.1:1/v2/${SECRET}\n`);
-        for (let i = 0; i < 40 && !log.includes('READY'); i++) await new Promise((ok) => setTimeout(ok, 100));
-        const r = await fetch(`http://127.0.0.1:${port}`, { method: 'POST', body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' });
-        const body = await r.text();
-        p.kill();
-        expect(r.status).toBe(502);
-        expect(body + log).not.toContain(SECRET);
-        const refused = (() => { try { execFileSync('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port + 1)], { input: 'http://127.0.0.1:8545\n', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); return ''; } catch (e: any) { return String(e.stderr); } })();
-        expect(refused).toMatch(/loopback address/);
-    }, 60_000);
-    it('the forwarder sends URL credentials as a header, withholds non-JSON pages, scrubs URL parts from JSON, survives an aborted upload', async () => {
-        const http = await import('node:http');
-        const net = await import('node:net');
-        let seenAuth = '', seenPath = '';
-        const up = http.createServer((req, res) => {
-            seenAuth = String(req.headers.authorization ?? ''); seenPath = String(req.url);
-            let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
-                const m = JSON.parse(b).method;
-                if (m === 'html') { res.writeHead(500, { 'content-type': 'text/html' }).end('<html>error for /v2/SECRETPATH42</html>'); return; }
-                res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { message: 'bad request to http://u:p@127.0.0.1/v2/SECRETPATH42' } }));
-            });
-        });
-        await new Promise<void>((ok) => up.listen(0, '127.0.0.1', () => ok()));
-        const upPort = (up.address() as any).port;
-        const port = 29500 + Math.floor(Math.random() * 300);
-        const { spawn } = await import('node:child_process');
-        const p = spawn('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port), '--test-loopback-upstream'], { stdio: ['pipe', 'pipe', 'pipe'] });
-        let log = ''; p.stdout.on('data', (c) => (log += c)); p.stderr.on('data', (c) => (log += c));
-        p.stdin.end(`http://alice:s3cr3tpass@127.0.0.1:${upPort}/v2/SECRETPATH42\n`);
-        for (let i = 0; i < 40 && !log.includes('READY'); i++) await new Promise((ok) => setTimeout(ok, 100));
+        const { SP550_FORK_URL: _drop, ...env } = process.env;
+        let out = '';
         try {
-            const post = (method: string) => fetch(`http://127.0.0.1:${port}`, { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: [] }) });
-            const j = await (await post('eth_chainId')).text();
-            expect(seenAuth).toBe('Basic ' + Buffer.from('alice:s3cr3tpass').toString('base64'));
-            expect(seenPath).toBe('/v2/SECRETPATH42');
-            expect(j).not.toMatch(/SECRETPATH42|s3cr3tpass/);
-            const h = await post('html');
-            expect(h.status).toBe(502);
-            expect(await h.text()).toMatch(/non-JSON body withheld/);
-            // An upload that dies half way: the proxy must keep serving.
-            await new Promise<void>((ok) => { const c = net.connect(port, '127.0.0.1', () => { c.write('POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\n{"js'); setTimeout(() => { c.destroy(); ok(); }, 100); }); });
-            await new Promise((ok) => setTimeout(ok, 200));
-            expect((await post('eth_chainId')).status).toBe(200);
-            expect(log).not.toMatch(/SECRETPATH42|s3cr3tpass/);
-        } finally { p.kill(); up.close(); }
+            out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-readback-compare.ts', '--fork-url-stdin', '--network', 'sepolia', '--rpc', 'http://127.0.0.1:9'],
+                { input: `https://sepolia.example/v2/${SECRET}\n`, encoding: 'utf8', env, stdio: ['pipe', 'pipe', 'pipe'] });
+        } catch (e: any) { out = String(e.stdout) + String(e.stderr); }
+        expect(out.length).toBeGreaterThan(0);
+        expect(out).not.toContain(SECRET);
     }, 60_000);
+    it('the E2E starts Alto with an environment without SP550_FORK_URL (childEnv), and pinned', () => {
+        expect(childEnv({ A: '1', SP550_FORK_URL: 'https://x/v2/k' } as any)).toEqual({ A: '1' });
+        const src = fs.readFileSync('scripts/sp550-live-e2e.ts', 'utf8');
+        expect(src).toMatch(/'@pimlico\/alto@0\.0\.21'[\s\S]*?\{ stdio: 'ignore', env: childEnv\(\) \}/);
+    });
 });

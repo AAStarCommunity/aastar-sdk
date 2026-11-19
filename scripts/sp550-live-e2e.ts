@@ -105,7 +105,7 @@ import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
 import { createHash } from 'crypto';
-import { gasParamsDiff, gasParamsOf, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { childEnv, gasParamsDiff, gasParamsOf, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -128,11 +128,6 @@ function installUrlRedaction(urls: readonly string[]) {
     // A rejection nothing awaited would otherwise be printed by node itself, outside the console wrapper.
     process.on('unhandledRejection', (e: any) => fail(`unhandled rejection: ${String(e?.shortMessage ?? e?.message ?? e)}`));
 }
-/** M3 (Daybreak): a child's environment without the fork source (SP550_FORK_URL usually carries a provider key). */
-const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
-    const { SP550_FORK_URL: _drop, ...rest } = env;
-    return rest;
-};
 const refuse = (m: string): never => { console.error(`refused: ${m}`); process.exit(2); };
 const fail = (m: string): never => { console.error(`❌ ${m}`); process.exit(1); };
 const result = (line: string) => console.log(`RESULT ${line}`);
@@ -479,6 +474,7 @@ async function main() {
         }
         st.lastSignedHash = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
         const sig = await base.signMessage(a);
+        st.lastSignature = sig;
         onSigned?.(st.lastSignedHash);
         return sig;
     } };
@@ -802,8 +798,10 @@ async function main() {
             await recheck('C12');
             const epNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
             // Two signatures: the op, then its one handleOps transaction (checked against this op before signing).
-            st.expect = { chainId: net.chainId, entryPoint: getAddress(ep), sender: account, nonce: epNonce, paymaster: getAddress(sp), beneficiary: getAddress(base.address), ...c12Caps };
-            st.lastSignedHash = undefined; st.txSigns = 0;
+            // The EOA's next nonce, taken now: C12's one transaction must use it (it cannot replace another pending tx).
+            const txNonce = await pub.getTransactionCount({ address: base.address, blockTag: 'pending' });
+            st.expect = { txNonce, chainId: net.chainId, entryPoint: getAddress(ep), sender: account, nonce: epNonce, paymaster: getAddress(sp), beneficiary: getAddress(base.address), ...c12Caps };
+            st.lastSignedHash = undefined; st.lastSignature = undefined; st.txSigns = 0;
             signBudget = 2; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,

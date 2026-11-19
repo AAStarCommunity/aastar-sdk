@@ -16,8 +16,8 @@
 # into its own FOUNDRY_DIR, never the shared ~/.foundry) must be the commit SP's A7 ran on
 # (A7_ANVIL_COMMIT): stable 1.7.1 has no Amsterdam, 1.8.6 prices Amsterdam CREATE wrongly.
 # Env:
-#   SP550_FORK_URL       archive Sepolia RPC (publicnode prunes old state). Never logged, and in no child's argv or
-#                        env: it usually embeds a provider key, so stage 1 puts it behind a loopback forwarder.
+#   SP550_FORK_URL       archive Sepolia RPC (publicnode prunes old state). Never logged and in no child's env (unset
+#                        here; the read-back reads it on stdin); anvil's --fork-url argv is the one exception (FU-127).
 #   ULTRARELAY_DIR       UltraRelay-AAStar / Alto checkout for the local bundler.
 #   SP550_A7_HARDFORK    --load-state only; default amsterdam (SP's A7 anvil).
 #   SP550_A7_DEPLOY_CMD  deploy mode only: a command run inside the SP checkout with RPC_URL /
@@ -42,6 +42,8 @@
 #     the Amsterdam first-write state-gas case) must succeed                 e2e.log
 # The last line of run.log is "A7 PASS" or "A7 FAIL at stage <n>".
 set -euo pipefail
+# First, before any child runs (even `anvil --version`): take the fork source and unset it (Daybreak #468 M3).
+FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"; unset SP550_FORK_URL
 export PATH="$HOME/.foundry/bin:$PATH"
 # The anvil build SP's A7 ran on (DSR, 2026-11-11): 1.8.7-nightly.
 A7_ANVIL_COMMIT=4e8874b2bdc840929585ca73e170993c50a4a531
@@ -73,8 +75,9 @@ else
   [ -z "$EXPECT$READBACK" ] || { echo "--expect-sha256 / --readback go with --load-state" >&2; exit 2; }
   : "${SP550_A7_DEPLOY_CMD:?deploy mode: set SP550_A7_DEPLOY_CMD (or use --load-state for the A7 run)}"
 fi
-# The fork source (SP550_FORK_URL, usually with a provider key) reaches no child's argv or environment: stage 1 moves it
-# behind a loopback proxy (upstream-proxy.sh) and every child gets $UPSTREAM = http://127.0.0.1:28599 (Daybreak M3).
+# The fork source (SP550_FORK_URL, usually with a provider key): read into a shell variable and UNSET from the
+# environment, so no child inherits it (Daybreak #468 M3). The read-back gets it on stdin; anvil gets it as --fork-url
+# (anvil has no env / file form for it: visible to local `ps`, outside the threat model, FU-127).
 SDK="$(cd "$(dirname "$0")/../.." && pwd)"; RPC=http://127.0.0.1:28546; BUNDLER=http://127.0.0.1:3046
 # Usage errors exit 2 before <out>/run.log is touched, so a refused start never wipes a previous run's log.
 [[ "$OPERATOR" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "operator must be an address" >&2; exit 2; }
@@ -87,7 +90,7 @@ case "$OUT" in /*) OUT_ABS="$OUT";; *) OUT_ABS="$PWD/$OUT";; esac; OUT_ABS="${OU
 DIRTY=$(git -C "$SDK" status --porcelain --untracked-files=all | while IFS= read -r line; do
   path="${line:3}"; case "$SDK/$path" in ("$OUT_ABS"/*|"$OUT_ABS") ;; (*) echo "$line";; esac; done)
 [ -z "$DIRTY" ] || { echo "the SDK checkout is not at a clean commit; A7 evidence must name the commit it ran. Commit, discard or move:" >&2; echo "$DIRTY" | head -20 >&2; exit 2; }
-for port in 28546 3046 28599; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
+for port in 28546 3046; do ! lsof -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || { echo "port $port is in use; stop the previous fork first" >&2; exit 2; }; done
 mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"; LOG="$OUT/run.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
 STAGE=0
@@ -95,12 +98,12 @@ FAILED=0
 fail() { FAILED=1; log "A7 FAIL at stage $STAGE: $*"; exit 1; }
 # pid files left in a reused <out> name processes this run did not start (possibly reused pids):
 # drop them before the trap, so cleanup only ever kills what this invocation wrote.
-rm -f "$OUT/anvil.pid" "$OUT/ultrarelay.pid" "$OUT/upstream-proxy.pid"
+rm -f "$OUT/anvil.pid" "$OUT/ultrarelay.pid"
 # Any exit under set -e (not only fail) still ends run.log with the stage it stopped at.
 cleanup() {
   local rc=$?
   [ "$rc" = 0 ] || [ "$FAILED" = 1 ] || log "A7 FAIL at stage $STAGE: exited $rc (see the stage log)"
-  for p in ultrarelay anvil upstream-proxy; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done
+  for p in ultrarelay anvil; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done
   exit "$rc"
 }
 trap cleanup EXIT
@@ -110,16 +113,14 @@ log "anvil: $("$ANVIL" --version | tr '\n' ' ')"
 log "bundler: UltraRelay @ $(git -C "$ULTRARELAY_DIR" rev-parse HEAD 2>/dev/null || echo '(not a git checkout)') · package $(node -p "require('$ULTRARELAY_DIR/package.json').version" 2>/dev/null || echo '?')"
 
 STAGE=1
-. "$SDK/scripts/sp550-fork/upstream-proxy.sh"
-start_upstream_proxy 28599 "$OUT" || fail "upstream proxy (upstream-proxy.log)"
 if [ -n "$DUMP" ]; then
-  "$ANVIL" --fork-url "$UPSTREAM" --fork-block-number "$FORK_BLOCK" --chain-id 11155111 --hardfork "$HARDFORK" --load-state "$DUMP" \
+  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --chain-id 11155111 --hardfork "$HARDFORK" --load-state "$DUMP" \
         --host 127.0.0.1 --port 28546 --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
 else
   # Deploy mode (a rehearsal of this script): the default anvil keeps its own hardfork; a pinned
   # --anvil runs the chain's real tier, so the bundler is exercised on Amsterdam blocks too.
   HF_ARG=(); [ "$ANVIL" = anvil ] || HF_ARG=(--hardfork "$HARDFORK")
-  "$ANVIL" --fork-url "$UPSTREAM" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port 28546 --auto-impersonate --silent ${HF_ARG[@]+"${HF_ARG[@]}"} > "$OUT/anvil.log" 2>&1 &  # bash 3.2: empty array under set -u
+  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port 28546 --auto-impersonate --silent ${HF_ARG[@]+"${HF_ARG[@]}"} > "$OUT/anvil.log" 2>&1 &  # bash 3.2: empty array under set -u
 fi
 echo $! > "$OUT/anvil.pid"
 for _ in $(seq 1 60); do cast block-number --rpc-url $RPC >/dev/null 2>&1 && break; sleep 1; done
@@ -142,8 +143,8 @@ STAGE=2
   || fail "read-back gate on the manifest pins: $(grep -E '^❌' "$OUT/gate.log" | head -3 | tr '\n' ' ') (gate.log)"
 log "stage 2a ok: $(grep -c '^✅' "$OUT/gate.log") gate checks on the manifest pins (gate.log)"
 if [ -n "$DUMP" ]; then
-  # The upstream for the Amsterdam checks and the probe's live side: the loopback proxy, never the provider URL.
-  (cd "$SDK" && SP550_FORK_URL="$UPSTREAM" pnpm exec tsx scripts/sp550-readback-compare.ts --upstream-proxy --network sepolia --readback "$READBACK" --pins "$PINS" --rpc $RPC --allow-rc \
+  # The upstream for the Amsterdam checks and the probe's live side, on stdin (printf is a builtin: no argv, no env).
+  (cd "$SDK" && printf '%s\n' "$FORK_URL" | pnpm exec tsx scripts/sp550-readback-compare.ts --fork-url-stdin --network sepolia --readback "$READBACK" --pins "$PINS" --rpc $RPC --allow-rc \
       --fork-block "$FORK_BLOCK" --dump-sha256 "$GOT" --anvil-commit "$A7_ANVIL_COMMIT" --hardfork "$HARDFORK" --sp-commit "$SP_COMMIT" --probe) > "$OUT/readback.log" 2>&1 \
     || fail "SP's read-back does not match: $(grep -E '^❌' "$OUT/readback.log" | head -3 | tr '\n' ' ') (readback.log)"
   log "stage 2b ok: SP's read-back $(shasum -a 256 "$READBACK" | cut -c1-64) matches the pins and the SDK's reads (readback.log)"

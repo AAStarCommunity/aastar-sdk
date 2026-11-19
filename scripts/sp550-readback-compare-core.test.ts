@@ -6,10 +6,9 @@ import * as path from 'path';
 import { BaseError, ContractFunctionExecutionError, ContractFunctionRevertedError, ContractFunctionZeroDataError, type Abi } from 'viem';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
-import { isLoopbackUrl } from './sp550-pin-fill-core.js';
 import {
     AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
-    classifyCallError, contractKeyOf, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, upstreamUrlProblem, type ChainReader, type Measured, type Observed,
+    classifyCallError, contractKeyOf, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
@@ -553,16 +552,5 @@ describe('the comparator validates by network: a coexisting stack\'s overlap and
         SP550_COEXIST_HOLDS['sepolia-rc8'] = 'held for test';
         try { expect(await readbackProblems({}, PINS, ctx, reader())).toContainEqual('pins: release hold: held for test'); }
         finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
-    });
-});
-
-describe('upstreamUrlProblem (Daybreak #468 M3): the upstream is the remote chain, or exactly the loopback forwarder', () => {
-    it('without --upstream-proxy a loopback URL is refused and a remote one accepted', () => {
-        expect(upstreamUrlProblem(isLoopbackUrl('http://127.0.0.1:28599'), false)).toMatch(/loopback URL/);
-        expect(upstreamUrlProblem(isLoopbackUrl('https://sepolia.example/v2/k'), false)).toBeUndefined();
-    });
-    it('with --upstream-proxy only the loopback forwarder is accepted', () => {
-        expect(upstreamUrlProblem(isLoopbackUrl('http://127.0.0.1:28599'), true)).toBeUndefined();
-        expect(upstreamUrlProblem(isLoopbackUrl('https://sepolia.example/v2/k'), true)).toMatch(/must be the loopback forwarder/);
     });
 });

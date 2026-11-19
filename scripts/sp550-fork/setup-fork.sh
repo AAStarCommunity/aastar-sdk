@@ -9,6 +9,8 @@
 #
 # Usage: setup-fork.sh <sp checkout at fbd74fb1> <out dir> [fork block]
 set -euo pipefail
+# First, before any child runs (even `anvil --version`): take the fork source and unset it (Daybreak #468 M3).
+FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"; unset SP550_FORK_URL
 SPW="$1"; OUT="$2"; FORK_BLOCK="${3:-12090052}"
 # SP550_FORGE_ARGS: extra forge script flags, e.g. --gas-estimate-multiplier 300: forge simulates gas on
 # foundry.toml's evm_version (cancun), which under-provisions Amsterdam state gas. Not --evm-version: it recompiles.
@@ -17,7 +19,8 @@ export PATH="${SP550_FOUNDRY_BIN:-$HOME/.foundry/bin}:$PATH"
 PORT=28546; RPC="http://127.0.0.1:$PORT"
 # Fork source. The public node prunes old state and anvil reads untouched slots lazily, so a long
 # run can fail mid-op with "pruned history unavailable"; point SP550_FORK_URL at an archive node.
-# Never logged and never in a child's argv / env: it usually embeds a provider key (upstream-proxy.sh, Daybreak M3).
+# Never logged and in no child's env (unset below): it usually embeds a provider key (Daybreak #468 M3); anvil's
+# --fork-url argv is the one exception (anvil has no env / file form; FU-127).
 mkdir -p "$OUT" "$SPW/cache/sdk-fork"; OUT="$(cd "$OUT" && pwd)"; rm -f "$SPW/cache/sdk-fork/config.sepolia-fork.json"
 LOG="$OUT/setup.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
@@ -34,12 +37,10 @@ PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
 if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
   log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
 else
-  rm -f "$OUT/anvil.pid" "$OUT/upstream-proxy.pid"   # only pids this invocation writes are ever killed
-  . "$(dirname "$0")/upstream-proxy.sh"
-  start_upstream_proxy 28599 "$OUT" || { log "upstream proxy did not start"; exit 1; }
-  # A failed setup stops the processes it started (proxy, anvil); a successful one leaves them for the run.
-  trap 'rc=$?; if [ "$rc" != 0 ]; then for p in anvil upstream-proxy; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done; fi' EXIT
-  anvil --fork-url "$UPSTREAM" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+  rm -f "$OUT/anvil.pid"   # only a pid this invocation writes is ever killed
+  # A failed setup stops the anvil it started; a successful one leaves it for the run.
+  trap 'rc=$?; if [ "$rc" != 0 ] && [ -f "$OUT/anvil.pid" ]; then kill "$(cat "$OUT/anvil.pid")" 2>/dev/null || true; fi' EXIT
+  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
   echo $! > "$OUT/anvil.pid"
   for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
   log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"

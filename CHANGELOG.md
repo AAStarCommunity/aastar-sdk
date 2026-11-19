@@ -23,7 +23,7 @@ All notable changes to this project will be documented in this file.
   chain id); C12's handleOps transaction is checked field by field before the key signs it (`c12Caps` required);
   `SP.gasParams()` is in the signing snapshot, held to the required `expectGasParams` release tuple (replaces
   `expectMinPostOpGas`) and re-read in each inclusion block; no configured URL reaches the output; the fork source
-  sits behind a loopback forwarder (no child argv / env carries it); S1r names any signed op before it can stop.
+  is taken and unset before any child runs (the read-back reads it on stdin; anvil's `--fork-url` argv is FU-127); S1r names any signed op before it can stop.
 - Fork mode for the joint rehearsal: `gate.deployLiveConfig` (fork only) holds a DeployLive config's addresses to fork
   checks (anvil client on the network's chain id, code at every address, SuperPaymaster's wiring) instead of the
   read-back gate, and `taskPlan` (SP's three-arm plan, pinned by sha256) supplies T and must match the run's chain,

@@ -161,6 +161,10 @@ export type C12TxExpectation = {
     entryPoint: Address;
     /** The userOpHash the user's key signed for this op (captured at signMessage). */
     userOpHash: Hex;
+    /** The signature bytes signMessage returned for it: op.signature must be exactly these (the hash omits them). */
+    userOpSignature: Hex;
+    /** The EOA's pending nonce snapshotted before C12: the transaction must use it (no replacing another pending tx). */
+    txNonce: number;
     sender: Address;
     nonce: bigint;
     paymaster: Address;
@@ -197,11 +201,23 @@ export function packedUserOpHashV07(op: { sender: Address; nonce: bigint; initCo
 export function c12TransactionProblems(tx: any, w: C12TxExpectation): string[] {
     const p: string[] = [];
     if (tx === null || typeof tx !== 'object') return ['not a transaction request'];
+    // Strict field table (Daybreak #468 M2): every key must be known. viem itself hands the signer its own bookkeeping
+    // keys (account, chain, from, nonceManager) and some forbidden fields as undefined; each is held to the one value
+    // C12 allows. Anything else — input, an unknown field — is refused.
+    const SERIALIZED = ['type', 'chainId', 'to', 'value', 'data', 'gas', 'maxFeePerGas', 'maxPriorityFeePerGas', 'nonce', 'accessList'];
+    const MUST_BE_UNSET = ['gasPrice', 'blobs', 'blobVersionedHashes', 'maxFeePerBlobGas', 'sidecars', 'kzg', 'authorizationList', 'nonceManager'];
+    const BOOKKEEPING = ['account', 'chain', 'from'];
+    const unknown = Object.keys(tx).filter((k) => ![...SERIALIZED, ...MUST_BE_UNSET, ...BOOKKEEPING].includes(k));
+    if (unknown.length) p.push(`unrecognised transaction field(s) ${unknown.join(', ')}`);
+    for (const k of MUST_BE_UNSET) if (tx[k] !== undefined) p.push(`${k} is not part of C12's transaction`);
+    const addrOf = (v: any) => (typeof v === 'string' ? v : typeof v?.address === 'string' ? v.address : undefined);
+    for (const k of ['from', 'account'] as const) {
+        if (tx[k] !== undefined && (addrOf(tx[k]) === undefined || getAddress(addrOf(tx[k])!) !== getAddress(w.beneficiary))) p.push(`${k} is not the user's EOA ${w.beneficiary}`);
+    }
+    if (tx.chain !== undefined && Number(tx.chain?.id) !== w.chainId) p.push(`chain ${tx.chain?.id} is not ${w.chainId}`);
     // EIP-1559 only: a legacy gasPrice or blob fees would be charged outside maxGas x maxFeePerGas (Codex 468-d1).
     if (tx.type !== 'eip1559') p.push(`transaction type ${JSON.stringify(tx.type)} is not eip1559`);
-    for (const k of ['gasPrice', 'blobs', 'blobVersionedHashes', 'maxFeePerBlobGas', 'sidecars', 'kzg', 'authorizationList'] as const) {
-        if (tx[k] !== undefined) p.push(`${k} is not part of C12's transaction`);
-    }
+    if (tx.nonce === undefined || Number(tx.nonce) !== w.txNonce) p.push(`nonce ${tx.nonce} is not the EOA's pending nonce ${w.txNonce}`);
     if (tx.accessList !== undefined && !(Array.isArray(tx.accessList) && tx.accessList.length === 0)) p.push('a non-empty accessList is not part of C12\'s transaction');
     if (tx.chainId === undefined || Number(tx.chainId) !== w.chainId) p.push(`chainId ${tx.chainId} is not ${w.chainId}`);
     if (typeof tx.to !== 'string' || getAddress(tx.to) !== getAddress(w.entryPoint)) p.push(`to ${tx.to} is not the EntryPoint ${w.entryPoint}`);
@@ -223,6 +239,7 @@ export function c12TransactionProblems(tx: any, w: C12TxExpectation): string[] {
     if (BigInt(op.nonce) !== w.nonce) p.push(`op nonce ${op.nonce} is not ${w.nonce}`);
     if (size(op.paymasterAndData) < 20 || getAddress(slice(op.paymasterAndData, 0, 20)) !== getAddress(w.paymaster)) p.push(`op paymaster is not ${w.paymaster}`);
     if (packedUserOpHashV07(op, w.entryPoint, w.chainId).toLowerCase() !== w.userOpHash.toLowerCase()) p.push('the op in the calldata is not the op whose hash was signed');
+    if (String(op.signature).toLowerCase() !== String(w.userOpSignature).toLowerCase()) p.push('the op\'s signature is not the bytes the user\'s key returned');
     return p;
 }
 
@@ -252,8 +269,9 @@ export function redactUrls(text: string, urls: readonly string[]): string {
 /** The signer state C12's transaction is checked against (sp550-live-e2e.ts owns it; mutable). */
 export type C12SignState = {
     allowTx: boolean;
-    expect?: Omit<C12TxExpectation, 'userOpHash'>;
+    expect?: Omit<C12TxExpectation, 'userOpHash' | 'userOpSignature'>;
     lastSignedHash?: Hex;
+    lastSignature?: Hex;
     signs: number;
     txSigns: number;
     signBudget: number;
@@ -269,8 +287,8 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     if (!st.allowTx || !st.expect) throw new Error('the user key signs no transaction outside C12 (a direct handleOps send would pay from the author\'s ETH); refused');
     if (st.txSigns >= 1) throw new Error('C12 signs exactly one transaction; a second one is refused');
     if (st.signs + st.txSigns >= st.signBudget) throw new Error(`signature budget exhausted (${st.signBudget}); refused`);
-    if (!st.lastSignedHash) throw new Error('C12: no UserOperation was signed before the transaction; refused');
-    const bad = c12TransactionProblems(tx, { ...st.expect, userOpHash: st.lastSignedHash });
+    if (!st.lastSignedHash || !st.lastSignature) throw new Error('C12: no UserOperation was signed before the transaction; refused');
+    const bad = c12TransactionProblems(tx, { ...st.expect, userOpHash: st.lastSignedHash, userOpSignature: st.lastSignature });
     if (bad.length) throw new Error(`C12 transaction refused before signing: ${bad.join('; ')}`);
     // The slot is taken synchronously, before the first await: a concurrent call sees it used (Codex 468-d2). A refusal
     // by beforeSign keeps it taken; nothing was signed and the cell fails.
@@ -296,3 +314,9 @@ export function snapshotChanges<T extends Record<string, unknown>>(gated: T, now
     return (Object.keys(gated) as (keyof T & string)[]).filter((k) => k !== 'blockNumber' && String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase())
         .map((k) => `${k} ${String(gated[k])} -> ${String(now[k])}`);
 }
+
+/** Daybreak #468 M3: a child's environment without the fork source (SP550_FORK_URL usually carries a provider key). */
+export const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
+    const { SP550_FORK_URL: _drop, ...rest } = env;
+    return rest;
+};

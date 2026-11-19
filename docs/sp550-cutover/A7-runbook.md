@@ -151,6 +151,10 @@ pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 
 
 `expectGasParams` 必须写上 rc.8 发布元组的四个值（500,000 / 450,000 / 5,000 / 450,000，SuperPaymasterStorage.sol:232）。E2E 在门检那一块把链上 `gasParams()` 的四项和 pending 提案一起快照，与它逐项比对，不相等就拒绝；之后每次签名（含 C12 的交易签名）前在同一块重读并与快照比对；每笔 op 上链后，再在打包它的那一块读 `gasParams()`，必须等于签名时的快照。缺任何一项、或仍写旧的 `expectMinPostOpGas`，E2E 直接拒绝运行。
 
+**C12 与部署者的 nonce（DSR）。** 批准签名者表里 Sepolia 的地址 0x51Ac…b8A3 也是部署者；C12 会从这个 EOA 发一笔外层 handleOps 交易，使它在 Sepolia 上的 nonce 加一。所以 **C12（以及任何从该 EOA 发交易的步骤）不得在“DeployLive 预测 / PoP 导出”与“DeployLive 广播”之间运行**；之后若要在同一条链上再做一次全新部署，PoP 必须在这些步骤之后重新导出。
+
+**分叉演练的网络（FU-127）。** 分叉模式下 Alto 监听所有网卡（0.0.0.0，没有选项改），带着公开执行者密钥、debug 端点开着：不要在不受信任的网络上跑分叉演练，或先用系统防火墙挡掉入站连接。
+
 **S1r 没有以“被拒”结束时（§S1r，Daybreak M4）。** S1r 签名后，E2E 会先打印一行 `S1r SIGNED OP: opHash … sender … nonce … validAfter …`，同样的字段也写进该行 RESULT。如果这一格不是以“rejected not yet valid at send”结束（例如 ACCEPTED、OUTCOME UNKNOWN、或运行中途退出），这笔签过的 op 在 validAfter 之后仍可能被某个 bundler 执行。**下一步只做一件事**：用同一个 nonce 发一笔正常 op（S1 那样的一笔赞助），让它把那个 nonce 用掉；在 EntryPoint 的 `getNonce(account, 0)` 超过打印的 nonce 之前，不继续后续场景、不重跑。
 
 `c12Caps` 是 C12 那笔 handleOps 交易的显式上限：`maxGas` × `maxFeePerGasWei` 就是这一格 EOA 最多花的 ETH。用户密钥签这笔交易之前，E2E 先逐项核对：恰好一笔；chainId；`to` 是 EntryPoint；value 为 0；calldata 规范编码为 `handleOps`，只含一个 op，它的哈希就是刚签过的 userOpHash（sender、nonce、paymaster 也逐项比对），beneficiary 是用户 EOA；gas 与 fee 不超过上限。任何一项不符就不签。交易签名也计入这一格的签名预算（op 一次 + 交易一次）。

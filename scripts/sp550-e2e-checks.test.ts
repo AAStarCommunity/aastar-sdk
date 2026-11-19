@@ -180,15 +180,15 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
     const HASH = getUserOperationHash({ chainId: CHAIN, entryPointAddress: EP, entryPointVersion: '0.7', userOperation: u as any });
     const HANDLE = parseAbi(['function handleOps((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature)[] ops, address beneficiary)']);
     const data = (ops = [packed], ben: `0x${string}` = EOA) => encodeFunctionData({ abi: HANDLE, functionName: 'handleOps', args: [ops as any, ben] });
-    const good = () => ({ type: 'eip1559', chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n });
-    const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n });
-    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, signs: 1, txSigns: 0, signBudget: 2, ...over });
+    const good = () => ({ type: 'eip1559', chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n, nonce: 3 });
+    const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n, txNonce: 3 });
+    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, ...over });
 
     it('the off-chain hash of the packed op equals viem\'s v0.7 getUserOperationHash', () => {
         expect(packedUserOpHashV07(packed, EP, CHAIN)).toBe(HASH);
     });
     it('the expected handleOps passes and is signed exactly once', async () => {
-        expect(c12TransactionProblems(good(), { ...expectOf(), userOpHash: HASH })).toEqual([]);
+        expect(c12TransactionProblems(good(), { ...expectOf(), userOpHash: HASH, userOpSignature: REAL })).toEqual([]);
         let n = 0; const st = state();
         await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).resolves.toBe('0xsig');
         expect(n).toBe(1); expect(st.txSigns).toBe(1);
@@ -219,8 +219,8 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
             }
         } });
         const w = createWalletClient({ account: account as any, chain: { ...sepolia }, transport });
-        await w.writeContract({ address: EP, abi: HANDLE, functionName: 'handleOps', args: [[packed as any], EOA], gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n } as any);
-        expect(c12TransactionProblems(seen, { ...expectOf(), userOpHash: HASH })).toEqual([]);
+        await w.writeContract({ address: EP, abi: HANDLE, functionName: 'handleOps', args: [[packed as any], acct.address], gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n } as any);
+        expect(c12TransactionProblems(seen, { ...expectOf(), beneficiary: acct.address, userOpHash: HASH, userOpSignature: REAL })).toEqual([]);
         // What was broadcast is what was checked.
         const tx = parseTransaction(raw!);
         expect(tx.to?.toLowerCase()).toBe(EP.toLowerCase());
@@ -245,6 +245,12 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
         ['blob fields (charged outside the cap)', { ...good(), type: 'eip4844', blobVersionedHashes: ['0x01' + '00'.repeat(31)], maxFeePerBlobGas: 10n ** 18n }, /eip1559|blobVersionedHashes|maxFeePerBlobGas/],
         ['an authorization list', { ...good(), authorizationList: [] }, /authorizationList/],
         ['a non-empty access list', { ...good(), accessList: [{ address: A(1), storageKeys: [] }] }, /accessList/],
+        ['the same op with other signature bytes (the hash omits the signature)', { ...good(), data: data([{ ...packed, signature: ('0x' + '34'.repeat(65)) as Hex }]) }, /signature is not the bytes/],
+        ['another outer nonce (would replace a pending tx)', { ...good(), nonce: 2 }, /nonce 2 is not the EOA's pending nonce 3/],
+        ['an `input` field', { ...good(), input: data() }, /unrecognised transaction field\(s\) input/],
+        ['an unknown field', { ...good(), foo: 1 }, /unrecognised transaction field\(s\) foo/],
+        ['a `from` that is not the EOA', { ...good(), from: A(0xf00) }, /from is not the user's EOA/],
+        ['a nonce manager', { ...good(), nonceManager: {} }, /nonceManager is not part of/],
         ['no op signed first', good(), /no UserOperation was signed/, { lastSignedHash: undefined }],
         ['a budget already spent', good(), /budget exhausted/, { signs: 2 }],
     ];
