@@ -1,4 +1,9 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { createHash } from 'crypto';
+import { spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { concat, createWalletClient, custom, getAddress, encodeAbiParameters, encodeEventTopics, encodeFunctionData, pad, parseAbi, parseTransaction, slice, toHex, type Abi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
@@ -7,7 +12,7 @@ import { getUserOperationHash } from 'viem/account-abstraction';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
-import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, guardedSignMessage, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
+import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
 
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
@@ -183,7 +188,7 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
     const data = (ops = [packed], ben: `0x${string}` = EOA) => encodeFunctionData({ abi: HANDLE, functionName: 'handleOps', args: [ops as any, ben] });
     const good = () => ({ type: 'eip1559', chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n, nonce: 3 });
     const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n, txNonce: 3 });
-    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, txNonceNow: async () => 3, costAtKey: async () => {}, ...over });
+    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, lastSignature: REAL, signs: 1, txSigns: 0, signBudget: 2, txNonceNow: async () => 3, costAtKey: async () => {}, fresh: async () => {}, ...over });
 
     it('the off-chain hash of the packed op equals viem\'s v0.7 getUserOperationHash', () => {
         expect(packedUserOpHashV07(packed, EP, CHAIN)).toBe(HASH);
@@ -330,7 +335,7 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
     const lock = superPaymasterLock;
     // SP's shared vector as a plan: maxCost 1234567890123457, priceCap 3500e8, aPNTs 29999999999999999, fee 137, rate 1.333…
     const sdkLive = { maxCostPerOpWei: '1234567890123457', priceCap: '350000000000', priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137,
-        validationBufferBPS: 1000, exchangeRate: '1333333333333333333', a0: '144032920514403321468', Amax: '160409463576890979119', Xmax: '213879284769187972106', status: 'cleared' };
+        validationBufferBPS: 1000, exchangeRate: '1333333333333333333', a0: '144032920514403321468', Amax: '160409463576890979119', Xmax: '213879284769187972106', status: 'cleared', priceHeadroomBPS: 0 };
     const OP = A(0x0e), X = A(0x0f), S1 = A(0x51), S2 = A(0x52);
     const phaseC = { priceCap: '350000000000', priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137, exchangeRate: '1333333333333333333', addresses: { X } };
     // plans is keyed by SP's three-arm accounts S; this run's account is an extraEndUser.
@@ -365,7 +370,7 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
         expect(signTimeCostProblems(1234567890123457n, { ...now, ethUsdPrice: 300000000000n }, plan, lock)).toEqual([]);
     });
     it.each([
-        ['ETH/USD above priceCap', { ethUsdPrice: 350000000001n }, /above the plan's priceCap/],
+        ['ETH/USD above priceCap', { ethUsdPrice: 350000000001n }, /not within the plan's headroom/],
         ['other price decimals', { priceDecimals: 18n }, /decimals 18 != plan priceDecimals 8/],
         ['aPNTsPriceUSD changed (either way)', { aPNTsPriceUSD: 30000000000000000n }, /aPNTsPriceUSD .* != plan/],
         ['protocolFeeBPS changed', { protocolFeeBPS: 138n }, /protocolFeeBPS 138 != plan 137/],
@@ -375,6 +380,19 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
     });
     it('an op above the plan\'s per-op cost is refused even if the lock would fit', () => {
         expect(signTimeCostProblems(1234567890123458n, { ...now, ethUsdPrice: 1n }, plan, lock)).toContainEqual(expect.stringMatching(/op maxCost .* > plan maxCostPerOpWei/));
+    });
+    it('the headroom is applied in integers: with 500 bps, priceCap x 0.95 passes and one unit above it is refused', () => {
+        const h = { ...plan, priceHeadroomBPS: 500n };
+        const edge = (350000000000n * 9_500n) / 10_000n; // 332500000000, exact
+        expect(signTimeCostProblems(1234567890123457n, { ...now, ethUsdPrice: edge }, h, lock)).toEqual([]);
+        expect(signTimeCostProblems(1234567890123457n, { ...now, ethUsdPrice: edge + 1n }, h, lock)).toContainEqual(expect.stringMatching(/not within the plan's headroom/));
+    });
+    it('the lock is bounded at priceCap, not today\'s price: a cheap price today does not let an op through whose worst-case lock exceeds Xmax', () => {
+        const tight = { ...plan, Xmax: plan.Xmax - 1n };
+        expect(signTimeCostProblems(1234567890123457n, { ...now, ethUsdPrice: 100000000000n }, tight, lock)).toContainEqual(expect.stringMatching(/at the plan's priceCap, above the plan's Xmax_sdk/));
+    });
+    it.each([[undefined], ['500'], [true], [-1], [10000], [0.5]])('priceHeadroomBPS %j is refused, never defaulted', (h) => {
+        expect(sdkLivePlanProblems(bundle({ priceHeadroomBPS: h }), W).problems).toContainEqual(expect.stringMatching(/priceHeadroomBPS must be a JSON integer 0..9999/));
     });
     it('the lock above Xmax is refused (a plan whose Xmax is below what the op would lock)', () => {
         const tight = { ...plan, Xmax: plan.Xmax - 1n };
@@ -400,7 +418,7 @@ describe('guardedSignMessage: the key boundary, driven with a counting key (DSR 
         const approvals = new CostApprovals();
         const io: any = {
             approvals, budget: () => ({ used, limit: 1 }), takeSlot: () => { used++; order.push('slot'); },
-            beforeSign: async () => { order.push('recheck'); }, costAtKey: async (m: bigint) => { order.push(`cost ${m}`); },
+            beforeSign: async () => { order.push('recheck'); }, costAtKey: async (m: bigint) => { order.push(`cost ${m}`); }, fresh: async () => { order.push('fresh'); },
             sign: async () => { keyUses++; order.push('key'); return '0xsig' as Hex; }, ...over,
         };
         return { io, approvals, order, keys: () => keyUses };
@@ -409,7 +427,7 @@ describe('guardedSignMessage: the key boundary, driven with a counting key (DSR 
         const t = setup();
         t.approvals.approve(H, 123n);
         await expect(guardedSignMessage(arg, t.io)).resolves.toBe('0xsig');
-        expect(t.order).toEqual(['slot', 'recheck', 'cost 123', 'key']);
+        expect(t.order).toEqual(['slot', 'recheck', 'cost 123', 'fresh', 'key']);
     });
     it.each([
         ['nothing approved this hash (a path without the hook)', (t: any) => {}, /no cost check approved/],
@@ -417,6 +435,8 @@ describe('guardedSignMessage: the key boundary, driven with a counting key (DSR 
         ['no wiring re-check wired (the pricing block would be stale)', (t: any) => { t.approvals.approve(H, 1n); t.io.beforeSign = undefined; }, /no wiring re-check/],
         ['the budget is spent', (t: any) => { t.approvals.approve(H, 1n); t.io.budget = () => ({ used: 1, limit: 1 }); }, /budget exhausted/],
         ['the wiring re-check refuses', (t: any) => { t.approvals.approve(H, 1n); t.io.beforeSign = async () => { throw new Error('SP changed'); }; }, /SP changed/],
+        ['the head moved too far since the check (fresh refuses)', (t: any) => { t.approvals.approve(H, 1n); t.io.fresh = async () => { throw new Error('the head moved to 12'); }; }, /head moved/],
+        ['no head-freshness check wired', (t: any) => { t.approvals.approve(H, 1n); t.io.fresh = undefined; }, /no head-freshness check/],
     ])('refused, key never used: %s', async (_n, arrange, why) => {
         const t = setup();
         (arrange as any)(t);
@@ -474,7 +494,7 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
     });
     it('a whole bundle emitted with JSON-number integers (as SP emits it) parses losslessly and passes the plan check', () => {
         const acct = A(0xacc), op = A(0x0e), x = A(0x0f), S = A(0x51);
-        const text = `{"plans":{"${S}":{"deploymentContext":{"operator":"${op}"},"phaseC":{"addresses":{"X":"${x}"},"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137}}},"shared":{"extraEndUsers":[{"address":"${acct}","xAmount":12345678901234567890}],"sdkLive":{"Amax":1170320411167255161156,"Xmax":1560427214889673547818,"a0":1050839913053115885028,"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"maxCostPerOpWei":9007199254740993,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137,"sdkCostCapCommit":"${'a'.repeat(40)}","status":"cleared","validationBufferBPS":1000}}}`;
+        const text = `{"plans":{"${S}":{"deploymentContext":{"operator":"${op}"},"phaseC":{"addresses":{"X":"${x}"},"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137}}},"shared":{"extraEndUsers":[{"address":"${acct}","xAmount":12345678901234567890}],"sdkLive":{"Amax":1170320411167255161156,"Xmax":1560427214889673547818,"a0":1050839913053115885028,"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"maxCostPerOpWei":9007199254740993,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137,"sdkCostCapCommit":"${'a'.repeat(40)}","status":"cleared","validationBufferBPS":1000,"priceHeadroomBPS":500}}}`;
         const r = sdkLivePlanProblems(parsePlanJson(text), { opMaxCostWei: 9007199254740993n, account: acct, lock: superPaymasterLock, validationBufferBPS: 1000n });
         expect(r.problems).toEqual([]);
         expect(r.plan).toMatchObject({ Xmax: 1560427214889673547818n, xAmount: 12345678901234567890n, status: 'cleared' });
@@ -520,27 +540,54 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
     });
 });
 
-describe('the cost check is wired into every signing path of sp550-live-e2e.ts (DSR: fail closed)', () => {
-    const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
-    it('the user signer IS guardedSignMessage, with the key-time pricing read at the re-check block', () => {
-        expect(src).toMatch(/signMessage: \(a: any\) => guardedSignMessage\(a, \{/);
-        expect(src).toMatch(/const costAtKey = async \(maxCost: bigint\) => \{[\s\S]{0,120}const at = \{ blockNumber: lastCheckBlock \}/);
-        expect(src).toMatch(/guardedSignMessage\(a, \{[\s\S]{0,800}\n\s*costAtKey,\n/);
-        // C12's outer transaction runs the same check for the UserOp it carries.
-        expect(src).toMatch(/st\.costAtKey = lastSignedMaxCost === undefined \? undefined : \(\) => costAtKey\(lastSignedMaxCost!\);/);
-        expect(src).not.toMatch(/signMessage: async \(a: any\) =>/);
+describe('the cost path, behaviourally (Daybreak #470 L3)', () => {
+    it('headFreshnessProblem: the head may be at most MAX_BLOCKS_SINCE_CHECK (1) past the check block', () => {
+        expect(MAX_BLOCKS_SINCE_CHECK).toBe(1n);
+        expect(headFreshnessProblem(100n, 100n)).toBeUndefined();
+        expect(headFreshnessProblem(100n, 101n)).toBeUndefined();
+        expect(headFreshnessProblem(100n, 102n)).toMatch(/more than 1 block\(s\) past the check block 100/);
     });
-    it('every UserOp submission passes the ceiling and the hook: PaymasterClient (S1 / S1r / S3b via submitOpts) and C12 executeGasless', () => {
-        expect(src).toMatch(/const submitOpts = [^\n]*\n\s*maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,/);
-        expect(src).toMatch(/executeGasless\(\{[\s\S]{0,400}maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook/);
-        const submits = src.match(/PaymasterClient\.submitGaslessUserOperation\(/g) ?? [];
-        const viaOpts = src.match(/PaymasterClient\.submitGaslessUserOperation\([^\n]*submitOpts\(/g) ?? [];
-        expect(submits.length).toBeGreaterThan(0);
-        expect(viaOpts.length).toBe(submits.length);
+    it('readPricingAt pins all four reads to the one block; a failed read fails the check', async () => {
+        const calls: any[] = [];
+        const client = { readContract: async (a: any) => { calls.push(a); return a.functionName === 'cachedPrice' ? [350000000000n, 0n, 0n, 8] : a.functionName === 'exchangeRate' ? 10n ** 18n : 137n; } };
+        const r = await readPricingAt(client, { sp: A(1), token: A(2), spAbi: [], tokenAbi: [], blockNumber: 77n });
+        expect(calls.map((c) => [c.functionName, c.blockNumber])).toEqual([['cachedPrice', 77n], ['aPNTsPriceUSD', 77n], ['protocolFeeBPS', 77n], ['exchangeRate', 77n]]);
+        expect(r).toMatchObject({ ethUsdPrice: 350000000000n, priceDecimals: 8n, exchangeRate: 10n ** 18n });
+        await expect(readPricingAt({ readContract: async () => { throw new Error('rpc down'); } }, { sp: A(1), token: A(2), spAbi: [], tokenAbi: [], blockNumber: 1n })).rejects.toThrow('rpc down');
     });
-    it('the plan is parsed losslessly and its cap matched against its bytes', () => {
-        expect(src).toMatch(/const bundleJson = parsePlanJson\(raw\);/);
-        expect(src).toMatch(/maxCostDigitsProblem\(raw, sdkPlan!\.maxCostPerOpWei\)/);
-        expect(src).not.toMatch(/JSON\.parse\(raw\)/);
+    it('a zero exchange rate (or any rate other than the plan\'s) is refused at the key', () => {
+        const plan: any = { maxCostPerOpWei: 10n, priceCap: 10n, priceDecimals: 8n, aPNTsPriceUSD: 1n, protocolFeeBPS: 0n, validationBufferBPS: 1000n, exchangeRate: 10n ** 18n, Xmax: 10n ** 30n, priceHeadroomBPS: 0n };
+        expect(signTimeCostProblems(1n, { ethUsdPrice: 1n, priceDecimals: 8n, aPNTsPriceUSD: 1n, protocolFeeBPS: 0n, exchangeRate: 0n }, plan, superPaymasterLock)).toContainEqual(expect.stringMatching(/exchangeRate 0 != plan/));
+    });
+    it('readPlanFile: the sha256 is over the raw bytes; a mismatch and invalid UTF-8 are refused', () => {
+        const bytes = new TextEncoder().encode('{"a":1}');
+        const sha = createHash('sha256').update(bytes).digest('hex');
+        expect(readPlanFile('p.json', sha, () => bytes)).toEqual({ raw: '{"a":1}' });
+        expect(readPlanFile('p.json', '0'.repeat(64), () => bytes)).toEqual({ problem: expect.stringMatching(/sha256 .* != the given/) });
+        const bad = new Uint8Array([0x7b, 0xff, 0x7d]);
+        expect(readPlanFile('p.json', createHash('sha256').update(bad).digest('hex'), () => bad)).toEqual({ problem: expect.stringMatching(/not valid UTF-8/) });
+    });
+    it('checkoutContains with real git: an ancestor is contained; no git metadata or a shallow clone without it is not', () => {
+        const git = (a: string[], cwd: string) => spawnSync('git', a, { cwd, encoding: 'utf8' }).status ?? 1;
+        const out = (a: string[], cwd: string) => spawnSync('git', a, { cwd, encoding: 'utf8' }).stdout.trim();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anc-'));
+        const env = ['-c', 'user.email=t@t', '-c', 'user.name=t'];
+        git(['init', '-q'], dir);
+        fs.writeFileSync(path.join(dir, 'a'), '1'); git(['add', 'a'], dir); git([...env, 'commit', '-qm', 'one'], dir);
+        const first = out(['rev-parse', 'HEAD'], dir);
+        fs.writeFileSync(path.join(dir, 'a'), '2'); git(['add', 'a'], dir); git([...env, 'commit', '-qm', 'two'], dir);
+        expect(checkoutContains(dir, first, git)).toBe(true);
+        expect(checkoutContains(dir, 'f'.repeat(40), git)).toBe(false);
+        const shallow = fs.mkdtempSync(path.join(os.tmpdir(), 'shallow-'));
+        git(['clone', '-q', '--depth', '1', `file://${dir}`, shallow], os.tmpdir());
+        expect(checkoutContains(shallow, first, git)).toBe(false);
+        const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'nogit-'));
+        expect(checkoutContains(bare, first, git)).toBe(false);
+    });
+    it('guardedSignMessage refuses before the key when no cost check approved the hash (a path that skipped the hook)', async () => {
+        let keys = 0;
+        const io: any = { approvals: new CostApprovals(), budget: () => ({ used: 0, limit: 1 }), takeSlot: () => {}, beforeSign: async () => {}, costAtKey: async () => {}, fresh: async () => {}, sign: async () => { keys++; return '0x' as Hex; } };
+        await expect(guardedSignMessage({ message: { raw: ('0x' + 'ee'.repeat(32)) as Hex } }, io)).rejects.toThrow(/no cost check approved/);
+        expect(keys).toBe(0);
     });
 });

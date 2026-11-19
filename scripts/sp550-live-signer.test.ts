@@ -246,7 +246,7 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         let out = '';
         try { out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg, '--live-go', 'sepolia', '--live-signer', signer], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
         catch (e: any) { out = String(e.stdout) + String(e.stderr); }
-        expect(out).toMatch(/refused: mode live: taskPlan \(SP's frozen plan, pinned by sha256\) is required/);
+        expect(out).toMatch(/refused: taskPlan \(SP's frozen plan, pinned by sha256\) is required in every mode/);
         expect(out).not.toMatch(/keystore password/);
     }, 60_000);
     it('a live run whose signer is not in the committed approved table for the chain is refused, before any key is loaded (Daybreak H1)', () => {
@@ -292,7 +292,7 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
         } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
     };
     const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 },
-        c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' }, opMaxCostWei: '100000000000000000', expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000' } };
+        c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' }, opMaxCostWei: '100000000000000000', taskPlan: { file: 'plan.json', sha256: '0'.repeat(64) }, expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000' } };
     it('live mode without --live-go is refused', () => {
         const r = run({}, []);
         expect(r.status).toBe(2);
@@ -318,7 +318,7 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
     }, 60_000);
     it('gate.deployLiveConfig and taskPlan + taskToken are refused where they do not belong (before any network read)', () => {
         expect(run({ ...fork, gate: { deployLiveConfig: 'c.json', pinsFile: 'p.json' } }, []).output).toMatch(/refused: gate.deployLiveConfig replaces gate.pinsFile/);
-        expect(run({ ...fork, taskPlan: { file: 'x', sha256: '0'.repeat(64) }, taskToken: '0x' + '11'.repeat(20) }, []).output).toMatch(/refused: taskPlan and taskToken/);
+        expect(run({ ...fork, taskPlan: { file: 'x', sha256: '0'.repeat(64) }, taskToken: '0x' + '11'.repeat(20) }, []).output).toMatch(/refused: taskToken is gone: T comes from SP's plan/);
     }, 60_000);
     it('--preflight with --fork-setup is refused (preflight reads only; Codex M12)', () => {
         const r = run(fork, ['--preflight', '--fork-setup']);
@@ -399,7 +399,7 @@ describe('sp550-live-e2e.ts config: the release gasParams tuple and C12 caps are
         fs.writeFileSync(cfg, JSON.stringify({
             network: 'sepolia', mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 },
             operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20),
-            c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' }, opMaxCostWei: '100000000000000000',
+            c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' }, opMaxCostWei: '100000000000000000', taskPlan: { file: 'plan.json', sha256: '0'.repeat(64) },
             expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000' }, ...extra,
         }));
         try {
@@ -415,6 +415,9 @@ describe('sp550-live-e2e.ts config: the release gasParams tuple and C12 caps are
     it('a gasParams tuple missing a field, or with an unknown one, is refused', () => {
         expect(run({ expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000' } }).output).toMatch(/refused: expectGasParams must give exactly/);
         expect(run({ expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000', x: '1' } }).output).toMatch(/refused: expectGasParams must give exactly/);
+    }, 60_000);
+    it('a fork rehearsal without SP\'s plan is refused too, before any network read (Daybreak #470 M1)', () => {
+        expect(run({ taskPlan: undefined }).output).toMatch(/refused: taskPlan \(SP's frozen plan, pinned by sha256\) is required in every mode/);
     }, 60_000);
     it('the per-UserOp cost ceiling opMaxCostWei is required, before any network read (DSR)', () => {
         expect(run({ opMaxCostWei: undefined }).output).toMatch(/refused: opMaxCostWei \(the per-UserOp cost ceiling, wei, decimal string\) is required/);

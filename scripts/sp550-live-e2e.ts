@@ -107,8 +107,7 @@ import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
-import { createHash } from 'crypto';
-import { CostApprovals, childEnv, guardedSignMessage, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { CostApprovals, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -193,7 +192,6 @@ async function main() {
     if (cfg.mode !== 'fork' && cfg.gate?.switchBook !== undefined) refuse('gate.switchBook is fork-only: a live run is held against the SDK book it ships with');
     if (cfg.mode !== 'fork' && cfg.gate?.deployLiveConfig !== undefined) refuse('gate.deployLiveConfig is fork-only: a live run is held to the read-back gate and the SDK pins');
     if (cfg.gate?.deployLiveConfig !== undefined && (cfg.gate?.pinsFile !== undefined || cfg.gate?.switchBook !== undefined)) refuse('gate.deployLiveConfig replaces gate.pinsFile / gate.switchBook: give one input');
-    if (cfg.taskPlan !== undefined && cfg.taskToken !== undefined) refuse('taskPlan and taskToken: T comes from one of them, never both');
     if (cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is gone: use gate.switchBook, which derives the book from the pins exactly as pin-fill does');
     // H4: a live run is bound to the author's signer address (a blacklist cannot prove a key is private).
     if (cfg.mode === 'live' && (typeof cfg.expectSigner !== 'string' || !isAddress(cfg.expectSigner))) refuse('mode live: config.expectSigner (the author\'s signer address) is required');
@@ -220,7 +218,9 @@ async function main() {
     // DSR: the cost ceiling on every UserOp this run signs, (PVG + VGL + CGL + pmVGL + pmPostOp) x maxFeePerGas, in wei.
     // Required and always on; in live mode it must equal SP's frozen plan (shared.sdkLive.maxCostPerOpWei).
     const opMaxCostWei = typeof cfg.opMaxCostWei === 'string' && /^[1-9][0-9]{0,40}$/.test(cfg.opMaxCostWei) ? BigInt(cfg.opMaxCostWei) : refuse(`opMaxCostWei (the per-UserOp cost ceiling, wei, decimal string) is required (got ${JSON.stringify(cfg.opMaxCostWei)})`);
-    if (cfg.mode === 'live' && cfg.taskPlan === undefined) refuse('mode live: taskPlan (SP\'s frozen plan, pinned by sha256) is required: the per-op cost cap and Xmax_sdk come only from it');
+    // Daybreak #470 M1: in EVERY mode (a fork rehearsal runs the live cost checks), checked before anything is read.
+    if (cfg.taskPlan === undefined) refuse('taskPlan (SP\'s frozen plan, pinned by sha256) is required in every mode: the per-op cost cap and Xmax_sdk come only from it');
+    if (cfg.taskToken !== undefined) refuse('taskToken is gone: T comes from SP\'s plan (taskPlan), required in every mode');
 
     // ---- 2. the read-back gate must pass on these RPCs ----
     const gateRpcs: GateRpc[] = rpcUrls.map((url, i) => ({
@@ -396,12 +396,15 @@ async function main() {
     // and the call this run sends must be byte-equal to its taskCallData (checked once the call is built).
     let plan: { T: Address; taskCallData: Hex; commit?: string } | undefined;
     let sdkPlan: SdkLivePlan | undefined;
-    if (cfg.taskPlan !== undefined) {
+    // Daybreak #470 M1: the plan is required in EVERY mode — a fork rehearsal runs exactly the live checks (parse,
+    // formula, pricing at the key, Xmax_sdk); only the live clearance (status "cleared", commit contained) is live-only.
+    {
         const { file: planFile, sha256 } = cfg.taskPlan ?? {};
-        if (typeof planFile !== 'string' || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(sha256)) refuse('taskPlan needs { file, sha256 (64 hex) }');
-        const raw = fs.readFileSync(planFile, 'utf8');
-        const got = createHash('sha256').update(raw).digest('hex');
-        if (got.toLowerCase() !== sha256.toLowerCase()) refuse(`taskPlan ${planFile}: sha256 ${got} != the given ${sha256}`);
+        if (typeof planFile !== 'string' || typeof sha256 !== 'string') refuse('taskPlan needs { file, sha256 (64 hex) }');
+        // The sha256 over the bytes on disk, then a fatal UTF-8 decode (Daybreak #470 L1).
+        const read = readPlanFile(planFile, sha256, (f) => fs.readFileSync(f));
+        if ('problem' in read) refuse(read.problem);
+        const raw = (read as { raw: string }).raw;
         // Lossless (SP 2026-11-19): integers above 2^53 become BigInt from their digits, never a rounded number.
         const bundleJson = parsePlanJson(raw);
         const sh = bundleJson?.shared ?? {};
@@ -416,10 +419,10 @@ async function main() {
         const digits = maxCostDigitsProblem(raw, sdkPlan!.maxCostPerOpWei);
         if (digits) refuse(digits);
         const gate = livePlanGateProblems(sdkPlan!, { mode: cfg.mode, operator, token,
-            isAncestor: (c) => spawnSync('git', ['merge-base', '--is-ancestor', c, 'HEAD'], { cwd: path.resolve(import.meta.dirname, '..') }).status === 0 });
+            isAncestor: (c) => checkoutContains(path.resolve(import.meta.dirname, '..'), c, (a, cwd) => spawnSync('git', a, { cwd }).status ?? 1) });
         if (gate.length) refuse(gate.join('; '));
     }
-    const taskToken = plan ? plan.T : cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
+    const taskToken: Address | undefined = plan!.T;
     // The task must move no X (SP's cap counts only the sponsor charge): T may not be the operator's xPNTs token.
     if (taskToken && getAddress(taskToken) === getAddress(token)) refuse(`task token T ${taskToken} is the operator's xPNTs token: the task would move X outside the plan's cap`);
     const FIELDS = ['verificationGasLimit', 'callGasLimit', 'preVerificationGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
@@ -486,23 +489,21 @@ async function main() {
     // (signC12Transaction, checks module). The wrapper copies allowTx / signs / signBudget / beforeSign into st per call.
     const st: C12SignState = { allowTx: false, signs: 0, txSigns: 0, signBudget: Infinity };
     const costAtKey = async (maxCost: bigint) => {
-        if (!sdkPlan) return;
-        const at = { blockNumber: lastCheckBlock } as const;
-        const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
-            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice', ...at } as any) as Promise<any>,
-            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD', ...at } as any) as Promise<any>,
-            pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS', ...at } as any) as Promise<any>,
-            pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate', ...at } as any) as Promise<any>,
-        ]);
-        const bad = signTimeCostProblems(maxCost, {
-            ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
-            aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
-        }, sdkPlan, superPaymasterLock);
+        if (!sdkPlan) throw new Error('cost check at the key: no plan loaded; refused');
+        // All four reads at the block of the last wiring re-check (readPricingAt pins them to one block).
+        const pricing = await readPricingAt(pub as any, { sp, token, spAbi: SuperPaymasterV550ABI, tokenAbi: xPNTsTokenV2ABI, blockNumber: lastCheckBlock });
+        const bad = signTimeCostProblems(maxCost, pricing, sdkPlan, superPaymasterLock);
         if (bad.length) throw new Error(`cost check at the key (block ${lastCheckBlock}) refused: ${bad.join('; ')}`);
+    };
+    // Last before the key (Daybreak #470 H1b): the head may be at most MAX_BLOCKS_SINCE_CHECK past the check block.
+    const fresh = async () => {
+        const p = headFreshnessProblem(lastCheckBlock, await pub.getBlockNumber({ cacheTime: 0 }));
+        if (p) throw new Error(p);
     };
     const user = { ...base, signTransaction: async (t: any, o?: any) => {
         st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
         st.costAtKey = lastSignedMaxCost === undefined ? undefined : () => costAtKey(lastSignedMaxCost!);
+        st.fresh = fresh;
         return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
     }, signMessage: (a: any) => guardedSignMessage(a, {
         approvals: costApprovals,
@@ -515,6 +516,7 @@ async function main() {
             if (now >= signDeadline!) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
         },
         costAtKey,
+        fresh,
         sign: (x) => base.signMessage(x),
         after: (h, sig, maxCost) => { st.lastSignedHash = h; st.lastSignature = sig; lastSignedMaxCost = maxCost; onSigned?.(h); },
     }) };

@@ -11,6 +11,7 @@
  *   - SP_RENEW is chosen by the SDK per op: an op that carries it must renew inline on-chain
  *     (AllowanceRenewed(bySP=true), autoRenewUsed +1), and an op without it must not renew at all.
  */
+import { createHash } from 'crypto';
 import { type Abi, type Address, type Hex, decodeEventLog, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getAddress, keccak256, size, slice } from 'viem';
 import { SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS } from '../packages/core/src/superPaymasterData.js';
 
@@ -282,6 +283,8 @@ export type C12SignState = {
     txNonceNow?: () => Promise<number>;
     /** The plan's pricing check for the UserOp this transaction carries, at the transaction's own re-check block. */
     costAtKey?: () => Promise<void>;
+    /** The head re-read last before the key (see guardedSignMessage). */
+    fresh?: () => Promise<void>;
 };
 
 /**
@@ -310,6 +313,8 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     // held to the plan again here, at this transaction's re-check block. Required: none wired => refused.
     if (!st.costAtKey) throw new Error('C12: no plan pricing check is wired for the transaction (costAtKey); refused before signing');
     await st.costAtKey();
+    if (!st.fresh) throw new Error('C12: no head-freshness check is wired for the transaction; refused before signing');
+    await st.fresh();
     return sign();
 }
 
@@ -345,6 +350,8 @@ export const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
 export type SdkLivePlan = {
     maxCostPerOpWei: bigint; priceCap: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint;
     validationBufferBPS: bigint; exchangeRate: bigint; a0: bigint; Amax: bigint; Xmax: bigint; status: string;
+    /** Required, 0..9999 (SP): sign only while cachedPrice x 10000 <= priceCap x (10000 - priceHeadroomBPS). */
+    priceHeadroomBPS: bigint;
     /** From plans[*]: the one genesis operator and X token every plan names. */
     operator?: Address; X?: Address;
     /** This run's account's entry in shared.extraEndUsers. */
@@ -377,6 +384,11 @@ export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; acco
         out[k] = BigInt(v);
     }
     out.status = typeof sl.status === 'string' ? sl.status : '';
+    // A JSON integer 0..9999, required: missing, a string, a boolean, a fraction or out of range is refused, never
+    // defaulted (SP: the value is the author's / DSR's to choose).
+    const h = sl.priceHeadroomBPS;
+    if (!((typeof h === 'number' && Number.isSafeInteger(h) && h >= 0 && h <= 9999))) p.push(`taskPlan: shared.sdkLive.priceHeadroomBPS must be a JSON integer 0..9999 (got ${typeof h === 'bigint' ? h.toString() : JSON.stringify(h)})`);
+    else out.priceHeadroomBPS = BigInt(h);
     if (p.length) return { problems: p };
     if (out.maxCostPerOpWei !== w.opMaxCostWei) p.push(`config.opMaxCostWei ${w.opMaxCostWei} != plan shared.sdkLive.maxCostPerOpWei ${out.maxCostPerOpWei} (one value, set once in SP's plan)`);
     if (out.validationBufferBPS !== w.validationBufferBPS) p.push(`plan validationBufferBPS ${out.validationBufferBPS} != SuperPaymaster's VALIDATION_BUFFER_BPS ${w.validationBufferBPS}`);
@@ -413,21 +425,24 @@ const isAddressLike = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
 export type SignTimePricing = { ethUsdPrice: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint; exchangeRate: bigint };
 
 /**
- * Why this op may not be signed under the plan (DSR): the chain's pricing must be within what the plan assumed
- * (cached ETH/USD at most priceCap with the same decimals; aPNTsPriceUSD, protocolFeeBPS and exchangeRate equal to the
- * plan's), and the X this op would lock at today's price must be at most the plan's Xmax_sdk.
+ * Why this op may not be signed under the plan (DSR ruling 2026-11-19). The X lock is compared AT THE PLAN'S priceCap,
+ * not at today's price: the bound holds iff, at validation, cachedPrice <= priceCap and protocolFeeBPS, the validation
+ * buffer and exchangeRate equal the plan's (each of which this check holds at the signing block). Today's price only
+ * gates signing, with the plan's headroom: cachedPrice x 10000 <= priceCap x (10000 - priceHeadroomBPS), integers, no
+ * division. A price that crosses priceCap after signing is a funding residual (FU-129), not a safety one.
  */
 export function signTimeCostProblems(maxCostWei: bigint, now: SignTimePricing, plan: SdkLivePlan, lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }): string[] {
     const p: string[] = [];
     if (now.priceDecimals !== plan.priceDecimals) p.push(`SP cachedPrice decimals ${now.priceDecimals} != plan priceDecimals ${plan.priceDecimals}`);
-    if (now.ethUsdPrice > plan.priceCap) p.push(`SP cachedPrice ${now.ethUsdPrice} is above the plan's priceCap ${plan.priceCap}`);
+    if (now.ethUsdPrice * 10_000n > plan.priceCap * (10_000n - plan.priceHeadroomBPS)) p.push(`SP cachedPrice ${now.ethUsdPrice} is not within the plan's headroom: needs cachedPrice x 10000 <= priceCap ${plan.priceCap} x (10000 - ${plan.priceHeadroomBPS})`);
     if (now.aPNTsPriceUSD !== plan.aPNTsPriceUSD) p.push(`SP aPNTsPriceUSD ${now.aPNTsPriceUSD} != plan ${plan.aPNTsPriceUSD}`);
     if (now.protocolFeeBPS !== plan.protocolFeeBPS) p.push(`SP protocolFeeBPS ${now.protocolFeeBPS} != plan ${plan.protocolFeeBPS}`);
     if (now.exchangeRate !== plan.exchangeRate) p.push(`token exchangeRate ${now.exchangeRate} != plan ${plan.exchangeRate}`);
     if (maxCostWei > plan.maxCostPerOpWei) p.push(`op maxCost ${maxCostWei} > plan maxCostPerOpWei ${plan.maxCostPerOpWei}`);
     if (p.length) return p;
-    const r = lock({ maxCost: maxCostWei, ethUsdPrice: now.ethUsdPrice, priceDecimals: now.priceDecimals, aPNTsPriceUSD: now.aPNTsPriceUSD, protocolFeeBPS: now.protocolFeeBPS, exchangeRate: now.exchangeRate, validationBufferBPS: plan.validationBufferBPS });
-    if (r.X > plan.Xmax) p.push(`this op would lock ${r.X} X at today's price, above the plan's Xmax_sdk ${plan.Xmax}`);
+    // At priceCap with the plan's (= today's, checked above) fee, buffer and rate: the bound on the validation lock.
+    const r = lock({ maxCost: maxCostWei, ethUsdPrice: plan.priceCap, priceDecimals: plan.priceDecimals, aPNTsPriceUSD: plan.aPNTsPriceUSD, protocolFeeBPS: plan.protocolFeeBPS, exchangeRate: plan.exchangeRate, validationBufferBPS: plan.validationBufferBPS });
+    if (r.X > plan.Xmax) p.push(`this op would lock up to ${r.X} X at the plan's priceCap, above the plan's Xmax_sdk ${plan.Xmax}`);
     return p;
 }
 
@@ -454,8 +469,9 @@ export class CostApprovals {
  *   2. the per-op budget, then the slot taken before any await;
  *   3. beforeSign (the one-block wiring re-check; it records the block it read) and the cell's deadline;
  *   4. costAtKey: SP pricing read AT THAT SAME BLOCK, held to the plan with the approved maxCost;
- *   5. the key.
- * Any throw before 5 leaves the key unused.
+ *   5. fresh: the head re-read last; more than MAX_BLOCKS_SINCE_CHECK past the check block => refused (Daybreak #470);
+ *   6. the key.
+ * Any throw before 6 leaves the key unused. What changes between the key and inclusion stays a residual (FU-129).
  */
 export async function guardedSignMessage(a: any, io: {
     approvals: CostApprovals;
@@ -464,6 +480,8 @@ export async function guardedSignMessage(a: any, io: {
     beforeSign: (() => Promise<void>) | undefined;
     deadline?: () => Promise<void>;
     costAtKey: (maxCostWei: bigint) => Promise<void>;
+    /** Last, right before the key: refuses when the head has moved more than MAX_BLOCKS_SINCE_CHECK past the check block. */
+    fresh: (() => Promise<void>) | undefined;
     sign: (a: any) => Promise<Hex>;
     after?: (userOpHash: Hex | undefined, sig: Hex, maxCostWei: bigint) => void;
 }): Promise<Hex> {
@@ -479,6 +497,8 @@ export async function guardedSignMessage(a: any, io: {
     await io.beforeSign();
     if (io.deadline) await io.deadline();
     await io.costAtKey(maxCost);
+    if (!io.fresh) throw new Error('no head-freshness check is wired for this signature; refused');
+    await io.fresh();
     const sig = await io.sign(a);
     io.after?.(raw, sig, maxCost);
     return sig;
@@ -611,4 +631,44 @@ export function livePlanGateProblems(plan: SdkLivePlan, w: { mode: string; opera
         else if (!w.isAncestor(c)) p.push(`mode live: this checkout does not contain the plan's sdkCostCapCommit ${c}`);
     }
     return p;
+}
+
+/**
+ * How far the head may move between the block the checks read and the key (Daybreak #470): 1 block. Pricing and
+ * wiring are read at the check block; one more block is tolerated (a new head can land while the reads run), more is
+ * refused and the cell fails rather than sign on stale reads.
+ */
+export const MAX_BLOCKS_SINCE_CHECK = 1n;
+export function headFreshnessProblem(checkBlock: bigint, head: bigint): string | undefined {
+    return head > checkBlock + MAX_BLOCKS_SINCE_CHECK ? `the head moved to ${head}, more than ${MAX_BLOCKS_SINCE_CHECK} block(s) past the check block ${checkBlock}; refused before the key` : undefined;
+}
+
+/**
+ * SP's plan file, read as on disk (Daybreak #470 L1): the sha256 is taken over the raw bytes, then the bytes are
+ * decoded as UTF-8 with fatal errors (no silent replacement characters) before parsing.
+ */
+export function readPlanFile(file: string, sha256: string, read: (f: string) => Uint8Array): { raw: string } | { problem: string } {
+    if (!/^[0-9a-f]{64}$/i.test(sha256)) return { problem: 'taskPlan needs { file, sha256 (64 hex) }' };
+    const bytes = read(file);
+    const got = createHash('sha256').update(bytes).digest('hex');
+    if (got.toLowerCase() !== sha256.toLowerCase()) return { problem: `taskPlan ${file}: sha256 ${got} != the given ${sha256}` };
+    try { return { raw: new TextDecoder('utf-8', { fatal: true }).decode(bytes) }; } catch { return { problem: `taskPlan ${file}: not valid UTF-8` }; }
+}
+
+/** The four pricing reads, all pinned to one block (Daybreak #470 L3: provable by an injected client). */
+export async function readPricingAt(client: { readContract: (a: any) => Promise<any> }, w: { sp: Address; token: Address; spAbi: unknown; tokenAbi: unknown; blockNumber: bigint }): Promise<SignTimePricing> {
+    const at = { blockNumber: w.blockNumber };
+    const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'cachedPrice', ...at }),
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'aPNTsPriceUSD', ...at }),
+        client.readContract({ address: w.sp, abi: w.spAbi, functionName: 'protocolFeeBPS', ...at }),
+        client.readContract({ address: w.token, abi: w.tokenAbi, functionName: 'exchangeRate', ...at }),
+    ]);
+    return { ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]), aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate) };
+}
+
+/** Whether `commit` is contained in the checkout at `repoDir` (real git; no metadata, a shallow clone without it => false). */
+export function checkoutContains(repoDir: string, commit: string, git: (args: string[], cwd: string) => number): boolean {
+    if (!/^[0-9a-f]{40}$/.test(commit)) return false;
+    return git(['merge-base', '--is-ancestor', commit, 'HEAD'], repoDir) === 0;
 }

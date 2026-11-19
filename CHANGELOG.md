@@ -19,8 +19,13 @@ All notable changes to this project will be documented in this file.
   rounding (SuperPaymaster.sol:339-344, xPNTsTokenV2.sol:214); shared test vector with SP's planner.
 - `scripts/sp550-live-e2e.ts`: `opMaxCostWei` is required and always on; live runs require SP's frozen plan
   (`taskPlan`, by sha256): `opMaxCostWei` must equal `shared.sdkLive.maxCostPerOpWei`, and before each signature the
-  op's X lock at today's SP pricing (cachedPrice ≤ priceCap; aPNTsPriceUSD, protocolFeeBPS, exchangeRate equal to the
-  plan) must be ≤ the plan's Xmax_sdk. The signer signs only a hash the check approved; a live run needs the plan's status to be exactly
+  op's X lock **at the plan's priceCap** must be ≤ the plan's Xmax_sdk. **That bound holds iff, at validation,
+  cachedPrice ≤ priceCap, and aPNTsPriceUSD, protocolFeeBPS, the validation buffer and exchangeRate are the values the
+  plan recorded** (a lower aPNTsPriceUSD raises the lock; all five are checked inside the signer at the block of the
+  last wiring re-check, and the head may be at most 1 block past it when the key is used). The plan is required in
+  fork mode too (the rehearsal runs the same checks; only the live clearance is live-only). Signing also needs today's price
+  within the plan's headroom: cachedPrice × 10000 ≤ priceCap × (10000 − priceHeadroomBPS), in integers (required plan
+  field, 0..9999). A price that crosses priceCap after signing is a funding residual, not a safety one (FU-129). The signer signs only a hash the check approved; a live run needs the plan's status to be exactly
   `"cleared"` and this checkout to contain its `sdkCostCapCommit`; the plan's operator / X must be this run's and the
   account one of `shared.extraEndUsers`; the task token may not be the operator's xPNTs.
 - `SuperPaymasterClient.submitGaslessTransaction` forwards `maxUserOpCostWei` / `beforeSignUserOp`. The library
