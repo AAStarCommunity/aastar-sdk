@@ -5,7 +5,7 @@ import { sepolia } from 'viem/chains';
 import { SepoliaFaucetAPI } from '../packages/core/src/actions/index.js';
 import { SuperPaymasterClient } from '../packages/paymaster/src/index.js';
 import * as dotenv from 'dotenv';
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 import { privateKeyToAccount } from 'viem/accounts';
 
 dotenv.config({ path: '.env.sepolia' });
@@ -19,7 +19,7 @@ const MY_FACTORY = '0x91E60e0613810449d098b0b5Ec8b51A0FE8c8985';
 
 async function main() {
     // 1. Config & Admin Setup
-    const config = loadNetworkConfig('sepolia');
+    const config = await loadGaslessNetworkConfig('sepolia');
     const rpcUrl = config.rpcUrl;
     const bundlerUrl = process.env.BUNDLER_URL!;
 
@@ -327,7 +327,7 @@ async function main() {
             TARGET_AA_ADDRESS,
             config.contracts.entryPoint,
             bundlerUrl,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 token: '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9', // cPNTs
                 recipient: adminAccount.address, 
                 amount: parseEther('0.1'),

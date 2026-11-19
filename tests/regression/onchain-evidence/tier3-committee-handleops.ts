@@ -37,6 +37,7 @@ import {
     getCommitteeState, isAccountEnrolled, fetchCommitteeSigners, readFrozenRootAgreement, describeFrozenRootDisagreement, type CommitteeSigner,
 } from '@aastar/core';
 import { packCumulativeT3Signature, packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -60,7 +61,7 @@ const pack = (hi: bigint, lo: bigint): Hex => concat([numberToHex(hi, { size: 16
 async function rpc<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> {
     let last: unknown;
     for (const url of RPCS) {
-        try { return await fn(createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient); }
+        try { return await fn(createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient); }
         catch (e) { last = e; }
     }
     throw last;
@@ -80,6 +81,9 @@ function eip2537ToG2(sig256: Hex) {
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══ FU-18/FU-19 — COMMITTEE-framed 0x05 through REAL EntryPoint.handleOps ═══\n');
     if (RPCS.length === 0) throw new Error('No SEPOLIA_RPC_URL[/2/3] in .env.sepolia');
 
@@ -87,9 +91,9 @@ async function main() {
     if (!pk) throw new Error('PRIVATE_KEY_JASON missing from .env.sepolia');
     if (!pk.startsWith('0x')) pk = `0x${pk}`;
     const owner = privateKeyToAccount(pk as Hex);
-    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     const guardian = privateKeyToAccount(GUARDIAN_PK);
-    const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: http(RPCS[0]) });
+    const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: testChainHttp(RPCS[0]) });
 
     // ── (0) the SAME account tier3-composite-e2e proved via eth_call ─────────────────────────────
     const config = buildInitConfig({

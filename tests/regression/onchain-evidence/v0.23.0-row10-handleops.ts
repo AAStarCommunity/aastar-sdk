@@ -39,6 +39,7 @@ import {
     newDvtIdentitySeen,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 const VERIFIER = getAddress(CANONICAL_ADDRESSES[11155111].aaStarBLSAlgorithm);
 
@@ -63,7 +64,7 @@ const BLS_ONLY_CONFIG = buildInitConfig({ guardians: [], dailyLimit: 10n ** 18n,
 const TUNNELS = getDvtConfig().dvtNodes.map((n) => n.url);
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3]
     .map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
-const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;
+const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient;
 async function rpc<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> {
     let last: unknown;
     for (const url of RPCS) { try { return await fn(clientFor(url)); } catch (e) { last = e; } }
@@ -90,10 +91,13 @@ async function requestNodeSign(url: string, userOpRpc: Record<string, string>, o
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
     let pk = process.env.PRIVATE_KEY_JASON || '';
     if (pk && !pk.startsWith('0x')) pk = `0x${pk}`;
     const owner = privateKeyToAccount(pk as Hex);
-    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     const ACC10 = (await rpc((c) =>
         airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: BLS_ONLY_SALT, config: BLS_ONLY_CONFIG })
     )) as Address;

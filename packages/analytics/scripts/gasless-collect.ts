@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, formatEther, formatGwei, http, 
 import { privateKeyToAccount } from 'viem/accounts';
 import { PaymasterClient, SuperPaymasterClient } from '../packages/paymaster/src/V4/index.js';
 import { superPaymasterActions, xPNTsTokenActions } from '../packages/core/src/actions/index.js';
-import { loadNetworkConfig, type NetworkName } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig, type NetworkName } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -79,7 +79,7 @@ async function main() {
     const envFile = `.env.${network}`;
     dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-    const config = loadNetworkConfig(network);
+    const config = await loadGaslessNetworkConfig(network);
     const publicClient: any = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     const bundlerRpc: any = createPublicClient({ chain: config.chain, transport: http(config.bundlerUrl) });
 
@@ -222,7 +222,7 @@ async function main() {
                 paymasterV4,
                 token,
                 config.bundlerUrl,
-                callData
+                callData, { maxUserOpCostWei: config.maxUserOpCostWei }
             );
         } else {
             userOpHash = await SuperPaymasterClient.submitGaslessTransaction(
@@ -231,7 +231,7 @@ async function main() {
                 senderAA,
                 config.contracts.entryPoint,
                 config.bundlerUrl,
-                {
+                { maxUserOpCostWei: config.maxUserOpCostWei,
                     token,
                     recipient,
                     amount,

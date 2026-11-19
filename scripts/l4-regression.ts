@@ -4,10 +4,11 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { registryActions, superPaymasterActions, xPNTsTokenActions } from '../packages/core/src/actions/index.js';
 import { PaymasterClient, SuperPaymasterClient, formatUserOpV07 } from '../packages/paymaster/src/V4/index.js'; 
 import { UserOpScenarioBuilder, UserOpScenarioType } from '../packages/sdk/src/utils/testScenarios.js';
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 async function main() {
     console.log(`\n🚀 Starting L4 Regression (Traffic Generation)...`);
@@ -23,7 +24,9 @@ async function main() {
     const envFile = `.env.${networkName}`;
     dotenv.config({ path: path.resolve(process.cwd(), envFile) });
 
-    const config = loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
+    // It also signs UserOperations outside the guarded SDK path (UserOpScenarioBuilder / raw eth_sendUserOperation).
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const bundlerUrl = config.bundlerUrl;
     const publicClient: any = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     const supplier = privateKeyToAccount(process.env.PRIVATE_KEY_SUPPLIER as `0x${string}`);
@@ -113,7 +116,7 @@ async function main() {
                    scene.paymaster!,
                    sceneToken,
                    bundlerUrl,
-                   callData
+                   callData, { maxUserOpCostWei: config.maxUserOpCostWei }
                );
                console.log(`   ✅ UserOp Sent! Hash: ${txHash}`);
                await waitForReceipt(bundlerRpc, txHash);
@@ -197,7 +200,7 @@ async function main() {
                     sceneSender,
                     config.contracts.entryPoint,
                     bundlerUrl,
-                    {
+                    { maxUserOpCostWei: config.maxUserOpCostWei,
                         token: sceneToken,
                         recipient: recipientEOA,
                         amount: parseEther('1'),

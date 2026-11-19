@@ -12,6 +12,7 @@ import {
 } from '../../packages/sdk/src/index.js'; // Correct import source
 import { tokenActions, entryPointActions, EntryPointVersion } from '../../packages/core/src/index.js';
 import { fileURLToPath } from 'url';
+import { refuseMainnetUserOps } from './userop-chain-gate.js';
 
 function loadState(networkName: string): any {
     const STATE_FILE = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
@@ -193,6 +194,7 @@ const PAYMASTER_V4_DEPOSIT_ABI = [
 ] as const;
 
 export async function runGaslessTests(config: NetworkConfig, networkName: string = 'sepolia') {
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('\n═══════════════════════════════════════════════');
     console.log(`⛽ Running L4 Gasless Verification Tests (${networkName})`);
     console.log('═══════════════════════════════════════════════\n');

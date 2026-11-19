@@ -205,6 +205,16 @@ describe('UserLifecycle', () => {
 
           expect(result).toBe('0xGaslessTxHash');
       });
+
+      it('executeGaslessTx forwards the cost ceiling and the pre-sign hook to UserClient.executeGasless (DSR L2)', async () => {
+          lifecycle.enableGasless({ paymasterUrl: 'https://p', paymasterAddress: '0x9999999999999999999999999999999999999999' as `0x${string}`, paymasterType: 'V4' as const, policy: 'CREDIT' as const });
+          mocks.mockRegistry.SUPER_PAYMASTER.mockResolvedValue('0xSuperPaymaster');
+          const hook = () => {};
+          await lifecycle.executeGaslessTx({ target: '0xTarget' as any, value: 0n, data: '0xData', maxUserOpCostWei: 77n, beforeSignUserOp: hook });
+          const { UserClient } = await import('../src/UserClient.js');
+          const inst = vi.mocked(UserClient).mock.results.at(-1)!.value as any;
+          expect(inst.executeGasless).toHaveBeenCalledWith(expect.objectContaining({ maxUserOpCostWei: 77n, beforeSignUserOp: hook }));
+      });
   });
 
   describe('Exit', () => {

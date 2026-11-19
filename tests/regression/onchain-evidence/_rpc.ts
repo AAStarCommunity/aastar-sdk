@@ -1,4 +1,4 @@
-import { fallback, http, parseGwei, type Transport, type Chain } from 'viem';
+import { fallback, http, parseGwei, type HttpTransportConfig, type Transport, type Chain } from 'viem';
 import { sepolia } from 'viem/chains';
 
 /**
@@ -45,8 +45,8 @@ export const resilientSepoliaChain: Chain = {
  * negatives (estimateGas/eth_sendRawTransaction intermittently erroring on one provider
  * while the call itself was valid: proven by a successful direct write, tx 0x6a268ca3…).
  */
-export function resilientSepoliaTransport(): Transport {
-  const urls = [
+export function sepoliaRpcUrls(): string[] {
+  return [
     process.env.SEPOLIA_RPC_URL,
     process.env.SEPOLIA_RPC_URL2,
     process.env.SEPOLIA_RPC_URL3,
@@ -54,13 +54,21 @@ export function resilientSepoliaTransport(): Transport {
   ]
     .map((u) => (u || '').trim().replace(/^['"]|['"]$/g, ''))
     .filter((u, i, a) => Boolean(u) && a.indexOf(u) === i);
+}
+
+/**
+ * `mk` builds each endpoint's transport (default viem `http`); a UserOp-signing script passes userop-chain-gate's
+ * testChainHttp, so an endpoint is verified to be on a test chain before it serves a request. Order unchanged.
+ */
+export function resilientSepoliaTransport(mk: (url: string, opts: HttpTransportConfig) => Transport = http): Transport {
+  const urls = sepoliaRpcUrls();
 
   if (urls.length === 0) {
     throw new Error('No Sepolia RPC URL in env (set SEPOLIA_RPC_URL / SEPOLIA_RPC_URL2 / SEPOLIA_RPC_URL3)');
   }
 
   return fallback(
-    urls.map((u) => http(u, { retryCount: 3, retryDelay: 800, timeout: 30_000 })),
+    urls.map((u) => mk(u, { retryCount: 3, retryDelay: 800, timeout: 30_000 })),
     { rank: false },
   );
 }

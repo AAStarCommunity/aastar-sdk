@@ -39,6 +39,7 @@ import {
     isAccountEnrolled, assertCommitteeSubmittable, type CommitteeSigner,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { refuseMainnetUserOps } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -74,6 +75,7 @@ function toG2(sig256: Hex) {
 }
 
 async function main() {
+    await refuseMainnetUserOps(RPC); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══ CC-103 COMMITTEE POSITIVE — live Sepolia ═══\n');
     const pc = createPublicClient({ chain: sepolia, transport: http(RPC) });
     const pk = process.env.PRIVATE_KEY_JASON!;

@@ -22,7 +22,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { fileURLToPath } from 'url';
-import { loadNetworkConfig, type NetworkConfig } from './config';
+import { loadGaslessNetworkConfig, assertGaslessNetworkConfig, type GaslessNetworkConfig } from './config';
 import { 
     createEndUserClient,
     createAdminClient,
@@ -53,6 +53,7 @@ import {
     ReputationSystemABI,
     xPNTsTokenABI
 } from '../../packages/core/dist/index.js';
+import { refuseMainnetUserOps } from './userop-chain-gate.js';
 
 // Load L4 State
 const __filename = fileURLToPath(import.meta.url);
@@ -89,7 +90,10 @@ async function waitAndCheckReceipt(bundlerClient: any, opHash: Hash, label: stri
     }
 }
 
-export async function runComprehensiveGaslessTests(config: NetworkConfig, networkName: string = 'sepolia') {
+export async function runComprehensiveGaslessTests(config: GaslessNetworkConfig, networkName: string = 'sepolia') {
+    await assertGaslessNetworkConfig(config); // also when called directly, not through loadGaslessNetworkConfig
+    // The GASLESS_V4 path signs through UserOpScenarioBuilder, outside the guarded SDK path.
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const state = loadState(networkName);
     console.log(`   📂 Loaded state for network: ${networkName}`);
     
@@ -378,7 +382,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
             targetAA.address,
             config.contracts.entryPoint,
             config.bundlerUrl,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 token: anniToken,
                 recipient: recipientAddr,
                 amount: parseEther('0.1'),
@@ -410,7 +414,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
                 targetAA.address,
                 config.contracts.entryPoint,
                 config.bundlerUrl,
-                {
+                { maxUserOpCostWei: config.maxUserOpCostWei,
                     token: anniToken,
                     recipient: '0x000000000000000000000000000000000000dead',
                     amount: freshBal,
@@ -434,7 +438,7 @@ export async function runComprehensiveGaslessTests(config: NetworkConfig, networ
             targetAA.address,
             config.contracts.entryPoint,
             config.bundlerUrl,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 token: anniToken,
                 recipient: recipientAddr,
                 amount: 0n, // Minimal transfer
@@ -489,8 +493,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     }
     
     // @ts-ignore
-    const config = loadNetworkConfig(network);
-    runComprehensiveGaslessTests(config, network).catch(error => {
+    loadGaslessNetworkConfig(network).then((config) => runComprehensiveGaslessTests(config, network)).catch(error => {
         console.error('❌ Fatal Error:', error);
         process.exit(1);
     });

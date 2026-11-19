@@ -18,6 +18,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +65,7 @@ async function main() {
         process.exit(1);
     }
     const rpcUrl = PUBLIC_RPC || BUNDLER_RPC;
+    await refuseMainnetUserOps(rpcUrl!, BUNDLER_RPC); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log(`Using RPC: ${rpcUrl}`);
 
     const client = createPublicClient({

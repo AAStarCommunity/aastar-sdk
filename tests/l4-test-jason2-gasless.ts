@@ -2,7 +2,7 @@ import { createPublicClient, createWalletClient, http, parseEther, formatEther, 
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 // import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.ts';
-import { loadNetworkConfig } from './regression/config.js';
+import { loadGaslessNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,7 +13,7 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
     const rpcUrl = process.env.RPC_URL || config.rpcUrl;
     
     // Dynamic import to avoid config mismatch
@@ -138,7 +138,7 @@ async function main() {
             jasonPM,
             jasonToken,
             config.bundlerUrl!,
-            transferCalldata
+            transferCalldata, { maxUserOpCostWei: config.maxUserOpCostWei }
             // {
             //    // Let SDK determine dynamic gas prices
             // }

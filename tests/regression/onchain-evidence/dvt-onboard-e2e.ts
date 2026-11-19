@@ -88,6 +88,7 @@ import { randomBytes } from 'node:crypto';
 import { bls12_381 as bls } from '@noble/curves/bls12-381';
 import { onboardDvtNode } from '@aastar/operator';
 import { CANONICAL_ADDRESSES } from '@aastar/core';
+import { refuseMainnetUserOps } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -104,6 +105,7 @@ function freshBlsKey(): Hex {
 
 async function main() {
   const RPC = process.env.SEPOLIA_RPC_URL || process.env.RPC_URL!;
+  await refuseMainnetUserOps(RPC); // no UserOperation outside the test chains (DSR, follow-up to #470)
   const transport = http(RPC);
   const publicClient = createPublicClient({ chain: sepolia, transport });
   const c = CANONICAL_ADDRESSES[11155111];

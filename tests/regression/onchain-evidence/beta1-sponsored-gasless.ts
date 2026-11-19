@@ -27,10 +27,11 @@ import { sepolia } from 'viem/chains';
 import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
 import { PaymasterClient, PaymasterOperator } from '../../../packages/paymaster/src/V4/index.js';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op.js';
-import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees } from './_rpc.js';
+import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees, sepoliaRpcUrls } from './_rpc.js';
 // Account creation + ERC20/nonce reads also via the SDK — 100% SDK API.
 import { airAccountFactoryActions, tokenActions, entryPointActions } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -100,6 +101,9 @@ const clean = (s?: string) => (s || '').replace(/^['"]|['"]$/g, '');
 async function main() {
     const rpc = clean(process.env.SEPOLIA_RPC_URL || process.env.RPC_URL);
     const bundlerUrl = clean(process.env.PIMLICO_BUNDLER_URL || process.env.PIMLICO_RPC_URL || process.env.BUNDLER_URL);
+    // Every endpoint the fail-over transport may use is asked its chain now, and again (testChainHttp) before it serves
+    // its first request, so one that was down at startup is checked when it is first used.
+    await verifiedTestChainEndpoints(sepoliaRpcUrls(), bundlerUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const pkRaw = clean(process.env.PRIVATE_KEY_JASON);
     if (!rpc || !bundlerUrl || !pkRaw) throw new Error('Missing SEPOLIA_RPC_URL / PIMLICO_BUNDLER_URL / PRIVATE_KEY_JASON in .env.sepolia');
     const pk = (pkRaw.startsWith('0x') ? pkRaw : `0x${pkRaw}`) as Hex;
@@ -110,8 +114,8 @@ async function main() {
     console.log(`   PaymasterV4: ${PAYMASTER_V4}`);
     console.log(`   Gas token:   ${GAS_TOKEN}`);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
-    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport(testChainHttp) });
+    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport(testChainHttp) }).extend(publicActions);
     const factorySvc = airAccountFactoryActions(FACTORY)(walletClient);
     const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
 

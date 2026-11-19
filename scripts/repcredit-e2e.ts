@@ -106,6 +106,7 @@ import { dirname, join, resolve } from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { performance } from "node:perf_hooks";
 import { createServer } from "node:net";
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const ZERO_BYTES32 = `0x${"00".repeat(32)}` as Hex;
@@ -2411,6 +2412,8 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
 }
 
 try {
+  // Local mode starts its own anvil inside main(); the endpoints that already exist are checked here.
+  if (isSepolia || isDeployed) await refuseMainnetUserOps(rpcUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
   await main();
 } catch (error) {
   const sanitized = sanitizeError(error);

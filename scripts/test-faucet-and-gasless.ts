@@ -5,14 +5,14 @@ import { sepolia } from 'viem/chains';
 import { SepoliaFaucetAPI } from '../packages/core/src/actions/index.js';
 import { SuperPaymasterClient, PaymasterClient } from '../packages/paymaster/src/index.js';
 import * as dotenv from 'dotenv';
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 
 dotenv.config({ path: '.env.sepolia' });
 
 async function main() {
     console.log('🌟 Starting Faucet + SuperPaymaster Verification...');
 
-    const config = await loadNetworkConfig('sepolia');
+    const config = await loadGaslessNetworkConfig('sepolia');
     const rpcUrl = process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/your-key';
     const bundlerUrl = process.env.BUNDLER_URL!;
 
@@ -119,7 +119,7 @@ async function main() {
         aaAddress,
         config.contracts.entryPoint,
         bundlerUrl,
-        {
+        { maxUserOpCostWei: config.maxUserOpCostWei,
             token: '0x71f9Dd79f3B0EF6f186e9C6DdDf3145235D9BBd9',
             recipient: adminAccount.address, // Send back to Admin
             amount: parseEther('1'),

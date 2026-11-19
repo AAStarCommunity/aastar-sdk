@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import * as dotenv from 'dotenv';
+import { gaslessCostCapFromEnv } from './costCap.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -181,11 +182,13 @@ async function main() {
     });
 
     try {
+        const costCap = await gaslessCostCapFromEnv(publicClient, createPublicClient({ transport: http(BUNDLER_URL) }));
         const txHash = await bobUser.executeGaslessTx({
             target: CONTRACTS.gToken,
             value: 0n,
             data: callData,
-            operator: aliceAcc.address
+            operator: aliceAcc.address,
+            maxUserOpCostWei: costCap.maxUserOpCostWei,
         });
         console.log(`   ✅ Gasless Tx Hash: ${txHash}`);
         

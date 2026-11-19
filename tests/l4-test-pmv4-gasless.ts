@@ -8,11 +8,13 @@ import { loadNetworkConfig } from '../tests/regression/config.js';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
 async function main() {
     const config = loadNetworkConfig('sepolia');
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const publicClient = createPublicClient({ chain: sepolia, transport: http(config.rpcUrl) });
 
     // Load state from l4-state.json

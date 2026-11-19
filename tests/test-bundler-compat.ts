@@ -7,7 +7,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
-import { loadNetworkConfig } from './regression/config.js';
+import { loadGaslessNetworkConfig } from './regression/config.js';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 // Environment and network config handled by loadNetworkConfig
 
@@ -18,12 +19,13 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
     
     // Setup
     const rpcUrl = config.rpcUrl;
     const alchemyBundler = config.bundlerUrl;
     const pimlicoBundler = process.env.PIMLICO_BUNDLER_URL || config.bundlerUrl;
+    await refuseMainnetUserOps(config.rpcUrl, pimlicoBundler); // the loader checked config.bundlerUrl; this is the second bundler // no UserOperation outside the test chains (DSR, follow-up to #470)
     
     const publicClient = createPublicClient({
         chain: config.chain,
@@ -82,7 +84,7 @@ async function main() {
             paymasterAddress,
             tokenAddress,
             alchemyBundler,
-            executeCalldata
+            executeCalldata, { maxUserOpCostWei: config.maxUserOpCostWei }
         );
         
         console.log('✅ Alchemy Test PASSED');
@@ -114,7 +116,7 @@ async function main() {
             paymasterAddress,
             tokenAddress,
             pimlicoBundler,
-            executeCalldata
+            executeCalldata, { maxUserOpCostWei: config.maxUserOpCostWei }
         );
         
         console.log('✅ Pimlico Test PASSED');

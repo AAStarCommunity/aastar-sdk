@@ -59,6 +59,8 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { optimism } from 'viem/chains';
 import * as dotenv from 'dotenv';
+import { guardUserOpSignature, userOpCostCeilingWei } from '@aastar/paymaster';
+import { reportedChainId, resolveUserOpCostCap } from '../tests/regression/userop-chain-gate.js';
 import { fileURLToPath } from 'url';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
@@ -435,6 +437,9 @@ async function main() {
     const POLICY_ID = process.env.ALCHEMY_PAYMASTER_POLICY_ID;
     if (!ALCHEMY_RPC) throw new Error('Missing ALCHEMY_RPC_URL_OP or OPT_MAINNET_RPC in env');
     if (!POLICY_ID) throw new Error('Missing ALCHEMY_PAYMASTER_POLICY_ID in env (create a sponsorship policy in Alchemy Gas Manager)');
+    // The hash below is computed for chain 10: refuse an endpoint on another chain, and refuse to start without a
+    // per-UserOp cost ceiling (--max-userop-cost-wei / AASTAR_MAX_USEROP_COST_WEI; no default) (DSR, follow-up to #470).
+    const maxUserOpCostWei = resolveUserOpCostCap(await reportedChainId(ALCHEMY_RPC, undefined, 10));
 
     const JASON_ACCOUNT = process.env.DEPLOYER_ACCOUNT || 'optimism-deployer';
     const JASON_AA = (process.env.JASON_AA || process.env.CONTROLLED_SIMPLE_ACCOUNT) as Address;
@@ -588,7 +593,18 @@ async function main() {
             const userOpHash = getUserOpHashV07(userOpForHash, ENTRYPOINT, BigInt(10));
             console.log(`   ✍️  userOpHash: ${userOpHash}`);
 
-            // Step 3: Sign with Jason's EOA
+            // Step 3: Sign with Jason's EOA — only an op whose worst-case cost (all five gas terms × maxFeePerGas) is
+            // within the ceiling; the gas values come from Alchemy, so this is the only bound on them.
+            const limits = {
+                preVerificationGas: BigInt(sp.preVerificationGas), verificationGasLimit: BigInt(sp.verificationGasLimit),
+                callGasLimit: BigInt(sp.callGasLimit), paymasterVerificationGasLimit: BigInt(sp.paymasterVerificationGasLimit),
+                paymasterPostOpGasLimit: BigInt(sp.paymasterPostOpGasLimit),
+            };
+            const maxFeePerGas = BigInt(sp.maxFeePerGas);
+            await guardUserOpSignature({
+                userOpHash, sender: JASON_AA, nonce, limits, maxFeePerGas, maxPriorityFeePerGas: BigInt(sp.maxPriorityFeePerGas),
+                maxCostWei: userOpCostCeilingWei(limits, maxFeePerGas), paymasterAndData,
+            }, { maxUserOpCostWei });
             const signature = await jasonAcc.signMessage({ message: { raw: userOpHash } });
 
             // Step 4: Submit

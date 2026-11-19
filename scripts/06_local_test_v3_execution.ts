@@ -3,6 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
@@ -27,6 +28,7 @@ function packUint(high128: bigint, low128: bigint): Hex {
 }
 
 async function runExecutionTest() {
+    await refuseMainnetUserOps(RPC_URL!); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log("🧪 Running SuperPaymaster V3 Execution Modular Test...");
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);

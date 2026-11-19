@@ -7,7 +7,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
-import { loadNetworkConfig } from './regression/config.js';
+import { loadGaslessNetworkConfig } from './regression/config.js';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 // Environment and network config handled by loadNetworkConfig
 
@@ -18,11 +19,12 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName, { checkConfiguredBundler: false });
     
     const rpcUrl = config.rpcUrl;
     const entryPoint = config.contracts.entryPoint;
     const bundlerUrl = process.env.PIMLICO_BUNDLER_URL || config.bundlerUrl;
+    await refuseMainnetUserOps(config.rpcUrl, bundlerUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
     
     const publicClient = createPublicClient({
         chain: config.chain,
@@ -74,7 +76,7 @@ async function main() {
             paymasterAddress,
             tokenAddress,
             bundlerUrl,
-            executeCalldata
+            executeCalldata, { maxUserOpCostWei: config.maxUserOpCostWei }
         );
         
         console.log('\n✅ Transaction Submitted!');

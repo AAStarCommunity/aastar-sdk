@@ -64,6 +64,12 @@ jobs:
       - name: Check for silent stubs
         run: pnpm run check:stubs
 
+      # Hard gate: a script that sends gasless reads its network through loadGaslessNetworkConfig (which refuses
+      # mainnet without an explicit per-UserOp cost ceiling) and passes that ceiling on every send call; a new
+      # gasless / submit function in packages/*/src fails until it is classified (DSR, follow-up to #470).
+      - name: Check gasless sends carry a cost ceiling
+        run: pnpm run check:gasless-cost-cap
+
       # Hard gate: the RepCredit evidence runner's own sources and the ABI-provenance gate are
       # linted directly. `pnpm run lint` wraps `pnpm -r lint` first, and that is a NO-OP in this
       # monorepo ("None of the selected packages has a 'lint' script"), so wiring the wrapper in

@@ -74,6 +74,7 @@ import {
 } from '../../../packages/airaccount/src/migration/viem/bls-packing';
 import { wrapExecuteUserOp } from '../../../packages/airaccount/src/server/utils/execute-user-op';
 import { UserOperationBuilder } from '../../../packages/sdk/src/index.js';
+import { refuseMainnetUserOps, testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -124,7 +125,7 @@ function hexToBytesLocal(h: Hex): Uint8Array { return toBytes(h); }
 async function withRpcFallback<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> {
     let lastErr: unknown;
     for (const url of RPCS) {
-        try { return await fn(createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient); }
+        try { return await fn(createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient); }
         catch (e) { lastErr = e; }
     }
     throw lastErr;
@@ -261,6 +262,9 @@ async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Addre
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══════════════════════════════════════════════════════════════════════════');
     console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian + tag-0x02 DVT ownerAuth, Sepolia v0.27.0 (#234/#261/#274)');
     console.log('═══════════════════════════════════════════════════════════════════════════');
@@ -270,14 +274,14 @@ async function main() {
     if (!jasonPk) throw new Error('PRIVATE_KEY_JASON missing');
     if (!jasonPk.startsWith('0x')) jasonPk = `0x${jasonPk}`;
     const owner = privateKeyToAccount(jasonPk as Hex);
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
 
     // Software P-256 "device passkey" + software ECDSA guardian.
     const p256Pub = p256.getPublicKey(P256_PRIV, false);
     const p256X = norm(Buffer.from(p256Pub.slice(1, 33)).toString('hex'));
     const p256Y = norm(Buffer.from(p256Pub.slice(33, 65)).toString('hex'));
     const guardian = privateKeyToAccount(GUARDIAN_PK);
-    const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: http(RPCS[0]) });
+    const guardianWallet = createWalletClient({ account: guardian, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     console.log(`\n[0a] factory(v0.27.0)=${FACTORY}  owner=${owner.address}  guardian=${guardian.address}`);
 
     // ── v0.22.0: deploy with the passkey + validator wired AT BIRTH (no setP256Key/setValidator tx) ──
@@ -390,6 +394,7 @@ async function main() {
     console.log('\n─────────── Phase 2: real device-passkey Tier-3 transfer (bundler) ───────────');
     const bundlerUrl = (process.env.PIMLICO_BUNDLER_URL || '').replace(/^["']|["']$/g, '');
     if (!bundlerUrl) throw new Error('PIMLICO_BUNDLER_URL missing in .env.sepolia');
+    await refuseMainnetUserOps(RPCS[0], bundlerUrl); // the bundler this phase sends to is on the RPC's (test) chain
     const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
     const G2 = getAddress('0xC59516625749001366aFab57FEFE23f3b62bB8B7'); // deterministic B3 recipient
     const TRANSFER = parseEther('0.051');

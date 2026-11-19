@@ -363,6 +363,21 @@ describe('UserClient', () => {
           expect(opts.tuneEstimate).toBeUndefined();
       });
 
+      it('executeGasless forwards the cost ceiling and the pre-sign hook to submit (DSR L2)', async () => {
+          const { PaymasterClient } = await import('@aastar/paymaster');
+          const submit = vi.mocked(PaymasterClient.submitGaslessUserOperation);
+          submit.mockClear();
+          const hook = () => {};
+          await client.executeGasless({
+              target: '0x1111111111111111111111111111111111111111', value: 0n, data: '0x1234',
+              paymaster: '0x2222222222222222222222222222222222222222', paymasterType: 'Super',
+              operator: '0x4444444444444444444444444444444444444444', maxUserOpCostWei: 123n, beforeSignUserOp: hook,
+          });
+          const opts = submit.mock.calls[0][8] as any;
+          expect(opts.maxUserOpCostWei).toBe(123n);
+          expect(opts.beforeSignUserOp).toBe(hook);
+      });
+
       it('executeGasless V4: explicit gas limits reach submit, so a V4 postOp the bundler does not estimate can be given (clestons #464 B1)', async () => {
           const { PaymasterClient } = await import('@aastar/paymaster');
           const submit = vi.mocked(PaymasterClient.submitGaslessUserOperation);
