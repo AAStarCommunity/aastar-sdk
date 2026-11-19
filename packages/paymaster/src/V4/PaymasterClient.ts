@@ -1,6 +1,7 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters, decodeEventLog } from 'viem';
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
-import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils.js';
+import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
+import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, DEFAULT_PVG_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 import { readUserOperationResult, userOperationNotYetValidFromRpc, UserOperationFailedError, type UserOperationExecutionResult, type WaitForUserOperationResultOptions } from './userOpOutcome.js';
@@ -31,7 +32,10 @@ export type SubmitGaslessOptions = {
      * (default true). false = never set it (flags 0, the behaviour before this option existed).
      */
     superPaymasterAutoRenew?: boolean;
-    /** Override the SDK's 5.5.0 paymasterVerificationGasLimit floor (default: spec §3.2 draft, 250k). */
+    /**
+     * A floor for SuperPaymaster's paymasterVerificationGasLimit. Unset: none beyond estimate × coefficient
+     * (the old 250k draft floor was below what the credit branch needs on 5.5.x).
+     */
     superPaymasterVerificationGasFloor?: bigint;
     /**
      * Adjust the bundler estimate before it is used, so a caller that tunes limits needs no
@@ -39,6 +43,60 @@ export type SubmitGaslessOptions = {
      * returned here.
      */
     tuneEstimate?: (est: GasEstimate) => Partial<GasEstimate>;
+    /**
+     * All five limits, fixed for a data collection and used exactly as given (no estimate). Refused when a
+     * limit is below a contract floor read from the chain (SuperPaymaster minPostOpGas) or below
+     * superPaymasterVerificationGasFloor, instead of being raised: a raised limit would change actualGas.
+     */
+    frozenGas?: UserOpGasLimits;
+    /** Estimate × this coefficient, in basis points (default DEFAULT_GAS_LIMIT_COEFFICIENT_BPS = 15000, i.e. 1.5x). */
+    gasLimitCoefficientBps?: bigint;
+    /** preVerificationGas = estimate × this (bps); default 10000 (1.0). PVG is charged in full, not a limit. */
+    preVerificationGasCoefficientBps?: bigint;
+    /** How fees are taken from the chain when maxFeePerGas / maxPriorityFeePerGas are not both given. */
+    feePolicy?: FeePolicy;
+    /** Called with the limits, fees and their sources before the op is signed, so a collector can record them. */
+    onGasDecided?: (decision: GasDecision) => void;
+};
+
+/** The limits used when the endpoint cannot estimate at all (eth_estimateUserOperationGas missing): defaults, not estimates. */
+/**
+ * A V4 paymaster's postOp limit when the bundler gives no estimate for it (Alchemy omits the field): the value the SDK
+ * used before limits came from estimates (max(est + 100k, 200k) with no estimate). Labelled 'default', not scaled.
+ */
+export const V4_DEFAULT_POSTOP_GAS = 200_000n;
+
+const LOCAL_DEFAULT_LIMITS: GasEstimate = {
+    preVerificationGas: 0n, verificationGasLimit: 1_000_000n, callGasLimit: 2_000_000n,
+    paymasterVerificationGasLimit: 100_000n, paymasterPostOpGasLimit: 100_000n,
+};
+
+/** Options of PaymasterClient.estimateUserOperationGas. */
+export type EstimateGasOptions = {
+    validityWindow?: number;
+    airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
+    operator?: Address; // For SuperPaymaster
+    factory?: Address;
+    factoryData?: Hex;
+    /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
+    superPaymasterFlags?: number;
+    /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
+    superPaymasterAutoRenew?: boolean;
+    /**
+     * Sponsorship already read for this op. When set, it is not read again — a 5.4.2→5.5.0
+     * upgrade between submit's read and this one would otherwise build two generations.
+     */
+    sponsorship?: SuperPaymasterSponsorshipContext;
+    /**
+     * Nonce already chosen for this op. Submit passes the reconciled value
+     * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
+     * so estimation cannot sign a different one.
+     */
+    nonce?: bigint;
+    /** Fees for the estimation op; unset ones come from the chain (feePolicy). */
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    feePolicy?: FeePolicy;
 };
 
 /** What estimateUserOperationGas returns (all limits). */
@@ -321,6 +379,10 @@ export class PaymasterClient {
     /**
      * Estimate Gas for a UserOperation.
      */
+    /**
+     * The bundler's estimate for one op, all five limits (unscaled). Throws when the bundler leaves a limit out or returns a
+     * sentinel (≤ 1); against an endpoint without eth_estimateUserOperationGas it returns the old local defaults.
+     */
     static async estimateUserOperationGas(
         client: any,
         wallet: any,
@@ -330,29 +392,31 @@ export class PaymasterClient {
         token: Address,
         bundlerUrl: string,
         callData: `0x${string}`,
-        options?: {
-            validityWindow?: number;
-            airAccountSig?: boolean; // v0.20.0 AirAccount: emit algId-prefixed [0x02] sig to avoid intermittent AA24
-            operator?: Address; // For SuperPaymaster
-            factory?: Address;
-            factoryData?: Hex;
-            /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
-            superPaymasterFlags?: number;
-            /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
-            superPaymasterAutoRenew?: boolean;
-            /**
-             * Sponsorship already read for this op. When set, it is not read again — a 5.4.2→5.5.0
-             * upgrade between submit's read and this one would otherwise build two generations.
-             */
-            sponsorship?: SuperPaymasterSponsorshipContext;
-            /**
-             * Nonce already chosen for this op. Submit passes the reconciled value
-             * (EntryPoint.getNonce when a hold exists, otherwise the account nonce)
-             * so estimation cannot sign a different one.
-             */
-            nonce?: bigint;
-        }
-    ) {
+        options?: EstimateGasOptions
+    ): Promise<GasEstimate> {
+        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(
+            client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
+        const missing = (Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]).filter((k) => fields[k] === undefined);
+        if (missing.length > 0 && !fallback) throw new Error(`Estimation Error: the bundler returned no usable ${missing.join(', ')}`);
+        return fields as GasEstimate;
+    }
+
+    /**
+     * What the bundler estimated: a field is absent when the bundler left it out or answered a sentinel (≤ 1, e.g. a postOp it
+     * did not simulate). `fallback`: the endpoint has no eth_estimateUserOperationGas and the fields are local defaults, not
+     * an estimate.
+     */
+    private static async estimateUserOperationGasDetailed(
+        client: any,
+        wallet: any,
+        aaAddress: Address,
+        entryPoint: Address,
+        paymasterAddress: Address,
+        token: Address,
+        bundlerUrl: string,
+        callData: `0x${string}`,
+        options?: EstimateGasOptions
+    ): Promise<{ fields: Partial<GasEstimate>; fallback: boolean }> {
         // 0. Check cachedPrice (Critical for Paymaster V4)
         if (!options?.operator) { // Only for Paymaster V4, not SuperPaymaster
             try {
@@ -432,33 +496,9 @@ export class PaymasterClient {
             });
         }
 
-        // 1.5. Get gas fees from network
-        // Strategy: testnets use aggressive floor (bundlers require higher minimums);
-        //          mainnet uses dynamic estimation with 1.5x buffer for cost efficiency.
-        const chainId = client.chain?.id || await client.getChainId();
-        const isTestnet = [11155111, 11155420, 31337].includes(chainId);
-        const TESTNET_PRIORITY_FLOOR = 500_000_000n; // 0.5 Gwei — Alchemy bundler minimum on testnets
-
-        let maxFeePerGas = 0n;
-        let maxPriorityFeePerGas = 0n;
-        try {
-            const feeData = await client.estimateFeesPerGas();
-            maxFeePerGas = ((feeData.maxFeePerGas ?? 0n) * 115n) / 100n;
-            maxPriorityFeePerGas = ((feeData.maxPriorityFeePerGas ?? 0n) * 115n) / 100n;
-        } catch {}
-        if (!maxFeePerGas) {
-            try {
-                const gasPrice = await client.getGasPrice();
-                maxFeePerGas = (gasPrice * 120n) / 100n;
-            } catch {}
-        }
-        // Testnet floor: bundlers like Alchemy require higher priority than network reports
-        if (isTestnet) {
-            if (maxPriorityFeePerGas < TESTNET_PRIORITY_FLOOR) maxPriorityFeePerGas = TESTNET_PRIORITY_FLOOR;
-            if (maxFeePerGas < TESTNET_PRIORITY_FLOOR * 2n) maxFeePerGas = TESTNET_PRIORITY_FLOOR * 2n;
-        }
-        if (!maxFeePerGas) maxFeePerGas = 1n;
-        if (maxFeePerGas < maxPriorityFeePerGas) maxFeePerGas = maxPriorityFeePerGas + 1n;
+        // 1.5. Fees for the estimation op: from the chain (eth_feeHistory), same rule as the submitted op.
+        const { maxFeePerGas, maxPriorityFeePerGas } = await resolveUserOpFees(
+            client, { maxFeePerGas: options?.maxFeePerGas, maxPriorityFeePerGas: options?.maxPriorityFeePerGas }, options?.feePolicy);
 
         const partialUserOp = {
             sender: aaAddress,
@@ -555,30 +595,23 @@ export class PaymasterClient {
 
         // Anvil Fallback for Estimation
         if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
-             console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using Anvil defaults.');
-             return {
-                 preVerificationGas: partialUserOp.preVerificationGas,
-                 verificationGasLimit: 1000000n, 
-                 callGasLimit: 2000000n,
-                 paymasterVerificationGasLimit: 100000n,
-                 paymasterPostOpGasLimit: 100000n
-             };
+             console.log('[PaymasterClient] EstimateUserOp failed (Method not found). Using local defaults (not an estimate).');
+             return { fallback: true, fields: { ...LOCAL_DEFAULT_LIMITS, preVerificationGas: partialUserOp.preVerificationGas } };
         }
 
         if (result.error) throw new Error(`Estimation Error: ${JSON.stringify(result.error)}`);
         
-        // Dynamic tuning: use estimated values directly to maintain efficiency
-        // Bundler efficiency check: actual_used / limit >= 0.4
-        const estVGL = BigInt(data.verificationGasLimit);
-        const estPMVGL = data.paymasterVerificationGasLimit ? BigInt(data.paymasterVerificationGasLimit) : 100000n;
-
-        return {
-            preVerificationGas: (BigInt(data.preVerificationGas) * 120n) / 100n + 5000n,
-            verificationGasLimit: tuneGasLimit(estVGL, 35_000n, 0.45), 
-            callGasLimit: (BigInt(data.callGasLimit) * 110n) / 100n, // Small 1.1x buffer
-            paymasterVerificationGasLimit: tuneGasLimit(estPMVGL, 35_000n, 0.45),
-            paymasterPostOpGasLimit: data.paymasterPostOpGasLimit ? BigInt(data.paymasterPostOpGasLimit) : 100000n
-        };
+        // The bundler's own estimate, unscaled: submitGaslessUserOperation applies the coefficient and the contract floors in
+        // one place. A field left out, or answered with a sentinel (≤ 1, e.g. a postOp the bundler did not simulate), is not
+        // an estimate: it is left absent so the caller's explicit value, or a refusal, decides it.
+        const fields: Partial<GasEstimate> = {};
+        for (const k of Object.keys(LOCAL_DEFAULT_LIMITS) as (keyof GasEstimate)[]) {
+            const v = data?.[k];
+            if (v === undefined || v === null) continue;
+            const n = BigInt(v);
+            if (n > 1n) fields[k] = n;
+        }
+        return { fields, fallback: false };
     }
 
     /**
@@ -676,17 +709,34 @@ export class PaymasterClient {
             }
         }
 
-        // 1. Auto-Estimate if requested or if limits missing
-        let gasLimits = {
-            preVerificationGas: options?.preVerificationGas,
-            verificationGasLimit: options?.verificationGasLimit,
-            callGasLimit: options?.callGasLimit,
-            paymasterVerificationGasLimit: options?.paymasterVerificationGasLimit,
-            paymasterPostOpGasLimit: options?.paymasterPostOpGasLimit ?? 200_000n
-        };
+        // 1. Limits: frozen (used as given), or the bundler's estimate × coefficient. Explicit per-field
+        // options and tuneEstimate still win over the scaled estimate.
+        const coefficientBps = options?.gasLimitCoefficientBps ?? DEFAULT_GAS_LIMIT_COEFFICIENT_BPS;
+        const pvgCoefficientBps = options?.preVerificationGasCoefficientBps ?? DEFAULT_PVG_COEFFICIENT_BPS;
+        const frozen = options?.frozenGas;
+        let rawEstimate: GasEstimate | undefined;
+        const FIELDS = ['preVerificationGas', 'verificationGasLimit', 'callGasLimit', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
+        type Field = typeof FIELDS[number];
+        // Where each sent limit came from, reported to onGasDecided (a collector must not record "estimate" for a default).
+        const limitSources: Partial<Record<Field, LimitSource>> = {};
+        let gasLimits: Partial<Record<Field, bigint>> = {};
+        if (frozen) {
+            for (const k of FIELDS) {
+                const v = (frozen as any)[k];
+                if (typeof v !== 'bigint' || v <= 0n || v >= 1n << 128n) throw new Error(`frozenGas.${k} must be a positive bigint below 2^128 (all five limits are required)`);
+                gasLimits[k] = v;
+                limitSources[k] = 'frozen';
+            }
+        } else {
+            for (const k of FIELDS) {
+                const v = options?.[k];
+                if (v !== undefined) { gasLimits[k] = v; limitSources[k] = 'explicit'; }
+            }
+        }
 
-        if (options?.autoEstimate !== false && (!gasLimits.verificationGasLimit || !gasLimits.callGasLimit)) {
-            const est = await this.estimateUserOperationGas(
+        // Estimate whenever a limit is still missing (unless estimation is switched off); fill only the missing ones.
+        if (!frozen && options?.autoEstimate !== false && FIELDS.some((k) => gasLimits[k] === undefined)) {
+            const { fields: est, fallback } = await this.estimateUserOperationGasDetailed(
                 client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData,
                 {
                     validityWindow: options?.validityWindow,
@@ -698,68 +748,71 @@ export class PaymasterClient {
                     superPaymasterAutoRenew: options?.superPaymasterAutoRenew,
                     sponsorship: spCtx, // one op, one resolve — do not re-read across a 5.4.2→5.5.0 upgrade
                     nonce,
+                    maxFeePerGas: options?.maxFeePerGas,
+                    maxPriorityFeePerGas: options?.maxPriorityFeePerGas,
+                    feePolicy: options?.feePolicy,
                 }
             );
-            const tuned = options?.tuneEstimate?.(est) ?? {};
-            gasLimits.preVerificationGas = options?.preVerificationGas ?? tuned.preVerificationGas ?? est.preVerificationGas;
-            gasLimits.verificationGasLimit = options?.verificationGasLimit ?? tuned.verificationGasLimit ?? est.verificationGasLimit;
-            gasLimits.callGasLimit = options?.callGasLimit ?? tuned.callGasLimit ?? est.callGasLimit;
-            gasLimits.paymasterVerificationGasLimit =
-                options?.paymasterVerificationGasLimit ?? tuned.paymasterVerificationGasLimit ?? est.paymasterVerificationGasLimit;
-            // SuperPaymaster postOp calls burnFromWithOpHash (~40k) + storage writes.
-            // Apply 100k buffer with 200k floor. Pure BigInt to avoid Number precision loss.
-            if (!options?.paymasterPostOpGasLimit) {
-                const _base = est.paymasterPostOpGasLimit + 100_000n;
-                gasLimits.paymasterPostOpGasLimit = tuned.paymasterPostOpGasLimit ?? (_base > 200_000n ? _base : 200_000n);
+            // A fallback (no estimation endpoint) yields local defaults: used as they are and labelled 'default'.
+            if (!fallback) rawEstimate = FIELDS.every((k) => est[k] !== undefined) ? est as GasEstimate : undefined;
+            if (options?.tuneEstimate && !fallback && !rawEstimate) {
+                // tuneEstimate is defined over a complete estimate; do not run it on a partial one, and do not skip it silently.
+                throw new Error(`tuneEstimate needs a complete estimate, but the bundler returned no usable ${FIELDS.filter((k) => est[k] === undefined).join(', ')}`);
+            }
+            const tuned = !fallback && rawEstimate ? (options?.tuneEstimate?.(rawEstimate) ?? {}) : {};
+            for (const k of FIELDS) {
+                if (gasLimits[k] !== undefined) continue;
+                if (tuned[k] !== undefined) { gasLimits[k] = tuned[k]; limitSources[k] = 'tuned'; continue; }
+                const v = est[k];
+                if (v === undefined) continue; // not estimated: a contract floor, or a refusal below, decides it
+                if (fallback) { gasLimits[k] = v; limitSources[k] = k === 'preVerificationGas' ? 'computed' : 'default'; }
+                else { gasLimits[k] = scaleLimits({ ...LOCAL_DEFAULT_LIMITS, [k]: v } as GasEstimate, coefficientBps, pvgCoefficientBps)[k]; limitSources[k] = 'estimate'; }
+            }
+            if (!fallback) {
+                const unestimated = FIELDS.filter((k) => gasLimits[k] === undefined);
+                // postOp: SuperPaymaster's has a contract floor read from the chain; a V4 paymaster's gets a labelled
+                // default (V4_DEFAULT_POSTOP_GAS, never a scaled sentinel) — bundlers such as Alchemy do not estimate it.
+                // Anything else needs a value.
+                const coveredByFloor = (k: Field) => k === 'paymasterPostOpGasLimit';
+                // preVerificationGas too: the SDK's local calculation has no L1 data fee, so it is not a stand-in for an L2 estimate.
+                const refuse = unestimated.filter((k) => !coveredByFloor(k));
+                if (refuse.length > 0) {
+                    throw new Error(`Estimation Error: the bundler returned no usable ${refuse.join(', ')}; pass ${refuse.length > 1 ? 'them' : 'it'} explicitly`);
+                }
             }
         }
 
-        // 1.5 Get Gas Prices from Network if not provided
-        // Strategy: testnets use aggressive floor; mainnet uses dynamic + 1.5x buffer
-        const chainId = client.chain?.id || await client.getChainId();
-        const isTestnet = [11155111, 11155420, 31337].includes(chainId);
-        const TESTNET_PRIORITY_FLOOR = 500_000_000n; // 0.5 Gwei
-
-        let maxFeePerGas = options?.maxFeePerGas;
-        let maxPriorityFeePerGas = options?.maxPriorityFeePerGas;
-        
-        if (!maxFeePerGas || !maxPriorityFeePerGas) {
-            try {
-                const feeData = await client.estimateFeesPerGas();
-                maxFeePerGas = maxFeePerGas ?? ((feeData.maxFeePerGas ?? 0n) * 115n) / 100n;
-                maxPriorityFeePerGas = maxPriorityFeePerGas ?? ((feeData.maxPriorityFeePerGas ?? 0n) * 115n) / 100n;
-            } catch (e) {
-                maxFeePerGas = maxFeePerGas ?? undefined;
-                maxPriorityFeePerGas = maxPriorityFeePerGas ?? undefined;
-            }
-        }
-        if (!maxFeePerGas) {
-            try {
-                maxFeePerGas = (await client.getGasPrice()) * 150n / 100n;
-            } catch {}
-        }
-        // Testnet floor: bundlers like Alchemy require higher priority than network reports
-        if (isTestnet) {
-            maxPriorityFeePerGas = maxPriorityFeePerGas ?? TESTNET_PRIORITY_FLOOR;
-            if (maxPriorityFeePerGas < TESTNET_PRIORITY_FLOOR) maxPriorityFeePerGas = TESTNET_PRIORITY_FLOOR;
-            if (!maxFeePerGas || maxFeePerGas < TESTNET_PRIORITY_FLOOR * 2n) maxFeePerGas = TESTNET_PRIORITY_FLOOR * 2n;
-        }
-        maxFeePerGas = maxFeePerGas ?? 1n;
-        maxPriorityFeePerGas = maxPriorityFeePerGas ?? 0n;
-        if (maxFeePerGas < maxPriorityFeePerGas) maxFeePerGas = maxPriorityFeePerGas + 1n;
-        console.log(`[PaymasterClient] Gas Pricing: ${isTestnet ? 'TESTNET (0.5 Gwei floor)' : 'MAINNET (dynamic)'} | priority=${maxPriorityFeePerGas} maxFee=${maxFeePerGas}`);
+        // 1.5 Fees: caller's values, otherwise from the chain (eth_feeHistory). No per-chain floor.
+        const fees = await resolveUserOpFees(
+            client, { maxFeePerGas: options?.maxFeePerGas, maxPriorityFeePerGas: options?.maxPriorityFeePerGas }, options?.feePolicy);
+        const { maxFeePerGas, maxPriorityFeePerGas } = fees;
+        console.log(`[PaymasterClient] Fees (${fees.source}): priority=${maxPriorityFeePerGas} maxFee=${maxFeePerGas}`);
 
         // 2. Build paymasterAndData
         let paymasterAndData: Hex;
+        const floors: GasDecision['floors'] = {};
         if (options?.operator && spCtx) {
-            // Floors only ever RAISE a limit. postOp: contract-enforced minPostOpGas (both
-            // generations; never trust a bundler estimate for it, spec §3.2). Verification: 5.5.0 only.
-            const verificationFloor = options?.superPaymasterVerificationGasFloor ?? spCtx.verificationGasFloor;
-            gasLimits.paymasterPostOpGasLimit = atLeast(gasLimits.paymasterPostOpGasLimit, spCtx.minPostOpGas);
-            gasLimits.paymasterVerificationGasLimit = atLeast(
-                gasLimits.paymasterVerificationGasLimit ?? gasLimits.verificationGasLimit ?? 150000n,
-                verificationFloor
-            );
+            // Contract floors read from the chain only ever RAISE an estimated limit. postOp:
+            // minPostOpGas (both generations; never trust a bundler estimate for it, spec §3.2).
+            // A frozen limit below a floor is refused instead: raising it would change actualGas.
+            floors.paymasterPostOpGasLimit = spCtx.minPostOpGas;
+            if (options?.superPaymasterVerificationGasFloor !== undefined) floors.paymasterVerificationGasLimit = options.superPaymasterVerificationGasFloor;
+            if (frozen) {
+                if (frozen.paymasterPostOpGasLimit < spCtx.minPostOpGas) {
+                    throw new Error(`frozenGas.paymasterPostOpGasLimit ${frozen.paymasterPostOpGasLimit} is below SuperPaymaster ${spCtx.version} minPostOpGas ${spCtx.minPostOpGas} (validation would fail)`);
+                }
+                if (floors.paymasterVerificationGasLimit !== undefined && frozen.paymasterVerificationGasLimit < floors.paymasterVerificationGasLimit) {
+                    throw new Error(`frozenGas.paymasterVerificationGasLimit ${frozen.paymasterVerificationGasLimit} is below superPaymasterVerificationGasFloor ${floors.paymasterVerificationGasLimit}`);
+                }
+            } else {
+                const raise = (k: 'paymasterPostOpGasLimit' | 'paymasterVerificationGasLimit', floor: bigint, fallback: bigint) => {
+                    const cur = gasLimits[k];
+                    if (cur === undefined) { gasLimits[k] = atLeast(fallback, floor); limitSources[k] = floor > fallback ? 'floor' : 'default'; }
+                    else if (cur < floor) { gasLimits[k] = floor; limitSources[k] = 'floor'; }
+                };
+                raise('paymasterPostOpGasLimit', spCtx.minPostOpGas, 0n);
+                raise('paymasterVerificationGasLimit', floors.paymasterVerificationGasLimit ?? 0n, gasLimits.verificationGasLimit ?? 150000n);
+            }
             paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
                 verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit,
@@ -770,25 +823,29 @@ export class PaymasterClient {
             // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
             // Since PVG is ~100k, (VGL + PMVGL) must be <= 150k.
             // We set each to 75k to safely pass the 0.4 efficiency guard.
-            const pmVerGas = gasLimits.paymasterVerificationGasLimit ?? 75000n; 
-            
+            if (gasLimits.paymasterVerificationGasLimit === undefined) { gasLimits.paymasterVerificationGasLimit = 75000n; limitSources.paymasterVerificationGasLimit = 'default'; }
+            if (gasLimits.paymasterPostOpGasLimit === undefined) { gasLimits.paymasterPostOpGasLimit = V4_DEFAULT_POSTOP_GAS; limitSources.paymasterPostOpGasLimit = 'default'; }
+
             paymasterAndData = buildPaymasterData(paymasterAddress, token, {
                 validityWindow: options?.validityWindow,
-                verificationGasLimit: pmVerGas,
-                postOpGasLimit: gasLimits.paymasterPostOpGasLimit ?? 100000n
+                verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
+                postOpGasLimit: gasLimits.paymasterPostOpGasLimit
             });
         }
 
         // 3. Construct UserOp
         const initCode = ((options?.factory && options?.factoryData) ? concat([options.factory, options.factoryData]) : '0x') as Hex;
+        if (gasLimits.verificationGasLimit === undefined) { gasLimits.verificationGasLimit = 75000n; limitSources.verificationGasLimit = 'default'; }
+        if (gasLimits.callGasLimit === undefined) { gasLimits.callGasLimit = 500000n; limitSources.callGasLimit = 'default'; }
         const accountGasLimits = concat([
-            pad(toHex(gasLimits.verificationGasLimit ?? 75000n), { size: 16 }),
-            pad(toHex(gasLimits.callGasLimit ?? 500000n), { size: 16 })
+            pad(toHex(gasLimits.verificationGasLimit), { size: 16 }),
+            pad(toHex(gasLimits.callGasLimit), { size: 16 })
         ]) as Hex;
         const gasFees = concat([
             pad(toHex(maxPriorityFeePerGas), { size: 16 }),
             pad(toHex(maxFeePerGas), { size: 16 })
         ]) as Hex;
+        if (gasLimits.preVerificationGas === undefined) limitSources.preVerificationGas = 'computed';
         const preVerificationGas =
             gasLimits.preVerificationGas ??
             (PaymasterClient.estimatePreVerificationGasV07({
@@ -856,6 +913,45 @@ export class PaymasterClient {
             userOp.signature = await PaymasterClient.signUserOpHash(wallet, h, options?.airAccountSig);
         };
 
+        // What was decided, read back from the op actually sent (fees may have been raised by a bundler's
+        // explicit requirement in the retry loop below).
+        const initialGasFees = userOp.gasFees;
+        // Fees the caller gave are a price limit: the retry loop below never raises an explicit field (per field).
+        const callerPriority = options?.maxPriorityFeePerGas !== undefined;
+        const callerMaxFee = options?.maxFeePerGas !== undefined;
+        const reportGas = () => {
+            if (!options?.onGasDecided) return;
+            const pmd = userOp.paymasterAndData;
+            const sources = limitSources as Record<keyof UserOpGasLimits, LimitSource>;
+            const all = Object.values(sources);
+            const decision: GasDecision = {
+                limits: {
+                    preVerificationGas: BigInt(userOp.preVerificationGas),
+                    verificationGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(2, 34)),
+                    callGasLimit: BigInt('0x' + userOp.accountGasLimits.slice(34)),
+                    paymasterVerificationGasLimit: BigInt('0x' + pmd.slice(42, 74)),
+                    paymasterPostOpGasLimit: BigInt('0x' + pmd.slice(74, 106)),
+                },
+                limitSources: sources,
+                fees: {
+                    ...fees,
+                    maxPriorityFeePerGas: BigInt('0x' + userOp.gasFees.slice(2, 34)),
+                    maxFeePerGas: BigInt('0x' + userOp.gasFees.slice(34)),
+                },
+                feesRaisedByBundler: userOp.gasFees !== initialGasFees,
+                limitsSource: frozen ? 'frozen' : all.every((x) => x === 'estimate' || x === 'floor') ? 'estimate' : 'mixed',
+                coefficientBps: all.includes('estimate') ? coefficientBps : undefined,
+                pvgCoefficientBps: limitSources.preVerificationGas === 'estimate' ? pvgCoefficientBps : undefined,
+                estimate: rawEstimate,
+                floors,
+            };
+            // An observer must not change the outcome: the op is already accepted (and its in-flight slot recorded)
+            // when this runs, so a throwing callback is reported and swallowed rather than turned into a failure.
+            try { options.onGasDecided(decision); } catch (e) {
+                console.warn(`[PaymasterClient] onGasDecided threw (${(e as Error)?.message ?? e}); the op was submitted and its result stands`);
+            }
+        };
+
         // 4. Final Hashing and Signing
         await resign();
 
@@ -898,24 +994,29 @@ export class PaymasterClient {
                 
                 // Case A: Replacement Underpriced (Nonce collision in mempool)
                 // e.g. {"code":-32602,"message":"replacement underpriced","data":{"currentMaxPriorityFee":"0x5f5e100","currentMaxFee":"0xf6a44be"}}
-                if (result.error.code === -32602 || msg.includes('replacement underpriced')) {
-                     console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Bumping fees to replace pending UserOp...`);
-                     let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
-                     let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
-
-                     // Extract from data if available (Alchemy/Pimlico standard)
-                     if (errData.currentMaxPriorityFee && errData.currentMaxFee) {
-                         const currentPriority = BigInt(errData.currentMaxPriorityFee);
-                         const currentMax = BigInt(errData.currentMaxFee);
-                         
-                         // Bump by 10% to ensure replacement (Geth/Alchemy minimum)
-                         newMaxPriority = (currentPriority * 110n) / 100n;
-                         newMaxFee = (currentMax * 110n) / 100n;
-                     } else {
-                         // Fallback: Bump current values by 15% if data missing
-                         newMaxPriority = (newMaxPriority * 115n) / 100n;
-                         newMaxFee = (newMaxFee * 115n) / 100n;
-                     }
+                if (/replacement/i.test(msg)) {
+                     console.log(`[PaymasterClient] ⚠️  Replacement Underpriced. Raising fees to replace the pending UserOp...`);
+                     const curPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
+                     const curMax = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
+                     // What the replacement needs, per field: 10% over the pending op's fees when the bundler names them
+                     // (Alchemy/Pimlico), else 15% over this op's.
+                     // A null / absent pair is "not named" (the 15% path); a named value that is not a number is a bundler error.
+                     const named = errData.currentMaxPriorityFee != null && errData.currentMaxFee != null;
+                     const feeOf = (v: unknown, field: string): bigint => {
+                         try { return BigInt(v as any); }
+                         catch { throw new Error(`Bundler Error: replacement underpriced with an unreadable ${field} ${JSON.stringify(v)}: ${JSON.stringify(result.error)}`); }
+                     };
+                     const needPriority = named ? (feeOf(errData.currentMaxPriorityFee, 'currentMaxPriorityFee') * 110n) / 100n : (curPriority * 115n) / 100n;
+                     const needMax = named ? (feeOf(errData.currentMaxFee, 'currentMaxFee') * 110n) / 100n : (curMax * 115n) / 100n;
+                     const refuseRaise = (field: string) => {
+                         throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (${field} was given by the caller and is not raised)`);
+                     };
+                     // An explicit field that already meets the requirement stays; one that does not is refused.
+                     let newMaxPriority = curPriority;
+                     let newMaxFee = curMax;
+                     if (curPriority < needPriority) { if (callerPriority) refuseRaise('maxPriorityFeePerGas'); newMaxPriority = needPriority; }
+                     if (curMax < needMax) { if (callerMaxFee) refuseRaise('maxFeePerGas'); newMaxFee = needMax; }
+                     if (newMaxFee < newMaxPriority) { if (callerMaxFee) refuseRaise('maxFeePerGas'); newMaxFee = newMaxPriority + 1n; }
 
                      console.log(`   -> New Priority: ${newMaxPriority}, New MaxFee: ${newMaxFee}`);
                      
@@ -941,31 +1042,37 @@ export class PaymasterClient {
 
                 if (matchPriority || matchMaxFee) {
                     console.log(`[PaymasterClient] ⚠️  Fee Error: ${msg}. Retrying with higher fees...`);
-                    
+
                     let newMaxPriority = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(2, 34)) : 0n;
                     let newMaxFee = userOp.gasFees ? BigInt('0x' + userOp.gasFees.slice(34)) : 0n;
+                    const refuseRaise = (field: string) => {
+                        throw new Error(`Bundler Error: ${JSON.stringify(result.error)} (${field} was given by the caller and is not raised)`);
+                    };
 
                     if (matchPriority && matchPriority[1]) {
                         const required = BigInt(matchPriority[1]);
                         if (required > newMaxPriority) {
+                            if (callerPriority) refuseRaise('maxPriorityFeePerGas');
                             console.log(`   -> Bumping Priority Fee to ${required}`);
-                            // Bump maxFee by at least the delta
                             const delta = required - newMaxPriority;
                             newMaxPriority = required;
-                            newMaxFee += delta;
+                            if (!callerMaxFee) newMaxFee += delta; // an explicit maxFee stays the cap
                         }
                     }
 
                     if (matchMaxFee && matchMaxFee[1]) {
                          const required = BigInt(matchMaxFee[1]);
                          if (required > newMaxFee) {
+                            if (callerMaxFee) refuseRaise('maxFeePerGas');
                             console.log(`   -> Bumping Max Fee to ${required}`);
                             newMaxFee = required;
                          }
                     }
 
-                    // Double check maxFee >= maxPriority
-                    if (newMaxFee < newMaxPriority) newMaxFee = newMaxPriority + 1n; // Minimal bump
+                    if (newMaxFee < newMaxPriority) {
+                        if (callerMaxFee) refuseRaise('maxFeePerGas');
+                        newMaxFee = newMaxPriority + 1n; // Minimal bump
+                    }
 
                     // Update UserOp
                     userOp.gasFees = concat([
@@ -987,6 +1094,10 @@ export class PaymasterClient {
                     const currentPVG = BigInt(userOp.preVerificationGas);
                     
                     if (requiredPVG > currentPVG) {
+                        if (frozen) {
+                            // A frozen collection does not change its limits per op; the caller re-freezes.
+                            throw new Error(`frozenGas.preVerificationGas ${currentPVG} is below the bundler's required ${requiredPVG}: ${msg}`);
+                        }
                         console.log(`[PaymasterClient] ⚠️  PVG Error: ${msg}. Updating preVerificationGas...`);
                         
                         // Add 5% buffer to avoid "chasing" the requirement on L2s
@@ -995,6 +1106,7 @@ export class PaymasterClient {
                         
                         // Update PVG and re-sign
                         userOp.preVerificationGas = bufferedPVG;
+                        limitSources.preVerificationGas = 'bundler-retry';
                         await resign();
                         
                         continue; // Retry
@@ -1044,7 +1156,7 @@ export class PaymasterClient {
                  });
                  let outcome = directHandleOpsOutcome(txHash, receipt, replacement);
                  if (!outcome.accept && (outcome.reason === 'replaced' || outcome.reason === 'cancelled')) {
-                     const executed = userOperationEvent(receipt, entryPoint, getUserOpHashV07(userOp, entryPoint, BigInt(chainId)));
+                     const executed = userOperationEvent(receipt, entryPoint, getUserOpHashV07(userOp, entryPoint, BigInt(chainIdForGuard)));
                      if (executed?.success) {
                          outcome = { accept: true, hash: outcome.hash };
                      } else if (executed) {
@@ -1071,12 +1183,14 @@ export class PaymasterClient {
                  }
                  guard.inSend = false;
                  if (spCtx?.generation === 'v5.5') guard.record?.(outcome.hash);
+                 reportGas();
                  return outcome.hash;
             }
 
             if (result.error) throw new Error(`Bundler Error: ${JSON.stringify(result.error)}`);
             console.log('[PaymasterClient] ✅ Submitted via', bundlerType, 'hash:', result.result);
             if (spCtx?.generation === 'v5.5') guard.record?.(result.result);
+            reportGas();
             return result.result;
         }
 

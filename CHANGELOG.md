@@ -21,6 +21,64 @@ All notable changes to this project will be documented in this file.
 - Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
   with the table) and a non-empty, frozen `SP550_WIRING_EXPECTED`; `--write=<value>` is refused before anything is read.
 
+### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
+
+- Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`
+  (default 15000 = 1.5x, the coefficient of SuperPaymaster's three-arm collector). The SDK-side compression
+  (`tuneGasLimit`) and the fixed 250k SuperPaymaster verification floor are no longer applied; the contract's
+  `gasParams().minPostOpGas` still raises postOp. `superPaymasterVerificationGasFloor` stays as an explicit floor.
+  `estimateUserOperationGas` now returns the bundler's estimate unscaled.
+- **preVerificationGas is not a limit and is not scaled by that coefficient**: EntryPoint v0.7 charges it in full (it
+  is added to preOpGas whole), so a margin on it is paid on every op. It has its own
+  `preVerificationGasCoefficientBps`, default 10000 (1.0, the estimate as is); a bundler that wants more answers
+  "must be at least" and the submit retry raises it (+5%). (Before this change it was × 1.5: 50,695 → 76,043 on the
+  local evidence, 25,348 gas paid per op.) `onGasDecided` reports `pvgCoefficientBps`.
+- Fees: both caller values given → used as they are; otherwise eth_feeHistory (priority = median of the 50th-percentile
+  rewards over 10 blocks, maxFee = next base fee × 2 + priority; `feePolicy` overrides). **No testnet priority floor**
+  (it used to replace even explicit fees on 31337 / Sepolia / OP Sepolia).
+- `frozenGas`: all five limits used exactly as given, for a data collection; refused instead of raised when below the
+  on-chain minPostOpGas or `superPaymasterVerificationGasFloor`, or when a bundler says preVerificationGas is too low.
+- `onGasDecided`: the sent limits with a per-field source (frozen / explicit / tuned / estimate / floor / default /
+  computed / bundler-retry), the fees and their source, and whether a bundler's explicit requirement raised the fees.
+  It runs after the op is accepted; a throwing callback is reported and does not change the outcome.
+- Estimation now runs whenever any of the five limits is missing (unless `autoEstimate: false`), filling only the
+  missing ones; before, giving verificationGasLimit and callGasLimit skipped it and the paymaster limits got defaults.
+- Fees the caller gives are a price limit, per field: the retry loop never raises an explicit field; a generated
+  field is still raised to a bundler's explicit requirement, within an explicit maxFeePerGas.
+- A bundler answer that is not an estimate is not used as one: a field left out or a sentinel (≤ 1, e.g. a postOp it
+  did not simulate) is filled only by an explicit value, a contract floor read from the chain, or — for a V4
+  paymaster's postOp, which bundlers such as Alchemy do not estimate — `V4_DEFAULT_POSTOP_GAS` (200,000, the
+  pre-change value; labelled `default`, never a scaled sentinel); otherwise the op is refused before signing. An
+  endpoint without eth_estimateUserOperationGas gives the old local defaults, labelled `default` and not scaled.
+  `estimateUserOperationGas` itself still returns all five fields or throws.
+- `UserClient.executeGasless({ …, gas })`: explicit gas limits for either paymaster type, used instead of the estimate.
+- A replacement answer whose fee fields are null falls back to the 15% bump (as before); a named fee that is not a
+  number is a named bundler error (it was a raw TypeError).
+- Paymaster prefund and per-op cap move with the limits and fees: a V4 paymaster checks
+  `maxCost <= maxGasCostCap` (`Paymaster__GasCostExceedsCap`) and pre-charges `token(maxCost)` from the sender's
+  balance, refunding the difference in postOp. With limits at estimate × 1.5 (preVerificationGas × 1.0) and maxFee = 2 × base + priority, maxCost
+  can rise on chains where it used to be bounded by tuned limits, and fall on testnets that lost the 1 gwei maxFee
+  floor. Bundler efficiency checks: Alchemy rejects an op whose actual/limit ratio is below 0.4, which a 1.5x
+  coefficient passes only while the estimate is within ~1.67x of actual use; SuperPaymaster's postOp floor (500,000 on
+  rc.8 against ~100,000 used) is a known risk there, to be measured on a real Sepolia submission (#434 B5).
+  `gasLimitCoefficientBps` is the knob.
+- `tuneEstimate` now receives the bundler's raw estimate (it used to get the SDK-tuned values), and is refused with a
+  partial estimate instead of being skipped. An unusable preVerificationGas estimate is refused like the others (the
+  SDK's local calculation has no L1 data fee); it is computed locally only without an estimation endpoint.
+- A replacement answer is recognised by its message (not by code -32602 alone) and handled per field: an explicit fee
+  that already meets the requirement stays, one that does not is refused, a generated one is raised.
+- `EstimateGasOptions`: the named options type of `estimateUserOperationGas`.
+- eth_feeHistory priority: the median of the per-block rewards (mean of the two middle values for an even count).
+- `SuperPaymasterClient` and `UserClient.executeGasless` (Super) no longer pass their own `tuneEstimate` (it capped
+  paymasterVerificationGasLimit near 133k, below what SuperPaymaster 5.5.x validation needs); they use the policy above.
+- What the gas values change in the charge (EntryPoint v0.7), measured one at a time from the same state: **three
+  things** — the unused part of the two execution limits (callGasLimit, paymasterPostOpGasLimit) at 10% (+200k each
+  → +20,000; v0.7 has no threshold, `PENALTY_GAS_THRESHOLD = 40000` is v0.8's), and preVerificationGas in full
+  (+20,000 → +20,000); verificationGasLimit and paymasterVerificationGasLimit do not (+0).
+- Evidence: `docs/onchain-evidence/gas-policy-local.md` (local SuperPaymaster DeployLive stack: credit branch, balance
+  branch, frozen limits giving identical actualGas, and the one-at-a-time variants above). `docs/onchain-evidence/paper-path-abi-equality.md`
+  with `packages/core/src/abis/paperPathAbi.test.ts`: the 32 ABI entries the paper paths use are identical in the vendored
+  files and SuperPaymaster cf8b1068. FU-122 lists the gas literals left outside this path.
 ### `sepolia-rc8`: SuperPaymaster rc.8 as a fresh stack next to Sepolia's 5.4.2 one
 
 - New SP 5.5.0 network `sepolia-rc8` (chain 11155111, `fresh`, `coexist: true`). Its pins live in
