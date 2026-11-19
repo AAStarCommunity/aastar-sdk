@@ -10,8 +10,15 @@
 # Usage: setup-fork.sh <sp checkout at fbd74fb1> <out dir> [fork block]
 set -euo pipefail
 SPW="$1"; OUT="$2"; FORK_BLOCK="${3:-12090052}"
-export PATH="$HOME/.foundry/bin:$PATH"
-PORT=28546; RPC="http://127.0.0.1:$PORT"; FORK_URL="https://ethereum-sepolia-rpc.publicnode.com"
+# SP550_FORGE_ARGS: extra forge script flags, e.g. --gas-estimate-multiplier 300: forge simulates gas on
+# foundry.toml's evm_version (cancun), which under-provisions Amsterdam state gas. Not --evm-version: it recompiles.
+# SP550_FOUNDRY_BIN: a pinned toolchain dir (forge must price the same hardfork as the anvil it sends to).
+export PATH="${SP550_FOUNDRY_BIN:-$HOME/.foundry/bin}:$PATH"
+PORT=28546; RPC="http://127.0.0.1:$PORT"
+# Fork source. The public node prunes old state and anvil reads untouched slots lazily, so a long
+# run can fail mid-op with "pruned history unavailable"; point SP550_FORK_URL at an archive node.
+# Never logged: it usually embeds a provider key.
+FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
 mkdir -p "$OUT" "$SPW/cache/sdk-fork"; OUT="$(cd "$OUT" && pwd)"; rm -f "$SPW/cache/sdk-fork/config.sepolia-fork.json"
 LOG="$OUT/setup.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
@@ -24,10 +31,15 @@ NEW_APNTS=0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7  # APNTsCapped-1.0.0 (pendi
 MINTER=0x16dF788ed4ed1Fc384e52dC832A6a6C3A23bdEBf    # APNTsCapped.minter()
 PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
 
-anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
-echo $! > "$OUT/anvil.pid"
-for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
-log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"
+# SP550_FORK_ATTACH=1: use the anvil already on $PORT (run-a7.sh starts it; this is then its deploy step).
+if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
+  log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
+else
+  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+  echo $! > "$OUT/anvil.pid"
+  for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
+  log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"
+fi
 check "pre SP.version()" "$(cast call $SP 'version()(string)' --rpc-url $RPC)" '"SuperPaymaster-5.4.2"'
 check "pre SP.pendingAPNTsToken()" "$(cast call $SP 'pendingAPNTsToken()(address)' --rpc-url $RPC)" "$NEW_APNTS"
 
@@ -74,7 +86,7 @@ run_step() { # <label> <sig> [args...] — forge script as OWNER unless SENDER i
   local label="$1" sig="$2"; shift 2
   log "== forge $label"
   (cd "$SPW" && ENV=sepolia V55_OUT_CONFIG="cache/sdk-fork/config.sepolia-fork.json" forge script contracts/script/v3/UpgradeToV5_5_0.s.sol:UpgradeToV5_5_0 \
-     --sig "$sig" "$@" --rpc-url $RPC --unlocked --sender "${SENDER:-$OWNER}" --broadcast --slow) >> "$OUT/forge-$label.log" 2>&1 \
+     --sig "$sig" "$@" --rpc-url $RPC --unlocked --sender "${SENDER:-$OWNER}" --broadcast --slow ${SP550_FORGE_ARGS:-}) >> "$OUT/forge-$label.log" 2>&1 \
      || { log "forge $label FAILED (see forge-$label.log)"; tail -30 "$OUT/forge-$label.log"; exit 1; }
   grep -E "step|CHECK|read-back|V55" "$OUT/forge-$label.log" | grep -v "^ *$" | tail -12 >> "$LOG" || true
 }
