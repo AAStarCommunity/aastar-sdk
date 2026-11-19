@@ -402,7 +402,10 @@ export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; acco
     const plans = Object.values(bundle?.plans ?? {}) as any[];
     if (!plans.length) p.push('taskPlan: plans is empty');
     for (const [s, pl] of Object.entries(bundle?.plans ?? {}) as [string, any][]) {
-        for (const k of PHASE_C_PRICING) if (typeof pl?.phaseC?.[k] === 'number' && !Number.isSafeInteger(pl.phaseC[k]) || String(pl?.phaseC?.[k]) !== String(out[k])) p.push(`plans[${s}].phaseC.${k} ${pl?.phaseC?.[k]} != shared.sdkLive.${k} ${out[k]}`);
+        for (const k of PHASE_C_PRICING) {
+            const v = planUint(pl?.phaseC?.[k]);
+            if (v === undefined || v !== out[k]) p.push(`plans[${s}].phaseC.${k} ${String(pl?.phaseC?.[k])} != shared.sdkLive.${k} ${out[k]}`);
+        }
     }
     const one = (vals: unknown[], what: string): string | undefined => {
         const set = new Set(vals.map((v) => (typeof v === 'string' && isAddressLike(v) ? getAddress(v) : `(bad ${JSON.stringify(v)})`)));
@@ -414,12 +417,18 @@ export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; acco
     const users = Array.isArray(bundle?.shared?.extraEndUsers) ? bundle.shared.extraEndUsers : [];
     const me = users.find((u: any) => typeof u?.address === 'string' && isAddressLike(u.address) && getAddress(u.address) === getAddress(w.account));
     if (!me) p.push(`taskPlan: this run's account ${w.account} is not in shared.extraEndUsers`);
-    out.xAmount = me && /^(0|[1-9][0-9]*)$/.test(String(me.xAmount)) ? BigInt(me.xAmount) : undefined;
+    out.xAmount = me ? planUint(me.xAmount) : undefined;
     if (me && out.xAmount === undefined) p.push(`taskPlan: shared.extraEndUsers[${w.account}].xAmount is not an integer`);
     out.sdkCostCapCommit = typeof sl.sdkCostCapCommit === 'string' ? sl.sdkCostCapCommit : undefined;
     return p.length ? { problems: p } : { problems: [], plan: out as SdkLivePlan };
 }
 const isAddressLike = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
+/** A plan integer as bigint, or undefined: a bigint, a safe non-negative integer number, or a decimal string — nothing
+ *  else (an array, an object marker or a fraction never compares equal by coercion; clestons #470 info). */
+const planUint = (v: unknown): bigint | undefined =>
+    typeof v === 'bigint' ? (v >= 0n ? v : undefined)
+        : typeof v === 'number' ? (Number.isSafeInteger(v) && v >= 0 ? BigInt(v) : undefined)
+            : typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v) ? BigInt(v) : undefined;
 
 /** SP and token state read at signing time (latest block). */
 export type SignTimePricing = { ethUsdPrice: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint; exchangeRate: bigint };
@@ -499,7 +508,8 @@ export async function guardedSignMessage(a: any, io: {
     await io.costAtKey(maxCost);
     if (!io.fresh) throw new Error('no head-freshness check is wired for this signature; refused');
     await io.fresh();
-    const sig = await io.sign(a);
+    // The key gets a fresh object built from the approved hash, never the caller's (which could change after approval).
+    const sig = await io.sign({ message: { raw } });
     io.after?.(raw, sig, maxCost);
     return sig;
 }

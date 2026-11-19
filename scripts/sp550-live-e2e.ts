@@ -500,7 +500,10 @@ async function main() {
         const p = headFreshnessProblem(lastCheckBlock, await pub.getBlockNumber({ cacheTime: 0 }));
         if (p) throw new Error(p);
     };
-    const user = { ...base, signTransaction: async (t: any, o?: any) => {
+    // Every other signing method of the key refuses (clestons #470): only signMessage (UserOps, guarded) and
+    // signTransaction (C12, guarded) exist on this account.
+    const refuseOther = (m: string) => async () => { throw new Error(`the user key does not ${m} in this run; refused`); };
+    const user = { ...base, sign: refuseOther('sign raw hashes'), signTypedData: refuseOther('sign typed data'), signAuthorization: refuseOther('sign EIP-7702 authorizations'), signTransaction: async (t: any, o?: any) => {
         st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
         st.costAtKey = lastSignedMaxCost === undefined ? undefined : () => costAtKey(lastSignedMaxCost!);
         st.fresh = fresh;

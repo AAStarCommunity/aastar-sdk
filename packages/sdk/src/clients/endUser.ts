@@ -276,7 +276,7 @@ export function createEndUserClient({
             });
 
             // 4. Sponsorship from what the deployed SP actually reads (both generations): token, minPostOpGas.
-            const { resolveSuperPaymasterSponsorship, buildSuperPaymasterData, PaymasterClient, resolveUserOpFees, scaleLimits, scaleGas, DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, guardUserOpSignature, userOpCostCeilingWei } = await import('@aastar/paymaster');
+            const { resolveSuperPaymasterSponsorship, buildSuperPaymasterData, PaymasterClient, resolveUserOpFees, scaleLimits, scaleGas, DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, guardUserOpSignature, userOpCostCeilingWei, getUserOpHashV07 } = await import('@aastar/paymaster');
             const sp = await resolveSuperPaymasterSponsorship(client as any, usedAddresses.superPaymaster, operator);
             if (!sp.isConfigured || sp.isPaused) {
                 throw new Error(`SuperPaymaster ${sp.version}: operator ${operator} is ${sp.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
@@ -344,8 +344,11 @@ export function createEndUserClient({
                 signature: '0x' as Hex
             };
 
-            // 7. Sign UserOp Hash
-            const userOpHash = await (client as any).readContract({
+            // 7. Sign UserOp Hash. The hash is computed HERE from the op itself (op + EntryPoint + chainId, a pure function):
+            // the guard checks and the key signs that value. The node's getUserOpHash is only a cross-check — a
+            // differing answer (a lying RPC, another EntryPoint version) refuses before anything is signed (clestons #470 B1).
+            const userOpHash = getUserOpHashV07(userOp, entryPointAddress, BigInt(client.chain!.id)) as Hex;
+            const rpcUserOpHash = await (client as any).readContract({
                 address: entryPointAddress,
                 abi: [{
                     type: 'function',
@@ -370,11 +373,14 @@ export function createEndUserClient({
                 functionName: 'getUserOpHash',
                 args: [userOp]
             }) as Hex;
+            if (String(rpcUserOpHash).toLowerCase() !== userOpHash.toLowerCase()) {
+                throw new Error(`executeGasless: the node's getUserOpHash ${rpcUserOpHash} is not the hash of this op ${userOpHash} (EntryPoint ${entryPointAddress}, chain ${client.chain!.id}); nothing was signed`);
+            }
 
             // The cost ceiling and the caller's hook see this op exactly as it is about to be signed (both refuse before
             // any signature; the outer handleOps transaction is a separate EOA spend, bounded by its own gas x fee).
             await guardUserOpSignature({
-                userOpHash, sender: accountAddress, nonce: BigInt(nonce), limits: L, maxFeePerGas: fees.maxFeePerGas,
+                userOpHash, sender: accountAddress, nonce: BigInt(nonce), limits: { ...L }, maxFeePerGas: fees.maxFeePerGas,
                 maxPriorityFeePerGas: fees.maxPriorityFeePerGas, maxCostWei: userOpCostCeilingWei(L, fees.maxFeePerGas), paymasterAndData,
             }, args);
             const signature = await (accountToUse as any).signMessage({

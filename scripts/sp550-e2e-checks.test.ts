@@ -446,6 +446,16 @@ describe('guardedSignMessage: the key boundary, driven with a counting key (DSR 
         await expect(guardedSignMessage(arg, t.io)).rejects.toThrow(why as RegExp);
         expect(t.keys()).toBe(0);
     });
+    it('the key gets a fresh { message: { raw } } built from the approved hash, not the caller\'s object', async () => {
+        const t = setup();
+        t.approvals.approve(H, 1n);
+        let got: any;
+        t.io.sign = async (x: any) => { got = x; return '0xsig' as Hex; };
+        const callerArg: any = { message: { raw: H }, extra: 'ignored' };
+        await guardedSignMessage(callerArg, t.io);
+        expect(got).toEqual({ message: { raw: H } });
+        expect(got).not.toBe(callerArg);
+    });
     it('an approval is used once: a second signature of the same hash is refused', async () => {
         const t = setup({ budget: () => ({ used: 0, limit: 9 }) });
         t.approvals.approve(H, 1n);
@@ -532,6 +542,13 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', { timeout:
     it('a number token is read whole, however long (no 4096-character cut)', () => {
         const big = '9'.repeat(5000);
         expect(parsePlanJson(`{"a":${big}}`).a.toString()).toBe(big);
+    });
+    it('a phaseC value wrapped in an array (["123"]) no longer matches by String() coercion', () => {
+        const live = { maxCostPerOpWei: '1234567890123457', priceCap: '350000000000', priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137, validationBufferBPS: 1000, exchangeRate: '1333333333333333333', a0: '144032920514403321468', Amax: '160409463576890979119', Xmax: '213879284769187972106', status: 'cleared', priceHeadroomBPS: 0 };
+        const pc = { priceCap: ['350000000000'], priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137, exchangeRate: '1333333333333333333', addresses: { X: A(0x0f) } };
+        const r = sdkLivePlanProblems({ shared: { sdkLive: live, extraEndUsers: [{ address: A(0xacc), xAmount: '1' }] }, plans: { [A(0x51)]: { phaseC: pc, deploymentContext: { operator: A(0x0e) } } } },
+            { opMaxCostWei: 1234567890123457n, account: A(0xacc), lock: superPaymasterLock, validationBufferBPS: 1000n });
+        expect(r.problems).toContainEqual(expect.stringMatching(/phaseC.priceCap 350000000000 != shared.sdkLive.priceCap/));
     });
     it('a fraction becomes a non-integer marker (never a rounded integer); the plan check refuses it in an integer field', () => {
         const v = parsePlanJson('{"a":1.00000000000000001,"b":-9007199254740993,"c":0.5}');
