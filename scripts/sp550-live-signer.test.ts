@@ -206,6 +206,11 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         expect(r.output).toMatch(/refused: --fork-setup impersonates accounts: mode fork only/); // checked first; switchBook alone is the next test
         expect(r.output).not.toMatch(/cutover gate|fork-only SDK book switch/);
     }, 60_000);
+    it('gate.deployLiveConfig in a live config is refused (fork-only: a live run is held to the gate and the pins)', () => {
+        const r = run({ gate: { deployLiveConfig: 'config.json' } }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: gate.deployLiveConfig is fork-only/);
+    }, 60_000);
     it('gate.switchBook alone in a live config is refused', () => {
         const r = run({ gate: { switchBook: true } }, []);
         expect(r.status).toBe(2);
@@ -256,12 +261,16 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
     it('fork mode with a non-loopback RPC is refused', () => {
         const r = run({ ...fork, rpcUrls: ['https://rpc.invalid'] }, []);
         expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: mode fork: every RPC and the bundler must be loopback/);
+        expect(r.output).toMatch(/refused: mode fork: every RPC must be loopback \(a non-loopback anvil fork is accepted only with gate.deployLiveConfig\)/);
     }, 60_000);
     it('fork mode with a non-loopback bundler is refused', () => {
         const r = run({ ...fork, bundlerUrl: 'https://bundler.invalid' }, []);
         expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: mode fork: every RPC and the bundler must be loopback/);
+        expect(r.output).toMatch(/refused: mode fork: the bundler must be loopback/);
+    }, 60_000);
+    it('gate.deployLiveConfig and taskPlan + taskToken are refused where they do not belong (before any network read)', () => {
+        expect(run({ ...fork, gate: { deployLiveConfig: 'c.json', pinsFile: 'p.json' } }, []).output).toMatch(/refused: gate.deployLiveConfig replaces gate.pinsFile/);
+        expect(run({ ...fork, taskPlan: { file: 'x', sha256: '0'.repeat(64) }, taskToken: '0x' + '11'.repeat(20) }, []).output).toMatch(/refused: taskPlan and taskToken/);
     }, 60_000);
     it('fork mode with a key other than { anvilIndex } is refused', () => {
         const r = run({ ...fork, userKey: { keystore: 'k.json' } }, []);

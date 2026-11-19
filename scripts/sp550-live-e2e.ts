@@ -22,7 +22,12 @@
  *     "rpcUrls": ["<rpc>", "<rpc2>"],     // the read-back gate's RPCs; the first one sends
  *     "bundlerUrl": "<bundler>",
  *     "gate": { "pinsFile"?: "<pins.json>", "block"?: "finalized" | "latest" | <n>, "allowRc"?: bool,
- *               "switchBook"?: true },   // mode fork only, with pinsFile: the book the pin-fill PR would write
+ *               "switchBook"?: true,     // mode fork only, with pinsFile: the book the pin-fill PR would write
+ *               "deployLiveConfig"?: "<DeployLive config.json>" },  // mode fork only: the joint rehearsal on SP's
+ *                                        // acceptance fork — addresses read from the config, held to fork checks
+ *                                        // (anvil, code, SP wiring) instead of the read-back gate
+ *     "taskPlan"?: { "file": "<rq3-three-arm.<chainId>.json>", "sha256": "<hex>" },  // SP's three-arm plan: its T
+ *                                        // and taskCallData are used (and must match); not with taskToken
  *     "operator": "0x…",                    // the community operator whose xPNTs v2 token pays
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
@@ -81,6 +86,8 @@ import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550Cut
 import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
+import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
+import { createHash } from 'crypto';
 import { gasSourceClient, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
@@ -104,7 +111,9 @@ async function main() {
     const rpcUrls: string[] = Array.isArray(cfg.rpcUrls) ? cfg.rpcUrls : [];
     if (rpcUrls.length === 0 || typeof cfg.bundlerUrl !== 'string') refuse('config needs rpcUrls[] and bundlerUrl');
     if (cfg.mode === 'fork') {
-        if (![...rpcUrls, cfg.bundlerUrl].every(isLoopback)) refuse('mode fork: every RPC and the bundler must be loopback');
+        // The bundler is always this machine's; a fork RPC elsewhere (SP's acceptance fork) must prove it is anvil, below.
+        if (!isLoopback(cfg.bundlerUrl)) refuse('mode fork: the bundler must be loopback');
+        if (!rpcUrls.every(isLoopback) && cfg.gate?.deployLiveConfig === undefined) refuse('mode fork: every RPC must be loopback (a non-loopback anvil fork is accepted only with gate.deployLiveConfig)');
         if (cfg.userKey?.anvilIndex === undefined) refuse('mode fork: userKey must be { anvilIndex } (anvil\'s public mnemonic)');
     } else if (cfg.mode === 'live') {
         if (arg('--live-go') !== net.network) refuse(`mode live sends real ops: pass --live-go ${net.network} (the author's go for this network)`);
@@ -115,6 +124,9 @@ async function main() {
     if (cfg.mode !== 'fork' && args.includes('--fork-setup')) refuse('--fork-setup impersonates accounts: mode fork only');
     if (cfg.mode !== 'fork' && cfg.gate?.pinsFile !== undefined) refuse('gate.pinsFile is fork-only: a live run is held against the pins the SDK ships with');
     if (cfg.mode !== 'fork' && cfg.gate?.switchBook !== undefined) refuse('gate.switchBook is fork-only: a live run is held against the SDK book it ships with');
+    if (cfg.mode !== 'fork' && cfg.gate?.deployLiveConfig !== undefined) refuse('gate.deployLiveConfig is fork-only: a live run is held to the read-back gate and the SDK pins');
+    if (cfg.gate?.deployLiveConfig !== undefined && (cfg.gate?.pinsFile !== undefined || cfg.gate?.switchBook !== undefined)) refuse('gate.deployLiveConfig replaces gate.pinsFile / gate.switchBook: give one input');
+    if (cfg.taskPlan !== undefined && cfg.taskToken !== undefined) refuse('taskPlan and taskToken: T comes from one of them, never both');
     if (cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is gone: use gate.switchBook, which derives the book from the pins exactly as pin-fill does');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
@@ -149,20 +161,42 @@ async function main() {
         for (const [k, a] of Object.entries(switched)) console.log(`fork-only SDK book switch: ${k} ${String(shipped[k] ?? '(absent)')} -> ${a ?? '(removed)'}`);
         book = applyBookSwitch(shipped, switched);
     }
-    const gate = await runSp550CutoverGate({
-        network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc, book,
-        block: block === undefined || block === 'finalized' || block === 'latest' ? block : BigInt(block),
-    });
-    if (gate.exitCode !== 0) {
-        for (const c of gate.results.filter((c) => !c.ok)) console.error(`  gate ❌ ${c.check} — ${c.detail}`);
-        refuse(`the SP 5.5.0 read-back gate did not pass (exit ${gate.exitCode}${gate.error ? `: ${gate.error}` : ''}); this E2E runs only after it does`);
+    let forkSet: ReturnType<typeof forkAddressSetFromDeployLive> | undefined;
+    if (cfg.gate?.deployLiveConfig !== undefined) {
+        // Joint fork rehearsal (DSR): SP's acceptance fork. Every RPC must be an anvil fork of the network's chain.
+        for (const url of rpcUrls) {
+            const c = createPublicClient({ transport: http(url) });
+            const cv = await c.request({ method: 'web3_clientVersion' } as never).catch(() => undefined);
+            if (!isLoopback(url) && !isAnvilClient(cv)) refuse(`mode fork: ${new URL(url).host} is not loopback and does not report an anvil client (${String(cv)})`);
+            const id = await c.getChainId();
+            if (id !== net.chainId) refuse(`mode fork: ${new URL(url).host} reports chain ${id}, not ${net.network} (${net.chainId})`);
+        }
+        let dl: Record<string, unknown>;
+        try { dl = JSON.parse(fs.readFileSync(cfg.gate.deployLiveConfig, 'utf8')); } catch (e) { return refuse(`gate.deployLiveConfig: ${(e as Error).message}`); }
+        forkSet = forkAddressSetFromDeployLive(dl, (CANONICAL_ADDRESSES as Record<number, any>)[net.chainId] ?? {});
+        const problems = await forkAddressSetProblems(createPublicClient({ transport: http(rpcUrls[0]) }) as any, forkSet);
+        if (problems.length) {
+            for (const x of problems) console.error(`  fork ❌ ${x}`);
+            refuse('the DeployLive config does not hold on this fork');
+        }
+        console.log(`=== FORK REHEARSAL: addresses from the DeployLive config (commit ${forkSet.provenance.commit ?? '(none)'}, srcHash ${forkSet.provenance.srcHash || '(none)'}), held to the fork checks — NOT the read-back gate; not live data ===`);
+        if (forkSet.notDeployed.length) console.log(`  not deployed (zero in the set): ${forkSet.notDeployed.join(', ')}`);
+    } else {
+        const gate = await runSp550CutoverGate({
+            network: net.network, rpcs: gateRpcs, pins, pinsSource: cfg.gate?.pinsFile, allowRc: !!cfg.gate?.allowRc, book,
+            block: block === undefined || block === 'finalized' || block === 'latest' ? block : BigInt(block),
+        });
+        if (gate.exitCode !== 0) {
+            for (const c of gate.results.filter((c) => !c.ok)) console.error(`  gate ❌ ${c.check} — ${c.detail}`);
+            refuse(`the SP 5.5.0 read-back gate did not pass (exit ${gate.exitCode}${gate.error ? `: ${gate.error}` : ''}); this E2E runs only after it does`);
+        }
+        console.log(gate.header);
+        for (const c of gate.results) console.log(`  gate ✅ ${c.check} — ${c.detail}`);
     }
-    console.log(gate.header);
-    for (const c of gate.results) console.log(`  gate ✅ ${c.check} — ${c.detail}`);
     // The SuperPaymaster the gate just passed: the --pins file, else the network's pin table — the
     // same source the gate read, so the E2E cannot drift onto an address the read-back did not check.
     // By network (sp550PinsFor), so sepolia-rc8 reads its own coexisting entry, never the chain's other stack.
-    const pinned = pins ?? sp550PinsFor(net.network).pins;
+    const pinned = forkSet ? { superPaymaster: forkSet.addresses.superPaymaster } : pins ?? sp550PinsFor(net.network).pins;
     const deployment = net.network;
     const sp = getAddress(requireDeployedAddress(pinned as Record<string, unknown> | undefined, 'superPaymaster', deployment));
     // The SDK hashes the op with client.chain.id, so the clients carry the network's chain, and the
@@ -191,7 +225,21 @@ async function main() {
     if (typeof cfg.expectMinTxInterval !== 'string' || !/^[0-9]+$/.test(cfg.expectMinTxInterval)) {
         refuse('expectMinTxInterval must be the operator\'s minTxInterval in seconds as a decimal string (the paper cells: "60")');
     }
-    const taskToken = cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
+    // SP's three-arm plan (DSR): pinned by its sha256; its chain and SuperPaymaster must be this run's, its T is used,
+    // and the call this run sends must be byte-equal to its taskCallData (checked once the call is built).
+    let plan: { T: Address; taskCallData: Hex; commit?: string } | undefined;
+    if (cfg.taskPlan !== undefined) {
+        const { file: planFile, sha256 } = cfg.taskPlan ?? {};
+        if (typeof planFile !== 'string' || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(sha256)) refuse('taskPlan needs { file, sha256 (64 hex) }');
+        const raw = fs.readFileSync(planFile, 'utf8');
+        const got = createHash('sha256').update(raw).digest('hex');
+        if (got.toLowerCase() !== sha256.toLowerCase()) refuse(`taskPlan ${planFile}: sha256 ${got} != the given ${sha256}`);
+        const sh = JSON.parse(raw)?.shared ?? {};
+        if (Number(sh.chainId) !== net.chainId) refuse(`taskPlan: shared.chainId ${sh.chainId} != ${net.network} (${net.chainId})`);
+        if (!isAddress(String(sh.T)) || !/^0x[0-9a-fA-F]*$/.test(String(sh.taskCallData))) refuse('taskPlan: shared.T / shared.taskCallData missing or malformed');
+        plan = { T: getAddress(sh.T), taskCallData: sh.taskCallData as Hex, commit: sh.commit, SP: sh.SP } as any;
+    }
+    const taskToken = plan ? plan.T : cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
     const FIELDS = ['verificationGasLimit', 'callGasLimit', 'preVerificationGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
     let frozenGas: Record<(typeof FIELDS)[number], bigint> | undefined;
     if (cfg.frozenGas !== undefined) {
@@ -381,6 +429,11 @@ async function main() {
     const noop = taskToken
         ? encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [taskToken, 0n, encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] })] })
         : encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
+    if (plan) {
+        if (!(plan as any).SP || getAddress((plan as any).SP) !== sp) refuse(`taskPlan: shared.SP ${(plan as any).SP} is not this run's SuperPaymaster ${sp}`);
+        if (noop.toLowerCase() !== plan.taskCallData.toLowerCase()) refuse('taskPlan: this run\'s call is not byte-equal to shared.taskCallData');
+        console.log(`task plan: T ${plan.T}, taskCallData byte-equal, plan commit ${plan.commit ?? '(none)'}`);
+    }
 
     try {
         // ---- 4. S1 ----
