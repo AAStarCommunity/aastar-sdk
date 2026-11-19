@@ -16,7 +16,7 @@ import {
     erc20Abi
 } from 'viem';
 
-import { 
+import { zeroDestinationGuard, 
     registryActions, 
     RegistryABI, 
     sbtActions,
@@ -74,7 +74,9 @@ export function createCommunityClient({
         account
     })
     .extend(publicActions)
-    .extend(walletActions);
+    .extend(walletActions)
+    // A destination of address zero (a contract the selected deployment does not include) is refused before signing.
+    .extend(zeroDestinationGuard);
 
     // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
     // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.

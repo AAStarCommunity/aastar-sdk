@@ -1,5 +1,5 @@
 import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address } from 'viem';
-import {
+import { zeroDestinationGuard,
     registryActions, 
     superPaymasterActions,
     paymasterActions, 
@@ -39,7 +39,9 @@ export function createAdminClient({
 }): AdminClient {
     const baseClient = createClient({ chain, transport, account })
         .extend(publicActions)
-        .extend(walletActions);
+        .extend(walletActions)
+    // A destination of address zero (a contract the selected deployment does not include) is refused before signing.
+    .extend(zeroDestinationGuard);
         
     // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
     // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
@@ -58,9 +60,9 @@ export function createAdminClient({
         ...paymasterActions(usedAddresses.paymasterV4)(baseClient as any),
         ...stakingActions(usedAddresses.gTokenStaking)(baseClient as any),
         ...sbtActions(usedAddresses.mySBT)(baseClient as any),
-        ...dvtActions(ADDRESS_PLACEHOLDER)(baseClient as any),
+        ...dvtActions((usedAddresses as Record<string, Address | undefined>).dvtValidator ?? ADDRESS_PLACEHOLDER)(baseClient as any),
         ...xPNTsFactoryActions(usedAddresses.xPNTsFactory || '0x')(baseClient as any),
-        ...aggregatorActions(ADDRESS_PLACEHOLDER)(baseClient as any),
+        ...aggregatorActions((usedAddresses as Record<string, Address | undefined>).blsAggregator ?? ADDRESS_PLACEHOLDER)(baseClient as any),
     };
 
     return Object.assign(baseClient, actions) as unknown as AdminClient;

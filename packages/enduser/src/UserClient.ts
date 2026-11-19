@@ -1,5 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
-import { BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain, encodeEndUserRoleData, RegistryABI } from '@aastar/core';
+import { isZeroAddress, ZeroAddressDestinationError, BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain, encodeEndUserRoleData, RegistryABI } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
 
@@ -477,6 +477,8 @@ export class UserClient extends BaseClient {
             // operator's configured xPNTs token on-chain and puts it in paymasterAndData (REQUIRED by
             // SuperPaymaster 5.5.0, ignored by 5.4.2), and applies the contract's gas floors.
             const ZERO = '0x0000000000000000000000000000000000000000' as Address;
+            // The call target goes inside the UserOp; a declared-absent contract (zero) is refused before anything is signed.
+            if (isZeroAddress(params.target)) throw new ZeroAddressDestinationError('executeGasless', 'execute target');
             if (params.paymasterType === 'V4' && !params.gasToken) {
                 throw new Error('executeGasless: gasToken is required for a V4 paymaster (the ERC-20 paid for gas) — not the call target.');
             }

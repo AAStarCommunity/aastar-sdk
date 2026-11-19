@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import {
+    sp550PinsFor, sp550NetworkPinProblems,
     SP550_ADDRESS_OWNER, SP550_FRESH_DEPLOY_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, SP550_NETWORKS, SP550_RELEASE_HOLDS,
     assertSp550ChainId, requireSp550FreshDeployPins, resolveSp550Network, sp550FreshPinProblems,
 } from './sp550Deployments.js';
@@ -12,10 +13,11 @@ const BOOK = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => 
 const FULL = {
     tag: 'v5.5.0', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: BOOK.superPaymaster, spImpl: A(1), spImplCodehash: ('0x' + 'ab'.repeat(32)) as `0x${string}`,
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
-    aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: A(9), readbackBlock: 12_000_000n,
+    aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: BOOK.aPNTs, readbackBlock: 12_000_000n,
     spAdminExtension: A(0xa), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0xb), disclosureRegistry: A(0xc),
-    addresses: BOOK,
-    absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS],
+    // The book's aPNTs / xPNTsFactory are the aPNTsCapped / xPNTsFactoryV2 contracts (sp550FreshPinProblems).
+    addresses: { ...BOOK, xPNTsFactory: A(4) } as Record<string, `0x${string}`>,
+    absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory'),
 };
 // A codehash for every name that can be pinned: the top-level pieces and every SP-owned book key, so
 // a test that adds an optional entry does not also have to add its hash.
@@ -25,12 +27,15 @@ Object.assign(FULL as any, { codehashes: Object.fromEntries([
 ].map((k, i) => [k, k === 'spImpl' ? FULL.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)])) });
 // A declared alias is one contract with one code: its book entry shares the top-level hash.
 (FULL as any).codehashes['addresses.superPaymaster'] = (FULL as any).codehashes.superPaymaster;
+(FULL as any).codehashes['addresses.aPNTs'] = (FULL as any).codehashes.aPNTsCapped;
+(FULL as any).codehashes['addresses.xPNTsFactory'] = (FULL as any).codehashes.xPNTsFactoryV2;
 
 describe('SP 5.5.0 network selection', () => {
     it('maps each network name to its viem chainId and deploy mode', () => {
-        expect(resolveSp550Network('sepolia')).toEqual({ network: 'sepolia', chainId: sepolia.id, mode: 'upgrade' });
-        expect(resolveSp550Network('op-sepolia')).toEqual({ network: 'op-sepolia', chainId: optimismSepolia.id, mode: 'fresh' });
-        expect(resolveSp550Network('op-mainnet')).toEqual({ network: 'op-mainnet', chainId: optimism.id, mode: 'fresh' });
+        expect(resolveSp550Network('sepolia')).toEqual({ network: 'sepolia', chainId: sepolia.id, mode: 'upgrade', coexist: false, allowRc: false });
+        expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true });
+        expect(resolveSp550Network('op-sepolia')).toEqual({ network: 'op-sepolia', chainId: optimismSepolia.id, mode: 'fresh', coexist: false, allowRc: false });
+        expect(resolveSp550Network('op-mainnet')).toEqual({ network: 'op-mainnet', chainId: optimism.id, mode: 'fresh', coexist: false, allowRc: false });
     });
     it.each([undefined, '', 'optimism', 'mainnet', 'toString', '__proto__'])('refuses an unknown network name: %s', (n) => {
         expect(() => resolveSp550Network(n as any)).toThrow(/unknown SP 5.5.0 network/);
@@ -41,10 +46,14 @@ describe('SP 5.5.0 network selection', () => {
         expect(() => assertSp550ChainId('op-mainnet', optimism.id)).not.toThrow();
     });
     it('every fresh network has a (fail-closed) pin entry, and none is pre-wired', () => {
-        for (const n of Object.values(SP550_NETWORKS)) {
+        for (const [name, n] of Object.entries(SP550_NETWORKS)) {
             if (n.mode !== 'fresh') continue;
-            expect(SP550_FRESH_DEPLOY_PINS[n.chainId]).toEqual({});
-            expect(() => requireSp550FreshDeployPins(n.chainId)).toThrow(/addresses\.registry: unpinned/);
+            // A coexisting stack's entry is by network name (SP550_COEXIST_PINS), a chain's by chainId.
+            const { pins } = sp550PinsFor(name as keyof typeof SP550_NETWORKS);
+            expect(pins).toEqual({});
+            if (!n.coexist) expect(pins).toBe(SP550_FRESH_DEPLOY_PINS[n.chainId]);
+            if (n.coexist) expect(sp550NetworkPinProblems(name as keyof typeof SP550_NETWORKS, pins).problems).toContain('addresses.registry: unpinned');
+            else expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/addresses\.registry: unpinned/);
         }
     });
 });
@@ -81,20 +90,20 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
     it('every optional SP entry must be pinned or declared absent — none may just be left out', () => {
         const { absent: _a, ...noAbsent } = FULL;
         expect(sp550FreshPinProblems(noAbsent)).toEqual(
-            SP550_FRESH_OPTIONAL_ADDRESS_KEYS.map((k) => `addresses.${k}: neither pinned nor declared absent`));
-        const absent = SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory');
-        expect(sp550FreshPinProblems({ ...FULL, absent })).toEqual(['addresses.xPNTsFactory: neither pinned nor declared absent']);
-        expect(sp550FreshPinProblems({ ...FULL, absent, addresses: { ...BOOK, xPNTsFactory: A(55) } })).toEqual([]);
+            SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory').map((k) => `addresses.${k}: neither pinned nor declared absent`));
+        const absent = FULL.absent.filter((k) => k !== 'pnts');
+        expect(sp550FreshPinProblems({ ...FULL, absent })).toEqual(['addresses.pnts: neither pinned nor declared absent']);
+        expect(sp550FreshPinProblems({ ...FULL, absent, addresses: { ...FULL.addresses, pnts: A(55) } })).toEqual([]);
     });
     it.each([
-        ['pinned and absent', { addresses: { ...BOOK, pnts: A(56) } }, /addresses\.pnts: pinned and declared absent/],
-        ['absent required key', { absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS, 'registry'] }, /absent: registry is not an sp-optional key/],
-        ['absent external key', { absent: [...SP550_FRESH_OPTIONAL_ADDRESS_KEYS, 'entryPoint'] }, /absent: entryPoint is not an sp-optional key/],
+        ['pinned and absent', { addresses: { ...FULL.addresses, pnts: A(56) } }, /addresses\.pnts: pinned and declared absent/],
+        ['absent required key', { absent: [...FULL.absent, 'registry'] }, /absent: registry is not an sp-optional key/],
+        ['absent external key', { absent: [...FULL.absent, 'entryPoint'] }, /absent: entryPoint is not an sp-optional key/],
     ])('a bad absent declaration is refused: %s', (_n, patch, msg) => {
         expect(sp550FreshPinProblems({ ...FULL, ...(patch as any) })).toEqual([expect.stringMatching(msg)]);
     });
     it('one missing SP-owned address is enough to refuse', () => {
-        const { registry: _drop, ...rest } = BOOK;
+        const { registry: _drop, ...rest } = FULL.addresses;
         expect(sp550FreshPinProblems({ ...FULL, addresses: rest })).toEqual(['addresses.registry: unpinned']);
     });
     it('a missing 5.5.0 piece is refused as for an upgrade', () => {
@@ -107,12 +116,12 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
         ['external key pinned from SP', { entryPoint: A(500) }, /addresses\.entryPoint: external/],
         ['unknown key', { notAKey: A(501) }, /addresses\.notAKey: not an address-book key/],
     ])('a bad book entry is refused: %s', (_n, patch, msg) => {
-        expect(sp550FreshPinProblems({ ...FULL, addresses: { ...BOOK, ...(patch as any) } })).toEqual([expect.stringMatching(msg)]);
+        expect(sp550FreshPinProblems({ ...FULL, addresses: { ...FULL.addresses, ...(patch as any) } })).toEqual([expect.stringMatching(msg)]);
     });
     it('an optional SP entry, when pinned, must be a real address', () => {
         expect(sp550FreshPinProblems(FULL)).toEqual([]);
-        const absent = SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'pnts');
-        expect(sp550FreshPinProblems({ ...FULL, absent, addresses: { ...BOOK, pnts: '0x0000000000000000000000000000000000000000' } }))
+        const absent = FULL.absent.filter((k) => k !== 'pnts');
+        expect(sp550FreshPinProblems({ ...FULL, absent, addresses: { ...FULL.addresses, pnts: '0x0000000000000000000000000000000000000000' } }))
             .toEqual([expect.stringMatching(/addresses\.pnts: not a non-zero/)]);
     });
     it('the top-level proxy and the book must name the same SuperPaymaster', () => {

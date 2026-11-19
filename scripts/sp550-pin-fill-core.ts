@@ -7,7 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import { SP550_CERTIFIED_ADDRESS_KEYS, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
-import { SP550_PIN_ALIASES, type Sp550FreshDeployPins } from '../packages/core/src/sp550Deployments.js';
+import { SP550_PIN_ALIASES, sp550PinsFor, type Sp550FreshDeployPins, type Sp550NetworkEntry } from '../packages/core/src/sp550Deployments.js';
 import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
 export { isNotDeployedPlaceholder };
 import { isIP } from 'net';
@@ -133,6 +133,43 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
     return { ...out, ...removed };
 }
 
+/**
+ * Where a pin set comes from. `manifest` = SP's step-13 pins JSON (implemented). `deploylive-archive` = a
+ * DeployLive release archive for a coexisting stack (DSR 2026-11-19): SHA256SUMS and the post-deploy checker's
+ * PASS record are verified first, config.commit must be the rc tag's commit, and only the ADDRESSES are taken
+ * from its config — version(), codehashes, the ERC-1967 slot and the wiring are still read and compared by the
+ * gate on two RPCs at the finalized block. Not implemented until SP names the source of the expected RUNTIME
+ * codehashes (its creation-pins are creation bytecode); the flag refuses until then.
+ */
+export type Sp550PinSourceKind = 'manifest' | 'deploylive-archive';
+export const DEPLOYLIVE_ARCHIVE_PENDING = '--deploylive-archive is not implemented yet: it waits for SP to name the source of the expected runtime codehashes (DSR 2026-11-19); nothing was read or written';
+
+/** The source files a fill may write, by role. */
+export interface PinFillFiles { upgrade: string; fresh: string; book: string }
+
+/** The files a fill writes for a network: its pin table's file, plus the address book unless the stack coexists. */
+export function pinFillTargets(net: Sp550NetworkEntry, files: PinFillFiles): string[] {
+    const table = net.mode === 'fresh' ? files.fresh : files.upgrade;
+    return net.coexist ? [table] : [table, files.book];
+}
+
+/**
+ * Exactly what a fill writes: the pin table entry (by chain, or by network name for a coexisting stack) and, unless
+ * the stack coexists, the address-book switch. A coexisting stack's plan never contains the book.
+ */
+export function pinFillWritePlan(net: Sp550NetworkEntry, pins: Sp550FreshDeployPins, files: PinFillFiles, read: (path: string) => string,
+    changed: Record<string, string | null>, note: string): { path: string; before: string; after: string }[] {
+    const { table, key } = sp550PinsFor(net.network);
+    const [tableFile, bookFile] = pinFillTargets(net, files);
+    const before = read(tableFile);
+    const plan = [{ path: tableFile, before, after: fillPinsTable(before, table, net.coexist ? key : net.chainId, pins) }];
+    if (bookFile !== undefined) {
+        const b = read(bookFile);
+        plan.push({ path: bookFile, before: b, after: switchBook(b, net.chainId, changed, note) });
+    }
+    return plan;
+}
+
 /** SP's GitHub repository: the live read-back is fetched from it, and its main must contain the commit. */
 export const SP_REPO = 'AAStarCommunity/SuperPaymaster';
 
@@ -198,7 +235,7 @@ const TABLE_KEY: Record<number, string[]> = { 10: ['10', '[optimism.id]'], 11155
  * Fill `<table>[chainId]` in `source`. Only an EMPTY entry (`<key>: {},`) is filled: a filled entry
  * is never overwritten by this tool (a re-pin is a reviewed edit, not a regeneration).
  */
-export function fillPinsTable(source: string, table: string, chainId: number, pins: Sp550CutoverPins | Sp550FreshDeployPins): string {
+export function fillPinsTable(source: string, table: string, chainId: number | string, pins: Sp550CutoverPins | Sp550FreshDeployPins): string {
     // The declaration at the start of a line: a commented-out copy (`// export const …`) is not it.
     const decl = `\nexport const ${table}`;
     const count = source.split(decl).length - 1;
@@ -207,7 +244,8 @@ export function fillPinsTable(source: string, table: string, chainId: number, pi
     const end = source.indexOf('\n};', start);
     if (end < 0) throw new Error(`${table}: table end not found`);
     const block = source.slice(start, end);
-    const spellings = TABLE_KEY[chainId] ?? [String(chainId)];
+    // A coexisting stack's entry is keyed by its network name (a quoted key), a chain's by its id.
+    const spellings = typeof chainId === 'string' ? [`'${chainId}'`] : TABLE_KEY[chainId] ?? [String(chainId)];
     const decls = spellings.reduce((n, k) => n + (block.split(`\n    ${k}: {`).length - 1), 0);
     if (decls > 1) throw new Error(`${table}[${chainId}]: ${decls} entries for this chain, refusing to guess which one ships`);
     for (const k of spellings) {
