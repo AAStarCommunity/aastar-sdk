@@ -1710,6 +1710,20 @@ describe('cost ceiling on what is signed (DSR: the missing upper bound at the si
         expect(signs.flat()).toHaveLength(0);
         expect(views).toHaveLength(0); // the ceiling refuses before the hook
     });
+    it('`maxUserOpCostWei: undefined` (what a repo script passes on a test chain) signs and sends byte-identically to omitting it (DSR L2)', async () => {
+        const run = async (extra: Record<string, unknown>) => {
+            SuperPaymasterInflightGuard.clearAll(); // two independent submits of the same op, each from a clean slate
+            const seen: any[] = [];
+            const { submit, signs } = harness(bundler(seen));
+            await submit({ frozenGas: FROZEN, ...FEE, ...extra });
+            return { signs: signs.flat(), seen };
+        };
+        const without = await run({});
+        const withUndefined = await run({ maxUserOpCostWei: undefined });
+        expect(without.signs).toHaveLength(1);
+        expect(withUndefined.signs).toEqual(without.signs);
+        expect(JSON.stringify(withUndefined.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v))).toBe(JSON.stringify(without.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v)));
+    });
     it('a non-positive ceiling is refused, not read as "off"', async () => {
         await expect(harness(bundler([])).submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: 0n })).rejects.toThrow(/maxUserOpCostWei must be a positive bigint/);
     });

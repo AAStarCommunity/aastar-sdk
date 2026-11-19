@@ -3,6 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
 dotenv.config({ path: path.resolve(__dirname, '../../env/.env.anvil') });
@@ -20,6 +21,7 @@ function packUint(high128: bigint, low128: bigint): Hex {
 }
 
 async function main() {
+    await refuseMainnetUserOps(RPC_URL!); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log("🛠️ [04.2] Constructing UserOp Locally for Inspection...");
     const client = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const signer = privateKeyToAccount(SIGNER_KEY);

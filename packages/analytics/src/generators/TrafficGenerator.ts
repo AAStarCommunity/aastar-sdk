@@ -22,6 +22,8 @@ export interface TrafficConfig {
     bundlerUrl?: string;
     pimlicoKey?: string;
     privateKey: Hex; // The "funder" or "operator" key
+    /** Per-UserOp cost ceiling (wei) forwarded to every gasless send; required by the caller outside the test chains. */
+    maxUserOpCostWei?: bigint;
 }
 
 export class TrafficGenerator {
@@ -190,7 +192,8 @@ export class TrafficGenerator {
                         recipient: smartAccountAddress, // Send to self to preserve tokens
                         amount: parseEther('0.1'),
                         operator: operatorAddress,
-                        paymasterAddress: superPaymasterAddress
+                        paymasterAddress: superPaymasterAddress,
+                        maxUserOpCostWei: this.config.maxUserOpCostWei,
                     }
                 );
 

@@ -6,6 +6,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,7 @@ async function main() {
     
     const bundlerUrl = process.env.CANDIDE_BUNDLER_URL!;
     const rpcUrl = process.env.RPC_URL!;
+    await refuseMainnetUserOps(rpcUrl, bundlerUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const privateKey = process.env.PRIVATE_KEY_JASON!;
     
     console.log('\n📋 Configuration:');

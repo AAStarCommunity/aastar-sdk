@@ -9,6 +9,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,7 @@ async function main() {
     if (!apiKey) throw new Error('Missing PIMLICO_API_KEY');
     
     const pimlicoUrl = `https://api.pimlico.io/v2/sepolia/rpc?apikey=${apiKey}`;
+    await refuseMainnetUserOps(process.env.RPC_URL!, pimlicoUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
     
     // Load state
     const statePath = path.resolve(__dirname, '../scripts/l4-state.json');

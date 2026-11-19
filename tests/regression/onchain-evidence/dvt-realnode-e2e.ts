@@ -81,6 +81,7 @@ import {
     AAStarCommitteeValidatorABI,
 } from '@aastar/core';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -164,7 +165,7 @@ const norm = (h: string): Hex => ((h.startsWith('0x') ? h : `0x${h}`).toLowerCas
 
 /** Make a public client over one RPC URL. */
 function clientFor(url: string): PublicClient {
-    return createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;
+    return createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient;
 }
 
 /** Run a read against each RPC in turn; the validate() pairing call is heavy and may hang sockets. */
@@ -230,6 +231,9 @@ async function requestNodeSign(
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══════════════════════════════════════════════════════════════════════════');
     console.log(' DVT real-node E2E (cross-repo, v0.20.0) — SDK proof vs canonical AAStarBLSAlgorithm');
     console.log('═══════════════════════════════════════════════════════════════════════════');
@@ -240,7 +244,7 @@ async function main() {
     if (!jasonPk) throw new Error('PRIVATE_KEY_JASON missing from .env.sepolia');
     if (!jasonPk.startsWith('0x')) jasonPk = `0x${jasonPk}`;
     const owner = privateKeyToAccount(jasonPk as Hex);
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     console.log(`\n[0a] owner (JASON) = ${owner.address}`);
     console.log(`     verifier  = ${VERIFIER}`);
     console.log(`     factory   = ${FACTORY}`);

@@ -3,7 +3,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator, SuperPaymasterClient } from '../packages/paymaster/src/V4/index.ts';
 import { xPNTsFactoryActions } from '../packages/core/src/actions/factory.js';
-import { loadNetworkConfig } from './regression/config.js';
+import { loadGaslessNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import path from 'path';
@@ -14,7 +14,7 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
     const publicClient = createPublicClient({ chain: config.chain, transport: http(config.rpcUrl) });
     
     // ANNI is the operator/owner
@@ -443,7 +443,7 @@ async function main() {
             anniAA,
             config.contracts.entryPoint as Address,
             config.bundlerUrl!,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 token: cPNTs,
                 recipient: bobEOA,
                 amount: parseEther('2'),

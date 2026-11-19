@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { loadNetworkConfig } from './regression/config.js';
+import { refuseMainnetUserOps } from './regression/userop-chain-gate.js';
 
 // Environment and network config handled by loadNetworkConfig
 
@@ -49,6 +50,7 @@ async function main() {
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
     const config = await loadNetworkConfig(networkName);
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     
     const bundlerUrl = config.bundlerUrl;
     const rpcUrl = config.rpcUrl;

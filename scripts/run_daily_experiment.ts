@@ -1,4 +1,5 @@
 import { runEOATest } from './02_test_eoa.js';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 // We need to export main functions from the other scripts, assumed they are exported.
 // I will check or dynamically import.
 // Current scripts execute if process.argv match, and export 'runX'.
@@ -41,6 +42,8 @@ async function runBatch(batchId: number) {
 }
 
 async function main() {
+    // The runners below sign UserOperations against SEPOLIA_RPC_URL || RPC_URL.
+    await refuseMainnetUserOps((process.env.SEPOLIA_RPC_URL || process.env.RPC_URL)!); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log("⏰ Daily Experiment Orchestrator Started");
     console.log("   Target: 48 runs / 24h (Avg every 30 mins)");
     

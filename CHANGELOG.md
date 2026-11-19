@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### No UserOperation from a repo script on a real-money chain without a per-UserOp cost ceiling
+
+- The chain is the one the endpoints REPORT, not a network name or a constant in the script, and only an explicit
+  allow-list (anvil 31337, Sepolia, OP Sepolia) counts as free: an unknown chain counts as real money.
+  `tests/regression/userop-chain-gate.ts` (no side effects on import): `reportedChainId` asks the RPC and the bundler
+  for `eth_chainId` and refuses a mismatch; `resolveUserOpCostCap` reads `--max-userop-cost-wei <wei>` or
+  `AASTAR_MAX_USEROP_COST_WEI` (no default) and requires it outside the test chains; `refuseMainnetUserOps` refuses
+  any non-test chain; `verifiedTestChainEndpoints` asks every fail-over RPC at startup (refusing a non-test or
+  disagreeing one, or none answering) and `testChainHttp` — viem's `http`, used for every RPC client of these scripts
+  — verifies its endpoint before serving its first request, so an endpoint that was down at startup rejoins the
+  fail-over order, in the configured order, once it answers, and one on another chain never serves a request.
+  `eth_chainId` has a 15 s timeout.
+- `loadGaslessNetworkConfig(network)` (async, tests/regression/config.ts): loads `.env.<network>` first, checks the
+  reported chain against the network, then resolves the ceiling; a script that picks its own bundler checks THAT one.
+  `assertGaslessNetworkConfig` repeats the checks at the top of the two exported runners that take a config, so a
+  hand-built `{ ...loadNetworkConfig('op-mainnet'), maxUserOpCostWei: undefined }` is refused there too. The 15 scripts / tests / examples that send through
+  the SDK use it and pass `maxUserOpCostWei: config.maxUserOpCostWei` on every send call; the two for-iri examples do
+  the same through their own `gaslessCostCapFromEnv`.
+- The ~30 scripts that sign or submit UserOperations by hand (raw `eth_sendUserOperation`, `handleOps`, hashes from the
+  EntryPoint, `UserOpScenarioBuilder`) cannot hold an op to a ceiling, so they now call `refuseMainnetUserOps` before
+  anything else. `l4-alchemy-controlled-op-mainnet.ts`, which does run on OP Mainnet, instead checks the chain is 10,
+  requires the ceiling, and runs `guardUserOpSignature` before its one signature.
+- `UserClient.executeGasless` and `UserLifecycle.executeGaslessTx` (@aastar/enduser) forward `maxUserOpCostWei` and
+  `beforeSignUserOp` to the signing site; they used to drop them.
+- `pnpm run check:gasless-cost-cap` (CI hard gate) parses every script with the TypeScript compiler: any file that
+  references a UserOp primitive, or imports a local module that does, must reach every hand-signing use only after an awaited
+  chain gate (earlier in the same function, at every call site of a local helper; exported functions, default
+  exports and class methods need their own), or send only through the SDK with the ceiling in every call's options
+  argument (resolved lexically to a `const` from the loader, never written to afterwards), or guard each signature
+  with a resolved ceiling, or be a reviewed exception with its reason (an entry that stops sending fails). It also fails on any gasless / submit-named function in `packages/*/src` that is in neither the
+  send-API list nor the reviewed non-sender list. Smart-account clients count as senders (permissionless and `@aastar/dapp` imports, viem `to…SmartAccount` /
+  `getUserOperationHash`); `.mjs` / `.cjs` and `packages/*/tests`, `packages/*/examples` are scanned; and every send-API
+  call in `packages/*/src` must forward `maxUserOpCostWei` (`TrafficGenerator` used to drop it). The AirAccount server
+  send paths are outside it (FU-130), `UserOpScenarioBuilder` in the library still signs unguarded (FU-131), and moving
+  the "ceiling required off the test chains" default into the SDK itself is for the author to decide (FU-132).
+
 ### A cost ceiling on every UserOperation the SDK signs (the missing upper bound at the signing boundary)
 
 - Until now nothing bounded what the SDK signed: gas limits were the bundler's estimate × 1.5 with no clamp, and fees

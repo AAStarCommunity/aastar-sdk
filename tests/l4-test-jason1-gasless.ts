@@ -3,7 +3,7 @@ import { bundlerActions } from 'viem/account-abstraction';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { PaymasterClient, PaymasterOperator } from '../packages/paymaster/src/V4/index.js';
-import { loadNetworkConfig } from './regression/config.js';
+import { loadGaslessNetworkConfig } from './regression/config.js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -14,7 +14,7 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
     const rpcUrl = process.env.RPC_URL || config.rpcUrl;
     
     // 1. Roles & Accounts
@@ -125,7 +125,7 @@ async function main() {
         jasonPM,
         dPNTs,
         config.bundlerUrl!, // Changed from process.env.BUNDLER_URL!
-        transferCalldata
+        transferCalldata, { maxUserOpCostWei: config.maxUserOpCostWei }
     );
 
     console.log(`   ✅ UserOp Hash: ${userOpHash}`);

@@ -13,6 +13,8 @@ import { sepolia, optimismSepolia, optimism, mainnet } from 'viem/chains';
 import { anvil, localhost } from 'viem/chains';
 import * as path from 'path';
 import * as fs from 'fs';
+import { TEST_CHAIN_IDS, readChainIdOverRpc, reportedChainId, resolveUserOpCostCap, type ChainIdReader } from './userop-chain-gate.js';
+export { TEST_CHAIN_IDS, readChainIdOverRpc, reportedChainId, resolveUserOpCostCap, refuseMainnetUserOps, verifiedTestChainEndpoints, type ChainIdReader } from './userop-chain-gate.js';
 
 // Anvil Default Private Key (Account #0)
 const ANVIL_DEFAULT_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -223,4 +225,49 @@ export function validateConfig(config: NetworkConfig): void {
     console.log(`   - GToken: ${config.contracts.gToken}`);
     console.log(`   - SuperPaymaster: ${config.contracts.superPaymaster}`);
     console.log(`✅ Explorer: ${config.explorerUrl}`);
+}
+
+/** A network config for a script that SENDS gasless operations, carrying the per-UserOp cost ceiling it must pass on. */
+export type GaslessNetworkConfig = NetworkConfig & {
+    /** (PVG + VGL + CGL + pmVGL + pmPostOp) x maxFeePerGas ceiling, wei; undefined only on a TEST_CHAIN_IDS chain. */
+    maxUserOpCostWei: bigint | undefined;
+};
+
+/** Options for loadGaslessNetworkConfig (defaults: the process argv / env, eth_chainId over HTTP). */
+export type GaslessLoadOptions = {
+    argv?: readonly string[];
+    env?: NodeJS.ProcessEnv;
+    read?: ChainIdReader;
+    /**
+     * Ask the configured bundler (config.bundlerUrl) for its chain too. Default true; a script that sends to a bundler
+     * it selects itself passes false and checks THAT bundler with refuseMainnetUserOps(config.rpcUrl, <its bundler>).
+     */
+    checkConfiguredBundler?: boolean;
+};
+
+/**
+ * loadNetworkConfig for scripts that send gasless operations through the SDK (PaymasterClient.submitGaslessUserOperation,
+ * SuperPaymasterClient.submitGaslessTransaction, executeGasless…). Loads .env.<network> first, then asks the RPC (and
+ * the configured bundler) which chain they are on, refusing a mismatch with the network, then resolves the ceiling:
+ * required on any chain outside TEST_CHAIN_IDS. Every send call must pass `maxUserOpCostWei: config.maxUserOpCostWei`
+ * (scripts/check-gasless-cost-cap.ts holds every such file to it).
+ */
+export async function loadGaslessNetworkConfig(network: NetworkName, o: GaslessLoadOptions = {}): Promise<GaslessNetworkConfig> {
+    const config = loadNetworkConfig(network);
+    const bundler = o.checkConfiguredBundler === false ? undefined : (config.bundlerUrl || undefined);
+    const chainId = await reportedChainId(config.rpcUrl, bundler, config.chain.id, o.read ?? readChainIdOverRpc);
+    return { ...config, maxUserOpCostWei: resolveUserOpCostCap(chainId, o.argv ?? process.argv, o.env ?? process.env) };
+}
+
+/**
+ * The same checks at the top of an EXPORTED function that takes a GaslessNetworkConfig, so a caller that builds the
+ * config by hand (`{ ...loadNetworkConfig('op-mainnet'), maxUserOpCostWei: undefined }`) is refused there too: the RPC
+ * must report the config's chain, and outside TEST_CHAIN_IDS the ceiling must be a positive bigint.
+ */
+export async function assertGaslessNetworkConfig(config: GaslessNetworkConfig, o: { read?: ChainIdReader; checkConfiguredBundler?: boolean } = {}): Promise<void> {
+    const bundler = o.checkConfiguredBundler === false ? undefined : (config.bundlerUrl || undefined);
+    const chainId = await reportedChainId(config.rpcUrl, bundler, config.chain.id, o.read ?? readChainIdOverRpc);
+    const cap = config.maxUserOpCostWei;
+    if (cap !== undefined && (typeof cap !== 'bigint' || cap <= 0n)) throw new Error(`maxUserOpCostWei must be a positive bigint (got ${String(cap)})`);
+    if (!TEST_CHAIN_IDS.has(chainId) && cap === undefined) throw new Error(`chain ${chainId} is not a test chain: a gasless send there needs an explicit per-UserOp cost ceiling (no default)`);
 }

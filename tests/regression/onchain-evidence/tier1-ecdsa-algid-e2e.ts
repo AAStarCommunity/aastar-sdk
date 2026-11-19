@@ -56,6 +56,7 @@ import {
 // generateTieredSignature) is exercised directly, not a possibly-stale dist build.
 import { BLSSignatureService } from '../../../packages/airaccount/src/server/services/bls-signature-service';
 import { LocalWalletSigner } from '../../../packages/airaccount/src/server/adapters/local-wallet-signer';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -80,13 +81,16 @@ type PackedUserOp = {
 async function withRpcFallback<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> {
     let lastErr: unknown;
     for (const url of RPCS) {
-        try { return await fn(createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient); }
+        try { return await fn(createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient); }
         catch (e) { lastErr = e; }
     }
     throw lastErr;
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══════════════════════════════════════════════════════════════════════════');
     console.log(' Tier-1 single-ECDSA (0x02) acceptance probe — SDK generateTieredSignature(tier=1), Sepolia (#273)');
     console.log('═══════════════════════════════════════════════════════════════════════════');
@@ -96,7 +100,7 @@ async function main() {
     if (!jasonPk) throw new Error('PRIVATE_KEY_JASON missing from .env.sepolia');
     if (!jasonPk.startsWith('0x')) jasonPk = `0x${jasonPk}`;
     const owner = privateKeyToAccount(jasonPk as Hex);
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     console.log(`\n[0a] owner(JASON)=${owner.address}  validatorRouter=${VALIDATOR_ROUTER}`);
 
     // ── (0b) Deploy a fresh account approving algId 0x02 (guard enabled ⇒ algId whitelist applies) ──

@@ -45,6 +45,7 @@ import {
 } from '../packages/sdk/src/index.js';
 import { fileURLToPath } from 'url';
 import * as dotenv from 'dotenv';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 // import { loadContract } from './00_utils.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -146,6 +147,7 @@ async function main() {
     }
     
     const config = loadNetworkConfig(networkArg as any);
+    await refuseMainnetUserOps(config.rpcUrl, config.bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     await syncConfig(networkArg, config);
     console.log(`\n🚀 Starting L4 Assessment & Setup on ${config.name}...`);
     

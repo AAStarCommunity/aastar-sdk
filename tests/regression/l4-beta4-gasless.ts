@@ -21,6 +21,7 @@ import { sepolia } from 'viem/chains';
 import { UserOperationBuilder } from '../../packages/sdk/src/index.js';
 import { wrapExecuteUserOp } from '../../packages/airaccount/src/server/utils/execute-user-op.js';
 import { CANONICAL_ADDRESSES } from '../../packages/core/src/addresses.js';
+import { refuseMainnetUserOps } from './userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -73,6 +74,7 @@ const EP_ABI = [
 async function main() {
     const rpc = (process.env.SEPOLIA_RPC_URL || process.env.RPC_URL)!.replace(/^['"]|['"]$/g, '');
     const bundlerUrl = (process.env.PIMLICO_BUNDLER_URL || process.env.PIMLICO_RPC_URL || process.env.BUNDLER_URL)!.replace(/^['"]|['"]$/g, '');
+    await refuseMainnetUserOps(rpc, bundlerUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const pk = (process.env.PRIVATE_KEY_JASON || process.env.TEST_PRIVATE_KEY || process.env.PRIVATE_KEY)!.replace(/^['"]|['"]$/g, '') as Hex;
     const owner = privateKeyToAccount(pk.startsWith('0x') ? pk : (`0x${pk}` as Hex));
 

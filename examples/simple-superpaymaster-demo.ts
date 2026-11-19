@@ -6,7 +6,7 @@ import { SuperPaymasterClient, PaymasterClient } from '../packages/paymaster/src
 import * as fs from 'fs';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 
 // Environment loading handled by loadNetworkConfig
 
@@ -24,7 +24,7 @@ async function main() {
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
 
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
     
     // Addresses loaded dynamically from state
     let tokenAddress: Address;
@@ -85,7 +85,7 @@ async function main() {
         APP_CONFIG.aaAccount as `0x${string}`,
         APP_CONFIG.entryPoint as `0x${string}`,
         APP_CONFIG.bundlerUrl,
-        {
+        { maxUserOpCostWei: config.maxUserOpCostWei,
             token: APP_CONFIG.token as `0x${string}`,
             recipient: APP_CONFIG.recipient as `0x${string}`,
             amount: parseEther('1'), // Transfer 1.0 Token

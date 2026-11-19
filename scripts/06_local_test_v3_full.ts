@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 // BigInt serialization fix
 (BigInt.prototype as any).toJSON = function () { return this.toString(); };
@@ -64,6 +65,7 @@ function estimatePreVerificationGasV07(userOp: {
 }
 
 async function runFullV3Test() {
+    await refuseMainnetUserOps(RPC_URL!, BUNDLER_RPC); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log("🚀 Starting Comprehensive SuperPaymaster V3 Test...");
     const publicClient = createPublicClient({ chain: foundry, transport: http(RPC_URL) });
     const bundlerClient = createPublicClient({ chain: foundry, transport: http(BUNDLER_RPC) });

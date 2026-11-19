@@ -31,7 +31,7 @@ import { createRequire } from 'module';
 
 
 // Use SDK APIs
-import { loadNetworkConfig, type NetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig, assertGaslessNetworkConfig, type GaslessNetworkConfig } from '../tests/regression/config.js';
 import { 
     createEndUserClient,
     SuperPaymasterClient,
@@ -358,7 +358,8 @@ async function randomDelay(minMs: number = 20_000, maxMs: number = 30_000): Prom
     await new Promise(r => setTimeout(r, delay));
 }
 
-export async function runGaslessDataCollection(config: NetworkConfig, networkName: string = 'op-mainnet') {
+export async function runGaslessDataCollection(config: GaslessNetworkConfig, networkName: string = 'op-mainnet') {
+    await assertGaslessNetworkConfig(config); // also when called directly, not through loadGaslessNetworkConfig
     const args = process.argv.slice(2);
     const getArg = (key: string) => {
         const i = args.indexOf(key);
@@ -584,7 +585,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 anniToken as Address,
                 config.bundlerUrl,
                 callData,
-                { 
+                { maxUserOpCostWei: config.maxUserOpCostWei, 
                     autoEstimate: true,
                     verificationGasLimit: 60000n,
                     paymasterVerificationGasLimit: 90000n
@@ -621,7 +622,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 anniToken as Address,
                 config.bundlerUrl,
                 callData,
-                { 
+                { maxUserOpCostWei: config.maxUserOpCostWei, 
                     autoEstimate: true, 
                     operator: anniAcc.address,
                     verificationGasLimit: 60000n,
@@ -687,7 +688,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 anniToken as Address,
                 config.bundlerUrl,
                 callData,
-                {
+                { maxUserOpCostWei: config.maxUserOpCostWei,
                     autoEstimate: true,
                     operator: anniAcc.address,
                     verificationGasLimit: 60000n,
@@ -751,7 +752,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                     anniToken as Address,
                     config.bundlerUrl,
                     PaymasterClient.encodeExecution(anniToken, 0n, repayCall),
-                    { 
+                    { maxUserOpCostWei: config.maxUserOpCostWei, 
                         autoEstimate: true, 
                         operator: anniAcc.address,
                         verificationGasLimit: 60000n,
@@ -796,7 +797,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                         publicClient, jasonWallet, jasonAA, ENTRYPOINT,
                         SP as Address, anniToken as Address, config.bundlerUrl,
                         PaymasterClient.encodeExecution(anniToken, 0n, repayCall2),
-                        { autoEstimate: true, operator: anniAcc.address, verificationGasLimit: 60000n, paymasterVerificationGasLimit: 90000n }
+                        { maxUserOpCostWei: config.maxUserOpCostWei, autoEstimate: true, operator: anniAcc.address, verificationGasLimit: 60000n, paymasterVerificationGasLimit: 90000n }
                     );
                     console.log(`   🚀 T5 UserOp: ${t5Hash2}`);
                     await waitAndCheckReceipt(publicClient, bundlerClient, t5Hash2, "T5", record, anniToken as Address, jasonAA);
@@ -890,7 +891,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
             anniToken as Address,
             config.bundlerUrl,
             callData,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 autoEstimate: true,
                 operator: anniAcc.address,
                 verificationGasLimit: 60000n,
@@ -939,7 +940,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 anniToken as Address,
                 config.bundlerUrl,
                 PaymasterClient.encodeExecution(REG, 0n, registerCall),
-                { autoEstimate: true, operator: anniAcc.address }
+                { maxUserOpCostWei: config.maxUserOpCostWei, autoEstimate: true, operator: anniAcc.address }
             );
 
             console.log(`   🚀 T3 UserOp: ${t3Hash}`);
@@ -1032,7 +1033,7 @@ export async function runGaslessDataCollection(config: NetworkConfig, networkNam
                 anniToken as Address,
                 config.bundlerUrl,
                 PaymasterClient.encodeExecution(anniToken, 0n, repayCall),
-                { 
+                { maxUserOpCostWei: config.maxUserOpCostWei, 
                     autoEstimate: true, 
                     operator: anniAcc.address,
                     // Alchemy Efficiency Tuning: (PVG=100k) / (PVG + VGL + PMVGL) >= 0.4
@@ -1058,6 +1059,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     let network = 'op-mainnet'; 
     const networkArg = args.find(arg => arg.startsWith('--network'));
     if (networkArg) network = networkArg.includes('=') ? networkArg.split('=')[1] : args[args.indexOf('--network') + 1];
-    const config = loadNetworkConfig(network);
-    runGaslessDataCollection(config, network).catch(console.error);
+    loadGaslessNetworkConfig(network as any).then((config) => runGaslessDataCollection(config, network)).catch(console.error);
 }

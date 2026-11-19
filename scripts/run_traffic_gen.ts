@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { type Hex } from 'viem';
 import { TrafficGenerator } from '../packages/analytics/src/generators/TrafficGenerator.js';
 import { getNetworkConfig } from './00_utils.js';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 // Setup
 const __filename = fileURLToPath(import.meta.url);
@@ -87,6 +88,7 @@ async function main() {
     if (!resolvedRpcUrl || !privateKey) {
         throw new Error("Missing RPC_URL or PRIVATE_KEY. Check .env." + networkName);
     }
+    await refuseMainnetUserOps(resolvedRpcUrl, bundlerUrl || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
 
     const generator = new TrafficGenerator({
         network: networkName,

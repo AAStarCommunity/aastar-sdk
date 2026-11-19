@@ -16,6 +16,7 @@ import { UserOpScenarioBuilder, UserOpScenarioType, UserOperationBuilder } from 
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { refuseMainnetUserOps } from '../tests/regression/userop-chain-gate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,6 +26,7 @@ async function main() {
     
     // 1. Load configuration
     const config = await loadNetworkConfig('sepolia');
+    await refuseMainnetUserOps(config.rpcUrl, process.env.SEPOLIA_BUNDLER_RPC || undefined); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const publicClient = createPublicClient({
         chain: config.chain,
         transport: http(config.rpcUrl)

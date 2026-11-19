@@ -27,7 +27,7 @@ import {
     type GaslessConfig
 } from '@aastar/sdk';
 
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 import { 
     registryActions, 
     tokenActions, 
@@ -67,7 +67,7 @@ async function main() {
 
     // 0. Configuration
     const networkArg = process.argv.find(arg => arg.startsWith('--network='))?.split('=')[1] || 'sepolia';
-    const config = loadNetworkConfig(networkArg as any);
+    const config = await loadGaslessNetworkConfig(networkArg as any);
     
     // Load .env
     const __filename = fileURLToPath(import.meta.url);
@@ -392,7 +392,7 @@ async function main() {
             bobAA,
             config.contracts.entryPoint,
             config.bundlerUrl!,
-            {
+            { maxUserOpCostWei: config.maxUserOpCostWei,
                 token: config.contracts.gToken,
                 recipient: aliceAcc.address,
                 amount: parseEther('1'), // Transfer 1.0 GToken back to Alice

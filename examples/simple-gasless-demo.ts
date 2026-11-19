@@ -5,7 +5,7 @@ import { sepolia } from 'viem/chains';
 import { PaymasterClient } from '../packages/paymaster/src/V4/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { loadNetworkConfig } from '../tests/regression/config.js';
+import { loadGaslessNetworkConfig } from '../tests/regression/config.js';
 // dotenv loaded by loadNetworkConfig
 
 // ...
@@ -13,7 +13,7 @@ async function main() {
     const args = process.argv.slice(2);
     const networkArgIndex = args.indexOf('--network');
     const networkName = (networkArgIndex >= 0 ? args[networkArgIndex + 1] : 'sepolia') as any;
-    const config = await loadNetworkConfig(networkName);
+    const config = await loadGaslessNetworkConfig(networkName);
 
     const statePath = path.resolve(process.cwd(), `scripts/l4-state.${networkName}.json`);
     if (!fs.existsSync(statePath)) throw new Error(`State file not found: ${statePath}. Please run l4-setup first.`);
@@ -63,7 +63,7 @@ async function main() {
         APP_CONFIG.paymaster as `0x${string}`,
         APP_CONFIG.gasToken as `0x${string}`,
         APP_CONFIG.bundlerUrl,
-        callData
+        callData, { maxUserOpCostWei: config.maxUserOpCostWei }
         // Gas prices auto-fetched from network if not specified
     );
 

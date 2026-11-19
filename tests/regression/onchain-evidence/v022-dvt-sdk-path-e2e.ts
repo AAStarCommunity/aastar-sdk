@@ -30,6 +30,7 @@ import {
 // The SDK discovery UNDER TEST (#257).
 import { BLSManager } from '../../../packages/airaccount/src/core/bls/bls.manager';
 import { packOwnerAuthEcdsa } from '../../../packages/airaccount/src/migration/viem/bls-packing';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -45,14 +46,17 @@ const ZERO32 = `0x${'00'.repeat(32)}` as Hex;
 const ALG_BLS = 0x01;
 
 async function pub(): Promise<PublicClient> {
-    return createPublicClient({ chain: sepolia, transport: http(RPCS[0]) }) as PublicClient;
+    return createPublicClient({ chain: sepolia, transport: testChainHttp(RPCS[0]) }) as PublicClient;
 }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const jasonPk = process.env.PRIVATE_KEY_JASON as Hex;
     if (!jasonPk) throw new Error('PRIVATE_KEY_JASON required');
     const owner = privateKeyToAccount(jasonPk);
-    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const walletClient = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     const c = await pub();
 
     // BLS-only account (owner = JASON), deployed idempotently.

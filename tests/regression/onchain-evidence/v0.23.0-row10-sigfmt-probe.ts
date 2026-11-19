@@ -24,6 +24,7 @@ import {
     AAStarAirAccountFactoryV7ABI, buildInitConfig, encodeDVTVerifierProof, encodeG2Point,
     airAccountFactoryActions, entryPointActions, blsAlgorithmActions,
 } from '@aastar/core';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 const SEP = 11155111;
@@ -32,16 +33,19 @@ const FACTORY = getAddress(CANONICAL_ADDRESSES[SEP].airAccountFactoryV7);
 const ENTRY_POINT = getAddress(CANONICAL_ADDRESSES[SEP].entryPoint);
 const TUNNELS = ['https://advisors-pumps-cheapest-municipal.trycloudflare.com', 'https://assumed-oil-talk-lawyer.trycloudflare.com', 'https://lending-configuring-shark-sept.trycloudflare.com'];
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3].map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
-const clientFor = (u: string) => createPublicClient({ chain: sepolia, transport: http(u) }) as PublicClient;
+const clientFor = (u: string) => createPublicClient({ chain: sepolia, transport: testChainHttp(u) }) as PublicClient;
 async function rpc<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> { let last: unknown; for (const u of RPCS) { try { return await fn(clientFor(u)); } catch (e) { last = e; } } throw last; }
 const norm = (h: string): Hex => ((h.startsWith('0x') ? h : `0x${h}`).toLowerCase() as Hex);
 function eip2537ToG2(s: Hex) { const raw = s.slice(2); const slot = (i: number) => raw.slice(i * 128, i * 128 + 128); const coord = (h: string) => BigInt('0x' + h.slice(32)); const Fp2 = noble.fields.Fp2; const p = noble.G2.ProjectivePoint.fromAffine({ x: Fp2.fromBigTuple([coord(slot(0)), coord(slot(1))]), y: Fp2.fromBigTuple([coord(slot(2)), coord(slot(3))]) }); p.assertValidity(); return p; }
 async function sign(url: string, userOpRpc: any, ownerAuth: Hex) { const res = await fetch(`${url}/signature/sign`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userOp: userOpRpc, ownerAuth }) }); const b = await res.json().catch(() => ({})); if (!res.ok || !b.nodeId || !b.signature) throw new Error(`${res.status}`); return { nodeId: norm(b.nodeId), signature: norm(b.signature) }; }
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     let pk = process.env.PRIVATE_KEY_JASON || ''; if (!pk.startsWith('0x')) pk = `0x${pk}`;
     const owner = privateKeyToAccount(pk as Hex);
-    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: http(RPCS[0]) });
+    const wallet = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });
     const SALT = BigInt(keccak256(toBytes('dvt-v0.20-cross-repo-e2e/bls-only/2026-06')));
     const config = buildInitConfig({ guardians: [], dailyLimit: parseEther('1'), approvedAlgIds: [0x01] });
     const account = await rpc((c) => airAccountFactoryActions(FACTORY)(c).getAddress({ owner: owner.address, salt: SALT, config })) as Address;

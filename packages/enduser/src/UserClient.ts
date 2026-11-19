@@ -1,4 +1,5 @@
 import { type Address, type Hash, type Hex, concat, pad, toHex, encodeFunctionData } from 'viem';
+import type { UserOpSignGuardOptions } from '@aastar/paymaster';
 import { isZeroAddress, ZeroAddressDestinationError, BaseClient, type ClientConfig, type TransactionOptions, getCanonicalAddresses, resolveAccountFactoryAddress, verifyAccountFactory, assertSameChain, confirmSentOnChain, encodeEndUserRoleData, RegistryABI } from '@aastar/core';
 import { accountActions, sbtActions, tokenActions, entryPointActions, stakingActions, registryActions, paymasterActions, superPaymasterActions } from '@aastar/core';
 import { bundlerActions, type UserOperation, getUserOperationHash } from 'viem/account-abstraction';
@@ -468,7 +469,7 @@ export class UserClient extends BaseClient {
         maxRate?: bigint;   // Added for SuperPaymaster
         /** Explicit gas limits, used instead of the bundler's estimate for those fields (e.g. a V4 postOp limit). */
         gas?: Partial<Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit', bigint>>;
-    }, options?: TransactionOptions): Promise<Hash> {
+    } & UserOpSignGuardOptions, options?: TransactionOptions): Promise<Hash> {
         try {
             const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
 
@@ -512,7 +513,10 @@ export class UserClient extends BaseClient {
                 callData,
                 {
                     ...params.gas,
-                    operator: params.operator
+                    operator: params.operator,
+                    // The cost ceiling and the pre-sign hook reach the one signing site (DSR L2).
+                    maxUserOpCostWei: params.maxUserOpCostWei,
+                    beforeSignUserOp: params.beforeSignUserOp,
                 }
             );
 

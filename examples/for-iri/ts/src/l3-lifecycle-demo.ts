@@ -9,6 +9,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import * as dotenv from 'dotenv';
+import { gaslessCostCapFromEnv } from './costCap.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -158,6 +159,7 @@ async function main() {
     console.log(`\n🔹 Step 4: Bob Executing Gasless Transaction (Sponsored by Alice)...`);
     
     try {
+        const costCap = await gaslessCostCapFromEnv(publicClient, createPublicClient({ transport: http(BUNDLER_URL) }));
         const userOpHash = await SuperPaymasterClient.submitGaslessTransaction(
             publicClient,
             bobClient,
@@ -169,7 +171,8 @@ async function main() {
                 recipient: aliceAcc.address,
                 amount: parseEther('0.1'),
                 operator: aliceAcc.address, // Alice sponsors this!
-                paymasterAddress: CONTRACTS.superPaymaster
+                paymasterAddress: CONTRACTS.superPaymaster,
+                maxUserOpCostWei: costCap.maxUserOpCostWei,
             }
         );
         console.log(`   ✅ Gasless UserOp Submitted! Hash: ${userOpHash}`);

@@ -27,6 +27,7 @@ import {
     CANONICAL_ADDRESSES, AAStarAirAccountV7ABI, AgentRegistryABI, EntryPointABI,
     AirAccountExtensionABI, PaymasterABI,
 } from '@aastar/core';
+import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -55,7 +56,7 @@ const ALG_BLS = 0x01, ALG_ECDSA = 0x02;
 
 const RPCS = [process.env.SEPOLIA_RPC_URL, process.env.SEPOLIA_RPC_URL2, process.env.SEPOLIA_RPC_URL3]
     .map((s) => (s || '').replace(/^['"]|['"]$/g, '')).filter(Boolean) as string[];
-const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: http(url) }) as PublicClient;
+const clientFor = (url: string) => createPublicClient({ chain: sepolia, transport: testChainHttp(url) }) as PublicClient;
 async function rpc<T>(fn: (c: PublicClient) => Promise<T>): Promise<T> {
     let last: unknown;
     for (const url of RPCS) {
@@ -104,6 +105,9 @@ const out: string[] = [];
 const log = (s = '') => { console.log(s); out.push(s); };
 
 async function main() {
+    // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
+    // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     if (!RPCS.length) throw new Error('No SEPOLIA_RPC_URL in .env.sepolia');
     const now = BigInt((await rpc((c) => c.getBlock())).timestamp);
     log(`# v0.23.0 strengthening reads — block.timestamp=${now} (${new Date(Number(now) * 1000).toISOString()})`);

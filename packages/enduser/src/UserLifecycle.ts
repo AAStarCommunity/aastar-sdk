@@ -1,4 +1,5 @@
 import { type Address, type Hash, type Hex, parseEther, BaseError, ContractFunctionRevertedError } from 'viem';
+import type { UserOpSignGuardOptions } from '@aastar/paymaster';
 import { BaseClient, type ClientConfig, type TransactionOptions, RegistryABI } from '@aastar/core';
 import { registryActions, sbtActions, tokenActions, stakingActions, entryPointActions } from '@aastar/core'; // L2/L1 Actions
 
@@ -142,7 +143,7 @@ export class UserLifecycle extends BaseClient {
         value: bigint;
         data: Hex;
         operator?: Address; // Optional specific operator
-    }): Promise<Hash> {
+    } & UserOpSignGuardOptions): Promise<Hash> {
         if (!this.gaslessConfig) {
             throw new Error("Gasless configuration not enabled. Call enableGasless() first.");
         }
@@ -191,7 +192,9 @@ export class UserLifecycle extends BaseClient {
             paymaster: paymasterAddress,
             paymasterType,
             gasToken: this.gaslessConfig.gasToken,
-            operator: params.operator
+            operator: params.operator,
+            maxUserOpCostWei: params.maxUserOpCostWei,
+            beforeSignUserOp: params.beforeSignUserOp,
         });
     }
 
