@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### SP 5.5.0 live E2E for the paper cells (S1, S1r, S3b, C12) on the coexisting rc.8 stack (#434)
+
+- `scripts/sp550-live-e2e.ts` selects its stack by network (`sp550PinsFor`; `--network sepolia-rc8` reads the
+  coexisting entry) and takes every address it signs, sends or encodes through `requireDeployedAddress`.
+- Preconditions are checked, never performed: ENDUSER role, SBT, xPNTs and task-token (T) balances, renewalMode,
+  `operators(operator).minTxInterval == expectMinTxInterval` (required; the paper cells use 60), ETH on the user's EOA
+  (C12 sends its own handleOps), and the account the SDK derives == `config.account`. A live run refuses a public
+  anvil / hardhat test key as its signer.
+- Every row records the gas decision (five limits with their source, coefficients, fees and their source), the
+  actualGasUsed and the efficiency actual / sum of limits (the bundler 0.4 check); a bundler rejection is recorded with
+  its reason and the gas decision. `frozenGas` (all five, for a data collection) is asserted to be used verbatim.
+- S1r: a second op straight after S1, inside minTxInterval, must be refused as not yet valid (-32503) with one send and
+  one signature (the SDK neither waits nor retries). C12: `createEndUserClient().executeGasless`, self-bundled handleOps
+  from the user's EOA; asserted success, sender = the EOA, one signature, xPNTs charged.
+- `createEndUserClient().executeGasless` has no gas literals left: limits are the caller's `gas`, else the estimate of
+  `estimateBundlerUrl` × `gasLimitCoefficientBps` (preVerificationGas × 1.0), refused before signing with neither; the
+  chain's minPostOpGas only raises; fees from eth_feeHistory; the handleOps transaction's gas is the node's
+  eth_estimateGas × the coefficient. `onGasDecided` reports it with PaymasterClient's field names and source labels.
+- Fork mode for the joint rehearsal: `gate.deployLiveConfig` (fork only) holds a DeployLive config's addresses to fork
+  checks (anvil client on the network's chain id, code at every address, SuperPaymaster's wiring) instead of the
+  read-back gate, and `taskPlan` (SP's three-arm plan, pinned by sha256) supplies T and must match the run's chain,
+  SuperPaymaster and call bytes.
+
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 
 - Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`
