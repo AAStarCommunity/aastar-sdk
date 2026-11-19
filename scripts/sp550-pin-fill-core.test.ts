@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { pinFillPreflightRefusal, PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -198,49 +198,29 @@ describe('round-2 rewrite guards (Codex r2 on 7cefda78)', { timeout: SPAWN_VERDI
     });
 });
 
-describe('writeAll: all or nothing, never clobbering another writer', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    const memIo = (files: Record<string, string>, fail: Partial<Record<'rename' | 'read' | 'write', (p: string) => boolean>> = {}): WriteIo & { files: Record<string, string> } => ({
-        files,
-        read: (p) => { if (fail.read?.(p)) throw new Error(`ENOENT ${p}`); if (!(p in files)) throw new Error(`ENOENT ${p}`); return files[p]; },
-        write: (p, v) => { if (fail.write?.(p)) throw new Error(`EACCES ${p}`); files[p] = v; },
-        rename: (a, b) => { if (fail.rename?.(b)) throw new Error(`EACCES ${b}`); files[b] = files[a]; delete files[a]; },
-        remove: (p) => { delete files[p]; },
+describe('pinFillPreflightRefusal: what stops the CLI before anything is read (Daybreak #469 re-run, pure)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const ok = ['--network', 'sepolia-rc8', '--manifest', 'm.json', '--rpc', 'http://a', '--allow-rc'];
+    it('a well-formed preview passes; --write is refused by the gate while not ready, passes only when ready', () => {
+        expect(pinFillPreflightRefusal(ok, false)).toBeUndefined();
+        expect(pinFillPreflightRefusal([...ok, '--write'], false)).toBe(PIN_WRITE_BEFORE_ALLOWLIST);
+        expect(pinFillPreflightRefusal([...ok, '--write'], true)).toBeUndefined();
     });
-    const F = [{ path: '/r/table.ts', before: 'old-table', after: 'new-table' }, { path: '/r/book.ts', before: 'old-book', after: 'new-book' }];
-    it('the second rename failing restores the first; no temp file is left', () => {
-        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => p === '/r/book.ts' });
-        expect(() => writeAll(F, '/r', io)).toThrow(/write failed .*nothing left changed/);
-        expect(io.files).toEqual({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
+    it.each([
+        [['--WRITE'], /unknown argument "--WRITE"/], [['--writ'], /unknown argument "--writ"/], [['--'], /unknown argument "--"/],
+        [['--allow-rc', '--allow-rc'], /--allow-rc given twice/], [['--rpc', 'http://b'], /--rpc given twice/],
+        [['--block'], /--block needs a value/], [['--rpc2', '--write'], /--rpc2 needs a value/], [['extra'], /unknown argument "extra"/],
+        [['--write=1'], /--write takes no value/], [['--deploylive-archive=x'], /not implemented yet/],
+    ])('%j is refused (never read as a preview)', (extra, why) => {
+        expect(pinFillPreflightRefusal([...ok, ...(extra as string[])], true)).toMatch(why as RegExp);
     });
-    it('…but a file another writer changed in between is left alone and reported', () => {
-        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => { if (p === '/r/book.ts') { io.files['/r/table.ts'] = 'their-edit'; return true; } return false; } });
-        expect(() => writeAll(F, '/r', io)).toThrow(/table\.ts changed since this run wrote it/);
-        expect(io.files['/r/table.ts']).toBe('their-edit');
-    });
-    it('a failed rename whose rollback also fails reports the unrestored file (the caller keeps its recovery data)', () => {
-        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, {
-            rename: (p) => p === '/r/book.ts',
-            write: (p) => p === '/r/table.ts', // the rollback of the already-renamed table fails
-        });
-        let err: any;
-        try { writeAll(F, '/r', io); } catch (e) { err = e; }
-        expect(err?.message).toMatch(/table\.ts could not be restored/);
-        expect(err?.unrestored).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
-    });
-    it('a temp file that cannot be removed does not mask the rollback status (Codex r9)', () => {
-        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' }, { rename: (p) => p === '/r/book.ts' });
-        io.remove = () => { throw new Error('EBUSY'); };
-        let err: any;
-        try { writeAll(F, '/r', io); } catch (e) { err = e; }
-        expect(err?.unrestored).toEqual(expect.arrayContaining([expect.stringMatching(/pin-fill\.tmp could not be removed \(EBUSY\)/)]));
-    });
-    it('restore() attempts every file and reports each failure', () => {
-        const io = memIo({ '/r/table.ts': 'old-table', '/r/book.ts': 'old-book' });
-        const restore = writeAll(F, '/r', io);
-        expect(io.files).toEqual({ '/r/table.ts': 'new-table', '/r/book.ts': 'new-book' });
-        delete io.files['/r/table.ts'];
-        expect(restore()).toEqual([expect.stringMatching(/table\.ts could not be restored/)]);
-        expect(io.files['/r/book.ts']).toBe('old-book');
+});
+
+describe('writeAll refuses while the FU-124 gate is closed, before any file operation (Daybreak #469 Medium)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('a direct call (bypassing the CLI) throws the gate reason and touches no file', () => {
+        const ops: string[] = [];
+        const io: WriteIo = { read: (p) => { ops.push(`read ${p}`); return ''; }, write: (p) => { ops.push(`write ${p}`); }, rename: (a) => { ops.push(`rename ${a}`); }, remove: (p) => { ops.push(`remove ${p}`); } };
+        expect(() => writeAll([{ path: '/r/table.ts', before: 'a', after: 'b' }], '/r', io)).toThrow(PIN_WRITE_BEFORE_ALLOWLIST);
+        expect(ops).toEqual([]);
     });
 });
 

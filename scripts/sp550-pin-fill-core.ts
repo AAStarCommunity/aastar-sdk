@@ -9,6 +9,7 @@ import { getAddress, isAddress } from 'viem';
 import { SP550_CERTIFIED_ADDRESS_KEYS, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, sp550PinsFor, type Sp550FreshDeployPins, type Sp550NetworkEntry } from '../packages/core/src/sp550Deployments.js';
 import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
+import { sp550WiringAllowListReady } from '../packages/core/src/sp550CutoverGate.js';
 export { isNotDeployedPlaceholder };
 import { isIP } from 'net';
 
@@ -144,6 +145,35 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
 export type Sp550PinSourceKind = 'manifest' | 'deploylive-archive';
 export const PIN_WRITE_BEFORE_ALLOWLIST = '--write is refused until the getter allow-list exists (FU-124: SP550_WIRING_EXPECTED is empty); the gate cannot yet prove every getter points at the right contract. Preview without --write works; the manifest was not read and no RPC was contacted';
 export const DEPLOYLIVE_ARCHIVE_PENDING = '--deploylive-archive is not implemented yet: it waits for SP to name the source of the expected runtime codehashes (DSR 2026-11-19); nothing was read or written';
+
+/** sp550-pin-fill.ts options: valued ones take the next argument; flags take none. Anything else is refused. */
+const PIN_FILL_VALUED = ['--network', '--manifest', '--rpc', '--rpc2', '--block', '--sp-readback-commit', '--sp-readback-path'];
+const PIN_FILL_FLAGS = ['--allow-rc', '--write'];
+/**
+ * Why sp550-pin-fill.ts must stop before reading anything, or undefined (Daybreak #469 re-run). Pure: argv and the
+ * gate's readiness in, a refusal out. Order: the two refusals older callers rely on (--deploylive-archive, a value on
+ * --write), then exact option parsing (unknown switches such as --WRITE / --writ, a bare `--`, a repeated option, a
+ * missing value: all refused, never read as preview), then the FU-124 write gate.
+ */
+export function pinFillPreflightRefusal(argv: readonly string[], allowListReady: boolean): string | undefined {
+    if (argv.some((x) => x === '--deploylive-archive' || x.startsWith('--deploylive-archive='))) return DEPLOYLIVE_ARCHIVE_PENDING;
+    if (argv.some((x) => x.startsWith('--write='))) return '--write takes no value (write intent is the bare --write flag); the manifest was not read and no RPC was contacted';
+    const seen = new Set<string>();
+    for (let i = 0; i < argv.length; i++) {
+        const x = argv[i];
+        const valued = PIN_FILL_VALUED.includes(x);
+        if (!valued && !PIN_FILL_FLAGS.includes(x)) return `unknown argument ${JSON.stringify(x)} (options: ${[...PIN_FILL_VALUED, ...PIN_FILL_FLAGS].join(' ')}); nothing was read`;
+        if (seen.has(x)) return `${x} given twice; nothing was read`;
+        seen.add(x);
+        if (valued) {
+            const v = argv[i + 1];
+            if (v === undefined || v.startsWith('--')) return `${x} needs a value; nothing was read`;
+            i++;
+        }
+    }
+    if (seen.has('--write') && !allowListReady) return PIN_WRITE_BEFORE_ALLOWLIST;
+    return undefined;
+}
 
 /** The source files a fill may write, by role. */
 export interface PinFillFiles { upgrade: string; fresh: string; book: string }
@@ -342,6 +372,9 @@ const nodeIo: WriteIo = {
  * reporting each one it could not restore instead of stopping at the first.
  */
 export function writeAll(files: { path: string; before: string; after: string }[], root: string, io: WriteIo = nodeIo): () => string[] {
+    // The gate is checked HERE, at the one place that touches the files, before any read / write / rename (Daybreak
+    // #469: a ban only in the CLI wrapper left this exported primitive open to any script that composes the plan).
+    if (!sp550WiringAllowListReady()) throw new Error(PIN_WRITE_BEFORE_ALLOWLIST);
     const restoreEach = (done: typeof files) => done.flatMap((f) => {
         try {
             if (io.read(f.path) !== f.after) return [`${path.relative(root, f.path)} changed since this run wrote it; left as is, restore it by hand`];

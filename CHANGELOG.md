@@ -63,6 +63,9 @@ All notable changes to this project will be documented in this file.
   set (`RegistryRc8ABI`, `GTokenAuthorizationRc8ABI`); the SDK-wide Registry / GToken ABIs are unchanged for 5.4.2.
   rc.8 deploys no BLSValidator, so the rc.8 gate fails a non-zero `addresses.blsValidator` pin. A test records every
   read a passing rc.8 gate makes and requires each to be covered; CI re-derives the fixture from a fresh forge build.
+- The pin-write ban is enforced where files are touched: `writeAll` checks the FU-124 gate itself before any file
+  operation (not only the CLI wrapper), and `sp550-pin-fill.ts` parses its arguments exactly (`pinFillPreflightRefusal`:
+  unknown switches such as `--WRITE`, a bare `--`, repeats and missing values exit 2 instead of running a preview).
 
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 

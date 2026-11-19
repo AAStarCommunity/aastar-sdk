@@ -277,7 +277,7 @@ export function sp550ReleaseVersionsProblems(table: Readonly<Record<string, unkn
     for (const k of want) {
         const v = table[k];
         // No whitespace anywhere (a trailing "\n" would satisfy `$`), then NAME-MAJOR.MINOR…
-        if (Object.prototype.hasOwnProperty.call(table, k) && (typeof v !== 'string' || /\s/.test(v) || !/^[A-Za-z][A-Za-z0-9]*-\d+\.\d+[0-9A-Za-z.\-]*$/.test(v))) p.push(`release-versions: ${k} ${JSON.stringify(v)} is not a version string`);
+        if (Object.prototype.hasOwnProperty.call(table, k) && (typeof v !== 'string' || /\s/.test(v) || !/^[A-Za-z][A-Za-z0-9]*-\d+\.\d+(\.\d+)?([.-][0-9A-Za-z]+)*$/.test(v))) p.push(`release-versions: ${k} ${JSON.stringify(v)} is not a version string`);
     }
     return p;
 }

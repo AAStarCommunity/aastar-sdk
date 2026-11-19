@@ -953,7 +953,7 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         const failed = (r: any) => r.results.filter((c: any) => !c.ok).map((c: any) => `${c.check} :: ${c.detail}`);
         it('the validator: missing key, unmapped key, empty or non-version value each fail; SP\'s table passes', () => {
             const T = RELEASE as Record<string, string>;
-            expect(sp550ReleaseVersionsProblems(T)).toEqual([]);
+            expect(sp550ReleaseVersionsProblems(T)).toEqual([]); // incl. xPNTsFactory-3.0.3-v2, Staking-4.2.1, GToken-2.2.0
             const { Registry: _drop, ...noReg } = T;
             expect(sp550ReleaseVersionsProblems(noReg)).toEqual(['release-versions: missing Registry']);
             expect(sp550ReleaseVersionsProblems({ ...T, MySBT: 'MySBT-1.0.0' })).toEqual([expect.stringMatching(/unmapped MySBT/)]);
@@ -962,7 +962,7 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         });
         it('the reverse matrix (Daybreak #469 re-run): whitespace, wrong types, case-only keys, prototype keys, arrays', () => {
             const T = RELEASE as Record<string, string>;
-            for (const v of ['Registry-5.10.1\n', ' Registry-5.10.1', 'Registry-5.10.1 ', '   ', '\t', 'Registry -5.10.1']) {
+            for (const v of ['Registry-5.10.1\n', ' Registry-5.10.1', 'Registry-5.10.1 ', '   ', '\t', 'Registry -5.10.1', 'Registry-5.10.', 'Registry-5.10..1', 'Registry-5.10.1-', 'Registry-5.10.1--v2', 'Registry-5.']) {
                 expect(sp550ReleaseVersionsProblems({ ...T, Registry: v }), JSON.stringify(v)).toEqual([expect.stringMatching(/Registry .* is not a version string/)]);
             }
             for (const v of [null, 5, true, {}, ['Registry-5.10.1'], undefined]) {
