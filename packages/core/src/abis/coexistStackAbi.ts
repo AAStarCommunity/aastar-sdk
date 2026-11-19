@@ -2,8 +2,9 @@
  * The functions and events the rc.8 live cells (S1, S1r, S3b, C12) and the read-back gate call on SuperPaymaster-
  * deployed contracts OUTSIDE the seven vendored 5.5.0 files (scripts/check-sp550-abis.ts). The SDK keeps these ABIs at
  * the deployed 5.4.2 generation; DSR (2026-11-19) asked for proof that, entry by entry, they equal the v5.5.0-rc.8
- * compiled artifacts (commit 5a150f6a) before not replacing them, and where they do not, a coexist set (rc8/) for that stack only. scripts/coexist-stack-abi-pin.ts records the
- * compiled side into fixtures/coexist-stack-abi.json; coexistStackAbi.test.ts holds the vendored files to it.
+ * compiled artifacts (commit 5a150f6a) before not replacing them, and where they do not, a coexist set (rc8/) for that
+ * stack only. scripts/coexist-stack-abi-pin.ts records the compiled side into fixtures/coexist-stack-abi.json;
+ * coexistStackAbi.test.ts holds the vendored files to it.
  *
  * Two sources of entries per file: the explicit calls (gate comparisons, live-cell reads), and — for every ABI the
  * gate's exhaustive scan reads — every no-argument view whose outputs carry an address (the same rule the gate uses).
