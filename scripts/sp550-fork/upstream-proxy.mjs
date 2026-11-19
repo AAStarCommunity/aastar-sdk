@@ -23,20 +23,40 @@ if (!['http:', 'https:'].includes(upstream.protocol)) { console.error('upstream-
 // --test-loopback-upstream: the proxy's own test only (its fake upstream is local); the flag carries no secret.
 if (!process.argv.includes('--test-loopback-upstream') && ['127.0.0.1', 'localhost', '[::1]'].includes(upstream.hostname)) { console.error('upstream-proxy: the upstream is a loopback address; it must be the remote fork source'); process.exit(2); }
 const MAX_BODY = 16 << 20;
+const UPSTREAM_TIMEOUT_MS = 120_000;
+// fetch() refuses a URL with credentials: they travel as a Basic Authorization header, the fetch URL carries none.
+const auth = upstream.username || upstream.password
+    ? 'Basic ' + Buffer.from(`${decodeURIComponent(upstream.username)}:${decodeURIComponent(upstream.password)}`).toString('base64') : undefined;
+const target = new URL(upstream.href); target.username = ''; target.password = '';
+// Every part of the URL that could carry a key, scrubbed from anything the upstream sends back.
+const secrets = [upstream.href, target.href, `${target.pathname}${target.search}`, upstream.username, upstream.password]
+    .filter((x) => x && x.length >= 6 && x !== '/').sort((a, b) => b.length - a.length);
+const scrub = (t) => secrets.reduce((acc, x) => acc.split(x).join('…'), t);
+const rpcError = (message) => JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message } });
 
 const server = http.createServer(async (req, res) => {
-    if (req.method !== 'POST') { res.writeHead(405).end(); return; }
-    const parts = [];
-    let size = 0;
-    for await (const c of req) { size += c.length; if (size > MAX_BODY) { res.writeHead(413).end(); return; } parts.push(c); }
+    // The whole request lifecycle is inside one catch: an aborted upload or a dead upstream answers, never crashes.
     try {
-        const r = await fetch(upstream, { method: 'POST', headers: { 'content-type': 'application/json' }, body: Buffer.concat(parts) });
-        const body = Buffer.from(await r.arrayBuffer());
-        res.writeHead(r.status, { 'content-type': r.headers.get('content-type') ?? 'application/json' }).end(body);
+        if (req.method !== 'POST') { res.writeHead(405).end(); return; }
+        const parts = [];
+        let size = 0;
+        for await (const c of req) { size += c.length; if (size > MAX_BODY) { res.writeHead(413).end(); return; } parts.push(c); }
+        const r = await fetch(target, {
+            method: 'POST', body: Buffer.concat(parts), signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+            headers: { 'content-type': 'application/json', ...(auth ? { authorization: auth } : {}) },
+        });
+        const text = await r.text();
+        // JSON = the body parses as JSON (a node may omit or mislabel the content-type).
+        let json = true; try { JSON.parse(text); } catch { json = false; }
+        // A non-JSON page (a provider's HTML error) is replaced; a JSON body is passed on with any URL part scrubbed.
+        const body = json ? scrub(text) : rpcError(`upstream HTTP ${r.status} (non-JSON body withheld)`);
+        res.writeHead(json ? r.status : 502, { 'content-type': 'application/json' }).end(body);
     } catch (e) {
         // The error text of a failed fetch can quote the URL: answer with its class only.
-        res.writeHead(502, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: `upstream unreachable (${e?.name ?? 'error'})` } }));
+        if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' }).end(rpcError(`upstream unreachable (${e?.name ?? 'error'})`));
+        else res.destroy();
     }
 });
+server.on('clientError', (_e, sock) => sock.destroy());
 server.listen(port, '127.0.0.1', () => console.log(`READY ${port}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => process.exit(0)));

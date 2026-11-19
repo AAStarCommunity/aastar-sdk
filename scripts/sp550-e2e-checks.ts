@@ -23,6 +23,9 @@ export type BundlerCall = {
     flags?: number;
     /** How many times the user's signer had been asked when this request left. */
     signsBefore: number;
+    /** The op's sender and nonce as sent (eth_sendUserOperation / estimate requests). */
+    sender?: string;
+    nonce?: bigint;
     /** The op's gas fields as sent (eth_sendUserOperation / estimate requests), so a rejected op is still recorded. */
     gas?: Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit' | 'maxFeePerGas' | 'maxPriorityFeePerGas', bigint | undefined>;
 };
@@ -56,7 +59,7 @@ export function gasSourceClient(reply: any): string | undefined {
     return typeof reply.result === 'string' && reply.result !== '' ? reply.result : undefined;
 }
 
-export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: BundlerCall[]): () => void {
+export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: BundlerCall[], opts: { timeoutMs?: number; onSend?: (c: BundlerCall) => void } = {}): () => void {
     const original = globalThis.fetch;
     globalThis.fetch = (async (input: any, init?: any) => {
         const url = typeof input === 'string' ? input : input?.url ?? String(input);
@@ -68,6 +71,8 @@ export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: Bun
                     if (USER_OP_METHODS.has(call.method)) {
                         const op = req.params?.[0] ?? {};
                         call.signature = op.signature;
+                        if (typeof op.sender === 'string') call.sender = op.sender;
+                        try { if (op.nonce !== undefined) call.nonce = BigInt(op.nonce); } catch { /* malformed: left out */ }
                         call.flags = flagsFromPaymasterData(op.paymasterData);
                         const big = (v: unknown) => { try { return v === undefined || v === null ? undefined : BigInt(v as any); } catch { return undefined; } };
                         call.gas = {
@@ -77,8 +82,11 @@ export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: Bun
                         };
                     }
                     sink.push(call);
+                    opts.onSend?.(call);
                 }
             } catch { sink.push({ method: '<unparsable body>', signsBefore: signsNow() }); }
+            // A bundler that never answers cannot hold the run (an AbortError fails the cell, recorded as OUTCOME UNKNOWN).
+            if (opts.timeoutMs && !init.signal) return original(input, { ...init, signal: AbortSignal.timeout(opts.timeoutMs) });
         }
         return original(input, init);
     }) as typeof fetch;
@@ -189,14 +197,19 @@ export function packedUserOpHashV07(op: { sender: Address; nonce: bigint; initCo
 export function c12TransactionProblems(tx: any, w: C12TxExpectation): string[] {
     const p: string[] = [];
     if (tx === null || typeof tx !== 'object') return ['not a transaction request'];
+    // EIP-1559 only: a legacy gasPrice or blob fees would be charged outside maxGas x maxFeePerGas (Codex 468-d1).
+    if (tx.type !== 'eip1559') p.push(`transaction type ${JSON.stringify(tx.type)} is not eip1559`);
+    for (const k of ['gasPrice', 'blobs', 'blobVersionedHashes', 'maxFeePerBlobGas', 'sidecars', 'kzg', 'authorizationList'] as const) {
+        if (tx[k] !== undefined) p.push(`${k} is not part of C12's transaction`);
+    }
+    if (tx.accessList !== undefined && !(Array.isArray(tx.accessList) && tx.accessList.length === 0)) p.push('a non-empty accessList is not part of C12\'s transaction');
     if (tx.chainId === undefined || Number(tx.chainId) !== w.chainId) p.push(`chainId ${tx.chainId} is not ${w.chainId}`);
     if (typeof tx.to !== 'string' || getAddress(tx.to) !== getAddress(w.entryPoint)) p.push(`to ${tx.to} is not the EntryPoint ${w.entryPoint}`);
     if (tx.value !== undefined && BigInt(tx.value) !== 0n) p.push(`value ${tx.value} is not 0`);
     if (tx.gas === undefined || BigInt(tx.gas) > w.maxGas) p.push(`gas ${tx.gas} is not within the cap ${w.maxGas}`);
-    const fee = tx.maxFeePerGas ?? tx.gasPrice;
+    const fee = tx.maxFeePerGas;
     if (fee === undefined || BigInt(fee) > w.maxFeePerGas) p.push(`maxFeePerGas ${fee} is not within the cap ${w.maxFeePerGas}`);
-    if (tx.maxPriorityFeePerGas !== undefined && fee !== undefined && BigInt(tx.maxPriorityFeePerGas) > BigInt(fee)) p.push('maxPriorityFeePerGas exceeds maxFeePerGas');
-    if (tx.authorizationList !== undefined || tx.blobs !== undefined) p.push('authorization list / blobs are not part of C12');
+    if (tx.maxPriorityFeePerGas === undefined || (fee !== undefined && BigInt(tx.maxPriorityFeePerGas) > BigInt(fee))) p.push('maxPriorityFeePerGas missing or above maxFeePerGas');
     let decoded: any;
     try { decoded = decodeFunctionData({ abi: HANDLE_OPS_ABI, data: tx.data }); } catch { return [...p, 'calldata does not decode as handleOps(PackedUserOperation[], address)']; }
     if (decoded.functionName !== 'handleOps') return [...p, `calldata is ${decoded.functionName}, not handleOps`];
@@ -222,9 +235,13 @@ export function redactUrls(text: string, urls: readonly string[]): string {
     // Every form of every URL, longest first: a URL that is a prefix of another must not leave the other's tail behind.
     const forms: [string, string][] = [];
     for (const u of urls) {
-        let safe: string;
-        try { const x = new URL(u); safe = `${x.protocol}//${x.host}/…`; } catch { continue; }
-        for (const f of new Set([u, u.replace(/\/+$/, '')])) if (f.length > 0) forms.push([f, safe]);
+        let safe: string, x: URL;
+        try { x = new URL(u); safe = `${x.protocol}//${x.host}/…`; } catch { continue; }
+        // As configured, and as a URL parser prints it back (lower-case host, default port dropped), each with and without
+        // a trailing slash; and the secret-bearing part on its own (userinfo, path, query), for text that quotes only it.
+        const secret = `${x.username}${x.password ? ':' + x.password : ''}${x.pathname === '/' ? '' : x.pathname}${x.search}`;
+        for (const f of new Set([u, u.replace(/\/+$/, ''), x.href, x.href.replace(/\/+$/, '')])) if (f.length > 0) forms.push([f, safe]);
+        if (secret.length >= 8) forms.push([secret, '/…']);
     }
     forms.sort((a, b) => b[0].length - a[0].length);
     let out = text;
@@ -255,7 +272,27 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     if (!st.lastSignedHash) throw new Error('C12: no UserOperation was signed before the transaction; refused');
     const bad = c12TransactionProblems(tx, { ...st.expect, userOpHash: st.lastSignedHash });
     if (bad.length) throw new Error(`C12 transaction refused before signing: ${bad.join('; ')}`);
-    if (st.beforeSign) await st.beforeSign();
+    // The slot is taken synchronously, before the first await: a concurrent call sees it used (Codex 468-d2). A refusal
+    // by beforeSign keeps it taken; nothing was signed and the cell fails.
     st.txSigns++;
+    if (st.beforeSign) await st.beforeSign();
     return sign();
+}
+
+/** The four gasParams() fields the E2E snapshots (Daybreak M1). */
+export type GasParamsTuple = { minPostOpGas: bigint; settleGasBound: bigint; cWrap: bigint; cPostop: bigint };
+export const GAS_PARAMS_KEYS = ['minPostOpGas', 'settleGasBound', 'cWrap', 'cPostop'] as const;
+/** Fields where `observed` differs from `expected`, as "k a != b" (empty = equal). */
+export function gasParamsDiff(observed: GasParamsTuple, expected: GasParamsTuple): string[] {
+    return GAS_PARAMS_KEYS.filter((k) => observed[k] !== expected[k]).map((k) => `${k} ${observed[k]} != ${expected[k]}`);
+}
+/** gasParams() result (current, pending) as the E2E reads it: tuple by name or index. */
+export function gasParamsOf(current: any): GasParamsTuple {
+    const pick = (k: string, i: number) => BigInt(String(current?.[k] ?? current?.[i]));
+    return { minPostOpGas: pick('minPostOpGas', 0), settleGasBound: pick('settleGasBound', 1), cWrap: pick('cWrap', 2), cPostop: pick('cPostop', 3) };
+}
+/** Snapshot keys whose value changed between the gate's snapshot and a re-read (blockNumber ignored). */
+export function snapshotChanges<T extends Record<string, unknown>>(gated: T, now: T): string[] {
+    return (Object.keys(gated) as (keyof T & string)[]).filter((k) => k !== 'blockNumber' && String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase())
+        .map((k) => `${k} ${String(gated[k])} -> ${String(now[k])}`);
 }

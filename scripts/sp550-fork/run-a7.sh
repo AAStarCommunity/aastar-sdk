@@ -16,12 +16,14 @@
 # into its own FOUNDRY_DIR, never the shared ~/.foundry) must be the commit SP's A7 ran on
 # (A7_ANVIL_COMMIT): stable 1.7.1 has no Amsterdam, 1.8.6 prices Amsterdam CREATE wrongly.
 # Env:
-#   SP550_FORK_URL       archive Sepolia RPC for anvil's --fork-url (publicnode prunes old state).
-#                        Never logged: it usually embeds a provider key.
+#   SP550_FORK_URL       archive Sepolia RPC (publicnode prunes old state). Never logged, and in no child's argv or
+#                        env: it usually embeds a provider key, so stage 1 puts it behind a loopback forwarder.
 #   ULTRARELAY_DIR       UltraRelay-AAStar / Alto checkout for the local bundler.
 #   SP550_A7_HARDFORK    --load-state only; default amsterdam (SP's A7 anvil).
 #   SP550_A7_DEPLOY_CMD  deploy mode only: a command run inside the SP checkout with RPC_URL /
 #                        ETH_RPC_URL set to the fork (a rehearsal of this script, not the A7 run).
+#                        Executed as given (bash -c): trusted environments only — it is the author's own command,
+#                        never take it from a file, a PR or another person.
 #
 # Stages, each failing the run before the next (logs under <out>/):
 #   1 anvil: --load-state <dump> (sha256 checked first; test keys funded with anvil_setBalance,

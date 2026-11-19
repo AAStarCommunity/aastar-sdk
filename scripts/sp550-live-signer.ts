@@ -56,11 +56,14 @@ export function decryptKeystoreV3(json: unknown, password: string): Hex {
     if (c.kdf === 'scrypt') {
         const N = Number(kp.n), r = Number(kp.r), p = Number(kp.p), dklen = Number(kp.dklen);
         if (![N, r, p, dklen].every((x) => Number.isSafeInteger(x) && x > 0) || dklen < 32) throw new Error('keystore: bad scrypt params');
+        // Bounded (clestons #468): geth / cast use N = 2^13..2^18, r = 8, p = 1; anything far above is refused, not run.
+        if (N > 2 ** 20 || (N & (N - 1)) !== 0 || r > 32 || p > 16 || dklen > 64) throw new Error(`keystore: scrypt params out of range (N ${N}, r ${r}, p ${p}, dklen ${dklen}; max N 2^20, r 32, p 16, dklen 64)`);
         dk = scryptSync(pw, hexBytes(kp.salt, 'salt'), dklen, { N, r, p, maxmem: 256 * N * r * p + 64 * 1024 * 1024 });
     } else if (c.kdf === 'pbkdf2') {
         if (kp.prf !== 'hmac-sha256') throw new Error(`keystore: unsupported prf ${String(kp.prf)}`);
         const iter = Number(kp.c), dklen = Number(kp.dklen);
         if (!Number.isSafeInteger(iter) || iter <= 0 || !Number.isSafeInteger(dklen) || dklen < 32) throw new Error('keystore: bad pbkdf2 params');
+        if (iter > 10_000_000 || dklen > 64) throw new Error(`keystore: pbkdf2 params out of range (c ${iter}, dklen ${dklen}; max c 10,000,000, dklen 64)`);
         dk = pbkdf2Sync(pw, hexBytes(kp.salt, 'salt'), iter, dklen, 'sha256');
     } else {
         throw new Error(`keystore: unsupported kdf ${String(c.kdf)}`);

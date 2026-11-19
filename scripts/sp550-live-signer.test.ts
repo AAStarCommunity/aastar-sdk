@@ -162,6 +162,15 @@ describe('loadLiveSigner', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
         expect(err?.message).toMatch(/wrong password/);
         expect(leaks(out + String(err?.message) + String(err?.stack))).toEqual([]);
     });
+    it('scrypt / pbkdf2 parameters far above the usual are refused before any KDF runs (clestons #468)', async () => {
+        const ks = scryptKeystore(KEY, PASSWORD);
+        const big = { ...ks, crypto: { ...ks.crypto, kdfparams: { ...ks.crypto.kdfparams, n: 2 ** 22 } } };
+        const t0 = Date.now();
+        await expect(loadLiveSigner({ keystore: tmp(big) }, async () => PASSWORD)).rejects.toThrow(/scrypt params out of range/);
+        expect(Date.now() - t0).toBeLessThan(2_000);
+        const odd = { ...ks, crypto: { ...ks.crypto, kdfparams: { ...ks.crypto.kdfparams, n: 3000 } } };
+        await expect(loadLiveSigner({ keystore: tmp(odd) }, async () => PASSWORD)).rejects.toThrow(/out of range/);
+    });
     it('a key that does not match the declared address is refused', async () => {
         const ks = { ...scryptKeystore(KEY, PASSWORD), address: '11'.repeat(20) };
         await expect(loadLiveSigner({ keystore: tmp(ks) }, async () => PASSWORD)).rejects.toThrow(/does not match the address/);
@@ -347,7 +356,7 @@ describe('public development keys are recognised (a live run refuses to sign wit
     });
 });
 
-describe('approved live signers (Daybreak H1): the committed table, not a key scan, is the guarantee', () => {
+describe('approved live signers (Daybreak H1): the committed table, not a key scan, is the guarantee', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('the anvil / hardhat mnemonic account at index 10,000 (past the scan) is not approved on Sepolia', async () => {
         const { mnemonicToAccount } = await import('viem/accounts');
         const a = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 10_000 }).address;
@@ -405,24 +414,16 @@ describe('fork source behind the loopback forwarder (Daybreak M3): no child argv
         const SECRET = 'SECRETKEY' + Date.now();
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proxy-'));
         const port = 29000 + Math.floor(Math.random() * 900);
-        // The helper as the scripts use it, with the test-only loopback switch for the fake upstream.
+        // The real helper, called as the scripts call it, plus the test-only loopback switch as its optional third argument.
         const script = `set -e
 . scripts/sp550-fork/upstream-proxy.sh
-start_upstream_proxy() { local port="$1" out="$2" url; url="\${SP550_FORK_URL}"; unset SP550_FORK_URL FORK_URL
-  printf '%s\\n' "$url" | node scripts/sp550-fork/upstream-proxy.mjs "$port" --test-loopback-upstream > "$out/upstream-proxy.log" 2>&1 &
-  echo $! > "$out/upstream-proxy.pid"; url=''
-  for _ in $(seq 1 30); do grep -q "^READY $port\\$" "$out/upstream-proxy.log" 2>/dev/null && break; sleep 0.5; done; UPSTREAM="http://127.0.0.1:$port"; }
-start_upstream_proxy ${port} "${dir}"
+start_upstream_proxy ${port} "${dir}" --test-loopback-upstream
 echo "ENV_AFTER=[\${SP550_FORK_URL:-}]"
 echo "CHILD_ENV=[$(env | grep -c SP550_FORK_URL || true)]"
 curl -s -X POST "$UPSTREAM" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":7,"method":"eth_chainId","params":[]}'; echo
 ps -o command= -p "$(cat "${dir}/upstream-proxy.pid")"
+if start_upstream_proxy ${port} "${dir}" --test-loopback-upstream 2>/dev/null; then echo SECOND=started; else echo SECOND=refused; fi
 kill "$(cat "${dir}/upstream-proxy.pid")"`;
-        // The real helper's body must match the inlined one apart from the test switch (it is the code under test).
-        const helper = fs.readFileSync('scripts/sp550-fork/upstream-proxy.sh', 'utf8');
-        expect(helper).toMatch(/unset SP550_FORK_URL FORK_URL/);
-        expect(helper).toMatch(/printf '%s\\n' "\$url" \| node "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/upstream-proxy\.mjs" "\$port"/);
-        // async: the fake upstream lives in this process and must keep answering while the shell runs.
         const { spawn } = await import('node:child_process');
         const out = await new Promise<string>((ok, no) => {
             const ch = spawn('bash', ['-c', script], { env: { ...process.env, SP550_FORK_URL: `http://127.0.0.1:${upPort}/v2/${SECRET}` }, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -434,6 +435,7 @@ kill "$(cat "${dir}/upstream-proxy.pid")"`;
         expect(out).toContain('CHILD_ENV=[0]');
         expect(out).toMatch(/"id":7,"result":"0xaa36a7"/);
         expect(out).not.toContain(SECRET); // the proxy's argv (ps) included
+        expect(out).toContain('SECOND=refused'); // a port already in use is refused, the running proxy's pid file kept
         expect(fs.readFileSync(path.join(dir, 'upstream-proxy.log'), 'utf8')).not.toContain(SECRET);
     }, 60_000);
     it('a failing upstream answers 502 without the URL, and a loopback upstream is refused without the test switch', async () => {
@@ -451,5 +453,41 @@ kill "$(cat "${dir}/upstream-proxy.pid")"`;
         expect(body + log).not.toContain(SECRET);
         const refused = (() => { try { execFileSync('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port + 1)], { input: 'http://127.0.0.1:8545\n', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); return ''; } catch (e: any) { return String(e.stderr); } })();
         expect(refused).toMatch(/loopback address/);
+    }, 60_000);
+    it('the forwarder sends URL credentials as a header, withholds non-JSON pages, scrubs URL parts from JSON, survives an aborted upload', async () => {
+        const http = await import('node:http');
+        const net = await import('node:net');
+        let seenAuth = '', seenPath = '';
+        const up = http.createServer((req, res) => {
+            seenAuth = String(req.headers.authorization ?? ''); seenPath = String(req.url);
+            let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => {
+                const m = JSON.parse(b).method;
+                if (m === 'html') { res.writeHead(500, { 'content-type': 'text/html' }).end('<html>error for /v2/SECRETPATH42</html>'); return; }
+                res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ jsonrpc: '2.0', id: 1, error: { message: 'bad request to http://u:p@127.0.0.1/v2/SECRETPATH42' } }));
+            });
+        });
+        await new Promise<void>((ok) => up.listen(0, '127.0.0.1', () => ok()));
+        const upPort = (up.address() as any).port;
+        const port = 29500 + Math.floor(Math.random() * 300);
+        const { spawn } = await import('node:child_process');
+        const p = spawn('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port), '--test-loopback-upstream'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        let log = ''; p.stdout.on('data', (c) => (log += c)); p.stderr.on('data', (c) => (log += c));
+        p.stdin.end(`http://alice:s3cr3tpass@127.0.0.1:${upPort}/v2/SECRETPATH42\n`);
+        for (let i = 0; i < 40 && !log.includes('READY'); i++) await new Promise((ok) => setTimeout(ok, 100));
+        try {
+            const post = (method: string) => fetch(`http://127.0.0.1:${port}`, { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: [] }) });
+            const j = await (await post('eth_chainId')).text();
+            expect(seenAuth).toBe('Basic ' + Buffer.from('alice:s3cr3tpass').toString('base64'));
+            expect(seenPath).toBe('/v2/SECRETPATH42');
+            expect(j).not.toMatch(/SECRETPATH42|s3cr3tpass/);
+            const h = await post('html');
+            expect(h.status).toBe(502);
+            expect(await h.text()).toMatch(/non-JSON body withheld/);
+            // An upload that dies half way: the proxy must keep serving.
+            await new Promise<void>((ok) => { const c = net.connect(port, '127.0.0.1', () => { c.write('POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 1000\r\n\r\n{"js'); setTimeout(() => { c.destroy(); ok(); }, 100); }); });
+            await new Promise((ok) => setTimeout(ok, 200));
+            expect((await post('eth_chainId')).status).toBe(200);
+            expect(log).not.toMatch(/SECRETPATH42|s3cr3tpass/);
+        } finally { p.kill(); up.close(); }
     }, 60_000);
 });

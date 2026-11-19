@@ -34,8 +34,11 @@ PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
 if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
   log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
 else
+  rm -f "$OUT/anvil.pid" "$OUT/upstream-proxy.pid"   # only pids this invocation writes are ever killed
   . "$(dirname "$0")/upstream-proxy.sh"
   start_upstream_proxy 28599 "$OUT" || { log "upstream proxy did not start"; exit 1; }
+  # A failed setup stops the processes it started (proxy, anvil); a successful one leaves them for the run.
+  trap 'rc=$?; if [ "$rc" != 0 ]; then for p in anvil upstream-proxy; do [ -f "$OUT/$p.pid" ] && kill "$(cat "$OUT/$p.pid")" 2>/dev/null || true; done; fi' EXIT
   anvil --fork-url "$UPSTREAM" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
   echo $! > "$OUT/anvil.pid"
   for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done

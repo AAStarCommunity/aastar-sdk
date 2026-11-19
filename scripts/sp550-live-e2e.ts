@@ -86,6 +86,7 @@
 import * as fs from 'fs';
 import { createServer } from 'http';
 import { spawn, type ChildProcess } from 'child_process';
+import { formatWithOptions } from 'util';
 import {
     type Abi, type Address, type Hex, createPublicClient, createWalletClient, decodeFunctionData,
     decodeEventLog, encodeFunctionData, extractChain, getAddress, http, isAddress, keccak256, toHex,
@@ -104,7 +105,7 @@ import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
 import { createHash } from 'crypto';
-import { gasSourceClient, redactUrls, signC12Transaction, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { gasParamsDiff, gasParamsOf, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -114,13 +115,18 @@ const MODE_SP_K = 0;
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 // L1 (Daybreak): no configured RPC / bundler URL reaches stdout, stderr or the tee'd log (redactUrls, checks module).
+let REDACT: readonly string[] = [];
+/** A text with every configured URL scrubbed: apply BEFORE truncating, so a cut cannot leave a partial URL behind. */
+const clean = (t: string) => redactUrls(t, REDACT);
 function installUrlRedaction(urls: readonly string[]) {
-    const scrub = (v: unknown): unknown => typeof v === 'string' ? redactUrls(v, urls)
-        : v instanceof Error ? redactUrls(String(v.stack ?? v.message), urls) : v;
+    REDACT = urls;
+    // The whole formatted line (objects, errors and stacks included), not each argument as given (Codex 468-d7).
     for (const k of ['log', 'error', 'warn', 'info'] as const) {
         const orig = console[k].bind(console);
-        console[k] = (...a: unknown[]) => orig(...a.map(scrub));
+        console[k] = (...a: unknown[]) => orig(clean(formatWithOptions({ depth: 6 }, ...a)));
     }
+    // A rejection nothing awaited would otherwise be printed by node itself, outside the console wrapper.
+    process.on('unhandledRejection', (e: any) => fail(`unhandled rejection: ${String(e?.shortMessage ?? e?.message ?? e)}`));
 }
 /** M3 (Daybreak): a child's environment without the fork source (SP550_FORK_URL usually carries a provider key). */
 const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
@@ -141,7 +147,8 @@ async function startForkBundler(rpc: string, entryPoint: Address, pub: any): Pro
     const acct = (i: number) => mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: i });
     for (const i of [2, 3]) await pub.request({ method: 'anvil_setBalance', params: [acct(i).address, '0x56BC75E2D63100000'] });
     const key = (i: number) => toHex(acct(i).getHdKey().privateKey!);
-    forkBundler = spawn('pnpm', ['dlx', '@pimlico/alto', '--entrypoints', entryPoint, '--rpc-url', rpc, '--port', String(port),
+    // Pinned (clestons #468): the version FU-127 inspected, not whatever is latest on the day of the run.
+    forkBundler = spawn('pnpm', ['dlx', '@pimlico/alto@0.0.21', '--entrypoints', entryPoint, '--rpc-url', rpc, '--port', String(port),
         '--executor-private-keys', key(2), '--utility-private-key', key(3), '--safe-mode', 'false',
         '--min-entity-stake', '0', '--min-entity-unstake-delay', '86400'], { stdio: 'ignore', env: childEnv() });
     const url = `http://127.0.0.1:${port}`;
@@ -307,7 +314,8 @@ async function main() {
     const IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
     // One block for every read of a snapshot (a change between two reads cannot mix two states).
     const wiring = async () => {
-        const blockNumber = await pub.getBlockNumber();
+        // cacheTime 0: viem caches the head (~4 s on Sepolia); a boundary re-read must see the block as of now (Codex 468-d3).
+        const blockNumber = await pub.getBlockNumber({ cacheTime: 0 });
         const at = { blockNumber } as const;
         const implOf = async (proxy: Address) => {
             const slot = await pub.getStorageAt({ address: proxy, slot: IMPL_SLOT, ...at });
@@ -327,7 +335,7 @@ async function main() {
         // M1 (Daybreak): gasParams at the same block, current tuple and the pending proposal, so a queued or executed
         // change between the gate and any signature aborts like any other wiring change.
         const [gpCur, gpPend] = (await read(sp, SuperPaymasterV550ABI, 'gasParams')) as readonly [any, any];
-        const pick = (x: any, k: string, i: number) => String(x?.[k] ?? x?.[i]);
+        const gp = gasParamsOf(gpCur);
         return {
             blockNumber,
             operatorConfigured: Boolean(o[1]), operatorPaused: Boolean(o[2]), minTxInterval: BigInt(o[5]),
@@ -338,8 +346,7 @@ async function main() {
             entryPoint: getAddress(await read(sp, SuperPaymasterV550ABI, 'entryPoint')),
             registry: reg, registryImpl: regImpl, registryImplCodehash: await codehash(regImpl),
             token: getAddress(o[3]),
-            gpMinPostOpGas: BigInt(pick(gpCur, 'minPostOpGas', 0)), gpSettleGasBound: BigInt(pick(gpCur, 'settleGasBound', 1)),
-            gpCWrap: BigInt(pick(gpCur, 'cWrap', 2)), gpCPostop: BigInt(pick(gpCur, 'cPostop', 3)),
+            gpMinPostOpGas: gp.minPostOpGas, gpSettleGasBound: gp.settleGasBound, gpCWrap: gp.cWrap, gpCPostop: gp.cPostop,
             gpPending: JSON.stringify(gpPend, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
         };
     };
@@ -363,23 +370,21 @@ async function main() {
     // M1: after inclusion, SP's gasParams in the inclusion block must equal the snapshot taken at signing.
     const settledUnderSnapshot = async (label: string, blockNumber: bigint) => {
         const [cur] = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'gasParams', blockNumber } as any)) as readonly [any, any];
-        const pick = (k: string, i: number) => BigInt(String(cur?.[k] ?? cur?.[i]));
-        const now = { gpMinPostOpGas: pick('minPostOpGas', 0), gpSettleGasBound: pick('settleGasBound', 1), gpCWrap: pick('cWrap', 2), gpCPostop: pick('cPostop', 3) };
-        const off = (Object.keys(now) as (keyof typeof now)[]).filter((k) => now[k] !== gated[k]);
-        if (off.length) fail(`${label}: SP.gasParams() in inclusion block ${blockNumber} differs from the snapshot taken at signing (${off.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
+        const off = gasParamsDiff(gasParamsOf(cur), snapGp);
+        if (off.length) fail(`${label}: SP.gasParams() in inclusion block ${blockNumber} differs from the snapshot taken at signing (${off.join('; ')})`);
     };
     const recheck = async (label: string) => {
         const now = await wiring();
         lastCheckBlock = now.blockNumber;
-        const changed = (Object.keys(gated) as (keyof typeof gated)[]).filter((k) => k !== 'blockNumber' && String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase());
-        if (changed.length) fail(`${label}: refused before signing — SuperPaymaster changed since the gate (${changed.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
+        const changed = snapshotChanges(gated, now);
+        if (changed.length) fail(`${label}: refused before signing — SuperPaymaster changed since the gate (${changed.join('; ')})`);
     };
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${cfg.mode === 'fork' ? '(this run\'s own, on the fork)' : new URL(cfg.bundlerUrl).host}`);
     // M1 (Daybreak): SP's whole gasParams() tuple is held to the release tuple (rc.8: 500k / 450k / 5k / 450k,
     // SuperPaymasterStorage.sol:232), required field by field (an optional expectation is a check a config can drop).
     const snapGp = { minPostOpGas: gated.gpMinPostOpGas, settleGasBound: gated.gpSettleGasBound, cWrap: gated.gpCWrap, cPostop: gated.gpCPostop };
-    const offGp = GP_KEYS.filter((k) => snapGp[k] !== BigInt(eg[k]));
-    if (offGp.length) refuse(`SP.gasParams() is not the release tuple at block ${gated.blockNumber} (${offGp.map((k) => `${k} ${snapGp[k]} != ${eg[k]}`).join('; ')})`);
+    const offGp = gasParamsDiff(snapGp, { minPostOpGas: BigInt(eg.minPostOpGas), settleGasBound: BigInt(eg.settleGasBound), cWrap: BigInt(eg.cWrap), cPostop: BigInt(eg.cPostop) });
+    if (offGp.length) refuse(`SP.gasParams() is not the release tuple at block ${gated.blockNumber} (${offGp.join('; ')})`);
     // The floor every check below uses is the snapshot's (equal to the release tuple, re-checked before every signature).
     const expectMinPostOpGas = snapGp.minPostOpGas;
     if (typeof cfg.expectMinTxInterval !== 'string' || !/^[1-9][0-9]*$/.test(cfg.expectMinTxInterval)) {
@@ -454,6 +459,8 @@ async function main() {
     // H1: the user's key signs UserOps only; a transaction (the SDK's direct-send fallback, or anything else) is refused
     // except in C12, whose cell IS the EOA's own handleOps.
     let allowTx = false;
+    // M4: a cell that must name every signed op before it can be lost (S1r) sets this; it runs as the signature returns.
+    let onSigned: ((userOpHash: Hex | undefined) => void) | undefined;
     // M2 (Daybreak): C12's transaction is checked field by field BEFORE the key signs it, exactly once, inside the budget
     // (signC12Transaction, checks module). The wrapper copies allowTx / signs / signBudget / beforeSign into st per call.
     const st: C12SignState = { allowTx: false, signs: 0, txSigns: 0, signBudget: Infinity };
@@ -462,14 +469,18 @@ async function main() {
         return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
     }, signMessage: async (a: any) => {
         if (signs + st.txSigns >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
+        // The slot is taken before the first await, so a concurrent call sees it used (Codex 468-d2); a refusal below
+        // keeps it taken (nothing signed, the cell fails).
+        signs++;
         if (beforeSign) await beforeSign();
         if (signDeadline !== undefined) {
             const now = (await pub.getBlock({ blockTag: 'latest' })).timestamp;
             if (now >= signDeadline) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
         }
-        signs++;
         st.lastSignedHash = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
-        return base.signMessage(a);
+        const sig = await base.signMessage(a);
+        onSigned?.(st.lastSignedHash);
+        return sig;
     } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
     // Whether the account exists before this run: A7 must prove the FIRST sponsored op of a brand-new
@@ -560,7 +571,7 @@ async function main() {
                 if (!res.ok) return fail(`receipt for ${opHash} (submitted): bundler answered HTTP ${res.status}`);
                 r = await res.json();
             } catch (e: any) { return fail(`receipt for ${opHash} (submitted): bundler did not answer (${e?.name ?? 'error'})`); }
-            if (r?.error) return fail(`receipt for ${opHash} (submitted): bundler error ${JSON.stringify(r.error).slice(0, 200)}`);
+            if (r?.error) return fail(`receipt for ${opHash} (submitted): bundler error ${clean(JSON.stringify(r.error)).slice(0, 200)}`);
             if (r?.result) return r.result;
             await new Promise((res) => setTimeout(res, 1000));
         }
@@ -589,7 +600,9 @@ async function main() {
         return { flags, postOpGasLimit, limits, maxPriorityFeePerGas: BigInt('0x' + gf.slice(0, 32)), maxFeePerGas: BigInt('0x' + gf.slice(32)), paymaster: getAddress(pmd.slice(0, 42)) };
     };
     const bundlerCalls: BundlerCall[] = [];
-    const untapBundler = tapBundler(bundlerUrl, () => signs, bundlerCalls);
+    // Every bundler request is bounded (60 s) and announced as it leaves (onSend), before any answer can stall the run.
+    let onSend: ((call: BundlerCall) => void) | undefined;
+    const untapBundler = tapBundler(bundlerUrl, () => signs, bundlerCalls, { timeoutMs: 60_000, onSend: (c) => onSend?.(c) });
     const DUMMY_SIGNATURE = PaymasterClient.dummySignature();
     let lastSent = 0;
     const spaced = async () => {
@@ -622,7 +635,7 @@ async function main() {
             // B5 (DSR): a bundler rejection (e.g. an efficiency check) is reported with its reason and the numbers — the
             // numbers from the op that was actually sent (onGasDecided only runs after acceptance).
             const sent = bundlerCalls.slice(first).filter((c) => c.method === 'eth_sendUserOperation').at(-1);
-            const msg = String(e?.shortMessage ?? e?.message ?? e).slice(0, 300);
+            const msg = clean(String(e?.shortMessage ?? e?.message ?? e)).slice(0, 300);
             // Three outcomes, not one: nothing left this process; the bundler answered with a JSON-RPC error; or an op was
             // sent and the outcome is unknown (a lost / malformed answer) — then it may be pending: read the nonce first.
             const outcome = !sent ? 'NOT SENT' : /Bundler Error|"code"|-32\d{3}/.test(msg) ? 'REJECTED by the bundler' : 'OUTCOME UNKNOWN (sent; check the EntryPoint nonce before rerunning)';
@@ -707,6 +720,11 @@ async function main() {
             // M4 (Daybreak, FU-126): the nonce this op is built with, so a signed op that might later become valid is named.
             const s1rNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
             st.lastSignedHash = undefined;
+            // M4 (Codex 468-d4): recorded the moment the key returns the signature, and again as the send leaves with the
+            // op's own sender / nonce, so an interrupted or stalled run still names the op.
+            const s1rVAExpected = s1Block.timestamp + minTxInterval;
+            onSigned = (h) => console.log(`S1r SIGNED OP: opHash ${h ?? '(not captured)'} sender ${account} nonce ${s1rNonce} (EntryPoint getNonce before building) validAfter ${s1rVAExpected} (expected: S1 block time + minTxInterval) — unless S1r ends rejected, spend that nonce with a normal op before any other cell (A7-runbook §S1r)`);
+            onSend = (c) => { if (c.method === 'eth_sendUserOperation') console.log(`S1r SENT OP: sender ${c.sender ?? '?'} nonce ${c.nonce ?? '?'} (as sent to the bundler)`); };
             const first = bundlerCalls.length;
             SuperPaymasterInflightGuard.clearAll();
             signs = 0;
@@ -714,19 +732,20 @@ async function main() {
             signBudget = 1; beforeSign = () => recheck('S1r'); signDeadline = s1Block.timestamp + minTxInterval - 5n;
             try { await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, bundlerUrl, noop, { ...submitOpts(() => {}), frozenGas: s1.decision!.limits }); }
             catch (e) { rejected = e; }
-            finally { signBudget = Infinity; beforeSign = undefined; signDeadline = undefined; }
+            finally { signBudget = Infinity; beforeSign = undefined; signDeadline = undefined; onSigned = undefined; onSend = undefined; }
             const calls = bundlerCalls.slice(first);
             const sends = calls.filter((c) => c.method === 'eth_sendUserOperation');
             const nyv = rejected instanceof UserOperationNotYetValidError ? rejected : undefined;
             // M4: printed before any check can stop the run, on every outcome once a signature exists. Unless S1r ends as
             // REJECTED (not yet valid), this op may still be valid after validAfter: the runbook's next step is to spend
             // the same nonce with a normal op before anything else.
-            const s1rVA = nyv?.validAfter !== undefined ? `${nyv.validAfter}` : `${s1Block.timestamp + minTxInterval} (expected: S1 block time + minTxInterval)`;
-            const s1rSigned = signs > 0 ? `opHash ${st.lastSignedHash ?? '(not captured)'} sender ${account} nonce ${s1rNonce} validAfter ${s1rVA}` : '';
-            if (s1rSigned) console.log(`S1r SIGNED OP: ${s1rSigned} · sends=${sends.length}${nyv ? '' : ' — NOT refused as not-yet-valid: before any other cell, spend nonce ' + s1rNonce + ' with a normal op (A7-runbook §S1r)'}`);
+            const s1rVA = nyv?.validAfter !== undefined ? `${nyv.validAfter}` : `${s1rVAExpected} (expected)`;
+            const sentNonce = sends.at(-1)?.nonce;
+            const s1rSigned = signs > 0 ? `opHash ${st.lastSignedHash ?? '(not captured)'} sender ${sends.at(-1)?.sender ?? account} nonce ${sentNonce ?? s1rNonce} validAfter ${s1rVA}` : '';
+            if (s1rSigned && !nyv) console.log(`S1r NOT refused as not-yet-valid: ${s1rSigned} — before any other cell, spend that nonce with a normal op (A7-runbook §S1r)`);
             const validAfterFuture = nyv?.validAfter !== undefined && nyv.now !== undefined && nyv.validAfter > nyv.now;
             const sentGas = sends.at(-1)?.gas;
-            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs}${s1rSigned ? ` · ${s1rSigned}` : ''} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
+            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${clean(String((rejected as any)?.message ?? rejected)).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs}${s1rSigned ? ` · ${s1rSigned}` : ''} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
             if (!nyv) fail('S1r: the second op inside minTxInterval was not refused as UserOperationNotYetValidError (-32503)');
             if (!validAfterFuture) fail('S1r: the refusal carries no validAfter in the future (not attributable to the operator\'s interval)');
             // validAfter is S1's inclusion time + the operator's interval (SP stamps the postOp timestamp; ±2 s for block time).
