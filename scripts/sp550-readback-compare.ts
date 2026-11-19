@@ -22,7 +22,7 @@ import * as fs from 'fs';
 import { createPublicClient, getAddress, http, keccak256, type Abi, type Address } from 'viem';
 import { SuperPaymasterLensABI, SuperPaymasterV550ABI } from '../packages/core/src/abis/index.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
-import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
+import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, upstreamUrlProblem, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
 import { isLoopbackUrl, parseManifestPins } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
@@ -110,7 +110,8 @@ async function main() {
     // from the real chain, never from the fork itself or another local node.
     if (source === 'fork' && process.env.SP550_FORK_URL) {
         const up = process.env.SP550_FORK_URL!;
-        if (isLoopbackUrl(up)) refuse('SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node');
+        const upProblem = upstreamUrlProblem(isLoopbackUrl(up), args.includes('--upstream-proxy'));
+        if (upProblem) refuse(upProblem);
         let same = false;
         try { same = new URL(up).host.toLowerCase() === new URL(urls[0]).host.toLowerCase(); } catch { refuse('SP550_FORK_URL is not a URL'); }
         if (same) refuse('SP550_FORK_URL is the --rpc endpoint; the live estimate must be independent of the fork');

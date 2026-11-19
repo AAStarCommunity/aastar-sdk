@@ -77,11 +77,11 @@ SP550_FORK_URL=<归档节点> ULTRARELAY_DIR=<UltraRelay-AAStar> \
 
 另外，S3b 里带 SP_RENEW 的那个 op 还要求 `UserOperationEvent.success = true`。
 
-**postOp 下限（链上值）。** `gasParams().minPostOpGas` 必须等于 release tuple 里的值（rc.8 是 500,000，`expectMinPostOpGas`，用 `SP550_A7_MIN_POST_OP_GAS` 设置）。SDK 填的 postOp limit 只会往上抬到这个值，不会低于它。
+**postOp 下限（链上值）。** `gasParams()` 四项必须等于 release tuple（rc.8：500,000 / 450,000 / 5,000 / 450,000，`expectGasParams`；A7 里用 `SP550_A7_MIN_POST_OP_GAS` / `SP550_A7_SETTLE_GAS_BOUND` / `SP550_A7_C_WRAP` / `SP550_A7_C_POSTOP` 设置）。SDK 填的 postOp limit 只会往上抬到这个值，不会低于它。
 
 **全新账户的第一笔 op（Amsterdam state gas）。** A7 要求用户账户在这次运行之前不存在（`requireFreshAccount`）。S1 就是这个账户的第一笔赞助 op，xPNTs 的 lock 和 allowance 槽都是第一次写入，在 Amsterdam 下要多付 state gas，这笔 op 必须成功。日志里会单独打一行 `RESULT A7 FRESH ACCOUNT: …`，`run-a7.sh` 没看到这一行就不判 PASS。
 
-**postOp 下限（实际提交的值）。** 每笔 op 都从打包交易的 handleOps calldata 里取出 `paymasterPostOpGasLimit`，它必须不低于 `expectMinPostOpGas`。只看 getter 不够：getter 是 500,000，SDK 却可能提交一个更低的值。
+**postOp 下限（实际提交的值）。** 每笔 op 都从打包交易的 handleOps calldata 里取出 `paymasterPostOpGasLimit`，它必须不低于签名时快照到的 `minPostOpGas`（等于 release tuple）。只看 getter 不够：getter 是 500,000，SDK 却可能提交一个更低的值。
 
 每个 op 打一行 `RESULT`，内容是：`S_user`（signMessage 次数）、估算次数、发送次数、SDK 选的 flags、allowance 变化、`autoRenewUsed` 变化、`AllowanceRenewed(bySP)`、`postOpGasLimit`（从 handleOps calldata 读出）、tx hash。
 
@@ -141,16 +141,21 @@ pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 
   "gate": { "allowRc": true },
   "operator": "<operator>", "account": "<用户 AA 账户>",
   "userKey": { "keystore": "<加密 keystore 路径>" },
-  "expectSigner": "<作者签名地址>",
+  "expectSigner": "<作者签名地址，须在 scripts/sp550-live-approved-signers.ts 里>",
   "maxOps": 8,
-  "expectMinPostOpGas": "500000",
+  "c12Caps": { "maxGas": "1500000", "maxFeePerGasWei": "5000000000" },
+  "expectGasParams": { "minPostOpGas": "500000", "settleGasBound": "450000", "cWrap": "5000", "cPostop": "450000" },
   "expectMinTxInterval": "60"
 }
 ```
 
-`expectMinPostOpGas` 必须写上 rc.8 发布元组的值（500,000）。E2E 会把链上 `gasParams().minPostOpGas` 和它比对，不相等就 FAIL；配置里没有这一项时，E2E 直接拒绝运行。
+`expectGasParams` 必须写上 rc.8 发布元组的四个值（500,000 / 450,000 / 5,000 / 450,000，SuperPaymasterStorage.sol:232）。E2E 在门检那一块把链上 `gasParams()` 的四项和 pending 提案一起快照，与它逐项比对，不相等就拒绝；之后每次签名（含 C12 的交易签名）前在同一块重读并与快照比对；每笔 op 上链后，再在打包它的那一块读 `gasParams()`，必须等于签名时的快照。缺任何一项、或仍写旧的 `expectMinPostOpGas`，E2E 直接拒绝运行。
 
-`expectSigner` 是作者签名地址，必须与命令行的 `--live-signer` 一致（两处来源，一个地址），keystore 解出的地址也必须是它。`expectMinTxInterval` 是 operator 的 minTxInterval（论文这几格是 60，由 SP 的三臂 setup 设置）；S1r 要求它为正数。
+**S1r 没有以“被拒”结束时（§S1r，Daybreak M4）。** S1r 签名后，E2E 会先打印一行 `S1r SIGNED OP: opHash … sender … nonce … validAfter …`，同样的字段也写进该行 RESULT。如果这一格不是以“rejected not yet valid at send”结束（例如 ACCEPTED、OUTCOME UNKNOWN、或运行中途退出），这笔签过的 op 在 validAfter 之后仍可能被某个 bundler 执行。**下一步只做一件事**：用同一个 nonce 发一笔正常 op（S1 那样的一笔赞助），让它把那个 nonce 用掉；在 EntryPoint 的 `getNonce(account, 0)` 超过打印的 nonce 之前，不继续后续场景、不重跑。
+
+`c12Caps` 是 C12 那笔 handleOps 交易的显式上限：`maxGas` × `maxFeePerGasWei` 就是这一格 EOA 最多花的 ETH。用户密钥签这笔交易之前，E2E 先逐项核对：恰好一笔；chainId；`to` 是 EntryPoint；value 为 0；calldata 规范编码为 `handleOps`，只含一个 op，它的哈希就是刚签过的 userOpHash（sender、nonce、paymaster 也逐项比对），beneficiary 是用户 EOA；gas 与 fee 不超过上限。任何一项不符就不签。交易签名也计入这一格的签名预算（op 一次 + 交易一次）。
+
+`expectSigner` 是作者签名地址，必须与命令行的 `--live-signer` 一致（两处来源，一个地址），keystore 解出的地址也必须是它。**它还必须在仓库里提交、经 PR 评审的批准表 `scripts/sp550-live-approved-signers.ts` 里（按 chainId）**；配置和命令行只能与表相符，不能往表里加地址。现在表里只有 Sepolia 的演练签名地址；OP 主网的地址由作者给出后另开 PR 加。公开密钥扫描（anvil/hardhat 助记词前 10,000 个 + 仓库 fixture）保留为第二道。`expectMinTxInterval` 是 operator 的 minTxInterval（论文这几格是 60，由 SP 的三臂 setup 设置）；S1r 要求它为正数。
 
 ```bash
 set -o pipefail   # 退出码要来自 E2E，不是 tee

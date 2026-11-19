@@ -32,8 +32,10 @@
  *     "account": "0x…",                     // the user's deployed AA account (SimpleAccount)
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
+ *     "c12Caps": { "maxGas": "1500000", "maxFeePerGasWei": "5000000000" },  // required: C12's handleOps tx bounds (EOA spend <= product)
  *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
- *     "expectMinPostOpGas": "500000",       // gasParams().minPostOpGas must equal the release tuple's value
+ *     "expectGasParams": { "minPostOpGas": "500000", "settleGasBound": "450000", "cWrap": "5000", "cPostop": "450000" },
+ *                                            // required: SP.gasParams() must equal the release tuple, field by field
  *     "expectMinTxInterval": "60",          // operators(operator).minTxInterval must equal it (S1r needs it; SP's setup sets it)
  *     "taskToken"?: "0x…",                  // T: each op calls execute(T, 0, transfer(0x…dEaD, 1)); its balance is a precondition
  *     "frozenGas"?: { "verificationGasLimit": "…", … all five },  // a data collection: limits used verbatim, recorded per row
@@ -92,16 +94,17 @@ import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import {
     CANONICAL_ADDRESSES, ERC20ABI, EntryPointABI, MySBTABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
-    SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, getSuperPaymasterGasParams, requireDeployedAddress, sp550PinsFor,
+    SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, requireDeployedAddress, sp550PinsFor,
 } from '@aastar/core';
 import { PaymasterClient, SuperPaymasterInflightGuard, UserOperationNotYetValidError, type GasDecision } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { isPublicTestAccount, liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
+import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
 import { createHash } from 'crypto';
-import { gasSourceClient, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { gasSourceClient, redactUrls, signC12Transaction, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -110,6 +113,20 @@ const MODE_SP_K = 0;
 
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
+// L1 (Daybreak): no configured RPC / bundler URL reaches stdout, stderr or the tee'd log (redactUrls, checks module).
+function installUrlRedaction(urls: readonly string[]) {
+    const scrub = (v: unknown): unknown => typeof v === 'string' ? redactUrls(v, urls)
+        : v instanceof Error ? redactUrls(String(v.stack ?? v.message), urls) : v;
+    for (const k of ['log', 'error', 'warn', 'info'] as const) {
+        const orig = console[k].bind(console);
+        console[k] = (...a: unknown[]) => orig(...a.map(scrub));
+    }
+}
+/** M3 (Daybreak): a child's environment without the fork source (SP550_FORK_URL usually carries a provider key). */
+const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => {
+    const { SP550_FORK_URL: _drop, ...rest } = env;
+    return rest;
+};
 const refuse = (m: string): never => { console.error(`refused: ${m}`); process.exit(2); };
 const fail = (m: string): never => { console.error(`❌ ${m}`); process.exit(1); };
 const result = (line: string) => console.log(`RESULT ${line}`);
@@ -126,7 +143,7 @@ async function startForkBundler(rpc: string, entryPoint: Address, pub: any): Pro
     const key = (i: number) => toHex(acct(i).getHdKey().privateKey!);
     forkBundler = spawn('pnpm', ['dlx', '@pimlico/alto', '--entrypoints', entryPoint, '--rpc-url', rpc, '--port', String(port),
         '--executor-private-keys', key(2), '--utility-private-key', key(3), '--safe-mode', 'false',
-        '--min-entity-stake', '0', '--min-entity-unstake-delay', '86400'], { stdio: 'ignore' });
+        '--min-entity-stake', '0', '--min-entity-unstake-delay', '86400'], { stdio: 'ignore', env: childEnv() });
     const url = `http://127.0.0.1:${port}`;
     for (let i = 0; i < 180; i++) {
         try {
@@ -147,6 +164,7 @@ async function main() {
     try { net = resolveSp550Network(cfg.network); } catch (e: any) { return refuse(e.message); }
     const rpcUrls: string[] = Array.isArray(cfg.rpcUrls) ? cfg.rpcUrls : [];
     if (rpcUrls.length === 0 || typeof cfg.bundlerUrl !== 'string') refuse('config needs rpcUrls[] and bundlerUrl');
+    installUrlRedaction([...rpcUrls, cfg.bundlerUrl, ...(process.env.SP550_FORK_URL ? [process.env.SP550_FORK_URL] : [])].filter((u) => typeof u === 'string'));
     if (cfg.mode === 'fork') {
         // The run starts its own bundler, bound to the verified fork RPC (a configured bundler could point at a real chain,
         // where a public-key signature over the same chain id / EntryPoint / account would be valid).
@@ -177,11 +195,23 @@ async function main() {
     if (cfg.mode === 'live' && getAddress(arg('--live-signer')!) !== getAddress(cfg.expectSigner)) refuse('mode live: --live-signer and config.expectSigner name different addresses');
     // H3: a live run is gated at the finalized block only (a historical snapshot is not today's state).
     if (cfg.mode === 'live' && cfg.gate?.block !== undefined && cfg.gate.block !== 'finalized') refuse('mode live: gate.block must be "finalized" (or omitted)');
+    // Daybreak H1: the guarantee is the committed, reviewed table of approved signers for this chain, not a key scan.
+    if (cfg.mode === 'live') { const p = liveSignerApprovalProblem(net.chainId, cfg.expectSigner); if (p) refuse(p); }
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
     // A spending bound: a finite integer 1..32, validated before anything is read or signed.
     const maxOps = cfg.maxOps === undefined ? 8 : Number(cfg.maxOps);
     if (!Number.isSafeInteger(maxOps) || maxOps < 1 || maxOps > 32) refuse(`maxOps must be an integer from 1 to 32 (got ${JSON.stringify(cfg.maxOps)})`);
+    // M1: the release gasParams tuple, shape-checked before anything is read (compared with the snapshot below).
+    if (cfg.expectMinPostOpGas !== undefined) refuse('expectMinPostOpGas is replaced by expectGasParams { minPostOpGas, settleGasBound, cWrap, cPostop }');
+    const GP_KEYS = ['minPostOpGas', 'settleGasBound', 'cWrap', 'cPostop'] as const;
+    const eg = cfg.expectGasParams ?? {};
+    if (GP_KEYS.some((k) => typeof eg[k] !== 'string' || !/^[1-9][0-9]*$/.test(eg[k])) || Object.keys(eg).some((k) => !(GP_KEYS as readonly string[]).includes(k))) {
+        refuse('expectGasParams must give exactly minPostOpGas, settleGasBound, cWrap, cPostop as positive decimal strings (rc.8: "500000", "450000", "5000", "450000")');
+    }
+    // M2: C12's own transaction is bounded by explicit caps, validated before anything is read or signed.
+    const capOf = (v: unknown, name: string): bigint => (typeof v === 'string' && /^[1-9][0-9]{0,30}$/.test(v) ? BigInt(v) : refuse(`c12Caps.${name} must be a positive decimal string (got ${JSON.stringify(v)})`));
+    const c12Caps = { maxGas: capOf(cfg.c12Caps?.maxGas, 'maxGas'), maxFeePerGas: capOf(cfg.c12Caps?.maxFeePerGasWei, 'maxFeePerGasWei') };
 
     // ---- 2. the read-back gate must pass on these RPCs ----
     const gateRpcs: GateRpc[] = rpcUrls.map((url, i) => ({
@@ -262,7 +292,7 @@ async function main() {
     if (!chain) fail(`no viem chain for chain id ${net.chainId}`);
     const pub = createPublicClient({ chain, transport: http(rpcUrls[0]) });
     const rpcChainId = await pub.getChainId();
-    if (rpcChainId !== net.chainId) refuse(`${rpcUrls[0]} reports chain ${rpcChainId}, not ${net.network} (${net.chainId})`);
+    if (rpcChainId !== net.chainId) refuse(`RPC ${new URL(rpcUrls[0]).host} reports chain ${rpcChainId}, not ${net.network} (${net.chainId})`);
     // Every address this run signs, sends or encodes goes through requireDeployedAddress (zero / missing -> refused).
     const ep = requireDeployedAddress({ entryPoint: await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'entryPoint' }) }, 'entryPoint', `${deployment} SP.entryPoint()`);
     const registry = requireDeployedAddress({ registry: await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'REGISTRY' }) }, 'registry', `${deployment} SP.REGISTRY()`);
@@ -294,6 +324,10 @@ async function main() {
         const regImpl = await implOf(reg);
         const o = (await read(sp, SuperPaymasterV550ABI, 'operators', [operator])) as readonly any[];
         const tkn = getAddress(o[3]);
+        // M1 (Daybreak): gasParams at the same block, current tuple and the pending proposal, so a queued or executed
+        // change between the gate and any signature aborts like any other wiring change.
+        const [gpCur, gpPend] = (await read(sp, SuperPaymasterV550ABI, 'gasParams')) as readonly [any, any];
+        const pick = (x: any, k: string, i: number) => String(x?.[k] ?? x?.[i]);
         return {
             blockNumber,
             operatorConfigured: Boolean(o[1]), operatorPaused: Boolean(o[2]), minTxInterval: BigInt(o[5]),
@@ -304,6 +338,9 @@ async function main() {
             entryPoint: getAddress(await read(sp, SuperPaymasterV550ABI, 'entryPoint')),
             registry: reg, registryImpl: regImpl, registryImplCodehash: await codehash(regImpl),
             token: getAddress(o[3]),
+            gpMinPostOpGas: BigInt(pick(gpCur, 'minPostOpGas', 0)), gpSettleGasBound: BigInt(pick(gpCur, 'settleGasBound', 1)),
+            gpCWrap: BigInt(pick(gpCur, 'cWrap', 2)), gpCPostop: BigInt(pick(gpCur, 'cPostop', 3)),
+            gpPending: JSON.stringify(gpPend, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
         };
     };
     const gated = await wiring();
@@ -323,6 +360,14 @@ async function main() {
     if (!gated.operatorConfigured || gated.operatorPaused) refuse(`operator ${operator} is not configured or is paused on ${sp}`);
     if (gated.minTxInterval !== minTxInterval) refuse('operators().minTxInterval changed while it was being read');
     let lastCheckBlock = gated.blockNumber;
+    // M1: after inclusion, SP's gasParams in the inclusion block must equal the snapshot taken at signing.
+    const settledUnderSnapshot = async (label: string, blockNumber: bigint) => {
+        const [cur] = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'gasParams', blockNumber } as any)) as readonly [any, any];
+        const pick = (k: string, i: number) => BigInt(String(cur?.[k] ?? cur?.[i]));
+        const now = { gpMinPostOpGas: pick('minPostOpGas', 0), gpSettleGasBound: pick('settleGasBound', 1), gpCWrap: pick('cWrap', 2), gpCPostop: pick('cPostop', 3) };
+        const off = (Object.keys(now) as (keyof typeof now)[]).filter((k) => now[k] !== gated[k]);
+        if (off.length) fail(`${label}: SP.gasParams() in inclusion block ${blockNumber} differs from the snapshot taken at signing (${off.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
+    };
     const recheck = async (label: string) => {
         const now = await wiring();
         lastCheckBlock = now.blockNumber;
@@ -330,13 +375,13 @@ async function main() {
         if (changed.length) fail(`${label}: refused before signing — SuperPaymaster changed since the gate (${changed.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
     };
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${cfg.mode === 'fork' ? '(this run\'s own, on the fork)' : new URL(cfg.bundlerUrl).host}`);
-    // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
-    // (rc.8: 500,000 — DSR). expectMinPostOpGas holds the chain to that value; it is required, since an
-    // optional expectation is a check a config can silently drop.
-    if (typeof cfg.expectMinPostOpGas !== 'string' || !/^[1-9][0-9]*$/.test(cfg.expectMinPostOpGas)) {
-        refuse('expectMinPostOpGas must be set to the release tuple\'s minPostOpGas as a positive decimal string (rc.8: "500000")');
-    }
-    const expectMinPostOpGas = BigInt(cfg.expectMinPostOpGas);
+    // M1 (Daybreak): SP's whole gasParams() tuple is held to the release tuple (rc.8: 500k / 450k / 5k / 450k,
+    // SuperPaymasterStorage.sol:232), required field by field (an optional expectation is a check a config can drop).
+    const snapGp = { minPostOpGas: gated.gpMinPostOpGas, settleGasBound: gated.gpSettleGasBound, cWrap: gated.gpCWrap, cPostop: gated.gpCPostop };
+    const offGp = GP_KEYS.filter((k) => snapGp[k] !== BigInt(eg[k]));
+    if (offGp.length) refuse(`SP.gasParams() is not the release tuple at block ${gated.blockNumber} (${offGp.map((k) => `${k} ${snapGp[k]} != ${eg[k]}`).join('; ')})`);
+    // The floor every check below uses is the snapshot's (equal to the release tuple, re-checked before every signature).
+    const expectMinPostOpGas = snapGp.minPostOpGas;
     if (typeof cfg.expectMinTxInterval !== 'string' || !/^[1-9][0-9]*$/.test(cfg.expectMinTxInterval)) {
         refuse('expectMinTxInterval must be the operator\'s minTxInterval in seconds as a positive decimal string (S1r needs one; the paper cells: "60")');
     }
@@ -364,11 +409,7 @@ async function main() {
         frozenGas = Object.fromEntries(FIELDS.map((k) => [k, BigInt(f[k])])) as any;
     }
     const gasLimitCoefficientBps = cfg.gasLimitCoefficientBps === undefined ? undefined : BigInt(cfg.gasLimitCoefficientBps);
-    const gp = await getSuperPaymasterGasParams(pub as any, sp);
-    console.log(`SP gasParams: minPostOpGas ${gp.minPostOpGas} (${gp.source}) · settleGasBound ${gp.settleGasBound ?? '-'} · cPostop ${gp.cPostop ?? '-'}`);
-    if (gp.minPostOpGas !== expectMinPostOpGas) {
-        fail(`gasParams().minPostOpGas ${gp.minPostOpGas} != expected ${cfg.expectMinPostOpGas} (the release tuple)`);
-    }
+    console.log(`SP gasParams @ block ${gated.blockNumber}: ${GP_KEYS.map((k) => `${k} ${snapGp[k]}`).join(' · ')} (= expectGasParams) · pending ${gated.gpPending}`);
     // Gas source (DSR): every op's gas comes from this bundler's eth_estimateUserOperationGas against its
     // own node — never from a local forge simulation. Recorded as the host and the client it reports
     // (the full URL usually embeds a key and is never printed).
@@ -401,6 +442,7 @@ async function main() {
     } catch (e: any) { return refuse(String(e?.message ?? e)); }
     // A live run never signs with a public development key (the fork rehearsal's test owner, anvil / hardhat defaults).
     if (cfg.mode === 'live' && getAddress(base.address) !== getAddress(cfg.expectSigner)) refuse(`mode live: the keystore signer ${base.address} is not config.expectSigner ${cfg.expectSigner}`);
+    if (cfg.mode === 'live') { const p = liveSignerApprovalProblem(net.chainId, base.address); if (p) refuse(p); }
     // A second line, not the guarantee (expectSigner is): known public development keys are refused even if configured.
     if (cfg.mode === 'live' && await isPublicTestAccount(base.address)) refuse(`mode live: the signer ${base.address} is a public development key (anvil / hardhat mnemonic or a repo fixture); never on a real chain`);
     let signs = 0;
@@ -412,17 +454,21 @@ async function main() {
     // H1: the user's key signs UserOps only; a transaction (the SDK's direct-send fallback, or anything else) is refused
     // except in C12, whose cell IS the EOA's own handleOps.
     let allowTx = false;
+    // M2 (Daybreak): C12's transaction is checked field by field BEFORE the key signs it, exactly once, inside the budget
+    // (signC12Transaction, checks module). The wrapper copies allowTx / signs / signBudget / beforeSign into st per call.
+    const st: C12SignState = { allowTx: false, signs: 0, txSigns: 0, signBudget: Infinity };
     const user = { ...base, signTransaction: async (t: any, o?: any) => {
-        if (!allowTx) throw new Error('the user key signs no transaction outside C12 (a direct handleOps send would pay from the author\'s ETH); refused');
-        return (base as any).signTransaction(t, o);
+        st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
+        return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
     }, signMessage: async (a: any) => {
-        if (signs >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
+        if (signs + st.txSigns >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
         if (beforeSign) await beforeSign();
         if (signDeadline !== undefined) {
             const now = (await pub.getBlock({ blockTag: 'latest' })).timestamp;
             if (now >= signDeadline) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
         }
         signs++;
+        st.lastSignedHash = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
         return base.signMessage(a);
     } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
@@ -625,6 +671,7 @@ async function main() {
         if (rc.success !== true) fail(`${label}: UserOperationEvent.success=${rc.success}`);
         // The floor the SDK applies, held on what was actually bundled (not on the getter alone).
         if (postOpGasLimit < expectMinPostOpGas) fail(`${label}: bundled paymasterPostOpGasLimit ${postOpGasLimit} < minPostOpGas ${expectMinPostOpGas}`);
+        await settledUnderSnapshot(label, chainRc.blockNumber);
         const problems = [
             ...opSigningProblems(submitted, signsForOp, DUMMY_SIGNATURE, { expectEstimate: !frozenGas }),
             ...renewalConsistencyProblems({
@@ -657,6 +704,9 @@ async function main() {
             const elapsedChain = head.timestamp - s1Block.timestamp;
             if (elapsedChain + 5n >= minTxInterval) fail(`S1r: ${elapsedChain}s of chain time have passed since S1 (minTxInterval ${minTxInterval}s); the window is closed, S1r not exercised (nothing signed)`);
             await recheck('S1r');
+            // M4 (Daybreak, FU-126): the nonce this op is built with, so a signed op that might later become valid is named.
+            const s1rNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
+            st.lastSignedHash = undefined;
             const first = bundlerCalls.length;
             SuperPaymasterInflightGuard.clearAll();
             signs = 0;
@@ -668,9 +718,15 @@ async function main() {
             const calls = bundlerCalls.slice(first);
             const sends = calls.filter((c) => c.method === 'eth_sendUserOperation');
             const nyv = rejected instanceof UserOperationNotYetValidError ? rejected : undefined;
+            // M4: printed before any check can stop the run, on every outcome once a signature exists. Unless S1r ends as
+            // REJECTED (not yet valid), this op may still be valid after validAfter: the runbook's next step is to spend
+            // the same nonce with a normal op before anything else.
+            const s1rVA = nyv?.validAfter !== undefined ? `${nyv.validAfter}` : `${s1Block.timestamp + minTxInterval} (expected: S1 block time + minTxInterval)`;
+            const s1rSigned = signs > 0 ? `opHash ${st.lastSignedHash ?? '(not captured)'} sender ${account} nonce ${s1rNonce} validAfter ${s1rVA}` : '';
+            if (s1rSigned) console.log(`S1r SIGNED OP: ${s1rSigned} · sends=${sends.length}${nyv ? '' : ' — NOT refused as not-yet-valid: before any other cell, spend nonce ' + s1rNonce + ' with a normal op (A7-runbook §S1r)'}`);
             const validAfterFuture = nyv?.validAfter !== undefined && nyv.now !== undefined && nyv.validAfter > nyv.now;
             const sentGas = sends.at(-1)?.gas;
-            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
+            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs}${s1rSigned ? ` · ${s1rSigned}` : ''} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
             if (!nyv) fail('S1r: the second op inside minTxInterval was not refused as UserOperationNotYetValidError (-32503)');
             if (!validAfterFuture) fail('S1r: the refusal carries no validAfter in the future (not attributable to the operator\'s interval)');
             // validAfter is S1's inclusion time + the operator's interval (SP stamps the postOp timestamp; ±2 s for block time).
@@ -721,18 +777,20 @@ async function main() {
             // handleOps with the node's eth_estimateGas x the coefficient; the decision is recorded like every other row.
             let c12: any;
             // M6: frozen limits are used as given: one below today's floor is refused before C12 signs.
-            if (frozenGas) {
-                const floorNow = (await getSuperPaymasterGasParams(pub as any, sp)).minPostOpGas;
-                if (frozenGas.paymasterPostOpGasLimit < floorNow) fail(`C12: frozenGas.paymasterPostOpGasLimit ${frozenGas.paymasterPostOpGasLimit} < minPostOpGas ${floorNow}; refused before signing`);
+            if (frozenGas && frozenGas.paymasterPostOpGasLimit < expectMinPostOpGas) {
+                fail(`C12: frozenGas.paymasterPostOpGasLimit ${frozenGas.paymasterPostOpGasLimit} < minPostOpGas ${expectMinPostOpGas}; refused before signing`);
             }
             await recheck('C12');
             const epNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
-            signBudget = 1; beforeSign = () => recheck('C12'); allowTx = true;
+            // Two signatures: the op, then its one handleOps transaction (checked against this op before signing).
+            st.expect = { chainId: net.chainId, entryPoint: getAddress(ep), sender: account, nonce: epNonce, paymaster: getAddress(sp), beneficiary: getAddress(base.address), ...c12Caps };
+            st.lastSignedHash = undefined; st.txSigns = 0;
+            signBudget = 2; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
                 estimateBundlerUrl: bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
-            }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; })) as Hex;
+            }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; st.expect = undefined; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });
             let ev: any;
             // The event from the EntryPoint, for this account and the nonce the op was built with.
@@ -757,8 +815,10 @@ async function main() {
             const outer = await pub.getTransaction({ hash: tx });
             if (outer.gas !== c12.handleOps.gasLimit) fail(`C12: handleOps gas ${outer.gas} is not the reported ${c12.handleOps.gasLimit}`);
             if (rc.status !== 'success' || ev?.success !== true) fail('C12: the self-bundled op did not succeed');
+            await settledUnderSnapshot('C12', rc.blockNumber);
             if (getAddress(rc.from) !== getAddress(base.address)) fail(`C12: handleOps was sent by ${rc.from}, not the user's EOA`);
             if (signs !== 1) fail(`C12: signMessage ${signs} times; one signature for the op`);
+            if (st.txSigns !== 1) fail(`C12: signTransaction ${st.txSigns} times; one handleOps transaction`);
             if (!(c1.bal < c0.bal)) fail('C12: the user was not charged in xPNTs (not sponsored)');
             lastSent = Date.now();
         }

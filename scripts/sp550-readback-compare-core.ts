@@ -437,3 +437,16 @@ export function isNotDeployedPlaceholder(c: any): boolean {
     const values = Object.values(c);
     return 'address' in c && 'codehash' in c && values.length > 0 && values.every((v) => v === NOT_DEPLOYED);
 }
+
+/**
+ * Whether SP550_FORK_URL may serve as the fork read-back's upstream. Without --upstream-proxy it must be the remote
+ * chain (a loopback URL is a local node). With --upstream-proxy (run-a7.sh, Daybreak #468 M3) it must be the loopback
+ * forwarder in front of the provider, so the provider URL is in no child's argv / env; the caller's chain-id and
+ * not-anvil checks still answer for the real upstream through it.
+ */
+export function upstreamUrlProblem(loop: boolean, viaProxy: boolean): string | undefined {
+    // loop = isLoopbackUrl(SP550_FORK_URL), computed by the caller (pin-fill-core imports this module).
+    if (viaProxy && !loop) return '--upstream-proxy: SP550_FORK_URL must be the loopback forwarder';
+    if (!viaProxy && loop) return 'SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node (behind run-a7.sh\'s forwarder, pass --upstream-proxy)';
+    return undefined;
+}

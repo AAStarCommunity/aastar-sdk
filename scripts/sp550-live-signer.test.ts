@@ -6,7 +6,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { bytesToHex, keccak256 } from 'viem';
 import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
-import { decryptKeystoreV3, liveKeySourceProblem, loadLiveSigner, promptHidden } from './sp550-live-signer.js';
+import { decryptKeystoreV3, isPublicTestAccount, liveKeySourceProblem, loadLiveSigner, promptHidden } from './sp550-live-signer.js';
+import { SP550_LIVE_APPROVED_SIGNERS, liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 
 // Web3 Secret Storage Definition, the published PBKDF2-SHA-256 test vector (password "testpassword").
 const SPEC_VECTOR = {
@@ -222,6 +223,12 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         expect(r.status).toBe(2);
         expect(r.output).toMatch(/refused: mode live: gate.block must be "finalized"/);
     }, 60_000);
+    it('a live run whose signer is not in the committed approved table for the chain is refused, before any key is loaded (Daybreak H1)', () => {
+        const r = run({ expectSigner: '0x' + '33'.repeat(20) }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode live: 0x3333333333333333333333333333333333333333 is not an approved signer for chain 11155111/);
+        expect(r.output).not.toMatch(/keystore password/);
+    }, 60_000);
     it('gate.switchBook alone in a live config is refused', () => {
         const r = run({ gate: { switchBook: true } }, []);
         expect(r.status).toBe(2);
@@ -258,7 +265,8 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
             return { status: 0, output: out };
         } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
     };
-    const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 } };
+    const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 },
+        c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' }, expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000' } };
     it('live mode without --live-go is refused', () => {
         const r = run({}, []);
         expect(r.status).toBe(2);
@@ -337,4 +345,111 @@ describe('public development keys are recognised (a live run refuses to sign wit
         expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 200 }).address)).toBe(true); // Codex r3 H3
         expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 9_999 }).address)).toBe(true);
     });
+});
+
+describe('approved live signers (Daybreak H1): the committed table, not a key scan, is the guarantee', () => {
+    it('the anvil / hardhat mnemonic account at index 10,000 (past the scan) is not approved on Sepolia', async () => {
+        const { mnemonicToAccount } = await import('viem/accounts');
+        const a = mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 10_000 }).address;
+        expect(await isPublicTestAccount(a)).toBe(false); // the scan alone would let it through
+        expect(liveSignerApprovalProblem(11155111, a)).toMatch(/is not an approved signer for chain 11155111/);
+    }, 60_000);
+    it('any address outside the table is refused, a listed one passes, and a chain without entries refuses everyone', () => {
+        expect(liveSignerApprovalProblem(11155111, '0x' + '12'.repeat(20))).toMatch(/not an approved signer/);
+        expect(liveSignerApprovalProblem(11155111, SP550_LIVE_APPROVED_SIGNERS[11155111][0].toLowerCase())).toBeUndefined();
+        expect(liveSignerApprovalProblem(10, SP550_LIVE_APPROVED_SIGNERS[11155111][0])).toMatch(/no approved signer for chain 10/);
+        expect(liveSignerApprovalProblem(11155111, '0x' + '12'.repeat(20), { 11155111: [] })).toMatch(/no approved signer/);
+    });
+    it('the table is frozen: a run cannot add to it', () => {
+        expect(Object.isFrozen(SP550_LIVE_APPROVED_SIGNERS)).toBe(true);
+        expect(Object.isFrozen(SP550_LIVE_APPROVED_SIGNERS[11155111])).toBe(true);
+    });
+});
+
+describe('sp550-live-e2e.ts config: the release gasParams tuple and C12 caps are required before any network read (Daybreak M1 / M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const run = (extra: Record<string, unknown>) => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-'));
+        const cfg = path.join(dir, 'run.json');
+        fs.writeFileSync(cfg, JSON.stringify({
+            network: 'sepolia', mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 },
+            operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20),
+            c12Caps: { maxGas: '1500000', maxFeePerGasWei: '5000000000' },
+            expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000' }, ...extra,
+        }));
+        try {
+            const out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+            return { status: 0, output: out };
+        } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
+    };
+    it('the retired expectMinPostOpGas is refused', () => {
+        const r = run({ expectMinPostOpGas: '500000' });
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: expectMinPostOpGas is replaced by expectGasParams/);
+    }, 60_000);
+    it('a gasParams tuple missing a field, or with an unknown one, is refused', () => {
+        expect(run({ expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000' } }).output).toMatch(/refused: expectGasParams must give exactly/);
+        expect(run({ expectGasParams: { minPostOpGas: '500000', settleGasBound: '450000', cWrap: '5000', cPostop: '450000', x: '1' } }).output).toMatch(/refused: expectGasParams must give exactly/);
+    }, 60_000);
+    it('C12 caps are required positive decimal strings', () => {
+        expect(run({ c12Caps: undefined }).output).toMatch(/refused: c12Caps\.maxGas must be a positive decimal string/);
+        expect(run({ c12Caps: { maxGas: '1500000', maxFeePerGasWei: 5 } }).output).toMatch(/refused: c12Caps\.maxFeePerGasWei must be a positive decimal string/);
+    }, 60_000);
+});
+
+describe('fork source behind the loopback forwarder (Daybreak M3): no child argv, env or log carries the URL', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('upstream-proxy.sh unsets SP550_FORK_URL, the proxy forwards JSON-RPC, and the secret is in no argv / env / log', async () => {
+        const http = await import('node:http');
+        const up = http.createServer((req, res) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => res.end(JSON.stringify({ jsonrpc: '2.0', id: JSON.parse(b).id, result: '0xaa36a7' }))); });
+        await new Promise<void>((ok) => up.listen(0, '127.0.0.1', () => ok()));
+        const upPort = (up.address() as any).port;
+        const SECRET = 'SECRETKEY' + Date.now();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proxy-'));
+        const port = 29000 + Math.floor(Math.random() * 900);
+        // The helper as the scripts use it, with the test-only loopback switch for the fake upstream.
+        const script = `set -e
+. scripts/sp550-fork/upstream-proxy.sh
+start_upstream_proxy() { local port="$1" out="$2" url; url="\${SP550_FORK_URL}"; unset SP550_FORK_URL FORK_URL
+  printf '%s\\n' "$url" | node scripts/sp550-fork/upstream-proxy.mjs "$port" --test-loopback-upstream > "$out/upstream-proxy.log" 2>&1 &
+  echo $! > "$out/upstream-proxy.pid"; url=''
+  for _ in $(seq 1 30); do grep -q "^READY $port\\$" "$out/upstream-proxy.log" 2>/dev/null && break; sleep 0.5; done; UPSTREAM="http://127.0.0.1:$port"; }
+start_upstream_proxy ${port} "${dir}"
+echo "ENV_AFTER=[\${SP550_FORK_URL:-}]"
+echo "CHILD_ENV=[$(env | grep -c SP550_FORK_URL || true)]"
+curl -s -X POST "$UPSTREAM" -H 'content-type: application/json' -d '{"jsonrpc":"2.0","id":7,"method":"eth_chainId","params":[]}'; echo
+ps -o command= -p "$(cat "${dir}/upstream-proxy.pid")"
+kill "$(cat "${dir}/upstream-proxy.pid")"`;
+        // The real helper's body must match the inlined one apart from the test switch (it is the code under test).
+        const helper = fs.readFileSync('scripts/sp550-fork/upstream-proxy.sh', 'utf8');
+        expect(helper).toMatch(/unset SP550_FORK_URL FORK_URL/);
+        expect(helper).toMatch(/printf '%s\\n' "\$url" \| node "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/upstream-proxy\.mjs" "\$port"/);
+        // async: the fake upstream lives in this process and must keep answering while the shell runs.
+        const { spawn } = await import('node:child_process');
+        const out = await new Promise<string>((ok, no) => {
+            const ch = spawn('bash', ['-c', script], { env: { ...process.env, SP550_FORK_URL: `http://127.0.0.1:${upPort}/v2/${SECRET}` }, stdio: ['ignore', 'pipe', 'pipe'] });
+            let o = ''; ch.stdout.on('data', (d) => (o += d)); ch.stderr.on('data', (d) => (o += d));
+            ch.on('close', (code) => (code === 0 ? ok(o) : no(new Error(`exit ${code}: ${o}`))));
+        });
+        up.close();
+        expect(out).toContain('ENV_AFTER=[]');
+        expect(out).toContain('CHILD_ENV=[0]');
+        expect(out).toMatch(/"id":7,"result":"0xaa36a7"/);
+        expect(out).not.toContain(SECRET); // the proxy's argv (ps) included
+        expect(fs.readFileSync(path.join(dir, 'upstream-proxy.log'), 'utf8')).not.toContain(SECRET);
+    }, 60_000);
+    it('a failing upstream answers 502 without the URL, and a loopback upstream is refused without the test switch', async () => {
+        const SECRET = 'SECRETKEY' + Date.now();
+        const port = 29900 + Math.floor(Math.random() * 90);
+        const { spawn } = await import('node:child_process');
+        const p = spawn('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port), '--test-loopback-upstream'], { stdio: ['pipe', 'pipe', 'pipe'] });
+        let log = ''; p.stdout.on('data', (c) => (log += c)); p.stderr.on('data', (c) => (log += c));
+        p.stdin.end(`http://127.0.0.1:1/v2/${SECRET}\n`);
+        for (let i = 0; i < 40 && !log.includes('READY'); i++) await new Promise((ok) => setTimeout(ok, 100));
+        const r = await fetch(`http://127.0.0.1:${port}`, { method: 'POST', body: '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' });
+        const body = await r.text();
+        p.kill();
+        expect(r.status).toBe(502);
+        expect(body + log).not.toContain(SECRET);
+        const refused = (() => { try { execFileSync('node', ['scripts/sp550-fork/upstream-proxy.mjs', String(port + 1)], { input: 'http://127.0.0.1:8545\n', encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }); return ''; } catch (e: any) { return String(e.stderr); } })();
+        expect(refused).toMatch(/loopback address/);
+    }, 60_000);
 });

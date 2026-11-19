@@ -17,8 +17,7 @@ export PATH="${SP550_FOUNDRY_BIN:-$HOME/.foundry/bin}:$PATH"
 PORT=28546; RPC="http://127.0.0.1:$PORT"
 # Fork source. The public node prunes old state and anvil reads untouched slots lazily, so a long
 # run can fail mid-op with "pruned history unavailable"; point SP550_FORK_URL at an archive node.
-# Never logged: it usually embeds a provider key.
-FORK_URL="${SP550_FORK_URL:-https://ethereum-sepolia-rpc.publicnode.com}"
+# Never logged and never in a child's argv / env: it usually embeds a provider key (upstream-proxy.sh, Daybreak M3).
 mkdir -p "$OUT" "$SPW/cache/sdk-fork"; OUT="$(cd "$OUT" && pwd)"; rm -f "$SPW/cache/sdk-fork/config.sepolia-fork.json"
 LOG="$OUT/setup.log"; : > "$LOG"
 log() { echo "$*" | tee -a "$LOG"; }
@@ -35,7 +34,9 @@ PRICE_FEED=0x694AA1769357215DE4FAC081bf1f309aDC325306
 if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
   log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
 else
-  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+  . "$(dirname "$0")/upstream-proxy.sh"
+  start_upstream_proxy 28599 "$OUT" || { log "upstream proxy did not start"; exit 1; }
+  anvil --fork-url "$UPSTREAM" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
   echo $! > "$OUT/anvil.pid"
   for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
   log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"

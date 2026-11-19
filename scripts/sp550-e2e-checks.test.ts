@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { encodeAbiParameters, encodeEventTopics, slice, type Abi, type Hex } from 'viem';
+import { concat, encodeAbiParameters, encodeEventTopics, encodeFunctionData, pad, parseAbi, slice, toHex, type Abi, type Hex } from 'viem';
+import { getUserOperationHash } from 'viem/account-abstraction';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
-import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient } from './sp550-e2e-checks.js';
+import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, c12TransactionProblems, packedUserOpHashV07, redactUrls, signC12Transaction, type C12SignState } from './sp550-e2e-checks.js';
 
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
@@ -157,4 +158,77 @@ describe('gasSourceClient: only a client version or method-not-found is a usable
         ['no jsonrpc field', { result: 'alto' }],
         ['not an object', 'ok'],
     ])('%s is not', (_n, reply) => expect(gasSourceClient(reply)).toBeUndefined());
+});
+
+describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs, nothing signed on refusal', () => {
+    const EP = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as const;
+    const SP = A(0x5b), SENDER = A(0xacc), EOA = A(0xe0a), CHAIN = 11155111;
+    const u = {
+        sender: SENDER, nonce: 7n, callData: '0xb61d27f6' as Hex, callGasLimit: 100_000n, verificationGasLimit: 200_000n, preVerificationGas: 50_000n,
+        maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n, paymaster: SP, paymasterVerificationGasLimit: 300_000n,
+        paymasterPostOpGasLimit: 500_000n, paymasterData: ('0x' + 'cd'.repeat(72)) as Hex, signature: REAL,
+    };
+    const packed = {
+        sender: u.sender, nonce: u.nonce, initCode: '0x' as Hex, callData: u.callData,
+        accountGasLimits: concat([pad(toHex(u.verificationGasLimit), { size: 16 }), pad(toHex(u.callGasLimit), { size: 16 })]),
+        preVerificationGas: u.preVerificationGas, gasFees: concat([pad(toHex(u.maxPriorityFeePerGas), { size: 16 }), pad(toHex(u.maxFeePerGas), { size: 16 })]),
+        paymasterAndData: concat([u.paymaster, pad(toHex(u.paymasterVerificationGasLimit), { size: 16 }), pad(toHex(u.paymasterPostOpGasLimit), { size: 16 }), u.paymasterData]),
+        signature: u.signature,
+    };
+    const HASH = getUserOperationHash({ chainId: CHAIN, entryPointAddress: EP, entryPointVersion: '0.7', userOperation: u as any });
+    const HANDLE = parseAbi(['function handleOps((address sender,uint256 nonce,bytes initCode,bytes callData,bytes32 accountGasLimits,uint256 preVerificationGas,bytes32 gasFees,bytes paymasterAndData,bytes signature)[] ops, address beneficiary)']);
+    const data = (ops = [packed], ben: `0x${string}` = EOA) => encodeFunctionData({ abi: HANDLE, functionName: 'handleOps', args: [ops as any, ben] });
+    const good = () => ({ chainId: CHAIN, to: EP, value: 0n, data: data(), gas: 1_000_000n, maxFeePerGas: 3_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n });
+    const expectOf = () => ({ chainId: CHAIN, entryPoint: EP, sender: SENDER, nonce: 7n, paymaster: SP, beneficiary: EOA, maxGas: 1_500_000n, maxFeePerGas: 5_000_000_000n });
+    const state = (over: Partial<C12SignState> = {}): C12SignState => ({ allowTx: true, expect: expectOf(), lastSignedHash: HASH, signs: 1, txSigns: 0, signBudget: 2, ...over });
+
+    it('the off-chain hash of the packed op equals viem\'s v0.7 getUserOperationHash', () => {
+        expect(packedUserOpHashV07(packed, EP, CHAIN)).toBe(HASH);
+    });
+    it('the expected handleOps passes and is signed exactly once', async () => {
+        expect(c12TransactionProblems(good(), { ...expectOf(), userOpHash: HASH })).toEqual([]);
+        let n = 0; const st = state();
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).resolves.toBe('0xsig');
+        expect(n).toBe(1); expect(st.txSigns).toBe(1);
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).rejects.toThrow(/exactly one transaction/);
+        expect(n).toBe(1);
+    });
+    const otherOp = { ...packed, callData: '0xdeadbeef' as Hex };
+    const cases: [string, any, RegExp, Partial<C12SignState>?][] = [
+        ['another destination', { ...good(), to: A(0xbad) }, /is not the EntryPoint/],
+        ['a value', { ...good(), value: 1n }, /value 1 is not 0/],
+        ['another chain', { ...good(), chainId: 10 }, /chainId 10 is not 11155111/],
+        ['other calldata (a transfer)', { ...good(), data: encodeFunctionData({ abi: parseAbi(['function transfer(address,uint256)']), functionName: 'transfer', args: [A(1), 1n] }) }, /does not decode as handleOps/],
+        ['a second op in the bundle', { ...good(), data: data([packed, packed]) }, /carries 2 ops/],
+        ['an op other than the signed one', { ...good(), data: data([otherOp]) }, /not the op whose hash was signed/],
+        ['another beneficiary', { ...good(), data: data([packed], A(0xbe)) }, /beneficiary/],
+        ['trailing bytes after the call', { ...good(), data: (data() + 'ab') as Hex }, /canonical|decode/],
+        ['gas above the cap', { ...good(), gas: 1_500_001n }, /gas 1500001 is not within the cap/],
+        ['a fee above the cap', { ...good(), maxFeePerGas: 5_000_000_001n }, /maxFeePerGas 5000000001 is not within the cap/],
+        ['no arming (outside C12)', good(), /outside C12/, { allowTx: false }],
+        ['no op signed first', good(), /no UserOperation was signed/, { lastSignedHash: undefined }],
+        ['a budget already spent', good(), /budget exhausted/, { signs: 2 }],
+    ];
+    for (const [name, tx, why, over] of cases) {
+        it(`refuses ${name} and the key is never called`, async () => {
+            let n = 0;
+            await expect(signC12Transaction(async () => { n++; return '0xsig'; }, tx, state(over))).rejects.toThrow(why);
+            expect(n).toBe(0);
+        });
+    }
+});
+
+describe('redactUrls (Daybreak #468 L1): no configured URL survives into output', () => {
+    const RPC = 'https://eth-sepolia.g.alchemy.com/v2/SECRETKEY123', RPC2 = 'https://eth-sepolia.g.alchemy.com/v2/SECRETKEY123456';
+    it('replaces each URL by scheme + host, longest first, in a viem-style error text', () => {
+        const text = `HTTP request failed.\n\nURL: ${RPC2}\nRequest body: {}\nalso ${RPC}/ and ${RPC}`;
+        const out = redactUrls(text, [RPC, RPC2]);
+        expect(out).not.toMatch(/SECRETKEY/);
+        expect(out).toContain('https://eth-sepolia.g.alchemy.com/…');
+    });
+    it('the wrong-chain refusal names only the host (sp550-live-e2e.ts prints new URL(rpc).host)', () => {
+        const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
+        expect(src).not.toMatch(/refuse\(`\$\{rpcUrls\[0\]\}/);
+        expect(src).toMatch(/installUrlRedaction\(\[\.\.\.rpcUrls, cfg\.bundlerUrl/);
+    });
 });
