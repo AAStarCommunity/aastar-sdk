@@ -23,6 +23,12 @@ All notable changes to this project will be documented in this file.
   plan) must be ≤ the plan's Xmax_sdk. The signer signs only a hash the check approved; a live run needs the plan's status to be exactly
   `"cleared"` and this checkout to contain its `sdkCostCapCommit`; the plan's operator / X must be this run's and the
   account one of `shared.extraEndUsers`; the task token may not be the operator's xPNTs.
+- `SuperPaymasterClient.submitGaslessTransaction` forwards `maxUserOpCostWei` / `beforeSignUserOp`. The library
+  ceiling stays opt-in for existing callers (DSR); the live runner always sets it.
+- Live runner: SP's plan is parsed losslessly (integers above 2^53 as BigInt; a lossy parse is refused) and the cap
+  must be the digit string in the plan's bytes; the pricing check runs AT the key, at the block of the last wiring
+  re-check (a price update between the hook and the signature cannot slip through), and a signature without that
+  re-check is refused.
 - Doc fix: `onGasDecided` reports after signing (it always did).
 
 ### SP 5.5.0 live E2E for the paper cells (S1, S1r, S3b, C12) on the coexisting rc.8 stack (#434)

@@ -7,7 +7,7 @@ import { getUserOperationHash } from 'viem/account-abstraction';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
-import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, assertCostApproved, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
+import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, guardedSignMessage, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
 
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
@@ -371,31 +371,122 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
         const tight = { ...plan, Xmax: plan.Xmax - 1n };
         expect(signTimeCostProblems(1234567890123457n, now, tight, lock)).toContainEqual(expect.stringMatching(/would lock .* above the plan's Xmax_sdk/));
     });
-    it('CostApprovals: the signer gets true once for an approved hash, never for an unapproved one (fail closed)', () => {
+    it('CostApprovals: an approved hash yields its maxCost once; an unapproved one never (fail closed)', () => {
         const c = new CostApprovals();
         const h = ('0x' + 'ab'.repeat(32)) as Hex;
-        expect(c.take(h)).toBe(false);
-        expect(c.take(undefined)).toBe(false);
-        c.approve(h);
-        expect(c.take(h.toUpperCase().replace('0X', '0x') as Hex)).toBe(true);
-        expect(c.take(h)).toBe(false);
+        expect(c.take(h)).toBeUndefined();
+        expect(c.take(undefined)).toBeUndefined();
+        c.approve(h, 7n);
+        expect(c.take(h.toUpperCase().replace('0X', '0x') as Hex)).toBe(7n);
+        expect(c.take(h)).toBeUndefined();
+    });
+});
+
+describe('guardedSignMessage: the key boundary, driven with a counting key (DSR + Codex cost-cap H2 / M)', () => {
+    const H = ('0x' + 'cd'.repeat(32)) as Hex;
+    const arg = { message: { raw: H } };
+    const setup = (over: any = {}) => {
+        const order: string[] = [];
+        let keyUses = 0, used = 0;
+        const approvals = new CostApprovals();
+        const io: any = {
+            approvals, budget: () => ({ used, limit: 1 }), takeSlot: () => { used++; order.push('slot'); },
+            beforeSign: async () => { order.push('recheck'); }, costAtKey: async (m: bigint) => { order.push(`cost ${m}`); },
+            sign: async () => { keyUses++; order.push('key'); return '0xsig' as Hex; }, ...over,
+        };
+        return { io, approvals, order, keys: () => keyUses };
+    };
+    it('approved: re-check, then the pricing check AT the key with the approved maxCost, then the key — in that order', async () => {
+        const t = setup();
+        t.approvals.approve(H, 123n);
+        await expect(guardedSignMessage(arg, t.io)).resolves.toBe('0xsig');
+        expect(t.order).toEqual(['slot', 'recheck', 'cost 123', 'key']);
+    });
+    it.each([
+        ['nothing approved this hash (a path without the hook)', (t: any) => {}, /no cost check approved/],
+        ['the pricing moved by the key\'s block (costAtKey refuses)', (t: any) => { t.approvals.approve(H, 1n); t.io.costAtKey = async () => { throw new Error('cachedPrice above priceCap'); }; }, /above priceCap/],
+        ['no wiring re-check wired (the pricing block would be stale)', (t: any) => { t.approvals.approve(H, 1n); t.io.beforeSign = undefined; }, /no wiring re-check/],
+        ['the budget is spent', (t: any) => { t.approvals.approve(H, 1n); t.io.budget = () => ({ used: 1, limit: 1 }); }, /budget exhausted/],
+        ['the wiring re-check refuses', (t: any) => { t.approvals.approve(H, 1n); t.io.beforeSign = async () => { throw new Error('SP changed'); }; }, /SP changed/],
+    ])('refused, key never used: %s', async (_n, arrange, why) => {
+        const t = setup();
+        (arrange as any)(t);
+        await expect(guardedSignMessage(arg, t.io)).rejects.toThrow(why as RegExp);
+        expect(t.keys()).toBe(0);
+    });
+    it('an approval is used once: a second signature of the same hash is refused', async () => {
+        const t = setup({ budget: () => ({ used: 0, limit: 9 }) });
+        t.approvals.approve(H, 1n);
+        await guardedSignMessage(arg, t.io);
+        await expect(guardedSignMessage(arg, t.io)).rejects.toThrow(/no cost check approved/);
+        expect(t.keys()).toBe(1);
+    });
+});
+
+describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
+    const P: any = { status: 'cleared', sdkCostCapCommit: 'a'.repeat(40), operator: getAddress(A(0x0e)), X: getAddress(A(0x0f)) };
+    const W = { mode: 'live', operator: A(0x0e), token: A(0x0f), isAncestor: () => true };
+    it('a cleared plan for this operator / X, whose commit this checkout contains, passes', () => {
+        expect(livePlanGateProblems(P, W)).toEqual([]);
+    });
+    it.each([
+        ['a provisional status', { ...P, status: 'provisional: live cells not cleared to run until the SDK pre-sign cost cap merges' }, W, /not "cleared"/],
+        ['a status that only starts with cleared', { ...P, status: 'cleared?' }, W, /not "cleared"/],
+        ['no sdkCostCapCommit', { ...P, sdkCostCapCommit: undefined }, W, /names no sdkCostCapCommit/],
+        ['an upper-case commit', { ...P, sdkCostCapCommit: 'A'.repeat(40) }, W, /names no sdkCostCapCommit/],
+        ['a commit this checkout lacks', P, { ...W, isAncestor: () => false }, /does not contain the plan's sdkCostCapCommit/],
+        ['another operator', P, { ...W, operator: A(0x77) }, /operator .* is not this run's/],
+        ['another X token', P, { ...W, token: A(0x78) }, /X token .* is not the operator's xPNTs/],
+    ])('refused: %s', (_n, plan, w, why) => {
+        expect(livePlanGateProblems(plan as any, w as any)).toContainEqual(expect.stringMatching(why as RegExp));
+    });
+    it('fork mode skips only the live clearance (status / commit), not operator / X', () => {
+        expect(livePlanGateProblems({ ...P, status: 'provisional' }, { ...W, mode: 'fork', isAncestor: () => false })).toEqual([]);
+        expect(livePlanGateProblems(P, { ...W, mode: 'fork', operator: A(0x77) })).toContainEqual(expect.stringMatching(/operator/));
+    });
+    // SP's second vector (sdk-cost-vector.json unsafeIntegerVector): maxCost = 2^53 + 1, a set low bit above the safe range.
+    const V2 = '{"maxCostPerOpWei":9007199254740993,"a0":1050839913053115885028,"Amax":1170320411167255161156,"Xmax":1560427214889673547818}';
+    it('the plan parser reads 2^53 + 1 and the large results digit for digit as BigInt; the lock formula reproduces them', () => {
+        const v = parsePlanJson(V2);
+        expect(v.maxCostPerOpWei).toBe(9007199254740993n);
+        expect(v.a0.toString()).toBe('1050839913053115885028');
+        expect(v.Amax.toString()).toBe('1170320411167255161156');
+        expect(v.Xmax.toString()).toBe('1560427214889673547818');
+        expect(superPaymasterLock({ maxCost: v.maxCostPerOpWei, ethUsdPrice: 350000000000n, priceDecimals: 8n, aPNTsPriceUSD: 29999999999999999n, protocolFeeBPS: 137n, exchangeRate: 1333333333333333333n }))
+            .toEqual({ a0: v.a0, Amax: v.Amax, X: v.Xmax });
+    });
+    it('control: a plain JSON.parse loses it (so the test above guards the failure)', () => {
+        expect(BigInt(JSON.parse(V2).maxCostPerOpWei)).not.toBe(9007199254740993n);
+    });
+    it('a plan field that arrives as an unsafe number (a lossy parse) is refused', () => {
+        const lossy = JSON.parse(V2);
+        const r = sdkLivePlanProblems({ shared: { sdkLive: { ...lossy } }, plans: {} }, { opMaxCostWei: 1n, account: A(1), lock: superPaymasterLock, validationBufferBPS: 1000n });
+        expect(r.problems).toContainEqual(expect.stringMatching(/arrived as an unsafe number .* \(a lossy parse\)/));
+    });
+    it('a whole bundle emitted with JSON-number integers (as SP emits it) parses losslessly and passes the plan check', () => {
+        const acct = A(0xacc), op = A(0x0e), x = A(0x0f), S = A(0x51);
+        const text = `{"plans":{"${S}":{"deploymentContext":{"operator":"${op}"},"phaseC":{"addresses":{"X":"${x}"},"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137}}},"shared":{"extraEndUsers":[{"address":"${acct}","xAmount":12345678901234567890}],"sdkLive":{"Amax":1170320411167255161156,"Xmax":1560427214889673547818,"a0":1050839913053115885028,"aPNTsPriceUSD":29999999999999999,"exchangeRate":1333333333333333333,"maxCostPerOpWei":9007199254740993,"priceCap":350000000000,"priceDecimals":8,"protocolFeeBPS":137,"sdkCostCapCommit":"${'a'.repeat(40)}","status":"cleared","validationBufferBPS":1000}}}`;
+        const r = sdkLivePlanProblems(parsePlanJson(text), { opMaxCostWei: 9007199254740993n, account: acct, lock: superPaymasterLock, validationBufferBPS: 1000n });
+        expect(r.problems).toEqual([]);
+        expect(r.plan).toMatchObject({ Xmax: 1560427214889673547818n, xAmount: 12345678901234567890n, status: 'cleared' });
+        expect(maxCostDigitsProblem(text, r.plan!.maxCostPerOpWei)).toBeUndefined();
+        // The same text through a plain JSON.parse is refused (lossy).
+        expect(sdkLivePlanProblems(JSON.parse(text), { opMaxCostWei: 9007199254740993n, account: acct, lock: superPaymasterLock, validationBufferBPS: 1000n }).problems.length).toBeGreaterThan(0);
+    });
+    it('the runner\'s cap must be the digit string in the plan bytes', () => {
+        expect(maxCostDigitsProblem(V2, 9007199254740993n)).toBeUndefined();
+        expect(maxCostDigitsProblem('{"maxCostPerOpWei": "9007199254740993" }', 9007199254740993n)).toBeUndefined();
+        expect(maxCostDigitsProblem(V2, 9007199254740992n)).toMatch(/is not the digit string/);
+        expect(maxCostDigitsProblem('{"maxCostPerOpWei":90071992547409931}', 9007199254740993n)).toMatch(/is not the digit string/);
     });
 });
 
 describe('the cost check is wired into every signing path of sp550-live-e2e.ts (DSR: fail closed)', () => {
     const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
-    it('assertCostApproved refuses a signature nothing approved, and passes an approved one once', () => {
-        const c = new CostApprovals();
-        const arg = { message: { raw: ('0x' + 'cd'.repeat(32)) as Hex } };
-        expect(() => assertCostApproved(c, arg)).toThrow(/no cost check approved this UserOp hash/);
-        c.approve(arg.message.raw);
-        expect(() => assertCostApproved(c, arg)).not.toThrow();
-        expect(() => assertCostApproved(c, arg)).toThrow(/no cost check approved/);
-    });
-    it('the user signer checks the approval FIRST, before the budget or any other step', () => {
-        const body = src.slice(src.indexOf('signMessage: async (a: any) => {'));
-        const firstStatement = body.split('\n').slice(1).find((l) => l.trim() && !l.trim().startsWith('//'))!;
-        expect(firstStatement.trim()).toBe('assertCostApproved(costApprovals, a);');
+    it('the user signer IS guardedSignMessage, with the key-time pricing read at the re-check block', () => {
+        expect(src).toMatch(/signMessage: \(a: any\) => guardedSignMessage\(a, \{/);
+        expect(src).toMatch(/costAtKey: async \(maxCost\) => \{[\s\S]{0,120}const at = \{ blockNumber: lastCheckBlock \}/);
+        expect(src).not.toMatch(/signMessage: async \(a: any\) =>/);
     });
     it('every UserOp submission passes the ceiling and the hook: PaymasterClient (S1 / S1r / S3b via submitOpts) and C12 executeGasless', () => {
         expect(src).toMatch(/const submitOpts = [^\n]*\n\s*maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,/);
@@ -404,5 +495,10 @@ describe('the cost check is wired into every signing path of sp550-live-e2e.ts (
         const viaOpts = src.match(/PaymasterClient\.submitGaslessUserOperation\([^\n]*submitOpts\(/g) ?? [];
         expect(submits.length).toBeGreaterThan(0);
         expect(viaOpts.length).toBe(submits.length);
+    });
+    it('the plan is parsed losslessly and its cap matched against its bytes', () => {
+        expect(src).toMatch(/const bundleJson = parsePlanJson\(raw\);/);
+        expect(src).toMatch(/maxCostDigitsProblem\(raw, sdkPlan!\.maxCostPerOpWei\)/);
+        expect(src).not.toMatch(/JSON\.parse\(raw\)/);
     });
 });

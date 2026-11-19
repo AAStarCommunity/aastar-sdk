@@ -108,7 +108,7 @@ import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
 import { createHash } from 'crypto';
-import { CostApprovals, SDK_LIVE_CLEARED, assertCostApproved, childEnv, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { CostApprovals, childEnv, guardedSignMessage, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -402,25 +402,22 @@ async function main() {
         const raw = fs.readFileSync(planFile, 'utf8');
         const got = createHash('sha256').update(raw).digest('hex');
         if (got.toLowerCase() !== sha256.toLowerCase()) refuse(`taskPlan ${planFile}: sha256 ${got} != the given ${sha256}`);
-        const sh = JSON.parse(raw)?.shared ?? {};
+        // Lossless (SP 2026-11-19): integers above 2^53 become BigInt from their digits, never a rounded number.
+        const bundleJson = parsePlanJson(raw);
+        const sh = bundleJson?.shared ?? {};
         if (Number(sh.chainId) !== net.chainId) refuse(`taskPlan: shared.chainId ${sh.chainId} != ${net.network} (${net.chainId})`);
         if (!isAddress(String(sh.T)) || !/^0x[0-9a-fA-F]*$/.test(String(sh.taskCallData))) refuse('taskPlan: shared.T / shared.taskCallData missing or malformed');
         plan = { T: getAddress(sh.T), taskCallData: sh.taskCallData as Hex, commit: sh.commit, SP: sh.SP } as any;
         // DSR: the cost cap and Xmax_sdk come from these bytes only.
-        const live = sdkLivePlanProblems(JSON.parse(raw), { opMaxCostWei, account, lock: superPaymasterLock, validationBufferBPS: SUPER_PAYMASTER_VALIDATION_BUFFER_BPS });
+        const live = sdkLivePlanProblems(bundleJson, { opMaxCostWei, account, lock: superPaymasterLock, validationBufferBPS: SUPER_PAYMASTER_VALIDATION_BUFFER_BPS });
         if (live.problems.length) refuse(live.problems.join('; '));
         sdkPlan = live.plan;
-        if (cfg.mode === 'live' && sdkPlan!.status !== SDK_LIVE_CLEARED) refuse(`mode live: SP's plan status is ${JSON.stringify(sdkPlan!.status)}, not "${SDK_LIVE_CLEARED}": the live cells are not cleared to run`);
-        // The plan's operator and X token are this run's (one operator, one X across all plans).
-        if (sdkPlan!.operator !== operator) refuse(`taskPlan: the plans' operator ${sdkPlan!.operator} is not this run's ${operator}`);
-        if (sdkPlan!.X !== getAddress(token)) refuse(`taskPlan: the plans' X token ${sdkPlan!.X} is not the operator's xPNTs ${token}`);
-        // The planner cleared this plan for the SDK commit where the cost cap merged: this run must contain it.
-        if (cfg.mode === 'live') {
-            const c = sdkPlan!.sdkCostCapCommit;
-            if (!c || !/^[0-9a-f]{40}$/.test(c)) refuse('mode live: the plan names no sdkCostCapCommit (40 hex)');
-            const has = spawnSync('git', ['merge-base', '--is-ancestor', c!, 'HEAD'], { cwd: path.resolve(import.meta.dirname, '..') }).status === 0;
-            if (!has) refuse(`mode live: this checkout does not contain the plan's sdkCostCapCommit ${c}`);
-        }
+        // The cap the runner uses is the digit string in the plan's own bytes (DSR).
+        const digits = maxCostDigitsProblem(raw, sdkPlan!.maxCostPerOpWei);
+        if (digits) refuse(digits);
+        const gate = livePlanGateProblems(sdkPlan!, { mode: cfg.mode, operator, token,
+            isAncestor: (c) => spawnSync('git', ['merge-base', '--is-ancestor', c, 'HEAD'], { cwd: path.resolve(import.meta.dirname, '..') }).status === 0 });
+        if (gate.length) refuse(gate.join('; '));
     }
     const taskToken = plan ? plan.T : cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
     // The task must move no X (SP's cap counts only the sponsor charge): T may not be the operator's xPNTs token.
@@ -488,24 +485,34 @@ async function main() {
     const user = { ...base, signTransaction: async (t: any, o?: any) => {
         st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
         return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
-    }, signMessage: async (a: any) => {
-        // Fail closed (DSR): only a hash the cost check approved, once — a signing path without the check is refused here.
-        assertCostApproved(costApprovals, a);
-        if (signs + st.txSigns >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
-        // The slot is taken before the first await, so a concurrent call sees it used (Codex 468-d2); a refusal below
-        // keeps it taken (nothing signed, the cell fails).
-        signs++;
-        if (beforeSign) await beforeSign();
-        if (signDeadline !== undefined) {
+    }, signMessage: (a: any) => guardedSignMessage(a, {
+        approvals: costApprovals,
+        budget: () => ({ used: signs + st.txSigns, limit: signBudget }),
+        // The slot is taken before the first await, so a concurrent call sees it used (Codex 468-d2).
+        takeSlot: () => { signs++; },
+        beforeSign,
+        deadline: signDeadline === undefined ? undefined : async () => {
             const now = (await pub.getBlock({ blockTag: 'latest' })).timestamp;
-            if (now >= signDeadline) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
-        }
-        st.lastSignedHash = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
-        const sig = await base.signMessage(a);
-        st.lastSignature = sig;
-        onSigned?.(st.lastSignedHash);
-        return sig;
-    } };
+            if (now >= signDeadline!) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
+        },
+        costAtKey: async (maxCost) => {
+            if (!sdkPlan) return;
+            const at = { blockNumber: lastCheckBlock } as const;
+            const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice', ...at } as any) as Promise<any>,
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD', ...at } as any) as Promise<any>,
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS', ...at } as any) as Promise<any>,
+                pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate', ...at } as any) as Promise<any>,
+            ]);
+            const bad = signTimeCostProblems(maxCost, {
+                ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
+                aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
+            }, sdkPlan, superPaymasterLock);
+            if (bad.length) throw new Error(`cost check at the key (block ${lastCheckBlock}) refused: ${bad.join('; ')}`);
+        },
+        sign: (x) => base.signMessage(x),
+        after: (h, sig) => { st.lastSignedHash = h; st.lastSignature = sig; onSigned?.(h); },
+    })    } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
     // Whether the account exists before this run: A7 must prove the FIRST sponsored op of a brand-new
     // account (fresh lock / allowance slots: the Amsterdam state-gas case, DSR) succeeds.
@@ -644,20 +651,9 @@ async function main() {
     // to SP's plan at today's pricing and approves exactly that hash; the signer signs only an approved hash.
     const costHook = async (v: UserOpSignView) => {
         if (getAddress(v.sender) !== account) throw new Error(`cost check: op sender ${v.sender} is not the run's account ${account}; refused before signing`);
-        if (sdkPlan) {
-            const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice' }) as Promise<any>,
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD' }) as Promise<any>,
-                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS' }) as Promise<any>,
-                pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate' }) as Promise<any>,
-            ]);
-            const bad = signTimeCostProblems(v.maxCostWei, {
-                ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
-                aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
-            }, sdkPlan, superPaymasterLock);
-            if (bad.length) throw new Error(`cost check refused before signing: ${bad.join('; ')}`);
-        }
-        costApprovals.approve(v.userOpHash);
+        // The library already refused maxCost above opMaxCostWei; the plan's pricing check runs at the key, at the block
+        // of the last wiring re-check (costAtKey), so a price change after this hook cannot slip through.
+        costApprovals.approve(v.userOpHash, v.maxCostWei);
     };
     const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
         maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,

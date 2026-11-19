@@ -364,7 +364,10 @@ export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; acco
     const out: any = {};
     for (const k of SDK_LIVE_UINTS) {
         const v = sl[k];
-        if (!((typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v)) || (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0))) { p.push(`taskPlan: shared.sdkLive.${k} is not a non-negative integer (got ${JSON.stringify(v)})`); continue; }
+        // bigint (a lossless parse of a large number), a safe non-negative number, or a decimal string; an UNSAFE number
+        // means the plan was parsed lossily (SP 2026-11-19) and is refused.
+        if (typeof v === 'number' && !Number.isSafeInteger(v)) { p.push(`taskPlan: shared.sdkLive.${k} arrived as an unsafe number ${v} (a lossy parse); refused`); continue; }
+        if (!((typeof v === 'bigint' && v >= 0n) || (typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v)) || (typeof v === 'number' && v >= 0))) { p.push(`taskPlan: shared.sdkLive.${k} is not a non-negative integer (got ${typeof v === 'bigint' ? v.toString() : JSON.stringify(v)})`); continue; }
         out[k] = BigInt(v);
     }
     out.status = typeof sl.status === 'string' ? sl.status : '';
@@ -381,7 +384,7 @@ export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; acco
     const plans = Object.values(bundle?.plans ?? {}) as any[];
     if (!plans.length) p.push('taskPlan: plans is empty');
     for (const [s, pl] of Object.entries(bundle?.plans ?? {}) as [string, any][]) {
-        for (const k of PHASE_C_PRICING) if (String(pl?.phaseC?.[k]) !== String(out[k])) p.push(`plans[${s}].phaseC.${k} ${pl?.phaseC?.[k]} != shared.sdkLive.${k} ${out[k]}`);
+        for (const k of PHASE_C_PRICING) if (typeof pl?.phaseC?.[k] === 'number' && !Number.isSafeInteger(pl.phaseC[k]) || String(pl?.phaseC?.[k]) !== String(out[k])) p.push(`plans[${s}].phaseC.${k} ${pl?.phaseC?.[k]} != shared.sdkLive.${k} ${out[k]}`);
     }
     const one = (vals: unknown[], what: string): string | undefined => {
         const set = new Set(vals.map((v) => (typeof v === 'string' && isAddressLike(v) ? getAddress(v) : `(bad ${JSON.stringify(v)})`)));
@@ -427,14 +430,91 @@ export function signTimeCostProblems(maxCostWei: bigint, now: SignTimePricing, p
  * that skips the check (a missing option, a refactor) is refused at the key instead of silently unchecked.
  */
 export class CostApprovals {
-    private readonly ok = new Set<string>();
-    approve(userOpHash: Hex) { this.ok.add(userOpHash.toLowerCase()); }
-    /** True once for an approved hash; false otherwise (never approved, or already used). */
-    take(userOpHash: Hex | undefined): boolean { const k = String(userOpHash ?? '').toLowerCase(); return this.ok.delete(k); }
+    private readonly ok = new Map<string, bigint>();
+    /** The cost check approved this hash for an op whose maxCost (all five gas terms x maxFeePerGas) is maxCostWei. */
+    approve(userOpHash: Hex, maxCostWei: bigint) { this.ok.set(userOpHash.toLowerCase(), maxCostWei); }
+    /** The approved maxCost, once; undefined if never approved or already used. */
+    take(userOpHash: Hex | undefined): bigint | undefined {
+        const k = String(userOpHash ?? '').toLowerCase();
+        const v = this.ok.get(k);
+        this.ok.delete(k);
+        return v;
+    }
 }
 
-/** The signer's first step (fail closed): throws unless the cost check approved exactly this UserOp hash, once. */
-export function assertCostApproved(approvals: CostApprovals, signMessageArg: any): void {
-    const raw = typeof signMessageArg?.message === 'object' && typeof signMessageArg.message?.raw === 'string' ? signMessageArg.message.raw as Hex : undefined;
-    if (!approvals.take(raw)) throw new Error('no cost check approved this UserOp hash (maxUserOpCostWei + the plan check run before every signature); refused');
+/**
+ * The user's signMessage, in the order the key boundary needs (DSR + Codex cost-cap H2):
+ *   1. the cost approval for exactly this hash (fail closed: a path that skipped the hook is refused here);
+ *   2. the per-op budget, then the slot taken before any await;
+ *   3. beforeSign (the one-block wiring re-check; it records the block it read) and the cell's deadline;
+ *   4. costAtKey: SP pricing read AT THAT SAME BLOCK, held to the plan with the approved maxCost;
+ *   5. the key.
+ * Any throw before 5 leaves the key unused.
+ */
+export async function guardedSignMessage(a: any, io: {
+    approvals: CostApprovals;
+    budget: () => { used: number; limit: number };
+    takeSlot: () => void;
+    beforeSign: (() => Promise<void>) | undefined;
+    deadline?: () => Promise<void>;
+    costAtKey: (maxCostWei: bigint) => Promise<void>;
+    sign: (a: any) => Promise<Hex>;
+    after?: (userOpHash: Hex | undefined, sig: Hex) => void;
+}): Promise<Hex> {
+    const raw = typeof a?.message === 'object' && typeof a.message?.raw === 'string' ? a.message.raw as Hex : undefined;
+    const maxCost = io.approvals.take(raw);
+    if (maxCost === undefined) throw new Error('no cost check approved this UserOp hash (maxUserOpCostWei + the plan check run before every signature); refused');
+    const b = io.budget();
+    if (b.used >= b.limit) throw new Error(`signature budget exhausted (${b.limit}) — a retry would sign again; refused`);
+    // The pricing read at the key uses the block the wiring re-check recorded: without that re-check the block would
+    // be stale, so a signature with no beforeSign wired is refused (fail closed).
+    if (!io.beforeSign) throw new Error('no wiring re-check (beforeSign) is wired for this signature; refused');
+    io.takeSlot();
+    await io.beforeSign();
+    if (io.deadline) await io.deadline();
+    await io.costAtKey(maxCost);
+    const sig = await io.sign(a);
+    io.after?.(raw, sig);
+    return sig;
+}
+
+/**
+ * SP's frozen plan, parsed losslessly (SP 2026-11-19): integers above 2^53 (a0, Amax, Xmax, wei amounts) become
+ * BigInt from their source digits instead of a rounded number. Needs Node >= 21 (reviver context.source).
+ */
+export function parsePlanJson(text: string): any {
+    let sawContext = false;
+    const v = JSON.parse(text, function (_k, val, ctx?: { source?: string }) {
+        if (ctx && typeof ctx.source === 'string') sawContext = true;
+        if (typeof val === 'number' && !Number.isSafeInteger(val) && Number.isInteger(val)) {
+            if (!ctx || typeof ctx.source !== 'string' || !/^-?[0-9]+$/.test(ctx.source)) throw new Error('plan: an integer above 2^53 cannot be read losslessly here (needs Node >= 21)');
+            return BigInt(ctx.source);
+        }
+        return val;
+    } as any);
+    if (!sawContext && /[0-9]{16,}/.test(text)) throw new Error('plan: this runtime gives no reviver context.source; refusing a lossy parse (needs Node >= 21)');
+    return v;
+}
+
+/**
+ * The cost cap read from the plan must be the digits in the plan's own bytes (DSR): its decimal form appears exactly
+ * as the value of "maxCostPerOpWei" in the raw text (a number or a string).
+ */
+export function maxCostDigitsProblem(raw: string, value: bigint): string | undefined {
+    const re = new RegExp(`"maxCostPerOpWei"\\s*:\\s*"?${value.toString()}"?\\s*[,}]`);
+    return re.test(raw) ? undefined : `plan: maxCostPerOpWei ${value} is not the digit string in the plan's bytes`;
+}
+
+/** Why a live run may not start under this plan (DSR / SP): exact "cleared", this run's operator / X, cost-cap commit included. */
+export function livePlanGateProblems(plan: SdkLivePlan, w: { mode: string; operator: Address; token: Address; isAncestor: (commit: string) => boolean }): string[] {
+    const p: string[] = [];
+    if (plan.operator !== getAddress(w.operator)) p.push(`taskPlan: the plans' operator ${plan.operator} is not this run's ${w.operator}`);
+    if (plan.X !== getAddress(w.token)) p.push(`taskPlan: the plans' X token ${plan.X} is not the operator's xPNTs ${w.token}`);
+    if (w.mode === 'live') {
+        if (plan.status !== SDK_LIVE_CLEARED) p.push(`mode live: SP's plan status is ${JSON.stringify(plan.status)}, not "${SDK_LIVE_CLEARED}": the live cells are not cleared to run`);
+        const c = plan.sdkCostCapCommit;
+        if (!c || !/^[0-9a-f]{40}$/.test(c)) p.push('mode live: the plan names no sdkCostCapCommit (40 lowercase hex)');
+        else if (!w.isAncestor(c)) p.push(`mode live: this checkout does not contain the plan's sdkCostCapCommit ${c}`);
+    }
+    return p;
 }

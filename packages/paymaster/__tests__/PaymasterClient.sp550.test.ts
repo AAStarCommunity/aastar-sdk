@@ -102,8 +102,9 @@ function harness(
             ...options,
         });
     /** The same flow through SuperPaymasterClient (it used to estimate BEFORE submit reserved the slot). */
-    const submitViaSuperClient = (walletIdx = 0) =>
+    const submitViaSuperClient = (walletIdx = 0, guard: Record<string, unknown> = {}) =>
         SuperPaymasterClient.submitGaslessTransaction(client, makeWallet(walletIdx), SENDER, EP, 'http://bundler.stub', {
+            ...guard,
             token: TOKEN, recipient: OPERATOR, amount: 1n, operator: OPERATOR, paymasterAddress: SP,
         });
     return { submit, submitViaSuperClient, calls, signs };
@@ -1700,6 +1701,14 @@ describe('cost ceiling on what is signed (DSR: the missing upper bound at the si
             .rejects.toThrow(UserOpCostCapError);
         expect(signs.flat()).toHaveLength(1); // the first op only; the bumped one was never signed
         expect(sends(seen)).toHaveLength(1);
+    });
+    it('SuperPaymasterClient forwards the ceiling and the hook to the signing site (Codex cost-cap H1)', async () => {
+        const seen: any[] = [];
+        const views: any[] = [];
+        const { submitViaSuperClient, signs } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+        await expect(submitViaSuperClient(0, { maxUserOpCostWei: 1n, beforeSignUserOp: (v: any) => { views.push(v); } })).rejects.toThrow(UserOpCostCapError);
+        expect(signs.flat()).toHaveLength(0);
+        expect(views).toHaveLength(0); // the ceiling refuses before the hook
     });
     it('a non-positive ceiling is refused, not read as "off"', async () => {
         await expect(harness(bundler([])).submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: 0n })).rejects.toThrow(/maxUserOpCostWei must be a positive bigint/);

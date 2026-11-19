@@ -1,5 +1,6 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
 import { type PublicClient } from '@aastar/core';
+import type { UserOpSignGuardOptions } from './gasPolicy.js';
 import { PaymasterClient } from './PaymasterClient';
 import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
 
@@ -11,7 +12,7 @@ export type GaslessTransactionConfig = {
     paymasterAddress: Address;
     factory?: Address;
     factoryData?: Hex;
-};
+} & UserOpSignGuardOptions;
 
 /**
  * SuperPaymasterClient
@@ -76,7 +77,10 @@ export class SuperPaymasterClient {
             {
                 operator: config.operator,
                 factory: config.factory,
-                factoryData: config.factoryData
+                factoryData: config.factoryData,
+                // The cost ceiling and the pre-sign hook reach the one signing site (Codex cost-cap H1).
+                maxUserOpCostWei: config.maxUserOpCostWei,
+                beforeSignUserOp: config.beforeSignUserOp,
             }
         );
     }
