@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 - S1r: a second op straight after S1, inside minTxInterval, must be refused as not yet valid (-32503) with one send and
   one signature (the SDK neither waits nor retries). C12: `createEndUserClient().executeGasless`, self-bundled handleOps
   from the user's EOA; asserted success, sender = the EOA, one signature, xPNTs charged.
-- C12's `executeGasless` gas policy: see the entry above (separate PR).
+- C12's `executeGasless` gas policy: see the `executeGasless` entry below (#467).
 - Fork mode for the joint rehearsal: `gate.deployLiveConfig` (fork only) holds a DeployLive config's addresses to fork
   checks (anvil client on the network's chain id, code at every address, SuperPaymaster's wiring) instead of the
   read-back gate, and `taskPlan` (SP's three-arm plan, pinned by sha256) supplies T and must match the run's chain,
