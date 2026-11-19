@@ -562,7 +562,7 @@ jobs:
   # ran that gate, so the skip pointed at a check that never executed (DSR review of #420).
   #
   # It is pinned to its OWN SuperPaymaster revision, not the `abi-provenance` job's: that job pins
-  # the deployed 5.4.2 stack, while these files come from v5.5.0-rc.4. The script itself enforces
+  # the deployed 5.4.2 stack, while these files come from v5.5.0-rc.8 (commit 5a150f6a). The script itself enforces
   # the same pin (`PINNED_COMMIT`) and fails if the tag has moved.
   #
   # REQUIRE_UPSTREAM=1: a missing checkout FAILS instead of printing SKIP. SP550_OUT: each union
@@ -570,7 +570,7 @@ jobs:
   # on byte-identity alone.
   # ---------------------------------------------------------------------------------
   sp550-abi-provenance:
-    name: SP 5.5.0 vendored ABI provenance (pinned v5.5.0-rc.4)
+    name: SP 5.5.0 vendored ABI provenance (pinned v5.5.0-rc.8)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -581,7 +581,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: AAStarCommunity/SuperPaymaster
-          ref: fbd74fb1e2e9d948996e6d6c02c48dc1c1778107
+          ref: 5a150f6ad43a6c6a57ccccea427c1dba0d797d06
           path: SuperPaymaster
           # The gate resolves the tag and reads blobs with `git show <pinned>:abis/...`.
           fetch-depth: 0
@@ -595,8 +595,8 @@ jobs:
       - name: Assert the upstream checkout is clean and at the pinned revision
         working-directory: SuperPaymaster
         run: |
-          test "$(git rev-parse HEAD)" = "fbd74fb1e2e9d948996e6d6c02c48dc1c1778107"
-          test "$(git rev-parse 'v5.5.0-rc.4^{commit}')" = "fbd74fb1e2e9d948996e6d6c02c48dc1c1778107"
+          test "$(git rev-parse HEAD)" = "5a150f6ad43a6c6a57ccccea427c1dba0d797d06"
+          test "$(git rev-parse 'v5.5.0-rc.8^{commit}')" = "5a150f6ad43a6c6a57ccccea427c1dba0d797d06"
           test -z "$(git status --porcelain)"
 
       - uses: pnpm/action-setup@v5
@@ -647,4 +647,11 @@ jobs:
           REQUIRE_UPSTREAM: '1'
           SP_REPO: ../SuperPaymaster
           SP550_OUT: ../SuperPaymaster/out
-        run: pnpm run check:sp550-abis
+        run: pnpm run check:sp550-abis --strict
+
+      - name: rc.8 coexist proof fixture equals this fresh build (scripts/coexist-stack-abi-pin.ts --verify)
+        working-directory: aastar-sdk
+        env:
+          SP_REPO: ../SuperPaymaster
+          SP_COMMIT: 5a150f6ad43a6c6a57ccccea427c1dba0d797d06
+        run: pnpm exec tsx scripts/coexist-stack-abi-pin.ts --verify

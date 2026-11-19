@@ -19,7 +19,7 @@ const TOKEN = '0x2c47000000000000000000000000000000000700' as const;
 /** bytes32("NAME") exactly as Solidity's `bytes32("NAME")` literal lays it out (left-aligned). */
 const b32 = (s: string) => pad(stringToHex(s), { size: 32, dir: 'right' });
 
-describe('decodeLensReasonCode (SuperPaymasterLens.sol:57-73, :158, :168 @ v5.5.0-rc.4)', () => {
+describe('decodeLensReasonCode (SuperPaymasterLens.sol:79-96, :196, :205 @ v5.5.0-rc.8)', () => {
     it('zero is OK', () => {
         expect(decodeLensReasonCode(pad('0x00', { size: 32 }))).toEqual({ code: 'OK' });
     });

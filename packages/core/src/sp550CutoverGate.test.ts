@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
+import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
-import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, sp550ReleaseVersionsProblems, SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
-import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
+import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, sp550WiringScanAbi, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
-const SP_VERSION = 'SuperPaymaster-5.5.1';
+// The release's own strings (SP's release-versions table at the pinned tag), so the coexist cases match it.
+import RELEASE from './sp550-release-versions.rc8.json' with { type: 'json' };
+const SP_VERSION = (RELEASE as Record<string, string>).SuperPaymaster;
 const LENS_VERSION = 'SuperPaymasterLens-1.2.2';
 /** Each fixture's SDK address book, keyed by its pins object, so every call site stays as written. */
 const BOOKS = new WeakMap<object, Record<string, unknown>>();
@@ -45,7 +52,11 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${p.sp}.REGISTRY`]: book.registry, [`${p.sp}.BLS_AGGREGATOR`]: book.blsAggregator,
         [`${p.sp}.agentIdentityRegistry`]: book.agentIdentityRegistry, [`${p.sp}.agentReputationRegistry`]: book.agentReputationRegistry,
         [`${p.sp}.entryPoint`]: canonical.entryPoint, [`${p.sp}.ETH_USD_PRICE_FEED`]: canonical.priceFeed,
-        [`${p.apnts}.version`]: 'APNTsCapped-1.0.0',
+        [`${p.apnts}.version`]: (RELEASE as Record<string, string>).APNTsCapped,
+        [`${book.registry}.version`]: (RELEASE as Record<string, string>).Registry,
+        [`${p.factory}.version`]: (RELEASE as Record<string, string>).xPNTsFactoryV2,
+        [`${book.staking}.version`]: (RELEASE as Record<string, string>).GTokenStaking,
+        [`${book.gToken}.version`]: (RELEASE as Record<string, string>).GTokenAuthorization,
         [`${p.factory}.SUPERPAYMASTER`]: p.sp, [`${p.factory}.implementation`]: p.tokenImpl, [`${p.factory}.defaultTierSource`]: p.tier,
         [`${p.factory}.implementationCodehash`]: keccak256(codeOf(p.tokenImpl)), [`${p.factory}.extensionCodehash`]: keccak256(codeOf(p.ext)),
         [`${p.tokenImpl}.EXTENSION`]: p.ext, [`${p.tokenImpl}.PROTOCOL_REGISTRY`]: p.aoa,
@@ -882,5 +893,123 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
             absent: m.pins.absent!.filter((k: string) => k !== 'paymasterV4' && k !== 'aPNTsPaymasterV4'),
             codehashes: { ...m.pins.codehashes, 'addresses.paymasterV4': hash, 'addresses.aPNTsPaymasterV4': hash } };
         expect(sp550NetworkPinProblems('sepolia-rc8', pins as any).problems).toEqual([]);
+    });
+
+    it('a coexisting stack is held to SP\'s release-versions: a wrong pinned spVersion and a wrong version() both fail (post-tag A)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        expect(sp550NetworkPinProblems('sepolia-rc8', { ...m.pins, spVersion: 'SuperPaymaster-5.5.0' }).problems).toContainEqual(expect.stringMatching(/is not the release's "SuperPaymaster-5\.5\.3"/));
+        m.reads[`${m.pins.addresses.registry}.version`] = 'Registry-5.8.0';
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual([expect.stringContaining('Registry.version() == release-versions "Registry-5.10.1"')]);
+    });
+
+    it('every contract read a passing sepolia-rc8 gate makes is covered by the vendored 5.5.0 files or the rc.8 proof (Codex A-r1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const rpcs = twin(m);
+        const seen: { abi: unknown; functionName: string }[] = [];
+        for (const r of rpcs) {
+            const inner = r.client.readContract;
+            r.client.readContract = (async (a: any) => { seen.push({ abi: a.abi, functionName: a.functionName }); return (inner as any)(a); }) as any;
+        }
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs, pins: m.pins });
+        expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        const vendored550 = [SuperPaymasterV550ABI, SuperPaymasterLensABI, xPNTsTokenV2ABI, xPNTsFactoryV2ABI, APNTsCappedABI, AOAProtocolRegistryABI, GlobalTierSourceABI];
+        const here = path.dirname(fileURLToPath(import.meta.url));
+        const fixture = JSON.parse(fs.readFileSync(path.join(here, 'abis/fixtures/coexist-stack-abi.json'), 'utf8'));
+        const proved = Object.keys(COEXIST_STACK_ENTRIES).map((f) => {
+            const j = JSON.parse(fs.readFileSync(path.join(here, 'abis', f), 'utf8'));
+            return { file: f, abi: Array.isArray(j) ? j : j.abi, names: new Set<string>(fixture.files[f].entries.map((e: any) => e.name)) };
+        });
+        const uncovered = new Set<string>();
+        for (const { abi, functionName } of seen) {
+            if (vendored550.includes(abi as any)) continue;
+            const hit = proved.find((p) => JSON.stringify(p.abi) === JSON.stringify(abi) && p.names.has(functionName));
+            if (!hit) uncovered.add(`${functionName} via ${proved.find((p) => JSON.stringify(p.abi) === JSON.stringify(abi))?.file ?? 'an ABI outside the proof'}`);
+        }
+        expect([...uncovered].sort()).toEqual([]);
+        expect(seen.length).toBeGreaterThan(50);
+        // And the scan's per-entry ABIs for this stack are each a vendored 5.5.0 file or a scanned proof file.
+        for (const [entry, abi] of Object.entries(sp550WiringScanAbi('sepolia-rc8'))) {
+            if (abi === null) continue; // not a contract of this release: held to zero / absent by the gate
+            const ok = vendored550.includes(abi as any) || proved.some((p) => COEXIST_STACK_ENTRIES[p.file].scanned && JSON.stringify(p.abi) === JSON.stringify(abi));
+            expect(ok, `${entry}: its scan ABI is not covered by the rc.8 proof`).toBe(true);
+        }
+    });
+
+    it('an rc.8 stack pinning a BLSValidator (not a contract of the release) fails the gate', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const pins: any = structuredClone(m.pins);
+        pins.addresses = { ...pins.addresses, blsValidator: '0x' + '7b'.repeat(20) };
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContain('addresses.blsValidator is not a contract of this release');
+    });
+
+    describe('release-versions: exact key set, non-empty both sides, every required contract compared (Daybreak #469 H1 / Low)', () => {
+        const withTable = async (t: Record<string, string>, fn: () => Promise<void>) => {
+            const saved = SP550_RELEASE_VERSIONS['sepolia-rc8'];
+            (SP550_RELEASE_VERSIONS as any)['sepolia-rc8'] = t;
+            try { await fn(); } finally { (SP550_RELEASE_VERSIONS as any)['sepolia-rc8'] = saved; }
+        };
+        const failed = (r: any) => r.results.filter((c: any) => !c.ok).map((c: any) => `${c.check} :: ${c.detail}`);
+        it('the validator: missing key, unmapped key, empty or non-version value each fail; SP\'s table passes', () => {
+            const T = RELEASE as Record<string, string>;
+            expect(sp550ReleaseVersionsProblems(T)).toEqual([]); // incl. xPNTsFactory-3.0.3-v2, Staking-4.2.1, GToken-2.2.0
+            const { Registry: _drop, ...noReg } = T;
+            expect(sp550ReleaseVersionsProblems(noReg)).toEqual(['release-versions: missing Registry']);
+            expect(sp550ReleaseVersionsProblems({ ...T, MySBT: 'MySBT-1.0.0' })).toEqual([expect.stringMatching(/unmapped MySBT/)]);
+            expect(sp550ReleaseVersionsProblems({ ...T, Registry: '' })).toEqual([expect.stringMatching(/Registry "" is not a version string/)]);
+            expect(sp550ReleaseVersionsProblems({ ...T, Registry: 'latest' })).toEqual([expect.stringMatching(/not a version string/)]);
+        });
+        it('the reverse matrix (Daybreak #469 re-run): whitespace, wrong types, case-only keys, prototype keys, arrays', () => {
+            const T = RELEASE as Record<string, string>;
+            for (const v of ['Registry-5.10.1\n', ' Registry-5.10.1', 'Registry-5.10.1 ', '   ', '\t', 'Registry -5.10.1', 'Registry-5.10.', 'Registry-5.10..1', 'Registry-5.10.1-', 'Registry-5.10.1--v2', 'Registry-5.']) {
+                expect(sp550ReleaseVersionsProblems({ ...T, Registry: v }), JSON.stringify(v)).toEqual([expect.stringMatching(/Registry .* is not a version string/)]);
+            }
+            for (const v of [null, 5, true, {}, ['Registry-5.10.1'], undefined]) {
+                expect(sp550ReleaseVersionsProblems({ ...T, Registry: v as any }).length, JSON.stringify(v) ?? 'undefined').toBeGreaterThan(0);
+            }
+            const { Registry: r, ...rest } = T;
+            expect(sp550ReleaseVersionsProblems({ ...rest, registry: r })).toEqual(['release-versions: missing Registry', expect.stringMatching(/unmapped registry/)]);
+            expect(sp550ReleaseVersionsProblems(JSON.parse(JSON.stringify(T).replace('{', '{"__proto__":"x-1.0.0",'))).length).toBeGreaterThan(0);
+            expect(sp550ReleaseVersionsProblems({ ...T, constructor: 'Foo-1.0.0' } as any)).toEqual([expect.stringMatching(/unmapped constructor/)]);
+            expect(sp550ReleaseVersionsProblems([] as any)).toEqual(['release-versions: the table is an array, not an object']);
+            expect(sp550ReleaseVersionsProblems(undefined)).toEqual(['release-versions: no table']);
+        });
+        it('the required key set is the one the SDK maps, written out here (a mapping edit must change this test)', () => {
+            expect(Object.keys(SP550_RELEASE_VERSION_ENTRY).sort()).toEqual(['APNTsCapped', 'GTokenAuthorization', 'GTokenStaking', 'Registry', 'SuperPaymaster', 'xPNTsFactoryV2']);
+        });
+        it('a required contract without a pinned address fails its version() check', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            const pins: any = structuredClone(m.pins);
+            delete pins.aPNTsCapped;
+            const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins }));
+            expect(f).toContainEqual(expect.stringMatching(/^APNTsCapped\.version\(\) == release-versions .*no pinned address/));
+        });
+        it('a table without a non-SP key (Registry) fails the gate, and the missing contract is still compared', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            const { Registry: _drop, ...noReg } = RELEASE as Record<string, string>;
+            await withTable(noReg, async () => {
+                const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }));
+                expect(f).toContainEqual(expect.stringMatching(/release-versions table: exact key set.*missing Registry/));
+                expect(f).toContainEqual(expect.stringMatching(/^Registry\.version\(\) == release-versions "\(missing\)"/));
+            });
+        });
+        it('an empty expected value with an empty version() fails (two empty strings are not a match)', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            m.reads[`${m.pins.addresses.registry}.version`] = '';
+            await withTable({ ...(RELEASE as Record<string, string>), Registry: '' }, async () => {
+                const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }));
+                expect(f).toContainEqual(expect.stringMatching(/^Registry\.version\(\) == release-versions ""/));
+            });
+        });
+        it('an empty version() against SP\'s table fails, and a reverting version() fails', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            m.reads[`${m.pins.addresses.registry}.version`] = '';
+            expect(failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }))).toContainEqual(expect.stringMatching(/^Registry\.version\(\)/));
+            const m2 = deployment(sepolia.id, 'fresh');
+            delete m2.reads[`${m2.pins.addresses.staking}.version`];
+            m2.revertUnset = true;
+            expect(failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m2), pins: m2.pins }))).toContainEqual(expect.stringMatching(/^GTokenStaking\.version\(\)/));
+        });
     });
 });

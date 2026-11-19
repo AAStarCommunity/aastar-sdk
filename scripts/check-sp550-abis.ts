@@ -14,10 +14,11 @@
  *      so a stale upstream `abis/*.json` cannot be laundered through step 2.
  *
  * Every run prints what it checked. A run that checked nothing says SKIP, and REQUIRE_UPSTREAM=1
- * turns that into a failure.
+ * turns that into a failure. --strict also requires SP550_OUT and every file's compiled-union check. Build
+ * out/ fresh from the pinned commit (`rm -rf out && forge build`): a stale out/ is not detected here.
  *
  *   pnpm run check:sp550-abis
- *   SP_REPO=/path/to/SuperPaymaster SP550_OUT=/path/to/sp-tag-checkout/out pnpm run check:sp550-abis
+ *   SP_REPO=/path/to/SuperPaymaster SP550_OUT=/path/to/sp-tag-checkout/out pnpm run check:sp550-abis --strict
  */
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
@@ -26,11 +27,20 @@ import * as path from 'path';
 
 const SDK_ROOT = process.cwd();
 const ABIS_DIR = path.join(SDK_ROOT, 'packages/core/src/abis');
-const TAG = 'v5.5.0-rc.4';
-const PINNED_COMMIT = 'fbd74fb1e2e9d948996e6d6c02c48dc1c1778107';
+const TAG = 'v5.5.0-rc.8';
+const PINNED_COMMIT = '5a150f6ad43a6c6a57ccccea427c1dba0d797d06';
 const SP_REPO = path.resolve(SDK_ROOT, process.env.SP_REPO ?? '../SuperPaymaster');
 const SP_OUT = process.env.SP550_OUT ? path.resolve(SDK_ROOT, process.env.SP550_OUT) : undefined;
-const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
+// --strict (Daybreak #469 M2) = REQUIRE_UPSTREAM=1 and SP550_OUT required: a run without the upstream checkout or
+// without compiled artifacts fails instead of printing SKIP / skipping the compiled-union step.
+// Exactly the bare `--strict` or nothing (Daybreak #469 re-run): `--strict=false`, a typo or any other argument is
+// refused, never read as "not strict".
+const ARGS = process.argv.slice(2);
+const unknownArgs = ARGS.filter((x) => x !== '--strict');
+if (unknownArgs.length || ARGS.length > 1) { console.error(`FAIL: unknown argument(s) ${JSON.stringify(ARGS)}; the only option is --strict`); process.exit(2); }
+const STRICT = ARGS.length === 1;
+const REQUIRE_UPSTREAM = STRICT || process.env.REQUIRE_UPSTREAM === '1';
+if (STRICT && !SP_OUT) { console.error('FAIL: --strict needs SP550_OUT=<forge out/ built from the pinned commit> (clean out/ before building)'); process.exit(1); }
 
 /** SDK file -> upstream blob path, and the compiled contracts whose union it must equal. */
 const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
@@ -41,6 +51,10 @@ const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
     { sdk: 'APNTsCapped.json', upstream: 'abis/APNTsCapped.json', parts: ['APNTsCapped'] },
     { sdk: 'AOAProtocolRegistry.json', upstream: 'abis/AOAProtocolRegistry.json', parts: ['AOAProtocolRegistry'] },
     { sdk: 'GlobalTierSource.json', upstream: 'abis/GlobalTierSource.json', parts: ['GlobalTierSource'] },
+    // The rc.8 coexist set: contracts whose rc.8 ABI the gate needs but the SDK-wide file (5.4.2 generation) lacks
+    // (docs/onchain-evidence/coexist-stack-abi-equality.md). Used only for a coexisting rc.8 stack.
+    { sdk: 'rc8/Registry.json', upstream: 'abis/Registry.json', parts: ['Registry'] },
+    { sdk: 'rc8/GTokenAuthorization.json', upstream: 'abis/GTokenAuthorization.json', parts: ['GTokenAuthorization'] },
 ];
 
 /**
@@ -49,13 +63,7 @@ const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
  * still fails. Remove an entry when the tag that fixes it is vendored.
  */
 const KNOWN_UPSTREAM_GAPS: Record<string, Record<string, string>> = {
-    'SuperPaymaster-5.5.0.full.json': {
-        'error:InvalidContextLength()':
-            'SP v5.5.0-rc.4 abis/SuperPaymaster.full.json is stale by the SP repo\'s own gate: ' +
-            '`python3 scripts/gen-sp-full-abi.py --check` at fbd74fb1 prints STALE. The error was added to the core ' +
-            '(SuperPaymasterStorage.sol:271, reverted in postOp at SuperPaymaster.sol:393) after full.json was last ' +
-            'regenerated (6e72d025). Error-only: no selector the SDK encodes is affected.',
-    },
+    // (rc.4's InvalidContextLength gap is fixed in v5.5.0-rc.8's abis/SuperPaymaster.full.json: entry removed.)
 };
 
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
@@ -126,7 +134,18 @@ for (const f of FILES) {
     }
 }
 
+// The release-version table the gate holds version() to (SP's deployments/release-versions.rc8.json): byte-identical too.
+const RELEASE_VERSIONS = { sdk: 'packages/core/src/sp550-release-versions.rc8.json', upstream: 'deployments/release-versions.rc8.json' };
+if (fs.existsSync(path.join(SP_REPO, '.git')) || fs.existsSync(SP_REPO)) {
+    try {
+        const blob = git('show', `${PINNED_COMMIT}:${RELEASE_VERSIONS.upstream}`);
+        const mine = fs.readFileSync(path.join(SDK_ROOT, RELEASE_VERSIONS.sdk));
+        if (sha(mine) !== sha(blob)) failures.push(`${RELEASE_VERSIONS.sdk} != ${RELEASE_VERSIONS.upstream}@${PINNED_COMMIT.slice(0, 12)}`);
+        else console.log(`✅ ${RELEASE_VERSIONS.sdk}  byte-identical to ${RELEASE_VERSIONS.upstream}@${PINNED_COMMIT.slice(0, 12)} (sha256 ${sha(mine).slice(0, 16)}…)`);
+    } catch (e) { failures.push(`${RELEASE_VERSIONS.upstream}: not readable at ${PINNED_COMMIT.slice(0, 12)} (${String(e).slice(0, 80)})`); }
+}
 console.log(`\nchecked ${checked}/${FILES.length} file(s) against the pinned blob; ${SP_OUT ? `${unionChecked}/${FILES.length} against compiled out/` : 'compiled-out/ check NOT run (set SP550_OUT)'}.`);
 if (failures.length) { console.error(`\nFAIL:\n - ${failures.join('\n - ')}`); process.exit(1); }
 if (checked === 0) { console.log('SKIP: nothing compared.'); process.exit(REQUIRE_UPSTREAM ? 1 : 0); }
+if (STRICT && (checked !== FILES.length || unionChecked !== FILES.length)) { console.error(`FAIL: --strict compared ${checked} blob(s) and ${unionChecked} compiled union(s) of ${FILES.length}`); process.exit(1); }
 console.log('PASS');

@@ -11,7 +11,7 @@ import {
  * Expectations here are written out by hand from the CONTRACT's parsing code, not produced by the
  * encoder under test:
  *
- *   SuperPaymaster v5.5.0-rc.4, contracts/src/paymasters/superpaymaster/v3/
+ *   SuperPaymaster v5.5.0-rc.8, contracts/src/paymasters/superpaymaster/v3/
  *     SuperPaymasterStorage.sol:176  PAYMASTER_DATA_OFFSET = 52   (operator = pmd[52:72])
  *     SuperPaymasterStorage.sol:177  RATE_OFFSET           = 72   (maxRate  = abi.decode(pmd[72:104]))
  *     SuperPaymasterStorage.sol:178  POSTOP_GAS_OFFSET     = 36   (postOpGas = uint128(bytes16(pmd[36:52])))

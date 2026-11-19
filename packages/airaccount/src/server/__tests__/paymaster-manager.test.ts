@@ -272,7 +272,7 @@ describe("PaymasterManager", () => {
 
       const packed = await pm.getPaymasterData("user-1", "custom-user-provided", {}, v07, addr);
 
-      // Offsets (bytes) from SuperPaymasterStorage.sol:176-180 @ v5.5.0-rc.4:
+      // Offsets (bytes) from SuperPaymasterStorage.sol:212-216 @ v5.5.0-rc.8:
       //   [20:36] verGas, [36:52] postOpGas, [52:72] operator, [104:124] token, [124] flags
       const at = (a: number, b: number) => packed.slice(2 + a * 2, 2 + b * 2);
       expect((packed.length - 2) / 2).toBe(125);

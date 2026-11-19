@@ -6,7 +6,7 @@
  * 5.5.0 is an in-place upgrade of the 5.4.2 proxy, so nothing here is selected by address: every
  * function that behaves differently per generation reads `version()` from the chain first.
  *
- * Spec: SuperPaymaster `docs/design/aoa-balance-mode/03-final-spec.md` (v4.1.1, tag v5.5.0-rc.4)
+ * Spec: SuperPaymaster `docs/design/aoa-balance-mode/03-final-spec.md` (v4.1.1; vendored ABIs at tag v5.5.0-rc.8)
  * and `M-11-downstream-changes.md` §4.
  */
 import { type Address, type Hex, type PublicClient, encodeFunctionData, hexToString, size, slice, trim } from 'viem';
@@ -92,7 +92,8 @@ export type LensReason = {
 /**
  * Decode a lens reason code. The lens returns `bytes32("NAME")` (left-aligned ASCII), and for the
  * two token-side rejections ORs the token's enum value into the LAST byte
- * (`DRYRUN_LOCK_REJECTED | bytes32(lr)`, SuperPaymasterLens.sol:158 / :168 at v5.5.0-rc.4).
+ * (`DRYRUN_LOCK_REJECTED | bytes32(lr)` at SuperPaymasterLens.sol:196, `DRYRUN_CREDIT_REJECTED | bytes32(cr)` at :205,
+ * v5.5.0-rc.8; :192 / :202 return the bare codes).
  */
 export function decodeLensReasonCode(reasonCode: Hex): LensReason {
     if (size(reasonCode) !== 32) throw new Error(`lens reason code must be bytes32, got ${size(reasonCode)} bytes`);

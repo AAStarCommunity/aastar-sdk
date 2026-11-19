@@ -17,15 +17,16 @@
  *     to (a PASS for a proxy the SDK does not use would authorise nothing it actually calls).
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
+import { scannedGetters } from './abis/coexistStackAbi.js';
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import {
     AOAProtocolRegistryABI, APNTsCappedABI, BLSAggregatorABI, BLSValidatorABI, DVTValidatorABI, GTokenABI, GTokenStakingABI, GlobalTierSourceABI, MicroPaymentChannelABI, MySBTABI,
-    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, RegistryRc8ABI, GTokenAuthorizationRc8ABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
 } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    SP550_ADDRESS_OWNER, assertSp550ChainId, sp550NetworkPinProblems, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
+    SP550_ADDRESS_OWNER, SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, sp550ReleaseVersionsProblems, assertSp550ChainId, sp550NetworkPinProblems, type Sp550CoexistNetwork, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -84,6 +85,18 @@ export const SP550_WIRING_SCAN_ABI: Record<string, unknown> = {
     'addresses.paymasterV4': PaymasterABI, 'addresses.aPNTsPaymasterV4': PaymasterABI, 'addresses.PNTsPaymasterV4': PaymasterABI,
     'addresses.xPNTsFactory': xPNTsFactoryV2ABI, 'addresses.microPaymentChannel': MicroPaymentChannelABI, 'addresses.blsValidator': BLSValidatorABI,
 };
+
+/**
+ * A coexisting stack's own ABIs for entries whose contract is newer than the SDK-wide file (the rc.8 coexist set,
+ * scripts/coexist-stack-abi-pin.ts found the gap): the scan and the reads of that stack use these instead.
+ */
+export const SP550_COEXIST_SCAN_ABI: Record<Sp550CoexistNetwork, Record<string, unknown>> = {
+    // null: not a contract of this release (rc.8 deploys no BLSValidator, SP DeployLive.s.sol:39): a pin naming it fails.
+    'sepolia-rc8': { registryImpl: RegistryRc8ABI, 'addresses.registry': RegistryRc8ABI, 'addresses.gToken': GTokenAuthorizationRc8ABI, 'addresses.blsValidator': null },
+};
+/** The ABI the gate reads each pinned entry with on a network: the coexist set first, then the SDK-wide file. */
+export const sp550WiringScanAbi = (network: string): Record<string, unknown> =>
+    ({ ...SP550_WIRING_SCAN_ABI, ...((SP550_COEXIST_SCAN_ABI as Record<string, Record<string, unknown>>)[network] ?? {}) });
 
 /** Pinned entries the scan does not read, each with why. Any other entry without an ABI above fails the gate. */
 export const SP550_WIRING_SCAN_EXEMPT: Record<string, string> = {
@@ -286,8 +299,9 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     // Every leg of the BLS / DVT / Registry wiring names the certified contracts: SP alone is not enough
     // (2026-08-26..09-01 the Registry pointed at a new aggregator while SP and DVT kept the old one).
     const reg = certified.registry as Address | undefined, bls = certified.blsAggregator as Address | undefined, dvt = certified.dvtValidator as Address | undefined;
-    cmp('Registry.blsAggregator() == addresses.blsAggregator', await read(reg, RegistryABI, 'blsAggregator'), bls);
-    cmp('Registry.SUPER_PAYMASTER() == pins.superPaymaster', await read(reg, RegistryABI, 'SUPER_PAYMASTER'), pins.superPaymaster);
+    const regAbi = sp550WiringScanAbi(net.network)['addresses.registry'];
+    cmp('Registry.blsAggregator() == addresses.blsAggregator', await read(reg, regAbi, 'blsAggregator'), bls);
+    cmp('Registry.SUPER_PAYMASTER() == pins.superPaymaster', await read(reg, regAbi, 'SUPER_PAYMASTER'), pins.superPaymaster);
     cmp('DVTValidator.BLS_AGGREGATOR() == addresses.blsAggregator', await read(dvt, DVTValidatorABI, 'BLS_AGGREGATOR'), bls);
     cmp('DVTValidator.REGISTRY() == addresses.registry', await read(dvt, DVTValidatorABI, 'REGISTRY'), reg);
     cmp('BLSAggregator.DVT_VALIDATOR() == addresses.dvtValidator', await read(bls, BLSAggregatorABI, 'DVT_VALIDATOR'), dvt);
@@ -316,8 +330,8 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         // The token / staking / SBT legs name the pinned contracts, so pins that are each new and correct cannot hide a
         // contract still wired into another stack (e.g. a fresh Registry whose GTOKEN_STAKING is the old staking).
         const stk = book.staking as Address | undefined, sbt = book.sbt as Address | undefined;
-        cmp('Registry.GTOKEN_STAKING() == addresses.staking', await read(reg, RegistryABI, 'GTOKEN_STAKING'), stk);
-        cmp('Registry.MYSBT() == addresses.sbt', await read(reg, RegistryABI, 'MYSBT'), sbt);
+        cmp('Registry.GTOKEN_STAKING() == addresses.staking', await read(reg, regAbi, 'GTOKEN_STAKING'), stk);
+        cmp('Registry.MYSBT() == addresses.sbt', await read(reg, regAbi, 'MYSBT'), sbt);
         cmp('GTokenStaking.REGISTRY() == addresses.registry', await read(stk, GTokenStakingABI, 'REGISTRY'), reg);
         cmp('GTokenStaking.GTOKEN() == addresses.gToken', await read(stk, GTokenStakingABI, 'GTOKEN'), book.gToken);
         cmp('MySBT.REGISTRY() == addresses.registry', await read(sbt, MySBTABI, 'REGISTRY'), reg);
@@ -343,17 +357,21 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         // may name an SP-owned contract of the chain's shipped stack (a hybrid with the old one). A chain-keyed fresh
         // stack replaces its chain's book, so its shipped book is not a forbidden set (after the switch it IS the stack).
         const old = net.coexist ? shippedStackAddresses(shipped) : new Map<string, string>();
+        const scanAbi = sp550WiringScanAbi(net.network);
         for (const [entry, address] of sp550PinnedAddressEntries(pins)) {
             if (typeof address !== 'string') continue;
-            const abi = SP550_WIRING_SCAN_ABI[entry];
+            const abi = scanAbi[entry];
+            if (abi === null) {
+                record(`${entry} is not a contract of this release`, false, `pinned ${address}; this release deploys none: omit it from addresses and list it in absent`);
+                continue;
+            }
             if (!abi) {
                 record(`address getters of ${entry} scanned`, entry in SP550_WIRING_SCAN_EXEMPT, SP550_WIRING_SCAN_EXEMPT[entry] ?? 'no ABI mapping and no exemption: add one');
                 continue;
             }
-            // Every no-argument view whose outputs carry an address anywhere (address, address[], tuples of them).
-            const carries = (o: any): boolean => o.type.startsWith('address') || (o.type.startsWith('tuple') && (o.components ?? []).some(carries));
-            const getters = (abi as any[]).filter((e) => e.type === 'function' && (e.inputs ?? []).length === 0 && ['view', 'pure'].includes(e.stateMutability)
-                && (e.outputs ?? []).some(carries)).map((e) => e.name as string);
+            // Every no-argument view whose outputs carry an address anywhere (address, address[], tuples of them): the
+            // same predicate the rc.8 coexist proof enumerates with (abis/coexistStackAbi.ts), one definition.
+            const getters = scannedGetters(abi as any[]).map((w) => w.name);
             const unsupported = new Set(SP550_WIRING_SCAN_UNSUPPORTED[entry] ?? []);
             const bad: string[] = [], skipped: string[] = [];
             // The addresses at the ADDRESS-typed positions of a decoded result, guided by the ABI outputs; undefined when
@@ -393,6 +411,27 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
             if (k === 'disclosureRegistry') continue; // a top-level pin, not a book entry
             const v = canonical[k];
             record(`SDK book has no ${k} (declared absent)`, v === undefined || (typeof v === 'string' && /^0x0{40}$/i.test(v)), `SDK book ${str(v ?? '(none)')}`);
+        }
+    }
+
+    // 5e''. A coexisting stack's contracts report the release's version() strings (SP's release-versions table).
+    if (net.coexist) {
+        const rv = SP550_RELEASE_VERSIONS[net.network as Sp550CoexistNetwork];
+        const entries = new Map(sp550PinnedAddressEntries(pins));
+        const abiFor: Record<string, unknown> = { SuperPaymaster: SuperPaymasterV550ABI, Registry: regAbi, xPNTsFactoryV2: xPNTsFactoryV2ABI, GTokenStaking: GTokenStakingABI, GTokenAuthorization: sp550WiringScanAbi(net.network)['addresses.gToken'], APNTsCapped: APNTsCappedABI };
+        // Daybreak #469 H1: the table is held to the exact required key set first, and the loop walks the REQUIRED
+        // mapping, not the table: a table missing a key fails instead of silently comparing less. An empty expected or
+        // observed version is a failure (eq() would call two empty strings equal).
+        const tableProblems = sp550ReleaseVersionsProblems(rv);
+        record('release-versions table: exact key set, non-empty versions', tableProblems.length === 0, tableProblems.join('; ') || `${Object.keys(rv).length} entries`);
+        for (const [name, entry] of Object.entries(SP550_RELEASE_VERSION_ENTRY)) {
+            const want = (rv as Record<string, unknown>)[name];
+            const addr = entries.get(entry) as Address | undefined;
+            const label = `${name}.version() == release-versions ${JSON.stringify(want ?? '(missing)')}`;
+            if (!abiFor[name]) { record(label, false, `no ABI mapping for ${name}: add one`); continue; }
+            const observed = await read(addr, abiFor[name], 'version');
+            record(label, typeof want === 'string' && want !== '' && typeof observed === 'string' && observed !== '' && observed === want,
+                `observed ${str(observed)} · release-versions ${str(want ?? '(missing)')}${addr ? '' : ' · (no pinned address)'}`);
         }
     }
 

@@ -17,6 +17,9 @@
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, type CanonicalAddresses } from './addresses.js';
+// SP's own release-version table at the pinned tag (byte-identical, scripts/check-sp550-abis.ts): the version()
+// strings a coexisting stack's contracts must report. Read from SP's file, never written here as constants.
+import SP550_RELEASE_VERSIONS_RC8 from './sp550-release-versions.rc8.json' with { type: 'json' };
 import { SP550_CERTIFIED_ADDRESS_KEYS, SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
@@ -248,6 +251,37 @@ export function sp550CoexistOverlapProblems(network: Sp550CoexistNetwork, pins: 
         .map(([k, a]) => `${k} ${a} is the shipped stack's ${old.get(a.toLowerCase())}; a coexisting stack must not reuse it`);
 }
 
+/** SP's release-version table for each coexisting stack (the tag's deployments/release-versions.<rc>.json). */
+export const SP550_RELEASE_VERSIONS: Record<Sp550CoexistNetwork, Readonly<Record<string, string>>> = {
+    'sepolia-rc8': SP550_RELEASE_VERSIONS_RC8 as Record<string, string>,
+};
+/** Where each release-versions contract sits in a pin set (top-level pin or address-book key). */
+export const SP550_RELEASE_VERSION_ENTRY: Readonly<Record<string, string>> = {
+    SuperPaymaster: 'superPaymaster', Registry: 'addresses.registry', xPNTsFactoryV2: 'xPNTsFactoryV2',
+    GTokenStaking: 'addresses.staking', GTokenAuthorization: 'addresses.gToken', APNTsCapped: 'aPNTsCapped',
+};
+
+/**
+ * Why a release-versions table cannot be used (Daybreak #469 H1): its key set must be exactly the contracts the SDK
+ * maps (SP550_RELEASE_VERSION_ENTRY, no more, no fewer) and every value a non-empty version string. Checked before
+ * the table is used; a table that drops a key would otherwise drop a comparison.
+ */
+export function sp550ReleaseVersionsProblems(table: Readonly<Record<string, unknown>> | undefined): string[] {
+    if (!table || typeof table !== 'object') return ['release-versions: no table'];
+    if (Array.isArray(table)) return ['release-versions: the table is an array, not an object'];
+    const want = Object.keys(SP550_RELEASE_VERSION_ENTRY).sort(), have = Object.keys(table).sort();
+    const p: string[] = [];
+    const missing = want.filter((k) => !have.includes(k)), extra = have.filter((k) => !want.includes(k));
+    if (missing.length) p.push(`release-versions: missing ${missing.join(', ')}`);
+    if (extra.length) p.push(`release-versions: unmapped ${extra.join(', ')} (add a pin / ABI mapping first)`);
+    for (const k of want) {
+        const v = table[k];
+        // No whitespace anywhere (a trailing "\n" would satisfy `$`), then NAME-MAJOR.MINOR…
+        if (Object.prototype.hasOwnProperty.call(table, k) && (typeof v !== 'string' || /\s/.test(v) || !/^[A-Za-z][A-Za-z0-9]*-\d+\.\d+(\.\d+)?([.-][0-9A-Za-z]+)*$/.test(v))) p.push(`release-versions: ${k} ${JSON.stringify(v)} is not a version string`);
+    }
+    return p;
+}
+
 /**
  * Release holds of a coexisting stack, by network name: independent of the chain's other stack, so holding one
  * Sepolia deployment never holds (or releases) the other.
@@ -270,6 +304,10 @@ export function sp550NetworkPinProblems(network: Sp550Network, pins: Sp550FreshD
     const allowRc = !!opts.allowRc || n.allowRc;
     const problems = n.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc }) : sp550UpgradePinProblems(pins, { allowRc });
     if (n.coexist) problems.push(...sp550CoexistOverlapProblems(network as Sp550CoexistNetwork, pins));
+    // The pinned SuperPaymaster version is the release's own (SP's release-versions table), not a free-form pin.
+    const rv = n.coexist ? SP550_RELEASE_VERSIONS[network as Sp550CoexistNetwork] : undefined;
+    if (n.coexist) problems.push(...sp550ReleaseVersionsProblems(rv));
+    if (rv && pins?.spVersion !== undefined && pins.spVersion !== rv.SuperPaymaster) problems.push(`spVersion ${JSON.stringify(pins.spVersion)} is not the release's ${JSON.stringify(rv.SuperPaymaster)} (SP release-versions)`);
     return { problems, hold: sp550HoldFor(network) };
 }
 

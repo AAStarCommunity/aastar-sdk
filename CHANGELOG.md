@@ -69,6 +69,29 @@ All notable changes to this project will be documented in this file.
   only the bundler's usable fields and throws when the endpoint cannot estimate; `estimateUserOperationGas` takes
   `requireEstimate` too.
 
+### SuperPaymaster 5.5.0 ABIs re-pinned to tag v5.5.0-rc.8 (commit 5a150f6a)
+
+- The seven vendored 5.5.0 files are the SP blobs at 5a150f6a, each equal to the union of its compiled ABIs
+  (`check:sp550-abis --strict`; CI pins the commit, never the tag object). The paper-path fixture is refreshed to it.
+- Version expectations come from SP's own `deployments/release-versions.rc8.json` (vendored byte-identical): a
+  coexisting rc.8 stack's pinned `spVersion` and every listed contract's `version()` must match it.
+- rc.8 appended `by` to eight SuperPaymaster events (and a `reason` to OperatorPaused / OperatorUnpaused), so their
+  topic0 changed. The default `SuperPaymasterABI` lists the eight 5.4.2 forms first, then the 5.5.0 union: a filter or
+  topic built by `eventName` stays the 5.4.2 one for those eight (unchanged for 5.4.2 users), and `decodeEventLog` /
+  `parseEventLogs` decode both generations. **To filter rc.8 logs of those eight, use `SuperPaymasterV550ABI`** (the
+  pure union).
+- Analytics accepts the release table's SuperPaymaster version (rc.8: `SuperPaymaster-5.5.3`) for its price reads.
+- Proof for what was not replaced: every entry the read-back gate and the live cells use outside the seven files is
+  compared with the rc.8 compiled artifacts (`scripts/coexist-stack-abi-pin.ts`,
+  docs/onchain-evidence/coexist-stack-abi-equality.md). It found two gaps — rc.8 Registry's `pendingOwner()` and the
+  book gToken being GTokenAuthorization (`factory()`, `mySBT()`) — so the rc.8 stack reads those two through a coexist
+  set (`RegistryRc8ABI`, `GTokenAuthorizationRc8ABI`); the SDK-wide Registry / GToken ABIs are unchanged for 5.4.2.
+  rc.8 deploys no BLSValidator, so the rc.8 gate fails a non-zero `addresses.blsValidator` pin. A test records every
+  read a passing rc.8 gate makes and requires each to be covered; CI re-derives the fixture from a fresh forge build.
+- The pin-write ban is enforced where files are touched: `writeAll` checks the FU-124 gate itself before any file
+  operation (not only the CLI wrapper), and `sp550-pin-fill.ts` parses its arguments exactly (`pinFillPreflightRefusal`:
+  unknown switches such as `--WRITE`, a bare `--`, repeats and missing values exit 2 instead of running a preview).
+
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 
 - Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`

@@ -1,0 +1,579 @@
+{
+  "spCommit": "5a150f6ad43a6c6a57ccccea427c1dba0d797d06",
+  "files": {
+    "rc8/Registry.json": {
+      "artifact": "Registry.sol/Registry.json",
+      "compiledScanned": [
+        "GTOKEN_STAKING",
+        "MYSBT",
+        "SUPER_PAYMASTER",
+        "blsAggregator",
+        "owner",
+        "pendingOwner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "blsAggregator",
+          "compiled": {
+            "signature": "blsAggregator() returns (address) view",
+            "selector": "0xbe30742f"
+          }
+        },
+        {
+          "type": "function",
+          "name": "SUPER_PAYMASTER",
+          "compiled": {
+            "signature": "SUPER_PAYMASTER() returns (address) view",
+            "selector": "0x919d1e2c"
+          }
+        },
+        {
+          "type": "function",
+          "name": "GTOKEN_STAKING",
+          "compiled": {
+            "signature": "GTOKEN_STAKING() returns (address) view",
+            "selector": "0x826600ce"
+          }
+        },
+        {
+          "type": "function",
+          "name": "MYSBT",
+          "compiled": {
+            "signature": "MYSBT() returns (address) view",
+            "selector": "0x19c46e81"
+          }
+        },
+        {
+          "type": "function",
+          "name": "version",
+          "compiled": {
+            "signature": "version() returns (string) pure",
+            "selector": "0x54fd4d50"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "pendingOwner",
+          "compiled": {
+            "signature": "pendingOwner() returns (address p) view",
+            "selector": "0xe30c3978"
+          }
+        }
+      ]
+    },
+    "rc8/GTokenAuthorization.json": {
+      "artifact": "GTokenAuthorization.sol/GTokenAuthorization.json",
+      "compiledScanned": [
+        "eip712Domain",
+        "factory",
+        "mySBT",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "version",
+          "compiled": {
+            "signature": "version() returns (string) pure",
+            "selector": "0x54fd4d50"
+          }
+        },
+        {
+          "type": "function",
+          "name": "eip712Domain",
+          "compiled": {
+            "signature": "eip712Domain() returns (bytes1 fields,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt,uint256[] extensions) view",
+            "selector": "0x84b0196e"
+          }
+        },
+        {
+          "type": "function",
+          "name": "factory",
+          "compiled": {
+            "signature": "factory() returns (address) view",
+            "selector": "0xc45a0155"
+          }
+        },
+        {
+          "type": "function",
+          "name": "mySBT",
+          "compiled": {
+            "signature": "mySBT() returns (address) view",
+            "selector": "0xabcd5a04"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
+    "Registry.json": {
+      "artifact": "Registry.sol/Registry.json",
+      "compiledScanned": [
+        "GTOKEN_STAKING",
+        "MYSBT",
+        "SUPER_PAYMASTER",
+        "blsAggregator",
+        "owner",
+        "pendingOwner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "hasRole",
+          "compiled": {
+            "signature": "hasRole(bytes32,address) returns (bool) view",
+            "selector": "0x91d14854"
+          }
+        }
+      ]
+    },
+    "GTokenStaking.json": {
+      "artifact": "GTokenStaking.sol/GTokenStaking.json",
+      "compiledScanned": [
+        "GTOKEN",
+        "REGISTRY",
+        "owner",
+        "treasury"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "GTOKEN",
+          "compiled": {
+            "signature": "GTOKEN() returns (address) view",
+            "selector": "0x7f6b337b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "version",
+          "compiled": {
+            "signature": "version() returns (string) pure",
+            "selector": "0x54fd4d50"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "treasury",
+          "compiled": {
+            "signature": "treasury() returns (address) view",
+            "selector": "0x61d027b3"
+          }
+        }
+      ]
+    },
+    "MySBT.json": {
+      "artifact": "MySBT.sol/MySBT.json",
+      "compiledScanned": [
+        "GTOKEN",
+        "GTOKEN_STAKING",
+        "REGISTRY",
+        "daoMultisig",
+        "reputationCalculator"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "GTOKEN_STAKING",
+          "compiled": {
+            "signature": "GTOKEN_STAKING() returns (address) view",
+            "selector": "0x826600ce"
+          }
+        },
+        {
+          "type": "function",
+          "name": "GTOKEN",
+          "compiled": {
+            "signature": "GTOKEN() returns (address) view",
+            "selector": "0x7f6b337b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "balanceOf",
+          "compiled": {
+            "signature": "balanceOf(address owner) returns (uint256) view",
+            "selector": "0x70a08231"
+          }
+        },
+        {
+          "type": "function",
+          "name": "daoMultisig",
+          "compiled": {
+            "signature": "daoMultisig() returns (address) view",
+            "selector": "0xc0d0aa69"
+          }
+        },
+        {
+          "type": "function",
+          "name": "reputationCalculator",
+          "compiled": {
+            "signature": "reputationCalculator() returns (address) view",
+            "selector": "0xccbc10d0"
+          }
+        }
+      ]
+    },
+    "ReputationSystem.json": {
+      "artifact": "ReputationSystem.sol/ReputationSystem.json",
+      "compiledScanned": [
+        "REGISTRY",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
+    "PaymasterFactory.json": {
+      "artifact": "PaymasterFactory.sol/PaymasterFactory.json",
+      "compiledScanned": [
+        "owner",
+        "registry"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "registry",
+          "compiled": {
+            "signature": "registry() returns (address) view",
+            "selector": "0x7b103999"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
+    "Paymaster.json": {
+      "artifact": "Paymaster.sol/Paymaster.json",
+      "compiledScanned": [
+        "entryPoint",
+        "ethUsdPriceFeed",
+        "getSupportedTokens",
+        "getSupportedTokensInfo",
+        "owner",
+        "registry",
+        "treasury"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "registry",
+          "compiled": {
+            "signature": "registry() returns (address) view",
+            "selector": "0x7b103999"
+          }
+        },
+        {
+          "type": "function",
+          "name": "entryPoint",
+          "compiled": {
+            "signature": "entryPoint() returns (address) view",
+            "selector": "0xb0d691fe"
+          }
+        },
+        {
+          "type": "function",
+          "name": "ethUsdPriceFeed",
+          "compiled": {
+            "signature": "ethUsdPriceFeed() returns (address) view",
+            "selector": "0x42f6fb29"
+          }
+        },
+        {
+          "type": "function",
+          "name": "getSupportedTokens",
+          "compiled": {
+            "signature": "getSupportedTokens() returns (address[]) view",
+            "selector": "0xd3c7c2c7"
+          }
+        },
+        {
+          "type": "function",
+          "name": "getSupportedTokensInfo",
+          "compiled": {
+            "signature": "getSupportedTokensInfo() returns (address[] tokens,uint256[] prices,uint8[] decimalsArr) view",
+            "selector": "0xdb110a07"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "treasury",
+          "compiled": {
+            "signature": "treasury() returns (address) view",
+            "selector": "0x61d027b3"
+          }
+        }
+      ]
+    },
+    "BLSAggregator.json": {
+      "artifact": "BLSAggregator.sol/BLSAggregator.json",
+      "compiledScanned": [
+        "DVT_VALIDATOR",
+        "REGISTRY",
+        "SUPERPAYMASTER",
+        "fraudProofVerifier",
+        "owner",
+        "pendingFraudProofVerifier",
+        "slashPolicyAdmin"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "DVT_VALIDATOR",
+          "compiled": {
+            "signature": "DVT_VALIDATOR() returns (address) view",
+            "selector": "0xbc8efe75"
+          }
+        },
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "SUPERPAYMASTER",
+          "compiled": {
+            "signature": "SUPERPAYMASTER() returns (address) view",
+            "selector": "0x5ae48ba4"
+          }
+        },
+        {
+          "type": "function",
+          "name": "fraudProofVerifier",
+          "compiled": {
+            "signature": "fraudProofVerifier() returns (address) view",
+            "selector": "0x3c396ea4"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "pendingFraudProofVerifier",
+          "compiled": {
+            "signature": "pendingFraudProofVerifier() returns (address) view",
+            "selector": "0x37abe80b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "slashPolicyAdmin",
+          "compiled": {
+            "signature": "slashPolicyAdmin() returns (address) view",
+            "selector": "0xbf5790a6"
+          }
+        }
+      ]
+    },
+    "DVTValidator.json": {
+      "artifact": "DVTValidator.sol/DVTValidator.json",
+      "compiledScanned": [
+        "BLS_AGGREGATOR",
+        "REGISTRY",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "BLS_AGGREGATOR",
+          "compiled": {
+            "signature": "BLS_AGGREGATOR() returns (address) view",
+            "selector": "0xc06f58e8"
+          }
+        },
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
+    "PolicyRegistry.json": {
+      "artifact": "PolicyRegistry.sol/PolicyRegistry.json",
+      "compiledScanned": [
+        "ETH_SENTINEL",
+        "guardian",
+        "timelock"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "ETH_SENTINEL",
+          "compiled": {
+            "signature": "ETH_SENTINEL() returns (address) view",
+            "selector": "0xb743be94"
+          }
+        },
+        {
+          "type": "function",
+          "name": "guardian",
+          "compiled": {
+            "signature": "guardian() returns (address) view",
+            "selector": "0x452a9320"
+          }
+        },
+        {
+          "type": "function",
+          "name": "timelock",
+          "compiled": {
+            "signature": "timelock() returns (address) view",
+            "selector": "0xd33219b4"
+          }
+        }
+      ]
+    },
+    "X402Facilitator.json": {
+      "artifact": "X402Facilitator.sol/X402Facilitator.json",
+      "compiledScanned": [
+        "REGISTRY",
+        "XPNTS_FACTORY",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "XPNTS_FACTORY",
+          "compiled": {
+            "signature": "XPNTS_FACTORY() returns (address) view",
+            "selector": "0xb08ec5ca"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
+    "TimelockController.json": {
+      "artifact": "TimelockController.sol/TimelockController.default.json",
+      "compiledScanned": [],
+      "entries": []
+    },
+    "MicroPaymentChannel.json": {
+      "artifact": "MicroPaymentChannel.sol/MicroPaymentChannel.json",
+      "compiledScanned": [
+        "eip712Domain",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "eip712Domain",
+          "compiled": {
+            "signature": "eip712Domain() returns (bytes1 fields,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt,uint256[] extensions) view",
+            "selector": "0x84b0196e"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    }
+  }
+}

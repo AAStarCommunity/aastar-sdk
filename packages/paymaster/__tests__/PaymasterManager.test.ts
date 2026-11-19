@@ -126,7 +126,7 @@ describe('PaymasterManager', () => {
                 flags: 1
             });
             expect(size(out)).toBe(125);
-            // TOKEN_OFFSET = 104, FLAGS_OFFSET = 124 (SuperPaymasterStorage.sol:179-180 @ v5.5.0-rc.4)
+            // TOKEN_OFFSET = 104, FLAGS_OFFSET = 124 (SuperPaymasterStorage.sol:215-216 @ v5.5.0-rc.8)
             expect(out.slice(2 + 104 * 2, 2 + 124 * 2)).toBe(TOKEN.slice(2));
             expect(out.slice(2 + 124 * 2)).toBe('01');
             // Head is unchanged vs the 5.4.x layout, which is what 5.4.2 reads (length >= 104).
