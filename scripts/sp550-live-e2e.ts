@@ -802,12 +802,13 @@ async function main() {
             const txNonce = await pub.getTransactionCount({ address: base.address, blockTag: 'pending' });
             st.expect = { txNonce, chainId: net.chainId, entryPoint: getAddress(ep), sender: account, nonce: epNonce, paymaster: getAddress(sp), beneficiary: getAddress(base.address), ...c12Caps };
             st.lastSignedHash = undefined; st.lastSignature = undefined; st.txSigns = 0;
+            st.txNonceNow = () => pub.getTransactionCount({ address: base.address, blockTag: 'pending' });
             signBudget = 2; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
                 estimateBundlerUrl: bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
-            }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; st.expect = undefined; })) as Hex;
+            }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; st.expect = undefined; st.txNonceNow = undefined; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });
             let ev: any;
             // The event from the EntryPoint, for this account and the nonce the op was built with.

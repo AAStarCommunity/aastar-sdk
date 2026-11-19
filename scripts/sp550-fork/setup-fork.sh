@@ -38,9 +38,10 @@ if [ "${SP550_FORK_ATTACH:-}" = 1 ]; then
   log "attached to the running fork on $PORT: block $(cast block-number --rpc-url "$RPC") chain $(cast chain-id --rpc-url "$RPC")"
 else
   rm -f "$OUT/anvil.pid"   # only a pid this invocation writes is ever killed
+  . "$(dirname "$0")/scrub-url.sh"   # anvil.log is written through scrub_log: the fork URL never reaches the file
   # A failed setup stops the anvil it started; a successful one leaves it for the run.
   trap 'rc=$?; if [ "$rc" != 0 ] && [ -f "$OUT/anvil.pid" ]; then kill "$(cat "$OUT/anvil.pid")" 2>/dev/null || true; fi' EXIT
-  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+  anvil --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port "$PORT" --auto-impersonate --silent > >(scrub_log > "$OUT/anvil.log") 2>&1 &
   echo $! > "$OUT/anvil.pid"
   for _ in $(seq 1 60); do cast block-number --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
   log "anvil pid $(cat "$OUT/anvil.pid") fork block $FORK_BLOCK chain $(cast chain-id --rpc-url "$RPC")"
@@ -111,3 +112,7 @@ run_step step7c2-unpause 'unpauseOperator(address)' $OWNER
 check "AAStar operator paused after 7c" "$(cast call $SP 'operators(address)(uint128,bool,bool,address,uint32,uint48,address,uint256,uint256)' $OWNER --rpc-url $RPC | sed -n 3p)" "false"
 cp "$SPW/cache/sdk-fork/config.sepolia-fork.json" "$OUT/config.sepolia-fork.json"
 log "SETUP OK — fork block $FORK_BLOCK, head $(cast block-number --rpc-url $RPC); config -> $OUT/config.sepolia-fork.json"
+# Standalone run: the anvil this invocation started stays up for the E2E (Daybreak #468 Low): say how to stop it.
+if [ "${SP550_FORK_ATTACH:-}" != 1 ] && [ -f "$OUT/anvil.pid" ]; then
+  log "anvil is still running (pid $(cat "$OUT/anvil.pid"), port $PORT); stop it when done: kill $(cat "$OUT/anvil.pid")"
+fi

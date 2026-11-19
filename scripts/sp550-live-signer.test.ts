@@ -436,3 +436,35 @@ describe('fork source URL (Daybreak #468 M3, option b): in no child env, read-ba
         expect(src).toMatch(/'@pimlico\/alto@0\.0\.21'[\s\S]*?\{ stdio: 'ignore', env: childEnv\(\) \}/);
     });
 });
+
+describe('fork URL never reaches anvil.log / deploy.log (Daybreak #468 re-run Medium 1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const SECRET = 'SENTINELKEY' + Date.now();
+    const URL_ = `https://sepolia.example.invalid/v2/${SECRET}`;
+    const scrub = (text: string) => execFileSync('bash', ['-c', '. scripts/sp550-fork/scrub-url.sh; scrub_log'], { input: text, encoding: 'utf8', env: { ...process.env, FORK_URL: URL_ } });
+    it('scrub_log replaces the URL as given, without scheme, without trailing slash, and its path alone', () => {
+        const out = scrub(`error sending request for url (${URL_})\nhost sepolia.example.invalid/v2/${SECRET}/ failed\npath /v2/${SECRET}\nlast line without newline ${URL_}`);
+        expect(out).not.toContain(SECRET);
+        expect(out).toMatch(/<fork-url>/);
+        expect(out.split('\n').length).toBe(5); // every line kept, including the last one without a newline
+    });
+    it('every anvil.log / deploy.log write in run-a7.sh and setup-fork.sh goes through scrub_log', () => {
+        for (const f of ['scripts/sp550-fork/run-a7.sh', 'scripts/sp550-fork/setup-fork.sh']) {
+            const writes = fs.readFileSync(f, 'utf8').split('\n').filter((l) => /\/(anvil|deploy)\.log"/.test(l) && /[>]/.test(l) && !l.trim().startsWith('#'));
+            expect(writes.length, f).toBeGreaterThan(0);
+            for (const l of writes) expect(l, f).toMatch(/> >\(scrub_log > "\$OUT\/(anvil|deploy)\.log"\)/);
+        }
+    });
+    const anvil = [process.env.HOME + '/.foundry/bin/anvil', '/usr/local/bin/anvil'].find((p) => fs.existsSync(p));
+    it.skipIf(!anvil)('a real anvil forking a failing upstream: its log, written as the scripts write it, has no sentinel', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anvil-scrub-'));
+        const port = 29100 + Math.floor(Math.random() * 800);
+        execFileSync('bash', ['-c', `. scripts/sp550-fork/scrub-url.sh
+"${anvil}" --fork-url "$FORK_URL" --host 127.0.0.1 --port ${port} --silent > >(scrub_log > "${dir}/anvil.log") 2>&1 || true
+sleep 1`], { encoding: 'utf8', env: { ...process.env, FORK_URL: `http://127.0.0.1:1/v2/${SECRET}` }, timeout: 50_000 });
+        const files = fs.readdirSync(dir);
+        expect(files).toContain('anvil.log');
+        const text = fs.readFileSync(path.join(dir, 'anvil.log'), 'utf8');
+        expect(text.length).toBeGreaterThan(0); // anvil did report the failure
+        for (const f of files) expect(fs.readFileSync(path.join(dir, f), 'utf8'), f).not.toContain(SECRET);
+    }, 60_000);
+});

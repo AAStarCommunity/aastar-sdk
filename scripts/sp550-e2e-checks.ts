@@ -211,6 +211,8 @@ export function c12TransactionProblems(tx: any, w: C12TxExpectation): string[] {
     if (unknown.length) p.push(`unrecognised transaction field(s) ${unknown.join(', ')}`);
     for (const k of MUST_BE_UNSET) if (tx[k] !== undefined) p.push(`${k} is not part of C12's transaction`);
     const addrOf = (v: any) => (typeof v === 'string' ? v : typeof v?.address === 'string' ? v.address : undefined);
+    // `from` / `account` are held to the EOA, not refused: viem's own writeContract hands the signer both (refusing them
+    // would refuse every real request; DSR accepted this on #468).
     for (const k of ['from', 'account'] as const) {
         if (tx[k] !== undefined && (addrOf(tx[k]) === undefined || getAddress(addrOf(tx[k])!) !== getAddress(w.beneficiary))) p.push(`${k} is not the user's EOA ${w.beneficiary}`);
     }
@@ -276,6 +278,8 @@ export type C12SignState = {
     txSigns: number;
     signBudget: number;
     beforeSign?: () => Promise<void>;
+    /** The EOA's pending nonce now (Daybreak #468 re-run): re-read at the boundary, it must still equal the snapshot. */
+    txNonceNow?: () => Promise<number>;
 };
 
 /**
@@ -294,6 +298,12 @@ export async function signC12Transaction<T>(sign: () => Promise<T>, tx: any, st:
     // by beforeSign keeps it taken; nothing was signed and the cell fails.
     st.txSigns++;
     if (st.beforeSign) await st.beforeSign();
+    // Last, right before the key: another honest transaction from this EOA during C12's estimate would have taken the
+    // snapshotted nonce; signing it again would replace that pending transaction.
+    if (st.txNonceNow) {
+        const now = await st.txNonceNow();
+        if (now !== st.expect.txNonce) throw new Error(`C12: the EOA's pending nonce moved ${st.expect.txNonce} -> ${now} since the snapshot; refused before signing`);
+    }
     return sign();
 }
 

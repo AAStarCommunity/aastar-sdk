@@ -195,6 +195,13 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
         await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), st)).rejects.toThrow(/exactly one transaction/);
         expect(n).toBe(1);
     });
+    it('the EOA pending nonce re-read at the boundary: unchanged signs, moved is refused with no signature', async () => {
+        let n = 0;
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), state({ txNonceNow: async () => 3 }))).resolves.toBe('0xsig');
+        expect(n).toBe(1);
+        await expect(signC12Transaction(async () => { n++; return '0xsig'; }, good(), state({ txNonceNow: async () => 4 }))).rejects.toThrow(/pending nonce moved 3 -> 4/);
+        expect(n).toBe(1);
+    });
     it('two concurrent transaction signatures: exactly one signs (the slot is taken before any await)', async () => {
         let n = 0;
         const st = state({ beforeSign: () => new Promise((ok) => setTimeout(ok, 20)) });

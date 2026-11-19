@@ -113,14 +113,16 @@ log "anvil: $("$ANVIL" --version | tr '\n' ' ')"
 log "bundler: UltraRelay @ $(git -C "$ULTRARELAY_DIR" rev-parse HEAD 2>/dev/null || echo '(not a git checkout)') · package $(node -p "require('$ULTRARELAY_DIR/package.json').version" 2>/dev/null || echo '?')"
 
 STAGE=1
+# Every log a child writes that could quote the fork source goes through scrub_log (anvil.log, deploy.log).
+. "$SDK/scripts/sp550-fork/scrub-url.sh"
 if [ -n "$DUMP" ]; then
   "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --chain-id 11155111 --hardfork "$HARDFORK" --load-state "$DUMP" \
-        --host 127.0.0.1 --port 28546 --auto-impersonate --silent > "$OUT/anvil.log" 2>&1 &
+        --host 127.0.0.1 --port 28546 --auto-impersonate --silent > >(scrub_log > "$OUT/anvil.log") 2>&1 &
 else
   # Deploy mode (a rehearsal of this script): the default anvil keeps its own hardfork; a pinned
   # --anvil runs the chain's real tier, so the bundler is exercised on Amsterdam blocks too.
   HF_ARG=(); [ "$ANVIL" = anvil ] || HF_ARG=(--hardfork "$HARDFORK")
-  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port 28546 --auto-impersonate --silent ${HF_ARG[@]+"${HF_ARG[@]}"} > "$OUT/anvil.log" 2>&1 &  # bash 3.2: empty array under set -u
+  "$ANVIL" --fork-url "$FORK_URL" --fork-block-number "$FORK_BLOCK" --host 127.0.0.1 --port 28546 --auto-impersonate --silent ${HF_ARG[@]+"${HF_ARG[@]}"} > >(scrub_log > "$OUT/anvil.log") 2>&1 &  # bash 3.2: empty array under set -u
 fi
 echo $! > "$OUT/anvil.pid"
 for _ in $(seq 1 60); do cast block-number --rpc-url $RPC >/dev/null 2>&1 && break; sleep 1; done
@@ -134,7 +136,7 @@ if [ -n "$DUMP" ]; then
   done
   log "stage 1 ok: loaded the dump on a fork of 11155111 at $FORK_BLOCK (hardfork $HARDFORK), head $(cast block-number --rpc-url $RPC); 100 ETH to test keys 0-3"
 else
-  (cd "$SP_DIR" && RPC_URL=$RPC ETH_RPC_URL=$RPC bash -c "$SP550_A7_DEPLOY_CMD") > "$OUT/deploy.log" 2>&1 || fail "deploy command exited $? (deploy.log)"
+  (cd "$SP_DIR" && RPC_URL=$RPC ETH_RPC_URL=$RPC bash -c "$SP550_A7_DEPLOY_CMD") > >(scrub_log > "$OUT/deploy.log") 2>&1 || fail "deploy command exited $? (deploy.log)"
   log "stage 1 ok: fork of 11155111 at $FORK_BLOCK, deploy command done (deploy.log)"
 fi
 
