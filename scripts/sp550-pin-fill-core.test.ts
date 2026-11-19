@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -592,5 +592,21 @@ describe('pinFillWritePlan: what the CLI writes (Codex r2 M5)', { timeout: SPAWN
         const plan = pinFillWritePlan(net, pins, FILES, read, bookSwitch('fresh', pins), 'note');
         expect(plan.map((w) => w.path)).toEqual([FILES.fresh, FILES.book]);
         expect(block(plan[0].after, 'SP550_COEXIST_PINS')).toBe(block(plan[0].before, 'SP550_COEXIST_PINS'));
+    });
+});
+
+describe('sp550-pin-fill --write refuses until the FU-124 getter allow-list exists (DSR: a code gate, not a document)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('exit 2 with the reason, on every network, before reading the manifest or an RPC', async () => {
+        const { spawnSync } = await import('child_process');
+        const { SP550_WIRING_EXPECTED, sp550WiringAllowListReady } = await import('../packages/core/src/sp550CutoverGate.js');
+        expect(Object.keys(SP550_WIRING_EXPECTED)).toEqual([]);
+        expect(sp550WiringAllowListReady()).toBe(false);
+        for (const network of ['sepolia', 'sepolia-rc8', 'op-sepolia']) {
+            const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', network, '--manifest', '/nonexistent.json', '--write'],
+                { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+            expect(r.status, network).toBe(2);
+            expect(r.stderr).toContain(PIN_WRITE_BEFORE_ALLOWLIST);
+            expect(r.stderr).not.toContain('ENOENT');
+        }
     });
 });

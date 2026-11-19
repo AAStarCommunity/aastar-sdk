@@ -97,6 +97,17 @@ export const SP550_WIRING_SCAN_EXEMPT: Record<string, string> = {
 };
 
 /**
+ * FU-124: the expected value of every address getter of every scanned contract (pin / external book key / allowed
+ * zero / named operator address), generated from the re-pinned rc.8 ABI and SP's readback.json. EMPTY until that PR:
+ * while it is empty the exhaustive scan can only refuse the shipped stack, not prove each getter points at the right
+ * contract, so no network's pins may be written (DSR 2026-11-19; scripts/sp550-pin-fill.ts --write refuses).
+ */
+export const SP550_WIRING_EXPECTED: Readonly<Record<string, Readonly<Record<string, string>>>> = {};
+
+/** True once the getter allow-list (FU-124) exists; until then pin writing is refused. */
+export const sp550WiringAllowListReady = (): boolean => Object.keys(SP550_WIRING_EXPECTED).length > 0;
+
+/**
  * Getters a vendored ABI lists that this release's contract does not implement (they revert): reviewed per release
  * at the ABI re-pin, so a revert anywhere else fails the gate. None known.
  */

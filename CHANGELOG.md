@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Pin writing refused until the getter allow-list exists; the zero-destination guard covers the Sync and signing actions
+
+- `scripts/sp550-pin-fill.ts --write` refuses (exit 2, before anything is read) on every network while
+  `SP550_WIRING_EXPECTED` (the FU-124 getter allow-list) is empty — `sp550WiringAllowListReady()`. The ordering rule
+  "FU-124 before any write" (DSR 2026-11-19) is a code check, not a document. Preview without `--write` still works.
+- `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync` and
+  `signTransaction` to the zero address before signing (clestons on #465).
+
 ### `sepolia-rc8`: SuperPaymaster rc.8 as a fresh stack next to Sepolia's 5.4.2 one
 
 - New SP 5.5.0 network `sepolia-rc8` (chain 11155111, `fresh`, `coexist: true`). Its pins live in

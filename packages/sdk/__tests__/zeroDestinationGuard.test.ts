@@ -29,7 +29,7 @@ function recording() {
     return { methods, transport };
 }
 
-const SENDS = ['eth_sendRawTransaction', 'eth_sendTransaction', 'eth_signTransaction'];
+const SENDS = ['eth_sendRawTransaction', 'eth_sendRawTransactionSync', 'eth_sendTransaction', 'eth_signTransaction', 'wallet_sendCalls'];
 
 describe('client writes to a zero-address book entry are refused before signing (Codex r3 H1 on sepolia-rc8)', () => {
     it('OperatorClient.addDeposit with value, paymasterV4 declared absent (zero): ZeroAddressDestinationError, nothing signed or sent', async () => {
@@ -113,6 +113,27 @@ describe('batch and account-execution paths (Codex r6 M3 / H4)', () => {
         const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
         expect(named(await acct.execute({ dest: zeroAddress, value: 1n, func: '0x', account }).catch((e: unknown) => e))).toBe(true);
         expect(named(await acct.executeBatch({ dest: ['0x2222222222222222222222222222222222222222', zeroAddress], value: [0n, 1n], func: ['0x', '0x'], account }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+});
+
+describe('the Sync variants and signTransaction are guarded too (clestons #465 follow-up 1)', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    it.each([
+        ['operator', createOperatorClient],
+        ['admin', createAdminClient],
+        ['endUser', createEndUserClient],
+        ['community', createCommunityClient],
+    ] as const)('%s client: writeContractSync / sendTransactionSync / sendCallsSync / signTransaction to address zero: refused, nothing signed or sent', async (_n, make) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client = (make as any)({ chain: sepolia, transport, account });
+        await expect(client.writeContractSync({ address: zeroAddress, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.sendTransactionSync({ to: zeroAddress, value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.sendCallsSync({ account, chain: sepolia, calls: [{ to: zeroAddress, value: 1n }] })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.signTransaction({ to: zeroAddress, value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        expect(sign).not.toHaveBeenCalled();
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 });
