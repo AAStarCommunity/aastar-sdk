@@ -3,7 +3,7 @@
  * Compare SP's read-back file ("aoa-a7-readback/1") with the SDK pins and the SDK's own reads
  * (scripts/sp550-readback-compare-core.ts). Read-only; sends nothing.
  *
- *   pnpm exec tsx scripts/sp550-readback-compare.ts --network <sepolia|op-sepolia|op-mainnet> \
+ *   pnpm exec tsx scripts/sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> \
  *       --readback <a7-readback.json> --pins <pins.json> --rpc <url> [--rpc2 <url>] [--allow-rc] \
  *       [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]
  *
@@ -25,7 +25,7 @@ import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
 import { isLoopbackUrl, parseManifestPins } from './sp550-pin-fill-core.js';
 
-const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
+const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
@@ -34,7 +34,21 @@ const pick = (abi: Abi, name: string) => abi.filter((e: any) => e.type === 'func
 // Zero-arg views taken from @aastar/core: version() from the Lens, owner / pendingOwner / EXTENSION from SP.
 const ABI = [...pick(SuperPaymasterLensABI as Abi, 'version'), ...['owner', 'pendingOwner', 'EXTENSION'].flatMap((n) => pick(SuperPaymasterV550ABI as Abi, n))] as Abi;
 
+/**
+ * The upstream fork source: from stdin with --fork-url-stdin (run-a7.sh: the URL, which usually embeds a provider key,
+ * is then in neither this process's argv nor its environment, Daybreak #468 M3), else SP550_FORK_URL.
+ */
+let FORK_URL: string | undefined;
+async function readForkUrl(): Promise<string | undefined> {
+    if (!args.includes('--fork-url-stdin')) return process.env.SP550_FORK_URL;
+    let input = '';
+    for await (const c of process.stdin) { input += c; if (input.length > 4096) break; }
+    const u = input.split('\n')[0].trim();
+    return u === '' ? undefined : u;
+}
+
 async function main() {
+    FORK_URL = await readForkUrl();
     let net: ReturnType<typeof resolveSp550Network>;
     try { net = resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); }
     if (args.includes('--block')) refuse('--block is not accepted: reads are taken at pins.readbackBlock, the block the file describes');
@@ -78,7 +92,7 @@ async function main() {
     // Amsterdam facts come from the real chain: the --rpc endpoints on a live read-back, the fork's
     // upstream (SP550_FORK_URL) on a fork one — never the anvil fork itself.
     const upstreamFor = () => (arg('--dump-sha256') !== undefined
-        ? (process.env.SP550_FORK_URL ? [createPublicClient({ transport: http(process.env.SP550_FORK_URL) })] : [])
+        ? (FORK_URL ? [createPublicClient({ transport: http(FORK_URL) })] : [])
         : clients);
     const amsterdam = async (block?: bigint): Promise<Observed> => {
         const ups = upstreamFor();
@@ -105,11 +119,11 @@ async function main() {
     const source = arg('--dump-sha256') !== undefined ? 'fork' : 'live';
     const probe = args.includes('--probe');
     if (probe && (source !== 'fork' || urls.length !== 1 || !isLoopbackUrl(urls[0]))) refuse('--probe sends a transaction: fork read-backs only, on one loopback RPC');
-    if (probe && !process.env.SP550_FORK_URL) refuse('--probe needs SP550_FORK_URL (the upstream the fork was started from) for the live estimate');
+    if (probe && !FORK_URL) refuse('--probe needs SP550_FORK_URL (the upstream the fork was started from) for the live estimate');
     // Any upstream evidence (the Amsterdam header / eth_config on a fork read-back, and --probe) must come
     // from the real chain, never from the fork itself or another local node.
-    if (source === 'fork' && process.env.SP550_FORK_URL) {
-        const up = process.env.SP550_FORK_URL!;
+    if (source === 'fork' && FORK_URL) {
+        const up = FORK_URL!;
         if (isLoopbackUrl(up)) refuse('SP550_FORK_URL is a loopback URL; the live estimate must come from the upstream chain, not a local node');
         let same = false;
         try { same = new URL(up).host.toLowerCase() === new URL(urls[0]).host.toLowerCase(); } catch { refuse('SP550_FORK_URL is not a URL'); }
@@ -121,7 +135,7 @@ async function main() {
         const cv = await upstream.request({ method: 'web3_clientVersion' } as never).catch(() => '') as string;
         if (/^anvil\//i.test(cv)) refuse('SP550_FORK_URL is an anvil node, not the live chain');
     }
-    if (source === 'fork' && !process.env.SP550_FORK_URL) refuse('a fork read-back needs SP550_FORK_URL (the upstream the fork was started from) for the Amsterdam checks');
+    if (source === 'fork' && !FORK_URL) refuse('a fork read-back needs SP550_FORK_URL (the upstream the fork was started from) for the Amsterdam checks');
     const rbJson = JSON.parse(fs.readFileSync(rbFile, 'utf8'));
     const problems = await readbackProblems(rbJson, pins, {
         chainId: net.chainId, mode: net.mode, network: net.network, source, allowRc: args.includes('--allow-rc'),
@@ -129,7 +143,7 @@ async function main() {
         anvilCommit: arg('--anvil-commit'), spCommit: arg('--sp-commit'),
     }, read);
     // The probe changes the fork: only after every read above, and only on a file that compared clean.
-    if (probe && !problems.length) problems.push(...probeProblems(rbJson.amsterdamProbe, await runProbe(urls[0], process.env.SP550_FORK_URL!, rbJson.amsterdamProbe, BigInt(fb!))));
+    if (probe && !problems.length) problems.push(...probeProblems(rbJson.amsterdamProbe, await runProbe(urls[0], FORK_URL!, rbJson.amsterdamProbe, BigInt(fb!))));
     else if (probe) problems.push('amsterdamProbe: not run (the read-back did not compare clean)');
     console.log(`=== SP read-back ${rbFile} (${source}) vs pins ${pinsFile} and the SDK's reads at block ${blockNumber} on ${urls.length} RPC(s)${probe ? ', + amsterdamProbe' : ''} ===`);
     for (const x of problems) console.log(`❌ ${x}`);
