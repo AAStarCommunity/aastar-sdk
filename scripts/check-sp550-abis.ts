@@ -26,8 +26,8 @@ import * as path from 'path';
 
 const SDK_ROOT = process.cwd();
 const ABIS_DIR = path.join(SDK_ROOT, 'packages/core/src/abis');
-const TAG = 'v5.5.0-rc.4';
-const PINNED_COMMIT = 'fbd74fb1e2e9d948996e6d6c02c48dc1c1778107';
+const TAG = 'v5.5.0-rc.8';
+const PINNED_COMMIT = '5a150f6ad43a6c6a57ccccea427c1dba0d797d06';
 const SP_REPO = path.resolve(SDK_ROOT, process.env.SP_REPO ?? '../SuperPaymaster');
 const SP_OUT = process.env.SP550_OUT ? path.resolve(SDK_ROOT, process.env.SP550_OUT) : undefined;
 const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
@@ -41,6 +41,10 @@ const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
     { sdk: 'APNTsCapped.json', upstream: 'abis/APNTsCapped.json', parts: ['APNTsCapped'] },
     { sdk: 'AOAProtocolRegistry.json', upstream: 'abis/AOAProtocolRegistry.json', parts: ['AOAProtocolRegistry'] },
     { sdk: 'GlobalTierSource.json', upstream: 'abis/GlobalTierSource.json', parts: ['GlobalTierSource'] },
+    // The rc.8 coexist set: contracts whose rc.8 ABI the gate needs but the SDK-wide file (5.4.2 generation) lacks
+    // (docs/onchain-evidence/coexist-stack-abi-equality.md). Used only for a coexisting rc.8 stack.
+    { sdk: 'rc8/Registry.json', upstream: 'abis/Registry.json', parts: ['Registry'] },
+    { sdk: 'rc8/GTokenAuthorization.json', upstream: 'abis/GTokenAuthorization.json', parts: ['GTokenAuthorization'] },
 ];
 
 /**
@@ -49,13 +53,7 @@ const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
  * still fails. Remove an entry when the tag that fixes it is vendored.
  */
 const KNOWN_UPSTREAM_GAPS: Record<string, Record<string, string>> = {
-    'SuperPaymaster-5.5.0.full.json': {
-        'error:InvalidContextLength()':
-            'SP v5.5.0-rc.4 abis/SuperPaymaster.full.json is stale by the SP repo\'s own gate: ' +
-            '`python3 scripts/gen-sp-full-abi.py --check` at fbd74fb1 prints STALE. The error was added to the core ' +
-            '(SuperPaymasterStorage.sol:271, reverted in postOp at SuperPaymaster.sol:393) after full.json was last ' +
-            'regenerated (6e72d025). Error-only: no selector the SDK encodes is affected.',
-    },
+    // (rc.4's InvalidContextLength gap is fixed in v5.5.0-rc.8's abis/SuperPaymaster.full.json: entry removed.)
 };
 
 const sha = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
@@ -126,6 +124,16 @@ for (const f of FILES) {
     }
 }
 
+// The release-version table the gate holds version() to (SP's deployments/release-versions.rc8.json): byte-identical too.
+const RELEASE_VERSIONS = { sdk: 'packages/core/src/sp550-release-versions.rc8.json', upstream: 'deployments/release-versions.rc8.json' };
+if (fs.existsSync(path.join(SP_REPO, '.git')) || fs.existsSync(SP_REPO)) {
+    try {
+        const blob = git('show', `${PINNED_COMMIT}:${RELEASE_VERSIONS.upstream}`);
+        const mine = fs.readFileSync(path.join(SDK_ROOT, RELEASE_VERSIONS.sdk));
+        if (sha(mine) !== sha(blob)) failures.push(`${RELEASE_VERSIONS.sdk} != ${RELEASE_VERSIONS.upstream}@${PINNED_COMMIT.slice(0, 12)}`);
+        else console.log(`✅ ${RELEASE_VERSIONS.sdk}  byte-identical to ${RELEASE_VERSIONS.upstream}@${PINNED_COMMIT.slice(0, 12)} (sha256 ${sha(mine).slice(0, 16)}…)`);
+    } catch (e) { failures.push(`${RELEASE_VERSIONS.upstream}: not readable at ${PINNED_COMMIT.slice(0, 12)} (${String(e).slice(0, 80)})`); }
+}
 console.log(`\nchecked ${checked}/${FILES.length} file(s) against the pinned blob; ${SP_OUT ? `${unionChecked}/${FILES.length} against compiled out/` : 'compiled-out/ check NOT run (set SP550_OUT)'}.`);
 if (failures.length) { console.error(`\nFAIL:\n - ${failures.join('\n - ')}`); process.exit(1); }
 if (checked === 0) { console.log('SKIP: nothing compared.'); process.exit(REQUIRE_UPSTREAM ? 1 : 0); }

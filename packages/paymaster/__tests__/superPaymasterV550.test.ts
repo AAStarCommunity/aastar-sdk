@@ -141,7 +141,7 @@ describe('getSuperPaymasterMiddleware', () => {
         const withToken = await getSuperPaymasterMiddleware({ paymasterAddress: SP, operator: OPERATOR, token: TOKEN })
             .sponsorUserOperation({ userOperation: {} });
         expect(size(withToken.paymasterAndData)).toBe(125);
-        // Field-by-field at the upstream offsets (SuperPaymasterStorage.sol:176-180 @ v5.5.0-rc.4):
+        // Field-by-field at the upstream offsets (SuperPaymasterStorage.sol:212-216 @ v5.5.0-rc.8):
         // a length check alone passes with two fields swapped.
         const at = (hex: string, a: number, b: number) => '0x' + hex.slice(2 + a * 2, 2 + b * 2);
         const pmd = withToken.paymasterAndData;

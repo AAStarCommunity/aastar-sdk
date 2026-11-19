@@ -20,6 +20,21 @@ All notable changes to this project will be documented in this file.
   only the bundler's usable fields and throws when the endpoint cannot estimate; `estimateUserOperationGas` takes
   `requireEstimate` too.
 
+### SuperPaymaster 5.5.0 ABIs re-pinned to tag v5.5.0-rc.8 (commit 5a150f6a)
+
+- The seven vendored 5.5.0 files are the SP blobs at 5a150f6a, each equal to the union of its compiled ABIs
+  (`check:sp550-abis --strict`; CI pins the commit, never the tag object). The paper-path fixture is refreshed to it.
+- Version expectations come from SP's own `deployments/release-versions.rc8.json` (vendored byte-identical): a
+  coexisting rc.8 stack's pinned `spVersion` and every listed contract's `version()` must match it.
+- **Breaking for log decoders:** rc.8 appended `by` to eight SuperPaymaster events (and a `reason` to
+  OperatorPaused / OperatorUnpaused), so their topic0 changed. Decode those events from a 5.4.2 deployment with
+  `SuperPaymasterV542ABI`; the default `SuperPaymasterABI` decodes rc.8.
+- Proof for what was not replaced: every entry the read-back gate and the live cells use outside the seven files is
+  compared with the rc.8 compiled artifacts (`scripts/coexist-stack-abi-pin.ts`,
+  docs/onchain-evidence/coexist-stack-abi-equality.md). It found two gaps — rc.8 Registry's `pendingOwner()` and the
+  book gToken being GTokenAuthorization (`factory()`, `mySBT()`) — so the rc.8 stack reads those two through a coexist
+  set (`RegistryRc8ABI`, `GTokenAuthorizationRc8ABI`); the SDK-wide Registry / GToken ABIs are unchanged for 5.4.2.
+
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 
 - Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`

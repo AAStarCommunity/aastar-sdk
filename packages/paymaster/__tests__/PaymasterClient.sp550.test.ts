@@ -1062,7 +1062,7 @@ describe('SuperPaymasterInflightGuard.reserve', () => {
 });
 
 describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op', () => {
-    // A model of the chain: SuperPaymaster's a0 (SuperPaymaster.sol:305-310 at v5.5.0-rc.4) and the
+    // A model of the chain: SuperPaymaster's a0 (SuperPaymaster.sol:339-344 at v5.5.0-rc.8) and the
     // token's _lockDecision (xPNTsTokenV2.sol:190-214), written here independently of the SDK. The
     // bundler stub applies the lock exactly as validation would, so an SDK whose flag or a0 is wrong
     // gets AA34 instead of a receipt.

@@ -6,6 +6,12 @@ import { SuperPaymasterABI, SuperPaymasterV542ABI, SuperPaymasterV550ABI } from 
 // functions 5.5.0 deliberately removed. A shared selector whose OUTPUTS changed would decode
 // silently wrong (the guardianSlashCases lesson), so outputs are compared too.
 const REMOVED_IN_550 = ['clearPendingDebt', 'dryRunValidation', 'pendingDebts', 'retryPendingDebt'].sort();
+// rc.8 (SP #627) appended the caller to eight events, and a pause/unpause reason: same name, new topic0. A 5.4.2 log
+// of these decodes only with SuperPaymasterV542ABI.
+const EXTENDED_IN_RC8: Record<string, string[]> = {
+    OperatorPaused: ['by', 'reason'], OperatorUnpaused: ['by', 'reason'], OperatorSlashed: ['by'], PriceModeChanged: ['by'],
+    PriceUpdated: ['by'], ReputationUpdated: ['by'], SlashCancelled: ['by'], SlashQueued: ['by'],
+};
 
 const render = (t: any): string =>
     typeof t.type === 'string' && t.type.startsWith('tuple')
@@ -20,10 +26,21 @@ describe('SuperPaymaster default ABI = 5.5.0, compatible with 5.4.2', () => {
         expect(SuperPaymasterABI).toBe(SuperPaymasterV550ABI);
     });
 
-    it('every 5.4.2 event and error exists unchanged in 5.5.0', () => {
+    it('every 5.4.2 error, and every 5.4.2 event but the eight rc.8 extended, exists unchanged in 5.5.0', () => {
         const next = new Set(entries(SuperPaymasterV550ABI, ['event', 'error']).map(key));
-        const missing = entries(SuperPaymasterV542ABI, ['event', 'error']).map(key).filter((k) => !next.has(k));
-        expect(missing).toEqual([]);
+        const missing = entries(SuperPaymasterV542ABI, ['event', 'error']).filter((e) => !next.has(key(e)));
+        expect(missing.map((e: any) => `${e.type}:${e.name}`).sort()).toEqual(Object.keys(EXTENDED_IN_RC8).map((n) => `event:${n}`).sort());
+    });
+
+    it('each rc.8 extended event keeps the 5.4.2 inputs as a prefix and only appends the listed fields', () => {
+        const old = new Map(entries(SuperPaymasterV542ABI, ['event']).map((e: any) => [e.name, e]));
+        for (const [name, added] of Object.entries(EXTENDED_IN_RC8)) {
+            const now: any = entries(SuperPaymasterV550ABI, ['event']).find((e: any) => e.name === name);
+            const was: any = old.get(name);
+            const sig = (i: any) => `${render(i)}${i.indexed ? ' indexed' : ''}`;
+            expect(now.inputs.slice(0, was.inputs.length).map(sig), name).toEqual(was.inputs.map(sig));
+            expect(now.inputs.slice(was.inputs.length).map((i: any) => i.name), name).toEqual(added);
+        }
     });
 
     it('5.4.2 functions missing from 5.5.0 are exactly the four removed ones', () => {

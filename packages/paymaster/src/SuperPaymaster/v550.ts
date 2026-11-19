@@ -60,8 +60,9 @@ export async function resolveSuperPaymasterSponsorship(
 }
 
 /**
- * `SuperPaymasterStorage.VALIDATION_BUFFER_BPS` (internal constant, SuperPaymasterStorage.sol:209 at
- * v5.5.0-rc.4). Not readable on chain, so it is pinned here; check:sp550-abis re-pins the tag.
+ * `SuperPaymasterStorage.VALIDATION_BUFFER_BPS` (internal constant, SuperPaymasterStorage.sol:254 at
+ * v5.5.0-rc.8, still 1000 — verified at the re-pin). Not readable on chain, so it is pinned here;
+ * every re-pin of the tag must re-check it.
  */
 export const SUPER_PAYMASTER_VALIDATION_BUFFER_BPS = 1000n;
 
@@ -94,7 +95,7 @@ export type SpRenewDecision = {
  * Whether a SuperPaymaster 5.5.0 op should carry SUPER_PAYMASTER_FLAGS.SP_RENEW: only when it is
  * NEEDED (the auto allowance cannot cover a0 without it) and ALLOWED (the token would accept it).
  * Both answers come from the token's own decision, `xPNTsTokenV2.previewLock`, the read-only mirror
- * of the `tryLockForGas` call SP makes in validation (xPNTsTokenV2.sol:190-222 at v5.5.0-rc.4):
+ * of the `tryLockForGas` call SP makes in validation (xPNTsTokenV2.sol:221-229 at v5.5.0-rc.8):
  *
  * - plain = previewLock(sp, user, h, a0, false). OK → no flag (renewing would spend the single K
  *   for nothing). Anything but INSUFFICIENT → no flag (renewal cannot fix it).
@@ -102,7 +103,7 @@ export type SpRenewDecision = {
  *   lock or credit reservation) or INSUFFICIENT (the balance, not the allowance, is short) → no flag;
  *   SP then tries credit, as it would without the flag.
  *
- * a0 mirrors SuperPaymaster.sol:305-310 (`_calculateAPNTsAmount(maxCost)` × (1 + fee + buffer),
+ * a0 mirrors SuperPaymaster.sol:339-344 (v5.5.0-rc.8) (`_calculateAPNTsAmount(maxCost)` × (1 + fee + buffer),
  * both roundings up) from the same reads SP makes. It is the reservation for THIS op's gas limits
  * and fee: call it again whenever they change. A keeper price update between this read and
  * inclusion moves a0; the decision is then off only if the remaining allowance sits within that move.

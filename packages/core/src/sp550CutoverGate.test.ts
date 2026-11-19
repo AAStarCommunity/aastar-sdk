@@ -7,7 +7,9 @@ import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550
 import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
-const SP_VERSION = 'SuperPaymaster-5.5.1';
+// The release's own strings (SP's release-versions table at the pinned tag), so the coexist cases match it.
+import RELEASE from './sp550-release-versions.rc8.json' with { type: 'json' };
+const SP_VERSION = (RELEASE as Record<string, string>).SuperPaymaster;
 const LENS_VERSION = 'SuperPaymasterLens-1.2.2';
 /** Each fixture's SDK address book, keyed by its pins object, so every call site stays as written. */
 const BOOKS = new WeakMap<object, Record<string, unknown>>();
@@ -45,7 +47,11 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${p.sp}.REGISTRY`]: book.registry, [`${p.sp}.BLS_AGGREGATOR`]: book.blsAggregator,
         [`${p.sp}.agentIdentityRegistry`]: book.agentIdentityRegistry, [`${p.sp}.agentReputationRegistry`]: book.agentReputationRegistry,
         [`${p.sp}.entryPoint`]: canonical.entryPoint, [`${p.sp}.ETH_USD_PRICE_FEED`]: canonical.priceFeed,
-        [`${p.apnts}.version`]: 'APNTsCapped-1.0.0',
+        [`${p.apnts}.version`]: (RELEASE as Record<string, string>).APNTsCapped,
+        [`${book.registry}.version`]: (RELEASE as Record<string, string>).Registry,
+        [`${p.factory}.version`]: (RELEASE as Record<string, string>).xPNTsFactoryV2,
+        [`${book.staking}.version`]: (RELEASE as Record<string, string>).GTokenStaking,
+        [`${book.gToken}.version`]: (RELEASE as Record<string, string>).GTokenAuthorization,
         [`${p.factory}.SUPERPAYMASTER`]: p.sp, [`${p.factory}.implementation`]: p.tokenImpl, [`${p.factory}.defaultTierSource`]: p.tier,
         [`${p.factory}.implementationCodehash`]: keccak256(codeOf(p.tokenImpl)), [`${p.factory}.extensionCodehash`]: keccak256(codeOf(p.ext)),
         [`${p.tokenImpl}.EXTENSION`]: p.ext, [`${p.tokenImpl}.PROTOCOL_REGISTRY`]: p.aoa,
@@ -882,5 +888,13 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
             absent: m.pins.absent!.filter((k: string) => k !== 'paymasterV4' && k !== 'aPNTsPaymasterV4'),
             codehashes: { ...m.pins.codehashes, 'addresses.paymasterV4': hash, 'addresses.aPNTsPaymasterV4': hash } };
         expect(sp550NetworkPinProblems('sepolia-rc8', pins as any).problems).toEqual([]);
+    });
+
+    it('a coexisting stack is held to SP\'s release-versions: a wrong pinned spVersion and a wrong version() both fail (post-tag A)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        expect(sp550NetworkPinProblems('sepolia-rc8', { ...m.pins, spVersion: 'SuperPaymaster-5.5.0' }).problems).toContainEqual(expect.stringMatching(/is not the release's "SuperPaymaster-5\.5\.3"/));
+        m.reads[`${m.pins.addresses.registry}.version`] = 'Registry-5.8.0';
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual([expect.stringContaining('Registry.version() == release-versions "Registry-5.10.1"')]);
     });
 });

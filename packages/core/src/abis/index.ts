@@ -42,6 +42,8 @@ import xPNTsFactoryV2ABIData from './xPNTsFactoryV2.json' with { type: 'json' };
 import APNTsCappedABIData from './APNTsCapped.json' with { type: 'json' };
 import AOAProtocolRegistryABIData from './AOAProtocolRegistry.json' with { type: 'json' };
 import GlobalTierSourceABIData from './GlobalTierSource.json' with { type: 'json' };
+import RegistryRc8ABIData from './rc8/Registry.json' with { type: 'json' };
+import GTokenAuthorizationRc8ABIData from './rc8/GTokenAuthorization.json' with { type: 'json' };
 import MySBTABIData from './MySBT.json' with { type: 'json' };
 
 // Agent Economy (SP V5.3)
@@ -97,10 +99,11 @@ export const GTokenStakingArtifact = GTokenStakingABIData;
 
 // SP 5.5.0 CUTOVER (draft, not merged until SP 5.5.0 is live): the DEFAULT SuperPaymaster ABI is
 // the 5.5.0 core ∪ Admin union below. It is a strict superset of 5.4.2 except four functions 5.5.0
-// removed (dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt): identical events
-// and errors, and no shared function changed its outputs (checked by
-// packages/core/src/abis/superPaymasterAbiCompat.test.ts). Callers of those four use
-// SuperPaymasterV542ABI explicitly.
+// removed (dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt) and eight events
+// rc.8 extended (SP #627: an appended `by`, plus `reason` on OperatorPaused / OperatorUnpaused), whose
+// topic0 therefore differs; errors are identical and no shared function changed its outputs (checked by
+// packages/core/src/abis/superPaymasterAbiCompat.test.ts). Callers of those four functions, and anyone
+// decoding those eight events from a 5.4.2 deployment, use SuperPaymasterV542ABI explicitly.
 //
 // SuperPaymaster 5.4.2 (proxy 0x09DF…4DE9 before the in-place upgrade). Still needed for those four
 // legacy calls and for reading a not-yet-upgraded deployment.
@@ -122,7 +125,7 @@ export const SuperPaymasterV550Artifact = SuperPaymasterV550ABIData;
 
 // SuperPaymasterLens (SP 5.5.0) — read-only lens; `dryRunValidation(sp, userOp, maxCost)` moved
 // here from the SP in 5.5.0. Pins `EXPECTED_SP_VERSION = keccak256("SuperPaymaster-5.5.0")` and
-// returns DRYRUN_VERSION_MISMATCH against any other SP. Vendored from tag v5.5.0-rc.4.
+// returns DRYRUN_VERSION_MISMATCH against any other SP. Vendored from tag v5.5.0-rc.8 (commit 5a150f6a).
 export const SuperPaymasterLensABI = (SuperPaymasterLensABIData as any).abi || SuperPaymasterLensABIData;
 export const SuperPaymasterLensArtifact = SuperPaymasterLensABIData;
 
@@ -156,13 +159,13 @@ export const xPNTsTokenABI = (xPNTsTokenABIData as any).abi || xPNTsTokenABIData
 export const xPNTsTokenArtifact = xPNTsTokenABIData;
 
 // xPNTs v2 (`XPNTs-4.0.0`, SP 5.5.0 balance mode) — a NEW token template, not an upgrade of v1.
-// Vendored from tag v5.5.0-rc.4 `abis/xPNTsTokenV2.full.json` = xPNTsTokenV2 ∪ xPNTsTokenV2Ext (the
+// Vendored from tag v5.5.0-rc.8 `abis/xPNTsTokenV2.full.json` = xPNTsTokenV2 ∪ xPNTsTokenV2Ext (the
 // extension is reached via the token's fallback; call everything at the token address). SP 5.5.0
 // `configureOperator` only accepts tokens with `BALANCE_MODE_VERSION() == 1`.
 export const xPNTsTokenV2ABI = (xPNTsTokenV2ABIData as any).abi || xPNTsTokenV2ABIData;
 
 // SP 5.5.0 new contracts — exposed as ABIs only (no wrappers; low-frequency / governance surface).
-// All vendored byte-for-byte from SuperPaymaster tag v5.5.0-rc.4 `abis/`; see scripts/check-sp550-abis.ts.
+// All vendored byte-for-byte from SuperPaymaster tag v5.5.0-rc.8 (commit 5a150f6a) `abis/`; see scripts/check-sp550-abis.ts.
 //   xPNTsFactoryV2       — deploys xPNTs v2 clones (SP.xpntsFactory() after the upgrade)
 //   APNTsCapped          — replaces aPNTs as SP.APNTS_TOKEN() (operators re-deposit into it)
 //   AOAProtocolRegistry  — codehash allowlist (SP / tier-source kinds) consulted by xPNTs v2
@@ -171,6 +174,13 @@ export const xPNTsFactoryV2ABI = (xPNTsFactoryV2ABIData as any).abi || xPNTsFact
 export const APNTsCappedABI = (APNTsCappedABIData as any).abi || APNTsCappedABIData;
 export const AOAProtocolRegistryABI = (AOAProtocolRegistryABIData as any).abi || AOAProtocolRegistryABIData;
 export const GlobalTierSourceABI = (GlobalTierSourceABIData as any).abi || GlobalTierSourceABIData;
+
+// The rc.8 coexist set (SP tag v5.5.0-rc.8, commit 5a150f6a, byte-for-byte): the rc.8 stack's Registry (5.10.1, adds
+// Ownable2Step `pendingOwner()`) and its gToken, which DeployLive deploys as GTokenAuthorization (adds `factory()`,
+// `mySBT()`). The SDK-wide RegistryABI / GTokenABI stay at the deployed 5.4.2 generation; only the rc.8 stack's
+// gate reads these (docs/onchain-evidence/coexist-stack-abi-equality.md).
+export const RegistryRc8ABI = (RegistryRc8ABIData as any).abi || RegistryRc8ABIData;
+export const GTokenAuthorizationRc8ABI = (GTokenAuthorizationRc8ABIData as any).abi || GTokenAuthorizationRc8ABIData;
 
 export const xPNTsFactoryABI = (xPNTsFactoryABIData as any).abi || xPNTsFactoryABIData;
 export const xPNTsFactoryArtifact = xPNTsFactoryABIData;

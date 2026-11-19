@@ -9,10 +9,10 @@
  *   5.5.x  [paymaster 20][verifGas 16][postOpGas 16][operator 20][maxRate 32][token 20][flags 1] = 125 B
  *
  * Offsets are copied from the contract, not derived from this encoder:
- *   - SuperPaymaster v5.5.0-rc.4 `SuperPaymasterStorage.sol:176-182`
+ *   - SuperPaymaster v5.5.0-rc.8 `SuperPaymasterStorage.sol:212-218`
  *       PAYMASTER_DATA_OFFSET = 52, RATE_OFFSET = 72, POSTOP_GAS_OFFSET = 36,
  *       TOKEN_OFFSET = 104, FLAGS_OFFSET = 124, FLAG_SP_RENEW = 1, FLAG_ACCOUNT_RENEW = 2
- *   - SuperPaymaster v5.5.0-rc.4 `SuperPaymaster.sol:292-298` (validatePaymasterUserOp):
+ *   - SuperPaymaster v5.5.0-rc.8 `SuperPaymaster.sol:326-332` (validatePaymasterUserOp):
  *       length < TOKEN_OFFSET + 20 -> sigFail; token != operators[op].xPNTsToken -> sigFail;
  *       flags = length > FLAGS_OFFSET ? pmd[FLAGS_OFFSET] : 0; both renew bits set -> sigFail.
  *   - SuperPaymaster v5.4.2 `SuperPaymaster.sol:78` RATE_OFFSET = 72 and `:1200-1201` — 5.4.2 only
@@ -25,7 +25,7 @@
  */
 import { type Address, type Hex, concat, getAddress, isAddress, pad, size, slice, toHex } from 'viem';
 
-/** Byte offsets inside `paymasterAndData` (SuperPaymasterStorage.sol:176-180, v5.5.0-rc.4). */
+/** Byte offsets inside `paymasterAndData` (SuperPaymasterStorage.sol:212-216, v5.5.0-rc.8). */
 export const SUPER_PAYMASTER_PMD_OFFSETS = {
     /** [0:20]   paymaster address (ERC-4337 v0.7). */
     PAYMASTER: 0,
@@ -51,7 +51,7 @@ export const SUPER_PAYMASTER_PMD_MIN_LENGTH_V55 = 124;
 export const SUPER_PAYMASTER_PMD_LENGTH_V55 = 125;
 
 /**
- * `flags` bits (SuperPaymasterStorage.sol:181-182, v5.5.0-rc.4; spec 03-final-spec §3.2).
+ * `flags` bits (SuperPaymasterStorage.sol:217-218, v5.5.0-rc.8; spec 03-final-spec §3.2).
  *
  * - `SP_RENEW` (bit0): SP relays a K-bounded allowance renewal to `xPNTsTokenV2.tryLockForGas`.
  *   Only valid when the user set `renewalMode == SP_K`, has renewals left, and has no live lock or

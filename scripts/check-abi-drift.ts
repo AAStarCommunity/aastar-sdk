@@ -150,8 +150,8 @@ const NAME_COLLISIONS = new Set(['AAStarBLSAlgorithm']);
 // SP 5.5.0 union ABIs (core ∪ fallback extension, one address). Verified byte-for-byte against the
 // pinned upstream tag AND against the union of their compiled halves by scripts/check-sp550-abis.ts.
 const UNION_ABIS = new Map<string, string>([
-  ['SuperPaymaster-5.5.0.full', 'union ABI (SuperPaymaster ∪ SuperPaymasterAdmin @ SP v5.5.0-rc.4) — verified by `pnpm run check:sp550-abis`'],
-  ['xPNTsTokenV2.full', 'union ABI (xPNTsTokenV2 ∪ xPNTsTokenV2Ext @ SP v5.5.0-rc.4) — verified by `pnpm run check:sp550-abis`'],
+  ['SuperPaymaster-5.5.0.full', 'union ABI (SuperPaymaster ∪ SuperPaymasterAdmin @ SP v5.5.0-rc.8) — verified by `pnpm run check:sp550-abis`'],
+  ['xPNTsTokenV2.full', 'union ABI (xPNTsTokenV2 ∪ xPNTsTokenV2Ext @ SP v5.5.0-rc.8) — verified by `pnpm run check:sp550-abis`'],
 ]);
 
 function loadAbi(file: string): any[] {

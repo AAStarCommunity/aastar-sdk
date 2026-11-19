@@ -17,6 +17,9 @@
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, type CanonicalAddresses } from './addresses.js';
+// SP's own release-version table at the pinned tag (byte-identical, scripts/check-sp550-abis.ts): the version()
+// strings a coexisting stack's contracts must report. Read from SP's file, never written here as constants.
+import SP550_RELEASE_VERSIONS_RC8 from './sp550-release-versions.rc8.json' with { type: 'json' };
 import { SP550_CERTIFIED_ADDRESS_KEYS, SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
@@ -248,6 +251,16 @@ export function sp550CoexistOverlapProblems(network: Sp550CoexistNetwork, pins: 
         .map(([k, a]) => `${k} ${a} is the shipped stack's ${old.get(a.toLowerCase())}; a coexisting stack must not reuse it`);
 }
 
+/** SP's release-version table for each coexisting stack (the tag's deployments/release-versions.<rc>.json). */
+export const SP550_RELEASE_VERSIONS: Record<Sp550CoexistNetwork, Readonly<Record<string, string>>> = {
+    'sepolia-rc8': SP550_RELEASE_VERSIONS_RC8 as Record<string, string>,
+};
+/** Where each release-versions contract sits in a pin set (top-level pin or address-book key). */
+export const SP550_RELEASE_VERSION_ENTRY: Readonly<Record<string, string>> = {
+    SuperPaymaster: 'superPaymaster', Registry: 'addresses.registry', xPNTsFactoryV2: 'xPNTsFactoryV2',
+    GTokenStaking: 'addresses.staking', GTokenAuthorization: 'addresses.gToken', APNTsCapped: 'aPNTsCapped',
+};
+
 /**
  * Release holds of a coexisting stack, by network name: independent of the chain's other stack, so holding one
  * Sepolia deployment never holds (or releases) the other.
@@ -270,6 +283,9 @@ export function sp550NetworkPinProblems(network: Sp550Network, pins: Sp550FreshD
     const allowRc = !!opts.allowRc || n.allowRc;
     const problems = n.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc }) : sp550UpgradePinProblems(pins, { allowRc });
     if (n.coexist) problems.push(...sp550CoexistOverlapProblems(network as Sp550CoexistNetwork, pins));
+    // The pinned SuperPaymaster version is the release's own (SP's release-versions table), not a free-form pin.
+    const rv = n.coexist ? SP550_RELEASE_VERSIONS[network as Sp550CoexistNetwork] : undefined;
+    if (rv && pins?.spVersion !== undefined && pins.spVersion !== rv.SuperPaymaster) problems.push(`spVersion ${JSON.stringify(pins.spVersion)} is not the release's ${JSON.stringify(rv.SuperPaymaster)} (SP release-versions)`);
     return { problems, hold: sp550HoldFor(network) };
 }
 
