@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { custom, zeroAddress, type Address } from 'viem';
+import { custom, parseTransaction, zeroAddress, type Address } from 'viem';
 import { sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import { ZeroAddressDestinationError } from '@aastar/core';
@@ -11,9 +11,11 @@ const MNEMONIC = 'test test test test test test test test test test test junk';
 /** A transport that answers the reads a local-account send needs and records every method it is asked for. */
 function recording() {
     const methods: string[] = [];
+    const raw: string[] = [];
     const transport = custom({
-        async request({ method }: { method: string }) {
+        async request({ method, params }: { method: string; params?: any[] }) {
             methods.push(method);
+            if (method === 'eth_sendRawTransaction' || method === 'eth_sendRawTransactionSync') raw.push(params![0]);
             switch (method) {
                 case 'eth_chainId': return '0x' + sepolia.id.toString(16);
                 case 'eth_getTransactionCount': return '0x0';
@@ -27,7 +29,7 @@ function recording() {
             }
         },
     });
-    return { methods, transport };
+    return { methods, transport, raw };
 }
 
 const SENDS = ['eth_sendRawTransaction', 'eth_sendRawTransactionSync', 'eth_sendTransaction', 'eth_signTransaction', 'wallet_sendCalls'];
@@ -204,9 +206,10 @@ describe('Codex r2 on the guard: check-then-use and raw sends', () => {
         const client: any = createOperatorClient({ chain: sepolia, transport, account });
         let reads = 0;
         const req: any = { account, chain: sepolia, value: 1n, get to() { return ++reads === 1 ? NONZERO : zeroAddress; } };
-        await client.sendTransaction(req).catch(() => undefined);
-        // Whatever was signed went to the address that was checked, never to zero.
-        for (const c of sign.mock.calls) expect((c[0] as any).to?.toLowerCase()).toBe(NONZERO.toLowerCase());
+        await client.sendTransaction(req);
+        // Signed exactly once, to the address that was checked, never to zero.
+        expect(sign).toHaveBeenCalledTimes(1);
+        expect((sign.mock.calls[0][0] as any).to?.toLowerCase()).toBe(NONZERO.toLowerCase());
         expect(reads).toBe(1);
         let callReads = 0;
         const batch: any = { account, chain: sepolia, calls: [{ value: 1n, get to() { return ++callReads === 1 ? NONZERO : zeroAddress; } }] };
@@ -228,5 +231,44 @@ describe('Codex r2 on the guard: check-then-use and raw sends', () => {
         const toOther = await account.signTransaction({ to: NONZERO, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, chainId: sepolia.id, type: 'eip1559' });
         await client.sendRawTransaction({ serializedTransaction: toOther });
         expect(methods).toContain('eth_sendRawTransaction');
+    });
+});
+
+describe('clestons #466: only plain-object requests; a missing address is refused', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+    class ConstTo { value = 7n; constructor(private readonly dest: Address) {} get to() { return this.dest; } }
+    class ConstAddress { abi = payable; functionName = 'f' as const; value = 7n; constructor(private readonly dest: Address) {} get address() { return this.dest; } }
+
+    it.each([['zero', zeroAddress], ['non-zero', NONZERO]] as const)('Object.create / class-instance requests (%s destination): refused, nothing signed or sent', async (_l, dest) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const withCtx = (o: any) => Object.assign(o, { account, chain: sepolia });
+        expect(named(await client.sendTransaction(withCtx(Object.create({ to: dest, value: 7n }))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.sendTransaction(withCtx(new ConstTo(dest))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.writeContract(withCtx(new ConstAddress(dest))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.writeContract(withCtx(Object.create({ address: dest, abi: payable, functionName: 'f', value: 7n }))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [Object.create({ to: dest, value: 7n })] }).catch((e: unknown) => e))).toBe(true);
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a contract write with no address (a missing book key) is refused instead of becoming a contract creation', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.writeContract({ address: undefined, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a plain-object batch is forwarded with exactly the checked destinations', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        await client.sendCalls({ account, chain: sepolia, calls: [{ to: NONZERO, value: 1n }], experimental_fallback: true });
+        expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
     });
 });
