@@ -135,27 +135,31 @@ pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 
 
 ```json
 {
-  "network": "sepolia", "mode": "live",
+  "network": "sepolia-rc8", "mode": "live",
   "rpcUrls": ["<节点 A>", "<节点 B>"],
   "bundlerUrl": "<实链 bundler>",
   "gate": { "allowRc": true },
   "operator": "<operator>", "account": "<用户 AA 账户>",
   "userKey": { "keystore": "<加密 keystore 路径>" },
+  "expectSigner": "<作者签名地址>",
   "maxOps": 8,
-  "expectMinPostOpGas": "500000"
+  "expectMinPostOpGas": "500000",
+  "expectMinTxInterval": "60"
 }
 ```
 
 `expectMinPostOpGas` 必须写上 rc.8 发布元组的值（500,000）。E2E 会把链上 `gasParams().minPostOpGas` 和它比对，不相等就 FAIL；配置里没有这一项时，E2E 直接拒绝运行。
 
+`expectSigner` 是作者签名地址，必须与命令行的 `--live-signer` 一致（两处来源，一个地址），keystore 解出的地址也必须是它。`expectMinTxInterval` 是 operator 的 minTxInterval（论文这几格是 60，由 SP 的三臂 setup 设置）；S1r 要求它为正数。
+
 ```bash
 set -o pipefail   # 退出码要来自 E2E，不是 tee
 # 在 pin 填充分支上执行（门读的是已经写进源码的 pins，实链不允许 bookOverrides）
-pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia --preflight 2>&1 | tee <out>/live-preflight.log
-pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia 2>&1 | tee <out>/live-e2e.log
+pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia-rc8 --live-signer <作者签名地址> --preflight 2>&1 | tee <out>/live-preflight.log
+pnpm exec tsx scripts/sp550-live-e2e.ts --config <live.json> --live-go sepolia-rc8 --live-signer <作者签名地址> 2>&1 | tee <out>/live-e2e.log
 ```
 
-- `--live-go sepolia` 是作者给的 go，必须和配置里的 network 相同。
+- `--live-go sepolia-rc8` 是作者给的 go，必须和配置里的 network 相同；`--live-signer` 必须等于 `expectSigner`。
 - 签名器**只**从加密 keystore 加载，密码由作者在隐藏提示符下输入；不在 TTY 下运行会被拒绝（`scripts/sp550-live-signer.ts`）。
 - 实链没有 `--fork-setup`。账户已部署、有 ENDUSER、xPNTs 有余额、renewalMode = SP_K，这几项要事先准备好，而且准备它们的交易同样要作者给 go。`--preflight` 会逐项核对，不发任何 op。
 - 逐 op 硬检查与分叉完全相同；退出码 0 才算通过。

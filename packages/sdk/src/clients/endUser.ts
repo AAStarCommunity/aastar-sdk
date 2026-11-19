@@ -261,9 +261,8 @@ export function createEndUserClient({
                     args: [accountAddress, 0n] // 0 = default nonce key
                 }) as bigint;
             } catch (e: any) {
-                console.warn(`   ⚠️  Failed to fetch nonce from EntryPoint, using default 0:`, e.message);
-                // For initial transactions, nonce is always 0
-                nonce = 0n;
+                // A guessed nonce signs an op the EntryPoint rejects (or a different one): refuse instead.
+                throw new Error(`executeGasless: could not read the EntryPoint nonce for ${accountAddress} (${e?.shortMessage ?? e?.message}); nothing was signed`);
             }
 
             // 3. Build CallData (execute(target, value, data))
@@ -289,22 +288,33 @@ export function createEndUserClient({
             const limitSources: Partial<SelfBundledGasDecision['limitSources']> = {};
             for (const k of FIELDS) if (gas?.[k] !== undefined) { limits[k] = gas[k]; limitSources[k] = 'explicit'; }
             const missing = FIELDS.filter((k) => limits[k] === undefined);
+            // Fees once, before the estimate: the estimate is for the op that is signed (same nonce, same fees, no flags).
+            const fees = await resolveUserOpFees(client as any, { maxFeePerGas, maxPriorityFeePerGas });
             let estimate: Record<string, bigint> | undefined;
             if (missing.length) {
                 if (!estimateBundlerUrl) throw new Error(`executeGasless: no gas source for ${missing.join(', ')}; pass gas or estimateBundlerUrl`);
-                const est = await PaymasterClient.estimateUserOperationGas(client as any, client as any, accountAddress, entryPointAddress,
+                // Only the bundler's usable fields (never local defaults): explicit fields fill what it left out.
+                const est = await PaymasterClient.estimateUserOperationGasFields(client as any, client as any, accountAddress, entryPointAddress,
                     usedAddresses.superPaymaster, '0x0000000000000000000000000000000000000000', estimateBundlerUrl, executeData,
-                    // requireEstimate: an endpoint that cannot estimate yields local defaults, never signed as an estimate.
-                    // superPaymasterFlags 0: the op signed below carries no flags, so the estimate is for that same op.
-                    { operator, sponsorship: sp, requireEstimate: true, superPaymasterFlags: 0, superPaymasterAutoRenew: false });
-                estimate = { ...est };
-                const scaled = scaleLimits(est, coefficientBps);
-                for (const k of missing) { limits[k] = scaled[k]; limitSources[k] = 'estimate'; }
+                    { operator, sponsorship: sp, superPaymasterFlags: 0, superPaymasterAutoRenew: false, nonce,
+                        maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+                estimate = Object.fromEntries(Object.entries(est).filter((e): e is [string, bigint] => typeof e[1] === 'bigint'));
+                for (const k of missing) {
+                    const v = est[k];
+                    if (v === undefined) continue;
+                    limits[k] = k === 'preVerificationGas' ? v : scaleLimits({ preVerificationGas: 0n, verificationGasLimit: 0n, callGasLimit: 0n, paymasterVerificationGasLimit: 0n, paymasterPostOpGasLimit: 0n, [k]: v }, coefficientBps)[k];
+                    limitSources[k] = 'estimate';
+                }
+                const unfilled = FIELDS.filter((k) => limits[k] === undefined);
+                if (unfilled.length) throw new Error(`executeGasless: the bundler gave no usable ${unfilled.join(', ')} and none was given explicitly; nothing was signed`);
             }
-            // The postOp floor read from the chain only raises.
-            if (limits.paymasterPostOpGasLimit! < sp.minPostOpGas) { limits.paymasterPostOpGasLimit = sp.minPostOpGas; limitSources.paymasterPostOpGasLimit = 'floor'; }
+            // The postOp floor read from the chain raises an ESTIMATED limit; an explicit one below it is refused
+            // (the signed value must be the caller's or an estimate's, never a silent rewrite of the caller's).
+            if (limits.paymasterPostOpGasLimit! < sp.minPostOpGas) {
+                if (limitSources.paymasterPostOpGasLimit === 'explicit') throw new Error(`executeGasless: gas.paymasterPostOpGasLimit ${limits.paymasterPostOpGasLimit} is below SuperPaymaster ${sp.version} minPostOpGas ${sp.minPostOpGas}; nothing was signed`);
+                limits.paymasterPostOpGasLimit = sp.minPostOpGas; limitSources.paymasterPostOpGasLimit = 'floor';
+            }
             const L = limits as SelfBundledGasDecision['limits'];
-            const fees = await resolveUserOpFees(client as any, { maxFeePerGas, maxPriorityFeePerGas });
             const accountGasLimits = concat([
                 pad(toHex(L.verificationGasLimit), { dir: 'left', size: 16 }),
                 pad(toHex(L.callGasLimit), { dir: 'left', size: 16 }),

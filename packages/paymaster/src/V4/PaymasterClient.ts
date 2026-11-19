@@ -406,6 +406,20 @@ export class PaymasterClient {
     }
 
     /**
+     * The bundler's usable estimate fields only (a field it left out or answered with a sentinel is absent), for a caller
+     * that fills the rest itself. Throws when the endpoint cannot estimate (it never returns the local defaults).
+     */
+    static async estimateUserOperationGasFields(
+        client: any, wallet: any, aaAddress: Address, entryPoint: Address, paymasterAddress: Address, token: Address,
+        bundlerUrl: string, callData: `0x${string}`, options?: EstimateGasOptions,
+    ): Promise<Partial<GasEstimate>> {
+        const { fields, fallback } = await PaymasterClient.estimateUserOperationGasDetailed(
+            client, wallet, aaAddress, entryPoint, paymasterAddress, token, bundlerUrl, callData, options);
+        if (fallback) throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; no estimate to use');
+        return fields;
+    }
+
+    /**
      * What the bundler estimated: a field is absent when the bundler left it out or answered a sentinel (≤ 1, e.g. a postOp it
      * did not simulate). `fallback`: the endpoint has no eth_estimateUserOperationGas and the fields are local defaults, not
      * an estimate.

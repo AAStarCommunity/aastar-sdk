@@ -81,13 +81,13 @@ function harness(version: string, opts: { minPostOpGas?: bigint; configured?: bo
     return { c, paymasterAndData, sentTx, sentOp, request, sent: () => sentRaw };
 }
 
-const EXPLICIT = { verificationGasLimit: 90_000n, callGasLimit: 80_000n, preVerificationGas: 60_000n, paymasterVerificationGasLimit: 210_000n, paymasterPostOpGasLimit: 150_000n };
+const EXPLICIT = { verificationGasLimit: 90_000n, callGasLimit: 80_000n, preVerificationGas: 60_000n, paymasterVerificationGasLimit: 210_000n, paymasterPostOpGasLimit: 400_000n };
 const at = (hex: Hex, a: number, b: number) => '0x' + hex.slice(2 + a * 2, 2 + b * 2);
 
 describe('createEndUserClient().executeGasless builds a paymasterAndData the deployed SP accepts', () => {
     it.each([
-        ['SuperPaymaster-5.5.0', 350_000n, 350_000n],
-        ['SuperPaymaster-5.4.2', undefined, 200_000n], // the explicit 150k raised to 5.4.2's 200k floor
+        ['SuperPaymaster-5.5.0', 350_000n, 400_000n], // the explicit postOp, above the floor: used as given
+        ['SuperPaymaster-5.4.2', undefined, 400_000n],
     ])('%s: 125-byte layout with the operator token, postOp at the contract floor', async (version, minPostOpGas, expectedPostOp) => {
         const { c, paymasterAndData } = harness(version, { minPostOpGas });
         await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT });
@@ -150,9 +150,37 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         });
         vi.stubGlobal('fetch', fetchMock);
         try {
-            await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337' })).rejects.toThrow(/requireEstimate/);
+            await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337' })).rejects.toThrow(/has no eth_estimateUserOperationGas; no estimate to use/);
         } finally { vi.unstubAllGlobals(); }
         expect(sent()).toBeUndefined();
+    });
+
+    it('an explicit postOp below the chain floor is refused before signing, never silently raised (Codex r2 M7)', async () => {
+        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: { ...EXPLICIT, paymasterPostOpGasLimit: 150_000n } }))
+            .rejects.toThrow(/gas.paymasterPostOpGasLimit 150000 is below .* minPostOpGas 500000; nothing was signed/);
+        expect(sent()).toBeUndefined();
+    });
+
+    it('explicit fields fill what the estimate left out; the estimate request carries the signed op\'s nonce and fees (Codex r2 M8 / M9)', async () => {
+        const { c, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        // The bundler omits postOp; the caller gives it explicitly.
+        const est = { preVerificationGas: '0xea60', verificationGasLimit: '0x11170', callGasLimit: '0x9c40', paymasterVerificationGasLimit: '0x30d40' };
+        const seen: any[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_u: string, init: any) => {
+            const body = JSON.parse(init.body); seen.push(body.params?.[0]);
+            return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: est }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }));
+        const decisions: any[] = [];
+        try {
+            await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337', gas: { paymasterPostOpGasLimit: 320_000n }, maxFeePerGas: 9_000_000_000n, maxPriorityFeePerGas: 2_000_000_000n, onGasDecided: (d: any) => decisions.push(d) });
+        } finally { vi.unstubAllGlobals(); }
+        expect(decisions[0].limits.paymasterPostOpGasLimit).toBe(320_000n);
+        expect(decisions[0].limitSources.paymasterPostOpGasLimit).toBe('explicit');
+        expect(decisions[0].limitSources.callGasLimit).toBe('estimate');
+        expect(BigInt(seen[0].nonce)).toBe(BigInt(sentOp().nonce)); // the nonce the op is signed with
+        expect(BigInt(seen[0].maxFeePerGas)).toBe(9_000_000_000n);
+        expect(BigInt(seen[0].maxPriorityFeePerGas)).toBe(2_000_000_000n);
     });
 
     it('explicit fields win over the estimate and are labelled explicit', async () => {

@@ -109,8 +109,8 @@ describe('tapBundler records what left for the bundler, and nothing else', () =>
         expect(globalThis.fetch).toBe(stub);
         expect(seen).toEqual(['http://127.0.0.1:4337', 'http://127.0.0.1:4337', 'http://127.0.0.1:8545']);
         expect(sink).toEqual([
-            { method: 'eth_estimateUserOperationGas', signature: DUMMY, flags: 1, signsBefore: 0 },
-            { method: 'eth_sendUserOperation', signature: REAL, flags: 1, signsBefore: 1 },
+            { method: 'eth_estimateUserOperationGas', signature: DUMMY, flags: 1, signsBefore: 0, gas: expect.any(Object) },
+            { method: 'eth_sendUserOperation', signature: REAL, flags: 1, signsBefore: 1, gas: expect.any(Object) },
         ]);
         expect(opSigningProblems(sink, 1, DUMMY)).toEqual([]);
     });

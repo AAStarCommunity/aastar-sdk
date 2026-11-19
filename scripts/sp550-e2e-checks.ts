@@ -23,6 +23,8 @@ export type BundlerCall = {
     flags?: number;
     /** How many times the user's signer had been asked when this request left. */
     signsBefore: number;
+    /** The op's gas fields as sent (eth_sendUserOperation / estimate requests), so a rejected op is still recorded. */
+    gas?: Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit' | 'maxFeePerGas' | 'maxPriorityFeePerGas', bigint | undefined>;
 };
 
 const USER_OP_METHODS = new Set(['eth_estimateUserOperationGas', 'eth_sendUserOperation']);
@@ -67,6 +69,12 @@ export function tapBundler(bundlerUrl: string, signsNow: () => number, sink: Bun
                         const op = req.params?.[0] ?? {};
                         call.signature = op.signature;
                         call.flags = flagsFromPaymasterData(op.paymasterData);
+                        const big = (v: unknown) => { try { return v === undefined || v === null ? undefined : BigInt(v as any); } catch { return undefined; } };
+                        call.gas = {
+                            verificationGasLimit: big(op.verificationGasLimit), callGasLimit: big(op.callGasLimit), preVerificationGas: big(op.preVerificationGas),
+                            paymasterVerificationGasLimit: big(op.paymasterVerificationGasLimit), paymasterPostOpGasLimit: big(op.paymasterPostOpGasLimit),
+                            maxFeePerGas: big(op.maxFeePerGas), maxPriorityFeePerGas: big(op.maxPriorityFeePerGas),
+                        };
                     }
                     sink.push(call);
                 }

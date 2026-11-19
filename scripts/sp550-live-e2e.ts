@@ -71,6 +71,8 @@
  * Exit 2 = refused before sending; 1 = something sent or read back wrong; 0 = all assertions held.
  */
 import * as fs from 'fs';
+import { createServer } from 'http';
+import { spawn, type ChildProcess } from 'child_process';
 import {
     type Abi, type Address, type Hex, createPublicClient, createWalletClient, decodeFunctionData,
     decodeEventLog, encodeFunctionData, extractChain, getAddress, http, isAddress, keccak256, toHex,
@@ -102,6 +104,30 @@ const fail = (m: string): never => { console.error(`❌ ${m}`); process.exit(1);
 const result = (line: string) => console.log(`RESULT ${line}`);
 const isLoopback = (u: string) => { try { return ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname); } catch { return false; } };
 
+let forkBundler: ChildProcess | undefined;
+const stopForkBundler = () => { try { forkBundler?.kill('SIGTERM'); } catch { /* gone */ } forkBundler = undefined; };
+process.on('exit', stopForkBundler);
+/** Mode fork: a fresh Alto bound to the verified fork RPC on a free loopback port (executor / utility: anvil keys 2 and 3, funded on the fork). */
+async function startForkBundler(rpc: string, entryPoint: Address, pub: any): Promise<string> {
+    const port = await new Promise<number>((ok) => { const srv = createServer(); srv.listen(0, '127.0.0.1', () => { const p = (srv.address() as any).port; srv.close(() => ok(p)); }); });
+    const acct = (i: number) => mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: i });
+    for (const i of [2, 3]) await pub.request({ method: 'anvil_setBalance', params: [acct(i).address, '0x56BC75E2D63100000'] });
+    const key = (i: number) => toHex(acct(i).getHdKey().privateKey!);
+    forkBundler = spawn('pnpm', ['dlx', '@pimlico/alto', '--entrypoints', entryPoint, '--rpc-url', rpc, '--port', String(port),
+        '--executor-private-keys', key(2), '--utility-private-key', key(3), '--safe-mode', 'false',
+        '--min-entity-stake', '0', '--min-entity-unstake-delay', '86400'], { stdio: 'ignore' });
+    const url = `http://127.0.0.1:${port}`;
+    for (let i = 0; i < 180; i++) {
+        try {
+            const r = await (await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_supportedEntryPoints', params: [] }), signal: AbortSignal.timeout(5_000) })).json();
+            if (JSON.stringify(r.result ?? []).toLowerCase().includes(entryPoint.toLowerCase())) { console.log(`fork bundler: this run's own Alto on ${url}, bound to the verified fork RPC`); return url; }
+        } catch { /* not up yet */ }
+        await new Promise((ok) => setTimeout(ok, 1000));
+    }
+    stopForkBundler();
+    return fail('fork bundler: Alto did not start');
+}
+
 async function main() {
     // ---- 1. usage ----
     const file = arg('--config') ?? refuse('--config <run.json> is required');
@@ -111,8 +137,9 @@ async function main() {
     const rpcUrls: string[] = Array.isArray(cfg.rpcUrls) ? cfg.rpcUrls : [];
     if (rpcUrls.length === 0 || typeof cfg.bundlerUrl !== 'string') refuse('config needs rpcUrls[] and bundlerUrl');
     if (cfg.mode === 'fork') {
-        // The bundler is always this machine's; a fork RPC elsewhere (SP's acceptance fork) must prove it is anvil, below.
-        if (!isLoopback(cfg.bundlerUrl)) refuse('mode fork: the bundler must be loopback');
+        // The run starts its own bundler, bound to the verified fork RPC (a configured bundler could point at a real chain,
+        // where a public-key signature over the same chain id / EntryPoint / account would be valid).
+        if (cfg.bundlerUrl !== 'self') refuse('mode fork: bundlerUrl must be "self" (the run starts its own bundler on the verified fork)');
         if (!rpcUrls.every(isLoopback) && cfg.gate?.deployLiveConfig === undefined) refuse('mode fork: every RPC must be loopback (a non-loopback anvil fork is accepted only with gate.deployLiveConfig)');
         // A loopback URL is not proof of a fork (a local proxy can front a real chain): every RPC must ALSO prove it is anvil, below.
         if (cfg.userKey?.anvilIndex === undefined) refuse('mode fork: userKey must be { anvilIndex } (anvil\'s public mnemonic)');
@@ -120,6 +147,9 @@ async function main() {
         if (arg('--live-go') !== net.network) refuse(`mode live sends real ops: pass --live-go ${net.network} (the author's go for this network)`);
         const problem = liveKeySourceProblem(cfg.userKey);
         if (problem) refuse(problem);
+        // The author's signer address, typed on the command line and repeated in the config: two sources, one address.
+        const ls = arg('--live-signer');
+        if (!ls || !isAddress(ls)) refuse('mode live: pass --live-signer <the author\'s signer address> (it must equal config.expectSigner)');
     } else refuse('config.mode must be "fork" or "live"');
     // Fork-only switches are refused here, before anything is read from a network.
     if (cfg.mode !== 'fork' && args.includes('--fork-setup')) refuse('--fork-setup impersonates accounts: mode fork only');
@@ -133,6 +163,7 @@ async function main() {
     if (cfg.gate?.bookOverrides !== undefined) refuse('gate.bookOverrides is gone: use gate.switchBook, which derives the book from the pins exactly as pin-fill does');
     // H4: a live run is bound to the author's signer address (a blacklist cannot prove a key is private).
     if (cfg.mode === 'live' && (typeof cfg.expectSigner !== 'string' || !isAddress(cfg.expectSigner))) refuse('mode live: config.expectSigner (the author\'s signer address) is required');
+    if (cfg.mode === 'live' && getAddress(arg('--live-signer')!) !== getAddress(cfg.expectSigner)) refuse('mode live: --live-signer and config.expectSigner name different addresses');
     // H3: a live run is gated at the finalized block only (a historical snapshot is not today's state).
     if (cfg.mode === 'live' && cfg.gate?.block !== undefined && cfg.gate.block !== 'finalized') refuse('mode live: gate.block must be "finalized" (or omitted)');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
@@ -231,29 +262,52 @@ async function main() {
     // slot + its code hash), its EntryPoint / Registry wiring and the operator's token. Any change aborts before signing.
     // (An upgrade between the last check and inclusion is not closable off-chain: an operational upgrade freeze covers it.)
     const IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
+    // One block for every read of a snapshot (a change between two reads cannot mix two states).
     const wiring = async () => {
-        const slot = await pub.getStorageAt({ address: sp, slot: IMPL_SLOT });
-        const impl = slot && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress('0x' + slot.slice(-40)) : String(slot);
-        const code = impl.startsWith('0x') && impl.length === 42 ? await pub.getCode({ address: impl as Address }) : undefined;
-        const o = (await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'operators', args: [operator] })) as readonly any[];
+        const blockNumber = await pub.getBlockNumber();
+        const at = { blockNumber } as const;
+        const implOf = async (proxy: Address) => {
+            const slot = await pub.getStorageAt({ address: proxy, slot: IMPL_SLOT, ...at });
+            return slot && /^0x0{24}[0-9a-fA-F]{40}$/.test(slot) ? getAddress('0x' + slot.slice(-40)) : String(slot);
+        };
+        const codehash = async (a: string) => {
+            if (!(a.startsWith('0x') && a.length === 42)) return '(no address)';
+            const code = await pub.getCode({ address: a as Address, ...at });
+            return code && code !== '0x' ? keccak256(code) : '(no code)';
+        };
+        const read = (address: Address, abi: any, functionName: string, args?: unknown[]) => pub.readContract({ address, abi, functionName, args, ...at } as any) as Promise<any>;
+        const impl = await implOf(sp);
+        const reg = getAddress(await read(sp, SuperPaymasterV550ABI, 'REGISTRY'));
+        const regImpl = await implOf(reg);
+        const o = (await read(sp, SuperPaymasterV550ABI, 'operators', [operator])) as readonly any[];
         return {
-            impl, implCodehash: code && code !== '0x' ? keccak256(code) : '(no code)',
-            entryPoint: getAddress((await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'entryPoint' })) as Address),
-            registry: getAddress((await pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'REGISTRY' })) as Address),
+            impl, implCodehash: await codehash(impl),
+            extension: getAddress(await read(sp, SuperPaymasterV550ABI, 'EXTENSION')),
+            entryPoint: getAddress(await read(sp, SuperPaymasterV550ABI, 'entryPoint')),
+            registry: reg, registryImpl: regImpl, registryImplCodehash: await codehash(regImpl),
             token: getAddress(o[3]),
         };
     };
     const gated = await wiring();
-    const pinnedImpl = (pinned as any)?.spImpl, pinnedImplHash = (pinned as any)?.spImplCodehash;
-    if (pinnedImpl && gated.impl.toLowerCase() !== String(pinnedImpl).toLowerCase()) refuse(`SP implementation ${gated.impl} is not the pinned ${pinnedImpl}`);
-    if (pinnedImplHash && gated.implCodehash.toLowerCase() !== String(pinnedImplHash).toLowerCase()) refuse(`SP implementation code hash ${gated.implCodehash} is not the pinned ${pinnedImplHash}`);
-    if (gated.entryPoint !== getAddress(ep) || gated.registry !== getAddress(registry)) refuse('SP wiring changed while it was being read');
+    // Held to what the read-back certified, directly (not only to the first read): implementation + code hash, the
+    // extension, the Registry and its implementation, the EntryPoint.
+    const P = (pinned ?? {}) as any;
+    const certified: [keyof typeof gated, unknown][] = [
+        ['impl', P.spImpl], ['implCodehash', P.spImplCodehash], ['extension', P.spAdminExtension],
+        ['registry', P.addresses?.registry], ['registryImpl', P.registryImpl], ['entryPoint', ep],
+    ];
+    for (const [k, want] of certified) {
+        if (want !== undefined && String(gated[k]).toLowerCase() !== String(want).toLowerCase()) refuse(`SP ${k} ${gated[k]} is not what the gate certified (${want})`);
+    }
+    // The token every encoded call and every precondition uses is the snapshot's (one read, not two).
+    if (gated.token !== getAddress(token)) refuse(`the operator's token changed while it was being read (${token} -> ${gated.token})`);
+    if (gated.registry !== getAddress(registry)) refuse('SP.REGISTRY() changed while it was being read');
     const recheck = async (label: string) => {
         const now = await wiring();
         const changed = (Object.keys(gated) as (keyof typeof gated)[]).filter((k) => String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase());
         if (changed.length) fail(`${label}: refused before signing — SuperPaymaster changed since the gate (${changed.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
     };
-    console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${new URL(cfg.bundlerUrl).host}`);
+    console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${cfg.mode === 'fork' ? '(this run\'s own, on the fork)' : new URL(cfg.bundlerUrl).host}`);
     // The postOp floor the SDK applies is read live (gasParams().minPostOpGas); the release tuple sets it
     // (rc.8: 500,000 — DSR). expectMinPostOpGas holds the chain to that value; it is required, since an
     // optional expectation is a check a config can silently drop.
@@ -299,10 +353,12 @@ async function main() {
     // An unreachable bundler, a non-2xx answer, a non-JSON-RPC body, or any JSON-RPC error other than
     // method-not-found (-32601: the method is optional) fails here — an auth / rate-limit / internal error
     // is not a usable gas source (Codex r4).
-    const bundlerHost = new URL(cfg.bundlerUrl).host;
+    // Mode fork: this run's own Alto, bound to the verified fork RPC, on a free loopback port, stopped on exit.
+    const bundlerUrl: string = cfg.mode === 'fork' ? await startForkBundler(rpcUrls[0], ep, pub) : cfg.bundlerUrl;
+    const bundlerHost = new URL(bundlerUrl).host;
     let bundlerReply: any;
     try {
-        const res = await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }), signal: AbortSignal.timeout(15_000) });
+        const res = await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }), signal: AbortSignal.timeout(15_000) });
         if (!res.ok) return fail(`GAS SOURCE: bundler ${bundlerHost} answered HTTP ${res.status}`);
         bundlerReply = await res.json();
     } catch (e: any) { return fail(`GAS SOURCE: bundler ${bundlerHost} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
@@ -323,7 +379,21 @@ async function main() {
     // A second line, not the guarantee (expectSigner is): known public development keys are refused even if configured.
     if (cfg.mode === 'live' && await isPublicTestAccount(base.address)) refuse(`mode live: the signer ${base.address} is a public development key (anvil / hardhat mnemonic or a repo fixture); never on a real chain`);
     let signs = 0;
-    const user = { ...base, signMessage: async (a: any) => { signs++; return base.signMessage(a); } };
+    // The signing boundary (M4): every signature passes these, right before the key is used — a per-op budget (an SDK
+    // retry cannot sign twice), a fresh SuperPaymaster check, and a chain-time deadline when a cell sets one.
+    let signBudget = Infinity;
+    let signDeadline: bigint | undefined;
+    let beforeSign: (() => Promise<void>) | undefined;
+    const user = { ...base, signMessage: async (a: any) => {
+        if (signs >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
+        if (beforeSign) await beforeSign();
+        if (signDeadline !== undefined) {
+            const now = (await pub.getBlock({ blockTag: 'latest' })).timestamp;
+            if (now >= signDeadline) throw new Error(`chain time ${now} reached the cell's signing deadline ${signDeadline}; refused`);
+        }
+        signs++;
+        return base.signMessage(a);
+    } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
     // Whether the account exists before this run: A7 must prove the FIRST sponsored op of a brand-new
     // account (fresh lock / allowance slots: the Amsterdam state-gas case, DSR) succeeds.
@@ -378,6 +448,16 @@ async function main() {
         const predicted = (await eu.createSmartAccount({ owner: base.address })).accountAddress as Address;
         if (getAddress(predicted) !== account) missing.push(`C12's account (createSmartAccount(owner) = ${predicted}) == config.account ${account}`);
     }
+    // The task call: SP's three-arm execute(T, 0, transfer(0x…dEaD, 1)) when T is configured, else a no-op call.
+    const DEAD = '0x000000000000000000000000000000000000dEaD' as Address;
+    const noop = taskToken
+        ? encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [taskToken, 0n, encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] })] })
+        : encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
+    if (plan) {
+        if (!(plan as any).SP || getAddress((plan as any).SP) !== sp) refuse(`taskPlan: shared.SP ${(plan as any).SP} is not this run's SuperPaymaster ${sp}`);
+        if (noop.toLowerCase() !== plan.taskCallData.toLowerCase()) refuse('taskPlan: this run\'s call is not byte-equal to shared.taskCallData');
+        console.log(`task plan: T ${plan.T}, taskCallData byte-equal, plan commit ${plan.commit ?? '(none)'}`);
+    }
     if (missing.length) refuse(`preconditions not met for ${account}: ${missing.join(', ')}`);
     if (args.includes('--preflight')) {
         result(`preflight: gate passed, preconditions met for ${account} (allowance ${s0.used}/${s0.cap}, autoRenewUsed ${s0.renewUsed}/${K}); no op sent`);
@@ -385,13 +465,21 @@ async function main() {
     }
 
     // ---- helpers ----
+    // Bounded: each request 15 s, the whole wait 180 s; an HTTP or JSON-RPC error is reported, not taken as "pending".
     const receipt = async (opHash: Hex) => {
-        for (let i = 0; i < 120; i++) {
-            const r = await (await fetch(cfg.bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [opHash] }) })).json();
-            if (r.result) return r.result;
+        const until = Date.now() + 180_000;
+        while (Date.now() < until) {
+            let r: any;
+            try {
+                const res = await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [opHash] }), signal: AbortSignal.timeout(15_000) });
+                if (!res.ok) return fail(`receipt for ${opHash} (submitted): bundler answered HTTP ${res.status}`);
+                r = await res.json();
+            } catch (e: any) { return fail(`receipt for ${opHash} (submitted): bundler did not answer (${e?.name ?? 'error'})`); }
+            if (r?.error) return fail(`receipt for ${opHash} (submitted): bundler error ${JSON.stringify(r.error).slice(0, 200)}`);
+            if (r?.result) return r.result;
             await new Promise((res) => setTimeout(res, 1000));
         }
-        return fail(`no receipt for ${opHash}`);
+        return fail(`no receipt for ${opHash} (submitted) within 180 s`);
     };
     /** THIS op as bundled, read from the bundle transaction's handleOps calldata: flags, all five limits and the fees. */
     const onChainOp = async (txHash: Hex, nonce: bigint): Promise<{ flags: number; postOpGasLimit: bigint; limits: Record<(typeof FIELDS)[number], bigint>; maxFeePerGas: bigint; maxPriorityFeePerGas: bigint; paymaster: Address }> => {
@@ -416,7 +504,7 @@ async function main() {
         return { flags, postOpGasLimit, limits, maxPriorityFeePerGas: BigInt('0x' + gf.slice(0, 32)), maxFeePerGas: BigInt('0x' + gf.slice(32)), paymaster: getAddress(pmd.slice(0, 42)) };
     };
     const bundlerCalls: BundlerCall[] = [];
-    const untapBundler = tapBundler(cfg.bundlerUrl, () => signs, bundlerCalls);
+    const untapBundler = tapBundler(bundlerUrl, () => signs, bundlerCalls);
     const DUMMY_SIGNATURE = PaymasterClient.dummySignature();
     let lastSent = 0;
     const spaced = async () => {
@@ -437,15 +525,18 @@ async function main() {
         const first = bundlerCalls.length;
         let decision: GasDecision | undefined;
         await recheck(label);
+        signBudget = 1; beforeSign = () => recheck(label);
         // No superPaymasterFlags: SP_RENEW is the SDK's per-op decision, which is what is under test.
         let opHash: Hex;
         try {
-            opHash = (await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, callData, submitOpts((d) => { decision = d; }))) as Hex;
+            opHash = (await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, bundlerUrl, callData, submitOpts((d) => { decision = d; }))) as Hex;
         } catch (e: any) {
-            // B5 (DSR): a bundler rejection (e.g. an efficiency check) is reported with its reason and the numbers.
-            result(`${label}: REJECTED before inclusion — ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 300)} · ${gasRow(decision)}`);
+            // B5 (DSR): a bundler rejection (e.g. an efficiency check) is reported with its reason and the numbers — the
+            // numbers from the op that was actually sent (onGasDecided only runs after acceptance).
+            const sent = bundlerCalls.slice(first).filter((c) => c.method === 'eth_sendUserOperation').at(-1);
+            result(`${label}: REJECTED before inclusion — ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 300)} · ${sent?.gas ? `sent gas=${FIELDS.map((k) => `${k}:${sent.gas![k]}`).join(',')} maxFee=${sent.gas.maxFeePerGas} priority=${sent.gas.maxPriorityFeePerGas}` : 'nothing sent'}`);
             throw e;
-        }
+        } finally { signBudget = Infinity; beforeSign = undefined; }
         lastSent = Date.now();
         const submitted = bundlerCalls.slice(first);
         const signsForOp = signs;
@@ -496,16 +587,6 @@ async function main() {
         if (problems.length) fail(`${label}: ${problems.join('; ')}`);
         return { flags, renewedInline, before, after, txHash, decision };
     };
-    // The task call: SP's three-arm execute(T, 0, transfer(0x…dEaD, 1)) when T is configured, else a no-op call.
-    const DEAD = '0x000000000000000000000000000000000000dEaD' as Address;
-    const noop = taskToken
-        ? encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [taskToken, 0n, encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] })] })
-        : encodeFunctionData({ abi: SimpleAccountABI, functionName: 'execute', args: [operator, 0n, '0x'] });
-    if (plan) {
-        if (!(plan as any).SP || getAddress((plan as any).SP) !== sp) refuse(`taskPlan: shared.SP ${(plan as any).SP} is not this run's SuperPaymaster ${sp}`);
-        if (noop.toLowerCase() !== plan.taskCallData.toLowerCase()) refuse('taskPlan: this run\'s call is not byte-equal to shared.taskCallData');
-        console.log(`task plan: T ${plan.T}, taskCallData byte-equal, plan commit ${plan.commit ?? '(none)'}`);
-    }
 
     try {
         // ---- 4. S1 ----
@@ -519,9 +600,9 @@ async function main() {
         }
 
         // ---- 4r. S1r (D9): a second op straight after S1, inside minTxInterval ----
-        // The bundler must refuse it as not yet valid (-32503), at estimation or at send; the SDK neither waits nor
-        // retries: at most one send and one signature. Before signing, the chain-time window must still be open (a slow
-        // receipt can use it up): if it is not, S1r is not exercised and the run stops without signing.
+        // Sent with S1's own limits (frozen, so no estimate that could refuse it first), it must be refused AT SEND as not
+        // yet valid with a structured validAfter in the future: exactly one send and one signature, no wait, no retry. The
+        // signature is refused by the signer itself once chain time reaches S1 + minTxInterval - 5 s.
         {
             const s1Block = await pub.getBlock({ blockHash: (await pub.getTransactionReceipt({ hash: s1.txHash })).blockHash });
             const head = await pub.getBlock({ blockTag: 'latest' });
@@ -532,17 +613,20 @@ async function main() {
             SuperPaymasterInflightGuard.clearAll();
             signs = 0;
             let rejected: unknown;
-            let d1r: GasDecision | undefined;
-            try { await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, cfg.bundlerUrl, noop, submitOpts((d) => { d1r = d; })); }
+            signBudget = 1; beforeSign = () => recheck('S1r'); signDeadline = s1Block.timestamp + minTxInterval - 5n;
+            try { await PaymasterClient.submitGaslessUserOperation(pub as any, userWallet as any, account, ep, sp, ZERO, bundlerUrl, noop, { ...submitOpts(() => {}), frozenGas: s1.decision!.limits }); }
             catch (e) { rejected = e; }
+            finally { signBudget = Infinity; beforeSign = undefined; signDeadline = undefined; }
             const calls = bundlerCalls.slice(first);
-            const sends = calls.filter((c) => c.method === 'eth_sendUserOperation').length;
-            const notYetValid = rejected instanceof UserOperationNotYetValidError || /-32503|not valid yet/i.test(String((rejected as any)?.message ?? ''));
-            const stage = sends === 0 ? 'estimation' : 'send';
-            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${notYetValid ? `rejected not yet valid at ${stage}${rejected instanceof UserOperationNotYetValidError && rejected.secondsToWait !== undefined ? ` (wait ${rejected.secondsToWait}s)` : ''}` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends} S_user signMessage=${signs} · ${gasRow(d1r)}`);
-            if (!notYetValid) fail('S1r: the second op inside minTxInterval was not refused as not yet valid (-32503)');
-            if (sends > 1) fail(`S1r: ${sends} eth_sendUserOperation calls; the SDK must not retry a not-yet-valid op`);
-            if (signs !== sends) fail(`S1r: signMessage ${signs} times for ${sends} send(s); one signature per send, none without one`);
+            const sends = calls.filter((c) => c.method === 'eth_sendUserOperation');
+            const nyv = rejected instanceof UserOperationNotYetValidError ? rejected : undefined;
+            const validAfterFuture = nyv?.validAfter !== undefined && nyv.now !== undefined && nyv.validAfter > nyv.now;
+            const sentGas = sends.at(-1)?.gas;
+            result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
+            if (!nyv) fail('S1r: the second op inside minTxInterval was not refused as UserOperationNotYetValidError (-32503)');
+            if (!validAfterFuture) fail('S1r: the refusal carries no validAfter in the future (not attributable to the operator\'s interval)');
+            if (sends.length !== 1) fail(`S1r: ${sends.length} eth_sendUserOperation calls; the cell is one send, refused`);
+            if (signs !== 1) fail(`S1r: signMessage ${signs} times; the cell is one signature`);
             lastSent = Date.now(); // the next op waits a full interval
         }
 
@@ -584,11 +668,12 @@ async function main() {
             }
             await recheck('C12');
             const epNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
+            signBudget = 1; beforeSign = () => recheck('C12');
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
-                estimateBundlerUrl: cfg.bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
+                estimateBundlerUrl: bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
-            })) as Hex;
+            }).finally(() => { signBudget = Infinity; beforeSign = undefined; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });
             let ev: any;
             // The event from the EntryPoint, for this account and the nonce the op was built with.
@@ -604,6 +689,14 @@ async function main() {
             result(`C12 createEndUserClient().executeGasless: tx ${rc.status} from ${rc.from} UserOperationEvent.success=${ev?.success} actualGasUsed=${ev?.actualGasUsed} · user xPNTs -${c0.bal - c1.bal} · EOA ETH -${eth0 - eth1} · S_user signMessage=${signs} · handleOps gasUsed=${rc.gasUsed} · ${c12Gas} · tx ${tx}`);
             if (c12 === undefined) fail('C12: executeGasless reported no gas decision');
             if (frozenGas && FIELDS.some((k) => c12.limits[k] !== frozenGas![k])) fail(`C12: frozenGas was not used verbatim (${c12Gas})`);
+            // What was mined must be what the SDK reported: the op's five limits, fees and paymaster, and the outer gas.
+            const mined = await onChainOp(tx, epNonce);
+            const off = FIELDS.filter((k) => mined.limits[k] !== c12.limits[k]);
+            if (off.length) fail(`C12: mined limits differ from the reported decision (${off.map((k) => `${k} ${mined.limits[k]} vs ${c12.limits[k]}`).join('; ')})`);
+            if (mined.maxFeePerGas !== c12.fees.maxFeePerGas || mined.maxPriorityFeePerGas !== c12.fees.maxPriorityFeePerGas) fail('C12: mined fees differ from the reported decision');
+            if (mined.paymaster !== getAddress(sp)) fail(`C12: mined paymaster ${mined.paymaster} is not ${sp}`);
+            const outer = await pub.getTransaction({ hash: tx });
+            if (outer.gas !== c12.handleOps.gasLimit) fail(`C12: handleOps gas ${outer.gas} is not the reported ${c12.handleOps.gasLimit}`);
             if (rc.status !== 'success' || ev?.success !== true) fail('C12: the self-bundled op did not succeed');
             if (getAddress(rc.from) !== getAddress(base.address)) fail(`C12: handleOps was sent by ${rc.from}, not the user's EOA`);
             if (signs !== 1) fail(`C12: signMessage ${signs} times; one signature for the op`);
@@ -611,8 +704,9 @@ async function main() {
             lastSent = Date.now();
         }
     } finally {
-        // fail() exits the process; this covers the normal path and a thrown error.
+        // fail() exits the process (the exit hook stops a self-started bundler); this covers the normal path and a throw.
         untapBundler();
+        stopForkBundler();
     }
     console.log('\nPASS');
 }

@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { bytesToHex, keccak256 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 import { decryptKeystoreV3, liveKeySourceProblem, loadLiveSigner, promptHidden } from './sp550-live-signer.js';
 
 // Web3 Secret Storage Definition, the published PBKDF2-SHA-256 test vector (password "testpassword").
@@ -196,7 +196,7 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
             operator: '0x' + '11'.repeat(20), account: '0x' + '22'.repeat(20), userKey: { keystore: path.join(dir, 'absent.json') }, ...extra,
         }));
         try {
-            const out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg, '--live-go', 'sepolia', ...flags], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+            const out = execFileSync('pnpm', ['exec', 'tsx', 'scripts/sp550-live-e2e.ts', '--config', cfg, '--live-go', 'sepolia', '--live-signer', '0x' + '33'.repeat(20), ...flags], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
             return { status: 0, output: out };
         } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
     };
@@ -210,6 +210,11 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         const r = run({ gate: { deployLiveConfig: 'config.json' } }, []);
         expect(r.status).toBe(2);
         expect(r.output).toMatch(/refused: gate.deployLiveConfig is fork-only/);
+    }, 60_000);
+    it('a live run whose --live-signer differs from config.expectSigner is refused (Codex r2 H2)', () => {
+        const r = run({ expectSigner: '0x' + '44'.repeat(20) }, []);
+        expect(r.status).toBe(2);
+        expect(r.output).toMatch(/refused: mode live: --live-signer and config.expectSigner name different addresses/);
     }, 60_000);
     it('a live run without config.expectSigner, or gated at a historical block, is refused (Codex H4 / H3)', () => {
         expect(run({}, []).output).toMatch(/refused: mode live: config.expectSigner \(the author's signer address\) is required/);
@@ -229,7 +234,7 @@ describe('sp550-live-e2e.ts live mode refuses the fork-only switches (exit 2, be
         expect(r.output).toMatch(/refused: gate\.pinsFile is fork-only/);
     }, 60_000);
     it('the retired gate.bookOverrides is refused in any mode', () => {
-        const r = run({ mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'http://127.0.0.1:9', userKey: { anvilIndex: 3 }, gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, []);
+        const r = run({ mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 }, gate: { bookOverrides: { aPNTs: '0x' + '33'.repeat(20) } } }, []);
         expect(r.status).toBe(2);
         expect(r.output).toMatch(/refused: gate\.bookOverrides is gone/);
     }, 60_000);
@@ -253,7 +258,7 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
             return { status: 0, output: out };
         } catch (e: any) { return { status: e.status as number, output: String(e.stdout) + String(e.stderr) }; }
     };
-    const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'http://127.0.0.1:9', userKey: { anvilIndex: 3 } };
+    const fork = { mode: 'fork', rpcUrls: ['http://127.0.0.1:9'], bundlerUrl: 'self', userKey: { anvilIndex: 3 } };
     it('live mode without --live-go is refused', () => {
         const r = run({}, []);
         expect(r.status).toBe(2);
@@ -270,9 +275,12 @@ describe('sp550-live-e2e.ts usage refusals (exit 2 with the usage-stage message)
         expect(r.output).toMatch(/refused: mode fork: every RPC must be loopback \(a non-loopback anvil fork is accepted only with gate.deployLiveConfig\)/);
     }, 60_000);
     it('fork mode with a non-loopback bundler is refused', () => {
-        const r = run({ ...fork, bundlerUrl: 'https://bundler.invalid' }, []);
-        expect(r.status).toBe(2);
-        expect(r.output).toMatch(/refused: mode fork: the bundler must be loopback/);
+        // Any configured bundler, loopback or not, is refused: the fork run starts its own, bound to the fork (Codex r2 H1).
+        for (const bundlerUrl of ['https://bundler.invalid', 'http://127.0.0.1:4337']) {
+            const r = run({ ...fork, bundlerUrl }, []);
+            expect(r.status).toBe(2);
+            expect(r.output).toMatch(/refused: mode fork: bundlerUrl must be "self"/);
+        }
     }, 60_000);
     it('gate.deployLiveConfig and taskPlan + taskToken are refused where they do not belong (before any network read)', () => {
         expect(run({ ...fork, gate: { deployLiveConfig: 'c.json', pinsFile: 'p.json' } }, []).output).toMatch(/refused: gate.deployLiveConfig replaces gate.pinsFile/);
@@ -323,5 +331,8 @@ describe('public development keys are recognised (a live run refuses to sign wit
         expect(await isPublicTestAccount('0x70997970C51812dc3A010C7d01b50e0d17dc79C8')).toBe(true);  // index 1: the rehearsal owner
         expect(await isPublicTestAccount(privateKeyToAccount(bytesToHex(randomBytes(32))).address)).toBe(false);
         expect(await isPublicTestAccount('0x2435BfEfe5225Ce043f26449d6c3FE42248CF3aB')).toBe(true); // the repo keystore fixture
+        expect(await isPublicTestAccount(privateKeyToAccount(KEY).address)).toBe(true); // this file's throwaway KEY
+        expect(await isPublicTestAccount(SPEC_ADDRESS)).toBe(true); // the PBKDF2 test vector
+        expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 150 }).address)).toBe(true);
     });
 });
