@@ -27,9 +27,10 @@ All notable changes to this project will be documented in this file.
 - Version expectations come from SP's own `deployments/release-versions.rc8.json` (vendored byte-identical): a
   coexisting rc.8 stack's pinned `spVersion` and every listed contract's `version()` must match it.
 - rc.8 appended `by` to eight SuperPaymaster events (and a `reason` to OperatorPaused / OperatorUnpaused), so their
-  topic0 changed. The default `SuperPaymasterABI` keeps the eight 5.4.2 forms as overloads after the 5.5.0 union, so
-  `decodeEventLog` / `parseEventLogs` decode both generations; **a filter by `eventName` selects the rc.8 form** — to
-  filter 5.4.2 logs of those eight, use `SuperPaymasterV542ABI`. `SuperPaymasterV550ABI` stays the pure union.
+  topic0 changed. The default `SuperPaymasterABI` lists the eight 5.4.2 forms first, then the 5.5.0 union: a filter or
+  topic built by `eventName` stays the 5.4.2 one for those eight (unchanged for 5.4.2 users), and `decodeEventLog` /
+  `parseEventLogs` decode both generations. **To filter rc.8 logs of those eight, use `SuperPaymasterV550ABI`** (the
+  pure union).
 - Analytics accepts the release table's SuperPaymaster version (rc.8: `SuperPaymaster-5.5.3`) for its price reads.
 - Proof for what was not replaced: every entry the read-back gate and the live cells use outside the seven files is
   compared with the rc.8 compiled artifacts (`scripts/coexist-stack-abi-pin.ts`,

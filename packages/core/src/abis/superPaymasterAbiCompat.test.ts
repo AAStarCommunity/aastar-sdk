@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeEventLog, encodeAbiParameters, encodeEventTopics } from 'viem';
+import { createPublicClient, custom, decodeEventLog, encodeAbiParameters, encodeEventTopics } from 'viem';
 import { SuperPaymasterABI, SuperPaymasterV542ABI, SuperPaymasterV550ABI } from './index.js';
 
 // The default ABI switched to 5.5.0 (SP 5.5.0 cutover). That is only safe for callers that still
@@ -23,11 +23,31 @@ const outs = (e: any) => `(${(e.outputs ?? []).map(render).join(',')})`;
 const entries = (abi: readonly any[], kinds: string[]) => abi.filter((e) => kinds.includes(e.type));
 
 describe('SuperPaymaster default ABI = 5.5.0, compatible with 5.4.2', () => {
-    it('the default export is the 5.5.0 union, then exactly the eight changed 5.4.2 event forms', () => {
-        expect(SuperPaymasterABI.slice(0, SuperPaymasterV550ABI.length)).toEqual(SuperPaymasterV550ABI);
-        const extra = SuperPaymasterABI.slice(SuperPaymasterV550ABI.length);
+    it('the default export is exactly the eight changed 5.4.2 event forms, then the 5.5.0 union', () => {
+        const n = SuperPaymasterABI.length - SuperPaymasterV550ABI.length;
+        expect(SuperPaymasterABI.slice(n)).toEqual(SuperPaymasterV550ABI);
+        const extra = SuperPaymasterABI.slice(0, n);
         expect(extra.map((e: any) => e.name).sort()).toEqual(Object.keys(EXTENDED_IN_RC8).sort());
         for (const e of extra) expect(SuperPaymasterV542ABI).toContainEqual(e);
+    });
+
+    it('a filter by eventName on the default ABI keeps the 5.4.2 topic for all eight (5.4.2 users unchanged); V550 gives rc.8', () => {
+        for (const name of Object.keys(EXTENDED_IN_RC8)) {
+            const def = encodeEventTopics({ abi: SuperPaymasterABI, eventName: name } as any)[0];
+            expect(def, name).toBe(encodeEventTopics({ abi: SuperPaymasterV542ABI, eventName: name } as any)[0]);
+            expect(encodeEventTopics({ abi: SuperPaymasterV550ABI, eventName: name } as any)[0], name).not.toBe(def);
+        }
+    });
+
+    it('getContractEvents with the default ABI asks eth_getLogs for the 5.4.2 topic', async () => {
+        const seen: any[] = [];
+        const client = createPublicClient({ transport: custom({ async request({ method, params }: any) {
+            if (method === 'eth_getLogs') { seen.push(params[0]); return []; }
+            if (method === 'eth_blockNumber') return '0x10';
+            throw new Error(method);
+        } }) });
+        await client.getContractEvents({ address: ('0x' + '11'.repeat(20)) as `0x${string}`, abi: SuperPaymasterABI as any, eventName: 'OperatorPaused', fromBlock: 1n, toBlock: 2n } as any);
+        expect(seen[0].topics[0]).toBe(encodeEventTopics({ abi: SuperPaymasterV542ABI, eventName: 'OperatorPaused' } as any)[0]);
     });
 
     it('decodeEventLog with the default ABI decodes a 5.4.2 log and an rc.8 log of the same event', () => {

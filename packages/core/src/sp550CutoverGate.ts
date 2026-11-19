@@ -91,7 +91,7 @@ export const SP550_WIRING_SCAN_ABI: Record<string, unknown> = {
  * scripts/coexist-stack-abi-pin.ts found the gap): the scan and the reads of that stack use these instead.
  */
 export const SP550_COEXIST_SCAN_ABI: Record<Sp550CoexistNetwork, Record<string, unknown>> = {
-    // null: not a contract of this release (rc.8 deploys no BLSValidator, SP DeployLive.s.sol:39), so it must be unpinned or zero.
+    // null: not a contract of this release (rc.8 deploys no BLSValidator, SP DeployLive.s.sol:39): a pin naming it fails.
     'sepolia-rc8': { registryImpl: RegistryRc8ABI, 'addresses.registry': RegistryRc8ABI, 'addresses.gToken': GTokenAuthorizationRc8ABI, 'addresses.blsValidator': null },
 };
 /** The ABI the gate reads each pinned entry with on a network: the coexist set first, then the SDK-wide file. */
@@ -345,7 +345,7 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
             if (typeof address !== 'string') continue;
             const abi = scanAbi[entry];
             if (abi === null) {
-                record(`${entry} is not a contract of this release`, /^0x0{40}$/i.test(address), `pinned ${address}; this release deploys none, so the entry must be zero or absent`);
+                record(`${entry} is not a contract of this release`, false, `pinned ${address}; this release deploys none: omit it from addresses and list it in absent`);
                 continue;
             }
             if (!abi) {
