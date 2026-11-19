@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - Preconditions are checked, never performed: ENDUSER role, SBT, xPNTs and task-token (T) balances, renewalMode,
   `operators(operator).minTxInterval == expectMinTxInterval` (required; the paper cells use 60), ETH on the user's EOA
   (C12 sends its own handleOps), and the account the SDK derives == `config.account`. A live run refuses a public
-  anvil / hardhat test key as its signer.
+  anvil / hardhat test key as its signer (a second line; the approved table is the guarantee).
 - Every row records the gas decision (five limits with their source, coefficients, fees and their source), the
   actualGasUsed and the efficiency actual / sum of limits (the bundler 0.4 check); a bundler rejection is recorded with
   its reason and the gas decision. `frozenGas` (all five, for a data collection) is asserted to be used verbatim.
@@ -19,10 +19,16 @@ All notable changes to this project will be documented in this file.
   one signature (the SDK neither waits nor retries). C12: `createEndUserClient().executeGasless`, self-bundled handleOps
   from the user's EOA; asserted success, sender = the EOA, one signature, xPNTs charged.
 - C12's `executeGasless` gas policy: see the `executeGasless` entry below (#467).
+- Daybreak #468: a live signer must be in the committed approved table (`scripts/sp550-live-approved-signers.ts`, by
+  chain id); C12's handleOps transaction is checked field by field before the key signs it (`c12Caps` required);
+  `SP.gasParams()` is in the signing snapshot, held to the required `expectGasParams` release tuple (replaces
+  `expectMinPostOpGas`) and re-read in each inclusion block; no configured URL reaches the output; the fork source
+  sits behind a loopback forwarder (no child argv / env carries it); S1r names any signed op before it can stop.
 - Fork mode for the joint rehearsal: `gate.deployLiveConfig` (fork only) holds a DeployLive config's addresses to fork
   checks (anvil client on the network's chain id, code at every address, SuperPaymaster's wiring) instead of the
   read-back gate, and `taskPlan` (SP's three-arm plan, pinned by sha256) supplies T and must match the run's chain,
   SuperPaymaster and call bytes.
+
 ### `executeGasless` (self-bundled) takes its gas from an estimate or the caller, never constants; PaymasterClient strict options
 
 - `createEndUserClient().executeGasless` has no gas literals left (it signed VGL / callGas 100k, 2 gwei fees, PVG 50k,
