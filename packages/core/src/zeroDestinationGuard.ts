@@ -14,9 +14,19 @@ import { parseTransaction, type Client } from 'viem';
 
 const ZERO = /^0x0{40}$/i;
 
+/** Why a request was refused: the reason decides the wording (only 'zero' is about a missing contract). */
+export type ZeroDestinationReason = 'zero' | 'no-destination' | 'not-plain' | 'conflicting-to' | 'unreadable-raw';
+const REASON: Record<ZeroDestinationReason, string> = {
+    'zero': 'to the zero address: the selected deployment does not include that contract',
+    'no-destination': 'with no destination (a missing address-book entry would make it a contract creation)',
+    'not-plain': 'with a request that is not a plain object (its copy would not be what viem reads)',
+    'conflicting-to': 'with a `to` field the destination is not taken from',
+    'unreadable-raw': "with a serialized transaction viem's generic parser does not read (e.g. a ZKsync 0x71 transaction)",
+};
+
 export class ZeroAddressDestinationError extends Error {
-    constructor(readonly method: string, readonly functionName?: string) {
-        super(`refusing ${method}${functionName ? ` ${functionName}` : ''} to the zero address: the selected deployment does not include that contract; nothing was signed or sent`);
+    constructor(readonly method: string, readonly functionName?: string, readonly reason: ZeroDestinationReason = 'zero') {
+        super(`refusing ${method}${functionName ? ` ${functionName}` : ''} ${REASON[reason]}; nothing was signed or sent`);
         this.name = 'ZeroAddressDestinationError';
     }
 }
@@ -40,15 +50,21 @@ export function zeroDestinationGuard(client: Client) {
     // One copy of the caller's request, checked and passed on. Only a PLAIN object is accepted (prototype
     // Object.prototype or null): a copy of a class instance or an Object.create(...) request would drop the inherited
     // fields viem reads (e.g. a `to` getter), turning a call into a contract creation (clestons #466 B1).
-    const plain = (o: unknown) => { const p = Object.getPrototypeOf(o); return p === Object.prototype || p === null; };
+    // Plain = prototype Object.prototype or null AND every own key enumerable (string or symbol): a spread copies exactly
+    // the own enumerable keys, so only then is the copy all that viem can read (clestons #466 B2: a non-enumerable `to`).
+    const plain = (o: object) => {
+        const p = Object.getPrototypeOf(o);
+        return (p === Object.prototype || p === null) && Reflect.ownKeys(o).every((k) => Object.prototype.propertyIsEnumerable.call(o, k));
+    };
     const snap = (method: string) => (args: any): any => {
         if (args === undefined || args === null || typeof args !== 'object') return args;
-        if (!plain(args)) throw new ZeroAddressDestinationError(method, 'pass a plain object request (not a class instance or Object.create)');
+        if (!plain(args)) throw new ZeroAddressDestinationError(method, 'pass a plain object (no class instance, Object.create or non-enumerable fields)', 'not-plain');
         const copy = { ...args };
-        if (Array.isArray(copy.calls)) {
-            copy.calls = copy.calls.map((c: any, i: number) => {
-                if (c && typeof c === 'object' && !plain(c)) throw new ZeroAddressDestinationError(method, `call ${i}: pass a plain object`);
-                return c && typeof c === 'object' ? { ...c } : c;
+        if (copy.calls !== undefined) {
+            if (!Array.isArray(copy.calls)) throw new ZeroAddressDestinationError(method, 'calls must be an array', 'not-plain');
+            copy.calls = Array.from(copy.calls, (c: any, i: number) => {
+                if (!c || typeof c !== 'object' || !plain(c)) throw new ZeroAddressDestinationError(method, `call ${i}: pass a plain object`, 'not-plain');
+                return { ...c };
             });
         }
         return copy;
@@ -58,16 +74,16 @@ export function zeroDestinationGuard(client: Client) {
     const byAddress = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
-        if (args?.to !== undefined) return Promise.reject(new ZeroAddressDestinationError(method, `${args.functionName ?? 'call'}: a contract call takes its destination from address, not to`));
+        if (args?.to !== undefined) return Promise.reject(new ZeroAddressDestinationError(method, `${args.functionName ?? 'call'}: a contract call takes its destination from address`, 'conflicting-to'));
         // A missing address (a book key absent) would make viem send a contract creation: refused like zero.
-        if (typeof args?.address !== 'string') return Promise.reject(new ZeroAddressDestinationError(method, `${args?.functionName ?? 'call'}: no address`));
+        if (typeof args?.address !== 'string') return Promise.reject(new ZeroAddressDestinationError(method, args?.functionName, 'no-destination'));
         return isZeroAddress(args.address) ? Promise.reject(new ZeroAddressDestinationError(method, args?.functionName)) : run(client, args);
     };
     // A deployment has no destination; viem spreads extra fields into a direct sendTransaction, so any `to` is refused.
     const noTo = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
-        return args?.to !== undefined ? Promise.reject(new ZeroAddressDestinationError(method, 'a deployment carries no to')) : run(client, args);
+        return args?.to !== undefined ? Promise.reject(new ZeroAddressDestinationError(method, 'a deployment carries no to', 'conflicting-to')) : run(client, args);
     };
     const byTo = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
@@ -77,7 +93,11 @@ export function zeroDestinationGuard(client: Client) {
     const byCalls = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
-        const i = (args?.calls ?? []).findIndex((c: any) => isZeroAddress(c?.to));
+        const calls: any[] = args?.calls ?? [];
+        // A call without a destination would be a contract creation (viem's Call type requires `to`): refused, like a missing address.
+        const noTo = calls.findIndex((c) => typeof c?.to !== 'string');
+        if (noTo >= 0) return Promise.reject(new ZeroAddressDestinationError(method, `call ${noTo}`, 'no-destination'));
+        const i = calls.findIndex((c) => isZeroAddress(c?.to));
         return i >= 0 ? Promise.reject(new ZeroAddressDestinationError(method, `call ${i}`)) : run(client, args);
     };
     // Bytes signed elsewhere: decoded, and refused when they would call the zero address.
@@ -86,7 +106,7 @@ export function zeroDestinationGuard(client: Client) {
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
         let to: unknown;
         try { to = parseTransaction(args?.serializedTransaction).to; }
-        catch { return Promise.reject(new ZeroAddressDestinationError(method, 'serialized transaction viem\'s generic parser does not read (e.g. a ZKsync 0x71 transaction): not sent')); }
+        catch { return Promise.reject(new ZeroAddressDestinationError(method, undefined, 'unreadable-raw')); }
         return isZeroAddress(to) ? Promise.reject(new ZeroAddressDestinationError(method)) : run(client, args);
     };
     return {

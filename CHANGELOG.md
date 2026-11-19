@@ -13,10 +13,12 @@ All notable changes to this project will be documented in this file.
   `prepareTransactionRequest` and `fillTransaction` to the zero address before signing (clestons on #465). A contract
   write carrying a `to` field is refused (viem would send to it instead of the checked `address`), and so is a
   `deployContract` carrying one (viem spreads it into a direct send). `sendRawTransaction(Sync)` decodes the bytes and refuses a zero
-  destination. Requests must be plain objects (a class instance or `Object.create(...)` request is
-  refused: copying it would drop inherited fields viem reads and turn a call into a contract creation); for a plain
-  object the one copy that is checked is the one passed on. A contract write without an address (a missing book key)
-  is refused. Raw transactions viem's generic parser cannot read (e.g. ZKsync 0x71) are refused, not sent. Trusted, not guarded: the client's chain configuration (a custom
+  destination. Requests must be plain objects — prototype `Object.prototype` or `null` and every own field enumerable (a class
+  instance, an `Object.create(...)` request or a non-enumerable field is refused: copying it would drop fields viem
+  reads and turn a call into a contract creation; an object from another realm, e.g. `node:vm`, is refused too); for a plain
+  object the one copy that is checked is the one passed on. A contract write without a string address (a missing book key)
+  and a batch call without a `to` are refused. Each refusal names its reason; only a zero destination is worded as a
+  contract the deployment does not include. Raw transactions viem's generic parser cannot read (e.g. ZKsync 0x71) are refused, not sent. Trusted, not guarded: the client's chain configuration (a custom
   `chain.prepareTransactionRequest` can rewrite a request), and `signAuthorization` (EIP-7702; zero means revoke).
 - Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
   with the table) and a non-empty, frozen `SP550_WIRING_EXPECTED`; `--write=<value>` is refused before anything is read.

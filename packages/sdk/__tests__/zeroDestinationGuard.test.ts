@@ -272,3 +272,49 @@ describe('clestons #466: only plain-object requests; a missing address is refuse
         expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
     });
 });
+
+describe('clestons #466 B2 and follow-ups: non-enumerable fields, calls without to, reason-specific wording', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+    const hidden = (o: Record<string, unknown>, k: string, v: unknown) => Object.defineProperty(o, k, { value: v, enumerable: false });
+
+    it.each([['zero', zeroAddress], ['non-zero', NONZERO]] as const)('a non-enumerable `to` (%s) at the top or in calls[0]: refused as not-plain, nothing signed or sent', async (_l, dest) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const e1 = named(await client.sendTransaction(hidden({ account, chain: sepolia, value: 7n }, 'to', dest)).catch((e: unknown) => e));
+        expect(e1?.reason).toBe('not-plain');
+        const e2 = named(await client.sendCalls({ account, chain: sepolia, calls: [hidden({ value: 7n }, 'to', dest)] }).catch((e: unknown) => e));
+        expect(e2?.reason).toBe('not-plain');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a contract write whose address is null or a number is refused (no-destination), not only undefined', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const address of [null, 0, undefined]) {
+            expect(named(await client.writeContract({ address, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, String(address)).toBe('no-destination');
+        }
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a batch call without `to` (would be a creation) and a non-array calls are refused', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ value: 7n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('no-destination');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: { 0: { to: NONZERO }, length: 1 } }).catch((e: unknown) => e))?.reason).toBe('not-plain');
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('only a zero destination is worded as a missing contract', () => {
+        expect(new ZeroAddressDestinationError('sendTransaction').message).toMatch(/zero address: the selected deployment does not include that contract/);
+        for (const r of ['no-destination', 'not-plain', 'conflicting-to', 'unreadable-raw'] as const) {
+            expect(new ZeroAddressDestinationError('sendTransaction', undefined, r).message).not.toMatch(/zero address/);
+        }
+    });
+});
