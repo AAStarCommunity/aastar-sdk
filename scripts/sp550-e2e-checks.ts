@@ -330,3 +330,111 @@ export const childEnv = (env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
     const { SP550_FORK_URL: _drop, ...rest } = env;
     return rest;
 };
+
+/**
+ * SP's frozen three-arm plan, the block the SDK runner reads (`shared.sdkLive`, SP #654 round 3; field names as
+ * proposed by SP 2026-11-19). The per-op cost cap and Xmax_sdk come only from these bytes (pinned by sha256), never
+ * from a separate config field.
+ */
+export type SdkLivePlan = {
+    maxCostPerOpWei: bigint; priceCap: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint;
+    validationBufferBPS: bigint; exchangeRate: bigint; a0: bigint; Amax: bigint; Xmax: bigint; status: string;
+    /** From plans[*]: the one genesis operator and X token every plan names. */
+    operator?: Address; X?: Address;
+    /** This run's account's entry in shared.extraEndUsers. */
+    xAmount?: bigint;
+    /** The SDK commit the planner was told the cost cap merged at (recorded next to status "cleared"). */
+    sdkCostCapCommit?: string;
+};
+/** The only status that lets a live run start (SP 2026-11-19); every other value, "provisional…" included, refuses. */
+export const SDK_LIVE_CLEARED = 'cleared';
+const SDK_LIVE_UINTS = ['maxCostPerOpWei', 'priceCap', 'priceDecimals', 'aPNTsPriceUSD', 'protocolFeeBPS', 'validationBufferBPS', 'exchangeRate', 'a0', 'Amax', 'Xmax'] as const;
+/** The pricing fields each plans[<S>].phaseC must repeat with the same value (SP asserts it; the runner checks it). */
+const PHASE_C_PRICING = ['priceCap', 'priceDecimals', 'aPNTsPriceUSD', 'protocolFeeBPS', 'exchangeRate'] as const;
+
+/**
+ * Why SP's plan cannot bound this run: shared.sdkLive is required and complete, its cost cap equals the run's
+ * opMaxCostWei, its buffer is SP's VALIDATION_BUFFER_BPS, its a0 / Amax / Xmax are what the formula gives on its own
+ * fields (superPaymasterLock), and this account's phaseC repeats the same pricing. Returns the parsed plan when clean.
+ */
+export function sdkLivePlanProblems(bundle: any, w: { opMaxCostWei: bigint; account: Address; lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }; validationBufferBPS: bigint }): { problems: string[]; plan?: SdkLivePlan } {
+    const p: string[] = [];
+    const sl = bundle?.shared?.sdkLive;
+    if (!sl || typeof sl !== 'object') return { problems: ['taskPlan: shared.sdkLive is missing (the cost cap and Xmax_sdk come only from SP\'s frozen plan)'] };
+    const out: any = {};
+    for (const k of SDK_LIVE_UINTS) {
+        const v = sl[k];
+        if (!((typeof v === 'string' && /^(0|[1-9][0-9]*)$/.test(v)) || (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0))) { p.push(`taskPlan: shared.sdkLive.${k} is not a non-negative integer (got ${JSON.stringify(v)})`); continue; }
+        out[k] = BigInt(v);
+    }
+    out.status = typeof sl.status === 'string' ? sl.status : '';
+    if (p.length) return { problems: p };
+    if (out.maxCostPerOpWei !== w.opMaxCostWei) p.push(`config.opMaxCostWei ${w.opMaxCostWei} != plan shared.sdkLive.maxCostPerOpWei ${out.maxCostPerOpWei} (one value, set once in SP's plan)`);
+    if (out.validationBufferBPS !== w.validationBufferBPS) p.push(`plan validationBufferBPS ${out.validationBufferBPS} != SuperPaymaster's VALIDATION_BUFFER_BPS ${w.validationBufferBPS}`);
+    if (out.priceCap <= 0n || out.aPNTsPriceUSD <= 0n) p.push('plan priceCap / aPNTsPriceUSD must be positive');
+    else {
+        const r = w.lock({ maxCost: out.maxCostPerOpWei, ethUsdPrice: out.priceCap, priceDecimals: out.priceDecimals, aPNTsPriceUSD: out.aPNTsPriceUSD, protocolFeeBPS: out.protocolFeeBPS, exchangeRate: out.exchangeRate, validationBufferBPS: out.validationBufferBPS });
+        if (r.a0 !== out.a0 || r.Amax !== out.Amax || r.X !== out.Xmax) p.push(`plan a0/Amax/Xmax ${out.a0}/${out.Amax}/${out.Xmax} are not the formula on its own fields (${r.a0}/${r.Amax}/${r.X})`);
+    }
+    // plans is keyed by SP's three-arm accounts S (not this run's account): every plan repeats sdkLive's pricing, and
+    // all name one operator and one X token; this run's account must be one of shared.extraEndUsers (SP 2026-11-19).
+    const plans = Object.values(bundle?.plans ?? {}) as any[];
+    if (!plans.length) p.push('taskPlan: plans is empty');
+    for (const [s, pl] of Object.entries(bundle?.plans ?? {}) as [string, any][]) {
+        for (const k of PHASE_C_PRICING) if (String(pl?.phaseC?.[k]) !== String(out[k])) p.push(`plans[${s}].phaseC.${k} ${pl?.phaseC?.[k]} != shared.sdkLive.${k} ${out[k]}`);
+    }
+    const one = (vals: unknown[], what: string): string | undefined => {
+        const set = new Set(vals.map((v) => (typeof v === 'string' && isAddressLike(v) ? getAddress(v) : `(bad ${JSON.stringify(v)})`)));
+        if (set.size !== 1 || [...set][0].startsWith('(bad')) { p.push(`taskPlan: plans do not name one ${what} (${[...set].join(', ')})`); return undefined; }
+        return [...set][0];
+    };
+    out.operator = plans.length ? one(plans.map((pl) => pl?.deploymentContext?.operator), 'operator') : undefined;
+    out.X = plans.length ? one(plans.map((pl) => pl?.phaseC?.addresses?.X), 'X token') : undefined;
+    const users = Array.isArray(bundle?.shared?.extraEndUsers) ? bundle.shared.extraEndUsers : [];
+    const me = users.find((u: any) => typeof u?.address === 'string' && isAddressLike(u.address) && getAddress(u.address) === getAddress(w.account));
+    if (!me) p.push(`taskPlan: this run's account ${w.account} is not in shared.extraEndUsers`);
+    out.xAmount = me && /^(0|[1-9][0-9]*)$/.test(String(me.xAmount)) ? BigInt(me.xAmount) : undefined;
+    if (me && out.xAmount === undefined) p.push(`taskPlan: shared.extraEndUsers[${w.account}].xAmount is not an integer`);
+    out.sdkCostCapCommit = typeof sl.sdkCostCapCommit === 'string' ? sl.sdkCostCapCommit : undefined;
+    return p.length ? { problems: p } : { problems: [], plan: out as SdkLivePlan };
+}
+const isAddressLike = (s: string) => /^0x[0-9a-fA-F]{40}$/.test(s);
+
+/** SP and token state read at signing time (latest block). */
+export type SignTimePricing = { ethUsdPrice: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint; exchangeRate: bigint };
+
+/**
+ * Why this op may not be signed under the plan (DSR): the chain's pricing must be within what the plan assumed
+ * (cached ETH/USD at most priceCap with the same decimals; aPNTsPriceUSD, protocolFeeBPS and exchangeRate equal to the
+ * plan's), and the X this op would lock at today's price must be at most the plan's Xmax_sdk.
+ */
+export function signTimeCostProblems(maxCostWei: bigint, now: SignTimePricing, plan: SdkLivePlan, lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }): string[] {
+    const p: string[] = [];
+    if (now.priceDecimals !== plan.priceDecimals) p.push(`SP cachedPrice decimals ${now.priceDecimals} != plan priceDecimals ${plan.priceDecimals}`);
+    if (now.ethUsdPrice > plan.priceCap) p.push(`SP cachedPrice ${now.ethUsdPrice} is above the plan's priceCap ${plan.priceCap}`);
+    if (now.aPNTsPriceUSD !== plan.aPNTsPriceUSD) p.push(`SP aPNTsPriceUSD ${now.aPNTsPriceUSD} != plan ${plan.aPNTsPriceUSD}`);
+    if (now.protocolFeeBPS !== plan.protocolFeeBPS) p.push(`SP protocolFeeBPS ${now.protocolFeeBPS} != plan ${plan.protocolFeeBPS}`);
+    if (now.exchangeRate !== plan.exchangeRate) p.push(`token exchangeRate ${now.exchangeRate} != plan ${plan.exchangeRate}`);
+    if (maxCostWei > plan.maxCostPerOpWei) p.push(`op maxCost ${maxCostWei} > plan maxCostPerOpWei ${plan.maxCostPerOpWei}`);
+    if (p.length) return p;
+    const r = lock({ maxCost: maxCostWei, ethUsdPrice: now.ethUsdPrice, priceDecimals: now.priceDecimals, aPNTsPriceUSD: now.aPNTsPriceUSD, protocolFeeBPS: now.protocolFeeBPS, exchangeRate: now.exchangeRate, validationBufferBPS: plan.validationBufferBPS });
+    if (r.X > plan.Xmax) p.push(`this op would lock ${r.X} X at today's price, above the plan's Xmax_sdk ${plan.Xmax}`);
+    return p;
+}
+
+/**
+ * Fail closed (DSR): the signer signs a UserOp hash only if the cost check approved exactly that hash, once. A path
+ * that skips the check (a missing option, a refactor) is refused at the key instead of silently unchecked.
+ */
+export class CostApprovals {
+    private readonly ok = new Set<string>();
+    approve(userOpHash: Hex) { this.ok.add(userOpHash.toLowerCase()); }
+    /** True once for an approved hash; false otherwise (never approved, or already used). */
+    take(userOpHash: Hex | undefined): boolean { const k = String(userOpHash ?? '').toLowerCase(); return this.ok.delete(k); }
+}
+
+/** The signer's first step (fail closed): throws unless the cost check approved exactly this UserOp hash, once. */
+export function assertCostApproved(approvals: CostApprovals, signMessageArg: any): void {
+    const raw = typeof signMessageArg?.message === 'object' && typeof signMessageArg.message?.raw === 'string' ? signMessageArg.message.raw as Hex : undefined;
+    if (!approvals.take(raw)) throw new Error('no cost check approved this UserOp hash (maxUserOpCostWei + the plan check run before every signature); refused');
+}

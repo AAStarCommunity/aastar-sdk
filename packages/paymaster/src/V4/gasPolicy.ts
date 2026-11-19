@@ -151,3 +151,51 @@ export async function resolveUserOpFees(
     if (maxFeePerGas < maxPriorityFeePerGas) throw new Error('maxFeePerGas is below maxPriorityFeePerGas');
     return { maxFeePerGas, maxPriorityFeePerGas, source, baseFeePerGas: baseFee };
 }
+
+/**
+ * The most a UserOperation can cost, in wei: all five gas terms × maxFeePerGas,
+ * (preVerificationGas + verificationGasLimit + callGasLimit + paymasterVerificationGasLimit + paymasterPostOpGasLimit)
+ * × maxFeePerGas — EntryPoint v0.7's requiredPrefund, and the maxCost SuperPaymaster locks against.
+ */
+export function userOpCostCeilingWei(limits: UserOpGasLimits, maxFeePerGas: bigint): bigint {
+    return (limits.preVerificationGas + limits.verificationGasLimit + limits.callGasLimit
+        + limits.paymasterVerificationGasLimit + limits.paymasterPostOpGasLimit) * maxFeePerGas;
+}
+
+/** The UserOperation exactly as it is about to be signed (every signature, retries included). */
+export interface UserOpSignView {
+    userOpHash: `0x${string}`;
+    sender: `0x${string}`;
+    nonce: bigint;
+    limits: UserOpGasLimits;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+    /** userOpCostCeilingWei(limits, maxFeePerGas). */
+    maxCostWei: bigint;
+    paymasterAndData: `0x${string}`;
+}
+
+/** The cost ceiling on what the SDK signs: refused before any signature, nothing signed or sent. */
+export class UserOpCostCapError extends Error {
+    constructor(readonly maxCostWei: bigint, readonly capWei: bigint) {
+        super(`refusing to sign: the UserOperation can cost up to ${maxCostWei} wei (all five gas terms × maxFeePerGas), above maxUserOpCostWei ${capWei}; nothing was signed or sent`);
+        this.name = 'UserOpCostCapError';
+    }
+}
+
+/** What a signing path may be given: a hard ceiling (default off) and a hook that sees the op and can refuse it. */
+export interface UserOpSignGuardOptions {
+    /** Refuse, before signing, an op whose userOpCostCeilingWei exceeds this. Default off (no ceiling). */
+    maxUserOpCostWei?: bigint;
+    /** Called with the exact op before EVERY signature (retries included); throwing refuses it, nothing is signed. */
+    beforeSignUserOp?: (op: UserOpSignView) => void | Promise<void>;
+}
+
+/** Runs the ceiling, then the hook; returns only when the op may be signed. */
+export async function guardUserOpSignature(op: UserOpSignView, o: UserOpSignGuardOptions | undefined): Promise<void> {
+    if (o?.maxUserOpCostWei !== undefined) {
+        if (typeof o.maxUserOpCostWei !== 'bigint' || o.maxUserOpCostWei <= 0n) throw new Error(`maxUserOpCostWei must be a positive bigint (got ${String(o.maxUserOpCostWei)}); nothing was signed`);
+        if (op.maxCostWei > o.maxUserOpCostWei) throw new UserOpCostCapError(op.maxCostWei, o.maxUserOpCostWei);
+    }
+    if (o?.beforeSignUserOp) await o.beforeSignUserOp(op);
+}

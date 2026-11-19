@@ -167,10 +167,12 @@ ACCOUNT=$(cast call "$FACTORY" 'getAddress(address,uint256)(address)' "$OWNER3" 
 GP_MIN="${SP550_A7_MIN_POST_OP_GAS:-500000}"; GP_SETTLE="${SP550_A7_SETTLE_GAS_BOUND:-450000}"
 GP_CWRAP="${SP550_A7_C_WRAP:-5000}"; GP_CPOSTOP="${SP550_A7_C_POSTOP:-450000}"
 # switchBook: the E2E gate derives the book from the pins with pin-fill's bookSwitch, as stage 2a did.
-jq -n --arg mpg "$GP_MIN" --arg gps "$GP_SETTLE" --arg gpw "$GP_CWRAP" --arg gpp "$GP_CPOSTOP" --arg mti "${MIN_TX_INTERVAL:-60}" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" '{
+# The per-UserOp cost ceiling (wei) every signed op is held to (fork rehearsal; a live run takes it from SP's plan).
+OP_MAX_COST_WEI="${SP550_A7_OP_MAX_COST_WEI:-100000000000000000}"
+jq -n --arg omc "$OP_MAX_COST_WEI" --arg mpg "$GP_MIN" --arg gps "$GP_SETTLE" --arg gpw "$GP_CWRAP" --arg gpp "$GP_CPOSTOP" --arg mti "${MIN_TX_INTERVAL:-60}" --arg rpc $RPC --arg bundler $BUNDLER --arg pins "$PINS" --arg op "$OPERATOR" --arg acc "$ACCOUNT" --arg fac "$FACTORY" '{
     network: "sepolia", mode: "fork", rpcUrls: [$rpc], bundlerUrl: "self",
     gate: { pinsFile: $pins, block: "latest", allowRc: true, switchBook: true },
-    operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8, c12Caps: { maxGas: "3000000", maxFeePerGasWei: "100000000000" },
+    operator: $op, account: $acc, userKey: { anvilIndex: 3 }, maxOps: 8, c12Caps: { maxGas: "3000000", maxFeePerGasWei: "100000000000" }, opMaxCostWei: $omc,
     forkSetup: { simpleAccountFactory: $fac, salt: 0 }, requireFreshAccount: true, expectGasParams: { minPostOpGas: $mpg, settleGasBound: $gps, cWrap: $gpw, cPostop: $gpp }, expectMinTxInterval: $mti }' > "$OUT/e2e.json"
 set +e
 (cd "$SDK" && pnpm exec tsx scripts/sp550-live-e2e.ts --config "$OUT/e2e.json" --fork-setup) 2>&1 | tee "$OUT/e2e.log"

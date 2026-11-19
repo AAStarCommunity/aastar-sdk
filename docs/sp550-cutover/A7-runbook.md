@@ -146,6 +146,8 @@ pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 
   "expectSigner": "<作者签名地址，须在 scripts/sp550-live-approved-signers.ts 里>",
   "maxOps": 8,
   "c12Caps": { "maxGas": "1500000", "maxFeePerGasWei": "5000000000" },
+  "opMaxCostWei": "<= SP 计划 shared.sdkLive.maxCostPerOpWei，必须相等>",
+  "taskPlan": { "file": "<rq3-three-arm.<chainId>.json>", "sha256": "<SP 给的 sha256>" },
   "expectGasParams": { "minPostOpGas": "500000", "settleGasBound": "450000", "cWrap": "5000", "cPostop": "450000" },
   "expectMinTxInterval": "60"
 }
@@ -158,6 +160,8 @@ pnpm exec tsx scripts/sp550-pin-fill.ts --network sepolia --manifest <冻结的 
 **分叉演练的网络（FU-127）。** 分叉模式下 Alto 监听所有网卡（0.0.0.0，没有选项改），带着公开执行者密钥、debug 端点开着：不要在不受信任的网络上跑分叉演练，或先用系统防火墙挡掉入站连接。
 
 **S1r 没有以“被拒”结束时（§S1r，Daybreak M4）。** S1r 签名后，E2E 会先打印一行 `S1r SIGNED OP: opHash … sender … nonce … validAfter …`，同样的字段也写进该行 RESULT。如果这一格不是以“rejected not yet valid at send”结束（例如 ACCEPTED、OUTCOME UNKNOWN、或运行中途退出），这笔签过的 op 在 validAfter 之后仍可能被某个 bundler 执行。**下一步只做一件事**：用同一个 nonce 发一笔正常 op（S1 那样的一笔赞助），让它把那个 nonce 用掉；在 EntryPoint 的 `getNonce(account, 0)` 超过打印的 nonce 之前，不继续后续场景、不重跑。
+
+**每笔 UserOp 的成本上限（DSR）。** `opMaxCostWei` 必填：E2E 签任何一笔 UserOp 之前（含重试的重签、C12 的 UserOp），先按 (preVerificationGas + verificationGasLimit + callGasLimit + paymasterVerificationGasLimit + paymasterPostOpGasLimit) × maxFeePerGas 算这笔最多花多少，超过就不签。live 模式还要求 `taskPlan`（SP 的冻结计划，按 sha256 钉住）：`opMaxCostWei` 必须等于计划里的 `shared.sdkLive.maxCostPerOpWei`；签名前按当时链上的 cachedPrice（不得高于计划的 priceCap）、aPNTsPriceUSD、protocolFeeBPS、汇率（这三项必须等于计划）算这笔要锁的 X，超过计划的 Xmax_sdk 就不签。计划的 `shared.sdkLive.status` 必须恰好是 `"cleared"`（其它任何值，含 provisional，live 都拒绝），并且本次 checkout 必须包含计划记下的 `sdkCostCapCommit`（cost cap 合并的那个 SDK 提交）。计划里的 operator 与 X 必须就是这次运行的；本账户必须在 `shared.extraEndUsers` 里。签名器只签经过这道检查批准过的 userOpHash，所以漏装检查的路径会在钥匙这里被拒。另外，任务代币 T 不得是 operator 的 xPNTs（否则任务本身会动 X）。
 
 `c12Caps` 是 C12 那笔 handleOps 交易的显式上限：`maxGas` × `maxFeePerGasWei` 就是这一格 EOA 最多花的 ETH。用户密钥签这笔交易之前，E2E 先逐项核对：恰好一笔；chainId；`to` 是 EntryPoint；value 为 0；calldata 规范编码为 `handleOps`，只含一个 op，它的哈希就是刚签过的 userOpHash（sender、nonce、paymaster 也逐项比对），beneficiary 是用户 EOA；gas 与 fee 不超过上限。任何一项不符就不签。交易签名也计入这一格的签名预算（op 一次 + 交易一次）。
 

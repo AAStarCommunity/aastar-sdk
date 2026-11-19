@@ -68,6 +68,21 @@ export const SUPER_PAYMASTER_VALIDATION_BUFFER_BPS = 1000n;
 
 const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
 
+/**
+ * What SuperPaymaster 5.5.0 reserves for an op, and the X the token then locks, in integer arithmetic with the
+ * contract's own rounding (every step rounds up):
+ *   a0   = ceil(maxCost × ethUsdPrice × 1e18 / (10^priceDecimals × aPNTsPriceUSD))      SuperPaymaster.sol:339 (_calculateAPNTsAmount)
+ *   Amax = ceil(a0 × (10000 + protocolFeeBPS + VALIDATION_BUFFER_BPS) / 10000)             SuperPaymaster.sol:343-344
+ *   X    = ceil(Amax × exchangeRate / 1e18)                                                 xPNTsTokenV2.sol:214 (tryLockForGas)
+ * (v5.5.0-rc.8). SP's planner (plan_three_arm.py:166-169) uses the same three steps; shared test vector in the tests.
+ */
+export function superPaymasterLock(i: { maxCost: bigint; ethUsdPrice: bigint; priceDecimals: bigint; aPNTsPriceUSD: bigint; protocolFeeBPS: bigint; exchangeRate: bigint; validationBufferBPS?: bigint }): { a0: bigint; Amax: bigint; X: bigint } {
+    if (i.ethUsdPrice <= 0n || i.aPNTsPriceUSD <= 0n) throw new Error('superPaymasterLock: price inputs must be positive');
+    const a0 = ceilDiv(i.maxCost * i.ethUsdPrice * 10n ** 18n, 10n ** i.priceDecimals * i.aPNTsPriceUSD);
+    const Amax = ceilDiv(a0 * (10_000n + i.protocolFeeBPS + (i.validationBufferBPS ?? SUPER_PAYMASTER_VALIDATION_BUFFER_BPS)), 10_000n);
+    return { a0, Amax, X: ceilDiv(Amax * i.exchangeRate, 10n ** 18n) };
+}
+
 /** EntryPoint v0.7 `maxCost` (requiredPrefund): every gas limit of the op times maxFeePerGas. */
 export function userOpMaxCostV07(op: {
     verificationGasLimit: bigint;
@@ -126,8 +141,8 @@ export async function decideSuperPaymasterSpRenew(
         const price = BigInt(cache?.price ?? cache?.[0]);
         const decimals = BigInt(cache?.decimals ?? cache?.[3]);
         if (price <= 0n) return { spRenew: false, reason: 'cachedPrice <= 0 (SP would revert OracleError)' };
-        const base = ceilDiv(maxCost * price * 10n ** 18n, 10n ** decimals * BigInt(aPNTsPriceUSD));
-        const a0 = ceilDiv(base * (10_000n + BigInt(feeBps) + SUPER_PAYMASTER_VALIDATION_BUFFER_BPS), 10_000n);
+        // SP's a0 (its reservation = Amax of superPaymasterLock; the exchange rate does not enter it).
+        const a0 = superPaymasterLock({ maxCost, ethUsdPrice: price, priceDecimals: decimals, aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: 10n ** 18n }).Amax;
         // opHash only feeds the CONFLICTING_LOCK check, and the real hash depends on the flag being
         // decided; no lock can exist under the zero hash.
         const h = ('0x' + '00'.repeat(32)) as Hex;

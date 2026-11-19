@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### A cost ceiling on every UserOperation the SDK signs (the missing upper bound at the signing boundary)
+
+- Until now nothing bounded what the SDK signed: gas limits were the bundler's estimate × 1.5 with no clamp, and fees
+  next base fee × 2 + priority with no ceiling, so a live key would sign an arbitrarily expensive UserOp (paid from
+  the operator's deposit and the user's xPNTs). New options on `PaymasterClient.submitGaslessUserOperation` and
+  `createEndUserClient().executeGasless`:
+  - `maxUserOpCostWei`: refuse, **before signing**, an op whose (preVerificationGas + verificationGasLimit +
+    callGasLimit + paymasterVerificationGasLimit + paymasterPostOpGasLimit) × maxFeePerGas exceeds it
+    (`UserOpCostCapError`); default off, so existing callers are unchanged.
+  - `beforeSignUserOp(op)`: sees the exact op about to be signed — before EVERY signature, retries included — and
+    refuses it by throwing.
+- `superPaymasterLock()`: SuperPaymaster 5.5.0's reservation and the X the token locks, in the contract's integer
+  rounding (SuperPaymaster.sol:339-344, xPNTsTokenV2.sol:214); shared test vector with SP's planner.
+- `scripts/sp550-live-e2e.ts`: `opMaxCostWei` is required and always on; live runs require SP's frozen plan
+  (`taskPlan`, by sha256): `opMaxCostWei` must equal `shared.sdkLive.maxCostPerOpWei`, and before each signature the
+  op's X lock at today's SP pricing (cachedPrice ≤ priceCap; aPNTsPriceUSD, protocolFeeBPS, exchangeRate equal to the
+  plan) must be ≤ the plan's Xmax_sdk. The signer signs only a hash the check approved; a live run needs the plan's status to be exactly
+  `"cleared"` and this checkout to contain its `sdkCostCapCommit`; the plan's operator / X must be this run's and the
+  account one of `shared.extraEndUsers`; the task token may not be the operator's xPNTs.
+- Doc fix: `onGasDecided` reports after signing (it always did).
+
 ### SP 5.5.0 live E2E for the paper cells (S1, S1r, S3b, C12) on the coexisting rc.8 stack (#434)
 
 - `scripts/sp550-live-e2e.ts` selects its stack by network (`sp550PinsFor`; `--network sepolia-rc8` reads the

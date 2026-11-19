@@ -33,6 +33,8 @@
  *     "userKey": { "keystore": "<encrypted JSON keystore>" } | { "anvilIndex": <n> },   // live | fork
  *     "maxOps"?: 8,                          // ops to spend before giving up on reaching renewal
  *     "c12Caps": { "maxGas": "1500000", "maxFeePerGasWei": "5000000000" },  // required: C12's handleOps tx bounds (EOA spend <= product)
+ *     "opMaxCostWei": "…",                  // required: every UserOp's (PVG+VGL+CGL+pmVGL+pmPostOp) x maxFeePerGas ceiling, wei;
+ *                                            // live: must equal taskPlan shared.sdkLive.maxCostPerOpWei (taskPlan required)
  *     "forkSetup"?: { "simpleAccountFactory": "0x…", "salt"?: 0 },  // --fork-setup, when the account has no code yet
  *     "expectGasParams": { "minPostOpGas": "500000", "settleGasBound": "450000", "cWrap": "5000", "cPostop": "450000" },
  *                                            // required: SP.gasParams() must equal the release tuple, field by field
@@ -84,8 +86,9 @@
  * Exit 2 = refused before sending; 1 = something sent or read back wrong; 0 = all assertions held.
  */
 import * as fs from 'fs';
+import * as path from 'path';
 import { createServer } from 'http';
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { formatWithOptions } from 'util';
 import {
     type Abi, type Address, type Hex, createPublicClient, createWalletClient, decodeFunctionData,
@@ -97,7 +100,7 @@ import {
     CANONICAL_ADDRESSES, ERC20ABI, EntryPointABI, MySBTABI, RegistryABI, SimpleAccountABI, SuperPaymasterV550ABI, xPNTsTokenV2ABI, resolveSp550Network,
     SUPER_PAYMASTER_FLAGS, SUPER_PAYMASTER_PMD_OFFSETS, requireDeployedAddress, sp550PinsFor,
 } from '@aastar/core';
-import { PaymasterClient, SuperPaymasterInflightGuard, UserOperationNotYetValidError, type GasDecision } from '@aastar/paymaster';
+import { PaymasterClient, SuperPaymasterInflightGuard, SUPER_PAYMASTER_VALIDATION_BUFFER_BPS, UserOperationNotYetValidError, superPaymasterLock, type GasDecision, type UserOpSignView } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { isPublicTestAccount, liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
@@ -105,7 +108,7 @@ import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
 import { createHash } from 'crypto';
-import { childEnv, gasParamsDiff, gasParamsOf, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { CostApprovals, SDK_LIVE_CLEARED, assertCostApproved, childEnv, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -214,6 +217,10 @@ async function main() {
     // M2: C12's own transaction is bounded by explicit caps, validated before anything is read or signed.
     const capOf = (v: unknown, name: string): bigint => (typeof v === 'string' && /^[1-9][0-9]{0,30}$/.test(v) ? BigInt(v) : refuse(`c12Caps.${name} must be a positive decimal string (got ${JSON.stringify(v)})`));
     const c12Caps = { maxGas: capOf(cfg.c12Caps?.maxGas, 'maxGas'), maxFeePerGas: capOf(cfg.c12Caps?.maxFeePerGasWei, 'maxFeePerGasWei') };
+    // DSR: the cost ceiling on every UserOp this run signs, (PVG + VGL + CGL + pmVGL + pmPostOp) x maxFeePerGas, in wei.
+    // Required and always on; in live mode it must equal SP's frozen plan (shared.sdkLive.maxCostPerOpWei).
+    const opMaxCostWei = typeof cfg.opMaxCostWei === 'string' && /^[1-9][0-9]{0,40}$/.test(cfg.opMaxCostWei) ? BigInt(cfg.opMaxCostWei) : refuse(`opMaxCostWei (the per-UserOp cost ceiling, wei, decimal string) is required (got ${JSON.stringify(cfg.opMaxCostWei)})`);
+    if (cfg.mode === 'live' && cfg.taskPlan === undefined) refuse('mode live: taskPlan (SP\'s frozen plan, pinned by sha256) is required: the per-op cost cap and Xmax_sdk come only from it');
 
     // ---- 2. the read-back gate must pass on these RPCs ----
     const gateRpcs: GateRpc[] = rpcUrls.map((url, i) => ({
@@ -388,6 +395,7 @@ async function main() {
     // SP's three-arm plan (DSR): pinned by its sha256; its chain and SuperPaymaster must be this run's, its T is used,
     // and the call this run sends must be byte-equal to its taskCallData (checked once the call is built).
     let plan: { T: Address; taskCallData: Hex; commit?: string } | undefined;
+    let sdkPlan: SdkLivePlan | undefined;
     if (cfg.taskPlan !== undefined) {
         const { file: planFile, sha256 } = cfg.taskPlan ?? {};
         if (typeof planFile !== 'string' || typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(sha256)) refuse('taskPlan needs { file, sha256 (64 hex) }');
@@ -398,8 +406,25 @@ async function main() {
         if (Number(sh.chainId) !== net.chainId) refuse(`taskPlan: shared.chainId ${sh.chainId} != ${net.network} (${net.chainId})`);
         if (!isAddress(String(sh.T)) || !/^0x[0-9a-fA-F]*$/.test(String(sh.taskCallData))) refuse('taskPlan: shared.T / shared.taskCallData missing or malformed');
         plan = { T: getAddress(sh.T), taskCallData: sh.taskCallData as Hex, commit: sh.commit, SP: sh.SP } as any;
+        // DSR: the cost cap and Xmax_sdk come from these bytes only.
+        const live = sdkLivePlanProblems(JSON.parse(raw), { opMaxCostWei, account, lock: superPaymasterLock, validationBufferBPS: SUPER_PAYMASTER_VALIDATION_BUFFER_BPS });
+        if (live.problems.length) refuse(live.problems.join('; '));
+        sdkPlan = live.plan;
+        if (cfg.mode === 'live' && sdkPlan!.status !== SDK_LIVE_CLEARED) refuse(`mode live: SP's plan status is ${JSON.stringify(sdkPlan!.status)}, not "${SDK_LIVE_CLEARED}": the live cells are not cleared to run`);
+        // The plan's operator and X token are this run's (one operator, one X across all plans).
+        if (sdkPlan!.operator !== operator) refuse(`taskPlan: the plans' operator ${sdkPlan!.operator} is not this run's ${operator}`);
+        if (sdkPlan!.X !== getAddress(token)) refuse(`taskPlan: the plans' X token ${sdkPlan!.X} is not the operator's xPNTs ${token}`);
+        // The planner cleared this plan for the SDK commit where the cost cap merged: this run must contain it.
+        if (cfg.mode === 'live') {
+            const c = sdkPlan!.sdkCostCapCommit;
+            if (!c || !/^[0-9a-f]{40}$/.test(c)) refuse('mode live: the plan names no sdkCostCapCommit (40 hex)');
+            const has = spawnSync('git', ['merge-base', '--is-ancestor', c!, 'HEAD'], { cwd: path.resolve(import.meta.dirname, '..') }).status === 0;
+            if (!has) refuse(`mode live: this checkout does not contain the plan's sdkCostCapCommit ${c}`);
+        }
     }
     const taskToken = plan ? plan.T : cfg.taskToken === undefined ? undefined : getAddress(requireDeployedAddress({ taskToken: cfg.taskToken }, 'taskToken', 'config'));
+    // The task must move no X (SP's cap counts only the sponsor charge): T may not be the operator's xPNTs token.
+    if (taskToken && getAddress(taskToken) === getAddress(token)) refuse(`task token T ${taskToken} is the operator's xPNTs token: the task would move X outside the plan's cap`);
     const FIELDS = ['verificationGasLimit', 'callGasLimit', 'preVerificationGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
     let frozenGas: Record<(typeof FIELDS)[number], bigint> | undefined;
     if (cfg.frozenGas !== undefined) {
@@ -456,6 +481,7 @@ async function main() {
     let allowTx = false;
     // M4: a cell that must name every signed op before it can be lost (S1r) sets this; it runs as the signature returns.
     let onSigned: ((userOpHash: Hex | undefined) => void) | undefined;
+    const costApprovals = new CostApprovals();
     // M2 (Daybreak): C12's transaction is checked field by field BEFORE the key signs it, exactly once, inside the budget
     // (signC12Transaction, checks module). The wrapper copies allowTx / signs / signBudget / beforeSign into st per call.
     const st: C12SignState = { allowTx: false, signs: 0, txSigns: 0, signBudget: Infinity };
@@ -463,6 +489,8 @@ async function main() {
         st.allowTx = allowTx; st.signs = signs; st.signBudget = signBudget; st.beforeSign = beforeSign;
         return signC12Transaction(() => (base as any).signTransaction(t, o), t, st);
     }, signMessage: async (a: any) => {
+        // Fail closed (DSR): only a hash the cost check approved, once — a signing path without the check is refused here.
+        assertCostApproved(costApprovals, a);
         if (signs + st.txSigns >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
         // The slot is taken before the first await, so a concurrent call sees it used (Codex 468-d2); a refusal below
         // keeps it taken (nothing signed, the cell fails).
@@ -612,7 +640,27 @@ async function main() {
           `${d.feesRaisedByBundler ? ' feesRaisedByBundler' : ''}`;
     // No direct-send fallback (it pays from the user's EOA) and no local-default gas: a bundler that cannot estimate or
     // cannot accept a UserOp is refused before anything is signed or spent.
+    // DSR: before every UserOp signature, the library refuses maxCost above opMaxCostWei, then this hook holds the op
+    // to SP's plan at today's pricing and approves exactly that hash; the signer signs only an approved hash.
+    const costHook = async (v: UserOpSignView) => {
+        if (getAddress(v.sender) !== account) throw new Error(`cost check: op sender ${v.sender} is not the run's account ${account}; refused before signing`);
+        if (sdkPlan) {
+            const [cache, aPNTsPriceUSD, feeBps, rate] = await Promise.all([
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'cachedPrice' }) as Promise<any>,
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'aPNTsPriceUSD' }) as Promise<any>,
+                pub.readContract({ address: sp, abi: SuperPaymasterV550ABI, functionName: 'protocolFeeBPS' }) as Promise<any>,
+                pub.readContract({ address: token, abi: xPNTsTokenV2ABI, functionName: 'exchangeRate' }) as Promise<any>,
+            ]);
+            const bad = signTimeCostProblems(v.maxCostWei, {
+                ethUsdPrice: BigInt(cache?.price ?? cache?.[0]), priceDecimals: BigInt(cache?.decimals ?? cache?.[3]),
+                aPNTsPriceUSD: BigInt(aPNTsPriceUSD), protocolFeeBPS: BigInt(feeBps), exchangeRate: BigInt(rate),
+            }, sdkPlan, superPaymasterLock);
+            if (bad.length) throw new Error(`cost check refused before signing: ${bad.join('; ')}`);
+        }
+        costApprovals.approve(v.userOpHash);
+    };
     const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
+        maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,
         ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
     const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
         if (o.spaced !== false) await spaced();
@@ -806,7 +854,7 @@ async function main() {
             signBudget = 2; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
-                estimateBundlerUrl: bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
+                estimateBundlerUrl: bundlerUrl, maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
             }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; st.expect = undefined; st.txNonceNow = undefined; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });

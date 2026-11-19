@@ -1,12 +1,13 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { concat, createWalletClient, custom, encodeAbiParameters, encodeEventTopics, encodeFunctionData, pad, parseAbi, parseTransaction, slice, toHex, type Abi, type Hex } from 'viem';
+import { concat, createWalletClient, custom, getAddress, encodeAbiParameters, encodeEventTopics, encodeFunctionData, pad, parseAbi, parseTransaction, slice, toHex, type Abi, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
+import { superPaymasterLock } from '../packages/paymaster/src/SuperPaymaster/v550.js';
 import { getUserOperationHash } from 'viem/account-abstraction';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
-import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
+import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, assertCostApproved, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
 
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
@@ -312,5 +313,96 @@ describe('redactUrls: normalized forms and fragments', () => {
         expect(redactUrls('URL: https://rpc.example/v2/SECRETKEY99', [cfg])).not.toMatch(/SECRETKEY99/);
         expect(redactUrls('request to /v2/SECRETKEY99 failed', [cfg])).not.toMatch(/SECRETKEY99/);
         expect(redactUrls('https://u:p4ssw0rd@rpc.example/', ['https://u:p4ssw0rd@rpc.example/'])).not.toMatch(/p4ssw0rd/);
+    });
+});
+
+describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
+    const ACCT = A(0xacc);
+    const lock = superPaymasterLock;
+    // SP's shared vector as a plan: maxCost 1234567890123457, priceCap 3500e8, aPNTs 29999999999999999, fee 137, rate 1.333…
+    const sdkLive = { maxCostPerOpWei: '1234567890123457', priceCap: '350000000000', priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137,
+        validationBufferBPS: 1000, exchangeRate: '1333333333333333333', a0: '144032920514403321468', Amax: '160409463576890979119', Xmax: '213879284769187972106', status: 'cleared' };
+    const OP = A(0x0e), X = A(0x0f), S1 = A(0x51), S2 = A(0x52);
+    const phaseC = { priceCap: '350000000000', priceDecimals: 8, aPNTsPriceUSD: '29999999999999999', protocolFeeBPS: 137, exchangeRate: '1333333333333333333', addresses: { X } };
+    // plans is keyed by SP's three-arm accounts S; this run's account is an extraEndUser.
+    const bundle = (over: any = {}, pc: any = phaseC, extra: any = { users: [{ address: ACCT, xAmount: '1000' }] }) => ({
+        shared: { sdkLive: { ...sdkLive, ...over }, extraEndUsers: extra.users },
+        plans: { [S1]: { phaseC, deploymentContext: { operator: OP } }, [S2]: { phaseC: pc, deploymentContext: { operator: extra.op ?? OP } } },
+    });
+    const W = { opMaxCostWei: 1234567890123457n, account: ACCT, lock, validationBufferBPS: 1000n };
+    it('SP\'s vector plan is accepted and parsed', () => {
+        const r = sdkLivePlanProblems(bundle(), W);
+        expect(r.problems).toEqual([]);
+        expect(r.plan).toMatchObject({ Xmax: 213879284769187972106n, maxCostPerOpWei: 1234567890123457n, operator: getAddress(OP), X: getAddress(X), xAmount: 1000n });
+    });
+    it.each([
+        ['a cost cap other than config.opMaxCostWei', bundle({ maxCostPerOpWei: '1234567890123458' }), /config.opMaxCostWei .* != plan/],
+        ['a buffer other than SP\'s 1000', bundle({ validationBufferBPS: 999 }), /validationBufferBPS 999/],
+        ['an Xmax that is not the formula on its own fields', bundle({ Xmax: '213879284769187972107' }), /are not the formula on its own fields/],
+        ['any plan\'s phaseC pricing differs from sdkLive', bundle({}, { ...phaseC, aPNTsPriceUSD: '1' }), /phaseC.aPNTsPriceUSD 1 != shared.sdkLive.aPNTsPriceUSD/],
+        ['no sdkLive at all', { shared: {}, plans: {} }, /shared.sdkLive is missing/],
+        ['a non-integer field', bundle({ priceCap: '3.5e11' }), /priceCap is not a non-negative integer/],
+        ['no plans', { shared: { sdkLive, extraEndUsers: [{ address: ACCT, xAmount: '1' }] }, plans: {} }, /plans is empty/],
+        ['this account is not an extraEndUser', bundle({}, phaseC, { users: [{ address: A(0x99), xAmount: '1' }] }), /is not in shared.extraEndUsers/],
+        ['plans naming two operators', bundle({}, phaseC, { users: [{ address: ACCT, xAmount: '1' }], op: A(0x77) }), /do not name one operator/],
+        ['plans naming two X tokens', bundle({}, { ...phaseC, addresses: { X: A(0x78) } }), /do not name one X token/],
+    ])('refused: %s', (_n, b, why) => {
+        expect(sdkLivePlanProblems(b, W).problems).toContainEqual(expect.stringMatching(why as RegExp));
+    });
+    const plan = sdkLivePlanProblems(bundle(), W).plan!;
+    const now = { ethUsdPrice: 350000000000n, priceDecimals: 8n, aPNTsPriceUSD: 29999999999999999n, protocolFeeBPS: 137n, exchangeRate: 1333333333333333333n };
+    it('at the plan\'s worst case the op locks exactly Xmax and passes; a cheaper price passes too', () => {
+        expect(signTimeCostProblems(1234567890123457n, now, plan, lock)).toEqual([]);
+        expect(signTimeCostProblems(1234567890123457n, { ...now, ethUsdPrice: 300000000000n }, plan, lock)).toEqual([]);
+    });
+    it.each([
+        ['ETH/USD above priceCap', { ethUsdPrice: 350000000001n }, /above the plan's priceCap/],
+        ['other price decimals', { priceDecimals: 18n }, /decimals 18 != plan priceDecimals 8/],
+        ['aPNTsPriceUSD changed (either way)', { aPNTsPriceUSD: 30000000000000000n }, /aPNTsPriceUSD .* != plan/],
+        ['protocolFeeBPS changed', { protocolFeeBPS: 138n }, /protocolFeeBPS 138 != plan 137/],
+        ['exchangeRate changed', { exchangeRate: 1n }, /exchangeRate 1 != plan/],
+    ])('refused at signing: %s', (_n, over, why) => {
+        expect(signTimeCostProblems(1234567890123457n, { ...now, ...(over as any) }, plan, lock)).toContainEqual(expect.stringMatching(why as RegExp));
+    });
+    it('an op above the plan\'s per-op cost is refused even if the lock would fit', () => {
+        expect(signTimeCostProblems(1234567890123458n, { ...now, ethUsdPrice: 1n }, plan, lock)).toContainEqual(expect.stringMatching(/op maxCost .* > plan maxCostPerOpWei/));
+    });
+    it('the lock above Xmax is refused (a plan whose Xmax is below what the op would lock)', () => {
+        const tight = { ...plan, Xmax: plan.Xmax - 1n };
+        expect(signTimeCostProblems(1234567890123457n, now, tight, lock)).toContainEqual(expect.stringMatching(/would lock .* above the plan's Xmax_sdk/));
+    });
+    it('CostApprovals: the signer gets true once for an approved hash, never for an unapproved one (fail closed)', () => {
+        const c = new CostApprovals();
+        const h = ('0x' + 'ab'.repeat(32)) as Hex;
+        expect(c.take(h)).toBe(false);
+        expect(c.take(undefined)).toBe(false);
+        c.approve(h);
+        expect(c.take(h.toUpperCase().replace('0X', '0x') as Hex)).toBe(true);
+        expect(c.take(h)).toBe(false);
+    });
+});
+
+describe('the cost check is wired into every signing path of sp550-live-e2e.ts (DSR: fail closed)', () => {
+    const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
+    it('assertCostApproved refuses a signature nothing approved, and passes an approved one once', () => {
+        const c = new CostApprovals();
+        const arg = { message: { raw: ('0x' + 'cd'.repeat(32)) as Hex } };
+        expect(() => assertCostApproved(c, arg)).toThrow(/no cost check approved this UserOp hash/);
+        c.approve(arg.message.raw);
+        expect(() => assertCostApproved(c, arg)).not.toThrow();
+        expect(() => assertCostApproved(c, arg)).toThrow(/no cost check approved/);
+    });
+    it('the user signer checks the approval FIRST, before the budget or any other step', () => {
+        const body = src.slice(src.indexOf('signMessage: async (a: any) => {'));
+        const firstStatement = body.split('\n').slice(1).find((l) => l.trim() && !l.trim().startsWith('//'))!;
+        expect(firstStatement.trim()).toBe('assertCostApproved(costApprovals, a);');
+    });
+    it('every UserOp submission passes the ceiling and the hook: PaymasterClient (S1 / S1r / S3b via submitOpts) and C12 executeGasless', () => {
+        expect(src).toMatch(/const submitOpts = [^\n]*\n\s*maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,/);
+        expect(src).toMatch(/executeGasless\(\{[\s\S]{0,400}maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook/);
+        const submits = src.match(/PaymasterClient\.submitGaslessUserOperation\(/g) ?? [];
+        const viaOpts = src.match(/PaymasterClient\.submitGaslessUserOperation\([^\n]*submitOpts\(/g) ?? [];
+        expect(submits.length).toBeGreaterThan(0);
+        expect(viaOpts.length).toBe(submits.length);
     });
 });

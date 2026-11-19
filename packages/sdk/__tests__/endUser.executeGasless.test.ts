@@ -167,6 +167,24 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         untouched();
     });
 
+    it('maxUserOpCostWei below the op\'s (5 gas terms) x maxFeePerGas: refused before the UserOp signature and the handleOps tx (DSR cost ceiling)', async () => {
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        const fee = 2_000_000_000n;
+        const sum = EXPLICIT.preVerificationGas + EXPLICIT.verificationGasLimit + EXPLICIT.callGasLimit + EXPLICIT.paymasterVerificationGasLimit + EXPLICIT.paymasterPostOpGasLimit;
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: fee, maxPriorityFeePerGas: 1n, maxUserOpCostWei: sum * fee - 1n }))
+            .rejects.toThrow(/above maxUserOpCostWei/);
+        untouched();
+    });
+
+    it('beforeSignUserOp sees the op about to be signed and a throw refuses it (nothing signed, nothing sent)', async () => {
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
+        const views: any[] = [];
+        await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1n,
+            beforeSignUserOp: (v: any) => { views.push(v); throw new Error('plan refuses'); } })).rejects.toThrow('plan refuses');
+        expect(views[0]).toMatchObject({ limits: EXPLICIT, maxFeePerGas: 2_000_000_000n });
+        untouched();
+    });
+
     it('explicit fields fill what the estimate left out; the estimate request carries the signed op\'s nonce and fees (Codex r2 M8 / M9)', async () => {
         const { c, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 300_000n });
         // The bundler omits postOp; the caller gives it explicitly.
