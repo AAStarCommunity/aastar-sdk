@@ -114,7 +114,7 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         expect(sent()).toBeUndefined();
     });
 
-    it('estimate x 1.5 per field (labelled estimate), postOp raised to the chain floor (floor), fees from eth_feeHistory, handleOps gas = node estimate x 1.5', async () => {
+    it('estimate x 1.5 per limit, preVerificationGas x 1.0 (labelled estimate), postOp raised to the chain floor (floor), fees from eth_feeHistory, handleOps gas = node estimate x 1.5', async () => {
         const { c, sentTx, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
         const est = { preVerificationGas: '0xea60', verificationGasLimit: '0x11170', callGasLimit: '0x9c40', paymasterVerificationGasLimit: '0x30d40', paymasterPostOpGasLimit: '0x186a0' };
         const fetchMock = vi.fn(async (_u: string, init: any) => {
@@ -128,14 +128,14 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
             await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337', onGasDecided: (d: any) => decisions.push(d) });
         } finally { vi.unstubAllGlobals(); }
         const d = decisions[0];
-        expect(d.limits).toEqual({ verificationGasLimit: 105_000n, callGasLimit: 60_000n, preVerificationGas: 90_000n, paymasterVerificationGasLimit: 300_000n, paymasterPostOpGasLimit: 500_000n });
+        expect(d.limits).toEqual({ verificationGasLimit: 105_000n, callGasLimit: 60_000n, preVerificationGas: 60_000n, paymasterVerificationGasLimit: 300_000n, paymasterPostOpGasLimit: 500_000n });
         expect(d.limitSources).toEqual({ verificationGasLimit: 'estimate', callGasLimit: 'estimate', preVerificationGas: 'estimate', paymasterVerificationGasLimit: 'estimate', paymasterPostOpGasLimit: 'floor' });
         expect(d.coefficientBps).toBe(15_000n);
         expect(d.fees.source).toBe('feeHistory');
         expect(d.handleOps).toEqual({ estimate: 200_000n, gasLimit: 300_000n, source: 'estimate' });
         // What was signed and sent is exactly the decision.
         const op = sentOp();
-        expect(BigInt(op.preVerificationGas)).toBe(90_000n);
+        expect(BigInt(op.preVerificationGas)).toBe(60_000n); // charged in full: not scaled (#464 B2)
         expect(BigInt('0x' + (op.accountGasLimits as string).slice(2, 34))).toBe(105_000n);
         expect(BigInt('0x' + (op.accountGasLimits as string).slice(34))).toBe(60_000n);
         expect(sentTx().gas).toBe(300_000n);
