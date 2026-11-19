@@ -14,6 +14,9 @@ import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
 
+// This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
+const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
+
 // PaymasterClient.dummySignature() for a SimpleAccount (no AirAccount prefix).
 const DUMMY = ('0x' + 'ff'.repeat(15) + 'f0' + '00'.repeat(16) + '7a' + 'aa'.repeat(31) + '1c') as Hex;
 const REAL = ('0x' + '12'.repeat(65)) as Hex;
@@ -25,7 +28,7 @@ const rpcPaymasterData = (flags?: number, withToken = true) => slice(encodeSuper
     ...(withToken ? { token: A(3) } : {}), ...(flags === undefined ? {} : { flags }),
 }), 52);
 
-describe('flagsFromPaymasterData reads the byte the real encoder writes', () => {
+describe('flagsFromPaymasterData reads the byte the real encoder writes', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([[SUPER_PAYMASTER_FLAGS.SP_RENEW], [SUPER_PAYMASTER_FLAGS.NONE], [SUPER_PAYMASTER_FLAGS.ACCOUNT_RENEW]])('flags %i round-trips', (f) => {
         expect(flagsFromPaymasterData(rpcPaymasterData(f))).toBe(f);
     });
@@ -46,7 +49,7 @@ describe('flagsFromPaymasterData reads the byte the real encoder writes', () => 
 const est = (over: Partial<BundlerCall> = {}): BundlerCall => ({ method: 'eth_estimateUserOperationGas', signature: DUMMY, flags: 0, signsBefore: 0, ...over });
 const send = (over: Partial<BundlerCall> = {}): BundlerCall => ({ method: 'eth_sendUserOperation', signature: REAL, flags: 0, signsBefore: 1, ...over });
 
-describe('opSigningProblems: placeholder-signature estimation, one signature per op', () => {
+describe('opSigningProblems: placeholder-signature estimation, one signature per op', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('the expected op is clean', () => {
         expect(opSigningProblems([est(), send(), { method: 'eth_getUserOperationReceipt', signsBefore: 1 }], 1, DUMMY)).toEqual([]);
     });
@@ -75,7 +78,7 @@ describe('opSigningProblems: placeholder-signature estimation, one signature per
     });
 });
 
-describe('renewalConsistencyProblems: SP_RENEW chosen by the SDK matches the chain, both ways', () => {
+describe('renewalConsistencyProblems: SP_RENEW chosen by the SDK matches the chain, both ways', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const renewed = { onChainFlags: 1, sentFlags: 1, renewedInline: true, renewUsedBefore: 0n, renewUsedAfter: 1n };
     const plain = { onChainFlags: 0, sentFlags: 0, renewedInline: false, renewUsedBefore: 0n, renewUsedAfter: 0n };
     it('a renewing op and a plain op are both clean', () => {
@@ -99,9 +102,9 @@ describe('renewalConsistencyProblems: SP_RENEW chosen by the SDK matches the cha
     });
 });
 
-describe('tapBundler records what left for the bundler, and nothing else', () => {
+describe('tapBundler records what left for the bundler, and nothing else', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const original = globalThis.fetch;
-    afterEach(() => { globalThis.fetch = original; });
+    afterEach(() => { globalThis.fetch = original; }, SPAWN_VERDICT_TIMEOUT_MS);
     it('records method, signature, flags and the signer count at send time; other URLs are untouched', async () => {
         const seen: string[] = [];
         const stub = (async (u: any) => { seen.push(String(u)); return new Response('{}'); }) as typeof fetch;
@@ -125,7 +128,7 @@ describe('tapBundler records what left for the bundler, and nothing else', () =>
     });
 });
 
-describe('isSpRelayedRenewal decodes AllowanceRenewed with the SHIPPED xPNTsTokenV2 ABI', () => {
+describe('isSpRelayedRenewal decodes AllowanceRenewed with the SHIPPED xPNTsTokenV2 ABI', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     // Caught on the rc.4 fork: the harness read `args.inline`, which the event does not have, so a
     // real on-chain renewal (autoRenewUsed 0 -> 1) was reported as missing. The field is `bySP`.
     const abi = JSON.parse(readFileSync(join(__dirname, '../packages/core/src/abis/xPNTsTokenV2.full.json'), 'utf8')).abi as Abi;
@@ -152,7 +155,7 @@ describe('isSpRelayedRenewal decodes AllowanceRenewed with the SHIPPED xPNTsToke
     });
 });
 
-describe('gasSourceClient: only a client version or method-not-found is a usable gas source (Codex r4)', () => {
+describe('gasSourceClient: only a client version or method-not-found is a usable gas source (Codex r4)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('a client version is recorded', () => expect(gasSourceClient({ jsonrpc: '2.0', id: 1, result: 'alto/0.0.1' })).toBe('alto/0.0.1'));
     it('"error": null beside a result is no error (Grok r5)', () => expect(gasSourceClient({ jsonrpc: '2.0', id: 1, result: 'alto/0.0.1', error: null })).toBe('alto/0.0.1'));
     it('method-not-found (-32601) is recorded as not reported', () => expect(gasSourceClient({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'x' } })).toBe('not reported: no web3_clientVersion'));
@@ -168,7 +171,7 @@ describe('gasSourceClient: only a client version or method-not-found is a usable
     ])('%s is not', (_n, reply) => expect(gasSourceClient(reply)).toBeUndefined());
 });
 
-describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs, nothing signed on refusal', () => {
+describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs, nothing signed on refusal', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const EP = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as const;
     const SP = A(0x5b), SENDER = A(0xacc), EOA = A(0xe0a), CHAIN = 11155111;
     const u = {
@@ -290,7 +293,7 @@ describe('C12 transaction guard (Daybreak #468 M2): checked before the key signs
     }
 });
 
-describe('redactUrls (Daybreak #468 L1): no configured URL survives into output', () => {
+describe('redactUrls (Daybreak #468 L1): no configured URL survives into output', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const RPC = 'https://eth-sepolia.g.alchemy.com/v2/SECRETKEY123', RPC2 = 'https://eth-sepolia.g.alchemy.com/v2/SECRETKEY123456';
     it('replaces each URL by scheme + host, longest first, in a viem-style error text', () => {
         const text = `HTTP request failed.\n\nURL: ${RPC2}\nRequest body: {}\nalso ${RPC}/ and ${RPC}`;
@@ -305,7 +308,7 @@ describe('redactUrls (Daybreak #468 L1): no configured URL survives into output'
     });
 });
 
-describe('gasParams snapshot helpers (Daybreak #468 M1)', () => {
+describe('gasParams snapshot helpers (Daybreak #468 M1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const T = { minPostOpGas: 500_000n, settleGasBound: 450_000n, cWrap: 5_000n, cPostop: 450_000n };
     it('gasParamsOf reads the tuple by name or by index; gasParamsDiff names every differing field', () => {
         expect(gasParamsOf({ minPostOpGas: 500000, settleGasBound: 450000, cWrap: 5000, cPostop: 450000 })).toEqual(T);
@@ -321,7 +324,7 @@ describe('gasParams snapshot helpers (Daybreak #468 M1)', () => {
     });
 });
 
-describe('redactUrls: normalized forms and fragments', () => {
+describe('redactUrls: normalized forms and fragments', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('a host-cased / default-port URL as viem prints it, and the secret path alone, are both scrubbed', () => {
         const cfg = 'https://RPC.example:443/v2/SECRETKEY99';
         expect(redactUrls('URL: https://rpc.example/v2/SECRETKEY99', [cfg])).not.toMatch(/SECRETKEY99/);
@@ -330,7 +333,7 @@ describe('redactUrls: normalized forms and fragments', () => {
     });
 });
 
-describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
+describe('per-op cost cap against SP\'s frozen plan (DSR)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const ACCT = A(0xacc);
     const lock = superPaymasterLock;
     // SP's shared vector as a plan: maxCost 1234567890123457, priceCap 3500e8, aPNTs 29999999999999999, fee 137, rate 1.333…
@@ -409,7 +412,7 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', () => {
     });
 });
 
-describe('guardedSignMessage: the key boundary, driven with a counting key (DSR + Codex cost-cap H2 / M)', () => {
+describe('guardedSignMessage: the key boundary, driven with a counting key (DSR + Codex cost-cap H2 / M)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const H = ('0x' + 'cd'.repeat(32)) as Hex;
     const arg = { message: { raw: H } };
     const setup = (over: any = {}) => {
@@ -452,7 +455,7 @@ describe('guardedSignMessage: the key boundary, driven with a counting key (DSR 
     });
 });
 
-describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
+describe('the live plan gate and the lossless plan parse (DSR / SP)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const P: any = { status: 'cleared', sdkCostCapCommit: 'a'.repeat(40), operator: getAddress(A(0x0e)), X: getAddress(A(0x0f)) };
     const W = { mode: 'live', operator: A(0x0e), token: A(0x0f), isAncestor: () => true };
     it('a cleared plan for this operator / X, whose commit this checkout contains, passes', () => {
@@ -540,7 +543,7 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
     });
 });
 
-describe('the cost path, behaviourally (Daybreak #470 L3)', () => {
+describe('the cost path, behaviourally (Daybreak #470 L3)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('headFreshnessProblem: the head may be at most MAX_BLOCKS_SINCE_CHECK (1) past the check block', () => {
         expect(MAX_BLOCKS_SINCE_CHECK).toBe(1n);
         expect(headFreshnessProblem(100n, 100n)).toBeUndefined();
