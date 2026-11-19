@@ -253,6 +253,8 @@ export function scan(fileName: string, src: string, senderNames: ReadonlySet<str
             if (ic.namedBindings && ts.isNamespaceImport(ic.namedBindings)) aliases.add(ic.namedBindings.name.text);
             if (ic.namedBindings && ts.isNamedImports(ic.namedBindings)) for (const el of ic.namedBindings.elements) if (!el.isTypeOnly) aliases.add(el.name.text);
         }
+        // `export { x } from 'permissionless'` / `export * from '@aastar/dapp'` hands a smart-account sender on.
+        if (ts.isExportDeclaration(st) && !st.isTypeOnly && st.moduleSpecifier && ts.isStringLiteral(st.moduleSpecifier) && USEROP_MODULES.some((m) => m.test((st.moduleSpecifier as ts.StringLiteral).text))) out.raw.push(st);
         // `export { send }` / `export default send`: those local functions are entry points.
         if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause)) {
             for (const el of st.exportClause.elements) out.exportedNames.add((el.propertyName ?? el.name).text);
@@ -416,7 +418,8 @@ export function fileProblems(file: string, src: string, senderNames: ReadonlySet
     const signs = s.calls.filter((c) => inList(SIGNING_CALLS, calleeName(c)));
     if (guards.length && signs.length && !s.signerRefs.length && signs.every((c) => guards.some((g) => guardDominates(g, c)))) return p;
     const first = uncovered[0];
-    const what = ts.isStringLiteralLike(first) ? first.text : ts.isIdentifier(first) ? first.text : ts.isCallExpression(first) ? `${calleeName(first)}(…)` : 'a UserOp primitive';
+    const what = ts.isStringLiteralLike(first) ? first.text : ts.isIdentifier(first) ? first.text : ts.isCallExpression(first) ? `${calleeName(first)}(…)`
+        : ts.isExportDeclaration(first) ? 're-export of a smart-account module' : 'a UserOp primitive';
     p.push(`${file}:${lineOf(first)}: ${what} signs / submits a UserOperation on a path that no awaited chain gate (${CHAIN_GATES.join(' / ')}) precedes${uncovered.length > 1 ? ` (and ${uncovered.length - 1} more)` : ''}: gate it before this point (an exported function, class method or default export needs its own gate), or guard every signature with guardUserOpSignature and a const from resolveUserOpCostCap, or add the file to REVIEWED_SENDERS with why`);
     return p;
 }
@@ -508,7 +511,7 @@ export function senderClosure(files: ReadonlyMap<string, string>): { senders: Se
 
 /**
  * Library sources: every call of a send API passes `maxUserOpCostWei` on (any value but a literal undefined), so a
- * ceiling a caller gives reaches the signing site (DSR Daybreak #471 M1: TrafficGenerator dropped it).
+ * ceiling a caller gives reaches the signing site (DSR's read-only review of #471, M1: TrafficGenerator dropped it).
  */
 export function libraryForwardingProblems(file: string, src: string): string[] {
     const s = scan(file, src);
@@ -570,6 +573,6 @@ function main() {
 }
 
 // Run main only when executed directly. Compare real paths: a path with spaces, or a symlink (macOS /tmp), would
-// otherwise skip main and exit 0 silently; CI also asserts the PASS line (DSR Daybreak #471 L1).
+// otherwise skip main and exit 0 silently; CI also asserts the PASS line (DSR's read-only review of #471, L1).
 const invoked = process.argv[1] ? (() => { try { return fs.realpathSync(process.argv[1]); } catch { return undefined; } })() : undefined;
 if (invoked && invoked === fs.realpathSync(fileURLToPath(import.meta.url))) main();

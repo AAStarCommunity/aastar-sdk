@@ -295,17 +295,29 @@ describe('the for-iri examples\' gaslessCostCapFromEnv: the chain the endpoints 
     });
 });
 
-describe('DSR Daybreak #471: other ways to send, library forwarding, and the runner itself', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+describe('DSR read-only review of #471: other ways to send, library forwarding, and the runner itself', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const UNGATED = /no awaited chain gate .* precedes/;
     it.each([
         ['a permissionless smart-account client', `import { createSmartAccountClient } from 'permissionless';\nimport { toSimpleSmartAccount } from 'permissionless/accounts';\nconst acc = await toSimpleSmartAccount({ client, owner });\nconst c = createSmartAccountClient({ account: acc });\nawait c.sendTransaction({ to, value: 0n });`],
         ['an aliased permissionless import', `import { createSmartAccountClient as mk } from 'permissionless';\nconst c = mk({ account });\nawait c.sendTransaction({ to });`],
         ['a viem smart account', `import { toCoinbaseSmartAccount } from 'viem/account-abstraction';\nconst a = await toCoinbaseSmartAccount({ client, owners });`],
         ["viem's getUserOperationHash", `import { getUserOperationHash } from 'viem/account-abstraction';\nconst h = getUserOperationHash({ userOperation, chainId, entryPointAddress, entryPointVersion: '0.7' });\nawait acc.signMessage({ message: { raw: h } });`],
+        ['a default import from permissionless', `import p from 'permissionless';\nconst c = p.createSmartAccountClient({ account });\nawait c.sendTransaction({ to });`],
+        ['a namespace import from permissionless/accounts', `import * as accounts from 'permissionless/accounts';\nconst a = await accounts.toSafeSmartAccount({ client, owners });`],
+        ['a namespace import from @aastar/dapp', `import * as dapp from '@aastar/dapp';\nconst p = new dapp.AirAccountEIP1193Provider(cfg);`],
         ['the dapp EIP-1193 provider', `import { AirAccountEIP1193Provider } from '@aastar/dapp';\nconst p = new AirAccountEIP1193Provider(cfg);\nawait p.request({ method: 'eth_sendTransaction', params: [tx] });`],
     ])('%s is a sender and needs a gate', (_l, src) => {
         expect(fileProblems('x.ts', src)).toEqual([expect.stringMatching(UNGATED)]);
         expect(fileProblems('x.ts', `await refuseMainnetUserOps(rpc);\n${src}`)).toEqual([]);
+    });
+    it.each([
+        ['a named re-export', `export { createSmartAccountClient } from 'permissionless';`],
+        ['a star re-export', `export * from '@aastar/dapp';`],
+        ['a namespace re-export', `export * as accounts from 'permissionless/accounts';`],
+    ])('%s of a smart-account module makes the file a sender (DSR read of #471)', (_l, src) => {
+        expect(fileProblems('x.ts', src)).toEqual([expect.stringMatching(/re-export of a smart-account module/)]);
+        // A type-only re-export does not.
+        expect(fileProblems('x.ts', `export type { SmartAccount } from 'permissionless';`)).toEqual([]);
     });
     it('a read-only viem/account-abstraction import (bundlerActions, entryPoint07Address) does not make a file a sender', () => {
         expect(fileProblems('x.ts', `import { bundlerActions, entryPoint07Address } from 'viem/account-abstraction';\nconst b = client.extend(bundlerActions);\nawait b.waitForUserOperationReceipt({ hash });`)).toEqual([]);
