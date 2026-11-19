@@ -143,8 +143,13 @@ export async function loadLiveSigner(
  * A live run must never sign with one (DSR 2026-11-19: the fork rehearsal's test owner must not reach a real chain).
  */
 const PUBLIC_TEST_MNEMONIC = 'test test test test test test test test test test test junk';
-/** Indices checked: anvil and hardhat fund the first 10 / 20 by default; 200 covers `--accounts` well beyond that. A finite list cannot prove a key is private: the guarantee is --live-signer = config.expectSigner. */
-const PUBLIC_TEST_ACCOUNTS = 200;
+/**
+ * Indices checked: 10,000 on the standard path m/44'/60'/0'/0/i (anvil / hardhat fund the first 10 / 20; `--accounts`
+ * rarely goes past a few hundred), derived once from the master key (~12 s, live mode only). A finite list cannot prove
+ * a key is private, and --live-signer = config.expectSigner is the author's attestation of WHICH key signs, not proof
+ * of its secrecy: together they make signing with a public development key an explicit, two-place mistake.
+ */
+const PUBLIC_TEST_ACCOUNTS = 10_000;
 /**
  * Keys this repository publishes as fixtures (their passwords / private keys are in the tests): the scrypt keystore
  * fixture (pinned by address in sp550-live-signer.test.ts) and the tests' throwaway KEY. A second line only: a live run
@@ -159,9 +164,12 @@ const REPO_FIXTURE_KEYS: `0x${string}`[] = [('0x' + '5a'.repeat(31) + '01') as `
 let publicTestAddresses: Set<string> | undefined;
 export async function isPublicTestAccount(address: string): Promise<boolean> {
     if (!publicTestAddresses) {
-        const { mnemonicToAccount } = await import('viem/accounts');
+        const { mnemonicToAccount, privateKeyToAccount } = await import('viem/accounts');
+        const { toHex } = await import('viem');
+        // The master key once (the seed derivation is the slow part), then each child on the standard path.
+        const master = mnemonicToAccount(PUBLIC_TEST_MNEMONIC, { path: 'm' as any }).getHdKey();
         publicTestAddresses = new Set([
-            ...Array.from({ length: PUBLIC_TEST_ACCOUNTS }, (_, i) => mnemonicToAccount(PUBLIC_TEST_MNEMONIC, { addressIndex: i }).address.toLowerCase()),
+            ...Array.from({ length: PUBLIC_TEST_ACCOUNTS }, (_, i) => privateKeyToAccount(toHex(master.derive(`m/44'/60'/0'/0/${i}`).privateKey!)).address.toLowerCase()),
             ...REPO_FIXTURE_ADDRESSES.map((a) => a.toLowerCase()),
             ...(await Promise.all(REPO_FIXTURE_KEYS.map(async (k) => (await import('viem/accounts')).privateKeyToAccount(k).address.toLowerCase()))),
         ]);

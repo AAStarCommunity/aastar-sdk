@@ -409,8 +409,9 @@ export function createEndUserClient({
             const outerEstimate = (await (client as any).estimateContractGas(handleOpsCall)) as bigint;
             const outerGas = scaleGas(outerEstimate, coefficientBps);
             try {
-                onGasDecided?.({ limits: L, limitSources: limitSources as SelfBundledGasDecision['limitSources'], fees, coefficientBps, estimate,
-                    floors: { paymasterPostOpGasLimit: sp.minPostOpGas }, handleOps: { estimate: outerEstimate, gasLimit: outerGas, source: 'estimate' } });
+                // A detached copy: an observer cannot change what was signed or what the transaction sends.
+                onGasDecided?.(structuredClone({ limits: L, limitSources: limitSources as SelfBundledGasDecision['limitSources'], fees, coefficientBps, estimate,
+                    floors: { paymasterPostOpGasLimit: sp.minPostOpGas }, handleOps: { estimate: outerEstimate, gasLimit: outerGas, source: 'estimate' as const } }));
             } catch (e) { console.warn('   SDK: onGasDecided threw; ignored', (e as Error)?.message); }
             const tx = await (client as any).writeContract({ ...handleOpsCall, gas: outerGas, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
 

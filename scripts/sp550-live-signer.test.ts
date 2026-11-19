@@ -334,5 +334,7 @@ describe('public development keys are recognised (a live run refuses to sign wit
         expect(await isPublicTestAccount(privateKeyToAccount(KEY).address)).toBe(true); // this file's throwaway KEY
         expect(await isPublicTestAccount(SPEC_ADDRESS)).toBe(true); // the PBKDF2 test vector
         expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 150 }).address)).toBe(true);
+        expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 200 }).address)).toBe(true); // Codex r3 H3
+        expect(await isPublicTestAccount(mnemonicToAccount('test test test test test test test test test test test junk', { addressIndex: 9_999 }).address)).toBe(true);
     });
 });

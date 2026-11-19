@@ -16,6 +16,13 @@ export type SubmitGaslessOptions = {
     maxFeePerGas?: bigint;
     maxPriorityFeePerGas?: bigint;
     autoEstimate?: boolean;
+    /** Refuse (before signing) instead of using the local defaults when the endpoint cannot estimate. */
+    requireEstimate?: boolean;
+    /**
+     * Refuse instead of sending handleOps from `wallet` itself when the endpoint has no eth_sendUserOperation (that
+     * direct send pays the transaction from the wallet's own balance).
+     */
+    noDirectSendFallback?: boolean;
     operator?: Address; // For SuperPaymaster
     paymasterVerificationGasLimit?: bigint;
     paymasterPostOpGasLimit?: bigint;
@@ -771,6 +778,9 @@ export class PaymasterClient {
                     feePolicy: options?.feePolicy,
                 }
             );
+            if (fallback && options?.requireEstimate) {
+                throw new Error('Estimation Error: the endpoint has no eth_estimateUserOperationGas; refusing the local defaults (requireEstimate); nothing was signed');
+            }
             // A fallback (no estimation endpoint) yields local defaults: used as they are and labelled 'default'.
             if (!fallback) rawEstimate = FIELDS.every((k) => est[k] !== undefined) ? est as GasEstimate : undefined;
             if (options?.tuneEstimate && !fallback && !rawEstimate) {
@@ -1133,6 +1143,9 @@ export class PaymasterClient {
             }
 
             if (result.error && (result.error.code === -32601 || result.error.message?.includes('Method not found'))) {
+                 if (options?.noDirectSendFallback) {
+                     throw new Error('Bundler Error: the endpoint has no eth_sendUserOperation, and the direct handleOps fallback is off (noDirectSendFallback); the signed op was not sent');
+                 }
                  console.log('[PaymasterClient] SendUserOp failed (Method not found). Falling back to direct handleOps...');
                  
                  const caller = wallet.account?.address ? wallet.account.address : wallet.account;

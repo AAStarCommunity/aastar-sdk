@@ -68,6 +68,17 @@
  *   - SP_RENEW chosen by the SDK (superPaymasterFlags is never passed here): the flags byte sent
  *     equals the bundled one; SP_RENEW => AllowanceRenewed(bySP=true) and autoRenewUsed +1; no SP_RENEW
  *     => neither.
+ * Threat model (DSR 2026-11-19; the reviews hold the script to it):
+ *   defended — the author's / operator's honest misconfiguration (network, key, RPC, bundler, fork / live mixed up);
+ *   chain state changing between the read-back gate and a signature (upgrade, rewiring, operator / account / floor
+ *   changes: re-read at one block right before every signature); the SDK's own retries and estimate drift (one
+ *   signature per op, no direct-send fallback, no local-default gas); assertions that must fail the run when the
+ *   behaviour is wrong. A public / anvil-derived key never signs on a real chain.
+ *   not defended — an adversary controlling this process, a local RPC proxy or the local bundler.
+ *   Run precondition (not a code property): an upgrade between the last check and inclusion is covered by the
+ *   deployment's upgrade freeze — SuperPaymaster's 48 h timelock gives that window; every live row records its check
+ *   block and its inclusion block, so the interval can be read back afterwards for upgrade events.
+ *
  * Exit 2 = refused before sending; 1 = something sent or read back wrong; 0 = all assertions held.
  */
 import * as fs from 'fs';
@@ -168,7 +179,9 @@ async function main() {
     if (cfg.mode === 'live' && cfg.gate?.block !== undefined && cfg.gate.block !== 'finalized') refuse('mode live: gate.block must be "finalized" (or omitted)');
     const operator = getAddress(cfg.operator ?? refuse('config.operator is required'));
     const account = getAddress(cfg.account ?? refuse('config.account is required'));
-    const maxOps = Number(cfg.maxOps ?? 8);
+    // A spending bound: a finite integer 1..32, validated before anything is read or signed.
+    const maxOps = cfg.maxOps === undefined ? 8 : Number(cfg.maxOps);
+    if (!Number.isSafeInteger(maxOps) || maxOps < 1 || maxOps > 32) refuse(`maxOps must be an integer from 1 to 32 (got ${JSON.stringify(cfg.maxOps)})`);
 
     // ---- 2. the read-back gate must pass on these RPCs ----
     const gateRpcs: GateRpc[] = rpcUrls.map((url, i) => ({
@@ -207,7 +220,7 @@ async function main() {
             const c = createPublicClient({ transport: http(url) });
             const cv = await c.request({ method: 'web3_clientVersion' } as never).catch(() => undefined);
             const info = await c.request({ method: 'anvil_nodeInfo' } as never).catch(() => undefined);
-            if (!isAnvilClient(cv) || info === undefined) refuse(`mode fork: ${new URL(url).host} does not prove it is anvil (client ${String(cv)}, anvil_nodeInfo ${info === undefined ? 'unavailable' : 'ok'})`);
+            if (!isAnvilClient(cv) || info === null || typeof info !== 'object') refuse(`mode fork: ${new URL(url).host} does not prove it is anvil (client ${String(cv)}, anvil_nodeInfo ${info && typeof info === 'object' ? 'ok' : 'unavailable'})`);
             const id = await c.getChainId();
             if (id !== net.chainId) refuse(`mode fork: ${new URL(url).host} reports chain ${id}, not ${net.network} (${net.chainId})`);
         }
@@ -280,7 +293,12 @@ async function main() {
         const reg = getAddress(await read(sp, SuperPaymasterV550ABI, 'REGISTRY'));
         const regImpl = await implOf(reg);
         const o = (await read(sp, SuperPaymasterV550ABI, 'operators', [operator])) as readonly any[];
+        const tkn = getAddress(o[3]);
         return {
+            blockNumber,
+            operatorConfigured: Boolean(o[1]), operatorPaused: Boolean(o[2]), minTxInterval: BigInt(o[5]),
+            accountOwner: String(await read(account, SimpleAccountABI, 'owner').catch(() => '(no account yet)')).toLowerCase(),
+            renewalMode: Number(await read(tkn, xPNTsTokenV2ABI, 'renewalMode', [account]).catch(() => -1)),
             impl, implCodehash: await codehash(impl),
             extension: getAddress(await read(sp, SuperPaymasterV550ABI, 'EXTENSION')),
             entryPoint: getAddress(await read(sp, SuperPaymasterV550ABI, 'entryPoint')),
@@ -302,9 +320,13 @@ async function main() {
     // The token every encoded call and every precondition uses is the snapshot's (one read, not two).
     if (gated.token !== getAddress(token)) refuse(`the operator's token changed while it was being read (${token} -> ${gated.token})`);
     if (gated.registry !== getAddress(registry)) refuse('SP.REGISTRY() changed while it was being read');
+    if (!gated.operatorConfigured || gated.operatorPaused) refuse(`operator ${operator} is not configured or is paused on ${sp}`);
+    if (gated.minTxInterval !== minTxInterval) refuse('operators().minTxInterval changed while it was being read');
+    let lastCheckBlock = gated.blockNumber;
     const recheck = async (label: string) => {
         const now = await wiring();
-        const changed = (Object.keys(gated) as (keyof typeof gated)[]).filter((k) => String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase());
+        lastCheckBlock = now.blockNumber;
+        const changed = (Object.keys(gated) as (keyof typeof gated)[]).filter((k) => k !== 'blockNumber' && String(now[k]).toLowerCase() !== String(gated[k]).toLowerCase());
         if (changed.length) fail(`${label}: refused before signing — SuperPaymaster changed since the gate (${changed.map((k) => `${k} ${gated[k]} -> ${now[k]}`).join('; ')})`);
     };
     console.log(`SP ${sp} · EntryPoint ${ep} · operator ${operator} · token ${token} · minTxInterval ${minTxInterval}s · bundler ${cfg.mode === 'fork' ? '(this run\'s own, on the fork)' : new URL(cfg.bundlerUrl).host}`);
@@ -353,18 +375,21 @@ async function main() {
     // An unreachable bundler, a non-2xx answer, a non-JSON-RPC body, or any JSON-RPC error other than
     // method-not-found (-32601: the method is optional) fails here — an auth / rate-limit / internal error
     // is not a usable gas source (Codex r4).
-    // Mode fork: this run's own Alto, bound to the verified fork RPC, on a free loopback port, stopped on exit.
-    const bundlerUrl: string = cfg.mode === 'fork' ? await startForkBundler(rpcUrls[0], ep, pub) : cfg.bundlerUrl;
-    const bundlerHost = new URL(bundlerUrl).host;
-    let bundlerReply: any;
-    try {
-        const res = await fetch(bundlerUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }), signal: AbortSignal.timeout(15_000) });
-        if (!res.ok) return fail(`GAS SOURCE: bundler ${bundlerHost} answered HTTP ${res.status}`);
-        bundlerReply = await res.json();
-    } catch (e: any) { return fail(`GAS SOURCE: bundler ${bundlerHost} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
-    const bundlerClient = gasSourceClient(bundlerReply);
-    if (bundlerClient === undefined) fail(`GAS SOURCE: bundler ${bundlerHost} did not give a client version or method-not-found (error ${JSON.stringify(bundlerReply?.error?.code ?? null)})`);
-    console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${bundlerHost} (client ${bundlerClient}); the SDK estimates nothing locally`);
+    const checkGasSource = async (url: string) => {
+        const bundlerHost = new URL(url).host;
+        let bundlerReply: any;
+        try {
+            const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'web3_clientVersion', params: [] }), signal: AbortSignal.timeout(15_000) });
+            if (!res.ok) return fail(`GAS SOURCE: bundler ${bundlerHost} answered HTTP ${res.status}`);
+            bundlerReply = await res.json();
+        } catch (e: any) { return fail(`GAS SOURCE: bundler ${bundlerHost} did not answer JSON-RPC (${e?.name ?? 'error'})`); }
+        const bundlerClient = gasSourceClient(bundlerReply);
+        if (bundlerClient === undefined) fail(`GAS SOURCE: bundler ${bundlerHost} did not give a client version or method-not-found (error ${JSON.stringify(bundlerReply?.error?.code ?? null)})`);
+        console.log(`GAS SOURCE: eth_estimateUserOperationGas on bundler ${bundlerHost} (client ${bundlerClient}); the SDK estimates nothing locally`);
+    };
+    // Mode fork starts its own bundler only for a real run (after preflight): preflight neither spawns nor funds anything.
+    let bundlerUrl = cfg.mode === 'fork' ? '' : cfg.bundlerUrl as string;
+    if (cfg.mode !== 'fork') await checkGasSource(bundlerUrl);
 
     // ---- the user's signer, counted ----
     // Prompted only now, after the gate passed, so a failing read-back never asks for the password.
@@ -384,7 +409,13 @@ async function main() {
     let signBudget = Infinity;
     let signDeadline: bigint | undefined;
     let beforeSign: (() => Promise<void>) | undefined;
-    const user = { ...base, signMessage: async (a: any) => {
+    // H1: the user's key signs UserOps only; a transaction (the SDK's direct-send fallback, or anything else) is refused
+    // except in C12, whose cell IS the EOA's own handleOps.
+    let allowTx = false;
+    const user = { ...base, signTransaction: async (t: any, o?: any) => {
+        if (!allowTx) throw new Error('the user key signs no transaction outside C12 (a direct handleOps send would pay from the author\'s ETH); refused');
+        return (base as any).signTransaction(t, o);
+    }, signMessage: async (a: any) => {
         if (signs >= signBudget) throw new Error(`signature budget exhausted (${signBudget}) — a retry would sign again; refused`);
         if (beforeSign) await beforeSign();
         if (signDeadline !== undefined) {
@@ -463,6 +494,14 @@ async function main() {
         result(`preflight: gate passed, preconditions met for ${account} (allowance ${s0.used}/${s0.cap}, autoRenewUsed ${s0.renewUsed}/${K}); no op sent`);
         return;
     }
+    // The account's own fields are taken once the preconditions hold (fork setup may have just created / configured it);
+    // from here every signature re-checks them like the SuperPaymaster fields.
+    { const fresh = await wiring(); gated.accountOwner = fresh.accountOwner; gated.renewalMode = fresh.renewalMode; }
+    if (cfg.mode === 'fork') {
+        // Mode fork: this run's own Alto, bound to the verified fork RPC, on a free loopback port, stopped on exit.
+        bundlerUrl = await startForkBundler(rpcUrls[0], ep, pub);
+        await checkGasSource(bundlerUrl);
+    }
 
     // ---- helpers ----
     // Bounded: each request 15 s, the whole wait 180 s; an HTTP or JSON-RPC error is reported, not taken as "pending".
@@ -516,7 +555,10 @@ async function main() {
         : `gas=${FIELDS.map((k) => `${k}:${d.limits[k]}(${d.limitSources[k]})`).join(',')} limitsSource=${d.limitsSource}` +
           `${d.coefficientBps !== undefined ? ` coefficientBps=${d.coefficientBps}` : ''} maxFee=${d.fees.maxFeePerGas} priority=${d.fees.maxPriorityFeePerGas} feeSource=${d.fees.source}` +
           `${d.feesRaisedByBundler ? ' feesRaisedByBundler' : ''}`;
-    const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
+    // No direct-send fallback (it pays from the user's EOA) and no local-default gas: a bundler that cannot estimate or
+    // cannot accept a UserOp is refused before anything is signed or spent.
+    const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
+        ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
     const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
         if (o.spaced !== false) await spaced();
         SuperPaymasterInflightGuard.clearAll();
@@ -534,7 +576,12 @@ async function main() {
             // B5 (DSR): a bundler rejection (e.g. an efficiency check) is reported with its reason and the numbers — the
             // numbers from the op that was actually sent (onGasDecided only runs after acceptance).
             const sent = bundlerCalls.slice(first).filter((c) => c.method === 'eth_sendUserOperation').at(-1);
-            result(`${label}: REJECTED before inclusion — ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 300)} · ${sent?.gas ? `sent gas=${FIELDS.map((k) => `${k}:${sent.gas![k]}`).join(',')} maxFee=${sent.gas.maxFeePerGas} priority=${sent.gas.maxPriorityFeePerGas}` : 'nothing sent'}`);
+            const msg = String(e?.shortMessage ?? e?.message ?? e).slice(0, 300);
+            // Three outcomes, not one: nothing left this process; the bundler answered with a JSON-RPC error; or an op was
+            // sent and the outcome is unknown (a lost / malformed answer) — then it may be pending: read the nonce first.
+            const outcome = !sent ? 'NOT SENT' : /Bundler Error|"code"|-32\d{3}/.test(msg) ? 'REJECTED by the bundler' : 'OUTCOME UNKNOWN (sent; check the EntryPoint nonce before rerunning)';
+            const nonceNow = await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] }).catch(() => undefined);
+            result(`${label}: ${outcome} — ${msg} · ${sent?.gas ? `sent gas=${FIELDS.map((k) => `${k}:${sent.gas![k]}`).join(',')} maxFee=${sent.gas.maxFeePerGas} priority=${sent.gas.maxPriorityFeePerGas}` : 'nothing sent'} · EntryPoint nonce now ${nonceNow ?? '?'} · checked at block ${lastCheckBlock}`);
             throw e;
         } finally { signBudget = Infinity; beforeSign = undefined; }
         lastSent = Date.now();
@@ -566,7 +613,8 @@ async function main() {
         result(`${label}: success=${rc.success} S_user signMessage=${signsForOp} estimates=${estimates} (placeholder sig) sends=${sends.length} ` +
             `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
-            `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} actualGasUsed=${actualGasUsed} efficiency=${efficiency} · ${gasRow(decision)} · tx ${txHash}`);
+            `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} actualGasUsed=${actualGasUsed} efficiency=${efficiency} · ${gasRow(decision)} · ` +
+            `checked at block ${lastCheckBlock}, included in block ${chainRc.blockNumber} · tx ${txHash}`);
         if (decision === undefined) fail(`${label}: the SDK reported no gas decision (onGasDecided) for a sent op`);
         // What was bundled must be what the decision says (not only what the callback reported), and frozen = verbatim.
         const offLimits = FIELDS.filter((k) => bundled.limits[k] !== decision!.limits[k]);
@@ -625,6 +673,14 @@ async function main() {
             result(`S1r second op ${elapsedChain}s (chain time) after S1 (minTxInterval ${minTxInterval}s): ${nyv ? `rejected not yet valid at send (validAfter ${nyv.validAfter ?? '?'}, now ${nyv.now ?? '?'})` : rejected ? `rejected otherwise: ${String((rejected as any)?.message ?? rejected).slice(0, 200)}` : 'ACCEPTED'} · sends=${sends.length} S_user signMessage=${signs} · ${sentGas ? `sent gas=${FIELDS.map((k) => `${k}:${sentGas[k]}`).join(',')} (S1's limits, frozen)` : 'nothing sent'}`);
             if (!nyv) fail('S1r: the second op inside minTxInterval was not refused as UserOperationNotYetValidError (-32503)');
             if (!validAfterFuture) fail('S1r: the refusal carries no validAfter in the future (not attributable to the operator\'s interval)');
+            // validAfter is S1's inclusion time + the operator's interval (SP stamps the postOp timestamp; ±2 s for block time).
+            const expectVA = s1Block.timestamp + minTxInterval;
+            if (nyv!.validAfter! < expectVA - 2n || nyv!.validAfter! > expectVA + 2n) fail(`S1r: validAfter ${nyv!.validAfter} is not S1's block time ${s1Block.timestamp} + minTxInterval ${minTxInterval} (±2 s): another validity window, not the operator's interval`);
+            if (calls.some((c) => c.method === 'eth_estimateUserOperationGas')) fail('S1r: an estimate was requested; the cell sends S1\'s limits frozen');
+            const sentLimits = sends.at(-1)?.gas;
+            const offS1 = FIELDS.filter((k) => sentLimits?.[k] !== s1.decision!.limits[k]);
+            if (offS1.length) fail(`S1r: sent limits are not S1's (${offS1.map((k) => `${k} ${sentLimits?.[k]} vs ${s1.decision!.limits[k]}`).join('; ')})`);
+            if (!sends.at(-1)?.signature || sends.at(-1)!.signature === '0x' || sends.at(-1)!.signature!.toLowerCase() === DUMMY_SIGNATURE.toLowerCase()) fail('S1r: the send carried the placeholder or no signature');
             if (sends.length !== 1) fail(`S1r: ${sends.length} eth_sendUserOperation calls; the cell is one send, refused`);
             if (signs !== 1) fail(`S1r: signMessage ${signs} times; the cell is one signature`);
             lastSent = Date.now(); // the next op waits a full interval
@@ -635,10 +691,13 @@ async function main() {
         if (!renewal) {
             const floor = BigInt(await tok('SP_CAP_FLOOR'));
             if ((await state()).cap > floor) {
-                await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
+                // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
+                // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
+                const setup = await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
                     abi: SimpleAccountABI, functionName: 'execute',
                     args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
                 }));
+                if (setup.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = setup;
             }
             for (let i = 1; i <= maxOps && !renewal; i++) {
                 const r = await op(`S3b spend ${i}/${maxOps}`, noop);
@@ -668,12 +727,12 @@ async function main() {
             }
             await recheck('C12');
             const epNonce = (await pub.readContract({ address: ep, abi: EntryPointABI, functionName: 'getNonce', args: [account, 0n] })) as bigint;
-            signBudget = 1; beforeSign = () => recheck('C12');
+            signBudget = 1; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
                 estimateBundlerUrl: bundlerUrl, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
-            }).finally(() => { signBudget = Infinity; beforeSign = undefined; })) as Hex;
+            }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });
             let ev: any;
             // The event from the EntryPoint, for this account and the nonce the op was built with.
@@ -686,7 +745,7 @@ async function main() {
             const eth1 = await pub.getBalance({ address: base.address });
             const c12Gas = c12 === undefined ? 'gas=(no decision reported)'
                 : `gas=${FIELDS.map((k) => `${k}:${c12.limits[k]}(${c12.limitSources[k]})`).join(',')} coefficientBps=${c12.coefficientBps} maxFee=${c12.fees.maxFeePerGas} priority=${c12.fees.maxPriorityFeePerGas} feeSource=${c12.fees.source} handleOpsGas:${c12.handleOps.gasLimit}(estimate ${c12.handleOps.estimate})`;
-            result(`C12 createEndUserClient().executeGasless: tx ${rc.status} from ${rc.from} UserOperationEvent.success=${ev?.success} actualGasUsed=${ev?.actualGasUsed} · user xPNTs -${c0.bal - c1.bal} · EOA ETH -${eth0 - eth1} · S_user signMessage=${signs} · handleOps gasUsed=${rc.gasUsed} · ${c12Gas} · tx ${tx}`);
+            result(`C12 createEndUserClient().executeGasless: tx ${rc.status} from ${rc.from} UserOperationEvent.success=${ev?.success} actualGasUsed=${ev?.actualGasUsed} · user xPNTs -${c0.bal - c1.bal} · EOA ETH -${eth0 - eth1} · S_user signMessage=${signs} · handleOps gasUsed=${rc.gasUsed} · ${c12Gas} · checked at block ${lastCheckBlock}, included in block ${rc.blockNumber} · tx ${tx}`);
             if (c12 === undefined) fail('C12: executeGasless reported no gas decision');
             if (frozenGas && FIELDS.some((k) => c12.limits[k] !== frozenGas![k])) fail(`C12: frozenGas was not used verbatim (${c12Gas})`);
             // What was mined must be what the SDK reported: the op's five limits, fees and paymaster, and the outer gas.

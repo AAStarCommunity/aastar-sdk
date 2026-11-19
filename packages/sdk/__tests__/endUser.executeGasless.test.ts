@@ -68,17 +68,22 @@ function harness(version: string, opts: { minPostOpGas?: bigint; configured?: bo
             default: throw Object.assign(new Error(`unexpected ${method}`), { code: -32601 });
         }
     });
+    const account = privateKeyToAccount(KEY);
+    const signMessage = vi.spyOn(account, 'signMessage');
+    const signTransaction = vi.spyOn(account, 'signTransaction');
     const c: any = createEndUserClient({
         chain: sepolia,
         transport: custom({ request }, { retryCount: 0 }),
-        account: privateKeyToAccount(KEY),
+        account,
         addresses: { superPaymaster: SP, entryPoint: EP },
     });
     c.createSmartAccount = async () => ({ accountAddress: AA, initCode: '0x', isDeployed: true });
     const sentTx = () => parseTransaction(sentRaw!);
     const sentOp = () => (decodeFunctionData({ abi: handleOpsAbi, data: sentTx().data! }).args[0] as any)[0];
     const paymasterAndData = (): Hex => sentOp().paymasterAndData as Hex;
-    return { c, paymasterAndData, sentTx, sentOp, request, sent: () => sentRaw };
+    /** Neither signer method was called and nothing was broadcast. */
+    const untouched = () => { expect(signMessage).not.toHaveBeenCalled(); expect(signTransaction).not.toHaveBeenCalled(); expect(sentRaw).toBeUndefined(); };
+    return { c, paymasterAndData, sentTx, sentOp, request, sent: () => sentRaw, untouched, signMessage, signTransaction };
 }
 
 const EXPLICIT = { verificationGasLimit: 90_000n, callGasLimit: 80_000n, preVerificationGas: 60_000n, paymasterVerificationGasLimit: 210_000n, paymasterPostOpGasLimit: 400_000n };
@@ -109,9 +114,9 @@ describe('createEndUserClient().executeGasless builds a paymasterAndData the dep
 
 describe('executeGasless gas: explicit or estimate x coefficient, never an SDK constant (DSR D14)', () => {
     it('no gas and no estimateBundlerUrl: refused before anything is signed or sent', async () => {
-        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 350_000n });
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 350_000n });
         await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR })).rejects.toThrow(/no gas source for .*pass gas or estimateBundlerUrl/);
-        expect(sent()).toBeUndefined();
+        untouched();
     });
 
     it('estimate x 1.5 per limit, preVerificationGas x 1.0 (labelled estimate), postOp raised to the chain floor (floor), fees from eth_feeHistory, handleOps gas = node estimate x 1.5', async () => {
@@ -143,7 +148,7 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
     });
 
     it('an endpoint that cannot estimate (-32601): refused before signing, the local defaults are never used (Codex H2)', async () => {
-        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
         const fetchMock = vi.fn(async (_u: string, init: any) => {
             const body = JSON.parse(init.body);
             return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, error: { code: -32601, message: 'Method not found' } }), { status: 200, headers: { 'content-type': 'application/json' } });
@@ -152,14 +157,14 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         try {
             await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337' })).rejects.toThrow(/has no eth_estimateUserOperationGas; no estimate to use/);
         } finally { vi.unstubAllGlobals(); }
-        expect(sent()).toBeUndefined();
+        untouched();
     });
 
     it('an explicit postOp below the chain floor is refused before signing, never silently raised (Codex r2 M7)', async () => {
-        const { c, sent } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        const { c, untouched } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
         await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: { ...EXPLICIT, paymasterPostOpGasLimit: 150_000n } }))
             .rejects.toThrow(/gas.paymasterPostOpGasLimit 150000 is below .* minPostOpGas 500000; nothing was signed/);
-        expect(sent()).toBeUndefined();
+        untouched();
     });
 
     it('explicit fields fill what the estimate left out; the estimate request carries the signed op\'s nonce and fees (Codex r2 M8 / M9)', async () => {
@@ -181,6 +186,15 @@ describe('executeGasless gas: explicit or estimate x coefficient, never an SDK c
         expect(BigInt(seen[0].nonce)).toBe(BigInt(sentOp().nonce)); // the nonce the op is signed with
         expect(BigInt(seen[0].maxFeePerGas)).toBe(9_000_000_000n);
         expect(BigInt(seen[0].maxPriorityFeePerGas)).toBe(2_000_000_000n);
+    });
+
+    it('an observer that mutates its decision (and throws) changes neither the signed op nor the transaction (Codex r3 M11)', async () => {
+        const { c, sentTx, sentOp } = harness('SuperPaymaster-5.5.0', { minPostOpGas: 100_000n });
+        await c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, onGasDecided: (d: any) => {
+            d.fees.maxFeePerGas = 1n; d.limits.callGasLimit = 1n; throw new Error('observer');
+        } });
+        expect(sentTx().maxFeePerGas).not.toBe(1n);
+        expect(BigInt('0x' + (sentOp().accountGasLimits as string).slice(34))).toBe(EXPLICIT.callGasLimit);
     });
 
     it('explicit fields win over the estimate and are labelled explicit', async () => {
