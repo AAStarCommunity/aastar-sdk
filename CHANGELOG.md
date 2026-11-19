@@ -17,9 +17,12 @@ All notable changes to this project will be documented in this file.
   destination. Requests must be plain objects — prototype `Object.prototype` or `null` and every own field enumerable (a class
   instance, an `Object.create(...)` request or a non-enumerable field is refused: copying it would drop fields viem
   reads and turn a call into a contract creation; an object from another realm, e.g. `node:vm`, is refused too); for a plain
-  object the one copy that is checked is the one passed on. A contract write without a string address (a missing book key)
-  and a batch call without a string `to` are refused; a top-level send with an own `to` of
-  undefined / null is refused (a send without any `to` field is a deployment and stays allowed). Each refusal names its reason; only a zero destination is worded as a
+  object the one copy that is checked is the one passed on. **One destination rule** (DSR on #466): every destination —
+  a contract write's `address`, an own top-level `to`, each batch call's `to` — must pass viem's `isAddress` in strict
+  mode (the rule viem's own `assertRequest` applies: mixed case needs a valid checksum) before the zero check, else it is
+  refused as `invalid-address`; that covers missing, `null`, `''`, `'0x'`, numbers and malformed hex alike. A send
+  without any `to` field is a deployment and stays allowed; an own `to: null` is refused on purpose (in this SDK it
+  comes from a missing book entry — deploy by omitting `to`, or with `deployContract`). Each refusal names its reason; only a zero destination is worded as a
   contract the deployment does not include. Raw transactions viem's generic parser cannot read (e.g. ZKsync 0x71) are refused, not sent. Trusted, not guarded: the client's chain configuration (a custom
   `chain.prepareTransactionRequest` can rewrite a request), and `signAuthorization` (EIP-7702; zero means revoke).
 - Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter

@@ -10,15 +10,15 @@
  * an adversary who controls the request object, the chain configuration or the process (those can send anywhere).
  */
 import { deployContract, fillTransaction, prepareTransactionRequest, sendCalls, sendCallsSync, sendRawTransaction, sendRawTransactionSync, sendTransaction, sendTransactionSync, signTransaction, writeContract, writeContractSync } from 'viem/actions';
-import { parseTransaction, type Client } from 'viem';
+import { isAddress, parseTransaction, type Client } from 'viem';
 
 const ZERO = /^0x0{40}$/i;
 
 /** Why a request was refused: the reason decides the wording (only 'zero' is about a missing contract). */
-export type ZeroDestinationReason = 'zero' | 'no-destination' | 'not-plain' | 'conflicting-to' | 'unreadable-raw';
+export type ZeroDestinationReason = 'zero' | 'invalid-address' | 'not-plain' | 'conflicting-to' | 'unreadable-raw';
 const REASON: Record<ZeroDestinationReason, string> = {
     'zero': 'to the zero address: the selected deployment does not include that contract',
-    'no-destination': 'with no destination (a missing address-book entry would make it a contract creation)',
+    'invalid-address': 'with a destination that is not an address (missing, empty or malformed: viem would send it as a contract creation or reject it)',
     'not-plain': 'with a request that is not a plain object (its copy would not be what viem reads)',
     'conflicting-to': 'with a `to` field the destination is not taken from',
     'unreadable-raw': "with a serialized transaction viem's generic parser does not read (e.g. a ZKsync 0x71 transaction)",
@@ -33,6 +33,16 @@ export class ZeroAddressDestinationError extends Error {
 
 /** True for an address that names "not deployed". */
 export const isZeroAddress = (a: unknown): boolean => typeof a === 'string' && ZERO.test(a);
+
+/**
+ * The one destination rule (DSR #466: accept the good shape instead of enumerating bad ones): a destination must be a
+ * string that viem's isAddress accepts in strict mode — the same rule viem's own assertRequest applies, so it refuses
+ * nothing viem would have sent to a real address (a mixed-case address must carry a valid checksum; all-lower / all-
+ * upper hex passes) — and only then is it checked against zero. undefined, null, '', '0x', numbers, short or long hex
+ * all fail the first test, as 'invalid-address'.
+ */
+const destinationProblem = (a: unknown): ZeroDestinationReason | undefined =>
+    typeof a !== 'string' || !isAddress(a, { strict: true }) ? 'invalid-address' : isZeroAddress(a) ? 'zero' : undefined;
 
 /**
  * viem extension: every wallet action that builds, signs or sends a call to a destination — writeContract(Sync),
@@ -77,9 +87,8 @@ export function zeroDestinationGuard(client: Client) {
         // ANY own `to` key, whatever its value: viem builds { to: address, ...request }, so even `to: undefined` would
         // overwrite the checked address and turn the call into a creation (clestons #466 N1).
         if (args && Object.prototype.hasOwnProperty.call(args, 'to')) return Promise.reject(new ZeroAddressDestinationError(method, `${args.functionName ?? 'call'}: a contract call takes its destination from address`, 'conflicting-to'));
-        // A missing address (a book key absent) would make viem send a contract creation: refused like zero.
-        if (typeof args?.address !== 'string') return Promise.reject(new ZeroAddressDestinationError(method, args?.functionName, 'no-destination'));
-        return isZeroAddress(args.address) ? Promise.reject(new ZeroAddressDestinationError(method, args?.functionName)) : run(client, args);
+        const bad = destinationProblem(args?.address);
+        return bad ? Promise.reject(new ZeroAddressDestinationError(method, args?.functionName, bad)) : run(client, args);
     };
     // A deployment has no destination; viem spreads extra fields into a direct sendTransaction, so any `to` is refused.
     const noTo = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
@@ -87,23 +96,27 @@ export function zeroDestinationGuard(client: Client) {
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
         return args?.to !== undefined ? Promise.reject(new ZeroAddressDestinationError(method, 'a deployment carries no to', 'conflicting-to')) : run(client, args);
     };
-    // A request that names `to` must name a real one: an own `to` of undefined / null is a missing book entry (a send
-    // without any `to` field stays allowed: that is a deployment, as viem defines it).
+    // A request that names `to` must name a real address. A send without any `to` field is a deployment, as viem
+    // defines it, and passes. An own `to` that is null is refused on purpose (clestons #466 follow-up 2): viem reads
+    // null as "create", but in this SDK a null `to` comes from a missing address-book entry; deploy by omitting `to`
+    // or with deployContract.
     const byTo = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
-        if (args && Object.prototype.hasOwnProperty.call(args, 'to') && (args.to === undefined || args.to === null)) return Promise.reject(new ZeroAddressDestinationError(method, undefined, 'no-destination'));
-        return isZeroAddress(args?.to) ? Promise.reject(new ZeroAddressDestinationError(method)) : run(client, args);
+        if (!args || !Object.prototype.hasOwnProperty.call(args, 'to')) return run(client, args);
+        const bad = destinationProblem(args.to);
+        return bad ? Promise.reject(new ZeroAddressDestinationError(method, undefined, bad)) : run(client, args);
     };
     const byCalls = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {
         let args: any;
         try { args = snap(method)(raw); } catch (e) { return Promise.reject(e); }
         const calls: any[] = args?.calls ?? [];
-        // A call without a destination would be a contract creation (viem's Call type requires `to`): refused, like a missing address.
-        const noTo = calls.findIndex((c) => typeof c?.to !== 'string');
-        if (noTo >= 0) return Promise.reject(new ZeroAddressDestinationError(method, `call ${noTo}`, 'no-destination'));
-        const i = calls.findIndex((c) => isZeroAddress(c?.to));
-        return i >= 0 ? Promise.reject(new ZeroAddressDestinationError(method, `call ${i}`)) : run(client, args);
+        // Every call needs a destination (viem's Call type requires `to`; a call without one would be a creation).
+        for (let i = 0; i < calls.length; i++) {
+            const bad = destinationProblem(calls[i]?.to);
+            if (bad) return Promise.reject(new ZeroAddressDestinationError(method, `call ${i}`, bad));
+        }
+        return run(client, args);
     };
     // Bytes signed elsewhere: decoded, and refused when they would call the zero address.
     const byRaw = (method: string, run: (c: any, a: any) => Promise<any>) => (raw: any): Promise<any> => {

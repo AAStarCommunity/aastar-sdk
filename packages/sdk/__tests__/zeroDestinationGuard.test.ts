@@ -292,12 +292,12 @@ describe('clestons #466 B2 and follow-ups: non-enumerable fields, calls without 
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 
-    it('a contract write whose address is null or a number is refused (no-destination), not only undefined', async () => {
+    it('a contract write whose address is null or a number is refused (invalid-address), not only undefined', async () => {
         const { methods, transport } = recording();
         const account = mnemonicToAccount(MNEMONIC);
         const client: any = createOperatorClient({ chain: sepolia, transport, account });
         for (const address of [null, 0, undefined]) {
-            expect(named(await client.writeContract({ address, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, String(address)).toBe('no-destination');
+            expect(named(await client.writeContract({ address, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, String(address)).toBe('invalid-address');
         }
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
@@ -306,14 +306,14 @@ describe('clestons #466 B2 and follow-ups: non-enumerable fields, calls without 
         const { methods, transport } = recording();
         const account = mnemonicToAccount(MNEMONIC);
         const client: any = createOperatorClient({ chain: sepolia, transport, account });
-        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ value: 7n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('no-destination');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ value: 7n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
         expect(named(await client.sendCalls({ account, chain: sepolia, calls: { 0: { to: NONZERO }, length: 1 } }).catch((e: unknown) => e))?.reason).toBe('not-plain');
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 
     it('only a zero destination is worded as a missing contract', () => {
         expect(new ZeroAddressDestinationError('sendTransaction').message).toMatch(/zero address: the selected deployment does not include that contract/);
-        for (const r of ['no-destination', 'not-plain', 'conflicting-to', 'unreadable-raw'] as const) {
+        for (const r of ['invalid-address', 'not-plain', 'conflicting-to', 'unreadable-raw'] as const) {
             expect(new ZeroAddressDestinationError('sendTransaction', undefined, r).message).not.toMatch(/zero address/);
         }
     });
@@ -348,11 +348,11 @@ describe('clestons #466 N1 and follow-ups: an own `to` key on a contract write, 
         expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
     });
 
-    it.each([[null], [0], [123n]] as const)('a batch call whose `to` is %s: refused as no-destination', async (to) => {
+    it.each([[null], [0], [123n]] as const)('a batch call whose `to` is %s: refused as invalid-address', async (to) => {
         const { methods, transport } = recording();
         const account = mnemonicToAccount(MNEMONIC);
         const client: any = createOperatorClient({ chain: sepolia, transport, account });
-        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('no-destination');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 
@@ -362,11 +362,50 @@ describe('clestons #466 N1 and follow-ups: an own `to` key on a contract write, 
         const client: any = createOperatorClient({ chain: sepolia, transport, account });
         for (const to of [undefined, null]) {
             for (const m of ['sendTransaction', 'signTransaction', 'prepareTransactionRequest']) {
-                expect(named(await client[m]({ to, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, `${m} ${to}`).toBe('no-destination');
+                expect(named(await client[m]({ to, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, `${m} ${to}`).toBe('invalid-address');
             }
         }
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
         const deploy = await client.sendTransaction({ data: '0x6000', account, chain: sepolia }).catch((e: unknown) => e);
         expect(named(deploy)).toBeUndefined();
+    });
+});
+
+describe('DSR #466: one destination rule (strict isAddress, then zero) instead of enumerating bad shapes', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+    const BAD = ['', '0x', '0x1234', NONZERO + '11', '0xZZ11111111111111111111111111111111111111', '0x5aaeb6053F3E94C9b9A09f33669435E7Ef1BeAed'] as const; // last: mixed case with a wrong checksum (one letter's case flipped)
+
+    it.each(BAD)('destination %j is refused as invalid-address by sendTransaction and writeContract (with value): nothing signed or sent', async (d) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendTransaction({ to: d, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(named(await client.writeContract({ address: d, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to: d, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('all-lower-case and correctly checksummed addresses pass (the rule refuses nothing viem would send)', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        await client.sendTransaction({ to: '0x52908400098527886e0f7030069857d2e4169ee7', value: 1n, account, chain: sepolia });
+        await client.sendTransaction({ to: '0x52908400098527886E0F7030069857D2E4169EE7', value: 1n, account, chain: sepolia }); // all upper
+        await client.sendTransaction({ to: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed', value: 1n, account, chain: sepolia }); // EIP-55
+        expect(raw).toHaveLength(3);
+    });
+
+    it('sendRawTransaction of bytes the generic parser cannot read is refused as unreadable-raw (clestons follow-up 1)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const serializedTransaction of ['0xdeadbeef', '0x71c0']) {
+            expect(named(await client.sendRawTransaction({ serializedTransaction }).catch((e: unknown) => e))?.reason, serializedTransaction).toBe('unreadable-raw');
+        }
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 });
