@@ -1,0 +1,87 @@
+# run-a7.sh rehearsal on SP rc.4 (deploy mode, stable anvil 1.7.1), 2026-11-11 — tooling validation only (DSR), NOT A7 evidence
+# pins: docs/sp550-cutover/fork-rehearsal/pins.fork.json (schema v2) + a disclosureRegistry stand-in (EntryPoint; rc.4 deploys none) — rehearsal only
+# run.log
+A7 run (deploy): SP v5.5.0-rc.4 @ fbd74fb1e2e9d948996e6d6c02c48dc1c1778107 · SDK 1746ab74cf931a0d677223a67c1c0944e9d9de30 · fork block 12090052 · pins sha256 2b8d16f2d07fe6882604bbab26c2377bee0c97de62d9684e624d13720ebb56df
+anvil: anvil Version: 1.7.1 Commit SHA: 4072e48705af9d93e3c0f6e29e93b5e9a40caed8 Build Timestamp: 2026-05-08T07:54:31.470926000Z (1778226871) Build Profile: dist 
+bundler: UltraRelay @ bc38114bd12eb150aea3093fdea81751e3c9b941 · package 0.0.1
+stage 1 ok: fork of 11155111 at 12090052, deploy command done (deploy.log)
+stage 2a ok: 65 gate checks on the manifest pins (gate.log)
+fork-only: bundler restarted, clock shift -158882000ms
+stage 3 ok: oracle refreshed, bundler up
+stage 4 ok: 5 RESULT lines (e2e.log)
+A7 PASS
+
+# e2e.log: gate rows, gas source, RESULT lines and verdict
+=== SP 5.5.0 cutover gate — sepolia (chain 11155111, upgrade), all reads at block 12090091 (lowest latest), pins from <scratch> ===
+  gate ✅ the RPC serves a well-formed snapshot block — --rpc #12090091 0x4a71f7ea650a0392e7e85226705264b0367a2f6573b88f4b72774967b29ece94
+  gate ✅ pins complete and well-formed — ok
+  gate ✅ pins.superPaymaster == SDK book superPaymaster — observed 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9 · SDK book 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9
+  gate ✅ SP.version() == pins.spVersion — observed SuperPaymaster-5.5.0 · pinned "SuperPaymaster-5.5.0"
+  gate ✅ ERC-1967 impl == pins.spImpl — observed 0xf2b952f0e60c2EA3F433De260E0D45d12645EB88 · pinned 0xf2b952f0e60c2EA3F433De260E0D45d12645EB88
+  gate ✅ keccak256(code(impl)) == pins.spImplCodehash — observed 0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd · pinned 0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd
+  gate ✅ SP.EXTENSION() == pins.spAdminExtension — observed 0xDE8cA238d17FF91E70c515bac90efB9ff952f7b6 · pinned 0xDE8cA238d17FF91E70c515bac90efB9ff952f7b6
+  gate ✅ SP.APNTS_TOKEN() == pins.aPNTsCapped — observed 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7 · pinned 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7
+  gate ✅ SP.xpntsFactory() == pins.xPNTsFactoryV2 — observed 0xC85d2B918209E7b53613965A1e624E3759DC6224 · pinned 0xC85d2B918209E7b53613965A1e624E3759DC6224
+  gate ✅ SDK book aPNTs == SP.APNTS_TOKEN() — observed 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7 · chain 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7
+  gate ✅ SDK book xPNTsFactory == SP.xpntsFactory() — observed 0xC85d2B918209E7b53613965A1e624E3759DC6224 · chain 0xC85d2B918209E7b53613965A1e624E3759DC6224
+  gate ✅ aPNTsCapped.version() is APNTsCapped-* — APNTsCapped-1.0.0
+  gate ✅ factory.SUPERPAYMASTER() == pins.superPaymaster — observed 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9 · pinned 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9
+  gate ✅ factory.implementation() == pins.xPNTsTokenV2Impl — observed 0x5B1D105e43dc297336bB7c2EdAA1d7d4e243F99a · pinned 0x5B1D105e43dc297336bB7c2EdAA1d7d4e243F99a
+  gate ✅ factory.defaultTierSource() == pins.globalTierSource — observed 0x68c81A2af2d997232f3347E7c988AA36792c0714 · pinned 0x68c81A2af2d997232f3347E7c988AA36792c0714
+  gate ✅ factory.implementationCodehash() == keccak256(code(xPNTsTokenV2Impl)) — observed 0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51 · pinned 0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51
+  gate ✅ factory.extensionCodehash() == keccak256(code(xPNTsTokenV2Ext)) — observed 0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4 · pinned 0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4
+  gate ✅ tokenImpl.EXTENSION() == pins.xPNTsTokenV2Ext — observed 0xB96BC8a47eEf47159CdD16FDdE0CD94D6430C8c3 · pinned 0xB96BC8a47eEf47159CdD16FDdE0CD94D6430C8c3
+  gate ✅ tokenImpl.PROTOCOL_REGISTRY() == pins.aoaProtocolRegistry — observed 0x85eF30D22E5DdB0dE4673932ED34FC3aBD8E05E0 · pinned 0x85eF30D22E5DdB0dE4673932ED34FC3aBD8E05E0
+  gate ✅ Lens.EXPECTED_SP_VERSION() == keccak256(pins.spVersion) — observed 0x3e1cf292c32c121e58ca1690e67f30e3b9e8cbcf09a05462a8a1f9124cb5d7c3 · pinned 0x3e1cf292c32c121e58ca1690e67f30e3b9e8cbcf09a05462a8a1f9124cb5d7c3
+  gate ✅ Lens.version() == pins.lensVersion — observed SuperPaymasterLens-1.2.0 · pinned "SuperPaymasterLens-1.2.0"
+  gate ✅ SP.REGISTRY() == addresses.registry — observed 0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71 · pinned 0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71
+  gate ✅ SP.BLS_AGGREGATOR() == addresses.blsAggregator — observed 0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D · pinned 0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D
+  gate ✅ ERC-1967 impl of addresses.registry == pins.registryImpl — observed 0x9beD0F58d6001B0006923eb8c4b1Cc548D42ccEe · pinned 0x9bed0f58d6001b0006923eb8c4b1cc548d42ccee
+  gate ✅ SDK book registry == addresses.registry — observed 0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71 · pinned 0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71
+  gate ✅ SDK book policyRegistry == addresses.policyRegistry — observed 0x29253bF61310B63866dfb9E9f464B6d95E09f2C1 · pinned 0x29253bF61310B63866dfb9E9f464B6d95E09f2C1
+  gate ✅ SDK book blsAggregator == addresses.blsAggregator — observed 0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D · pinned 0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D
+  gate ✅ SDK book dvtValidator == addresses.dvtValidator — observed 0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e · pinned 0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e
+  gate ✅ SDK book reputationSystem == addresses.reputationSystem — observed 0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A · pinned 0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A
+  gate ✅ superPaymaster has the same non-empty code on every RPC — 0x09DF0d2e3722EC0e401fE3819E64278a42ae4DE9 · 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0
+  gate ✅ keccak256(code(superPaymaster)) == pins.codehashes.superPaymaster — observed 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0 · pinned 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0
+  gate ✅ spImpl has the same non-empty code on every RPC — 0xf2b952f0e60c2EA3F433De260E0D45d12645EB88 · 0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd
+  gate ✅ keccak256(code(spImpl)) == pins.codehashes.spImpl — observed 0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd · pinned 0xa33acc923ed2da33b159182ec42c6a0701bc68d851894a3f46d94061bafb0ebd
+  gate ✅ spAdminExtension has the same non-empty code on every RPC — 0xDE8cA238d17FF91E70c515bac90efB9ff952f7b6 · 0xce1dc81bbd49d465990cae9369aa44fa1672c189a52e54a3827e59dbba8bb724
+  gate ✅ keccak256(code(spAdminExtension)) == pins.codehashes.spAdminExtension — observed 0xce1dc81bbd49d465990cae9369aa44fa1672c189a52e54a3827e59dbba8bb724 · pinned 0xce1dc81bbd49d465990cae9369aa44fa1672c189a52e54a3827e59dbba8bb724
+  gate ✅ superPaymasterLens has the same non-empty code on every RPC — 0xAE86C09787a668fc404594994ee30f22a75D2183 · 0x4435e4a51e3293245ec1856bc9aa8d5606b9dc45b9a3dbd9742cf625e3cad3c1
+  gate ✅ keccak256(code(superPaymasterLens)) == pins.codehashes.superPaymasterLens — observed 0x4435e4a51e3293245ec1856bc9aa8d5606b9dc45b9a3dbd9742cf625e3cad3c1 · pinned 0x4435e4a51e3293245ec1856bc9aa8d5606b9dc45b9a3dbd9742cf625e3cad3c1
+  gate ✅ xPNTsFactoryV2 has the same non-empty code on every RPC — 0xC85d2B918209E7b53613965A1e624E3759DC6224 · 0xc7a770d14ffeef5e6cc8cea37da1c670d3c1fa1a3d538045c91fa3f9309574e8
+  gate ✅ keccak256(code(xPNTsFactoryV2)) == pins.codehashes.xPNTsFactoryV2 — observed 0xc7a770d14ffeef5e6cc8cea37da1c670d3c1fa1a3d538045c91fa3f9309574e8 · pinned 0xc7a770d14ffeef5e6cc8cea37da1c670d3c1fa1a3d538045c91fa3f9309574e8
+  gate ✅ xPNTsTokenV2Impl has the same non-empty code on every RPC — 0x5B1D105e43dc297336bB7c2EdAA1d7d4e243F99a · 0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51
+  gate ✅ keccak256(code(xPNTsTokenV2Impl)) == pins.codehashes.xPNTsTokenV2Impl — observed 0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51 · pinned 0xf011cb0f077ce0a8e7b2fd98f6cf5bc211c835ef038e294d4bf11fac07460b51
+  gate ✅ xPNTsTokenV2Ext has the same non-empty code on every RPC — 0xB96BC8a47eEf47159CdD16FDdE0CD94D6430C8c3 · 0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4
+  gate ✅ keccak256(code(xPNTsTokenV2Ext)) == pins.codehashes.xPNTsTokenV2Ext — observed 0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4 · pinned 0x2a19678e9e89e86497f31a2933a59071d4bca774bd6b076fe0c4921fb90e46b4
+  gate ✅ aoaProtocolRegistry has the same non-empty code on every RPC — 0x85eF30D22E5DdB0dE4673932ED34FC3aBD8E05E0 · 0x14b95e6c2b6630b835f4253ac5d667980288de98461dcda9580e25df78fb5551
+  gate ✅ keccak256(code(aoaProtocolRegistry)) == pins.codehashes.aoaProtocolRegistry — observed 0x14b95e6c2b6630b835f4253ac5d667980288de98461dcda9580e25df78fb5551 · pinned 0x14b95e6c2b6630b835f4253ac5d667980288de98461dcda9580e25df78fb5551
+  gate ✅ globalTierSource has the same non-empty code on every RPC — 0x68c81A2af2d997232f3347E7c988AA36792c0714 · 0x730436c0dcf31db7b35233abbf2c673302fb29ac02e6f09705c0e996e8e541f0
+  gate ✅ keccak256(code(globalTierSource)) == pins.codehashes.globalTierSource — observed 0x730436c0dcf31db7b35233abbf2c673302fb29ac02e6f09705c0e996e8e541f0 · pinned 0x730436c0dcf31db7b35233abbf2c673302fb29ac02e6f09705c0e996e8e541f0
+  gate ✅ aPNTsCapped has the same non-empty code on every RPC — 0x9Eb17FAc022557F64924aA2F9E018dB3A330e1E7 · 0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4
+  gate ✅ keccak256(code(aPNTsCapped)) == pins.codehashes.aPNTsCapped — observed 0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4 · pinned 0x313d60fc0cd6c959371f5ae6dc544232690e34512a6094c96ebc45bd510fb8e4
+  gate ✅ registryImpl has the same non-empty code on every RPC — 0x9bed0f58d6001b0006923eb8c4b1cc548d42ccee · 0xa43e76a74928389398d096f3a877828b84b21cd7b0294c1cfd56a888431ad5a8
+  gate ✅ keccak256(code(registryImpl)) == pins.codehashes.registryImpl — observed 0xa43e76a74928389398d096f3a877828b84b21cd7b0294c1cfd56a888431ad5a8 · pinned 0xa43e76a74928389398d096f3a877828b84b21cd7b0294c1cfd56a888431ad5a8
+  gate ✅ disclosureRegistry has the same non-empty code on every RPC — 0x0000000071727De22E5E9d8BAf0edAc6f37da032 · 0x8db5ff695839d655407cc8490bb7a5d82337a86a6b39c3f0258aa6c3b582fc58
+  gate ✅ keccak256(code(disclosureRegistry)) == pins.codehashes.disclosureRegistry — observed 0x8db5ff695839d655407cc8490bb7a5d82337a86a6b39c3f0258aa6c3b582fc58 · pinned 0x8db5ff695839d655407cc8490bb7a5d82337a86a6b39c3f0258aa6c3b582fc58
+  gate ✅ addresses.registry has the same non-empty code on every RPC — 0xf5Bf37ca83AfdAab73691bA7eCcDfA69b8708E71 · 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0
+  gate ✅ keccak256(code(addresses.registry)) == pins.codehashes.addresses.registry — observed 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0 · pinned 0xbfa8a49f3061225d6e1298934a59b43ee6ab3c042b13fc572712709ff6cc7ec0
+  gate ✅ addresses.policyRegistry has the same non-empty code on every RPC — 0x29253bF61310B63866dfb9E9f464B6d95E09f2C1 · 0x044e21f50a0c3228528c7241cf96cefaedb4adde0ac6e25ed160e9a755cec386
+  gate ✅ keccak256(code(addresses.policyRegistry)) == pins.codehashes.addresses.policyRegistry — observed 0x044e21f50a0c3228528c7241cf96cefaedb4adde0ac6e25ed160e9a755cec386 · pinned 0x044e21f50a0c3228528c7241cf96cefaedb4adde0ac6e25ed160e9a755cec386
+  gate ✅ addresses.blsAggregator has the same non-empty code on every RPC — 0xEaeC2F512eA50708211fa95533e4dBb60e3d2E5D · 0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c
+  gate ✅ keccak256(code(addresses.blsAggregator)) == pins.codehashes.addresses.blsAggregator — observed 0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c · pinned 0xa47bcf01babb782960fab93f8b5d5a9ca6e27c1aa96c0aa8648386b4a75bde4c
+  gate ✅ addresses.dvtValidator has the same non-empty code on every RPC — 0x568b1486BFE036e603eA11f0D03Dc47fa62c9E0e · 0x945bf1df04a0894f57b0da0d62661f123a8ccec7e1c9e748610d0663e71b863c
+  gate ✅ keccak256(code(addresses.dvtValidator)) == pins.codehashes.addresses.dvtValidator — observed 0x945bf1df04a0894f57b0da0d62661f123a8ccec7e1c9e748610d0663e71b863c · pinned 0x945bf1df04a0894f57b0da0d62661f123a8ccec7e1c9e748610d0663e71b863c
+  gate ✅ addresses.reputationSystem has the same non-empty code on every RPC — 0x4Ec2D49D75D5D4206B64387A7d6a6C3c5c90fB5A · 0x6d712dae9628ea0788b9ace4c3c1f4d981c2add68f3e9d0ac28eb189c01deaa3
+  gate ✅ keccak256(code(addresses.reputationSystem)) == pins.codehashes.addresses.reputationSystem — observed 0x6d712dae9628ea0788b9ace4c3c1f4d981c2add68f3e9d0ac28eb189c01deaa3 · pinned 0x6d712dae9628ea0788b9ace4c3c1f4d981c2add68f3e9d0ac28eb189c01deaa3
+  gate ✅ pins.readbackBlock <= snapshot block — 12090086 · snapshot 12090091
+  gate ✅ the snapshot block did not change during the reads (no reorg) — --rpc 0x4a71f7ea650a0392e7e85226705264b0367a2f6573b88f4b72774967b29ece94 -> 0x4a71f7ea650a0392e7e85226705264b0367a2f6573b88f4b72774967b29ece94
+GAS SOURCE: eth_estimateUserOperationGas on bundler 127.0.0.1:3046 (client (no web3_clientVersion: Validation error: Invalid discriminator value. Expected 'eth_chainId' | 'eth_supportedEntryPoints' | 'eth_estimateUserOperationGas' | 'eth_sendUserOperation' | 'boost_sendUserOperation' | 'eth_getUserOperationByHash' | 'eth_getUserOperationReceipt' | 'debug_bundler_clearState' | 'debug_bundler_clearMempool' | 'debug_bundler_dumpMempool' | 'debug_bundler_sendBundleNow' | 'debug_bundler_setBundlingMode' | 'debug_bundler_setReputation' | 'debug_bundler_dumpReputation' | 'debug_bundler_clearReputation' | 'debug_bundler_getStakeStatus' | 'pimlico_getUserOperationStatus' | 'pimlico_getUserOperationGasPrice' | 'pimlico_sendUserOperationNow' | 'pimlico_simulateAssetChange' at "method")); the SDK estimates nothing locally
+RESULT S1 PaymasterClient.submitGaslessUserOperation: success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x00 (SDK-selected) allowance used 0->84193714030298473587/5000000000000000000000 autoRenewUsed 0->0 AllowanceRenewed(bySP)=false · tx 0x0204450ff7fd407a80b2cf9655a75b06f04a50a634902081c571b0b717ff33ee
+RESULT A7 FRESH ACCOUNT: account 0xA4B43330919Da938f0D8aE29d1e04CA63460671d created in this run (no code before it), S1 is its first sponsored op (allowance used 0, lockedOf 0, autoRenewUsed 0) and succeeded · tx 0x0204450ff7fd407a80b2cf9655a75b06f04a50a634902081c571b0b717ff33ee
+RESULT S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000): success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x00 (SDK-selected) allowance used 84193714030298473587->162647519155138371441/250000000000000000000 autoRenewUsed 0->0 AllowanceRenewed(bySP)=false · tx 0xe77d0a2f4c502c9d7ccf1b97a4dd595bffd9f5e48f790b4394136ef2c2b716f8
+RESULT S3b spend 1/8: success=true S_user signMessage=1 estimates=1 (placeholder sig) sends=1 flags=0x01 (SDK-selected) allowance used 162647519155138371441->80973775470666347692/250000000000000000000 autoRenewUsed 0->1 AllowanceRenewed(bySP)=true · tx 0x4525b76ac5068d98c30729ff63c13952965523c210504f4af910e624f9ddfd91
+RESULT S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[124] of tx 0x4525b76ac5068d98c30729ff63c13952965523c210504f4af910e624f9ddfd91; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1
+PASS
