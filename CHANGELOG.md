@@ -12,7 +12,10 @@ All notable changes to this project will be documented in this file.
 - `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync`, `signTransaction`,
   `prepareTransactionRequest` and `fillTransaction` to the zero address before signing (clestons on #465). A contract
   write carrying a `to` field is refused (viem would send to it instead of the checked `address`), and so is a
-  `deployContract` carrying one (viem spreads it into a direct send).
+  `deployContract` carrying one (viem spreads it into a direct send). `sendRawTransaction(Sync)` decodes the bytes and refuses a zero
+  destination. Each request is copied once and that copy is both checked and passed on (a getter cannot answer one
+  address when checked and another when used). Trusted, not guarded: the client's chain configuration (a custom
+  `chain.prepareTransactionRequest` can rewrite a request), and `signAuthorization` (EIP-7702; zero means revoke).
 - Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
   with the table) and a non-empty, frozen `SP550_WIRING_EXPECTED`; `--write=<value>` is refused before anything is read.
 

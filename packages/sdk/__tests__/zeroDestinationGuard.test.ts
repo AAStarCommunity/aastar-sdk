@@ -192,3 +192,41 @@ describe('Codex r1 on the guard: conflicting destinations, deployments, request 
         expect(ptr.named).toBe(false); expect(ptr.methods).toContain('eth_estimateGas');
     });
 });
+
+describe('Codex r2 on the guard: check-then-use and raw sends', () => {
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+
+    it('a getter that answers non-zero when checked and zero when used cannot slip through: the checked copy is what viem gets', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        let reads = 0;
+        const req: any = { account, chain: sepolia, value: 1n, get to() { return ++reads === 1 ? NONZERO : zeroAddress; } };
+        await client.sendTransaction(req).catch(() => undefined);
+        // Whatever was signed went to the address that was checked, never to zero.
+        for (const c of sign.mock.calls) expect((c[0] as any).to?.toLowerCase()).toBe(NONZERO.toLowerCase());
+        expect(reads).toBe(1);
+        let callReads = 0;
+        const batch: any = { account, chain: sepolia, calls: [{ value: 1n, get to() { return ++callReads === 1 ? NONZERO : zeroAddress; } }] };
+        await client.sendCalls(batch).catch(() => undefined);
+        expect(callReads).toBe(1);
+        expect(methods.filter((m) => m === 'eth_sendRawTransaction').length).toBeLessThanOrEqual(2);
+    });
+
+    it('sendRawTransaction / sendRawTransactionSync of bytes signed elsewhere to address zero: refused before the node is asked', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const toZero = await account.signTransaction({ to: zeroAddress, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, chainId: sepolia.id, type: 'eip1559' });
+        for (const m of ['sendRawTransaction', 'sendRawTransactionSync']) {
+            expect(named(await client[m]({ serializedTransaction: toZero }).catch((e: unknown) => e)), m).toBe(true);
+        }
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+        // Positive control: the same bytes to a non-zero address reach the node.
+        const toOther = await account.signTransaction({ to: NONZERO, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, chainId: sepolia.id, type: 'eip1559' });
+        await client.sendRawTransaction({ serializedTransaction: toOther });
+        expect(methods).toContain('eth_sendRawTransaction');
+    });
+});

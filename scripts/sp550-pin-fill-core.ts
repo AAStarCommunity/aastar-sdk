@@ -142,7 +142,7 @@ export function bookSwitch(mode: PinFillMode, pins: Sp550FreshDeployPins): Recor
  * codehashes (its creation-pins are creation bytecode); the flag refuses until then.
  */
 export type Sp550PinSourceKind = 'manifest' | 'deploylive-archive';
-export const PIN_WRITE_BEFORE_ALLOWLIST = '--write is refused until the getter allow-list exists (FU-124: SP550_WIRING_EXPECTED is empty); the gate cannot yet prove every getter points at the right contract. Preview without --write works; nothing was read or written';
+export const PIN_WRITE_BEFORE_ALLOWLIST = '--write is refused until the getter allow-list exists (FU-124: SP550_WIRING_EXPECTED is empty); the gate cannot yet prove every getter points at the right contract. Preview without --write works; the manifest was not read and no RPC was contacted';
 export const DEPLOYLIVE_ARCHIVE_PENDING = '--deploylive-archive is not implemented yet: it waits for SP to name the source of the expected runtime codehashes (DSR 2026-11-19); nothing was read or written';
 
 /** The source files a fill may write, by role. */
