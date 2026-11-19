@@ -7,7 +7,7 @@ import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
-import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { SP550_RELEASE_VERSIONS, sp550ReleaseVersionsProblems, SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, sp550WiringScanAbi, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -942,5 +942,49 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         pins.addresses = { ...pins.addresses, blsValidator: '0x' + '7b'.repeat(20) };
         const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
         expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContain('addresses.blsValidator is not a contract of this release');
+    });
+
+    describe('release-versions: exact key set, non-empty both sides, every required contract compared (Daybreak #469 H1 / Low)', () => {
+        const withTable = async (t: Record<string, string>, fn: () => Promise<void>) => {
+            const saved = SP550_RELEASE_VERSIONS['sepolia-rc8'];
+            (SP550_RELEASE_VERSIONS as any)['sepolia-rc8'] = t;
+            try { await fn(); } finally { (SP550_RELEASE_VERSIONS as any)['sepolia-rc8'] = saved; }
+        };
+        const failed = (r: any) => r.results.filter((c: any) => !c.ok).map((c: any) => `${c.check} :: ${c.detail}`);
+        it('the validator: missing key, unmapped key, empty or non-version value each fail; SP\'s table passes', () => {
+            const T = RELEASE as Record<string, string>;
+            expect(sp550ReleaseVersionsProblems(T)).toEqual([]);
+            const { Registry: _drop, ...noReg } = T;
+            expect(sp550ReleaseVersionsProblems(noReg)).toEqual(['release-versions: missing Registry']);
+            expect(sp550ReleaseVersionsProblems({ ...T, MySBT: 'MySBT-1.0.0' })).toEqual([expect.stringMatching(/unmapped MySBT/)]);
+            expect(sp550ReleaseVersionsProblems({ ...T, Registry: '' })).toEqual([expect.stringMatching(/Registry "" is not a version string/)]);
+            expect(sp550ReleaseVersionsProblems({ ...T, Registry: 'latest' })).toEqual([expect.stringMatching(/not a version string/)]);
+        });
+        it('a table without a non-SP key (Registry) fails the gate, and the missing contract is still compared', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            const { Registry: _drop, ...noReg } = RELEASE as Record<string, string>;
+            await withTable(noReg, async () => {
+                const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }));
+                expect(f).toContainEqual(expect.stringMatching(/release-versions table: exact key set.*missing Registry/));
+                expect(f).toContainEqual(expect.stringMatching(/^Registry\.version\(\) == release-versions "\(missing\)"/));
+            });
+        });
+        it('an empty expected value with an empty version() fails (two empty strings are not a match)', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            m.reads[`${m.pins.addresses.registry}.version`] = '';
+            await withTable({ ...(RELEASE as Record<string, string>), Registry: '' }, async () => {
+                const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }));
+                expect(f).toContainEqual(expect.stringMatching(/^Registry\.version\(\) == release-versions ""/));
+            });
+        });
+        it('an empty version() against SP\'s table fails, and a reverting version() fails', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            m.reads[`${m.pins.addresses.registry}.version`] = '';
+            expect(failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }))).toContainEqual(expect.stringMatching(/^Registry\.version\(\)/));
+            const m2 = deployment(sepolia.id, 'fresh');
+            delete m2.reads[`${m2.pins.addresses.staking}.version`];
+            m2.revertUnset = true;
+            expect(failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m2), pins: m2.pins }))).toContainEqual(expect.stringMatching(/^GTokenStaking\.version\(\)/));
+        });
     });
 });

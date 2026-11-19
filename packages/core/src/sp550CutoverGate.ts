@@ -26,7 +26,7 @@ import {
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
 import {
-    SP550_ADDRESS_OWNER, SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, assertSp550ChainId, sp550NetworkPinProblems, type Sp550CoexistNetwork, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
+    SP550_ADDRESS_OWNER, SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, sp550ReleaseVersionsProblems, assertSp550ChainId, sp550NetworkPinProblems, type Sp550CoexistNetwork, resolveSp550Network, sp550FreshPinProblems, sp550OverlayBook, sp550PinsFor, sp550UpgradePinProblems,
     type Sp550FreshDeployPins,
 } from './sp550Deployments.js';
 
@@ -402,11 +402,19 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         const rv = SP550_RELEASE_VERSIONS[net.network as Sp550CoexistNetwork];
         const entries = new Map(sp550PinnedAddressEntries(pins));
         const abiFor: Record<string, unknown> = { SuperPaymaster: SuperPaymasterV550ABI, Registry: regAbi, xPNTsFactoryV2: xPNTsFactoryV2ABI, GTokenStaking: GTokenStakingABI, GTokenAuthorization: sp550WiringScanAbi(net.network)['addresses.gToken'], APNTsCapped: APNTsCappedABI };
-        for (const [name, want] of Object.entries(rv)) {
-            const entry = SP550_RELEASE_VERSION_ENTRY[name];
-            const addr = entry ? (entries.get(entry) as Address | undefined) : undefined;
-            if (!entry || !abiFor[name]) { record(`${name}.version() == release-versions`, false, `no pin / ABI mapping for ${name}: add one`); continue; }
-            cmp(`${name}.version() == release-versions ${JSON.stringify(want)}`, await read(addr, abiFor[name], 'version'), want, 'release-versions');
+        // Daybreak #469 H1: the table is held to the exact required key set first, and the loop walks the REQUIRED
+        // mapping, not the table: a table missing a key fails instead of silently comparing less. An empty expected or
+        // observed version is a failure (eq() would call two empty strings equal).
+        const tableProblems = sp550ReleaseVersionsProblems(rv);
+        record('release-versions table: exact key set, non-empty versions', tableProblems.length === 0, tableProblems.join('; ') || `${Object.keys(rv).length} entries`);
+        for (const [name, entry] of Object.entries(SP550_RELEASE_VERSION_ENTRY)) {
+            const want = (rv as Record<string, unknown>)[name];
+            const addr = entries.get(entry) as Address | undefined;
+            const label = `${name}.version() == release-versions ${JSON.stringify(want ?? '(missing)')}`;
+            if (!abiFor[name]) { record(label, false, `no ABI mapping for ${name}: add one`); continue; }
+            const observed = await read(addr, abiFor[name], 'version');
+            record(label, typeof want === 'string' && want !== '' && typeof observed === 'string' && observed !== '' && observed === want,
+                `observed ${str(observed)} · release-versions ${str(want ?? '(missing)')}${addr ? '' : ' · (no pinned address)'}`);
         }
     }
 

@@ -647,7 +647,7 @@ jobs:
           REQUIRE_UPSTREAM: '1'
           SP_REPO: ../SuperPaymaster
           SP550_OUT: ../SuperPaymaster/out
-        run: pnpm run check:sp550-abis
+        run: pnpm run check:sp550-abis --strict
 
       - name: rc.8 coexist proof fixture equals this fresh build (scripts/coexist-stack-abi-pin.ts --verify)
         working-directory: aastar-sdk

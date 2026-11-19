@@ -14,10 +14,11 @@
  *      so a stale upstream `abis/*.json` cannot be laundered through step 2.
  *
  * Every run prints what it checked. A run that checked nothing says SKIP, and REQUIRE_UPSTREAM=1
- * turns that into a failure.
+ * turns that into a failure. --strict also requires SP550_OUT and every file's compiled-union check. Build
+ * out/ fresh from the pinned commit (`rm -rf out && forge build`): a stale out/ is not detected here.
  *
  *   pnpm run check:sp550-abis
- *   SP_REPO=/path/to/SuperPaymaster SP550_OUT=/path/to/sp-tag-checkout/out pnpm run check:sp550-abis
+ *   SP_REPO=/path/to/SuperPaymaster SP550_OUT=/path/to/sp-tag-checkout/out pnpm run check:sp550-abis --strict
  */
 import { execFileSync } from 'child_process';
 import { createHash } from 'crypto';
@@ -30,7 +31,11 @@ const TAG = 'v5.5.0-rc.8';
 const PINNED_COMMIT = '5a150f6ad43a6c6a57ccccea427c1dba0d797d06';
 const SP_REPO = path.resolve(SDK_ROOT, process.env.SP_REPO ?? '../SuperPaymaster');
 const SP_OUT = process.env.SP550_OUT ? path.resolve(SDK_ROOT, process.env.SP550_OUT) : undefined;
-const REQUIRE_UPSTREAM = process.env.REQUIRE_UPSTREAM === '1';
+// --strict (Daybreak #469 M2) = REQUIRE_UPSTREAM=1 and SP550_OUT required: a run without the upstream checkout or
+// without compiled artifacts fails instead of printing SKIP / skipping the compiled-union step.
+const STRICT = process.argv.includes('--strict');
+const REQUIRE_UPSTREAM = STRICT || process.env.REQUIRE_UPSTREAM === '1';
+if (STRICT && !SP_OUT) { console.error('FAIL: --strict needs SP550_OUT=<forge out/ built from the pinned commit> (clean out/ before building)'); process.exit(1); }
 
 /** SDK file -> upstream blob path, and the compiled contracts whose union it must equal. */
 const FILES: { sdk: string; upstream: string; parts: string[] }[] = [
@@ -137,4 +142,5 @@ if (fs.existsSync(path.join(SP_REPO, '.git')) || fs.existsSync(SP_REPO)) {
 console.log(`\nchecked ${checked}/${FILES.length} file(s) against the pinned blob; ${SP_OUT ? `${unionChecked}/${FILES.length} against compiled out/` : 'compiled-out/ check NOT run (set SP550_OUT)'}.`);
 if (failures.length) { console.error(`\nFAIL:\n - ${failures.join('\n - ')}`); process.exit(1); }
 if (checked === 0) { console.log('SKIP: nothing compared.'); process.exit(REQUIRE_UPSTREAM ? 1 : 0); }
+if (STRICT && (checked !== FILES.length || unionChecked !== FILES.length)) { console.error(`FAIL: --strict compared ${checked} blob(s) and ${unionChecked} compiled union(s) of ${FILES.length}`); process.exit(1); }
 console.log('PASS');
