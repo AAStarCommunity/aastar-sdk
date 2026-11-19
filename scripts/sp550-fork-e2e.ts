@@ -213,7 +213,7 @@ async function main() {
     await pub.request({ method: 'anvil_setBalance' as any, params: [base.address, '0xDE0B6B3A7640000'] as any });
     const eu: any = createEndUserClient({ chain: sepolia, transport: http(RPC), account: user as any, addresses: { superPaymaster: sp, entryPoint: ep } });
     const c0 = await bal();
-    const tx = (await eu.executeGasless({ target: OWNER, data: '0x', operator: OWNER })) as Hex;
+    const tx = (await eu.executeGasless({ target: OWNER, data: '0x', operator: OWNER, estimateBundlerUrl: BUNDLER })) as Hex;
     const rc = await pub.getTransactionReceipt({ hash: tx });
     let ok: boolean | undefined;
     for (const l of rc.logs as any[]) { try { const ev: any = decodeEventLog({ abi: EntryPointABI, data: l.data, topics: l.topics }); if (ev.eventName === 'UserOperationEvent') ok = ev.args.success; } catch { /* */ } }

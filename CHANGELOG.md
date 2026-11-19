@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### `executeGasless` (self-bundled) takes its gas from an estimate or the caller, never constants; PaymasterClient strict options
+
+- `createEndUserClient().executeGasless` has no gas literals left (it signed VGL / callGas 100k, 2 gwei fees, PVG 50k,
+  pmVGL 250k, postOp 300k): limits are the caller's `gas`, else the usable fields of `estimateBundlerUrl`'s estimate ×
+  `gasLimitCoefficientBps` (preVerificationGas × 1.0), merged field by field; with a field neither gives it refuses
+  before signing. The estimate is requested for the op that is signed (same nonce, same fees, flags 0). The chain's
+  minPostOpGas raises an estimated postOp; an explicit one below it is refused (never silently rewritten). Fees come
+  from eth_feeHistory unless given. The handleOps transaction's gas is the node's eth_estimateGas × the coefficient.
+  An unreadable EntryPoint nonce is refused (it used to fall back to 0). `onGasDecided` receives a detached copy of the
+  decision, with PaymasterClient's field names and source labels plus `handleOps: { estimate, gasLimit }`.
+- `PaymasterClient.submitGaslessUserOperation`: `requireEstimate` refuses the local defaults when the endpoint cannot
+  estimate; `noDirectSendFallback` refuses to send handleOps from the wallet itself when the endpoint has no
+  eth_sendUserOperation (that fallback pays from the wallet's own balance). `estimateUserOperationGasFields` returns
+  only the bundler's usable fields and throws when the endpoint cannot estimate; `estimateUserOperationGas` takes
+  `requireEstimate` too.
+
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 
 - Limits: the bundler's estimate (eth_estimateUserOperationGas on the target chain) × `gasLimitCoefficientBps`
