@@ -136,3 +136,20 @@ export async function loadLiveSigner(
     if (declared && account.address !== declared) throw new Error('keystore: decrypted key does not match the address the keystore declares');
     return account;
 }
+
+
+/**
+ * The public development mnemonic anvil and hardhat both start with: every account derived from it is a known key.
+ * A live run must never sign with one (DSR 2026-11-19: the fork rehearsal's test owner must not reach a real chain).
+ */
+const PUBLIC_TEST_MNEMONIC = 'test test test test test test test test test test test junk';
+/** Indices checked: anvil and hardhat fund the first 10 / 20 by default; 50 leaves headroom. */
+const PUBLIC_TEST_ACCOUNTS = 50;
+let publicTestAddresses: Set<string> | undefined;
+export async function isPublicTestAccount(address: string): Promise<boolean> {
+    if (!publicTestAddresses) {
+        const { mnemonicToAccount } = await import('viem/accounts');
+        publicTestAddresses = new Set(Array.from({ length: PUBLIC_TEST_ACCOUNTS }, (_, i) => mnemonicToAccount(PUBLIC_TEST_MNEMONIC, { addressIndex: i }).address.toLowerCase()));
+    }
+    return publicTestAddresses.has(address.toLowerCase());
+}

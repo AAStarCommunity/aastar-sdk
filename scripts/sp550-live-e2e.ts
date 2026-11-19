@@ -83,7 +83,7 @@ import {
 } from '@aastar/core';
 import { PaymasterClient, SuperPaymasterInflightGuard, UserOperationNotYetValidError, type GasDecision } from '@aastar/paymaster';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
-import { liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
+import { isPublicTestAccount, liveKeySourceProblem, loadLiveSigner } from './sp550-live-signer.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
@@ -279,6 +279,8 @@ async function main() {
             ? mnemonicToAccount(ANVIL_MNEMONIC, { addressIndex: Number(cfg.userKey.anvilIndex) })
             : await loadLiveSigner(cfg.userKey);
     } catch (e: any) { return refuse(String(e?.message ?? e)); }
+    // A live run never signs with a public development key (the fork rehearsal's test owner, anvil / hardhat defaults).
+    if (cfg.mode === 'live' && await isPublicTestAccount(base.address)) refuse(`mode live: the signer ${base.address} is a public anvil / hardhat test key; never on a real chain`);
     let signs = 0;
     const user = { ...base, signMessage: async (a: any) => { signs++; return base.signMessage(a); } };
     const userWallet = createWalletClient({ account: user as any, chain, transport: http(rpcUrls[0]) });
