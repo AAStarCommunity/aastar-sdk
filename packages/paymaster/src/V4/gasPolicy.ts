@@ -8,12 +8,19 @@ import type { Hex } from 'viem';
  *   minPostOpGas) only ever raise a limit.
  * - Fees: maxPriorityFeePerGas from eth_feeHistory (a stated percentile of recent blocks' rewards),
  *   maxFeePerGas = latest base fee × a stated multiplier + that priority fee. Fees the caller gives win.
- * - Frozen limits: a data collection fixes its limits once and passes them on every op (they change the
- *   recorded actualGas through EntryPoint v0.7's unused-gas penalty), so they are used as given.
+ * - preVerificationGas is NOT a limit: EntryPoint v0.7 charges it in full (it is added to preOpGas whole), so it has
+ *   its own coefficient, default 1.0 (the bundler's estimate as is; a bundler that wants more says "must be at least"
+ *   and the submit retry raises it).
+ * - What the gas values change in the charge (EntryPoint v0.7): the unused part of the two EXECUTION limits
+ *   (callGasLimit + paymasterPostOpGasLimit) at 10% — v0.7 has no threshold, any unused execution gas is penalised
+ *   (the 40,000 PENALTY_GAS_THRESHOLD is v0.8's) — and preVerificationGas in full. Verification limits do not.
+ *   So a data collection fixes its limits once and passes them on every op (frozenGas), used as given.
  */
 
 /** Limit = estimate × 1.5. Same coefficient as SuperPaymaster's three-arm collector; override per call. */
 export const DEFAULT_GAS_LIMIT_COEFFICIENT_BPS = 15_000n;
+/** preVerificationGas = estimate × 1.0: it is charged in full, so a margin on it is paid on every op. */
+export const DEFAULT_PVG_COEFFICIENT_BPS = 10_000n;
 /** maxFeePerGas = base fee × 2 + priority fee. */
 export const DEFAULT_BASE_FEE_MULTIPLIER = 2n;
 /** Priority fee: the 50th percentile of eth_feeHistory rewards. */
@@ -62,9 +69,11 @@ export interface GasDecision {
     limitsSource: 'frozen' | 'estimate' | 'mixed';
     /** Coefficient applied to the estimate (bps), when any field came from it. */
     coefficientBps?: bigint;
+    /** Coefficient applied to the preVerificationGas estimate (bps), when it came from the estimate. */
+    pvgCoefficientBps?: bigint;
     /** The bundler's estimate before scaling; undefined for frozen limits. */
     estimate?: UserOpGasLimits;
-    /** Contract floors applied, read from the chain. */
+    /** Floors applied: minPostOpGas read from the chain, and the caller's superPaymasterVerificationGasFloor when given. */
     floors: { paymasterPostOpGasLimit?: bigint; paymasterVerificationGasLimit?: bigint };
 }
 
@@ -73,9 +82,10 @@ export function scaleGas(estimate: bigint, coefficientBps: bigint): bigint {
     return (estimate * coefficientBps + 9_999n) / 10_000n;
 }
 
-export function scaleLimits(estimate: UserOpGasLimits, coefficientBps: bigint): UserOpGasLimits {
+/** Limits × coefficientBps; preVerificationGas × pvgCoefficientBps (default 1.0: it is charged in full, not a limit). */
+export function scaleLimits(estimate: UserOpGasLimits, coefficientBps: bigint, pvgCoefficientBps: bigint = DEFAULT_PVG_COEFFICIENT_BPS): UserOpGasLimits {
     return {
-        preVerificationGas: scaleGas(estimate.preVerificationGas, coefficientBps),
+        preVerificationGas: scaleGas(estimate.preVerificationGas, pvgCoefficientBps),
         verificationGasLimit: scaleGas(estimate.verificationGasLimit, coefficientBps),
         callGasLimit: scaleGas(estimate.callGasLimit, coefficientBps),
         paymasterVerificationGasLimit: scaleGas(estimate.paymasterVerificationGasLimit, coefficientBps),
@@ -103,6 +113,7 @@ export async function resolveUserOpFees(
     policy: FeePolicy = {},
 ): Promise<UserOpFees> {
     const multiplier = policy.baseFeeMultiplier ?? DEFAULT_BASE_FEE_MULTIPLIER;
+    if (multiplier < 1n) throw new Error(`baseFeeMultiplier ${multiplier} is below 1: maxFeePerGas would be under the base fee`);
     if (given.maxFeePerGas !== undefined && given.maxPriorityFeePerGas !== undefined) {
         if (given.maxFeePerGas < given.maxPriorityFeePerGas) throw new Error('maxFeePerGas is below maxPriorityFeePerGas');
         return { maxFeePerGas: given.maxFeePerGas, maxPriorityFeePerGas: given.maxPriorityFeePerGas, source: 'caller' };

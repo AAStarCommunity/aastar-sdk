@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { resolveUserOpFees, scaleGas, scaleLimits } from '../src/V4/gasPolicy';
+import { DEFAULT_PVG_COEFFICIENT_BPS, resolveUserOpFees, scaleGas, scaleLimits } from '../src/V4/gasPolicy';
 
 const client = (o: { history?: any; historyFails?: boolean; priority?: bigint; baseFee?: bigint | null } = {}) => ({
     getFeeHistory: vi.fn(async () => { if (o.historyFails) throw new Error('method not found'); return o.history; }),
@@ -49,8 +49,11 @@ describe('scaleGas / scaleLimits', () => {
         expect(scaleGas(3n, 15_000n)).toBe(5n); // 4.5 → 5
         expect(scaleGas(200_000n, 15_000n)).toBe(300_000n);
         expect(() => scaleGas(1n, 9_999n)).toThrow('below 1x');
+        // preVerificationGas keeps its own coefficient, default 1.0: it is charged in full (clestons #464 B2).
         expect(scaleLimits({ preVerificationGas: 2n, verificationGasLimit: 4n, callGasLimit: 6n, paymasterVerificationGasLimit: 8n, paymasterPostOpGasLimit: 10n }, 15_000n))
-            .toEqual({ preVerificationGas: 3n, verificationGasLimit: 6n, callGasLimit: 9n, paymasterVerificationGasLimit: 12n, paymasterPostOpGasLimit: 15n });
+            .toEqual({ preVerificationGas: 2n, verificationGasLimit: 6n, callGasLimit: 9n, paymasterVerificationGasLimit: 12n, paymasterPostOpGasLimit: 15n });
+        expect(scaleLimits({ preVerificationGas: 2n, verificationGasLimit: 4n, callGasLimit: 6n, paymasterVerificationGasLimit: 8n, paymasterPostOpGasLimit: 10n }, 15_000n, 12_000n).preVerificationGas).toBe(3n); // 2.4 → 3
+        expect(DEFAULT_PVG_COEFFICIENT_BPS).toBe(10_000n);
     });
 });
 
@@ -74,5 +77,12 @@ describe('median over an even number of blocks', () => {
         expect((await resolveUserOpFees(c, {})).maxPriorityFeePerGas).toBe(5n);
         const c2 = { getFeeHistory: vi.fn(async () => ({ baseFeePerGas: [1n, 1n], reward: [[2n], [5n]] })), estimateMaxPriorityFeePerGas: vi.fn(), getBlock: vi.fn() };
         expect((await resolveUserOpFees(c2, {})).maxPriorityFeePerGas).toBe(3n); // (2 + 5) / 2 rounded down
+    });
+});
+
+describe('fee policy bounds (clestons #464 Info)', () => {
+    it('a baseFeeMultiplier below 1 is refused', async () => {
+        const client: any = { getFeeHistory: async () => ({ baseFeePerGas: [10n, 10n], reward: [[1n]], gasUsedRatio: [0.5], oldestBlock: 1n }), getBlock: async () => ({ baseFeePerGas: 10n }), estimateMaxPriorityFeePerGas: async () => 1n };
+        await expect(resolveUserOpFees(client, {}, { baseFeeMultiplier: 0n })).rejects.toThrow('below 1');
     });
 });

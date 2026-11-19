@@ -145,7 +145,9 @@ async function main() {
         const want = (x: bigint) => (x * d.coefficientBps! + 9_999n) / 10_000n;
         const pmPost = want(e.paymasterPostOpGasLimit) > d.floors.paymasterPostOpGasLimit! ? want(e.paymasterPostOpGasLimit) : d.floors.paymasterPostOpGasLimit!;
         const l = d.limits;
-        return l.verificationGasLimit === want(e.verificationGasLimit) && l.callGasLimit === want(e.callGasLimit) && l.preVerificationGas === want(e.preVerificationGas)
+        // preVerificationGas has its own coefficient (default 1.0): it is charged in full, not a limit.
+        const wantPvg = (x: bigint) => (x * (d.pvgCoefficientBps ?? 10_000n) + 9_999n) / 10_000n;
+        return l.verificationGasLimit === want(e.verificationGasLimit) && l.callGasLimit === want(e.callGasLimit) && l.preVerificationGas === wantPvg(e.preVerificationGas)
             && l.paymasterVerificationGasLimit === want(e.paymasterVerificationGasLimit) && l.paymasterPostOpGasLimit === pmPost ? undefined : 'limits are not estimate × coefficient with the floor';
     };
 
@@ -174,15 +176,18 @@ async function main() {
     }
 
     // Part 2 — does a limit change actualGas? From one snapshot, the same op with exactly one limit raised by 200k, each
-    // sent and then reverted, so every variant starts from identical state. EntryPoint v0.7 charges 10% of the unused
-    // EXECUTION gas (callGasLimit + paymasterPostOpGasLimit) when it exceeds 40,000; verification gas is not penalised.
+    // sent and then reverted, so every variant starts from identical state. EntryPoint v0.7 charges 10% of ANY unused
+    // EXECUTION gas (callGasLimit + paymasterPostOpGasLimit; v0.7 has no threshold — the 40,000 one is v0.8's) and
+    // preVerificationGas in full; verification limits are not charged.
     const STEP = 200_000n;
+    const PVG_STEP = 20_000n; // charged in full: actualGas moves by exactly this
     const variants: Array<[string, Partial<GasDecision['limits']>, bigint]> = [
         ['baseline (B\'s limits)', {}, 0n],
         ['paymasterVerificationGasLimit + 200k', { paymasterVerificationGasLimit: dB.limits.paymasterVerificationGasLimit + STEP }, 0n],
         ['callGasLimit + 200k', { callGasLimit: dB.limits.callGasLimit + STEP }, STEP / 10n],
         ['paymasterPostOpGasLimit + 200k', { paymasterPostOpGasLimit: dB.limits.paymasterPostOpGasLimit + STEP }, STEP / 10n],
         ['verificationGasLimit + 200k', { verificationGasLimit: dB.limits.verificationGasLimit + STEP }, 0n],
+        ['preVerificationGas + 20k', { preVerificationGas: dB.limits.preVerificationGas + PVG_STEP }, PVG_STEP],
     ];
     const measured: Array<[string, Hex, bigint, bigint, string, GasDecision['limits']]> = [];
     // A bundler remembers sender+nonce across evm_revert, so these variants go straight to EntryPoint.handleOps
@@ -237,15 +242,15 @@ async function main() {
         '',
         '## Part 2 — one limit at a time, from the same state',
         '',
-        'Each row is the balance-branch op above with B\'s frozen limits and exactly one of them raised by 200,000, sent from one `evm_snapshot` and reverted afterwards. Expected change from EntryPoint v0.7: 10% of the extra unused execution gas (callGasLimit, paymasterPostOpGasLimit) once unused execution gas exceeds 40,000; none for verification gas.',
+        'Each row is the balance-branch op above with B\'s frozen limits and exactly one of them raised (limits by 200,000, preVerificationGas by 20,000), sent from one `evm_snapshot` and reverted afterwards. Expected change from EntryPoint v0.7 (`EntryPoint.sol` v0.7: PENALTY_PERCENT = 10, no threshold): three things enter the charge — the unused part of the two execution limits (callGasLimit, paymasterPostOpGasLimit) at 10%, and preVerificationGas in full; the verification limits do not.',
         '',
-        `Fees fixed for every variant (priority ${FIXED_FEES.maxPriorityFeePerGas}, maxFee ${FIXED_FEES.maxFeePerGas}). Note: SuperPaymaster's minPostOpGas (500,000 here) is far above what postOp uses, so unused execution gas is always above the 40,000 threshold on this path and the penalty always applies; the threshold itself is EntryPoint v0.7's PENALTY_GAS_THRESHOLD constant (not measured here).`,
+        `Fees fixed for every variant (priority ${FIXED_FEES.maxPriorityFeePerGas}, maxFee ${FIXED_FEES.maxFeePerGas}). Note: SuperPaymaster's minPostOpGas (500,000 here) is far above what postOp uses, so on this path most of the postOp limit is unused and penalised at 10% on every op.`,
         '',
         '| Variant | UserOp hash (reverted) | limits | actualGasUsed | actualGasCost (wei) | EntryPoint event | change vs baseline | expected | OK |',
         '|---|---|---|---|---|---|---|---|---|',
         ...part2,
         '',
-        'The 40,000 unused-execution-gas threshold is EntryPoint v0.7\'s `PENALTY_GAS_THRESHOLD`; it is not measured here (on this SuperPaymaster path the 500,000 minPostOpGas keeps unused execution gas above it).',
+        'EntryPoint v0.7 has no unused-gas threshold (`PENALTY_GAS_THRESHOLD = 40000` is v0.8\'s): any unused execution gas is penalised at 10%, as the +200k rows show (+20,000 each). preVerificationGas is charged in full (+20,000 → +20,000), which is why the SDK does not scale it by the limit coefficient.',
         '',
         `Whole run reverted to its starting snapshot; read back (EntryPoint nonce, operator deposit, account token balance, debt): ${restored ? 'unchanged' : `**CHANGED** ${before} → ${after}`}.`,
         '',

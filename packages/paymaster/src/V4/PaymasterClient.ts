@@ -1,7 +1,7 @@
 import { type Address, type Hex, parseAbi, encodePacked, keccak256, toBytes, concat, pad, toHex, encodeFunctionData, encodeAbiParameters, parseAbiParameters, decodeEventLog } from 'viem';
 import { type PublicClient, EntryPointABI, SUPER_PAYMASTER_FLAGS } from '@aastar/core';
 import { buildPaymasterData, buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils.js';
-import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
+import { DEFAULT_GAS_LIMIT_COEFFICIENT_BPS, DEFAULT_PVG_COEFFICIENT_BPS, resolveUserOpFees, scaleLimits, type FeePolicy, type GasDecision, type LimitSource, type UserOpGasLimits } from './gasPolicy.js';
 import { detectBundlerType, BundlerType } from './BundlerCompat.js';
 import { resolveSuperPaymasterSponsorship, atLeast, SuperPaymasterInflightGuard, decideSuperPaymasterSpRenew, userOpMaxCostV07, type SuperPaymasterSponsorshipContext } from '../SuperPaymaster/v550.js';
 import { readUserOperationResult, userOperationNotYetValidFromRpc, UserOperationFailedError, type UserOperationExecutionResult, type WaitForUserOperationResultOptions } from './userOpOutcome.js';
@@ -51,6 +51,8 @@ export type SubmitGaslessOptions = {
     frozenGas?: UserOpGasLimits;
     /** Estimate × this coefficient, in basis points (default DEFAULT_GAS_LIMIT_COEFFICIENT_BPS = 15000, i.e. 1.5x). */
     gasLimitCoefficientBps?: bigint;
+    /** preVerificationGas = estimate × this (bps); default 10000 (1.0). PVG is charged in full, not a limit. */
+    preVerificationGasCoefficientBps?: bigint;
     /** How fees are taken from the chain when maxFeePerGas / maxPriorityFeePerGas are not both given. */
     feePolicy?: FeePolicy;
     /** Called with the limits, fees and their sources before the op is signed, so a collector can record them. */
@@ -710,6 +712,7 @@ export class PaymasterClient {
         // 1. Limits: frozen (used as given), or the bundler's estimate × coefficient. Explicit per-field
         // options and tuneEstimate still win over the scaled estimate.
         const coefficientBps = options?.gasLimitCoefficientBps ?? DEFAULT_GAS_LIMIT_COEFFICIENT_BPS;
+        const pvgCoefficientBps = options?.preVerificationGasCoefficientBps ?? DEFAULT_PVG_COEFFICIENT_BPS;
         const frozen = options?.frozenGas;
         let rawEstimate: GasEstimate | undefined;
         const FIELDS = ['preVerificationGas', 'verificationGasLimit', 'callGasLimit', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
@@ -763,7 +766,7 @@ export class PaymasterClient {
                 const v = est[k];
                 if (v === undefined) continue; // not estimated: a contract floor, or a refusal below, decides it
                 if (fallback) { gasLimits[k] = v; limitSources[k] = k === 'preVerificationGas' ? 'computed' : 'default'; }
-                else { gasLimits[k] = scaleLimits({ ...LOCAL_DEFAULT_LIMITS, [k]: v } as GasEstimate, coefficientBps)[k]; limitSources[k] = 'estimate'; }
+                else { gasLimits[k] = scaleLimits({ ...LOCAL_DEFAULT_LIMITS, [k]: v } as GasEstimate, coefficientBps, pvgCoefficientBps)[k]; limitSources[k] = 'estimate'; }
             }
             if (!fallback) {
                 const unestimated = FIELDS.filter((k) => gasLimits[k] === undefined);
@@ -938,6 +941,7 @@ export class PaymasterClient {
                 feesRaisedByBundler: userOp.gasFees !== initialGasFees,
                 limitsSource: frozen ? 'frozen' : all.every((x) => x === 'estimate' || x === 'floor') ? 'estimate' : 'mixed',
                 coefficientBps: all.includes('estimate') ? coefficientBps : undefined,
+                pvgCoefficientBps: limitSources.preVerificationGas === 'estimate' ? pvgCoefficientBps : undefined,
                 estimate: rawEstimate,
                 floors,
             };
