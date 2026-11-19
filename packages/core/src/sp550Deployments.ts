@@ -16,26 +16,41 @@
  */
 import { isAddress, type Address } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
-import type { CanonicalAddresses } from './addresses.js';
+import { CANONICAL_ADDRESSES, type CanonicalAddresses } from './addresses.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, SP550_CUTOVER_PINS, sp550PinProblems, sp550PinnedAddressEntries, sp550UpgradeAddressProblems, type Sp550CutoverPins } from './sp550Cutover.js';
 
 export type Sp550DeployMode = 'upgrade' | 'fresh';
 
+/**
+ * `coexist`: a fresh full stack deployed NEXT TO the chain's existing one (DSR 2026-11-19: rc.8 on Sepolia via
+ * DeployLive, the 5.4.2 stack untouched). Its pins live in SP550_COEXIST_PINS under the network name, it never
+ * switches CANONICAL_ADDRESSES, and callers select it explicitly (sp550AddressSet), so the default book stays
+ * the existing stack.
+ */
+/**
+ * `allowRc`: the network's release-tag policy, applied alike by the writer, the gate and the consumers. Only the rc.8
+ * stack accepts `v5.5.0-rc.N` without the operator's --allow-rc (it IS the release candidate).
+ */
 export const SP550_NETWORKS = {
-    sepolia: { chainId: sepolia.id, mode: 'upgrade' },
-    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh' },
-    'op-mainnet': { chainId: optimism.id, mode: 'fresh' },
-} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode }>;
+    sepolia: { chainId: sepolia.id, mode: 'upgrade', coexist: false, allowRc: false },
+    'sepolia-rc8': { chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true },
+    'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh', coexist: false, allowRc: false },
+    'op-mainnet': { chainId: optimism.id, mode: 'fresh', coexist: false, allowRc: false },
+} as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode; coexist: boolean; allowRc: boolean }>;
 
 export type Sp550Network = keyof typeof SP550_NETWORKS;
+export type Sp550CoexistNetwork = { [K in Sp550Network]: (typeof SP550_NETWORKS)[K]['coexist'] extends true ? K : never }[Sp550Network];
+
+/** One network's entry with its name; a union over the networks, so `if (net.coexist)` narrows `net.network`. */
+export type Sp550NetworkEntry = { [K in Sp550Network]: { network: K } & (typeof SP550_NETWORKS)[K] }[Sp550Network];
 
 /** The network entry for a name, or throw listing the accepted names. */
-export function resolveSp550Network(name: string | undefined): { network: Sp550Network; chainId: number; mode: Sp550DeployMode } {
+export function resolveSp550Network(name: string | undefined): Sp550NetworkEntry {
     if (!name || !Object.prototype.hasOwnProperty.call(SP550_NETWORKS, name)) {
         throw new Error(`unknown SP 5.5.0 network ${JSON.stringify(name)}; expected one of ${Object.keys(SP550_NETWORKS).join(', ')}`);
     }
     const n = name as Sp550Network;
-    return { network: n, ...SP550_NETWORKS[n] };
+    return { network: n, ...SP550_NETWORKS[n] } as Sp550NetworkEntry;
 }
 
 /** Throw unless the chainId an RPC reports is the one the selected network stands for. */
@@ -128,6 +143,136 @@ export const SP550_FRESH_DEPLOY_PINS: Record<number, Sp550FreshDeployPins> = {
     [optimism.id]: {},
 };
 
+/**
+ * Coexisting fresh stacks, by network name (a chain may carry one next to its existing stack). Empty until the
+ * post-deploy two-RPC read-back fills it (scripts/sp550-pin-fill.ts), so every consumer fails closed.
+ */
+export const SP550_COEXIST_PINS: Record<Sp550CoexistNetwork, Sp550FreshDeployPins> = {
+    'sepolia-rc8': {},
+};
+
+/** The pin table entry the gate and the consumers read for a network: by name for a coexisting stack, else by chain. */
+export function sp550PinsFor(network: Sp550Network): { table: string; key: string; pins: Sp550FreshDeployPins | undefined } {
+    const n = SP550_NETWORKS[network];
+    if (n.coexist) return { table: 'SP550_COEXIST_PINS', key: network, pins: SP550_COEXIST_PINS[network as Sp550CoexistNetwork] };
+    if (n.mode === 'fresh') return { table: 'SP550_FRESH_DEPLOY_PINS', key: String(n.chainId), pins: SP550_FRESH_DEPLOY_PINS[n.chainId] };
+    return { table: 'SP550_CUTOVER_PINS', key: String(n.chainId), pins: SP550_CUTOVER_PINS[n.chainId] };
+}
+
+/**
+ * The address book a fresh pin set stands for: the chain's shipped book with every SP-owned entry taken from the
+ * pins and each key the pins declare absent set to the zero address (the book's "not deployed", so it overrides a
+ * chain default in a `{ ...defaults, ...addresses }` merge instead of letting the old stack's entry through), and
+ * the client-factory aliases (gTokenStaking = staking, mySBT = sbt) taken from the same set. External entries
+ * (EntryPoint, price feed, AirAccount) stay the shipped ones; the gate checks SP's wiring against them.
+ */
+export function sp550OverlayBook(shipped: Record<string, unknown>, pins: Sp550FreshDeployPins): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...shipped };
+    for (const [k, owner] of Object.entries(SP550_ADDRESS_OWNER)) {
+        if (owner !== 'external') delete out[k];
+    }
+    // The shipped stack's history is not this stack's: zeroed, so a merge into chain defaults does not inherit it.
+    out.timelockControllerLegacy = ZERO;
+    for (const k of pins.absent ?? []) if (k !== 'disclosureRegistry') out[k] = ZERO;
+    Object.assign(out, pins.addresses ?? {});
+    out.gTokenStaking = out.staking;
+    out.mySBT = out.sbt;
+    return out;
+}
+
+/**
+ * A coexisting stack's complete address set: every book key (zero address = not deployed; the history key
+ * timelockControllerLegacy is always zero, it belongs to the shipped stack) plus the client aliases.
+ */
+export type Sp550AddressSet = Record<AddressBookKey | 'gTokenStaking' | 'mySBT', Address>;
+
+/**
+ * The full address set of a coexisting stack, after the complete fresh-deploy validation (with the network's tag
+ * policy) and any release hold: what a caller passes as a client's `addresses` to select it (e.g. `--network
+ * sepolia-rc8`). Every key is present, so nothing falls back to the chain's default stack. Throws until its pins
+ * are read back.
+ */
+export function sp550AddressSet(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined = SP550_COEXIST_PINS[network]): { chainId: number; pins: Sp550ValidatedPins<Sp550FreshDeployPins>; absent: string[]; addresses: Sp550AddressSet } {
+    const n = SP550_NETWORKS[network] as { chainId: number; coexist: boolean; allowRc: boolean } | undefined;
+    if (!n?.coexist) throw new Error(`${JSON.stringify(network)} is not a coexisting SP 5.5.0 network`);
+    const { problems, hold } = sp550NetworkPinProblems(network, pins);
+    const valid = freshPinsOrThrow(n.chainId, pins, {}, hold, problems, true);
+    const book = sp550OverlayBook((CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[n.chainId] ?? {}, valid);
+    const keys = [...Object.keys(SP550_ADDRESS_OWNER), 'gTokenStaking', 'mySBT'];
+    const missing = keys.filter((k) => typeof book[k] !== 'string' || !isAddress(book[k] as string, { strict: false }));
+    if (missing.length) throw new Error(`${network}: address set incomplete (${missing.join(', ')}); refusing a partial set`);
+    const addresses = Object.fromEntries(keys.map((k) => [k, book[k]])) as Sp550AddressSet;
+    return { chainId: n.chainId, pins: valid, absent: [...(valid.absent ?? [])].filter((k) => k !== 'disclosureRegistry'), addresses };
+}
+
+/** A deployment does not include a contract the caller is about to use (zero / missing / malformed address). */
+export class Sp550NotDeployedError extends Error {
+    constructor(readonly deployment: string, readonly key: string, readonly value: unknown) {
+        super(`the ${deployment} deployment does not include ${key} (${value === undefined ? 'no entry' : String(value)}); refusing before anything is signed or sent`);
+        this.name = 'Sp550NotDeployedError';
+    }
+}
+
+/**
+ * The address of `key` in a deployment's address set, or throw Sp550NotDeployedError. The zero address is the book's
+ * "not deployed": a transaction, transfer or calldata built with it would go to (or burn at) address zero, so every
+ * path that signs, sends or encodes an address takes it through here (DSR 2026-11-19). Also for addresses read from
+ * the chain (e.g. SP.REGISTRY(), an operator's xPNTs token): pass them as `{ [label]: value }`.
+ */
+export function requireDeployedAddress(set: Record<string, unknown> | undefined, key: string, deployment: string): Address {
+    const v = set?.[key];
+    if (typeof v !== 'string' || !isAddress(v, { strict: false }) || /^0x0{40}$/i.test(v)) throw new Sp550NotDeployedError(deployment, key, v);
+    return v as Address;
+}
+
+/**
+ * SP-owned addresses of a coexisting stack's pins that are also SP-owned addresses of the chain's shipped stack
+ * (the shipped book, including its history). A coexisting stack is a separate deployment: a pin naming the old
+ * stack's token, staking or SBT would make a hybrid that the gate's wiring reads do not all reach. Sharing an entry
+ * on purpose is a reviewed entry in SP550_COEXIST_SHARED_KEYS, none today.
+ */
+export const SP550_COEXIST_SHARED_KEYS: Record<Sp550CoexistNetwork, readonly string[]> = { 'sepolia-rc8': [] };
+export function sp550CoexistOverlapProblems(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined): string[] {
+    const n = SP550_NETWORKS[network] as { chainId: number } | undefined;
+    if (!n || !pins) return [];
+    const shipped = (CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)[n.chainId] ?? {};
+    const old = new Map<string, string>();
+    for (const [k, owner] of Object.entries(SP550_ADDRESS_OWNER)) {
+        const v = shipped[k];
+        if ((owner !== 'external' || k === 'timelockControllerLegacy') && typeof v === 'string' && isAddress(v, { strict: false }) && !/^0x0{40}$/i.test(v)) old.set(v.toLowerCase(), k);
+    }
+    const shared = new Set(SP550_COEXIST_SHARED_KEYS[network] ?? []);
+    return sp550PinnedAddressEntries(pins)
+        .filter((e): e is [string, string] => typeof e[1] === 'string' && old.has(e[1].toLowerCase()))
+        .filter(([k]) => !shared.has(k.replace(/^addresses\./, '')))
+        .map(([k, a]) => `${k} ${a} is the shipped stack's ${old.get(a.toLowerCase())}; a coexisting stack must not reuse it`);
+}
+
+/**
+ * Release holds of a coexisting stack, by network name: independent of the chain's other stack, so holding one
+ * Sepolia deployment never holds (or releases) the other.
+ */
+export const SP550_COEXIST_HOLDS: Partial<Record<Sp550CoexistNetwork, string>> = {};
+
+/** The release hold that applies to a network: by name for a coexisting stack, by chain (SP550_RELEASE_HOLDS) otherwise. */
+export function sp550HoldFor(network: Sp550Network): string | undefined {
+    const n = SP550_NETWORKS[network];
+    return n.coexist ? SP550_COEXIST_HOLDS[network as Sp550CoexistNetwork] : SP550_RELEASE_HOLDS[n.chainId];
+}
+
+/**
+ * Everything wrong with a network's pins, by NETWORK (not chain): its mode's rule set with its tag policy, and for a
+ * coexisting stack the overlap with the chain's shipped stack; plus the hold that applies to it. The one validation the
+ * gate, the read-back comparator and sp550AddressSet share.
+ */
+export function sp550NetworkPinProblems(network: Sp550Network, pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean } = {}): { problems: string[]; hold: string | undefined } {
+    const n = SP550_NETWORKS[network];
+    const allowRc = !!opts.allowRc || n.allowRc;
+    const problems = n.mode === 'fresh' ? sp550FreshPinProblems(pins, { allowRc }) : sp550UpgradePinProblems(pins, { allowRc });
+    if (n.coexist) problems.push(...sp550CoexistOverlapProblems(network as Sp550CoexistNetwork, pins));
+    return { problems, hold: sp550HoldFor(network) };
+}
+
 /** Chains whose 5.5.0 pins must not ship in a release even when complete, with the reason. */
 export const SP550_RELEASE_HOLDS: Record<number, string> = {
     [optimism.id]:
@@ -156,6 +301,14 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
     problems.push(...sp550BookOwnershipProblems(pins));
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
+    }
+    // The book entries an upgrade derives from top-level pins are the same contracts in a fresh set:
+    // aPNTs = aPNTsCapped, xPNTsFactory = xPNTsFactoryV2 (the factory the SDK uses is the V2 one).
+    for (const [k, top] of [['aPNTs', 'aPNTsCapped'], ['xPNTsFactory', 'xPNTsFactoryV2']] as const) {
+        const t = pins?.[top];
+        if (t === undefined) continue; // the missing top-level pin is reported by sp550PinProblems
+        if (absent.has(k)) problems.push(`addresses.${k}: declared absent, but ${top} is pinned (${t})`);
+        else if (book[k] !== undefined && String(book[k]).toLowerCase() !== String(t).toLowerCase()) problems.push(`addresses.${k} ${book[k]} != ${top} ${t} (one contract)`);
     }
     problems.push(...sp550PinAliasProblems(pins));
     return problems;
@@ -230,8 +383,17 @@ export function requireSp550FreshDeployPins(
     pins = SP550_FRESH_DEPLOY_PINS[chainId],
     opts: { allowRc?: boolean } = {},
 ): Sp550ValidatedPins<Sp550FreshDeployPins> {
-    const problems = sp550FreshPinProblems(pins, opts);
-    const hold = SP550_RELEASE_HOLDS[chainId];
+    // By chain only for a chain whose fresh stack is its own: a chain that also hosts a coexisting stack is validated by
+    // network (sp550AddressSet), or its holds and overlap rules would be skipped.
+    const hosts = Object.values(SP550_NETWORKS).filter((x) => x.chainId === chainId);
+    if (hosts.some((x) => x.coexist) || !hosts.some((x) => x.mode === 'fresh' && !x.coexist)) {
+        throw new Error(`chain ${chainId} has no chain-keyed fresh SP 5.5.0 stack; validate a coexisting stack by network (sp550AddressSet / sp550NetworkPinProblems)`);
+    }
+    return freshPinsOrThrow(chainId, pins, opts, SP550_RELEASE_HOLDS[chainId], []);
+}
+
+function freshPinsOrThrow(chainId: number, pins: Sp550FreshDeployPins | undefined, opts: { allowRc?: boolean }, hold: string | undefined, extra: string[], extraIsComplete = false): Sp550ValidatedPins<Sp550FreshDeployPins> {
+    const problems = extraIsComplete ? [...extra] : [...sp550FreshPinProblems(pins, opts), ...extra];
     if (hold) problems.push(`release hold: ${hold}`);
     if (problems.length) {
         throw new Error(
@@ -251,6 +413,8 @@ export const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
     ['superPaymaster', 'addresses.superPaymaster'],
     ['aPNTsCapped', 'addresses.aPNTs'],
     ['xPNTsFactoryV2', 'addresses.xPNTsFactory'],
+    // The book's generic V4 paymaster is the community's aPNTs paymaster instance (as in the shipped books).
+    ['addresses.paymasterV4', 'addresses.aPNTsPaymasterV4'],
 ];
 
 /** Every pair of pinned entries that share an address without being a declared alias. */

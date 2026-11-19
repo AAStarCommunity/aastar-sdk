@@ -1,5 +1,5 @@
 import { createClient, type Client, type Transport, type Chain, type Account, publicActions, walletActions, type PublicActions, type WalletActions, type Address, type Hex, type Hash, parseAbi } from 'viem';
-import { 
+import { isZeroAddress, ZeroAddressDestinationError, zeroDestinationGuard, 
     registryActions, 
     sbtActions,
     superPaymasterActions,
@@ -98,7 +98,9 @@ export function createEndUserClient({
         account
     })
     .extend(publicActions)
-    .extend(walletActions);
+    .extend(walletActions)
+    // A destination of address zero (a contract the selected deployment does not include) is refused before signing.
+    .extend(zeroDestinationGuard);
 
     // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
     // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.
@@ -210,6 +212,9 @@ export function createEndUserClient({
         }) {
             const accountToUse = account;
             if (!accountToUse) throw new Error("Wallet account required for gasless execution");
+            // The call target is inside the UserOp (execute(target, value, data)), past the client's zero-destination
+            // guard: a declared-absent contract (zero) is refused here, before the account is touched or anything signed.
+            if (isZeroAddress(target)) throw new ZeroAddressDestinationError('executeGasless', 'execute target');
 
             // 1. Get AA Address (Predict if necessary)
             const { accountAddress } = await (this as any).createSmartAccount({ owner: accountToUse.address });

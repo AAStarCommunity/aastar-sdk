@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook } from './sp550-pin-fill-core.js';
+import { PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 
@@ -102,6 +103,17 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
         expect(m.SP550_FRESH_DEPLOY_PINS[11155420].addresses).toEqual({ registry: getAddress(A(0x21)) });
         expect(m.SP550_FRESH_DEPLOY_PINS[11155420].absent).toEqual(['pnts', 'timelockController']);
         expect(m.SP550_FRESH_DEPLOY_PINS[10]).toEqual({});
+    });
+    it('coexist: SP550_COEXIST_PINS is filled under the network name; the chain-keyed tables are untouched', async () => {
+        const dep = fs.readFileSync(path.join(SRC, 'sp550Deployments.ts'), 'utf8');
+        const pins = parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x31) }, absent: ['pnts'] }, 'fresh');
+        const filled = fillPinsTable(dep, 'SP550_COEXIST_PINS', 'sepolia-rc8', pins);
+        const m = await load('coexist', filled);
+        expect(m.SP550_COEXIST_PINS['sepolia-rc8'].addresses).toEqual({ registry: getAddress(A(0x31)) });
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155111]).toBeUndefined();
+        expect(m.SP550_FRESH_DEPLOY_PINS[11155420]).toEqual({});
+        expect(() => fillPinsTable(filled, 'SP550_COEXIST_PINS', 'sepolia-rc8', pins)).toThrow(/already filled/);
+        expect(() => fillPinsTable(dep, 'SP550_COEXIST_PINS', 'op-mainnet-rc8', pins)).toThrow(/no entry for this chain/);
     });
 });
 
@@ -531,5 +543,54 @@ describe('disclosureRegistry: an address or "n/a:none" (author 2026-11-12: 5.5.0
 describe('absent must be an array of key names (PR-Daemon #443 N1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it.each([[{}], ['pnts'], [[1]], [null]])('absent %j is a manifest error, not a TypeError', (absent) => {
         expect(() => parseManifestPins({ ...MANIFEST, absent }, 'fresh')).toThrow(/manifest pins: absent must be an array of key names/);
+    });
+});
+
+describe('sp550-pin-fill --deploylive-archive refuses until SP names the runtime-codehash source', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('exit 2 with the pending reason, before reading any manifest or RPC', async () => {
+        const { spawnSync } = await import('child_process');
+        const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', 'sepolia-rc8', '--deploylive-archive', '/nonexistent'],
+            { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+        expect(r.status).toBe(2);
+        expect(r.stderr).toContain(DEPLOYLIVE_ARCHIVE_PENDING);
+    });
+    it.each([['trailing, no value', ['--manifest', './nonexistent.json', '--deploylive-archive']], ['--flag=value', ['--deploylive-archive=/x', '--manifest', './nonexistent.json']]])('%s also refuses before the manifest is read (Codex r1 M6)', async (_l, extra) => {
+        const { spawnSync } = await import('child_process');
+        const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', 'sepolia-rc8', ...extra],
+            { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
+        expect(r.status).toBe(2);
+        expect(r.stderr).toContain(DEPLOYLIVE_ARCHIVE_PENDING);
+        expect(r.stderr).not.toContain('ENOENT');
+    });
+});
+
+describe('pinFillWritePlan: what the CLI writes (Codex r2 M5)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const ROOT = path.resolve(import.meta.dirname, '..');
+    const FILES = { upgrade: path.join(SRC, 'sp550Cutover.ts'), fresh: path.join(SRC, 'sp550Deployments.ts'), book: path.join(SRC, 'addresses.ts') };
+    const read = (f: string) => fs.readFileSync(f, 'utf8');
+    const coexistPins = () => parseManifestPins({ ...MANIFEST, addresses: { registry: A(0x41) }, absent: ['pnts'] }, 'fresh');
+    const block = (src: string, decl: string) => { const i = src.indexOf(`\nexport const ${decl}`); return src.slice(i, src.indexOf('\n};', i)); };
+
+    it('sepolia-rc8: one write, the coexist pin entry only; addresses.ts and the chain-keyed tables are byte-identical', () => {
+        const net = resolveSp550Network('sepolia-rc8');
+        expect(pinFillTargets(net, FILES)).toEqual([FILES.fresh]);
+        const plan = pinFillWritePlan(net, coexistPins(), FILES, read, {}, 'note');
+        expect(plan.map((w) => w.path)).toEqual([FILES.fresh]);
+        const [w] = plan;
+        expect(w.after).not.toBe(w.before);
+        expect(block(w.after, 'SP550_FRESH_DEPLOY_PINS')).toBe(block(w.before, 'SP550_FRESH_DEPLOY_PINS'));
+        // Outside the coexist table, nothing changes.
+        const strip = (src: string) => src.replace(block(src, 'SP550_COEXIST_PINS'), '');
+        expect(strip(w.after)).toBe(strip(w.before));
+        expect(read(FILES.book)).toBe(fs.readFileSync(path.join(ROOT, 'packages/core/src/addresses.ts'), 'utf8'));
+    });
+
+    it('a chain-keyed fresh network (op-sepolia) still writes its table and the address book', () => {
+        const net = resolveSp550Network('op-sepolia');
+        expect(pinFillTargets(net, FILES)).toEqual([FILES.fresh, FILES.book]);
+        const pins = coexistPins();
+        const plan = pinFillWritePlan(net, pins, FILES, read, bookSwitch('fresh', pins), 'note');
+        expect(plan.map((w) => w.path)).toEqual([FILES.fresh, FILES.book]);
+        expect(block(plan[0].after, 'SP550_COEXIST_PINS')).toBe(block(plan[0].before, 'SP550_COEXIST_PINS'));
     });
 });

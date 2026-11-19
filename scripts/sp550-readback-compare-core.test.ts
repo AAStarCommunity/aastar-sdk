@@ -23,7 +23,7 @@ const PINS: any = {
 PINS.codehashes = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [k, k === 'spImpl' ? PINS.spImplCodehash : H(parseInt((a as string).slice(-2), 16))]));
 const DUMP = 'ab'.repeat(32);
 const ANVIL = '4e8874b2bdc840929585ca73e170993c50a4a531';
-const CTX = { chainId: 11155111, mode: 'upgrade' as const, source: 'fork' as const, allowRc: true, forkBlock: 400n, dumpSha256: DUMP, hardfork: 'amsterdam', anvilCommit: ANVIL, spCommit: 'c0ffee'.padEnd(40, '0') };
+const CTX = { chainId: 11155111, mode: 'upgrade' as const, network: 'sepolia' as const, source: 'fork' as const, allowRc: true, forkBlock: 400n, dumpSha256: DUMP, hardfork: 'amsterdam', anvilCommit: ANVIL, spCommit: 'c0ffee'.padEnd(40, '0') };
 const BLOCK_HASH = H(0xbb);
 
 /** The chain as the SDK reads it: versions where the contract has one, owners for SP and the Registry. */
@@ -149,7 +149,7 @@ describe('readbackProblems: a read-back that agrees with the pins and the chain 
     it('live: no anvil, no dump (anvilVersion "n/a:…" valid since schema 61d30b82)', async () => {
         const rb = good();
         Object.assign(rb.header, { source: 'live', anvilVersion: 'n/a:live', anvilCommit: 'n/a:live', dumpSha256: 'n/a:live' });
-        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } })).toEqual([]);
+        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', network: 'sepolia', source: 'live', allowRc: true } })).toEqual([]);
     });
     it('the header / contract field lists match the schema', () => {
         const schema = JSON.parse(fs.readFileSync(READBACK_SCHEMA_FILE, 'utf8'));
@@ -232,7 +232,7 @@ describe('readbackProblems refuses', () => {
     });
     it('a live read-back that names an anvil or a dump', async () => {
         const rb = good(); rb.header.source = 'live';
-        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', source: 'live', allowRc: true } }))
+        expect(await run(rb, { ctx: { chainId: 11155111, mode: 'upgrade', network: 'sepolia', source: 'live', allowRc: true } }))
             .toEqual(['anvilVersion', 'anvilCommit', 'dumpSha256'].map((k) => expect.stringMatching(new RegExp(`header\\.${k} .*expected "n/a:…"`))));
     });
     it('a provider URL', async () => {
@@ -248,7 +248,7 @@ describe('readbackProblems refuses', () => {
     });
     it('a chain with no Amsterdam reference cannot pass', async () => {
         const rb = good(); rb.header.chainId = 1;
-        expect(await run(rb, { ctx: { ...CTX, chainId: 1 } })).toContain('header.ethConfig: no Amsterdam reference for chain 1');
+        expect(await run(rb, { ctx: { ...CTX, chainId: 1, network: undefined } })).toContain('header.ethConfig: no Amsterdam reference for chain 1');
     });
     it('incomplete pins are refused before anything is compared (no vacuous pass)', async () => {
         const rb = good(); rb.contracts = {};
@@ -534,5 +534,23 @@ describe('disclosureRegistry rolesSource, aligned with DVT a7-fork VERIFIED-ABSE
     });
     it('no SDK address book carries a disclosureRegistry entry', () => {
         for (const book of Object.values(CANONICAL_ADDRESSES as Record<number, Record<string, unknown>>)) expect(Object.keys(book)).not.toContain('disclosureRegistry');
+    });
+});
+
+describe('the comparator validates by network: a coexisting stack\'s overlap and hold are refused (Codex r3 M4)', () => {
+    it('sepolia-rc8 pins naming the shipped staking contract, or under a hold, are pins problems before any comparison', async () => {
+        const { SP550_COEXIST_HOLDS } = await import('../packages/core/src/sp550Deployments.js');
+        const { CANONICAL_ADDRESSES } = await import('../packages/core/src/addresses.js');
+        const old = (CANONICAL_ADDRESSES as any)[11155111].staking;
+        const pins = { ...PINS, addresses: { ...(PINS.addresses ?? {}), staking: old } };
+        const ctx = { ...CTX, mode: 'fresh' as const, network: 'sepolia-rc8' as const };
+        // Without the network, a chain that hosts a coexisting stack is refused as ambiguous (Codex r4 M3).
+        expect(await readbackProblems({}, pins, { ...CTX, mode: 'fresh' as const, network: undefined }, reader())).toEqual([expect.stringMatching(/^context: chain 11155111 hosts more than one SP 5.5.0 stack/)]);
+        expect(await readbackProblems({}, pins, { ...CTX, mode: 'upgrade' as const, network: 'sepolia-rc8' as const }, reader())).toEqual([expect.stringMatching(/^context: network sepolia-rc8 is chain 11155111 fresh/)]);
+        const got = await readbackProblems({}, pins, ctx, reader());
+        expect(got).toContainEqual(expect.stringMatching(/^pins: addresses\.staking .* is the shipped stack's staking/));
+        SP550_COEXIST_HOLDS['sepolia-rc8'] = 'held for test';
+        try { expect(await readbackProblems({}, PINS, ctx, reader())).toContainEqual('pins: release hold: held for test'); }
+        finally { delete SP550_COEXIST_HOLDS['sepolia-rc8']; }
     });
 });

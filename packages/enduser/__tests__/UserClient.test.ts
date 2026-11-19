@@ -381,6 +381,21 @@ describe('UserClient', () => {
           expect(opts.operator).toBeUndefined();
       });
 
+      it('executeGasless refuses target = address zero before submit (a declared-absent contract; Codex r4 H2)', async () => {
+          const { PaymasterClient } = await import('@aastar/paymaster');
+          const submit = vi.mocked(PaymasterClient.submitGaslessUserOperation);
+          submit.mockClear();
+          await expect(client.executeGasless({
+              target: '0x0000000000000000000000000000000000000000',
+              value: 1n,
+              data: '0x',
+              paymaster: '0x2222222222222222222222222222222222222222',
+              paymasterType: 'Super',
+              operator: '0x4444444444444444444444444444444444444444'
+          })).rejects.toThrow(/zero address/);
+          expect(submit).not.toHaveBeenCalled();
+      });
+
       it('executeGasless throws for a V4 paymaster without a gasToken (#169 — no silent target-as-token)', async () => {
           await expect(client.executeGasless({
               target: '0x1111111111111111111111111111111111111111',

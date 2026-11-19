@@ -1,6 +1,6 @@
 import { createClient, type Client, type Transport, type Chain, type Account, type Hash, type Hex, erc20Abi, publicActions, walletActions, type PublicActions, type WalletActions, type Address, keccak256, stringToBytes, zeroAddress } from 'viem';
 
-import {
+import { zeroDestinationGuard,
     stakingActions,
     registryActions,
     RegistryABI,
@@ -81,7 +81,9 @@ export function createOperatorClient({
         account
     })
     .extend(publicActions)
-    .extend(walletActions);
+    .extend(walletActions)
+    // A destination of address zero (a contract the selected deployment does not include) is refused before signing.
+    .extend(zeroDestinationGuard);
 
     // Auto-resolve the contract address book from `chain.id` (seamless multi-chain).
     // Precedence: explicit `addresses` > canonical-by-chainId > static CORE_ADDRESSES fallback.

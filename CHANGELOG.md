@@ -62,6 +62,53 @@ All notable changes to this project will be documented in this file.
   branch, frozen limits giving identical actualGas, and the one-at-a-time variants above). `docs/onchain-evidence/paper-path-abi-equality.md`
   with `packages/core/src/abis/paperPathAbi.test.ts`: the 32 ABI entries the paper paths use are identical in the vendored
   files and SuperPaymaster cf8b1068. FU-122 lists the gas literals left outside this path.
+### `sepolia-rc8`: SuperPaymaster rc.8 as a fresh stack next to Sepolia's 5.4.2 one
+
+- New SP 5.5.0 network `sepolia-rc8` (chain 11155111, `fresh`, `coexist: true`). Its pins live in
+  `SP550_COEXIST_PINS['sepolia-rc8']` (empty until the post-deploy read-back, so every consumer fails closed); it never
+  switches `CANONICAL_ADDRESSES`, which stays the 5.4.2 stack. `sepolia` (the in-place upgrade entry) is unchanged.
+- `sp550AddressSet('sepolia-rc8')`: the stack's complete address set after the full fresh-deploy validation — what
+  a caller passes as a client's `addresses`. Every book key is present: SP entries and the client aliases
+  (`gTokenStaking`, `mySBT`) from the pins, external ones from the shipped book, declared-absent ones as the zero
+  address, so a client's `{ ...chainDefaults, ...addresses }` merge cannot fall back to the 5.4.2 stack.
+  `sp550PinsFor(network)` names the table entry a network reads; `sp550OverlayBook` builds the set.
+- `requireDeployedAddress(set, key, deployment)`: the address of a key, or a named `Sp550NotDeployedError` when it is
+  zero (not deployed), missing or malformed — for every path that signs, sends or encodes an address (the rc.8 live
+  cells route their keys through it).
+- `zeroDestinationGuard` (viem client extension, `ZeroAddressDestinationError`): `createOperatorClient` /
+  `createAdminClient` / `createEndUserClient` / `createCommunityClient` refuse a `writeContract` / `sendTransaction`
+  to the zero address before signing (and `sendCalls` with any zero call), so an action bound to a declared-absent
+  entry cannot burn value there. The account actions `execute` / `executeBatch` refuse a zero inner target.
+  `executeGasless` (SDK EndUserClient and `@aastar/enduser` UserClient) refuses a zero call target, which sits inside
+  the UserOp past that guard. AdminClient's DVT / BLS actions are bound to the resolved `dvtValidator` /
+  `blsAggregator` (they were bound to a zero placeholder).
+- The cutover gate also reads the wiring of a fresh stack against the pins: Registry.GTOKEN_STAKING / MYSBT,
+  GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN, xPNTsFactoryV2.REGISTRY,
+  PaymasterFactory.registry, X402Facilitator.REGISTRY / XPNTS_FACTORY, the PaymasterV4 implementation's registry,
+  GlobalTierSource.REGISTRY, and each deployed V4 paymaster's registry / entryPoint / ethUsdPriceFeed.
+  It also reads every no-argument view that returns an address anywhere (address, address[], tuples) of every pinned
+  contract on every RPC
+  (`SP550_WIRING_SCAN_ABI`; an entry without an ABI needs a reasoned `SP550_WIRING_SCAN_EXEMPT`): a disagreement, a
+  failed call or a non-address fails (a revert only where `SP550_WIRING_SCAN_UNSUPPORTED` lists it for the release),
+  and for a coexisting stack no getter may name an SP-owned contract of the chain's shipped stack.
+- The read-back comparator refuses a context without a network on a chain that hosts more than one stack, and a
+  network that does not match the context's chain and mode.
+- One network-aware validation (`sp550NetworkPinProblems`: tag policy, coexist overlap, hold) for the gate, the
+  read-back comparator and `sp550AddressSet`; `requireSp550FreshDeployPins(chainId)` refuses a chain that hosts a
+  coexisting stack.
+- `addresses.paymasterV4 = addresses.aPNTsPaymasterV4` is a declared pin alias (one contract, one codehash), as in the
+  shipped books.
+- A coexisting stack may not reuse an SP-owned address of the chain's shipped stack (`sp550CoexistOverlapProblems`;
+  a deliberate share is a reviewed `SP550_COEXIST_SHARED_KEYS` entry). Its release holds are its own
+  (`SP550_COEXIST_HOLDS`, `sp550HoldFor`), so holding one Sepolia deployment never holds or releases the other.
+- A network's release-tag policy (`allowRc`) applies alike to the writer, the gate, the read-back comparator and `sp550AddressSet`; only
+  `sepolia-rc8` accepts `v5.5.0-rc.N` without `--allow-rc`. `resolveSp550Network` returns a discriminated union.
+- Fresh pins (every fresh network): the book's `aPNTs` / `xPNTsFactory` must be the `aPNTsCapped` / `xPNTsFactoryV2`
+  contracts (neither different nor declared absent), as an upgrade derives them. The gate accepts the zero address
+  as "not deployed" for a declared-absent key in fresh mode too (as it already did for an upgrade).
+- The cutover gate holds a coexisting stack against that overlay; `scripts/sp550-pin-fill.ts --network sepolia-rc8`
+  fills only its pin table entry. Its input will be a DeployLive release archive (`--deploylive-archive`), which
+  refuses until SP names the source of the expected runtime codehashes.
 
 ### ROLE_ENDUSER registration sends the role data Registry decodes, through `registerRole`
 

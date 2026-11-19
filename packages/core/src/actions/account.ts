@@ -1,3 +1,4 @@
+import { isZeroAddress, ZeroAddressDestinationError } from '../zeroDestinationGuard.js';
 import { type Address, type PublicClient, type WalletClient, type Hex, type Hash, type Account } from 'viem';
 import { SimpleAccountABI, SimpleAccountFactoryABI } from '../abis/index.js';
 import { validateAddress, validateRequired, validateAmount } from '../validators/index.js';
@@ -25,6 +26,8 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
     async execute({ dest, value, func, account }) {
         try {
             validateAddress(dest, 'dest');
+            // The inner target is past any client-level destination guard (the outer call goes to the account).
+            if (isZeroAddress(dest)) throw new ZeroAddressDestinationError('execute', 'dest');
             validateAmount(value, 'value');
             validateRequired(func, 'func');
             return await (client as any).writeContract({
@@ -49,6 +52,8 @@ export const accountActions = (address: Address) => (client: PublicClient | Wall
             if (dest.length !== value.length || dest.length !== func.length) {
                 throw new Error('executeBatch: Array lengths must match');
             }
+            const zeroAt = dest.findIndex((t) => isZeroAddress(t));
+            if (zeroAt >= 0) throw new ZeroAddressDestinationError('executeBatch', `dest[${zeroAt}]`);
 
             // Zip arguments into Call[] struct format
             const calls = dest.map((t, i) => ({
