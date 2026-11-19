@@ -7,7 +7,7 @@ import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
-import { SP550_RELEASE_VERSIONS, sp550ReleaseVersionsProblems, SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
+import { SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, sp550ReleaseVersionsProblems, SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
 import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, sp550WiringScanAbi, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
@@ -959,6 +959,31 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
             expect(sp550ReleaseVersionsProblems({ ...T, MySBT: 'MySBT-1.0.0' })).toEqual([expect.stringMatching(/unmapped MySBT/)]);
             expect(sp550ReleaseVersionsProblems({ ...T, Registry: '' })).toEqual([expect.stringMatching(/Registry "" is not a version string/)]);
             expect(sp550ReleaseVersionsProblems({ ...T, Registry: 'latest' })).toEqual([expect.stringMatching(/not a version string/)]);
+        });
+        it('the reverse matrix (Daybreak #469 re-run): whitespace, wrong types, case-only keys, prototype keys, arrays', () => {
+            const T = RELEASE as Record<string, string>;
+            for (const v of ['Registry-5.10.1\n', ' Registry-5.10.1', 'Registry-5.10.1 ', '   ', '\t', 'Registry -5.10.1']) {
+                expect(sp550ReleaseVersionsProblems({ ...T, Registry: v }), JSON.stringify(v)).toEqual([expect.stringMatching(/Registry .* is not a version string/)]);
+            }
+            for (const v of [null, 5, true, {}, ['Registry-5.10.1'], undefined]) {
+                expect(sp550ReleaseVersionsProblems({ ...T, Registry: v as any }).length, JSON.stringify(v) ?? 'undefined').toBeGreaterThan(0);
+            }
+            const { Registry: r, ...rest } = T;
+            expect(sp550ReleaseVersionsProblems({ ...rest, registry: r })).toEqual(['release-versions: missing Registry', expect.stringMatching(/unmapped registry/)]);
+            expect(sp550ReleaseVersionsProblems(JSON.parse(JSON.stringify(T).replace('{', '{"__proto__":"x-1.0.0",'))).length).toBeGreaterThan(0);
+            expect(sp550ReleaseVersionsProblems({ ...T, constructor: 'Foo-1.0.0' } as any)).toEqual([expect.stringMatching(/unmapped constructor/)]);
+            expect(sp550ReleaseVersionsProblems([] as any)).toEqual(['release-versions: the table is an array, not an object']);
+            expect(sp550ReleaseVersionsProblems(undefined)).toEqual(['release-versions: no table']);
+        });
+        it('the required key set is the one the SDK maps, written out here (a mapping edit must change this test)', () => {
+            expect(Object.keys(SP550_RELEASE_VERSION_ENTRY).sort()).toEqual(['APNTsCapped', 'GTokenAuthorization', 'GTokenStaking', 'Registry', 'SuperPaymaster', 'xPNTsFactoryV2']);
+        });
+        it('a required contract without a pinned address fails its version() check', async () => {
+            const m = deployment(sepolia.id, 'fresh');
+            const pins: any = structuredClone(m.pins);
+            delete pins.aPNTsCapped;
+            const f = failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins }));
+            expect(f).toContainEqual(expect.stringMatching(/^APNTsCapped\.version\(\) == release-versions .*no pinned address/));
         });
         it('a table without a non-SP key (Registry) fails the gate, and the missing contract is still compared', async () => {
             const m = deployment(sepolia.id, 'fresh');

@@ -33,7 +33,12 @@ const SP_REPO = path.resolve(SDK_ROOT, process.env.SP_REPO ?? '../SuperPaymaster
 const SP_OUT = process.env.SP550_OUT ? path.resolve(SDK_ROOT, process.env.SP550_OUT) : undefined;
 // --strict (Daybreak #469 M2) = REQUIRE_UPSTREAM=1 and SP550_OUT required: a run without the upstream checkout or
 // without compiled artifacts fails instead of printing SKIP / skipping the compiled-union step.
-const STRICT = process.argv.includes('--strict');
+// Exactly the bare `--strict` or nothing (Daybreak #469 re-run): `--strict=false`, a typo or any other argument is
+// refused, never read as "not strict".
+const ARGS = process.argv.slice(2);
+const unknownArgs = ARGS.filter((x) => x !== '--strict');
+if (unknownArgs.length || ARGS.length > 1) { console.error(`FAIL: unknown argument(s) ${JSON.stringify(ARGS)}; the only option is --strict`); process.exit(2); }
+const STRICT = ARGS.length === 1;
 const REQUIRE_UPSTREAM = STRICT || process.env.REQUIRE_UPSTREAM === '1';
 if (STRICT && !SP_OUT) { console.error('FAIL: --strict needs SP550_OUT=<forge out/ built from the pinned commit> (clean out/ before building)'); process.exit(1); }
 

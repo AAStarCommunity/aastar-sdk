@@ -268,6 +268,7 @@ export const SP550_RELEASE_VERSION_ENTRY: Readonly<Record<string, string>> = {
  */
 export function sp550ReleaseVersionsProblems(table: Readonly<Record<string, unknown>> | undefined): string[] {
     if (!table || typeof table !== 'object') return ['release-versions: no table'];
+    if (Array.isArray(table)) return ['release-versions: the table is an array, not an object'];
     const want = Object.keys(SP550_RELEASE_VERSION_ENTRY).sort(), have = Object.keys(table).sort();
     const p: string[] = [];
     const missing = want.filter((k) => !have.includes(k)), extra = have.filter((k) => !want.includes(k));
@@ -275,7 +276,8 @@ export function sp550ReleaseVersionsProblems(table: Readonly<Record<string, unkn
     if (extra.length) p.push(`release-versions: unmapped ${extra.join(', ')} (add a pin / ABI mapping first)`);
     for (const k of want) {
         const v = table[k];
-        if (k in table && (typeof v !== 'string' || !/^\S+-\d+\.\d+\S*$/.test(v))) p.push(`release-versions: ${k} ${JSON.stringify(v)} is not a version string`);
+        // No whitespace anywhere (a trailing "\n" would satisfy `$`), then NAME-MAJOR.MINOR…
+        if (Object.prototype.hasOwnProperty.call(table, k) && (typeof v !== 'string' || /\s/.test(v) || !/^[A-Za-z][A-Za-z0-9]*-\d+\.\d+[0-9A-Za-z.\-]*$/.test(v))) p.push(`release-versions: ${k} ${JSON.stringify(v)} is not a version string`);
     }
     return p;
 }
