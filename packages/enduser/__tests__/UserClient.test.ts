@@ -341,7 +341,7 @@ describe('UserClient', () => {
           expect(result).toBe('0xUserOpHash');
       });
 
-      it('executeGasless Super: estimation is left to submit (tuneEstimate), never run before it', async () => {
+      it('executeGasless Super: estimation and limits are left to submit (no SDK-side tuning), never run before it', async () => {
           // The estimation request carries a real signature over the real nonce; estimating here,
           // before submit reserves the SP 5.5.0 in-flight slot, leaked a signed op (PR #420 M3-b).
           // The @aastar/paymaster mock has no estimateUserOperationGas: calling it would throw.
@@ -359,13 +359,26 @@ describe('UserClient', () => {
           expect(submit).toHaveBeenCalledTimes(1);
           const opts = submit.mock.calls[0][8] as any;
           expect(opts.autoEstimate).toBeUndefined();
-          expect(typeof opts.tuneEstimate).toBe('function');
-          const tuned = opts.tuneEstimate({
-              preVerificationGas: 50_000n, verificationGasLimit: 100_000n, callGasLimit: 60_000n,
-              paymasterVerificationGasLimit: 120_000n, paymasterPostOpGasLimit: 50_000n,
+          // Limits are submit's own (estimate × coefficient, chain floors): no compressing tuneEstimate.
+          expect(opts.tuneEstimate).toBeUndefined();
+      });
+
+      it('executeGasless V4: explicit gas limits reach submit, so a V4 postOp the bundler does not estimate can be given (clestons #464 B1)', async () => {
+          const { PaymasterClient } = await import('@aastar/paymaster');
+          const submit = vi.mocked(PaymasterClient.submitGaslessUserOperation);
+          submit.mockClear();
+          await client.executeGasless({
+              target: '0x1111111111111111111111111111111111111111',
+              value: 0n,
+              data: '0x1234',
+              paymaster: '0x2222222222222222222222222222222222222222',
+              paymasterType: 'V4',
+              gasToken: '0x3333333333333333333333333333333333333333',
+              gas: { paymasterPostOpGasLimit: 150_000n },
           });
-          expect(tuned.verificationGasLimit).toBe(180_000n); // + 80k safety pad
-          expect(tuned.paymasterPostOpGasLimit).toBe(200_000n); // 150k → 200k floor
+          const opts = submit.mock.calls[0][8] as any;
+          expect(opts.paymasterPostOpGasLimit).toBe(150_000n);
+          expect(opts.operator).toBeUndefined();
       });
 
       it('executeGasless refuses target = address zero before submit (a declared-absent contract; Codex r4 H2)', async () => {

@@ -466,6 +466,8 @@ export class UserClient extends BaseClient {
         gasToken?: Address;
         operator?: Address; // Added for SuperPaymaster
         maxRate?: bigint;   // Added for SuperPaymaster
+        /** Explicit gas limits, used instead of the bundler's estimate for those fields (e.g. a V4 postOp limit). */
+        gas?: Partial<Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit', bigint>>;
     }, options?: TransactionOptions): Promise<Hash> {
         try {
             const client = this.bundlerClient ? this.bundlerClient.extend(bundlerActions) : (this.client as any).extend(bundlerActions);
@@ -496,27 +498,8 @@ export class UserClient extends BaseClient {
             // We dynamic import to avoid circular dependencies if any
             const { PaymasterClient: SDKPaymasterClient } = await import('@aastar/paymaster');
             
-            // Super: the tuning is handed to submit (tuneEstimate) rather than estimating here. The
-            // estimation request carries a real signature over the real nonce, so it must run after
-            // submit has reserved the SuperPaymaster 5.5.0 single-in-flight slot (PR #420 M3-b).
-            let tuneEstimate: ((est: any) => Record<string, bigint>) | undefined;
-            if (params.paymasterType === 'Super') {
-                const { tuneGasLimit } = await import('@aastar/paymaster');
-                tuneEstimate = (est: any) => {
-                    // Matches SuperPaymasterClient: nominal 60k, efficiency 0.45.
-                    const bundlerEstimate = est.paymasterVerificationGasLimit || 100000n;
-                    // Safety pad for VGL (moderate, not 1M).
-                    const SAFETY_PAD = 80000n;
-                    // SuperPaymaster postOp calls burnFromWithOpHash (~40k gas) + storage writes.
-                    // Add 100k buffer; floor at 200k to prevent OOG. Pure BigInt.
-                    const postOpBase = est.paymasterPostOpGasLimit + 100_000n;
-                    return {
-                        paymasterVerificationGasLimit: tuneGasLimit(bundlerEstimate, 60_000n, 0.45),
-                        verificationGasLimit: est.verificationGasLimit + SAFETY_PAD,
-                        paymasterPostOpGasLimit: postOpBase > 200_000n ? postOpBase : 200_000n,
-                    };
-                };
-            }
+            // Limits are submit's (bundler estimate × coefficient, contract floors from the chain); estimation runs
+            // inside submit, after the SuperPaymaster 5.5.0 single-in-flight slot is reserved (PR #420 M3-b).
 
             const txHash = await SDKPaymasterClient.submitGaslessUserOperation(
                 this.client,
@@ -528,8 +511,8 @@ export class UserClient extends BaseClient {
                 this.bundlerClient?.transport?.url || (this.client.transport as any).url || '',
                 callData,
                 {
-                    operator: params.operator,
-                    tuneEstimate
+                    ...params.gas,
+                    operator: params.operator
                 }
             );
 

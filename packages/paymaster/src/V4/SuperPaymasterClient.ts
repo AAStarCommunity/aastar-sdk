@@ -1,7 +1,7 @@
 import { type Address, type Hex, concat, pad, toHex, encodeFunctionData, parseAbi } from 'viem';
 import { type PublicClient } from '@aastar/core';
-import { PaymasterClient, type GasEstimate } from './PaymasterClient';
-import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07, tuneGasLimit } from './PaymasterUtils';
+import { PaymasterClient } from './PaymasterClient';
+import { buildSuperPaymasterData, formatUserOpV07, getUserOpHashV07 } from './PaymasterUtils';
 
 export type GaslessTransactionConfig = {
     token: Address;
@@ -59,29 +59,11 @@ export class SuperPaymasterClient {
         console.log(`   - Token: ${config.token}`);
         console.log(`   - Operator: ${config.operator}`);
 
-        // 2-3. Estimation + Smart Buffer Strategy, run INSIDE submit (tuneEstimate): the estimation
-        // request carries a real signature over the real nonce, so it must happen after submit has
-        // reserved the SuperPaymaster 5.5.0 single-in-flight slot (PR #420 M3-b).
-        //
-        // SuperPaymaster validation common case is ~58k-66k, worst case (refresh) 115k; a nominal
-        // 60k with efficiency 0.45 gives a 133k ceiling, which satisfies the bundler's 0.4
-        // efficiency ratio (58/133 = 0.43) and execution (115 < 133). Account validation +
-        // execution is ~35k → 77k limit. postOp calls burnFromWithOpHash (~40k) + storage writes:
-        // +100k buffer, 200k floor.
-        const tuneEstimate = (est: GasEstimate): Partial<GasEstimate> => {
-            const tunedVGL = tuneGasLimit(est.verificationGasLimit, 35_000n, 0.45);
-            const tunedPMVerificationGas = tuneGasLimit(est.paymasterVerificationGasLimit || 100000n, 60_000n, 0.45);
-            const postOpBase = est.paymasterPostOpGasLimit + 100_000n;
-            const tunedPostOp = postOpBase > 200_000n ? postOpBase : 200_000n;
-            console.log(`[SuperPaymasterClient] 🔧 Tuned Limits: VGL=${tunedVGL}, PMVGL=${tunedPMVerificationGas}, PostOp=${tunedPostOp}`);
-            return {
-                verificationGasLimit: tunedVGL,
-                paymasterVerificationGasLimit: tunedPMVerificationGas,
-                paymasterPostOpGasLimit: tunedPostOp,
-            };
-        };
+        // 2-3. Estimation runs INSIDE submit, after it has reserved the SuperPaymaster 5.5.0 single-in-flight slot
+        // (PR #420 M3-b). Limits are submit's: the bundler estimate × coefficient, with the contract's
+        // minPostOpGas read from the chain (gasPolicy.ts); no SDK-side compression.
 
-        // 4. Estimate (inside submit) and submit with tuned limits
+        // 4. Estimate (inside submit) and submit
         return PaymasterClient.submitGaslessUserOperation(
             client,
             wallet,
@@ -93,7 +75,6 @@ export class SuperPaymasterClient {
             callData,
             {
                 operator: config.operator,
-                tuneEstimate,
                 factory: config.factory,
                 factoryData: config.factoryData
             }
