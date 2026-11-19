@@ -491,16 +491,24 @@ describe('the live plan gate and the lossless plan parse (DSR / SP)', () => {
         expect(maxCostDigitsProblem(wrap('1.00000000000000001', ',"other":{"maxCostPerOpWei":1}'), 1n)).toMatch(/are not 1/);
         expect(maxCostDigitsProblem(wrap('1e0', ',"other":{"maxCostPerOpWei":1}'), 1n)).toMatch(/are not 1/);
         expect(maxCostDigitsProblem('{"other":{"maxCostPerOpWei":5}}', 5n)).toMatch(/\(absent\)/);
+        // Codex r3: a flattened key that spells the path must not stand in for the nested value (and vice versa).
+        expect(maxCostDigitsProblem('{"shared":{"sdkLive":{"maxCostPerOpWei":"1\\u0030"}},"shared.sdkLive.maxCostPerOpWei":10}', 10n)).toMatch(/are not 10/);
+        expect(maxCostDigitsProblem('{"shared":{"sdkLive":{"maxCostPerOpWei":10}},"shared.sdkLive.maxCostPerOpWei":11}', 10n)).toBeUndefined();
     });
     it.each([
         ['an exponent', '{"a":1e3}', /exponent form 1e3/],
         ['a large exponent', '{"a":1e16}', /exponent form/],
         ['an underflowing exponent', '{"a":-1e-400}', /exponent form/],
         ['negative zero', '{"a":-0}', /negative zero/],
-        ['a duplicate key', '{"n":1,"n":2}', /duplicate key\(s\) n/],
-        ['a nested duplicate key', '{"shared":{"sdkLive":{"status":"cleared","status":"x"}}}', /duplicate key\(s\) shared.sdkLive.status/],
+        ['a duplicate key', '{"n":1,"n":2}', /duplicate key\(s\) \["n"\]/],
+        ['a nested duplicate key', '{"shared":{"sdkLive":{"status":"cleared","status":"x"}}}', /duplicate key\(s\) \["shared","sdkLive","status"\]/],
+        ['nesting deeper than the stated limit', '['.repeat(300) + ']'.repeat(300), /nesting deeper than 256/],
     ])('parsePlanJson refuses %s', (_n, text, why) => {
         expect(() => parsePlanJson(text as string)).toThrow(why as RegExp);
+    });
+    it('a number token is read whole, however long (no 4096-character cut)', () => {
+        const big = '9'.repeat(5000);
+        expect(parsePlanJson(`{"a":${big}}`).a.toString()).toBe(big);
     });
     it('a fraction becomes a non-integer marker (never a rounded integer); the plan check refuses it in an integer field', () => {
         const v = parsePlanJson('{"a":1.00000000000000001,"b":-9007199254740993,"c":0.5}');

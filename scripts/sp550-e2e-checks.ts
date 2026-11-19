@@ -485,11 +485,15 @@ export async function guardedSignMessage(a: any, io: {
 }
 
 /**
- * One pass over (already valid) JSON text: every value's exact source token by path ("a.b[0].c"), duplicate keys, and
+ * One pass over (already valid) JSON text: every value's exact source token by path (the JSON array of its segments,
+ * e.g. '["shared","sdkLive","maxCostPerOpWei"]', so a key containing a dot cannot collide), duplicate keys, and
  * number tokens a plan may not use (an exponent, or negative zero). JSON.parse keeps the last of two equal keys and
  * rounds exponents silently; the plan's integers must be what its bytes say (Codex cost-cap r2).
  */
+export const PLAN_JSON_MAX_DEPTH = 256;
 export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: string[]; source: Map<string, string> } {
+    // Limits, stated: nesting deeper than PLAN_JSON_MAX_DEPTH is refused with a clear error (a plan is shallow);
+    // number tokens are read whole, however long.
     let i = 0;
     const duplicates: string[] = [], badNumbers: string[] = [], source = new Map<string, string>();
     const ws = () => { while (i < text.length && ' \t\n\r'.includes(text[i])) i++; };
@@ -501,8 +505,11 @@ export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: 
         i++;
         return JSON.parse(text.slice(s0, i));
     };
-    const at = (base: string, k: string) => (base ? `${base}.${k}` : k);
-    const value = (path: string): void => {
+    const key = (segs: (string | number)[]) => JSON.stringify(segs);
+    const NUM = /-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/y;
+    const value = (segs: (string | number)[]): void => {
+        if (segs.length > PLAN_JSON_MAX_DEPTH) fail(`nesting deeper than ${PLAN_JSON_MAX_DEPTH}`);
+        const path = key(segs);
         ws();
         const c = text[i];
         if (c === '{') {
@@ -513,11 +520,11 @@ export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: 
                 ws();
                 if (text[i] !== '"') fail('expected a key');
                 const k = str();
-                if (keys.has(k)) duplicates.push(at(path, k));
+                if (keys.has(k)) duplicates.push(key([...segs, k]));
                 keys.add(k);
                 ws();
                 if (text[i++] !== ':') fail('expected ":"');
-                value(at(path, k));
+                value([...segs, k]);
                 ws();
                 if (text[i] === ',') { i++; continue; }
                 if (text[i] === '}') { i++; return; }
@@ -529,7 +536,7 @@ export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: 
             let n = 0;
             if (text[i] === ']') { i++; return; }
             for (;;) {
-                value(`${path}[${n++}]`);
+                value([...segs, n++]);
                 ws();
                 if (text[i] === ',') { i++; continue; }
                 if (text[i] === ']') { i++; return; }
@@ -537,7 +544,8 @@ export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: 
             }
         }
         if (c === '"') { const s0 = i; str(); source.set(path, text.slice(s0, i)); return; }
-        const m = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/.exec(text.slice(i, i + 4096));
+        NUM.lastIndex = i;
+        const m = NUM.exec(text);
         if (m && m[0]) {
             source.set(path, m[0]);
             if (m[3]) badNumbers.push(`${path}: exponent form ${m[0]}`);
@@ -548,7 +556,7 @@ export function scanPlanJson(text: string): { duplicates: string[]; badNumbers: 
         for (const lit of ['true', 'false', 'null']) if (text.startsWith(lit, i)) { source.set(path, lit); i += lit.length; return; }
         fail('unexpected token');
     };
-    value('');
+    value([]);
     ws();
     if (i !== text.length) fail('trailing data');
     return { duplicates, badNumbers, source };
@@ -586,7 +594,7 @@ export function parsePlanJson(text: string): any {
  * the source token of shared.sdkLive.maxCostPerOpWei is exactly its decimal form (a number token, or that string).
  */
 export function maxCostDigitsProblem(raw: string, value: bigint): string | undefined {
-    const tok = scanPlanJson(raw).source.get('shared.sdkLive.maxCostPerOpWei');
+    const tok = scanPlanJson(raw).source.get(JSON.stringify(['shared', 'sdkLive', 'maxCostPerOpWei']));
     const d = value.toString();
     return tok === d || tok === `"${d}"` ? undefined : `plan: shared.sdkLive.maxCostPerOpWei's bytes ${JSON.stringify(tok ?? '(absent)')} are not ${d}`;
 }
