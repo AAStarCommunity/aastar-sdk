@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { custom, zeroAddress, type Address } from 'viem';
+import { custom, parseTransaction, zeroAddress, type Address } from 'viem';
 import { sepolia } from 'viem/chains';
 import { mnemonicToAccount } from 'viem/accounts';
 import { ZeroAddressDestinationError } from '@aastar/core';
@@ -11,9 +11,11 @@ const MNEMONIC = 'test test test test test test test test test test test junk';
 /** A transport that answers the reads a local-account send needs and records every method it is asked for. */
 function recording() {
     const methods: string[] = [];
+    const raw: string[] = [];
     const transport = custom({
-        async request({ method }: { method: string }) {
+        async request({ method, params }: { method: string; params?: any[] }) {
             methods.push(method);
+            if (method === 'eth_sendRawTransaction' || method === 'eth_sendRawTransactionSync') raw.push(params![0]);
             switch (method) {
                 case 'eth_chainId': return '0x' + sepolia.id.toString(16);
                 case 'eth_getTransactionCount': return '0x0';
@@ -22,14 +24,15 @@ function recording() {
                 case 'eth_gasPrice': return '0x1';
                 case 'eth_getBlockByNumber': return { baseFeePerGas: '0x1', number: '0x1', hash: '0x' + '11'.repeat(32), timestamp: '0x1' };
                 case 'eth_sendRawTransaction': return '0x' + '22'.repeat(32);
+                case 'eth_sendRawTransactionSync': return { transactionHash: '0x' + '22'.repeat(32), status: '0x1', blockNumber: '0x1', blockHash: '0x' + '11'.repeat(32), logs: [], cumulativeGasUsed: '0x1', gasUsed: '0x1', effectiveGasPrice: '0x1', from: '0x' + '00'.repeat(20), to: null, transactionIndex: '0x0', type: '0x2', logsBloom: '0x' + '00'.repeat(256), contractAddress: null };
                 default: throw new Error(`unexpected ${method}`);
             }
         },
     });
-    return { methods, transport };
+    return { methods, transport, raw };
 }
 
-const SENDS = ['eth_sendRawTransaction', 'eth_sendTransaction', 'eth_signTransaction'];
+const SENDS = ['eth_sendRawTransaction', 'eth_sendRawTransactionSync', 'eth_sendTransaction', 'eth_signTransaction', 'wallet_sendCalls'];
 
 describe('client writes to a zero-address book entry are refused before signing (Codex r3 H1 on sepolia-rc8)', () => {
     it('OperatorClient.addDeposit with value, paymasterV4 declared absent (zero): ZeroAddressDestinationError, nothing signed or sent', async () => {
@@ -113,6 +116,296 @@ describe('batch and account-execution paths (Codex r6 M3 / H4)', () => {
         const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
         expect(named(await acct.execute({ dest: zeroAddress, value: 1n, func: '0x', account }).catch((e: unknown) => e))).toBe(true);
         expect(named(await acct.executeBatch({ dest: ['0x2222222222222222222222222222222222222222', zeroAddress], value: [0n, 1n], func: ['0x', '0x'], account }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+});
+
+describe('the Sync variants and signTransaction are guarded too (clestons #465 follow-up 1)', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    it.each([
+        ['operator', createOperatorClient],
+        ['admin', createAdminClient],
+        ['endUser', createEndUserClient],
+        ['community', createCommunityClient],
+    ] as const)('%s client: writeContractSync / sendTransactionSync / sendCallsSync / signTransaction to address zero: refused, nothing signed or sent', async (_n, make) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client = (make as any)({ chain: sepolia, transport, account });
+        await expect(client.writeContractSync({ address: zeroAddress, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.sendTransactionSync({ to: zeroAddress, value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.sendCallsSync({ account, chain: sepolia, calls: [{ to: zeroAddress, value: 1n }] })).rejects.toThrow(ZeroAddressDestinationError);
+        await expect(client.signTransaction({ to: zeroAddress, value: 1n, account, chain: sepolia })).rejects.toThrow(ZeroAddressDestinationError);
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+});
+
+describe('Codex r1 on the guard: conflicting destinations, deployments, request building, positive controls', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+
+    it('writeContract / writeContractSync with a non-zero address but a `to` field: refused, nothing sent (viem would send to `to`)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const m of ['writeContract', 'writeContractSync']) {
+            expect(named(await client[m]({ address: NONZERO, to: zeroAddress, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e)), m).toBe(true);
+        }
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+    });
+
+    it('deployContract carrying a `to`: refused, nothing sent (viem spreads it into a direct send)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.deployContract({ abi: [], bytecode: '0x00', to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+    });
+
+    it('prepareTransactionRequest / fillTransaction to address zero: refused before anything is built', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.prepareTransactionRequest({ to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.fillTransaction({ to: zeroAddress, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods).toEqual([]);
+    });
+
+    it('positive controls: each newly guarded action with a non-zero destination goes past the guard to the signer / node', async () => {
+        const account = mnemonicToAccount(MNEMONIC);
+        const run = async (fn: (c: any) => Promise<unknown>) => {
+            const { methods, transport } = recording();
+            const sign = vi.spyOn(account, 'signTransaction');
+            const c: any = createOperatorClient({ chain: sepolia, transport, account });
+            const err = await fn(c).then(() => undefined, (e) => e);
+            const r = { named: named(err), signed: sign.mock.calls.length, methods };
+            sign.mockRestore();
+            return r;
+        };
+        const wcs = await run((c) => c.writeContractSync({ address: NONZERO, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }));
+        expect(wcs.named).toBe(false); expect(wcs.signed).toBe(1); expect(wcs.methods).toContain('eth_sendRawTransactionSync');
+        const sts = await run((c) => c.sendTransactionSync({ to: NONZERO, value: 1n, account, chain: sepolia }));
+        expect(sts.named).toBe(false); expect(sts.signed).toBe(1); expect(sts.methods).toContain('eth_sendRawTransactionSync');
+        const st = await run((c) => c.signTransaction({ to: NONZERO, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, account, chain: sepolia }));
+        expect(st.named).toBe(false); expect(st.signed).toBe(1);
+        const ptr = await run((c) => c.prepareTransactionRequest({ to: NONZERO, value: 1n, account, chain: sepolia }));
+        expect(ptr.named).toBe(false); expect(ptr.methods).toContain('eth_estimateGas');
+    });
+});
+
+describe('Codex r2 on the guard: check-then-use and raw sends', () => {
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+
+    it('a getter that answers non-zero when checked and zero when used cannot slip through: the checked copy is what viem gets', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        let reads = 0;
+        const req: any = { account, chain: sepolia, value: 1n, get to() { return ++reads === 1 ? NONZERO : zeroAddress; } };
+        await client.sendTransaction(req);
+        // Signed exactly once, to the address that was checked, never to zero.
+        expect(sign).toHaveBeenCalledTimes(1);
+        expect((sign.mock.calls[0][0] as any).to?.toLowerCase()).toBe(NONZERO.toLowerCase());
+        expect(reads).toBe(1);
+        let callReads = 0;
+        const batch: any = { account, chain: sepolia, calls: [{ value: 1n, get to() { return ++callReads === 1 ? NONZERO : zeroAddress; } }] };
+        await client.sendCalls(batch).catch(() => undefined);
+        expect(callReads).toBe(1);
+        expect(methods.filter((m) => m === 'eth_sendRawTransaction').length).toBeLessThanOrEqual(2);
+    });
+
+    it('sendRawTransaction / sendRawTransactionSync of bytes signed elsewhere to address zero: refused before the node is asked', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const toZero = await account.signTransaction({ to: zeroAddress, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, chainId: sepolia.id, type: 'eip1559' });
+        for (const m of ['sendRawTransaction', 'sendRawTransactionSync']) {
+            expect(named(await client[m]({ serializedTransaction: toZero }).catch((e: unknown) => e)), m).toBe(true);
+        }
+        expect(methods.filter((x) => SENDS.includes(x))).toEqual([]);
+        // Positive control: the same bytes to a non-zero address reach the node.
+        const toOther = await account.signTransaction({ to: NONZERO, value: 1n, gas: 21_000n, maxFeePerGas: 2n, maxPriorityFeePerGas: 1n, nonce: 0, chainId: sepolia.id, type: 'eip1559' });
+        await client.sendRawTransaction({ serializedTransaction: toOther });
+        expect(methods).toContain('eth_sendRawTransaction');
+    });
+});
+
+describe('clestons #466: only plain-object requests; a missing address is refused', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+    class ConstTo { value = 7n; constructor(private readonly dest: Address) {} get to() { return this.dest; } }
+    class ConstAddress { abi = payable; functionName = 'f' as const; value = 7n; constructor(private readonly dest: Address) {} get address() { return this.dest; } }
+
+    it.each([['zero', zeroAddress], ['non-zero', NONZERO]] as const)('Object.create / class-instance requests (%s destination): refused, nothing signed or sent', async (_l, dest) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const withCtx = (o: any) => Object.assign(o, { account, chain: sepolia });
+        expect(named(await client.sendTransaction(withCtx(Object.create({ to: dest, value: 7n }))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.sendTransaction(withCtx(new ConstTo(dest))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.writeContract(withCtx(new ConstAddress(dest))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.writeContract(withCtx(Object.create({ address: dest, abi: payable, functionName: 'f', value: 7n }))).catch((e: unknown) => e))).toBe(true);
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [Object.create({ to: dest, value: 7n })] }).catch((e: unknown) => e))).toBe(true);
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a contract write with no address (a missing book key) is refused instead of becoming a contract creation', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.writeContract({ address: undefined, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a plain-object batch is forwarded with exactly the checked destinations', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        await client.sendCalls({ account, chain: sepolia, calls: [{ to: NONZERO, value: 1n }], experimental_fallback: true });
+        expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
+    });
+});
+
+describe('clestons #466 B2 and follow-ups: non-enumerable fields, calls without to, reason-specific wording', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+    const hidden = (o: Record<string, unknown>, k: string, v: unknown) => Object.defineProperty(o, k, { value: v, enumerable: false });
+
+    it.each([['zero', zeroAddress], ['non-zero', NONZERO]] as const)('a non-enumerable `to` (%s) at the top or in calls[0]: refused as not-plain, nothing signed or sent', async (_l, dest) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const e1 = named(await client.sendTransaction(hidden({ account, chain: sepolia, value: 7n }, 'to', dest)).catch((e: unknown) => e));
+        expect(e1?.reason).toBe('not-plain');
+        const e2 = named(await client.sendCalls({ account, chain: sepolia, calls: [hidden({ value: 7n }, 'to', dest)] }).catch((e: unknown) => e));
+        expect(e2?.reason).toBe('not-plain');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a contract write whose address is null or a number is refused (invalid-address), not only undefined', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const address of [null, 0, undefined]) {
+            expect(named(await client.writeContract({ address, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, String(address)).toBe('invalid-address');
+        }
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a batch call without `to` (would be a creation) and a non-array calls are refused', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ value: 7n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: { 0: { to: NONZERO }, length: 1 } }).catch((e: unknown) => e))?.reason).toBe('not-plain');
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('only a zero destination is worded as a missing contract', () => {
+        expect(new ZeroAddressDestinationError('sendTransaction').message).toMatch(/zero address: the selected deployment does not include that contract/);
+        for (const r of ['invalid-address', 'not-plain', 'conflicting-to', 'unreadable-raw'] as const) {
+            expect(new ZeroAddressDestinationError('sendTransaction', undefined, r).message).not.toMatch(/zero address/);
+        }
+    });
+});
+
+describe('clestons #466 N1 and follow-ups: an own `to` key on a contract write, batch copies, explicit empty destinations', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+
+    it('writeContract / writeContractSync / a simulate-shaped request with an own `to: undefined`: refused (would overwrite the address), nothing signed or sent', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        const req = { address: NONZERO, to: undefined, abi: payable, functionName: 'f', value: 7n, account, chain: sepolia };
+        for (const m of ['writeContract', 'writeContractSync']) expect(named(await client[m](req).catch((e: unknown) => e))?.reason, m).toBe('conflicting-to');
+        // simulateContract(...).request keeps the caller's own keys: the same shape reaching writeContract.
+        const simulated = { ...{ address: NONZERO, abi: payable, functionName: 'f', args: [], value: 7n }, to: undefined, account, chain: sepolia };
+        expect(named(await client.writeContract(simulated).catch((e: unknown) => e))?.reason).toBe('conflicting-to');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('the batch is forwarded from its copy: a call whose `to` getter changes after the check still goes to the checked address', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        let reads = 0;
+        const call = { value: 1n, get to() { return ++reads === 1 ? NONZERO : zeroAddress; } };
+        await client.sendCalls({ account, chain: sepolia, calls: [call], experimental_fallback: true });
+        expect(raw.map((r) => parseTransaction(r as any).to?.toLowerCase())).toEqual([NONZERO.toLowerCase()]);
+    });
+
+    it.each([[null], [0], [123n]] as const)('a batch call whose `to` is %s: refused as invalid-address', async (to) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('a top-level send with an own `to` of undefined / null is refused; a deployment with no `to` field passes the guard', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const to of [undefined, null]) {
+            for (const m of ['sendTransaction', 'signTransaction', 'prepareTransactionRequest']) {
+                expect(named(await client[m]({ to, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason, `${m} ${to}`).toBe('invalid-address');
+            }
+        }
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+        const deploy = await client.sendTransaction({ data: '0x6000', account, chain: sepolia }).catch((e: unknown) => e);
+        expect(named(deploy)).toBeUndefined();
+    });
+});
+
+describe('DSR #466: one destination rule (strict isAddress, then zero) instead of enumerating bad shapes', () => {
+    const payable = [{ type: 'function', name: 'f', inputs: [], outputs: [], stateMutability: 'payable' }] as const;
+    const NONZERO = '0x1111111111111111111111111111111111111111' as Address;
+    const named = (e: any) => (e instanceof ZeroAddressDestinationError ? e : e?.cause instanceof ZeroAddressDestinationError ? e.cause : undefined);
+    const BAD = ['', '0x', '0x1234', NONZERO + '11', '0xZZ11111111111111111111111111111111111111', '0x5aaeb6053F3E94C9b9A09f33669435E7Ef1BeAed'] as const; // last: mixed case with a wrong checksum (one letter's case flipped)
+
+    it.each(BAD)('destination %j is refused as invalid-address by sendTransaction and writeContract (with value): nothing signed or sent', async (d) => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const sign = vi.spyOn(account, 'signTransaction');
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        expect(named(await client.sendTransaction({ to: d, value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(named(await client.writeContract({ address: d, abi: payable, functionName: 'f', value: 1n, account, chain: sepolia }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(named(await client.sendCalls({ account, chain: sepolia, calls: [{ to: d, value: 1n }], experimental_fallback: true }).catch((e: unknown) => e))?.reason).toBe('invalid-address');
+        expect(sign).not.toHaveBeenCalled();
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+
+    it('all-lower-case and correctly checksummed addresses pass (the rule refuses nothing viem would send)', async () => {
+        const { raw, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        await client.sendTransaction({ to: '0x52908400098527886e0f7030069857d2e4169ee7', value: 1n, account, chain: sepolia });
+        await client.sendTransaction({ to: '0x52908400098527886E0F7030069857D2E4169EE7', value: 1n, account, chain: sepolia }); // all upper
+        await client.sendTransaction({ to: '0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed', value: 1n, account, chain: sepolia }); // EIP-55
+        expect(raw).toHaveLength(3);
+    });
+
+    it('sendRawTransaction of bytes the generic parser cannot read is refused as unreadable-raw (clestons follow-up 1)', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        for (const serializedTransaction of ['0xdeadbeef', '0x71c0']) {
+            expect(named(await client.sendRawTransaction({ serializedTransaction }).catch((e: unknown) => e))?.reason, serializedTransaction).toBe('unreadable-raw');
+        }
         expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
     });
 });
