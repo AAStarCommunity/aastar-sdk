@@ -20,6 +20,33 @@ import { isZeroAddress, ZeroAddressDestinationError, zeroDestinationGuard,
     encodeEndUserRoleData,
 } from '@aastar/core';
 
+/** What executeGasless decided for one op: PaymasterClient's GasDecision fields, plus the outer handleOps gas. */
+export type SelfBundledGasDecision = {
+    limits: Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit', bigint>;
+    limitSources: Record<'verificationGasLimit' | 'callGasLimit' | 'preVerificationGas' | 'paymasterVerificationGasLimit' | 'paymasterPostOpGasLimit', 'explicit' | 'estimate' | 'floor'>;
+    fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint; source: string };
+    coefficientBps: bigint;
+    estimate?: Record<string, bigint>;
+    floors: { paymasterPostOpGasLimit: bigint };
+    /** The node's eth_estimateGas for the handleOps transaction, and the gas limit sent (x coefficient). */
+    handleOps: { estimate: bigint; gasLimit: bigint; source: 'estimate' };
+};
+
+export type ExecuteGaslessArgs = {
+    target: Address;
+    data: Hex;
+    value?: bigint;
+    operator: Address;
+    /** Explicit limits; the rest come from estimateBundlerUrl. */
+    gas?: Partial<SelfBundledGasDecision['limits']>;
+    /** An ERC-4337 endpoint used ONLY for eth_estimateUserOperationGas (the op is still sent by the EOA). */
+    estimateBundlerUrl?: string;
+    gasLimitCoefficientBps?: bigint;
+    maxFeePerGas?: bigint;
+    maxPriorityFeePerGas?: bigint;
+    onGasDecided?: (d: SelfBundledGasDecision) => void;
+};
+
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
     /**
      * High-level API: Onboard user to community with automatic funding
@@ -42,12 +69,14 @@ export type EndUserClient = Client<Transport, Chain, Account | undefined> & Publ
     /**
      * Executes a gasless transaction via SuperPaymaster.
      */
-    executeGasless: (args: {
-        target: Address,
-        data: Hex,
-        value?: bigint,
-        operator: Address
-    }) => Promise<Hash>;
+    /**
+     * Self-bundled sponsored op: the account's EOA sends handleOps itself (paid in ETH). Gas limits are the caller's
+     * explicit `gas`, else the estimate of `estimateBundlerUrl` x `gasLimitCoefficientBps` (one policy with
+     * PaymasterClient.submitGaslessUserOperation); with neither it refuses. Contract floors (minPostOpGas) only raise.
+     * Fees come from the chain (eth_feeHistory) unless given. The outer handleOps gas is the node's eth_estimateGas x
+     * the coefficient. `onGasDecided` reports all of it, with the same field names and source labels as PaymasterClient.
+     */
+    executeGasless: (args: ExecuteGaslessArgs) => Promise<Hash>;
     /**
      * Check if the user meets the requirements to join a community (stake, sbt, etc.)
      */
@@ -204,12 +233,7 @@ export function createEndUserClient({
                 initialCredit: credit
             };
         },
-        async executeGasless({ target, data, value = 0n, operator }: { 
-            target: Address, 
-            data: Hex, 
-            value?: bigint, 
-            operator: Address 
-        }) {
+        async executeGasless({ target, data, value = 0n, operator, gas, estimateBundlerUrl, gasLimitCoefficientBps, maxFeePerGas, maxPriorityFeePerGas, onGasDecided }: ExecuteGaslessArgs) {
             const accountToUse = account;
             if (!accountToUse) throw new Error("Wallet account required for gasless execution");
             // The call target is inside the UserOp (execute(target, value, data)), past the client's zero-destination
@@ -237,44 +261,71 @@ export function createEndUserClient({
                     args: [accountAddress, 0n] // 0 = default nonce key
                 }) as bigint;
             } catch (e: any) {
-                console.warn(`   ⚠️  Failed to fetch nonce from EntryPoint, using default 0:`, e.message);
-                // For initial transactions, nonce is always 0
-                nonce = 0n;
+                // A guessed nonce signs an op the EntryPoint rejects (or a different one): refuse instead.
+                throw new Error(`executeGasless: could not read the EntryPoint nonce for ${accountAddress} (${e?.shortMessage ?? e?.message}); nothing was signed`);
             }
 
             // 3. Build CallData (execute(target, value, data))
-            const { encodeFunctionData, concat, pad, keccak256 } = await import('viem');
+            const { encodeFunctionData, concat, pad, toHex } = await import('viem');
             const executeData = encodeFunctionData({
                 abi: [{ type: 'function', name: 'execute', inputs: [{type: 'address'}, {type: 'uint256'}, {type: 'bytes'}] }],
                 functionName: 'execute',
                 args: [target, value, data]
             });
 
-            // 4. Build Gas Limits & Fees (Benchmarked for experiments)
-            const accountGasLimits = concat([
-                pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 }), // verification
-                pad(`0x${(100000).toString(16)}`, { dir: 'left', size: 16 })  // call
-            ]) as Hex;
-
-            const gasFees = concat([
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 }), // 2 gwei
-                pad(`0x${(2000000000).toString(16)}`, { dir: 'left', size: 16 })  // 2 gwei
-            ]) as Hex;
-
-            // 5. Build PaymasterAndData from what the deployed SP actually reads (both generations).
-            // The previous hand-rolled bytes were the 72-byte 5.4.x prefix with no token and a 50k
-            // postOp: SuperPaymaster 5.5.0 sigFails that (token REQUIRED, postOp below the
-            // governable minPostOpGas), and even 5.4.2 enforces MIN_POST_OP_GAS = 200k.
-            const { resolveSuperPaymasterSponsorship, buildSuperPaymasterData, atLeast } = await import('@aastar/paymaster');
+            // 4. Sponsorship from what the deployed SP actually reads (both generations): token, minPostOpGas.
+            const { resolveSuperPaymasterSponsorship, buildSuperPaymasterData, PaymasterClient, resolveUserOpFees, scaleLimits, scaleGas, DEFAULT_GAS_LIMIT_COEFFICIENT_BPS } = await import('@aastar/paymaster');
             const sp = await resolveSuperPaymasterSponsorship(client as any, usedAddresses.superPaymaster, operator);
             if (!sp.isConfigured || sp.isPaused) {
                 throw new Error(`SuperPaymaster ${sp.version}: operator ${operator} is ${sp.isConfigured ? 'paused' : 'not configured'}; the op would be rejected (AA34).`);
             }
+            const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
+
+            // 5. Gas limits: explicit, else the estimate x coefficient; nothing written into the SDK (DSR D14).
+            const FIELDS = ['verificationGasLimit', 'callGasLimit', 'preVerificationGas', 'paymasterVerificationGasLimit', 'paymasterPostOpGasLimit'] as const;
+            const coefficientBps = gasLimitCoefficientBps ?? DEFAULT_GAS_LIMIT_COEFFICIENT_BPS;
+            const limits: Partial<SelfBundledGasDecision['limits']> = {};
+            const limitSources: Partial<SelfBundledGasDecision['limitSources']> = {};
+            for (const k of FIELDS) if (gas?.[k] !== undefined) { limits[k] = gas[k]; limitSources[k] = 'explicit'; }
+            const missing = FIELDS.filter((k) => limits[k] === undefined);
+            // Fees once, before the estimate: the estimate is for the op that is signed (same nonce, same fees, no flags).
+            const fees = await resolveUserOpFees(client as any, { maxFeePerGas, maxPriorityFeePerGas });
+            let estimate: Record<string, bigint> | undefined;
+            if (missing.length) {
+                if (!estimateBundlerUrl) throw new Error(`executeGasless: no gas source for ${missing.join(', ')}; pass gas or estimateBundlerUrl`);
+                // Only the bundler's usable fields (never local defaults): explicit fields fill what it left out.
+                const est = await PaymasterClient.estimateUserOperationGasFields(client as any, client as any, accountAddress, entryPointAddress,
+                    usedAddresses.superPaymaster, '0x0000000000000000000000000000000000000000', estimateBundlerUrl, executeData,
+                    { operator, sponsorship: sp, superPaymasterFlags: 0, superPaymasterAutoRenew: false, nonce,
+                        maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+                estimate = Object.fromEntries(Object.entries(est).filter((e): e is [string, bigint] => typeof e[1] === 'bigint'));
+                for (const k of missing) {
+                    const v = est[k];
+                    if (v === undefined) continue;
+                    limits[k] = k === 'preVerificationGas' ? v : scaleLimits({ preVerificationGas: 0n, verificationGasLimit: 0n, callGasLimit: 0n, paymasterVerificationGasLimit: 0n, paymasterPostOpGasLimit: 0n, [k]: v }, coefficientBps)[k];
+                    limitSources[k] = 'estimate';
+                }
+                const unfilled = FIELDS.filter((k) => limits[k] === undefined);
+                if (unfilled.length) throw new Error(`executeGasless: the bundler gave no usable ${unfilled.join(', ')} and none was given explicitly; nothing was signed`);
+            }
+            // The postOp floor read from the chain raises an ESTIMATED limit; an explicit one below it is refused
+            // (the signed value must be the caller's or an estimate's, never a silent rewrite of the caller's).
+            if (limits.paymasterPostOpGasLimit! < sp.minPostOpGas) {
+                if (limitSources.paymasterPostOpGasLimit === 'explicit') throw new Error(`executeGasless: gas.paymasterPostOpGasLimit ${limits.paymasterPostOpGasLimit} is below SuperPaymaster ${sp.version} minPostOpGas ${sp.minPostOpGas}; nothing was signed`);
+                limits.paymasterPostOpGasLimit = sp.minPostOpGas; limitSources.paymasterPostOpGasLimit = 'floor';
+            }
+            const L = limits as SelfBundledGasDecision['limits'];
+            const accountGasLimits = concat([
+                pad(toHex(L.verificationGasLimit), { dir: 'left', size: 16 }),
+                pad(toHex(L.callGasLimit), { dir: 'left', size: 16 }),
+            ]) as Hex;
+            const gasFees = concat([
+                pad(toHex(fees.maxPriorityFeePerGas), { dir: 'left', size: 16 }),
+                pad(toHex(fees.maxFeePerGas), { dir: 'left', size: 16 }),
+            ]) as Hex;
             const paymasterAndData = buildSuperPaymasterData(usedAddresses.superPaymaster, operator, {
-                // 250k covers 5.5.0 validation (spec §3.2: 198k-238k measured); floors only raise.
-                verificationGasLimit: atLeast(250_000n, sp.verificationGasFloor),
-                // 300k headroom (observed ~117k on 5.4.2), never below the contract's floor.
-                postOpGasLimit: atLeast(300_000n, sp.minPostOpGas),
+                verificationGasLimit: L.paymasterVerificationGasLimit,
+                postOpGasLimit: L.paymasterPostOpGasLimit,
                 token: sp.token,
             });
 
@@ -285,14 +336,13 @@ export function createEndUserClient({
                 initCode: '0x' as Hex,
                 callData: executeData,
                 accountGasLimits,
-                preVerificationGas: 50000n,
+                preVerificationGas: L.preVerificationGas,
                 gasFees,
                 paymasterAndData,
                 signature: '0x' as Hex
             };
 
             // 7. Sign UserOp Hash
-            const entryPointAddress = usedAddresses.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032';
             const userOpHash = await (client as any).readContract({
                 address: entryPointAddress,
                 abi: [{
@@ -324,9 +374,9 @@ export function createEndUserClient({
             });
             userOp.signature = signature;
 
-            // 8. Submit via handleOps
+            // 8. Submit via handleOps; its own gas limit is the node's estimate (target chain rules) x the coefficient.
             console.log(`   SDK: Submitting UserOp ${userOpHash}...`);
-            const tx = await (client as any).writeContract({
+            const handleOpsCall: any = {
                 address: entryPointAddress,
                 abi: [{
                     type: 'function',
@@ -355,7 +405,15 @@ export function createEndUserClient({
                 args: [[userOp], accountToUse.address],
                 account,
                 chain
-            });
+            };
+            const outerEstimate = (await (client as any).estimateContractGas(handleOpsCall)) as bigint;
+            const outerGas = scaleGas(outerEstimate, coefficientBps);
+            try {
+                // A detached copy: an observer cannot change what was signed or what the transaction sends.
+                onGasDecided?.(structuredClone({ limits: L, limitSources: limitSources as SelfBundledGasDecision['limitSources'], fees, coefficientBps, estimate,
+                    floors: { paymasterPostOpGasLimit: sp.minPostOpGas }, handleOps: { estimate: outerEstimate, gasLimit: outerGas, source: 'estimate' as const } }));
+            } catch (e) { console.warn('   SDK: onGasDecided threw; ignored', (e as Error)?.message); }
+            const tx = await (client as any).writeContract({ ...handleOpsCall, gas: outerGas, maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
 
             await (client as any).waitForTransactionReceipt({ hash: tx });
             return tx;
