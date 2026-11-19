@@ -5,7 +5,7 @@
  *
  * Applied as a viem client extension by the role-based client factories, so every action's write goes through it.
  */
-import { sendTransaction, writeContract } from 'viem/actions';
+import { sendCalls, sendTransaction, writeContract } from 'viem/actions';
 import type { Client } from 'viem';
 
 const ZERO = /^0x0{40}$/i;
@@ -20,7 +20,7 @@ export class ZeroAddressDestinationError extends Error {
 /** True for an address that names "not deployed". */
 export const isZeroAddress = (a: unknown): boolean => typeof a === 'string' && ZERO.test(a);
 
-/** viem extension: writeContract / sendTransaction to the zero address throw ZeroAddressDestinationError first. */
+/** viem extension: writeContract / sendTransaction / sendCalls with a zero destination throw ZeroAddressDestinationError first. */
 export function zeroDestinationGuard(client: Client) {
     return {
         writeContract: (args: any) => {
@@ -30,6 +30,11 @@ export function zeroDestinationGuard(client: Client) {
         sendTransaction: (args: any) => {
             if (isZeroAddress(args?.to)) return Promise.reject(new ZeroAddressDestinationError('sendTransaction'));
             return sendTransaction(client as any, args);
+        },
+        sendCalls: (args: any) => {
+            const i = (args?.calls ?? []).findIndex((c: any) => isZeroAddress(c?.to));
+            if (i >= 0) return Promise.reject(new ZeroAddressDestinationError('sendCalls', `call ${i}`));
+            return sendCalls(client as any, args);
         },
     };
 }

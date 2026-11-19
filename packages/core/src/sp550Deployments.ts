@@ -413,6 +413,8 @@ export const SP550_PIN_ALIASES: ReadonlyArray<readonly [string, string]> = [
     ['superPaymaster', 'addresses.superPaymaster'],
     ['aPNTsCapped', 'addresses.aPNTs'],
     ['xPNTsFactoryV2', 'addresses.xPNTsFactory'],
+    // The book's generic V4 paymaster is the community's aPNTs paymaster instance (as in the shipped books).
+    ['addresses.paymasterV4', 'addresses.aPNTsPaymasterV4'],
 ];
 
 /** Every pair of pinned entries that share an address without being a declared alias. */

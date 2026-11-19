@@ -19,14 +19,17 @@ All notable changes to this project will be documented in this file.
   cells route their keys through it).
 - `zeroDestinationGuard` (viem client extension, `ZeroAddressDestinationError`): `createOperatorClient` /
   `createAdminClient` / `createEndUserClient` / `createCommunityClient` refuse a `writeContract` / `sendTransaction`
-  to the zero address before signing, so an action bound to a declared-absent entry cannot burn value there.
+  to the zero address before signing (and `sendCalls` with any zero call), so an action bound to a declared-absent
+  entry cannot burn value there. The account actions `execute` / `executeBatch` refuse a zero inner target.
   `executeGasless` (SDK EndUserClient and `@aastar/enduser` UserClient) refuses a zero call target, which sits inside
   the UserOp past that guard. AdminClient's DVT / BLS actions are bound to the resolved `dvtValidator` /
   `blsAggregator` (they were bound to a zero placeholder).
 - The cutover gate also reads the wiring of a fresh stack against the pins: Registry.GTOKEN_STAKING / MYSBT,
   GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN, xPNTsFactoryV2.REGISTRY,
-  PaymasterFactory.registry, X402Facilitator.REGISTRY / XPNTS_FACTORY, the PaymasterV4 implementation's registry.
-  It also reads every no-argument address getter of every pinned contract on every RPC
+  PaymasterFactory.registry, X402Facilitator.REGISTRY / XPNTS_FACTORY, the PaymasterV4 implementation's registry,
+  GlobalTierSource.REGISTRY, and each deployed V4 paymaster's registry / entryPoint / ethUsdPriceFeed.
+  It also reads every no-argument view that returns an address anywhere (address, address[], tuples) of every pinned
+  contract on every RPC
   (`SP550_WIRING_SCAN_ABI`; an entry without an ABI needs a reasoned `SP550_WIRING_SCAN_EXEMPT`): a disagreement, a
   failed call or a non-address fails (a revert only where `SP550_WIRING_SCAN_UNSUPPORTED` lists it for the release),
   and for a coexisting stack no getter may name an SP-owned contract of the chain's shipped stack.
@@ -35,6 +38,8 @@ All notable changes to this project will be documented in this file.
 - One network-aware validation (`sp550NetworkPinProblems`: tag policy, coexist overlap, hold) for the gate, the
   read-back comparator and `sp550AddressSet`; `requireSp550FreshDeployPins(chainId)` refuses a chain that hosts a
   coexisting stack.
+- `addresses.paymasterV4 = addresses.aPNTsPaymasterV4` is a declared pin alias (one contract, one codehash), as in the
+  shipped books.
 - A coexisting stack may not reuse an SP-owned address of the chain's shipped stack (`sp550CoexistOverlapProblems`;
   a deliberate share is a reviewed `SP550_COEXIST_SHARED_KEYS` entry). Its release holds are its own
   (`SP550_COEXIST_HOLDS`, `sp550HoldFor`), so holding one Sepolia deployment never holds or releases the other.

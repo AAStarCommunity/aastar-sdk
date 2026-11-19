@@ -93,3 +93,26 @@ describe('the inner call target and the admin DVT / BLS bindings (Codex r4 H2 / 
         expect(err instanceof ZeroAddressDestinationError || err?.cause instanceof ZeroAddressDestinationError).toBe(false);
     });
 });
+
+describe('batch and account-execution paths (Codex r6 M3 / H4)', () => {
+    it('sendCalls with a zero destination: refused before any wallet request', async () => {
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createOperatorClient({ chain: sepolia, transport, account });
+        await expect(client.sendCalls({ account, chain: sepolia, calls: [{ to: '0x1111111111111111111111111111111111111111', value: 0n }, { to: zeroAddress, value: 1n }] }))
+            .rejects.toThrow(ZeroAddressDestinationError);
+        expect(methods).toEqual([]);
+    });
+
+    it('account execute / executeBatch with a zero inner target: refused before signing (the outer call goes to the account)', async () => {
+        const { accountActions } = await import('@aastar/core');
+        const { methods, transport } = recording();
+        const account = mnemonicToAccount(MNEMONIC);
+        const client: any = createEndUserClient({ chain: sepolia, transport, account });
+        const acct = accountActions('0x1111111111111111111111111111111111111111')(client);
+        const named = (e: any) => e instanceof ZeroAddressDestinationError || e?.cause instanceof ZeroAddressDestinationError;
+        expect(named(await acct.execute({ dest: zeroAddress, value: 1n, func: '0x', account }).catch((e: unknown) => e))).toBe(true);
+        expect(named(await acct.executeBatch({ dest: ['0x2222222222222222222222222222222222222222', zeroAddress], value: [0n, 1n], func: ['0x', '0x'], account }).catch((e: unknown) => e))).toBe(true);
+        expect(methods.filter((m) => SENDS.includes(m))).toEqual([]);
+    });
+});

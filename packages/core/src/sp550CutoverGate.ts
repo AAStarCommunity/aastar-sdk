@@ -311,6 +311,15 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         cmp('X402Facilitator.REGISTRY() == addresses.registry', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'REGISTRY'), reg);
         cmp('X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV2', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'XPNTS_FACTORY'), pins.xPNTsFactoryV2);
         cmp('PaymasterV4 impl registry() == addresses.registry', await read(book.paymasterV4Impl as Address | undefined, PaymasterABI, 'registry'), reg);
+        cmp('GlobalTierSource.REGISTRY() == addresses.registry', await read(pins.globalTierSource, GlobalTierSourceABI, 'REGISTRY'), reg);
+        // Each deployed V4 paymaster instance: its Registry, EntryPoint and price feed are the stack's.
+        for (const k of ['paymasterV4', 'aPNTsPaymasterV4', 'PNTsPaymasterV4'] as const) {
+            const pm = book[k] as Address | undefined;
+            if (typeof pm !== 'string' || /^0x0{40}$/i.test(pm)) continue; // declared absent
+            cmp(`${k}.registry() == addresses.registry`, await read(pm, PaymasterABI, 'registry'), reg);
+            cmp(`${k}.entryPoint() == SDK book entryPoint`, await read(pm, PaymasterABI, 'entryPoint'), canonical.entryPoint, 'SDK book');
+            cmp(`${k}.ethUsdPriceFeed() == SDK book priceFeed`, await read(pm, PaymasterABI, 'ethUsdPriceFeed'), canonical.priceFeed, 'SDK book');
+        }
         // Exhaustive, not a hand list: every no-argument address getter of every pinned contract is read on every RPC.
         // A disagreement, a failed call or a malformed answer fails (a revert only where SP550_WIRING_SCAN_UNSUPPORTED
         // lists it); every pinned entry has an ABI here or a reasoned exemption. For a COEXISTING stack, no getter
@@ -324,17 +333,41 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
                 record(`address getters of ${entry} scanned`, entry in SP550_WIRING_SCAN_EXEMPT, SP550_WIRING_SCAN_EXEMPT[entry] ?? 'no ABI mapping and no exemption: add one');
                 continue;
             }
+            // Every no-argument view whose outputs carry an address anywhere (address, address[], tuples of them).
+            const carries = (o: any): boolean => o.type.startsWith('address') || (o.type.startsWith('tuple') && (o.components ?? []).some(carries));
             const getters = (abi as any[]).filter((e) => e.type === 'function' && (e.inputs ?? []).length === 0 && ['view', 'pure'].includes(e.stateMutability)
-                && (e.outputs ?? []).length === 1 && e.outputs[0].type === 'address').map((e) => e.name as string);
+                && (e.outputs ?? []).some(carries)).map((e) => e.name as string);
             const unsupported = new Set(SP550_WIRING_SCAN_UNSUPPORTED[entry] ?? []);
             const bad: string[] = [], skipped: string[] = [];
+            // The addresses at the ADDRESS-typed positions of a decoded result, guided by the ABI outputs; undefined when
+            // the value does not have that shape (a disagreement between RPCs, or an unreadable answer).
+            const at = (o: any, v: unknown): string[] | undefined => {
+                if (o.type.endsWith('[]')) {
+                    if (!Array.isArray(v)) return undefined;
+                    const inner = { ...o, type: o.type.slice(0, o.type.lastIndexOf('[')) };
+                    const out: string[] = [];
+                    for (const x of v) { const a = at(inner, x); if (!a) return undefined; out.push(...a); }
+                    return out;
+                }
+                if (o.type === 'address') return typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v) ? [v] : undefined;
+                if (o.type === 'tuple') return outputsAt(o.components ?? [], v);
+                return []; // not an address position
+            };
+            const outputsAt = (outs: any[], v: unknown): string[] | undefined => {
+                const vals = outs.length === 1 && !(outs[0].type === 'tuple' && Array.isArray(v) === false && v && typeof v === 'object') ? [v]
+                    : Array.isArray(v) ? v : v && typeof v === 'object' ? outs.map((o, k) => (v as any)[o.name || k]) : undefined;
+                if (!vals || vals.length !== outs.length) return undefined;
+                const out: string[] = [];
+                for (let k = 0; k < outs.length; k++) { const a = at(outs[k], vals[k]); if (!a) return undefined; out.push(...a); }
+                return out;
+            };
+            const outputsOf = (g: string) => (abi as any[]).find((e) => e.type === 'function' && e.name === g && (e.inputs ?? []).length === 0).outputs;
             for (const g of getters) {
                 const v = await read(address as Address, abi, g);
-                if (typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) {
-                    const k = old.get(v.toLowerCase());
-                    if (k) bad.push(`${g}() = ${v} (the shipped stack's ${k})`);
-                } else if (unsupported.has(g) && typeof v === 'string' && v.startsWith('ERR ')) skipped.push(g);
-                else bad.push(`${g}() ${str(v)}`); // disagreement between RPCs, a failed call, or not an address
+                if (typeof v === 'string' && v.startsWith('ERR ')) { if (unsupported.has(g)) skipped.push(g); else bad.push(`${g}() ${v}`); continue; }
+                const found = v instanceof Diverge ? undefined : outputsAt(outputsOf(g), v);
+                if (!found) { bad.push(`${g}() ${str(v)}`); continue; }
+                for (const a of found) { const k = old.get(a.toLowerCase()); if (k) bad.push(`${g}() names ${a} (the shipped stack's ${k})`); }
             }
             record(`address getters of ${entry}${net.coexist ? ' name no shipped-stack contract' : ' read on every RPC'}`, bad.length === 0,
                 bad.length ? bad.join('; ') : `${getters.length - skipped.length}/${getters.length} read${skipped.length ? `; unsupported in this release: ${skipped.join(', ')}` : ''}`);

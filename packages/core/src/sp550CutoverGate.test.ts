@@ -60,7 +60,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${book.staking}.REGISTRY`]: book.registry, [`${book.staking}.GTOKEN`]: book.gToken,
         [`${book.sbt}.REGISTRY`]: book.registry, [`${book.sbt}.GTOKEN_STAKING`]: book.staking, [`${book.sbt}.GTOKEN`]: book.gToken,
         [`${p.factory}.REGISTRY`]: book.registry, [`${book.paymasterFactory}.registry`]: book.registry, [`${book.x402Facilitator}.REGISTRY`]: book.registry,
-        [`${book.x402Facilitator}.XPNTS_FACTORY`]: p.factory, [`${book.paymasterV4Impl}.registry`]: book.registry,
+        [`${book.x402Facilitator}.XPNTS_FACTORY`]: p.factory, [`${book.paymasterV4Impl}.registry`]: book.registry, [`${p.tier}.REGISTRY`]: book.registry,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -118,7 +118,14 @@ function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
             if (!(k in m.reads)) {
                 // An address getter no test sets answers a neutral address (not a pin, not the shipped stack).
                 const e = (abi as any[]).find((x) => x.type === 'function' && x.name === functionName);
-                if (e && (e.inputs ?? []).length === 0 && e.outputs?.length === 1 && e.outputs[0].type === 'address' && !m.revertUnset) return NEUTRAL;
+                // Address-carrying views no test sets: neutral values (address -> NEUTRAL, arrays empty, numbers 0).
+                const neutral = (o: any): unknown => o.type.endsWith('[]') ? [] : o.type === 'address' ? NEUTRAL : o.type === 'bool' ? false
+                    : /^u?int/.test(o.type) ? 0n : o.type === 'string' ? '' : /^bytes\d+$/.test(o.type) ? '0x' + '00'.repeat(Number(o.type.slice(5)))
+                    : o.type === 'bytes' ? '0x' : o.type === 'tuple' ? (o.components ?? []).map(neutral) : undefined;
+                if (e && (e.inputs ?? []).length === 0 && (e.outputs ?? []).some((o: any) => o.type.startsWith('address')) && !m.revertUnset) {
+                    const vals = e.outputs.map(neutral);
+                    if (vals.every((v: unknown) => v !== undefined)) return vals.length === 1 ? vals[0] : vals;
+                }
                 throw Object.assign(new Error('reverted'), { shortMessage: `no ${functionName}` });
             }
             const v = m.reads[k];
@@ -801,7 +808,7 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         expect(r.exitCode).toBe(1);
         const bad = r.results.filter((c) => !c.ok);
         expect(bad.map((c) => c.check)).toEqual(['address getters of addresses.staking name no shipped-stack contract']);
-        expect(bad[0].detail).toMatch(/treasury\(\) = .* \(the shipped stack's superPaymaster\)/);
+        expect(bad[0].detail).toMatch(/treasury\(\) names .* \(the shipped stack's superPaymaster\)/);
     });
 
     it('the scan fails on RPC disagreement, on one RPC failing, and on a revert not listed as unsupported (Codex r5 H1)', async () => {
@@ -849,5 +856,31 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
             const r = await rawGate({ network: 'op-sepolia', rpcs: twin(m), pins: m.pins });
             expect(r.results.filter((c) => !c.ok)).toEqual([]);
         } finally { for (const k of Object.keys(live)) delete live[k]; Object.assign(live, saved); }
+    });
+
+    it('GlobalTierSource.REGISTRY() naming an unrelated address (not the shipped stack) fails (Codex r6 H1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.p.tier}.REGISTRY`] = A(0xbad);
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['GlobalTierSource.REGISTRY() == addresses.registry']);
+    });
+
+    it('an address inside an array getter (Paymaster getSupportedTokens) naming the shipped aPNTs fails the coexist scan (Codex r6 H2)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.addresses.paymasterV4Impl}.getSupportedTokens`] = [A(0x123), shippedSepolia.aPNTs];
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        const bad = r.results.filter((c) => !c.ok);
+        expect(bad.map((c) => c.check)).toEqual(['address getters of addresses.paymasterV4Impl name no shipped-stack contract']);
+        expect(bad[0].detail).toMatch(/getSupportedTokens\(\) names .* \(the shipped stack's aPNTs\)/);
+    });
+
+    it('addresses.paymasterV4 = addresses.aPNTsPaymasterV4 is a declared alias (the shipped books use it) (Codex r6 M5)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const pm = A(0x4321);
+        const hash = keccak256(codeOf(pm));
+        const pins = { ...m.pins, addresses: { ...m.pins.addresses, paymasterV4: pm, aPNTsPaymasterV4: pm },
+            absent: m.pins.absent!.filter((k: string) => k !== 'paymasterV4' && k !== 'aPNTsPaymasterV4'),
+            codehashes: { ...m.pins.codehashes, 'addresses.paymasterV4': hash, 'addresses.aPNTsPaymasterV4': hash } };
+        expect(sp550NetworkPinProblems('sepolia-rc8', pins as any).problems).toEqual([]);
     });
 });
