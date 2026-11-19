@@ -4,7 +4,7 @@ import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
 import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
-import { rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
+import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
 const SP_VERSION = 'SuperPaymaster-5.5.1';
@@ -17,6 +17,7 @@ const LOOP = 'http://127.0.0.1:8545';
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as Address;
 const HEAD = 5_000n;
 const BLOCK_HASH = ('0x' + 'b1'.repeat(32)) as Hex;
+const NEUTRAL = ('0x' + 'fe'.repeat(20)) as Address;
 const codeOf = (a: Address) => ('0x6080' + a.slice(2)) as Hex; // distinct non-empty code per address
 
 /** A complete, consistent 5.5.0 deployment on `chainId`, and the pins that describe it. */
@@ -59,6 +60,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${book.staking}.REGISTRY`]: book.registry, [`${book.staking}.GTOKEN`]: book.gToken,
         [`${book.sbt}.REGISTRY`]: book.registry, [`${book.sbt}.GTOKEN_STAKING`]: book.staking, [`${book.sbt}.GTOKEN`]: book.gToken,
         [`${p.factory}.REGISTRY`]: book.registry, [`${book.paymasterFactory}.registry`]: book.registry, [`${book.x402Facilitator}.REGISTRY`]: book.registry,
+        [`${book.x402Facilitator}.XPNTS_FACTORY`]: p.factory, [`${book.paymasterV4Impl}.registry`]: book.registry,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -74,7 +76,9 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         /** Per-address code overrides ('0x' = no code); default codeOf(address). */
         code: {} as Record<string, Hex>,
         /** Called after each readContract answer (lets a test reorg the model mid-run). */
-        afterRead: undefined as undefined | ((functionName: string) => void) };
+        afterRead: undefined as undefined | ((functionName: string) => void),
+        /** Unset address getters revert instead of answering NEUTRAL. */
+        revertUnset: false };
 }
 
 type Model = ReturnType<typeof deployment>;
@@ -108,10 +112,15 @@ function rpc(label: string, url: string, m: Model, calls: string[]): GateRpc {
             log('getCode'); atSnapshot('getCode', blockNumber);
             return m.code[address] ?? codeOf(address);
         }) as any,
-        readContract: (async ({ address, functionName, blockNumber }: any) => {
+        readContract: (async ({ address, abi, functionName, blockNumber }: any) => {
             log(`read ${functionName}`); atSnapshot(`read ${functionName}`, blockNumber);
             const k = `${address}.${functionName}`;
-            if (!(k in m.reads)) throw Object.assign(new Error('reverted'), { shortMessage: `no ${functionName}` });
+            if (!(k in m.reads)) {
+                // An address getter no test sets answers a neutral address (not a pin, not the shipped stack).
+                const e = (abi as any[]).find((x) => x.type === 'function' && x.name === functionName);
+                if (e && (e.inputs ?? []).length === 0 && e.outputs?.length === 1 && e.outputs[0].type === 'address' && !m.revertUnset) return NEUTRAL;
+                throw Object.assign(new Error('reverted'), { shortMessage: `no ${functionName}` });
+            }
             const v = m.reads[k];
             m.afterRead?.(functionName);
             return v;
@@ -791,7 +800,54 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
         expect(r.exitCode).toBe(1);
         const bad = r.results.filter((c) => !c.ok);
-        expect(bad.map((c) => c.check)).toEqual(['no address getter of addresses.staking names the shipped stack']);
+        expect(bad.map((c) => c.check)).toEqual(['address getters of addresses.staking name no shipped-stack contract']);
         expect(bad[0].detail).toMatch(/treasury\(\) = .* \(the shipped stack's superPaymaster\)/);
+    });
+
+    it('the scan fails on RPC disagreement, on one RPC failing, and on a revert not listed as unsupported (Codex r5 H1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const t = `${m.pins.addresses.staking}.treasury`;
+        // Disagreement: rpc2 sees another address.
+        const m2 = structuredClone(m); m2.reads[t] = A(0xabc);
+        let r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m, m2), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['address getters of addresses.staking name no shipped-stack contract']);
+        // One RPC fails the call.
+        const m3 = structuredClone(m); m3.revertUnset = true;
+        r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m, m3), pins: m.pins });
+        expect(r.exitCode).toBe(1);
+        // Both revert: fails unless the getter is listed as unsupported for this entry.
+        const both = { ...deployment(sepolia.id, 'fresh'), revertUnset: true };
+        r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(both, structuredClone(both)), pins: both.pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'address getters of addresses.staking name no shipped-stack contract')!.detail).toMatch(/treasury\(\) ERR/);
+    });
+
+    it('every pinned entry is scanned or has a reasoned exemption (Codex r5 H3)', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        for (const [entry] of sp550PinnedAddressEntries(m.pins)) expect(entry in SP550_WIRING_SCAN_ABI || entry in SP550_WIRING_SCAN_EXEMPT, entry).toBe(true);
+        expect(SP550_WIRING_SCAN_ABI['addresses.paymasterV4Impl']).toBeDefined();
+    });
+
+    it('a new Paymaster implementation wired to the shipped Registry fails; so does a facilitator on an unrelated factory (Codex r5 H3/M4)', async () => {
+        let m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.addresses.paymasterV4Impl}.registry`] = shippedSepolia.registry;
+        let r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContainEqual('PaymasterV4 impl registry() == addresses.registry');
+        m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.addresses.x402Facilitator}.XPNTS_FACTORY`] = A(0xbeef); // not a pin, not the shipped stack
+        r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV2']);
+    });
+
+    it('a chain-keyed fresh stack still passes after its switch put the pinned addresses into CANONICAL_ADDRESSES (Codex r5 H2)', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const live = (CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id];
+        const saved = { ...live };
+        Object.assign(live, BOOKS.get(m.pins)); // the post-write state the re-run gate imports: switched entries in,
+        for (const k of m.pins.absent ?? []) delete live[k]; // declared-absent ones removed (bookSwitch: null)
+        try {
+            const r = await rawGate({ network: 'op-sepolia', rpcs: twin(m), pins: m.pins });
+            expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        } finally { for (const k of Object.keys(live)) delete live[k]; Object.assign(live, saved); }
     });
 });

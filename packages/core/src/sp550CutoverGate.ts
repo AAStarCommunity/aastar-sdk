@@ -20,7 +20,7 @@
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import {
     AOAProtocolRegistryABI, APNTsCappedABI, BLSAggregatorABI, BLSValidatorABI, DVTValidatorABI, GTokenABI, GTokenStakingABI, GlobalTierSourceABI, MicroPaymentChannelABI, MySBTABI,
-    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
 } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
@@ -72,15 +72,35 @@ const isLoopback = (url: string) => {
 };
 
 /** The vendored ABI of each pinned entry the wiring scan reads (sp550PinnedAddressEntries names). */
-const WIRING_SCAN_ABI: Record<string, unknown> = {
-    superPaymaster: SuperPaymasterV550ABI, superPaymasterLens: SuperPaymasterLensABI, xPNTsFactoryV2: xPNTsFactoryV2ABI,
-    xPNTsTokenV2Impl: xPNTsTokenV2ABI, aoaProtocolRegistry: AOAProtocolRegistryABI, globalTierSource: GlobalTierSourceABI, aPNTsCapped: APNTsCappedABI,
+export const SP550_WIRING_SCAN_ABI: Record<string, unknown> = {
+    superPaymaster: SuperPaymasterV550ABI, spImpl: SuperPaymasterV550ABI, superPaymasterLens: SuperPaymasterLensABI,
+    xPNTsFactoryV2: xPNTsFactoryV2ABI, xPNTsTokenV2Impl: xPNTsTokenV2ABI, aoaProtocolRegistry: AOAProtocolRegistryABI,
+    globalTierSource: GlobalTierSourceABI, aPNTsCapped: APNTsCappedABI, registryImpl: RegistryABI,
     'addresses.registry': RegistryABI, 'addresses.gToken': GTokenABI, 'addresses.staking': GTokenStakingABI, 'addresses.sbt': MySBTABI,
-    'addresses.reputationSystem': ReputationSystemABI, 'addresses.paymasterFactory': PaymasterFactoryABI, 'addresses.blsAggregator': BLSAggregatorABI,
-    'addresses.dvtValidator': DVTValidatorABI, 'addresses.policyRegistry': PolicyRegistryABI, 'addresses.x402Facilitator': X402FacilitatorABI,
-    'addresses.microPaymentChannel': MicroPaymentChannelABI, 'addresses.blsValidator': BLSValidatorABI,
-    'addresses.aPNTsPaymasterV4': PaymasterABI, 'addresses.PNTsPaymasterV4': PaymasterABI, 'addresses.paymasterV4': PaymasterABI,
+    'addresses.reputationSystem': ReputationSystemABI, 'addresses.superPaymaster': SuperPaymasterV550ABI,
+    'addresses.paymasterFactory': PaymasterFactoryABI, 'addresses.paymasterV4Impl': PaymasterABI, 'addresses.blsAggregator': BLSAggregatorABI,
+    'addresses.dvtValidator': DVTValidatorABI, 'addresses.aPNTs': APNTsCappedABI, 'addresses.policyRegistry': PolicyRegistryABI,
+    'addresses.x402Facilitator': X402FacilitatorABI, 'addresses.timelockController': TimelockControllerABI,
+    'addresses.paymasterV4': PaymasterABI, 'addresses.aPNTsPaymasterV4': PaymasterABI, 'addresses.PNTsPaymasterV4': PaymasterABI,
+    'addresses.xPNTsFactory': xPNTsFactoryV2ABI, 'addresses.microPaymentChannel': MicroPaymentChannelABI, 'addresses.blsValidator': BLSValidatorABI,
 };
+
+/** Pinned entries the scan does not read, each with why. Any other entry without an ABI above fails the gate. */
+export const SP550_WIRING_SCAN_EXEMPT: Record<string, string> = {
+    spAdminExtension: 'no vendored ABI (reached through SP.EXTENSION(), which the gate compares with the pin)',
+    xPNTsTokenV2Ext: 'no vendored ABI (compared through tokenImpl.EXTENSION() and the factory extensionCodehash)',
+    disclosureRegistry: 'no vendored ABI; 5.5.0 deploys none (declared absent)',
+    'addresses.agentIdentityRegistry': 'no vendored ABI for SP\'s ERC-8004 registries (SP.agentIdentityRegistry() is compared)',
+    'addresses.agentReputationRegistry': 'no vendored ABI for SP\'s ERC-8004 registries (SP.agentReputationRegistry() is compared)',
+    'addresses.agentValidationRegistry': 'no vendored ABI for SP\'s ERC-8004 registries',
+    'addresses.pnts': 'a community token whose generation (xPNTs v1 / v2) differs by deployment; no single ABI',
+};
+
+/**
+ * Getters a vendored ABI lists that this release's contract does not implement (they revert): reviewed per release
+ * at the ABI re-pin, so a revert anywhere else fails the gate. None known.
+ */
+export const SP550_WIRING_SCAN_UNSUPPORTED: Record<string, readonly string[]> = {};
 
 /** SP-owned (and history) addresses of a shipped book, lower-cased, with their key. */
 function shippedStackAddresses(shipped: Record<string, unknown>): Map<string, string> {
@@ -289,24 +309,35 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         cmp('xPNTsFactoryV2.REGISTRY() == addresses.registry', await read(pins.xPNTsFactoryV2, xPNTsFactoryV2ABI, 'REGISTRY'), reg);
         cmp('PaymasterFactory.registry() == addresses.registry', await read(book.paymasterFactory as Address | undefined, PaymasterFactoryABI, 'registry'), reg);
         cmp('X402Facilitator.REGISTRY() == addresses.registry', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'REGISTRY'), reg);
-        // Exhaustive, not a hand list: every no-argument address getter of every pinned contract with a vendored ABI must
-        // not name an SP-owned contract of the chain's shipped stack (a hybrid with the old stack). A getter that
-        // reverts is listed, not failed (the vendored ABI may carry it while this release does not).
-        const old = shippedStackAddresses(shipped);
+        cmp('X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV2', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'XPNTS_FACTORY'), pins.xPNTsFactoryV2);
+        cmp('PaymasterV4 impl registry() == addresses.registry', await read(book.paymasterV4Impl as Address | undefined, PaymasterABI, 'registry'), reg);
+        // Exhaustive, not a hand list: every no-argument address getter of every pinned contract is read on every RPC.
+        // A disagreement, a failed call or a malformed answer fails (a revert only where SP550_WIRING_SCAN_UNSUPPORTED
+        // lists it); every pinned entry has an ABI here or a reasoned exemption. For a COEXISTING stack, no getter
+        // may name an SP-owned contract of the chain's shipped stack (a hybrid with the old one). A chain-keyed fresh
+        // stack replaces its chain's book, so its shipped book is not a forbidden set (after the switch it IS the stack).
+        const old = net.coexist ? shippedStackAddresses(shipped) : new Map<string, string>();
         for (const [entry, address] of sp550PinnedAddressEntries(pins)) {
-            const abi = WIRING_SCAN_ABI[entry];
-            if (!abi || typeof address !== 'string') continue;
+            if (typeof address !== 'string') continue;
+            const abi = SP550_WIRING_SCAN_ABI[entry];
+            if (!abi) {
+                record(`address getters of ${entry} scanned`, entry in SP550_WIRING_SCAN_EXEMPT, SP550_WIRING_SCAN_EXEMPT[entry] ?? 'no ABI mapping and no exemption: add one');
+                continue;
+            }
             const getters = (abi as any[]).filter((e) => e.type === 'function' && (e.inputs ?? []).length === 0 && ['view', 'pure'].includes(e.stateMutability)
                 && (e.outputs ?? []).length === 1 && e.outputs[0].type === 'address').map((e) => e.name as string);
-            const hits: string[] = [], unread: string[] = [];
+            const unsupported = new Set(SP550_WIRING_SCAN_UNSUPPORTED[entry] ?? []);
+            const bad: string[] = [], skipped: string[] = [];
             for (const g of getters) {
                 const v = await read(address as Address, abi, g);
-                if (typeof v !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(v)) { unread.push(g); continue; }
-                const k = old.get(v.toLowerCase());
-                if (k) hits.push(`${g}() = ${v} (the shipped stack's ${k})`);
+                if (typeof v === 'string' && /^0x[0-9a-fA-F]{40}$/.test(v)) {
+                    const k = old.get(v.toLowerCase());
+                    if (k) bad.push(`${g}() = ${v} (the shipped stack's ${k})`);
+                } else if (unsupported.has(g) && typeof v === 'string' && v.startsWith('ERR ')) skipped.push(g);
+                else bad.push(`${g}() ${str(v)}`); // disagreement between RPCs, a failed call, or not an address
             }
-            record(`no address getter of ${entry} names the shipped stack`, hits.length === 0,
-                hits.length ? hits.join('; ') : `${getters.length - unread.length}/${getters.length} getters read${unread.length ? `; unread: ${unread.join(', ')}` : ''}`);
+            record(`address getters of ${entry}${net.coexist ? ' name no shipped-stack contract' : ' read on every RPC'}`, bad.length === 0,
+                bad.length ? bad.join('; ') : `${getters.length - skipped.length}/${getters.length} read${skipped.length ? `; unsupported in this release: ${skipped.join(', ')}` : ''}`);
         }
         for (const k of pins.absent ?? []) {
             if (k === 'disclosureRegistry') continue; // a top-level pin, not a book entry

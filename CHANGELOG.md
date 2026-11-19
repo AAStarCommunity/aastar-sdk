@@ -25,8 +25,11 @@ All notable changes to this project will be documented in this file.
   `blsAggregator` (they were bound to a zero placeholder).
 - The cutover gate also reads the wiring of a fresh stack against the pins: Registry.GTOKEN_STAKING / MYSBT,
   GTokenStaking.REGISTRY / GTOKEN, MySBT.REGISTRY / GTOKEN_STAKING / GTOKEN, xPNTsFactoryV2.REGISTRY,
-  PaymasterFactory.registry, X402Facilitator.REGISTRY; and it scans every no-argument address getter of every pinned
-  contract with a vendored ABI, failing on any that names an SP-owned contract of the chain's shipped stack.
+  PaymasterFactory.registry, X402Facilitator.REGISTRY / XPNTS_FACTORY, the PaymasterV4 implementation's registry.
+  It also reads every no-argument address getter of every pinned contract on every RPC
+  (`SP550_WIRING_SCAN_ABI`; an entry without an ABI needs a reasoned `SP550_WIRING_SCAN_EXEMPT`): a disagreement, a
+  failed call or a non-address fails (a revert only where `SP550_WIRING_SCAN_UNSUPPORTED` lists it for the release),
+  and for a coexisting stack no getter may name an SP-owned contract of the chain's shipped stack.
 - The read-back comparator refuses a context without a network on a chain that hosts more than one stack, and a
   network that does not match the context's chain and mode.
 - One network-aware validation (`sp550NetworkPinProblems`: tag policy, coexist overlap, hold) for the gate, the
