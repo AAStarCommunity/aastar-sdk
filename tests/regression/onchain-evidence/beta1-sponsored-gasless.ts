@@ -31,7 +31,7 @@ import { resilientSepoliaTransport, resilientSepoliaChain, bumpedFees, sepoliaRp
 // Account creation + ERC20/nonce reads also via the SDK — 100% SDK API.
 import { airAccountFactoryActions, tokenActions, entryPointActions } from '../../../packages/core/src/index.js';
 import { CANONICAL_ADDRESSES } from '../../../packages/core/src/addresses.js';
-import { testChainHttp, verifiedTestChainEndpoints } from '../userop-chain-gate.js';
+import { verifiedTestChainEndpoints } from '../userop-chain-gate.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env.sepolia') });
 
@@ -103,7 +103,7 @@ async function main() {
     const bundlerUrl = clean(process.env.PIMLICO_BUNDLER_URL || process.env.PIMLICO_RPC_URL || process.env.BUNDLER_URL);
     // Every endpoint the fail-over transport may use is asked its chain now, and again (testChainHttp) before it serves
     // its first request, so one that was down at startup is checked when it is first used.
-    await verifiedTestChainEndpoints(sepoliaRpcUrls(), bundlerUrl); // no UserOperation outside the test chains (DSR, follow-up to #470)
+    await verifiedTestChainEndpoints(sepoliaRpcUrls(), { bundlerUrl, lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const pkRaw = clean(process.env.PRIVATE_KEY_JASON);
     if (!rpc || !bundlerUrl || !pkRaw) throw new Error('Missing SEPOLIA_RPC_URL / PIMLICO_BUNDLER_URL / PRIVATE_KEY_JASON in .env.sepolia');
     const pk = (pkRaw.startsWith('0x') ? pkRaw : `0x${pkRaw}`) as Hex;
@@ -114,8 +114,8 @@ async function main() {
     console.log(`   PaymasterV4: ${PAYMASTER_V4}`);
     console.log(`   Gas token:   ${GAS_TOKEN}`);
 
-    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport(testChainHttp) });
-    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport(testChainHttp) }).extend(publicActions);
+    const publicClient = createPublicClient({ chain: sepolia, transport: resilientSepoliaTransport() });
+    const walletClient = createWalletClient({ account: owner, chain: resilientSepoliaChain, transport: resilientSepoliaTransport() }).extend(publicActions);
     const factorySvc = airAccountFactoryActions(FACTORY)(walletClient);
     const bundler = createPublicClient({ chain: sepolia, transport: http(bundlerUrl) });
 

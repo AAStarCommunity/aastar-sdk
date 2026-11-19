@@ -1,7 +1,11 @@
 import type { PublicClient } from 'viem';
 
-/** Chains where a UserOperation spends nothing real: anvil, Sepolia, OP Sepolia. Any other chain counts as real money. */
-const TEST_CHAIN_IDS = new Set([31337, 11155111, 11155420]);
+/**
+ * Chains where a UserOperation spends nothing real: anvil, Sepolia, OP Sepolia. Any other chain counts as real money.
+ * A copy of tests/regression/userop-chain-gate.ts TEST_CHAIN_IDS (this package does not import the repo's tests);
+ * scripts/check-gasless-cost-cap.test.ts asserts the two are equal.
+ */
+export const TEST_CHAIN_IDS: ReadonlySet<number> = new Set([31337, 11155111, 11155420]);
 
 /**
  * The per-UserOp cost ceiling these examples pass to the SDK, from AASTAR_MAX_USEROP_COST_WEI (wei; no default).

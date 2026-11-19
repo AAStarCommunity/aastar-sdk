@@ -52,7 +52,7 @@ async function pub(): Promise<PublicClient> {
 async function main() {
     // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
     // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
-    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     const jasonPk = process.env.PRIVATE_KEY_JASON as Hex;
     if (!jasonPk) throw new Error('PRIVATE_KEY_JASON required');
     const owner = privateKeyToAccount(jasonPk);

@@ -42,7 +42,7 @@ async function sign(url: string, userOpRpc: any, ownerAuth: Hex) { const res = a
 async function main() {
     // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
     // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
-    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     let pk = process.env.PRIVATE_KEY_JASON || ''; if (!pk.startsWith('0x')) pk = `0x${pk}`;
     const owner = privateKeyToAccount(pk as Hex);
     const wallet = createWalletClient({ account: owner, chain: sepolia, transport: testChainHttp(RPCS[0]) });

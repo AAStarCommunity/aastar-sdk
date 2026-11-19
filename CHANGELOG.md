@@ -34,7 +34,11 @@ All notable changes to this project will be documented in this file.
   exports and class methods need their own), or send only through the SDK with the ceiling in every call's options
   argument (resolved lexically to a `const` from the loader, never written to afterwards), or guard each signature
   with a resolved ceiling, or be a reviewed exception with its reason (an entry that stops sending fails). It also fails on any gasless / submit-named function in `packages/*/src` that is in neither the
-  send-API list nor the reviewed non-sender list. The AirAccount server send paths are outside it (FU-130), and `UserOpScenarioBuilder` in the library still signs unguarded (FU-131).
+  send-API list nor the reviewed non-sender list. Smart-account clients count as senders (permissionless and `@aastar/dapp` imports, viem `to…SmartAccount` /
+  `getUserOperationHash`); `.mjs` / `.cjs` and `packages/*/tests`, `packages/*/examples` are scanned; and every send-API
+  call in `packages/*/src` must forward `maxUserOpCostWei` (`TrafficGenerator` used to drop it). The AirAccount server
+  send paths are outside it (FU-130), `UserOpScenarioBuilder` in the library still signs unguarded (FU-131), and moving
+  the "ceiling required off the test chains" default into the SDK itself is for the author to decide (FU-132).
 
 ### A cost ceiling on every UserOperation the SDK signs (the missing upper bound at the signing boundary)
 

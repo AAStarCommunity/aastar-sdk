@@ -8,7 +8,8 @@ import { TEST_CHAIN_IDS, refuseMainnetUserOps, reportedChainId, resetVerifiedEnd
 import * as http from 'http';
 import { createPublicClient, fallback } from 'viem';
 import { assertGaslessNetworkConfig } from '../tests/regression/config.js';
-import { gaslessCostCapFromEnv } from '../examples/for-iri/ts/src/costCap.js';
+import { gaslessCostCapFromEnv, TEST_CHAIN_IDS as FOR_IRI_TEST_CHAIN_IDS } from '../examples/for-iri/ts/src/costCap.js';
+import { libraryForwardingProblems } from './check-gasless-cost-cap.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 const LOADER = `const config = await loadGaslessNetworkConfig(n);\n`;
@@ -137,8 +138,9 @@ describe('check:gasless-cost-cap: every hand-signing path is reached only after 
             ['tests/a/runner.ts', `import { go } from './helper.js';\nawait go();`],
             ['tests/a/other.ts', `import { x } from './nothing.js';`],
         ]);
-        expect([...senderClosure(files)].sort()).toEqual(['tests/a/helper.ts', 'tests/a/runner.ts']);
-        expect(fileProblems('tests/a/runner.ts', files.get('tests/a/runner.ts')!, true)).toEqual([expect.stringMatching(/imports a local module that signs/)]);
+        const { senders, names } = senderClosure(files);
+        expect([...senders].sort()).toEqual(['tests/a/helper.ts', 'tests/a/runner.ts']);
+        expect(fileProblems('tests/a/runner.ts', files.get('tests/a/runner.ts')!, names.get('tests/a/runner.ts'))).toEqual([expect.stringMatching(/go signs \/ submits/)]);
     });
 });
 
@@ -187,11 +189,13 @@ describe('userop-chain-gate: the endpoints decide the chain; outside the test ch
     });
     it('verifiedTestChainEndpoints: a non-test or disagreeing RPC refuses, none answering refuses; one that is down is NOT dropped (Codex L2 round 3 M2)', async () => {
         resetVerifiedEndpoints();
-        expect(await verifiedTestChainEndpoints(['a', undefined, 'down', 'b'], undefined, reader({ a: 11155111, b: 11155111 }))).toEqual({ chainId: 11155111 });
-        await expect(verifiedTestChainEndpoints(['a', 'main'], undefined, reader({ a: 11155111, main: 1 }))).rejects.toThrow(/reports chain 1, not a test chain/);
-        await expect(verifiedTestChainEndpoints(['a', 'op'], undefined, reader({ a: 11155111, op: 11155420 }))).rejects.toThrow(/disagree/);
-        await expect(verifiedTestChainEndpoints(['down'], undefined, reader({}))).rejects.toThrow(/no RPC endpoint answered/);
-        await expect(verifiedTestChainEndpoints(['a'], 'b', reader({ a: 11155111, b: 10 }))).rejects.toThrow(/the bundler reports chain 10/);
+        // Unless the caller says its transports verify lazily, an endpoint that does not answer refuses the run (DSR #471 M3).
+        await expect(verifiedTestChainEndpoints(['a', 'down'], { read: reader({ a: 11155111 }) })).rejects.toThrow(/did not answer eth_chainId .* refusing to run with an unverified endpoint/);
+        expect(await verifiedTestChainEndpoints(['a', undefined, 'down', 'b'], { lazy: true, read: reader({ a: 11155111, b: 11155111 }) })).toEqual({ chainId: 11155111 });
+        await expect(verifiedTestChainEndpoints(['a', 'main'], { read: reader({ a: 11155111, main: 1 }) })).rejects.toThrow(/reports chain 1, not a test chain/);
+        await expect(verifiedTestChainEndpoints(['a', 'op'], { read: reader({ a: 11155111, op: 11155420 }) })).rejects.toThrow(/disagree/);
+        await expect(verifiedTestChainEndpoints(['down'], { lazy: true, read: reader({}) })).rejects.toThrow(/no RPC endpoint answered/);
+        await expect(verifiedTestChainEndpoints(['a'], { bundlerUrl: 'b', read: reader({ a: 11155111, b: 10 }) })).rejects.toThrow(/the bundler reports chain 10/);
         resetVerifiedEndpoints();
     });
     it('testChainHttp behind a fallback: a mainnet endpoint never serves a request; one that was down rejoins, in the configured order, once it answers (Codex L2 round 2 H1 / round 3 M2)', async () => {
@@ -288,5 +292,62 @@ describe('the for-iri examples\' gaslessCostCapFromEnv: the chain the endpoints 
         await withEnv('5000', async () => expect(await gaslessCostCapFromEnv(at(10))).toEqual({ maxUserOpCostWei: 5000n }));
         await withEnv('1e18', () => expect(gaslessCostCapFromEnv(at(11155420))).rejects.toThrow(/positive integer in wei/));
         await withEnv(undefined, () => expect(gaslessCostCapFromEnv(at(11155420), at(10))).rejects.toThrow(/the bundler reports chain 10/));
+    });
+});
+
+describe('DSR Daybreak #471: other ways to send, library forwarding, and the runner itself', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const UNGATED = /no awaited chain gate .* precedes/;
+    it.each([
+        ['a permissionless smart-account client', `import { createSmartAccountClient } from 'permissionless';\nimport { toSimpleSmartAccount } from 'permissionless/accounts';\nconst acc = await toSimpleSmartAccount({ client, owner });\nconst c = createSmartAccountClient({ account: acc });\nawait c.sendTransaction({ to, value: 0n });`],
+        ['an aliased permissionless import', `import { createSmartAccountClient as mk } from 'permissionless';\nconst c = mk({ account });\nawait c.sendTransaction({ to });`],
+        ['a viem smart account', `import { toCoinbaseSmartAccount } from 'viem/account-abstraction';\nconst a = await toCoinbaseSmartAccount({ client, owners });`],
+        ["viem's getUserOperationHash", `import { getUserOperationHash } from 'viem/account-abstraction';\nconst h = getUserOperationHash({ userOperation, chainId, entryPointAddress, entryPointVersion: '0.7' });\nawait acc.signMessage({ message: { raw: h } });`],
+        ['the dapp EIP-1193 provider', `import { AirAccountEIP1193Provider } from '@aastar/dapp';\nconst p = new AirAccountEIP1193Provider(cfg);\nawait p.request({ method: 'eth_sendTransaction', params: [tx] });`],
+    ])('%s is a sender and needs a gate', (_l, src) => {
+        expect(fileProblems('x.ts', src)).toEqual([expect.stringMatching(UNGATED)]);
+        expect(fileProblems('x.ts', `await refuseMainnetUserOps(rpc);\n${src}`)).toEqual([]);
+    });
+    it('a read-only viem/account-abstraction import (bundlerActions, entryPoint07Address) does not make a file a sender', () => {
+        expect(fileProblems('x.ts', `import { bundlerActions, entryPoint07Address } from 'viem/account-abstraction';\nconst b = client.extend(bundlerActions);\nawait b.waitForUserOperationReceipt({ hash });`)).toEqual([]);
+        expect(fileProblems('x.ts', `import type { SmartAccount } from 'permissionless';\nconst x: SmartAccount | undefined = undefined;`)).toEqual([]);
+    });
+    it('.mjs / .cjs files are parsed as JavaScript and held to the same rules', () => {
+        expect(fileProblems('x.mjs', `const h = await c.readContract({ functionName: 'getUserOpHash' });`)).toEqual([expect.stringMatching(UNGATED)]);
+    });
+    it('a name imported from a local sender module is a use the gate must cover; a side-effect import needs a review', () => {
+        const files = new Map([
+            ['scripts/lib.ts', `export async function sendOp() { ep.handleOps(ops, b); }`],
+            ['scripts/run.ts', `import { sendOp } from './lib.js';\nawait sendOp();`],
+            ['scripts/run-gated.ts', `import { sendOp } from './lib.js';\nawait refuseMainnetUserOps(rpc);\nawait sendOp();`],
+            ['scripts/side.ts', `import './lib.js';`],
+        ]);
+        const { names, sideEffect } = senderClosure(files);
+        expect(fileProblems('scripts/run.ts', files.get('scripts/run.ts')!, names.get('scripts/run.ts'))).toEqual([expect.stringMatching(/sendOp signs \/ submits/)]);
+        expect(fileProblems('scripts/run-gated.ts', files.get('scripts/run-gated.ts')!, names.get('scripts/run-gated.ts'))).toEqual([]);
+        expect(sideEffect.has('scripts/side.ts')).toBe(true);
+        expect(fileProblems('scripts/side.ts', files.get('scripts/side.ts')!, names.get('scripts/side.ts'), true)).toEqual([expect.stringMatching(/for its side effects only/)]);
+        // lib.ts itself: an exported function with no gate of its own.
+        expect(fileProblems('scripts/lib.ts', files.get('scripts/lib.ts')!)).toEqual([expect.stringMatching(UNGATED)]);
+    });
+    it('library sources: a send-API call that does not forward maxUserOpCostWei fails (DSR #471 M1, TrafficGenerator)', () => {
+        expect(libraryForwardingProblems('p.ts', `await C.submitGaslessTransaction(a, b, c, d, e, { token, operator });`)).toEqual([expect.stringMatching(/does not forward maxUserOpCostWei/)]);
+        expect(libraryForwardingProblems('p.ts', `await C.submitGaslessTransaction(a, b, c, d, e, { token, maxUserOpCostWei: undefined });`)).toEqual([expect.stringMatching(/does not forward maxUserOpCostWei/)]);
+        expect(libraryForwardingProblems('p.ts', `await C.submitGaslessTransaction(a, b, c, d, e, { token, maxUserOpCostWei: this.config.maxUserOpCostWei });`)).toEqual([]);
+        expect(libraryForwardingProblems('p.ts', `await u.executeGasless({ ...p, maxUserOpCostWei });`)).toEqual([]);
+    });
+    it('the for-iri examples\' test-chain list equals the gate\'s (DSR #471 L5)', () => {
+        expect([...FOR_IRI_TEST_CHAIN_IDS].sort()).toEqual([...TEST_CHAIN_IDS].sort());
+    });
+    it('run through a symlink (macOS /tmp) or a path with a space, the checker still runs and prints its verdict (DSR #471 L1)', () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gasless cap '));
+        try {
+            const link = path.join(dir, 'check link.ts');
+            fs.symlinkSync(path.resolve('scripts/check-gasless-cost-cap.ts'), link);
+            const r = spawnSync(path.resolve('node_modules/.bin/tsx'), [link], { encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS });
+            expect(r.status, r.stderr).toBe(0);
+            expect(r.stdout).toMatch(/check:gasless-cost-cap PASS/);
+        } finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });

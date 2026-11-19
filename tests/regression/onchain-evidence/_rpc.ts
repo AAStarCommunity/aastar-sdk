@@ -1,4 +1,5 @@
-import { fallback, http, parseGwei, type HttpTransportConfig, type Transport, type Chain } from 'viem';
+import { fallback, parseGwei, type HttpTransportConfig, type Transport, type Chain } from 'viem';
+import { testChainHttp } from '../userop-chain-gate.js';
 import { sepolia } from 'viem/chains';
 
 /**
@@ -57,10 +58,10 @@ export function sepoliaRpcUrls(): string[] {
 }
 
 /**
- * `mk` builds each endpoint's transport (default viem `http`); a UserOp-signing script passes userop-chain-gate's
- * testChainHttp, so an endpoint is verified to be on a test chain before it serves a request. Order unchanged.
+ * Each endpoint's transport is userop-chain-gate's testChainHttp (viem `http` that first verifies the endpoint is on a
+ * test chain, and on the client's chain), so no endpoint on another chain serves a request. Order unchanged.
  */
-export function resilientSepoliaTransport(mk: (url: string, opts: HttpTransportConfig) => Transport = http): Transport {
+export function resilientSepoliaTransport(mk: (url: string, opts: HttpTransportConfig) => Transport = testChainHttp): Transport {
   const urls = sepoliaRpcUrls();
 
   if (urls.length === 0) {

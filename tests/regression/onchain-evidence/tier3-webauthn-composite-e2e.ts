@@ -264,7 +264,7 @@ async function buildBlsPayload(nodeIds: Hex[], blsSignature: Hex, account: Addre
 async function main() {
     // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
     // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
-    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══════════════════════════════════════════════════════════════════════════');
     console.log(' Tier-3 WebAuthn cumulative (0x0a) E2E — passkey + DVT BLS + guardian + tag-0x02 DVT ownerAuth, Sepolia v0.27.0 (#234/#261/#274)');
     console.log('═══════════════════════════════════════════════════════════════════════════');

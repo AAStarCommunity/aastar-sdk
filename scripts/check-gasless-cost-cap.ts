@@ -36,6 +36,7 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import ts from 'typescript';
 
 /** The SDK's guarded send entry points, with the index of their options argument (maxUserOpCostWei goes there). */
@@ -46,8 +47,16 @@ export const GASLESS_SEND_APIS: Readonly<Record<string, number>> = {
     executeGaslessTx: 0,
 };
 
-/** Names whose reference makes a file a UserOp sender (beyond the send APIs); `getUserOpHash*` matches by prefix. */
-export const USEROP_PRIMITIVES = ['handleOps', 'signUserOperation', 'sendUserOperation', 'UserOpScenarioBuilder', 'getUserOpHash'] as const;
+/**
+ * Names whose reference makes a file a UserOp sender (beyond the send APIs): `getUserOpHash*` matches by prefix, and any
+ * `to…SmartAccount` (viem / permissionless account factories) by pattern. A smart-account client sends through generic
+ * names (`sendTransaction`, `writeContract`), so the account / client factory is what marks the file.
+ */
+export const USEROP_PRIMITIVES = ['handleOps', 'signUserOperation', 'sendUserOperation', 'UserOpScenarioBuilder', 'getUserOpHash',
+    'getUserOperationHash', 'createSmartAccountClient', 'AirAccountEIP1193Provider'] as const;
+const SMART_ACCOUNT_FACTORY = /^to[A-Za-z0-9]*SmartAccount$/;
+/** Modules every value import from which is a UserOp primitive (smart-account clients; the dapp EIP-1193 provider turns eth_sendTransaction into a UserOp). */
+export const USEROP_MODULES = [/^permissionless(\/|$)/, /^@aastar\/dapp(\/|$)/] as const;
 /** String literals whose presence makes a file a UserOp sender (a raw bundler call). */
 export const USEROP_PRIMITIVE_STRINGS = ['eth_sendUserOperation'] as const;
 
@@ -69,8 +78,7 @@ export const REVIEWED_SENDERS: Readonly<Record<string, string>> = {
     'scripts/sp550-fork-e2e.ts': 'local fork only: refuses a non-loopback RPC or bundler URL, and a chain other than the Sepolia fork',
     'tests/regression/onchain-evidence/gas-policy-local.ts': 'local anvil only: refuses an RPC or bundler not on chain 31337',
     'scripts/cc128/count-signatures.ts': 'stub public client and bundler; nothing is sent to a network',
-    'packages/analytics/scripts/collect_paymaster_baselines.ts': 'read-only: decodes past handleOps transactions and reads their hashes; no signer, nothing sent',
-    'scripts/run_daily_experiment.ts': 'a broken orchestrator: it imports runStandardAATest / runPaymasterV4Test, which 03 / 04 do not export, so it fails to link before any of its code runs (pre-existing); 05\'s runSuperPaymasterTest awaits refuseMainnetUserOps first',
+    'packages/analytics/scripts/collect_paymaster_baselines.ts': 'read-only: decodes past handleOps transactions and reads their hashes (getUserOpHash); no signer, nothing sent',
     'tests/regression/l4-runner.ts': 'an orchestrator: runGaslessTests (l4-gasless.ts, exported) awaits refuseMainnetUserOps first',
     'scripts/repcredit-e2e.ts': 'its gate is conditional on the live modes (sepolia / deployed), where the RPC exists before main(); local mode starts its own anvil and waitRpc() requires it to report chain 31337 before anything is sent',
     'tests/utils/userOpHelper.ts': 'a signing helper module; a file that imports it is a sender itself and is held to these rules',
@@ -111,7 +119,7 @@ const calleeName = (c: ts.CallExpression): string | undefined => {
     const e = unwrap(c.expression);
     return ts.isIdentifier(e) ? e.text : nameOfMember(e);
 };
-const isPrimitiveName = (n: string) => (USEROP_PRIMITIVES as readonly string[]).some((p) => n === p || (p === 'getUserOpHash' && n.startsWith(p)));
+const isPrimitiveName = (n: string) => SMART_ACCOUNT_FACTORY.test(n) || (USEROP_PRIMITIVES as readonly string[]).some((p) => n === p || (p === 'getUserOpHash' && n.startsWith(p)));
 const isFunctionLike = (n: ts.Node): n is ts.FunctionLikeDeclaration =>
     ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n) || ts.isArrowFunction(n) || ts.isMethodDeclaration(n) || ts.isConstructorDeclaration(n) || ts.isGetAccessor(n) || ts.isSetAccessor(n);
 const enclosingFunction = (n: ts.Node): ts.FunctionLikeDeclaration | undefined => {
@@ -226,14 +234,24 @@ export type Scan = {
     signerRefs: ts.Node[];
 };
 
-export function scan(fileName: string, src: string): Scan {
-    const sf = ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const scriptKind = (f: string) => (/\.(mjs|cjs|js)$/.test(f) ? ts.ScriptKind.JS : ts.ScriptKind.TS);
+
+/** `senderNames`: local names this file imports from a local module that is itself a sender (their uses are uses). */
+export function scan(fileName: string, src: string, senderNames: ReadonlySet<string> = new Set()): Scan {
+    const sf = ts.createSourceFile(fileName, src, ts.ScriptTarget.Latest, true, scriptKind(fileName));
     const out: Scan = { sf, apiCalls: [], apiNonCallRefs: [], raw: [], calls: [], mutations: [], imports: [], exportedNames: new Set(), signerRefs: [] };
     // `import { getUserOpHashV07 as hash }`: the alias is the primitive under another name.
     const aliases = new Set<string>();
     for (const st of sf.statements) {
         if (ts.isImportDeclaration(st) && st.importClause?.namedBindings && ts.isNamedImports(st.importClause.namedBindings)) {
             for (const el of st.importClause.namedBindings.elements) if (isPrimitiveName((el.propertyName ?? el.name).text) && el.propertyName) aliases.add(el.name.text);
+        }
+        // Every value import from a smart-account module is a primitive under its local name.
+        if (ts.isImportDeclaration(st) && ts.isStringLiteral(st.moduleSpecifier) && USEROP_MODULES.some((m) => m.test((st.moduleSpecifier as ts.StringLiteral).text)) && st.importClause && !st.importClause.isTypeOnly) {
+            const ic = st.importClause;
+            if (ic.name) aliases.add(ic.name.text);
+            if (ic.namedBindings && ts.isNamespaceImport(ic.namedBindings)) aliases.add(ic.namedBindings.name.text);
+            if (ic.namedBindings && ts.isNamedImports(ic.namedBindings)) for (const el of ic.namedBindings.elements) if (!el.isTypeOnly) aliases.add(el.name.text);
         }
         // `export { send }` / `export default send`: those local functions are entry points.
         if (ts.isExportDeclaration(st) && !st.moduleSpecifier && st.exportClause && ts.isNamedExports(st.exportClause)) {
@@ -260,7 +278,7 @@ export function scan(fileName: string, src: string): Scan {
         if (ts.isStringLiteralLike(n) && ((USEROP_PRIMITIVE_STRINGS as readonly string[]).includes(n.text) || (isPrimitiveName(n.text) && isOperationString(n)))) out.raw.push(n);
         if (ts.isIdentifier(n)) {
             const t = n.text;
-            if ((isPrimitiveName(t) || aliases.has(t)) && isUse(n)) out.raw.push(n);
+            if ((isPrimitiveName(t) || aliases.has(t) || senderNames.has(t)) && isUse(n)) out.raw.push(n);
             // A signer method used other than as a direct call (`acc.signMessage.bind(acc)`, `const s = acc.signMessage`).
             if (inList(SIGNING_CALLS, t) && ts.isPropertyAccessExpression(n.parent) && n.parent.name === n && !(ts.isCallExpression(n.parent.parent) && n.parent.parent.expression === n.parent)) out.signerRefs.push(n);
             if (has(GASLESS_SEND_APIS, t)) {
@@ -354,12 +372,15 @@ function resolveFn(id: ts.Identifier): ts.Node | undefined {
     return undefined;
 }
 
-/** The rules for one file, given whether it imports a local sender module. */
-export function fileProblems(file: string, src: string, importsSender = false): string[] {
+/**
+ * The rules for one file. `senderNames`: names it imports from local sender modules (their uses are hand-signing uses);
+ * `sideEffectSender`: it imports a local sender module for its side effects only, which no rule can see into.
+ */
+export function fileProblems(file: string, src: string, senderNames: ReadonlySet<string> = new Set(), sideEffectSender = false): string[] {
     if (SELF.has(file)) return [];
-    const s = scan(file, src);
+    const s = scan(file, src, senderNames);
     const sends = s.apiCalls.length > 0 || s.apiNonCallRefs.length > 0;
-    const hasRaw = s.raw.length > 0 || importsSender;
+    const hasRaw = s.raw.length > 0 || sideEffectSender;
     if (!sends && !hasRaw) return [];
     const p: string[] = [];
     for (const m of s.mutations) p.push(`${file}:${lineOf(m)}: writes maxUserOpCostWei after it was resolved; a ceiling must not be changed between the loader and the send`);
@@ -382,8 +403,8 @@ export function fileProblems(file: string, src: string, importsSender = false): 
         if (open.length || !s.apiCalls.length) p.push(`${file}${open.length ? `:${lineOf(open[0].node)}` : ''}: sends gasless without a cost ceiling loader (${CAP_LOADERS.join(' / ')}) and not after an awaited chain gate; use a loader, or gate it, or add it to REVIEWED_SENDERS with why`);
         return p;
     }
-    if (importsSender && !s.raw.length) {
-        p.push(`${file}: imports a local module that signs UserOperations: add it to REVIEWED_SENDERS with why (the imported entry points must gate themselves)`);
+    if (sideEffectSender && !s.raw.length) {
+        p.push(`${file}: imports a local module that signs UserOperations for its side effects only: add it to REVIEWED_SENDERS with why`);
         return p;
     }
     // Rule R: every hand-signing use is reached only after an awaited chain gate.
@@ -435,24 +456,71 @@ function guardHasResolvedCap(c: ts.CallExpression): boolean {
     });
 }
 
-/** Resolve relative imports among the scanned files and return the set of files that are senders (direct or via import). */
-export function senderClosure(files: Map<string, string>): Set<string> {
+const resolveImport = (files: ReadonlyMap<string, string>, from: string, spec: string): string | undefined => {
+    if (!spec.startsWith('.')) return undefined;
+    const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec)).replace(/\.(js|mjs|cjs|ts|mts|cts)$/, '');
+    return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs', '/index.ts', '/index.js'].map((e) => base + e).find((c) => files.has(c));
+};
+
+/**
+ * Over the scanned script files: which are senders, directly or through an import of another; and, per file, the local
+ * names it imports from a sender module, and whether it imports one for its side effects only.
+ */
+export function senderClosure(files: ReadonlyMap<string, string>): { senders: Set<string>; names: Map<string, Set<string>>; sideEffect: Set<string> } {
     const scans = new Map([...files].map(([f, src]) => [f, scan(f, src)]));
-    const direct = new Set([...scans].filter(([, s]) => s.raw.length || s.apiCalls.length || s.apiNonCallRefs.length).map(([f]) => f));
-    const resolve = (from: string, spec: string): string | undefined => {
-        if (!spec.startsWith('.')) return undefined;
-        const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), spec)).replace(/\.(js|mjs)$/, '');
-        return [`${base}.ts`, `${base}/index.ts`].find((c) => files.has(c));
+    const senders = new Set([...scans].filter(([, s]) => s.raw.length || s.apiCalls.length || s.apiNonCallRefs.length).map(([f]) => f));
+    const bindings = (f: string) => {
+        const out: { target: string; names: string[] }[] = [];
+        for (const st of scans.get(f)!.sf.statements) {
+            if (!(ts.isImportDeclaration(st) || ts.isExportDeclaration(st)) || !st.moduleSpecifier || !ts.isStringLiteral(st.moduleSpecifier)) continue;
+            const target = resolveImport(files, f, st.moduleSpecifier.text);
+            if (!target || target === f) continue;
+            const names: string[] = [];
+            if (ts.isImportDeclaration(st) && st.importClause && !st.importClause.isTypeOnly) {
+                const ic = st.importClause;
+                if (ic.name) names.push(ic.name.text);
+                if (ic.namedBindings && ts.isNamespaceImport(ic.namedBindings)) names.push(ic.namedBindings.name.text);
+                if (ic.namedBindings && ts.isNamedImports(ic.namedBindings)) for (const el of ic.namedBindings.elements) if (!el.isTypeOnly) names.push(el.name.text);
+            }
+            out.push({ target, names });
+        }
+        return out;
     };
-    const senders = new Set(direct);
     for (let changed = true; changed; ) {
         changed = false;
-        for (const [f, s] of scans) {
+        for (const f of scans.keys()) {
             if (senders.has(f)) continue;
-            if (s.imports.some((i) => { const r = resolve(f, i); return r !== undefined && senders.has(r) && r !== f; })) { senders.add(f); changed = true; }
+            if (bindings(f).some((b) => senders.has(b.target))) { senders.add(f); changed = true; }
         }
     }
-    return senders;
+    const names = new Map<string, Set<string>>();
+    const sideEffect = new Set<string>();
+    for (const f of scans.keys()) {
+        const bs = bindings(f).filter((b) => senders.has(b.target));
+        names.set(f, new Set(bs.flatMap((b) => b.names)));
+        if (bs.some((b) => b.names.length === 0)) {
+            const st = scans.get(f)!.sf.statements.find((x) => ts.isImportDeclaration(x) && !x.importClause && ts.isStringLiteral(x.moduleSpecifier) && senders.has(resolveImport(files, f, (x.moduleSpecifier as ts.StringLiteral).text) ?? ''));
+            if (st) sideEffect.add(f);
+        }
+    }
+    return { senders, names, sideEffect };
+}
+
+/**
+ * Library sources: every call of a send API passes `maxUserOpCostWei` on (any value but a literal undefined), so a
+ * ceiling a caller gives reaches the signing site (DSR Daybreak #471 M1: TrafficGenerator dropped it).
+ */
+export function libraryForwardingProblems(file: string, src: string): string[] {
+    const s = scan(file, src);
+    const p: string[] = [];
+    for (const c of s.apiCalls) {
+        const arg = c.node.arguments[GASLESS_SEND_APIS[c.api]];
+        const o = arg && unwrap(arg);
+        const prop = o && ts.isObjectLiteralExpression(o) ? o.properties.find((pp) => pp.name && (ts.isIdentifier(pp.name) || ts.isStringLiteralLike(pp.name)) && pp.name.text === 'maxUserOpCostWei') : undefined;
+        const v = prop && (ts.isPropertyAssignment(prop) ? unwrap(prop.initializer) : ts.isShorthandPropertyAssignment(prop) ? prop.name : undefined);
+        if (!v || (ts.isIdentifier(v) && v.text === 'undefined')) p.push(`${file}:${lineOf(c.node)}: ${c.api} does not forward maxUserOpCostWei in its options (a caller's ceiling would not reach the signing site)`);
+    }
+    return p;
 }
 
 /** The catch-all: a gasless / submit function in packages/*\/src that is neither a send API nor a reviewed non-sender. */
@@ -462,7 +530,7 @@ export function unclassifiedSenders(files: { path: string; src: string }[]): str
         if (n && /gasless|submit/i.test(n) && !has(GASLESS_SEND_APIS, n) && !has(NOT_GASLESS_SENDERS, n)) out.add(`${n} (${f})`);
     };
     for (const { path: f, src } of files) {
-        const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        const sf = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true, scriptKind(f));
         const visit = (n: ts.Node) => {
             if ((ts.isFunctionDeclaration(n) || ts.isMethodDeclaration(n)) && n.name && (ts.isIdentifier(n.name) || ts.isStringLiteralLike(n.name))) named(n.name.text, f);
             if ((ts.isVariableDeclaration(n) || ts.isPropertyAssignment(n) || ts.isPropertyDeclaration(n)) && n.name && ts.isIdentifier(n.name) && n.initializer) {
@@ -476,26 +544,32 @@ export function unclassifiedSenders(files: { path: string; src: string }[]): str
     return [...out].sort();
 }
 
-const SCRIPT_GLOBS = ['scripts/*.ts', 'scripts/**/*.ts', 'tests/*.ts', 'tests/**/*.ts', 'examples/*.ts', 'examples/**/*.ts', 'packages/*/scripts/*.ts', 'packages/*/scripts/**/*.ts'];
+const SCRIPT_GLOBS = ['scripts', 'tests', 'examples', 'packages/*/scripts', 'packages/*/tests', 'packages/*/examples'];
+const CODE = /\.(ts|mts|cts|mjs|cjs|js)$/;
 
 function main() {
-    const ls = (globs: string[]) => execFileSync('git', ['ls-files', ...globs], { encoding: 'utf8' }).split('\n').filter((f) => f && /\.ts$/.test(f) && !/\.(test|spec)\.ts$/.test(f) && !/\.d\.ts$/.test(f));
+    // `:(glob)dir/**` so a wildcard directory (packages/*/src) is listed recursively.
+    const ls = (dirs: string[]) => execFileSync('git', ['ls-files', ...dirs.map((d) => `:(glob)${d}/**`)], { encoding: 'utf8' }).split('\n')
+        .filter((f) => f && CODE.test(f) && !/\.(test|spec)\.[cm]?[jt]s$/.test(f) && !/\.d\.[cm]?ts$/.test(f) && !/(^|\/)(node_modules|dist)\//.test(f));
     const scriptFiles = [...new Set(ls(SCRIPT_GLOBS))];
-    const srcs = new Map(scriptFiles.map((f) => [f, fs.readFileSync(f, 'utf8')]));
-    const senders = senderClosure(srcs);
+    const libFileList = ls(['packages/*/src']);
+    const srcs = new Map([...scriptFiles, ...libFileList].map((f) => [f, fs.readFileSync(f, 'utf8')]));
+    // The closure is over the scripts. Library sources are held by their own rule (every send-API call forwards the
+    // ceiling), and their hand-signers are a library concern (FU-131): a script importing any SDK name is not a sender.
+    const { senders, names, sideEffect } = senderClosure(new Map(scriptFiles.map((f) => [f, srcs.get(f)!])));
     const problems: string[] = [];
-    for (const [f, src] of srcs) {
-        const direct = scan(f, src);
-        const importsSender = senders.has(f) && !direct.raw.length && !direct.apiCalls.length && !direct.apiNonCallRefs.length;
-        problems.push(...fileProblems(f, src, importsSender));
-    }
+    for (const f of scriptFiles) problems.push(...fileProblems(f, srcs.get(f)!, names.get(f), sideEffect.has(f)));
     for (const f of Object.keys(REVIEWED_SENDERS)) {
-        if (!senders.has(f)) problems.push(`REVIEWED_SENDERS lists ${f}, which no longer exists or no longer signs / submits UserOperations: remove the entry`);
+        if (!senders.has(f) || !scriptFiles.includes(f)) problems.push(`REVIEWED_SENDERS lists ${f}, which no longer exists or no longer signs / submits UserOperations: remove the entry`);
     }
-    const libFiles = ls(['packages/*/src/*.ts', 'packages/*/src/**/*.ts']).map((f) => ({ path: f, src: fs.readFileSync(f, 'utf8') }));
+    const libFiles = libFileList.map((f) => ({ path: f, src: srcs.get(f)! }));
+    for (const { path: f, src } of libFiles) problems.push(...libraryForwardingProblems(f, src));
     for (const u of unclassifiedSenders(libFiles)) problems.push(`unclassified gasless / submit function ${u}: add it to GASLESS_SEND_APIS (and pass the ceiling) or to NOT_GASLESS_SENDERS with why`);
     if (problems.length) { console.error(`check:gasless-cost-cap FAIL\n - ${problems.join('\n - ')}`); process.exit(1); }
-    console.log(`check:gasless-cost-cap PASS — ${scriptFiles.length} script file(s) scanned, ${senders.size} UserOp sender(s) held to the rules, ${libFiles.length} library file(s) classified`);
+    console.log(`check:gasless-cost-cap PASS — ${scriptFiles.length} script file(s) scanned, ${[...senders].filter((f) => scriptFiles.includes(f)).length} UserOp sender(s) held to the rules, ${libFiles.length} library file(s) checked`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// Run main only when executed directly. Compare real paths: a path with spaces, or a symlink (macOS /tmp), would
+// otherwise skip main and exit 0 silently; CI also asserts the PASS line (DSR Daybreak #471 L1).
+const invoked = process.argv[1] ? (() => { try { return fs.realpathSync(process.argv[1]); } catch { return undefined; } })() : undefined;
+if (invoked && invoked === fs.realpathSync(fileURLToPath(import.meta.url))) main();

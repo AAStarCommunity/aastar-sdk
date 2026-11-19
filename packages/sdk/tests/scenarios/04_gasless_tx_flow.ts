@@ -2,9 +2,11 @@ import { getTestSetup } from './setup.js';
 import { http, parseEther, encodeFunctionData, erc20Abi } from 'viem';
 import { createEndUserClient } from '../../src/clients/endUser.js';
 import { ExperimentClient } from '../../src/clients/ExperimentClient.js';
+import { refuseMainnetUserOps } from '../../../../tests/regression/userop-chain-gate.js';
 
 async function main() {
     const { account, chain, rpcUrl } = await getTestSetup();
+    await refuseMainnetUserOps(rpcUrl!); // no UserOperation outside the test chains (DSR, follow-up to #470)
     
     console.log(`\n--- Scenario: Gasless Transaction Flow ---`);
     console.log(`User: ${account.address}`);

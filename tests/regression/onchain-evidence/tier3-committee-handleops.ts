@@ -83,7 +83,7 @@ function eip2537ToG2(sig256: Hex) {
 async function main() {
     // Every fail-over RPC is asked its chain at startup; each client's transport (testChainHttp) also verifies its endpoint
     // before serving it, so one that was down here is checked when it is first used, and none serves a request unchecked.
-    await verifiedTestChainEndpoints(RPCS); // no UserOperation outside the test chains (DSR, follow-up to #470)
+    await verifiedTestChainEndpoints(RPCS, { lazy: true }); // no UserOperation outside the test chains (DSR, follow-up to #470)
     console.log('═══ FU-18/FU-19 — COMMITTEE-framed 0x05 through REAL EntryPoint.handleOps ═══\n');
     if (RPCS.length === 0) throw new Error('No SEPOLIA_RPC_URL[/2/3] in .env.sepolia');
 

@@ -207,7 +207,7 @@ describe('UserLifecycle', () => {
       });
 
       it('executeGaslessTx forwards the cost ceiling and the pre-sign hook to UserClient.executeGasless (DSR L2)', async () => {
-          lifecycle.enableGasless({ paymasterUrl: 'https://p', paymasterAddress: '0x9999999999999999999999999999999999999999' as `0x${string}`, paymasterType: 'V4' as const, policy: 'CREDIT' as const });
+          lifecycle.enableGasless({ paymasterUrl: 'https://p', paymasterAddress: '0x9999999999999999999999999999999999999999' as `0x${string}`, policy: 'CREDIT' as const });
           mocks.mockRegistry.SUPER_PAYMASTER.mockResolvedValue('0xSuperPaymaster');
           const hook = () => {};
           await lifecycle.executeGaslessTx({ target: '0xTarget' as any, value: 0n, data: '0xData', maxUserOpCostWei: 77n, beforeSignUserOp: hook });

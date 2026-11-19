@@ -72,16 +72,23 @@ export async function refuseMainnetUserOps(rpcUrl: string, bundlerUrl?: string, 
 /**
  * For a script that fails over across several RPCs, at startup: ask each one its chain. One that answers a non-test
  * chain, or a different chain from the rest, refuses the run; none answering refuses it too. One that does not answer
- * is NOT dropped (the fail-over order stays as configured): its transport must be testChainHttp, which verifies it
- * before it serves a request instead. Only a fully successful check is remembered.
+ * refuses it as well, unless the caller passes `lazy: true` — and then every one of its RPC transports must be
+ * testChainHttp, which verifies an endpoint before it serves a request (the fail-over order stays as configured).
+ * Only a fully successful check is remembered.
  */
-export async function verifiedTestChainEndpoints(urls: readonly (string | undefined)[], bundlerUrl?: string, read: ChainIdReader = readChainIdOverRpc): Promise<{ chainId: number }> {
+export async function verifiedTestChainEndpoints(urls: readonly (string | undefined)[], o: { bundlerUrl?: string; lazy?: boolean; read?: ChainIdReader } = {}): Promise<{ chainId: number }> {
+    const read = o.read ?? readChainIdOverRpc;
+    const bundlerUrl = o.bundlerUrl;
     let chainId: number | undefined;
     const answered: [string, number][] = [];
     for (const u of urls) {
         if (!u) continue;
         let id: number;
-        try { id = await read(u); } catch (e) { console.warn(`   ⚠️ RPC endpoint did not answer eth_chainId at startup; it is verified before it serves a request instead: ${(e as Error).message}`); continue; }
+        try { id = await read(u); } catch (e) {
+            if (!o.lazy) throw new Error(`an RPC endpoint did not answer eth_chainId (${(e as Error).message}); refusing to run with an unverified endpoint (pass lazy: true only when every RPC transport is testChainHttp)`);
+            console.warn(`   ⚠️ RPC endpoint did not answer eth_chainId at startup; testChainHttp verifies it before it serves a request: ${(e as Error).message}`);
+            continue;
+        }
         if (!TEST_CHAIN_IDS.has(id)) throw new Error(`an RPC endpoint reports chain ${id}, not a test chain: this script signs UserOperations without a cost ceiling and refuses to run there`);
         if (chainId !== undefined && id !== chainId) throw new Error(`the RPC endpoints disagree (chain ${chainId} and chain ${id}); refusing to sign`);
         chainId = id;
