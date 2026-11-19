@@ -102,8 +102,9 @@ export const GTokenStakingArtifact = GTokenStakingABIData;
 // removed (dryRunValidation / pendingDebts / retryPendingDebt / clearPendingDebt) and eight events
 // rc.8 extended (SP #627: an appended `by`, plus `reason` on OperatorPaused / OperatorUnpaused), whose
 // topic0 therefore differs; errors are identical and no shared function changed its outputs (checked by
-// packages/core/src/abis/superPaymasterAbiCompat.test.ts). Callers of those four functions, and anyone
-// decoding those eight events from a 5.4.2 deployment, use SuperPaymasterV542ABI explicitly.
+// packages/core/src/abis/superPaymasterAbiCompat.test.ts). Callers of those four functions use
+// SuperPaymasterV542ABI explicitly; the default export also carries the eight 5.4.2 event forms (below), so
+// decoding a 5.4.2 log by topic still works with it, but a filter by eventName selects the 5.5.0 form.
 //
 // SuperPaymaster 5.4.2 (proxy 0x09DF…4DE9 before the in-place upgrade). Still needed for those four
 // legacy calls and for reading a not-yet-upgraded deployment.
@@ -112,8 +113,15 @@ export const SuperPaymasterV542Artifact = SuperPaymasterABIData;
 
 export const SuperPaymasterV550ABI = (SuperPaymasterV550ABIData as any).abi || SuperPaymasterV550ABIData;
 
-/** Default SuperPaymaster ABI = 5.5.0 (see the cutover note above). */
-export const SuperPaymasterABI = SuperPaymasterV550ABI;
+// The 5.4.2 events whose signature 5.5.0 changed (rc.8 appended `by` / `reason`), derived from the two ABIs: kept in
+// the default export as overloads, so decodeEventLog / parseEventLogs with SuperPaymasterABI still decode a 5.4.2
+// deployment's logs (they are matched by topic0). A filter by eventName resolves to the 5.5.0 form, listed first.
+const spEventSig = (e: any) => `${e.name}(${(e.inputs ?? []).map((i: any) => `${i.type}${i.indexed ? ' indexed' : ''}`).join(',')})`;
+const SP550_EVENT_SIGS = new Set((SuperPaymasterV550ABI as any[]).filter((e) => e.type === 'event').map(spEventSig));
+export const SuperPaymasterV542ChangedEvents = (SuperPaymasterV542ABI as any[]).filter((e) => e.type === 'event' && !SP550_EVENT_SIGS.has(spEventSig(e)));
+
+/** Default SuperPaymaster ABI = 5.5.0 (see the cutover note above) + the changed 5.4.2 event forms, after it. */
+export const SuperPaymasterABI = [...(SuperPaymasterV550ABI as any[]), ...SuperPaymasterV542ChangedEvents];
 /**
  * Deliberately still the 5.4.2 artifact: it is the one carrying `bytecode`, and consumers of
  * `.bytecode` must not silently get `undefined` (the vendored 5.5.0 union is ABI-only — 5.5.0 is

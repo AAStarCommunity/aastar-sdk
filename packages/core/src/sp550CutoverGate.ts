@@ -17,6 +17,7 @@
  *     to (a PASS for a proxy the SDK does not use would authorise nothing it actually calls).
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
+import { scannedGetters } from './abis/coexistStackAbi.js';
 import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
 import {
     AOAProtocolRegistryABI, APNTsCappedABI, BLSAggregatorABI, BLSValidatorABI, DVTValidatorABI, GTokenABI, GTokenStakingABI, GlobalTierSourceABI, MicroPaymentChannelABI, MySBTABI,
@@ -90,7 +91,8 @@ export const SP550_WIRING_SCAN_ABI: Record<string, unknown> = {
  * scripts/coexist-stack-abi-pin.ts found the gap): the scan and the reads of that stack use these instead.
  */
 export const SP550_COEXIST_SCAN_ABI: Record<Sp550CoexistNetwork, Record<string, unknown>> = {
-    'sepolia-rc8': { registryImpl: RegistryRc8ABI, 'addresses.registry': RegistryRc8ABI, 'addresses.gToken': GTokenAuthorizationRc8ABI },
+    // null: not a contract of this release (rc.8 deploys no BLSValidator, SP DeployLive.s.sol:39), so it must be unpinned or zero.
+    'sepolia-rc8': { registryImpl: RegistryRc8ABI, 'addresses.registry': RegistryRc8ABI, 'addresses.gToken': GTokenAuthorizationRc8ABI, 'addresses.blsValidator': null },
 };
 /** The ABI the gate reads each pinned entry with on a network: the coexist set first, then the SDK-wide file. */
 export const sp550WiringScanAbi = (network: string): Record<string, unknown> =>
@@ -342,14 +344,17 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         for (const [entry, address] of sp550PinnedAddressEntries(pins)) {
             if (typeof address !== 'string') continue;
             const abi = scanAbi[entry];
+            if (abi === null) {
+                record(`${entry} is not a contract of this release`, /^0x0{40}$/i.test(address), `pinned ${address}; this release deploys none, so the entry must be zero or absent`);
+                continue;
+            }
             if (!abi) {
                 record(`address getters of ${entry} scanned`, entry in SP550_WIRING_SCAN_EXEMPT, SP550_WIRING_SCAN_EXEMPT[entry] ?? 'no ABI mapping and no exemption: add one');
                 continue;
             }
-            // Every no-argument view whose outputs carry an address anywhere (address, address[], tuples of them).
-            const carries = (o: any): boolean => o.type.startsWith('address') || (o.type.startsWith('tuple') && (o.components ?? []).some(carries));
-            const getters = (abi as any[]).filter((e) => e.type === 'function' && (e.inputs ?? []).length === 0 && ['view', 'pure'].includes(e.stateMutability)
-                && (e.outputs ?? []).some(carries)).map((e) => e.name as string);
+            // Every no-argument view whose outputs carry an address anywhere (address, address[], tuples of them): the
+            // same predicate the rc.8 coexist proof enumerates with (abis/coexistStackAbi.ts), one definition.
+            const getters = scannedGetters(abi as any[]).map((w) => w.name);
             const unsupported = new Set(SP550_WIRING_SCAN_UNSUPPORTED[entry] ?? []);
             const bad: string[] = [], skipped: string[] = [];
             // The addresses at the ADDRESS-typed positions of a decoded result, guided by the ABI outputs; undefined when

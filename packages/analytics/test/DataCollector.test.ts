@@ -48,6 +48,7 @@ const SUPPORTED_VERSIONS = [
     'SuperPaymaster-5.4.2',
     'SuperPaymaster-5.5.0',
     'SuperPaymaster-5.5.1',
+    'SuperPaymaster-5.5.3', // rc.8, from SP's release-versions table
 ] as const;
 
 const SPONSORED_ABI = [{

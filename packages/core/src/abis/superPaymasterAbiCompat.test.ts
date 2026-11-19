@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { decodeEventLog, encodeAbiParameters, encodeEventTopics } from 'viem';
 import { SuperPaymasterABI, SuperPaymasterV542ABI, SuperPaymasterV550ABI } from './index.js';
 
 // The default ABI switched to 5.5.0 (SP 5.5.0 cutover). That is only safe for callers that still
@@ -22,8 +23,24 @@ const outs = (e: any) => `(${(e.outputs ?? []).map(render).join(',')})`;
 const entries = (abi: readonly any[], kinds: string[]) => abi.filter((e) => kinds.includes(e.type));
 
 describe('SuperPaymaster default ABI = 5.5.0, compatible with 5.4.2', () => {
-    it('the default export IS the 5.5.0 union', () => {
-        expect(SuperPaymasterABI).toBe(SuperPaymasterV550ABI);
+    it('the default export is the 5.5.0 union, then exactly the eight changed 5.4.2 event forms', () => {
+        expect(SuperPaymasterABI.slice(0, SuperPaymasterV550ABI.length)).toEqual(SuperPaymasterV550ABI);
+        const extra = SuperPaymasterABI.slice(SuperPaymasterV550ABI.length);
+        expect(extra.map((e: any) => e.name).sort()).toEqual(Object.keys(EXTENDED_IN_RC8).sort());
+        for (const e of extra) expect(SuperPaymasterV542ABI).toContainEqual(e);
+    });
+
+    it('decodeEventLog with the default ABI decodes a 5.4.2 log and an rc.8 log of the same event', () => {
+        const op = '0x' + '11'.repeat(20) as `0x${string}`, by = '0x' + '22'.repeat(20) as `0x${string}`;
+        const old = { topics: encodeEventTopics({ abi: SuperPaymasterV542ABI, eventName: 'OperatorPaused', args: { operator: op } } as any), data: '0x' as `0x${string}` };
+        const d1: any = decodeEventLog({ abi: SuperPaymasterABI, ...old } as any);
+        expect(d1.eventName).toBe('OperatorPaused');
+        expect(String(d1.args.operator).toLowerCase()).toBe(op);
+        const nowTopics = encodeEventTopics({ abi: SuperPaymasterV550ABI, eventName: 'OperatorPaused', args: { operator: op, by } } as any);
+        const d2: any = decodeEventLog({ abi: SuperPaymasterABI, topics: nowTopics, data: encodeAbiParameters([{ type: 'uint8' }], [3]) } as any);
+        expect(String(d2.args.by).toLowerCase()).toBe(by);
+        expect(Number(d2.args.reason)).toBe(3);
+        expect(nowTopics[0]).not.toBe(old.topics[0]);
     });
 
     it('every 5.4.2 error, and every 5.4.2 event but the eight rc.8 extended, exists unchanged in 5.5.0', () => {

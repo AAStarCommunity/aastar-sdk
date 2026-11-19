@@ -15,7 +15,7 @@
 
 import { createPublicClient, http, zeroAddress, type PublicClient, type Hash, type TransactionReceipt, type Chain, type Address, type Abi } from 'viem';
 import { sepolia } from 'viem/chains';
-import { SuperPaymasterABI, getCanonicalAddresses, xPNTsTokenABI } from '@aastar/core';
+import { SP550_RELEASE_VERSIONS, SuperPaymasterABI, getCanonicalAddresses, xPNTsTokenABI } from '@aastar/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -45,13 +45,16 @@ const CACHE_SCHEMA_VERSION = 3;
  * docs readback SuperPaymaster-5.4.2, fork e2e SuperPaymaster-5.5.0, and the 5.5.0
  * line's version() SuperPaymaster-5.5.1 (docs/sp550-cutover, same vendored ABI).
  * 5.3.3 / 5.4.0-beta share the tuple but this repo never quotes their version()
- * string, so they stay outside the set.
+ * string, so they stay outside the set. A coexisting release stack adds its own
+ * version() from SP's release-versions table (rc.8: SuperPaymaster-5.5.3), whose
+ * operators() / aPNTsPriceUSD() the same compat test holds to 5.4.2.
  */
 const SUPPORTED_SP_VERSIONS = new Set([
   'SuperPaymaster-5.4.1',
   'SuperPaymaster-5.4.2',
   'SuperPaymaster-5.5.0',
   'SuperPaymaster-5.5.1',
+  ...Object.values(SP550_RELEASE_VERSIONS).map((v) => v.SuperPaymaster),
 ]);
 
 type HistoricalRead = { value: bigint | undefined; retryable: boolean };

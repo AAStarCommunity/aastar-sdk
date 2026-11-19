@@ -648,3 +648,10 @@ jobs:
           SP_REPO: ../SuperPaymaster
           SP550_OUT: ../SuperPaymaster/out
         run: pnpm run check:sp550-abis
+
+      - name: rc.8 coexist proof fixture equals this fresh build (scripts/coexist-stack-abi-pin.ts --verify)
+        working-directory: aastar-sdk
+        env:
+          SP_REPO: ../SuperPaymaster
+          SP_COMMIT: 5a150f6ad43a6c6a57ccccea427c1dba0d797d06
+        run: pnpm exec tsx scripts/coexist-stack-abi-pin.ts --verify

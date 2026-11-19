@@ -8,7 +8,9 @@
  *
  *   SP_REPO=<SuperPaymaster checkout at the commit, built: forge build> SP_COMMIT=<40-hex> pnpm exec tsx scripts/coexist-stack-abi-pin.ts
  *
- * Refuses unless the checkout's HEAD is SP_COMMIT and its tree is clean (the compiled out/ is then that commit's).
+ * Refuses unless the checkout's HEAD is SP_COMMIT and its tree is clean. A clean tree does not prove out/ was built
+ * from it (ignored artifacts survive a checkout): build fresh before recording. `--verify` writes nothing and exits 1
+ * unless the committed fixture equals what this out/ gives; CI runs it on its own fresh forge build of the commit.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -24,6 +26,8 @@ const git = (...a: string[]) => execFileSync('git', ['-C', SP_REPO, ...a], { enc
 if (git('rev-parse', 'HEAD') !== COMMIT) throw new Error(`${SP_REPO} is not at ${COMMIT}`);
 if (git('status', '--porcelain', '--untracked-files=no') !== '') throw new Error(`${SP_REPO} has local changes; the compiled out/ would not be the commit's`);
 
+const VERIFY = process.argv.includes('--verify');
+const FIXTURE = path.join(SDK_ROOT, 'packages/core/src/abis/fixtures/coexist-stack-abi.json');
 const abiOf = (text: string) => { const j = JSON.parse(text); return Array.isArray(j) ? j : j.abi; };
 const fixture: any = { spCommit: COMMIT, files: {} as Record<string, any> };
 const rows: string[] = [];
@@ -47,7 +51,13 @@ for (const [file, spec] of Object.entries(COEXIST_STACK_ENTRIES)) {
         rows.push(`| ${file} | ${w.type} ${w.name} | \`${mine?.signature ?? '(absent)'}\` | \`${theirs?.signature ?? '(absent)'}\` | ${same ? 'yes' : '**NO**'} |`);
     }
 }
-writeFileSync(path.join(SDK_ROOT, 'packages/core/src/abis/fixtures/coexist-stack-abi.json'), JSON.stringify(fixture, null, 2) + '\n');
+if (VERIFY) {
+    const committed = readFileSync(FIXTURE, 'utf8');
+    const same = committed === JSON.stringify(fixture, null, 2) + '\n';
+    console.log(same ? `PASS — the committed fixture equals the compiled artifacts at ${COMMIT} (${mismatches} mismatches)` : `FAIL — the committed fixture differs from the compiled artifacts at ${COMMIT}: re-record it`);
+    process.exit(same && mismatches === 0 ? 0 : 1);
+}
+writeFileSync(FIXTURE, JSON.stringify(fixture, null, 2) + '\n');
 const doc = [
     '# rc.8 coexisting stack: the ABI entries the live cells and the gate use outside the seven 5.5.0 files',
     '',

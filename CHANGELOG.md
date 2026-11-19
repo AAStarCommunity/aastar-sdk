@@ -26,14 +26,18 @@ All notable changes to this project will be documented in this file.
   (`check:sp550-abis --strict`; CI pins the commit, never the tag object). The paper-path fixture is refreshed to it.
 - Version expectations come from SP's own `deployments/release-versions.rc8.json` (vendored byte-identical): a
   coexisting rc.8 stack's pinned `spVersion` and every listed contract's `version()` must match it.
-- **Breaking for log decoders:** rc.8 appended `by` to eight SuperPaymaster events (and a `reason` to
-  OperatorPaused / OperatorUnpaused), so their topic0 changed. Decode those events from a 5.4.2 deployment with
-  `SuperPaymasterV542ABI`; the default `SuperPaymasterABI` decodes rc.8.
+- rc.8 appended `by` to eight SuperPaymaster events (and a `reason` to OperatorPaused / OperatorUnpaused), so their
+  topic0 changed. The default `SuperPaymasterABI` keeps the eight 5.4.2 forms as overloads after the 5.5.0 union, so
+  `decodeEventLog` / `parseEventLogs` decode both generations; **a filter by `eventName` selects the rc.8 form** — to
+  filter 5.4.2 logs of those eight, use `SuperPaymasterV542ABI`. `SuperPaymasterV550ABI` stays the pure union.
+- Analytics accepts the release table's SuperPaymaster version (rc.8: `SuperPaymaster-5.5.3`) for its price reads.
 - Proof for what was not replaced: every entry the read-back gate and the live cells use outside the seven files is
   compared with the rc.8 compiled artifacts (`scripts/coexist-stack-abi-pin.ts`,
   docs/onchain-evidence/coexist-stack-abi-equality.md). It found two gaps — rc.8 Registry's `pendingOwner()` and the
   book gToken being GTokenAuthorization (`factory()`, `mySBT()`) — so the rc.8 stack reads those two through a coexist
   set (`RegistryRc8ABI`, `GTokenAuthorizationRc8ABI`); the SDK-wide Registry / GToken ABIs are unchanged for 5.4.2.
+  rc.8 deploys no BLSValidator, so the rc.8 gate fails a non-zero `addresses.blsValidator` pin. A test records every
+  read a passing rc.8 gate makes and requires each to be covered; CI re-derives the fixture from a fresh forge build.
 
 ### UserOperation gas limits and fees are taken from the chain (PaymasterClient.submitGaslessUserOperation)
 

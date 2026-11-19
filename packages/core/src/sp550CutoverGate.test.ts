@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
+import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
 import { SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
 import { SP550_CERTIFIED_ADDRESS_KEYS, sp550PinnedAddressEntries } from './sp550Cutover.js';
-import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
+import { SP550_WIRING_SCAN_ABI, SP550_WIRING_SCAN_EXEMPT, sp550WiringScanAbi, rpcEndpointKey, runSp550CutoverGate as rawGate, type GateClient, type GateInput, type GateRpc } from './sp550CutoverGate.js';
 
 /** Fixture release strings (SP's current group heads); the real pins come from the tag's final list. */
 // The release's own strings (SP's release-versions table at the pinned tag), so the coexist cases match it.
@@ -896,5 +901,46 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         m.reads[`${m.pins.addresses.registry}.version`] = 'Registry-5.8.0';
         const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
         expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual([expect.stringContaining('Registry.version() == release-versions "Registry-5.10.1"')]);
+    });
+
+    it('every contract read a passing sepolia-rc8 gate makes is covered by the vendored 5.5.0 files or the rc.8 proof (Codex A-r1)', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const rpcs = twin(m);
+        const seen: { abi: unknown; functionName: string }[] = [];
+        for (const r of rpcs) {
+            const inner = r.client.readContract;
+            r.client.readContract = (async (a: any) => { seen.push({ abi: a.abi, functionName: a.functionName }); return (inner as any)(a); }) as any;
+        }
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs, pins: m.pins });
+        expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        const vendored550 = [SuperPaymasterV550ABI, SuperPaymasterLensABI, xPNTsTokenV2ABI, xPNTsFactoryV2ABI, APNTsCappedABI, AOAProtocolRegistryABI, GlobalTierSourceABI];
+        const here = path.dirname(fileURLToPath(import.meta.url));
+        const fixture = JSON.parse(fs.readFileSync(path.join(here, 'abis/fixtures/coexist-stack-abi.json'), 'utf8'));
+        const proved = Object.keys(COEXIST_STACK_ENTRIES).map((f) => {
+            const j = JSON.parse(fs.readFileSync(path.join(here, 'abis', f), 'utf8'));
+            return { file: f, abi: Array.isArray(j) ? j : j.abi, names: new Set<string>(fixture.files[f].entries.map((e: any) => e.name)) };
+        });
+        const uncovered = new Set<string>();
+        for (const { abi, functionName } of seen) {
+            if (vendored550.includes(abi as any)) continue;
+            const hit = proved.find((p) => JSON.stringify(p.abi) === JSON.stringify(abi) && p.names.has(functionName));
+            if (!hit) uncovered.add(`${functionName} via ${proved.find((p) => JSON.stringify(p.abi) === JSON.stringify(abi))?.file ?? 'an ABI outside the proof'}`);
+        }
+        expect([...uncovered].sort()).toEqual([]);
+        expect(seen.length).toBeGreaterThan(50);
+        // And the scan's per-entry ABIs for this stack are each a vendored 5.5.0 file or a scanned proof file.
+        for (const [entry, abi] of Object.entries(sp550WiringScanAbi('sepolia-rc8'))) {
+            if (abi === null) continue; // not a contract of this release: held to zero / absent by the gate
+            const ok = vendored550.includes(abi as any) || proved.some((p) => COEXIST_STACK_ENTRIES[p.file].scanned && JSON.stringify(p.abi) === JSON.stringify(abi));
+            expect(ok, `${entry}: its scan ABI is not covered by the rc.8 proof`).toBe(true);
+        }
+    });
+
+    it('an rc.8 stack pinning a BLSValidator (not a contract of the release) fails the gate', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const pins: any = structuredClone(m.pins);
+        pins.addresses = { ...pins.addresses, blsValidator: '0x' + '7b'.repeat(20) };
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toContain('addresses.blsValidator is not a contract of this release');
     });
 });

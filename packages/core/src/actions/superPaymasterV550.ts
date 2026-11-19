@@ -92,7 +92,8 @@ export type LensReason = {
 /**
  * Decode a lens reason code. The lens returns `bytes32("NAME")` (left-aligned ASCII), and for the
  * two token-side rejections ORs the token's enum value into the LAST byte
- * (`DRYRUN_LOCK_REJECTED | bytes32(lr)`, SuperPaymasterLens.sol:192 / :196 at v5.5.0-rc.8).
+ * (`DRYRUN_LOCK_REJECTED | bytes32(lr)` at SuperPaymasterLens.sol:196, `DRYRUN_CREDIT_REJECTED | bytes32(cr)` at :205,
+ * v5.5.0-rc.8; :192 / :202 return the bare codes).
  */
 export function decodeLensReasonCode(reasonCode: Hex): LensReason {
     if (size(reasonCode) !== 32) throw new Error(`lens reason code must be bytes32, got ${size(reasonCode)} bytes`);
