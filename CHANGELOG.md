@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Pin writing refused until the getter allow-list exists; the zero-destination guard covers the Sync and signing actions
+
+- `scripts/sp550-pin-fill.ts --write` refuses (exit 2, before anything is read) on every network while
+  `SP550_WIRING_EXPECTED` (the FU-124 getter allow-list) is empty — `sp550WiringAllowListReady()`. The ordering rule
+  "FU-124 before any write" (DSR 2026-11-19) is a code check, not a document. Preview without `--write` still works.
+- `zeroDestinationGuard` also refuses `writeContractSync`, `sendTransactionSync`, `sendCallsSync`, `signTransaction`,
+  `prepareTransactionRequest` and `fillTransaction` to the zero address before signing (clestons on #465). A contract
+  write carrying an own `to` key is refused whatever its value (viem builds `{ to: address, ...request }`, so even
+  `to: undefined` would overwrite the checked `address`), and so is a
+  `deployContract` carrying one (viem spreads it into a direct send). `sendRawTransaction(Sync)` decodes the bytes and refuses a zero
+  destination. Requests must be plain objects — prototype `Object.prototype` or `null` and every own field enumerable (a class
+  instance, an `Object.create(...)` request or a non-enumerable field is refused: copying it would drop fields viem
+  reads and turn a call into a contract creation; an object from another realm, e.g. `node:vm`, is refused too); for a plain
+  object the one copy that is checked is the one passed on. **One destination rule** (DSR on #466): every destination —
+  a contract write's `address`, an own top-level `to`, each batch call's `to` — must pass viem's `isAddress` in strict
+  mode (the rule viem's own `assertRequest` applies: mixed case needs a valid checksum) before the zero check, else it is
+  refused as `invalid-address`; that covers missing, `null`, `''`, `'0x'`, numbers and malformed hex alike. A send
+  without any `to` field is a deployment and stays allowed; an own `to: null` is refused on purpose (in this SDK it
+  comes from a missing book entry — deploy by omitting `to`, or with `deployContract`). Each refusal names its reason; only a zero destination is worded as a
+  contract the deployment does not include. Raw transactions viem's generic parser cannot read (e.g. ZKsync 0x71) are refused, not sent. Trusted, not guarded: the client's chain configuration (a custom
+  `chain.prepareTransactionRequest` can rewrite a request), and `signAuthorization` (EIP-7702; zero means revoke).
+- Readiness needs `SP550_WIRING_ALLOWLIST_ENFORCED` (set only by the change that makes the gate compare every getter
+  with the table) and a non-empty, frozen `SP550_WIRING_EXPECTED`; `--write=<value>` is refused before anything is read.
+
 ### `executeGasless` (self-bundled) takes its gas from an estimate or the caller, never constants; PaymasterClient strict options
 
 - `createEndUserClient().executeGasless` has no gas literals left (it signed VGL / callGas 100k, 2 gwei fees, PVG 50k,

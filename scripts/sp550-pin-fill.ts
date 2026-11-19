@@ -37,12 +37,12 @@ import { spawnSync } from 'child_process';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
 import { createPublicClient, http } from 'viem';
-import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
+import { runSp550CutoverGate, sp550WiringAllowListReady, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 import { resolveSp550Network, sp550OverlayBook, sp550PinsFor } from '../packages/core/src/sp550Deployments.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
-import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, DEPLOYLIVE_ARCHIVE_PENDING, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, parseManifestPins, renderPinsLiteral, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
 
 const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -59,6 +59,10 @@ async function main() {
     const net = (() => { try { return resolveSp550Network(arg('--network')); } catch (e) { return refuse((e as Error).message); } })();
     // Any spelling of the flag, with or without a value, refuses before anything is read.
     if (args.some((x) => x === '--deploylive-archive' || x.startsWith('--deploylive-archive='))) refuse(DEPLOYLIVE_ARCHIVE_PENDING);
+    // FU-124 (DSR 2026-11-19): no network's pins are written before the getter allow-list exists. A code check, not a
+    // document: --write refuses here, before the manifest is read or any RPC contacted (module loading aside).
+    if (args.some((x) => x.startsWith('--write='))) refuse('--write takes no value (write intent is the bare --write flag); the manifest was not read and no RPC was contacted');
+    if (args.includes('--write') && !sp550WiringAllowListReady()) refuse(PIN_WRITE_BEFORE_ALLOWLIST);
     const file = arg('--manifest') ?? refuse('--manifest <pins.json> is required');
     let pins;
     try { pins = parseManifestPins(JSON.parse(fs.readFileSync(file, 'utf8')), net.mode); } catch (e) { return refuse((e as Error).message); }
