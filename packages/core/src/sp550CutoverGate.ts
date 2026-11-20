@@ -18,7 +18,7 @@
  * Exit 2 = refused before reading state; 1 = read, something failed; 0 = every check passed.
  */
 import { scannedGetters } from './abis/coexistStackAbi.js';
-import { getAddress, keccak256, toHex, type Address, type PublicClient } from 'viem';
+import { getAddress, keccak256, toHex, zeroAddress, type Address, type PublicClient } from 'viem';
 import {
     AOAProtocolRegistryABI, APNTsCappedABI, BLSAggregatorABI, BLSValidatorABI, DVTValidatorABI, GTokenABI, GTokenStakingABI, GlobalTierSourceABI, MicroPaymentChannelABI, MySBTABI,
     PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, RegistryRc8ABI, GTokenAuthorizationRc8ABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
@@ -319,8 +319,15 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
     // 5e'. Fresh deploy: the rest of the SP-owned book is the one SP is wired to.
     if (net.mode === 'fresh') {
         const book = certified;
-        cmp('SP.agentIdentityRegistry() == addresses.agentIdentityRegistry', await read(sp, SuperPaymasterV550ABI, 'agentIdentityRegistry'), book.agentIdentityRegistry);
-        cmp('SP.agentReputationRegistry() == addresses.agentReputationRegistry', await read(sp, SuperPaymasterV550ABI, 'agentReputationRegistry'), book.agentReputationRegistry);
+        // The ERC-8004 registries are sp-optional: pinned, SP must name the pinned one; declared absent, SP must name
+        // none (zero). Neither leaves the expectation unpinned, which fails (and the pins check reports it). SP 5.5.x
+        // has no agentValidationRegistry getter, so that key's absence is checked only through the pins.
+        const declaredAbsent = new Set<string>(pins.absent ?? []);
+        for (const k of ['agentIdentityRegistry', 'agentReputationRegistry'] as const) {
+            const observed = await read(sp, SuperPaymasterV550ABI, k);
+            if (book[k] === undefined && declaredAbsent.has(k)) cmp(`SP.${k}() == zero (declared absent)`, observed, zeroAddress, 'declared absent');
+            else cmp(`SP.${k}() == addresses.${k}`, observed, book[k]);
+        }
         cmp('addresses.aPNTs == pins.aPNTsCapped', book.aPNTs, pins.aPNTsCapped);
         // External entries are not SP's deploy: compare SP's wiring with the SDK book, not with pins.
         cmp('SP.entryPoint() == SDK book entryPoint', await read(sp, SuperPaymasterV550ABI, 'entryPoint'), canonical.entryPoint, 'SDK book');

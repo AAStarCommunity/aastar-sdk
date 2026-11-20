@@ -96,9 +96,12 @@ export const SP550_ADDRESS_OWNER: Record<AddressBookKey | Sp550HistoryKey, 'sp' 
     blsAggregator: 'sp',
     dvtValidator: 'sp',
     aPNTs: 'sp',
-    agentIdentityRegistry: 'sp',
-    agentReputationRegistry: 'sp',
-    agentValidationRegistry: 'sp',
+    // ERC-8004 registries: optional (DSR 2026-11-20). DeployLive with ENABLE_AGENT_REGISTRIES=0 deploys none and
+    // SP is wired to zero (the Sepolia rc.8 release); declared absent, the gate holds SP's identity and reputation
+    // getters to zero (SP has no validation getter).
+    agentIdentityRegistry: 'sp-optional',
+    agentReputationRegistry: 'sp-optional',
+    agentValidationRegistry: 'sp-optional',
     policyRegistry: 'sp',
     x402Facilitator: 'sp',
     timelockController: 'sp-optional', // SP schema 543f3498: a deployment may have none (pins declare it)

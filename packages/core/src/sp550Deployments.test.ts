@@ -77,15 +77,27 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
         // A hand-kept expectation on purpose: flipping a key between sp and sp-optional (or to
         // external) must be a visible change to this test, reviewed with SP's manifest.
         expect([...SP550_FRESH_REQUIRED_ADDRESS_KEYS].sort()).toEqual([
-            'aPNTs', 'agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry', 'blsAggregator', 'dvtValidator',
+            'aPNTs', 'blsAggregator', 'dvtValidator',
             'gToken', 'paymasterFactory', 'paymasterV4Impl', 'policyRegistry', 'registry', 'reputationSystem', 'sbt', 'staking',
             'superPaymaster', 'x402Facilitator',
         ]);
-        // timelockController moved to optional with SP schema 543f3498 (a deployment may have none).
+        // timelockController moved to optional with SP schema 543f3498 (a deployment may have none); the three ERC-8004
+        // registries with DSR 2026-11-20 (the Sepolia rc.8 release deploys none: ENABLE_AGENT_REGISTRIES=0).
         expect([...SP550_FRESH_OPTIONAL_ADDRESS_KEYS].sort()).toEqual([
-            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'timelockController', 'xPNTsFactory',
+            'PNTsPaymasterV4', 'aPNTsPaymasterV4', 'agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry',
+            'blsValidator', 'microPaymentChannel', 'paymasterV4', 'pnts', 'timelockController', 'xPNTsFactory',
         ]);
         expect(SP550_ADDRESS_OWNER.agentRegistry).toBe('external');
+    });
+    it('the ERC-8004 registries validate both ways: pinned (with codehashes) or declared absent, never both', () => {
+        const AGENT = ['agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry'];
+        expect(AGENT.every((k) => FULL.absent.includes(k as any))).toBe(true); // FULL declares them absent
+        expect(sp550FreshPinProblems(FULL)).toEqual([]);
+        const pinned = { ...FULL, addresses: { ...FULL.addresses, ...Object.fromEntries(AGENT.map((k, i) => [k, A(0x800 + i)])) },
+            absent: FULL.absent.filter((k) => !AGENT.includes(k)) };
+        expect(sp550FreshPinProblems(pinned)).toEqual([]);
+        expect(sp550FreshPinProblems({ ...pinned, absent: [...pinned.absent, 'agentIdentityRegistry'] }))
+            .toEqual(['addresses.agentIdentityRegistry: pinned and declared absent']);
     });
     it('every optional SP entry must be pinned or declared absent — none may just be left out', () => {
         const { absent: _a, ...noAbsent } = FULL;

@@ -40,6 +40,14 @@ describe('a DeployLive config as the SDK address set (fork rehearsal only)', () 
         expect(await forkAddressSetProblems({ getCode: async () => '0x60', readContract: async () => A(0) }, s)).toEqual(['config has no sbt (a required SP contract)']);
     });
 
+    it('agent registries at zero (ENABLE_AGENT_REGISTRIES=0, the Sepolia rc.8 release) are not deployed, not missing (DSR 2026-11-20)', () => {
+        const Z = '0x0000000000000000000000000000000000000000';
+        const s = forkAddressSetFromDeployLive({ ...CONFIG, agentIdentityRegistry: Z, agentReputationRegistry: Z, agentValidationRegistry: Z }, SHIPPED);
+        expect(s.missingRequired).toEqual([]);
+        expect(s.notDeployed.sort()).toEqual(['PNTsPaymasterV4', 'agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry', 'blsValidator']);
+        for (const k of ['agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry']) expect(s.addresses[k]).toBe(Z);
+    });
+
     it('checks on the fork: code at every mapped address, and SP / Registry wiring naming the config\'s contracts', async () => {
         const s = forkAddressSetFromDeployLive(CONFIG, SHIPPED);
         const wiring: Record<string, Address> = {
@@ -47,6 +55,8 @@ describe('a DeployLive config as the SDK address set (fork rehearsal only)', () 
             [`${CONFIG.superPaymaster}.APNTS_TOKEN`]: CONFIG.aPNTs as Address, [`${CONFIG.superPaymaster}.xpntsFactory`]: CONFIG.xPNTsFactoryV2 as Address,
             [`${CONFIG.registry}.SUPER_PAYMASTER`]: CONFIG.superPaymaster as Address, [`${CONFIG.registry}.GTOKEN_STAKING`]: CONFIG.staking as Address,
             [`${CONFIG.registry}.MYSBT`]: CONFIG.sbt as Address,
+            [`${CONFIG.superPaymaster}.agentIdentityRegistry`]: CONFIG.agentIdentityRegistry as Address,
+            [`${CONFIG.superPaymaster}.agentReputationRegistry`]: CONFIG.agentReputationRegistry as Address,
         };
         const reader = (over: Record<string, unknown> = {}, noCode: string[] = []) => ({
             getCode: async ({ address }: { address: Address }) => (noCode.includes(address) ? '0x' : '0x6080'),
@@ -55,6 +65,27 @@ describe('a DeployLive config as the SDK address set (fork rehearsal only)', () 
         expect(await forkAddressSetProblems(reader(), s)).toEqual([]);
         expect(await forkAddressSetProblems(reader({ [`${CONFIG.registry}.GTOKEN_STAKING`]: A(0x555) }), s)).toEqual([expect.stringMatching(/^Registry.GTOKEN_STAKING\(\) = .* config says/)]);
         expect(await forkAddressSetProblems(reader({}, [CONFIG.policyRegistry as string]), s)).toEqual([`policyRegistry ${CONFIG.policyRegistry} has no code on the fork`]);
+    });
+
+    it('the ERC-8004 pointers on the fork: zero in the config holds SP to zero, and SP naming a registry then fails', async () => {
+        const Z = '0x0000000000000000000000000000000000000000' as Address;
+        const cfg = { ...CONFIG, agentIdentityRegistry: Z, agentReputationRegistry: Z, agentValidationRegistry: Z };
+        const s = forkAddressSetFromDeployLive(cfg, SHIPPED);
+        const sp = CONFIG.superPaymaster as Address;
+        const wiring: Record<string, unknown> = {
+            [`${sp}.REGISTRY`]: CONFIG.registry, [`${sp}.entryPoint`]: CONFIG.entryPoint, [`${sp}.APNTS_TOKEN`]: CONFIG.aPNTs,
+            [`${sp}.xpntsFactory`]: CONFIG.xPNTsFactoryV2, [`${CONFIG.registry}.SUPER_PAYMASTER`]: sp,
+            [`${CONFIG.registry}.GTOKEN_STAKING`]: CONFIG.staking, [`${CONFIG.registry}.MYSBT`]: CONFIG.sbt,
+            [`${sp}.agentIdentityRegistry`]: Z, [`${sp}.agentReputationRegistry`]: Z,
+        };
+        const reader = (over: Record<string, unknown> = {}) => ({
+            getCode: async () => '0x6080', readContract: async ({ address, functionName }: any) => ({ ...wiring, ...over })[`${address}.${functionName}`],
+        });
+        expect(await forkAddressSetProblems(reader(), s)).toEqual([]);
+        expect(await forkAddressSetProblems(reader({ [`${sp}.agentIdentityRegistry`]: A(0x8004) }), s))
+            .toEqual([`SP.agentIdentityRegistry() = ${A(0x8004)}, config says ${Z}`]);
+        expect(await forkAddressSetProblems(reader({ [`${sp}.agentReputationRegistry`]: A(0x8005) }), s))
+            .toEqual([`SP.agentReputationRegistry() = ${A(0x8005)}, config says ${Z}`]);
     });
 
     it('a non-loopback fork RPC is accepted only as an anvil client', () => {

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
 import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
-import { keccak256, pad, toHex, type Address, type Hex } from 'viem';
+import { keccak256, pad, toHex, zeroAddress, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
 import { CANONICAL_ADDRESSES, getCanonicalAddresses } from './addresses.js';
 import { SP550_RELEASE_VERSIONS, SP550_RELEASE_VERSION_ENTRY, sp550ReleaseVersionsProblems, SP550_ADDRESS_OWNER, SP550_COEXIST_PINS, SP550_FRESH_OPTIONAL_ADDRESS_KEYS, SP550_FRESH_REQUIRED_ADDRESS_KEYS, resolveSp550Network, requireDeployedAddress, SP550_COEXIST_HOLDS, SP550_RELEASE_HOLDS, sp550CoexistOverlapProblems, sp550HoldFor, sp550OverlayBook, sp550NetworkPinProblems, requireSp550FreshDeployPins, Sp550NotDeployedError, sp550AddressSet, sp550PinsFor } from './sp550Deployments.js';
@@ -28,8 +28,11 @@ const NEUTRAL = ('0x' + 'fe'.repeat(20)) as Address;
 const codeOf = (a: Address) => ('0x6080' + a.slice(2)) as Hex; // distinct non-empty code per address
 
 /** A complete, consistent 5.5.0 deployment on `chainId`, and the pins that describe it. */
+/** The sp-optional ERC-8004 registries: the fixture pins them (present); the absent cases undo that per test. */
+const AGENT_REGISTRY_KEYS = ['agentIdentityRegistry', 'agentReputationRegistry', 'agentValidationRegistry'] as const;
+
 function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
-    const book = Object.fromEntries(SP550_FRESH_REQUIRED_ADDRESS_KEYS.map((k, i) => [k, A(0x100 + i)])) as Record<string, Address>;
+    const book = Object.fromEntries([...SP550_FRESH_REQUIRED_ADDRESS_KEYS, ...AGENT_REGISTRY_KEYS].map((k, i) => [k, A(0x100 + i)])) as Record<string, Address>;
     const p = {
         sp: book.superPaymaster, impl: A(1), lens: A(3), factory: A(4), tokenImpl: A(5), ext: A(6), aoa: A(7), tier: A(8), apnts: book.aPNTs,
         admin: A(0xa), registryImpl: A(0xb), disclosure: A(0xc),
@@ -43,7 +46,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         xPNTsFactoryV2: p.factory, xPNTsTokenV2Impl: p.tokenImpl, xPNTsTokenV2Ext: p.ext, aoaProtocolRegistry: p.aoa,
         globalTierSource: p.tier, aPNTsCapped: p.apnts, readbackBlock: HEAD - 10n,
         spAdminExtension: p.admin, lensVersion: LENS_VERSION, registryImpl: p.registryImpl, disclosureRegistry: p.disclosure,
-        addresses: certified, ...(mode === 'fresh' ? { absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory') } : {}),
+        addresses: certified, ...(mode === 'fresh' ? { absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory' && !(AGENT_REGISTRY_KEYS as readonly string[]).includes(k)) } : {}),
     };
     // The read-back runtime codehash of every pinned address (the model serves codeOf(address)).
     const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
@@ -464,6 +467,87 @@ describe('the SDK book names what the gate certified (clestons B1 / N1 / N2)', (
         const book = { ...BOOKS.get(m.pins)!, pnts: A(0x996) };
         const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m), pins: m.pins, book });
         expect(failed(r)).toEqual(['SDK book has no pnts (declared absent)']);
+    });
+});
+
+/** The same deployment with the ERC-8004 registries not deployed: unpinned, declared absent, SP wired to zero. */
+function withAgentRegistriesAbsent(m: Model, keys: readonly string[] = AGENT_REGISTRY_KEYS): Model {
+    const addresses = Object.fromEntries(Object.entries(m.pins.addresses).filter(([k]) => !keys.includes(k)));
+    const codehashes = Object.fromEntries(Object.entries(m.pins.codehashes).filter(([k]) => !keys.some((a) => k === `addresses.${a}`)));
+    const pins = { ...m.pins, addresses, codehashes, absent: [...(m.pins.absent ?? []), ...keys] } as typeof m.pins;
+    const reads = { ...m.reads };
+    for (const k of keys) if (`${m.p.sp}.${k}` in reads) reads[`${m.p.sp}.${k}`] = zeroAddress;
+    BOOKS.set(pins, Object.fromEntries(Object.entries(BOOKS.get(m.pins)!).filter(([k]) => !keys.includes(k))));
+    return { ...m, pins, reads };
+}
+
+describe('the ERC-8004 agent registries are sp-optional (DSR 2026-11-20: the Sepolia rc.8 release deploys none)', () => {
+    const ID = 'SP.agentIdentityRegistry() == zero (declared absent)';
+    const REP = 'SP.agentReputationRegistry() == zero (declared absent)';
+
+    it('sepolia-rc8: declared absent and SP wired to zero -> exit 0, and both getters are held to zero', async () => {
+        const m = withAgentRegistriesAbsent(deployment(sepolia.id, 'fresh'));
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(failed(r)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+        expect(r.results.filter((c) => c.check === ID || c.check === REP).map((c) => c.ok)).toEqual([true, true]);
+    });
+
+    it('op-sepolia: the same absent set passes against its own book', async () => {
+        const m = withAgentRegistriesAbsent(deployment(optimismSepolia.id, 'fresh'));
+        const r = await runSp550CutoverGate({ network: 'op-sepolia', rpcs: twin(m), pins: m.pins });
+        expect(failed(r)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+    });
+
+    it('declared absent but SP names a registry -> fails on exactly that getter', async () => {
+        for (const [k, check] of [['agentIdentityRegistry', ID], ['agentReputationRegistry', REP]] as const) {
+            const m = withAgentRegistriesAbsent(deployment(sepolia.id, 'fresh'));
+            m.reads[`${m.p.sp}.${k}`] = A(0x8004);
+            const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+            expect(failed(r)).toEqual([check]);
+            expect(r.exitCode).toBe(1);
+        }
+    });
+
+    it('declared absent, and SP disagrees between the RPCs -> fails', async () => {
+        const m = withAgentRegistriesAbsent(deployment(sepolia.id, 'fresh'));
+        const m2 = structuredClone(m);
+        m2.reads[`${m.p.sp}.agentIdentityRegistry`] = A(0x8004);
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m, m2), pins: m.pins });
+        expect(failed(r)).toContain(ID);
+    });
+
+    it('neither pinned nor declared absent -> fails, in the pins check and on the getter', async () => {
+        const m = withAgentRegistriesAbsent(deployment(sepolia.id, 'fresh'));
+        const pins = { ...m.pins, absent: m.pins.absent!.filter((k) => k !== 'agentIdentityRegistry') };
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
+        expect(r.exitCode).toBe(1);
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')?.detail).toMatch(/addresses\.agentIdentityRegistry: neither pinned nor declared absent/);
+        expect(r.results.find((c) => c.check === 'SP.agentIdentityRegistry() == addresses.agentIdentityRegistry')?.ok).toBe(false);
+    });
+
+    it('pinned and declared absent at once -> fails', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const pins = { ...m.pins, absent: [...(m.pins.absent ?? []), 'agentIdentityRegistry'] };
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins });
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')?.detail).toMatch(/addresses\.agentIdentityRegistry: pinned and declared absent/);
+        expect(r.exitCode).toBe(1);
+    });
+
+    it('pinned (present): unchanged — SP must name the pinned registry, and zero is not accepted', async () => {
+        const m = deployment(sepolia.id, 'fresh');
+        expect((await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins })).exitCode).toBe(0);
+        m.reads[`${m.p.sp}.agentIdentityRegistry`] = zeroAddress;
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(failed(r)).toEqual(['SP.agentIdentityRegistry() == addresses.agentIdentityRegistry']);
+    });
+
+    it('agentValidationRegistry alone declared absent: SP has no getter for it, so only the pins account for it', async () => {
+        const m = withAgentRegistriesAbsent(deployment(sepolia.id, 'fresh'), ['agentValidationRegistry']);
+        const r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(failed(r)).toEqual([]);
+        expect(r.results.some((c) => /agentValidationRegistry\(\)/.test(c.check))).toBe(false);
     });
 });
 
