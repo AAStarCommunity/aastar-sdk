@@ -3,8 +3,9 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { gitBlobId, offlineProblems, REPO_ROOT, SAME_AT_BOTH_PINS, symlinkedComponents, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
-import { SP550_RUNTIME_PINS, SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
+import { compileInputChanges, gitBlobId, gitIn, offlineProblems, REPO_ROOT, SAME_AT_BOTH_PINS, symlinkedComponents, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
+import { execFileSync } from 'child_process';
+import { SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 const DIR = path.resolve('packages/core/src/sp550-tooling');
@@ -72,14 +73,11 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         if (q === `rev-parse ${toolingCommit}^{commit}`) return toolingCommit;
         for (const [i, sub] of SAME_AT_BOTH_PINS.entries()) if (q === `rev-parse ${contractsCommit}:${sub}` || q === `rev-parse ${toolingCommit}:${sub}`) return String(i).repeat(40);
         for (const v of Object.values(SP550_TOOLING_FILES)) if (q === `rev-parse ${toolingCommit}:${v.upstream}`) return v.gitBlob;
-        // `git grep -l -E <contract X> <commit> -- *.sol`: each pinned artifact defined under contracts/src by default.
-        if (args[0] === 'grep') { const art = /contract\[\[:space:\]\]\+(\w+)/.exec(args[3])![1]; return `${toolingCommit}:contracts/src/${art}.sol`; }
+        if (args[0] === 'diff') return ''; // no compilation input changed
         throw new Error(`unexpected git ${q}`);
     };
-    it('an upstream that matches passes, and every pinned artifact was located', () => {
-        const r = upstreamProblems(fakeGit());
-        expect(r.problems).toEqual([]);
-        expect(r.checked).toBeGreaterThanOrEqual(Object.keys(SP550_RUNTIME_PINS['10'].artifacts).length);
+    it('an upstream that matches passes', () => {
+        expect(upstreamProblems(fakeGit()).problems).toEqual([]);
     });
     it.each<[string, Record<string, string | undefined>, RegExp]>([
         ['a moved tag', { [`rev-parse ${contractsTag}^{commit}`]: 'c'.repeat(40) }, /tag v5\.5\.0-rc\.8 resolves to c+, not/],
@@ -91,10 +89,8 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         ['only a dependency gitlink changed (contracts/lib)', { [`rev-parse ${toolingCommit}:contracts/lib`]: 'e'.repeat(40) }, /contracts\/lib differs/],
         ['only the singleton-paymaster dependency changed', { [`rev-parse ${toolingCommit}:singleton-paymaster`]: 'e'.repeat(40) }, /singleton-paymaster differs/],
         ['only the submodule list changed', { [`rev-parse ${toolingCommit}:.gitmodules`]: 'e'.repeat(40) }, /\.gitmodules differs/],
-        // Codex B1 r3 M1: every pinned artifact's defining source lies inside the compared inputs.
-        ['an artifact defined only outside the compared inputs', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+TimelockHandoverBootstrap([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: `${toolingCommit}:script/rehearsal/TimelockHandoverBootstrap.sol` }, /contract TimelockHandoverBootstrap is defined only in script\/rehearsal\/TimelockHandoverBootstrap\.sol, outside the inputs compared/],
-        ['an artifact no source defines', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+MySBT([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: undefined }, /no source at the tooling commit defines contract MySBT/],
-        ['an artifact defined only in docs / tests', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+MySBT([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: `${toolingCommit}:docs/x/MySBT.sol\n${toolingCommit}:contracts/test/MySBT.sol` }, /no source at the tooling commit defines contract MySBT/],
+        ['a Solidity source changed somewhere between the pins', { [`diff --raw --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: `:100644 100644 ${'1'.repeat(40)} ${'2'.repeat(40)} M\tsingleton-paymaster/lib/x/ERC1967Proxy.sol` }, /ERC1967Proxy\.sol \(a Solidity source\) changed between the pins/],
+        ['git diff failing', { [`diff --raw --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: undefined }, /git diff between the pins failed/],
         ['a compilation input missing at one pin', { [`rev-parse ${contractsCommit}:contracts/lib`]: undefined }, /contracts\/lib differs between the contracts tag \(missing\)/],
         ['an upstream blob that is not the pinned one', { [`rev-parse ${toolingCommit}:deployments/readback-policy.json`]: 'f'.repeat(40) }, /deployments\/readback-policy\.json at the tooling commit is blob f+, not the pinned/],
     ])('%s fails', (_l, over, why) => {
@@ -120,5 +116,47 @@ describe('check:sp550-tooling CLI', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () =>
     });
     it('any argument but a bare --strict is refused (exit 2), never read as "not strict"', () => {
         for (const a of [['--strict=false'], ['--Strict'], ['--strict', '--strict'], ['x']]) expect(run(a, { SP_REPO: '/nonexistent-sp-repo' }).status, a.join(' ')).toBe(2);
+    });
+});
+
+describe('compileInputChanges on a real git repository (Codex B1 r4 M1 / L1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    /** A temp repo with a base commit; returns [git, base sha, commit(edit) -> sha]. */
+    const repo = () => {
+        const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sp550-cin-'));
+        const g = (...a: string[]) => execFileSync('git', ['-C', d, ...a], { encoding: 'utf8' }).trim();
+        g('init', '-q'); g('config', 'user.email', 't@t'); g('config', 'user.name', 't'); g('config', 'commit.gpgsign', 'false');
+        const put = (f: string, body: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), body); };
+        put('contracts/src/A.sol', 'contract A {}\n'); put('lib/oz/Proxy.sol', 'contract ERC1967Proxy {}\n'); put('foundry.toml', '[profile.default]\n');
+        put('docs/notes.md', 'x\n'); put('contracts/test/T.t.sol', 'contract T {}\n');
+        g('add', '-A');
+        // A submodule gitlink, as a 160000 index entry.
+        g('update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},contracts/lib/solady`);
+        g('commit', '-q', '-m', 'base');
+        const base = g('rev-parse', 'HEAD');
+        // The gitlink has no work-tree directory: `add -A` would stage its removal, so it is excluded from staging.
+        const commit = (edit: () => void) => { edit(); g('add', '-A', '--', '.', ':!contracts/lib/solady'); g('commit', '-q', '--allow-empty', '-m', 'next'); return g('rev-parse', 'HEAD'); };
+        return { d, git: gitIn(d), g, put, base, commit, done: () => fs.rmSync(d, { recursive: true, force: true }) };
+    };
+    it('no change to a source, gitlink or build config: nothing reported (docs and non-Solidity files may change)', () => {
+        const r = repo();
+        try { const to = r.commit(() => { r.put('docs/notes.md', 'y\n'); r.put('script/run.py', 'print(1)\n'); }); expect(compileInputChanges(r.git, r.base, to)).toEqual([]); } finally { r.done(); }
+    });
+    it.each<[string, (r: ReturnType<typeof repo>) => void, RegExp]>([
+        ['a source in src', (r) => r.put('contracts/src/A.sol', 'contract A { uint x; }\n'), /contracts\/src\/A\.sol \(a Solidity source\)/],
+        ['an unused copy of a library outside the compared roots', (r) => r.put('lib/oz/Proxy.sol', 'contract ERC1967Proxy { uint y; }\n'), /lib\/oz\/Proxy\.sol \(a Solidity source\)/],
+        ['a new source anywhere', (r) => r.put('elsewhere/New.sol', 'contract N {}\n'), /elsewhere\/New\.sol \(a Solidity source\)/],
+        ['a removed source', (r) => fs.rmSync(path.join(r.d, 'contracts/test/T.t.sol')), /contracts\/test\/T\.t\.sol \(a Solidity source\)/],
+        ['an upper-case extension', (r) => r.put('x/Y.SOL', 'contract Y {}\n'), /x\/Y\.SOL \(a Solidity source\)/],
+        ['the build config', (r) => r.put('foundry.toml', '[profile.default]\nvia_ir = true\n'), /foundry\.toml \(build config\)/],
+        ['a nested remappings.txt', (r) => r.put('sub/remappings.txt', 'a/=b/\n'), /sub\/remappings\.txt \(build config\)/],
+        ['a submodule gitlink moved', (r) => r.g('update-index', '--cacheinfo', `160000,${'b'.repeat(40)},contracts/lib/solady`), /contracts\/lib\/solady \(a submodule gitlink\)/],
+    ])('%s is reported', (_l, edit, why) => {
+        const r = repo();
+        try {
+            // A gitlink is edited in the index directly; commit what is staged without re-adding the work tree over it.
+            let to: string;
+            if (/gitlink/.test(_l)) { edit(r); r.g('commit', '-q', '-m', 'next'); to = r.g('rev-parse', 'HEAD'); } else to = r.commit(() => edit(r));
+            expect(compileInputChanges(r.git, r.base, to)).toEqual(expect.arrayContaining([expect.stringMatching(why)]));
+        } finally { r.done(); }
     });
 });

@@ -15,7 +15,7 @@
  *   upstream (SP_REPO checkout; required with --strict or REQUIRE_UPSTREAM=1):
  *     - the tag still resolves to the contracts commit, and the tooling commit exists;
  *     - every compilation input (SAME_AT_BOTH_PINS: sources, dependency gitlinks, foundry.toml, .gitmodules) is the same
- *       object at both commits;
+ *       object at both commits, and no .sol file, submodule gitlink or build config changed anywhere between them;
  *     - each file's blob at the tooling commit is the pinned one.
  *
  *   pnpm run check:sp550-tooling
@@ -45,11 +45,33 @@ export const VENDORED_DIR = path.join(REPO_ROOT, 'packages/core/src/sp550-toolin
  * what foundry.toml reads: `src` (contracts/src), the `libs` and remapping targets (contracts/lib,
  * singleton-paymaster), the directory holding the one pinned artifact that is not in `src`
  * (contracts/script/v3/TimelockHandoverBootstrap.sol), the build config itself and the submodule list (Codex B1 r2 M4,
- * r3 M1). upstreamProblems also locates every pinned artifact's defining source and fails if none lies inside these.
+ * r3 M1). A second, structural check stands beside it: compileInputChanges (no .sol, gitlink or build config changed
+ * anywhere in the tree).
  */
 export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-paymaster', 'contracts/script', 'foundry.toml', '.gitmodules'] as const;
-/** Where a `contract X` text match is not a compilation input of a release artifact. */
-const NOT_A_SOURCE = /(^|\/)(docs|test|tests|fixtures?)(\/|$)/i;
+/** A build-config file anywhere in the tree (it can change how sources resolve or compile). */
+const BUILD_CONFIG = /(^|\/)(foundry\.toml|remappings\.txt|\.gitmodules)$/;
+
+/**
+ * Every change between two commits that could change a compiled artifact: a Solidity source anywhere (whichever copy
+ * the compiler selects, through any chain of imports), a submodule gitlink (mode 160000 on either side), or a build
+ * config. No import closure is needed: the compiler reads nothing else, so if none of these changed, no artifact can
+ * have (Codex B1 r4 M1; the third round on compile-input completeness, made structural).
+ */
+export function compileInputChanges(git: Git, from: string, to: string): string[] {
+    const raw = git(['diff', '--raw', '--no-renames', '--no-abbrev', from, to]);
+    const out: string[] = [];
+    for (const line of raw.split('\n')) {
+        if (!line.trim()) continue;
+        const m = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*\t(.+)$/.exec(line);
+        if (!m) { out.push(`unparsed git diff line ${JSON.stringify(line)}`); continue; }
+        const [, oldMode, newMode, file] = m;
+        if (/\.sol$/i.test(file)) out.push(`${file} (a Solidity source) changed between the pins`);
+        else if (oldMode === '160000' || newMode === '160000') out.push(`${file} (a submodule gitlink) changed between the pins`);
+        else if (BUILD_CONFIG.test(file)) out.push(`${file} (build config) changed between the pins`);
+    }
+    return out;
+}
 
 /** Each path component from `root` down to `dir` (both inclusive of what lies between) that is a symlink. */
 export function symlinkedComponents(root: string, dir: string): string[] {
@@ -131,14 +153,11 @@ export function upstreamProblems(git: Git): { problems: string[]; checked: numbe
         checked++;
         if (!a || !b || a !== b) p.push(`${sub} differs between the contracts tag (${a ?? 'missing'}) and the tooling commit (${b ?? 'missing'}): the two pins are not about the same contracts`);
     }
-    // Every pinned artifact is defined in a source the two pins are compared on (a new artifact elsewhere fails).
-    for (const art of Object.keys(SP550_RUNTIME_PINS['10'].artifacts)) {
-        const out = tryGit(['grep', '-l', '-E', `^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+${art}([[:space:]]|\\{|$)`, toolingCommit, '--', '*.sol']);
-        const files = (out ?? '').split('\n').map((l) => l.trim().replace(`${toolingCommit}:`, '')).filter((f) => f && !NOT_A_SOURCE.test(f));
-        checked++;
-        if (!files.length) p.push(`no source at the tooling commit defines contract ${art}`);
-        else if (!files.some((f) => SAME_AT_BOTH_PINS.some((root) => f === root || f.startsWith(`${root}/`)))) p.push(`contract ${art} is defined only in ${files.join(', ')}, outside the inputs compared at both pins`);
-    }
+    // No compilation input changed anywhere in the tree between the pins.
+    checked++;
+    let changes: string[];
+    try { changes = compileInputChanges(git, contractsCommit, toolingCommit); } catch (e) { changes = [`git diff between the pins failed: ${(e as Error).message}`]; }
+    p.push(...changes);
     for (const [f, v] of Object.entries(SP550_TOOLING_FILES)) {
         const id = tryGit(['rev-parse', `${toolingCommit}:${v.upstream}`]);
         checked++;
