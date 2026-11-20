@@ -6,7 +6,8 @@
  * the spec — is pinned to SP main 12b5ef80 (the merge of #657; #653 fc33cfd3 and #655 698eeff1 are intermediate and
  * must not be pinned). Each file under ./sp550-tooling is the git blob at that commit, byte for byte:
  * scripts/check-sp550-tooling.ts holds the bytes (blob ids, sha256) and, with the upstream checkout, the two-pin
- * relation (`contracts/src` is the same tree at both commits). This module holds the structure, and is browser-safe.
+ * relation (no Solidity source, gitlink, symlink or build config differs between the commits). This module holds the
+ * structure, and is browser-safe.
  *
  * Nothing here reads a chain or changes what the pin-fill gate does: --write stays refused until B4.
  */
