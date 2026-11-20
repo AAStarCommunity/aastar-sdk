@@ -659,6 +659,19 @@ jobs:
           SP550_OUT: ../SuperPaymaster/out
         run: pnpm run check:sp550-abis --strict
 
+      # Part B1's vendored read-back tooling data (packages/core/src/sp550-tooling, SP main 12b5ef80): the upstream half
+      # of check:sp550-tooling — the tag still resolves, no .sol / gitlink / symlink / build config differs between the
+      # contracts tag and the tooling commit, and each vendored file is that commit's blob. fetch-depth 0 above brings
+      # SP main's history, which holds the tooling commit. --strict: a missing checkout fails instead of SKIP.
+      - name: SP read-back tooling data provenance (check:sp550-tooling --strict)
+        working-directory: aastar-sdk
+        env:
+          SP_REPO: ../SuperPaymaster
+        run: |
+          set -o pipefail
+          pnpm run check:sp550-tooling --strict | tee "$RUNNER_TEMP/sp550-tooling.out"
+          grep -q 'upstream: [0-9]* check(s) at 12b5ef80' "$RUNNER_TEMP/sp550-tooling.out"
+
       - name: rc.8 coexist proof fixture equals this fresh build (scripts/coexist-stack-abi-pin.ts --verify)
         working-directory: aastar-sdk
         env:
