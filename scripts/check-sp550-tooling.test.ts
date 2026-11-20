@@ -89,8 +89,8 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         ['only a dependency gitlink changed (contracts/lib)', { [`rev-parse ${toolingCommit}:contracts/lib`]: 'e'.repeat(40) }, /contracts\/lib differs/],
         ['only the singleton-paymaster dependency changed', { [`rev-parse ${toolingCommit}:singleton-paymaster`]: 'e'.repeat(40) }, /singleton-paymaster differs/],
         ['only the submodule list changed', { [`rev-parse ${toolingCommit}:.gitmodules`]: 'e'.repeat(40) }, /\.gitmodules differs/],
-        ['a Solidity source changed somewhere between the pins', { [`diff --raw --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: `:100644 100644 ${'1'.repeat(40)} ${'2'.repeat(40)} M\tsingleton-paymaster/lib/x/ERC1967Proxy.sol` }, /ERC1967Proxy\.sol \(a Solidity source\) changed between the pins/],
-        ['git diff failing', { [`diff --raw --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: undefined }, /git diff between the pins failed/],
+        ['a Solidity source changed somewhere between the pins', { [`diff --raw -z --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: `:100644 100644 ${'1'.repeat(40)} ${'2'.repeat(40)} M\0singleton-paymaster/lib/x/ERC1967Proxy.sol\0` }, /ERC1967Proxy\.sol \(a Solidity source\) changed between the pins/],
+        ['git diff failing', { [`diff --raw -z --no-renames --no-abbrev ${contractsCommit} ${toolingCommit}`]: undefined }, /git diff between the pins failed/],
         ['a compilation input missing at one pin', { [`rev-parse ${contractsCommit}:contracts/lib`]: undefined }, /contracts\/lib differs between the contracts tag \(missing\)/],
         ['an upstream blob that is not the pinned one', { [`rev-parse ${toolingCommit}:deployments/readback-policy.json`]: 'f'.repeat(40) }, /deployments\/readback-policy\.json at the tooling commit is blob f+, not the pinned/],
     ])('%s fails', (_l, over, why) => {
@@ -128,6 +128,8 @@ describe('compileInputChanges on a real git repository (Codex B1 r4 M1 / L1)', {
         const put = (f: string, body: string) => { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), body); };
         put('contracts/src/A.sol', 'contract A {}\n'); put('lib/oz/Proxy.sol', 'contract ERC1967Proxy {}\n'); put('foundry.toml', '[profile.default]\n');
         put('docs/notes.md', 'x\n'); put('contracts/test/T.t.sol', 'contract T {}\n');
+        put('vendor/v1/Lib.sol', 'library L {}\n'); put('vendor/v2/Lib.sol', 'library L { }\n'); fs.symlinkSync('v1', path.join(d, 'vendor/current'));
+        g('config', 'core.quotePath', 'true'); // the default; quoting is what -z must not be fooled by
         g('add', '-A');
         // A submodule gitlink, as a 160000 index entry.
         g('update-index', '--add', '--cacheinfo', `160000,${'a'.repeat(40)},contracts/lib/solady`);
@@ -149,6 +151,12 @@ describe('compileInputChanges on a real git repository (Codex B1 r4 M1 / L1)', {
         ['an upper-case extension', (r) => r.put('x/Y.SOL', 'contract Y {}\n'), /x\/Y\.SOL \(a Solidity source\)/],
         ['the build config', (r) => r.put('foundry.toml', '[profile.default]\nvia_ir = true\n'), /foundry\.toml \(build config\)/],
         ['a nested remappings.txt', (r) => r.put('sub/remappings.txt', 'a/=b/\n'), /sub\/remappings\.txt \(build config\)/],
+        // Codex B1 r5 M1: quoted paths (tab, quote, non-ASCII) are read raw.
+        ['a source with a non-ASCII name', (r) => r.put('lib/é/A.sol', 'contract A {}\n'), /lib\/é\/A\.sol \(a Solidity source\)/],
+        ['a source with a tab and a quote in its name', (r) => r.put('lib/a\tb"c.sol', 'contract C {}\n'), /lib\/a\tb"c\.sol \(a Solidity source\)/],
+        ['a nested foundry.toml under a non-ASCII directory', (r) => r.put('ü/foundry.toml', '[profile.x]\n'), /ü\/foundry\.toml \(build config\)/],
+        // Codex B1 r5 M2: a re-pointed directory symlink changes what is compiled without changing a .sol blob.
+        ['a directory symlink re-pointed', (r) => { fs.rmSync(path.join(r.d, 'vendor/current')); fs.symlinkSync('v2', path.join(r.d, 'vendor/current')); }, /vendor\/current \(a symlink\)/],
         ['a submodule gitlink moved', (r) => r.g('update-index', '--cacheinfo', `160000,${'b'.repeat(40)},contracts/lib/solady`), /contracts\/lib\/solady \(a submodule gitlink\)/],
     ])('%s is reported', (_l, edit, why) => {
         const r = repo();

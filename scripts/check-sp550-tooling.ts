@@ -53,21 +53,29 @@ export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-p
 const BUILD_CONFIG = /(^|\/)(foundry\.toml|remappings\.txt|\.gitmodules)$/;
 
 /**
- * Every change between two commits that could change a compiled artifact: a Solidity source anywhere (whichever copy
- * the compiler selects, through any chain of imports), a submodule gitlink (mode 160000 on either side), or a build
- * config. No import closure is needed: the compiler reads nothing else, so if none of these changed, no artifact can
- * have (Codex B1 r4 M1; the third round on compile-input completeness, made structural).
+ * Changes between two commits that could change a compiled artifact: a Solidity source anywhere (whichever copy the
+ * compiler selects, through any chain of imports), a submodule gitlink or a symlink (mode 160000 / 120000 on either
+ * side — a re-pointed directory link changes the sources read without changing any .sol blob), or a build config. Paths
+ * come from `git diff --raw -z`, so tabs, quotes and non-ASCII names are read as they are (Codex B1 r5 M1).
+ *
+ * Not claimed: that nothing outside the tree can change a build (a compiler binary, the environment). This check says
+ * the two pins hold the same build inputs; what was actually deployed is compared against the runtime pins on chain,
+ * by masked runtime code, in Part B4.
  */
 export function compileInputChanges(git: Git, from: string, to: string): string[] {
-    const raw = git(['diff', '--raw', '--no-renames', '--no-abbrev', from, to]);
+    const raw = git(['diff', '--raw', '-z', '--no-renames', '--no-abbrev', from, to]);
     const out: string[] = [];
-    for (const line of raw.split('\n')) {
-        if (!line.trim()) continue;
-        const m = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*\t(.+)$/.exec(line);
-        if (!m) { out.push(`unparsed git diff line ${JSON.stringify(line)}`); continue; }
-        const [, oldMode, newMode, file] = m;
+    const parts = raw.split('\0');
+    if (parts.length && parts[parts.length - 1] === '') parts.pop();
+    for (let i = 0; i < parts.length; i += 2) {
+        const meta = parts[i].replace(/^\n/, '');
+        const file = parts[i + 1];
+        const m = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*$/.exec(meta);
+        if (!m || file === undefined) { out.push(`unparsed git diff record ${JSON.stringify(meta)}`); continue; }
+        const [, oldMode, newMode] = m;
         if (/\.sol$/i.test(file)) out.push(`${file} (a Solidity source) changed between the pins`);
         else if (oldMode === '160000' || newMode === '160000') out.push(`${file} (a submodule gitlink) changed between the pins`);
+        else if (oldMode === '120000' || newMode === '120000') out.push(`${file} (a symlink) changed between the pins`);
         else if (BUILD_CONFIG.test(file)) out.push(`${file} (build config) changed between the pins`);
     }
     return out;
