@@ -76,7 +76,7 @@ describe('SP DeployLive read-back tooling data (Part B1)', () => {
         ['hasImmutables disagreeing with the ranges', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.hasImmutables = false; }, /SuperPaymaster\.hasImmutables disagrees/],
         ['an immutable range with another length', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0].length = '20'; }, /SuperPaymaster\.immutableRanges\[0\] is malformed/],
         ['an immutable without a policy binding', (d) => { const r = (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0].name; delete (d.policy.immutableBindings as any).SuperPaymaster[r]; }, /immutableBindings\.SuperPaymaster has no entry for immutable/],
-        ['a policy binding for no immutable (stale)', (d) => { (d.policy.immutableBindings as any).SuperPaymaster.NOT_AN_IMMUTABLE = { allowed: ['zero'], why: 'x' }; }, /NOT_AN_IMMUTABLE names no immutable of SuperPaymaster \(stale\)/],
+        ['a policy binding for no immutable (stale)', (d) => { (d.policy.immutableBindings as any).SuperPaymaster.NOT_AN_IMMUTABLE = { allowed: ['zero'], why: 'x' }; }, /NOT_AN_IMMUTABLE names no immutable of SuperPaymaster on chain 10 \(stale\)/],
         ['a binding with two kinds', (d) => { const b = (d.policy.immutableBindings as any).GTokenAuthorization._cap; b.allowed = ['zero']; }, /_cap has expectedUint \+ allowed binding kind|_cap has allowed \+ expectedUint binding kind/],
         ['an unbound with extra fields', (d) => { const bs = (d.policy.immutableBindings as any).APNTsCapped; const k = Object.keys(bs).find((n) => 'unbound' in bs[n])!; bs[k].why = 'x'; }, /must be exactly \{"unbound": "<reason>"\}/],
         ['a getter entry with an unknown label', (d) => { const gs = (d.policy.getters as any).MySBT; const g = Object.keys(gs)[0]; gs[g].allowed = ['config:*']; }, /getters\.MySBT\..*\.allowed is not a list of/],
@@ -84,9 +84,41 @@ describe('SP DeployLive read-back tooling data (Part B1)', () => {
         ['a getter entry without why', (d) => { const gs = (d.policy.getters as any).MySBT; const g = Object.keys(gs)[0]; delete gs[g].why; }, /getters\.MySBT\..* has no why/],
         ['a policy without zeroAllowedConfigKeys', (d) => { delete (d.policy as any).zeroAllowedConfigKeys; }, /readback-policy has no zeroAllowedConfigKeys object/],
         ['a policy without unreadableAllowed', (d) => { delete (d.policy as any).unreadableAllowed; }, /readback-policy has no unreadableAllowed object/],
+        // Codex B1 r2 M1: coverage on every chain's pins, not only chain 10.
+        ...(['11155111', '31337'] as const).map((c): [string, (d: Sp550ToolingData) => void, RegExp] => [`an immutable renamed only in chain ${c}'s pins`,
+            (d) => { (d.runtimePins[c] as any).artifacts.SuperPaymaster.immutableRanges[0].name = 'RENAMED'; }, new RegExp(`has no entry for immutable RENAMED \\(chain ${c}\\)`)]),
+        // Codex B1 r2 M2: ranges inside the code, sorted, not overlapping; empty code fails.
+        ['a range past the end of the code', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0].start = '999999999'; }, /past runtimeLength/],
+        ['a range ending one byte past the code', (d) => { const a = (d.runtimePins['10'] as any).artifacts.SuperPaymaster; const last = a.immutableRanges[a.immutableRanges.length - 1]; last.start = String(Number(a.runtimeLength) - 31); }, /past runtimeLength/],
+        ['overlapping ranges', (d) => { const rs = (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges; rs[1].start = String(Number(rs[0].start) + 16); }, /before the previous range ends.*unsorted or overlapping/],
+        ['a zero runtime length', (d) => { (d.runtimePins['10'] as any).artifacts.MySBT.runtimeLength = '0'; }, /MySBT\.runtimeLength is 0/],
+        // Codex B1 r2 L1: emptyAllowed is a boolean (false is valid; only true grants).
+        ['a non-boolean emptyAllowed', (d) => { (d.policy.getters as any).Paymaster.getSupportedTokens.emptyAllowed = 'yes'; }, /emptyAllowed is present but not a boolean/],
     ])('%s fails', (_l, mutate, why) => {
         const d = clone();
         mutate(d);
         expect(sp550ToolingProblems(d)).toEqual(expect.arrayContaining([expect.stringMatching(why)]));
+    });
+
+    it('a range exactly at the end of the code passes; emptyAllowed: false is a valid policy entry (Codex B1 r2 M2 / L1)', () => {
+        const d = clone();
+        const a = (d.runtimePins['10'] as any).artifacts.SuperPaymaster;
+        const last = a.immutableRanges[a.immutableRanges.length - 1];
+        // Moving the last range to end exactly at runtimeLength is in bounds (it may now collide with nothing before it).
+        last.start = String(Number(a.runtimeLength) - 32);
+        expect(sp550ToolingProblems(d).filter((x) => /past runtimeLength/.test(x))).toEqual([]);
+        const e = clone();
+        (e.policy.getters as any).Paymaster.getSupportedTokens.emptyAllowed = false;
+        expect(sp550ToolingProblems(e)).toEqual([]);
+    });
+    it('malformed structures are reported, not thrown (Codex B1 r2 L2)', () => {
+        const d = clone(); (d.policy as any).getters = null;
+        expect(() => sp550ToolingProblems(d)).not.toThrow();
+        expect(sp550ToolingProblems(d)).toEqual(expect.arrayContaining([expect.stringMatching(/readback-policy has no getters object/)]));
+        const e = clone(); (e.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0] = null;
+        expect(() => sp550ToolingProblems(e)).not.toThrow();
+        expect(sp550ToolingProblems(e)).toEqual(expect.arrayContaining([expect.stringMatching(/SuperPaymaster\.immutableRanges\[0\] is malformed/)]));
+        const f = clone(); (f.runtimePins['31337'] as any).artifacts = null;
+        expect(() => sp550ToolingProblems(f)).not.toThrow();
     });
 });

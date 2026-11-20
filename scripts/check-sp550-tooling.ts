@@ -14,7 +14,8 @@
  *     - sp550ToolingProblems() is empty (schemas, the agreed rule text, the release table, providers);
  *   upstream (SP_REPO checkout; required with --strict or REQUIRE_UPSTREAM=1):
  *     - the tag still resolves to the contracts commit, and the tooling commit exists;
- *     - `contracts/src` is the same tree, and `foundry.toml` the same blob, at both commits;
+ *     - every compilation input (SAME_AT_BOTH_PINS: sources, dependency gitlinks, foundry.toml, .gitmodules) is the same
+ *       object at both commits;
  *     - each file's blob at the tooling commit is the pinned one.
  *
  *   pnpm run check:sp550-tooling
@@ -34,16 +35,41 @@ import {
 export const gitBlobId = (b: Uint8Array) => createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex');
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
+/** The SDK checkout this script belongs to. */
+export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** The directory core imports the data from: the only one the CLI checks (Codex B1 r1 M2). */
-export const VENDORED_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../packages/core/src/sp550-tooling');
+export const VENDORED_DIR = path.join(REPO_ROOT, 'packages/core/src/sp550-tooling');
+
+/**
+ * The compilation inputs that must be identical at both pins for them to describe the same contracts: the sources, the
+ * dependency gitlinks / trees the remappings point into, the build config holding those remappings, and the submodule
+ * list (Codex B1 r2 M4).
+ */
+export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-paymaster', 'foundry.toml', '.gitmodules'] as const;
+
+/** Each path component from `root` down to `dir` (both inclusive of what lies between) that is a symlink. */
+export function symlinkedComponents(root: string, dir: string): string[] {
+    const rel = path.relative(root, dir);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return [`${dir} is not under ${root}`];
+    const out: string[] = [];
+    let cur = root;
+    for (const part of rel.split(path.sep).filter(Boolean)) {
+        cur = path.join(cur, part);
+        const st = fs.lstatSync(cur, { throwIfNoEntry: false });
+        if (st?.isSymbolicLink()) out.push(`${path.relative(root, cur)} is a symlink`);
+    }
+    return out;
+}
 
 /**
  * Offline problems for a tooling directory. `structural` is the data-level check (sp550ToolingProblems on what core
  * imports); a test passes another to prove it is wired in. Returns what it checked, too.
  */
-export function offlineProblems(dir: string, structural: () => string[] = sp550ToolingProblems): { problems: string[]; checked: number } {
+export function offlineProblems(dir: string, structural: () => string[] = sp550ToolingProblems, root?: string): { problems: string[]; checked: number } {
     const p: string[] = [];
     let checked = 0;
+    // An ancestor symlink would let git store a link instead of the vendored subtree (Codex B1 r2 M3).
+    if (root) { checked++; p.push(...symlinkedComponents(root, dir)); }
     const want = Object.keys(SP550_TOOLING_FILES).sort();
     const dirStat = fs.existsSync(dir) ? fs.lstatSync(dir) : undefined;
     if (!dirStat || !dirStat.isDirectory() || dirStat.isSymbolicLink()) return { problems: [`${dir} is not a real directory`], checked: 1 };
@@ -95,7 +121,7 @@ export function upstreamProblems(git: Git): { problems: string[]; checked: numbe
     const tooling = tryGit(['rev-parse', `${toolingCommit}^{commit}`]);
     checked++;
     if (tooling !== toolingCommit) { p.push(`the tooling commit ${toolingCommit} is not in the upstream checkout (fetch SP main)`); return { problems: p, checked }; }
-    for (const sub of ['contracts/src', 'foundry.toml']) {
+    for (const sub of SAME_AT_BOTH_PINS) {
         const a = tryGit(['rev-parse', `${contractsCommit}:${sub}`]);
         const b = tryGit(['rev-parse', `${toolingCommit}:${sub}`]);
         checked++;
@@ -114,7 +140,7 @@ function main() {
     if (args.length > 1 || args.some((a) => a !== '--strict')) { console.error(`FAIL: unknown argument(s) ${JSON.stringify(args)}; the only option is --strict`); process.exit(2); }
     const strict = args.length === 1;
     const requireUpstream = strict || process.env.REQUIRE_UPSTREAM === '1';
-    const off = offlineProblems(VENDORED_DIR);
+    const off = offlineProblems(VENDORED_DIR, sp550ToolingProblems, REPO_ROOT);
     const repo = path.resolve(process.env.SP_REPO ?? '../SuperPaymaster');
     let up: { problems: string[]; checked: number } | undefined;
     if (fs.existsSync(path.join(repo, '.git'))) up = upstreamProblems(gitIn(repo));

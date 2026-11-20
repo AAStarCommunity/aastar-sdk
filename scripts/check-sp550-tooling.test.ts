@@ -3,7 +3,7 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { gitBlobId, offlineProblems, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
+import { gitBlobId, offlineProblems, REPO_ROOT, SAME_AT_BOTH_PINS, symlinkedComponents, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
 import { SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
@@ -21,6 +21,17 @@ describe('check:sp550-tooling offline: the vendored bytes are the pinned blobs',
     it('the vendored directory passes, and it is the one core imports from', () => {
         expect(VENDORED_DIR).toBe(DIR);
         expect(offlineProblems(DIR).problems).toEqual([]);
+    });
+    it('no component between the repo root and the vendored directory is a symlink; an intermediate symlink is caught (Codex B1 r2 M3)', () => {
+        expect(symlinkedComponents(REPO_ROOT, VENDORED_DIR)).toEqual([]);
+        expect(offlineProblems(VENDORED_DIR, undefined, REPO_ROOT).problems).toEqual([]);
+        const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sp550-anc-')));
+        try {
+            fs.mkdirSync(path.join(root, 'real', 'src', 'sp550-tooling'), { recursive: true });
+            fs.symlinkSync(path.join(root, 'real'), path.join(root, 'core'));
+            expect(symlinkedComponents(root, path.join(root, 'core', 'src', 'sp550-tooling'))).toEqual(['core is a symlink']);
+            expect(symlinkedComponents(root, path.join(os.tmpdir(), 'elsewhere'))).toEqual([expect.stringMatching(/is not under/)]);
+        } finally { fs.rmSync(root, { recursive: true, force: true }); }
     });
     it('the structural check is wired in: its problems are the CLI\'s problems (Codex B1 r1 L1)', () => {
         expect(offlineProblems(DIR, () => ['structural X']).problems).toEqual(['structural X']);
@@ -59,8 +70,7 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         if (q in over) { const v = over[q]; if (v === undefined) throw new Error('fatal'); return v; }
         if (q === `rev-parse ${contractsTag}^{commit}`) return contractsCommit;
         if (q === `rev-parse ${toolingCommit}^{commit}`) return toolingCommit;
-        if (q === `rev-parse ${contractsCommit}:contracts/src` || q === `rev-parse ${toolingCommit}:contracts/src`) return 'a'.repeat(40);
-        if (q === `rev-parse ${contractsCommit}:foundry.toml` || q === `rev-parse ${toolingCommit}:foundry.toml`) return 'b'.repeat(40);
+        for (const [i, sub] of SAME_AT_BOTH_PINS.entries()) if (q === `rev-parse ${contractsCommit}:${sub}` || q === `rev-parse ${toolingCommit}:${sub}`) return String(i).repeat(40);
         for (const v of Object.values(SP550_TOOLING_FILES)) if (q === `rev-parse ${toolingCommit}:${v.upstream}`) return v.gitBlob;
         throw new Error(`unexpected git ${q}`);
     };
@@ -73,6 +83,11 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         ['the tooling commit not fetched', { [`rev-parse ${toolingCommit}^{commit}`]: undefined }, /is not in the upstream checkout/],
         ['contracts/src changed between the pins', { [`rev-parse ${toolingCommit}:contracts/src`]: 'd'.repeat(40) }, /contracts\/src differs between the contracts tag/],
         ['foundry.toml changed between the pins', { [`rev-parse ${toolingCommit}:foundry.toml`]: 'e'.repeat(40) }, /foundry\.toml differs/],
+        // Codex B1 r2 M4: a dependency change alone (same sources) is caught.
+        ['only a dependency gitlink changed (contracts/lib)', { [`rev-parse ${toolingCommit}:contracts/lib`]: 'e'.repeat(40) }, /contracts\/lib differs/],
+        ['only the singleton-paymaster dependency changed', { [`rev-parse ${toolingCommit}:singleton-paymaster`]: 'e'.repeat(40) }, /singleton-paymaster differs/],
+        ['only the submodule list changed', { [`rev-parse ${toolingCommit}:.gitmodules`]: 'e'.repeat(40) }, /\.gitmodules differs/],
+        ['a compilation input missing at one pin', { [`rev-parse ${contractsCommit}:contracts/lib`]: undefined }, /contracts\/lib differs between the contracts tag \(missing\)/],
         ['an upstream blob that is not the pinned one', { [`rev-parse ${toolingCommit}:deployments/readback-policy.json`]: 'f'.repeat(40) }, /deployments\/readback-policy\.json at the tooling commit is blob f+, not the pinned/],
     ])('%s fails', (_l, over, why) => {
         expect(upstreamProblems(fakeGit(over)).problems).toEqual(expect.arrayContaining([expect.stringMatching(why)]));

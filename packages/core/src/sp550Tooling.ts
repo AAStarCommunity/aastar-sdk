@@ -146,19 +146,29 @@ const strArr = (x: unknown): x is string[] => Array.isArray(x) && x.every((y) =>
 function runtimePinShapeProblems(d: Sp550ToolingData): string[] {
     const p: string[] = [];
     for (const c of SP550_TOOLING_CHAINS) {
-        for (const [art, raw] of Object.entries(d.runtimePins[c]?.artifacts ?? {})) {
+        const arts = d.runtimePins[c]?.artifacts;
+        if (!isObj(arts)) { p.push(`runtime-pins.${c} has no artifacts object`); continue; }
+        for (const [art, raw] of Object.entries(arts)) {
             const a = raw as Record<string, unknown>;
             const at = `runtime-pins.${c} ${art}`;
             if (!isObj(a)) { p.push(`${at} is not an object`); continue; }
             for (const f of ['optimizerRuns', 'runtimeLength'] as const) if (typeof a[f] !== 'string' || !DEC.test(a[f] as string)) p.push(`${at}.${f} is not a decimal string`);
+            const codeLen = typeof a.runtimeLength === 'string' && DEC.test(a.runtimeLength) ? BigInt(a.runtimeLength) : undefined;
+            if (codeLen === 0n) p.push(`${at}.runtimeLength is 0 (empty code fails closed)`);
             for (const f of ['maskedRuntimeKeccak', 'rawRuntimeKeccak'] as const) if (typeof a[f] !== 'string' || !HEX32.test(a[f] as string)) p.push(`${at}.${f} is not a 32-byte hash`);
             if (typeof a.hasImmutables !== 'boolean') p.push(`${at}.hasImmutables is not a boolean`);
             if (!Array.isArray(a.immutableRanges)) { p.push(`${at}.immutableRanges is not an array`); continue; }
             if (a.hasImmutables !== (a.immutableRanges.length > 0)) p.push(`${at}.hasImmutables disagrees with its ${a.immutableRanges.length} immutable range(s)`);
             if (!a.immutableRanges.length && a.maskedRuntimeKeccak !== a.rawRuntimeKeccak) p.push(`${at} has no immutables but its masked and raw keccaks differ`);
+            let prevEnd = -1n;
             for (const [i, rg] of (a.immutableRanges as unknown[]).entries()) {
                 const q = rg as Record<string, unknown>;
-                if (!isObj(q) || typeof q.start !== 'string' || !DEC.test(q.start) || q.length !== '32' || typeof q.name !== 'string' || !q.name || typeof q.type !== 'string' || typeof q.id !== 'string') p.push(`${at}.immutableRanges[${i}] is malformed (start / length 32 / name / type / id)`);
+                if (!isObj(q) || typeof q.start !== 'string' || !DEC.test(q.start) || q.length !== '32' || typeof q.name !== 'string' || !q.name || typeof q.type !== 'string' || typeof q.id !== 'string') { p.push(`${at}.immutableRanges[${i}] is malformed (start / length 32 / name / type / id)`); continue; }
+                // Inside the code, sorted by start, not overlapping (spec §1: a range outside the code fails closed).
+                const start = BigInt(q.start), end = start + 32n;
+                if (codeLen !== undefined && end > codeLen) p.push(`${at}.immutableRanges[${i}] (${q.name}) ends at ${end}, past runtimeLength ${codeLen}`);
+                if (start < prevEnd) p.push(`${at}.immutableRanges[${i}] (${q.name}) starts at ${start}, before the previous range ends (${prevEnd}): unsorted or overlapping`);
+                prevEnd = end;
             }
         }
     }
@@ -178,23 +188,26 @@ function policyShapeProblems(d: Sp550ToolingData): string[] {
             if (!isObj(e)) { p.push(`${at} is not an object`); continue; }
             if (!strArr(e.allowed) || e.allowed.some((l) => !LABEL.test(l))) p.push(`${at}.allowed is not a list of config: / external: / zero labels`);
             if (typeof e.why !== 'string' || !e.why.trim()) p.push(`${at} has no why`);
-            if ('emptyAllowed' in e && e.emptyAllowed !== true) p.push(`${at}.emptyAllowed is present but not true`);
+            if ('emptyAllowed' in e && typeof e.emptyAllowed !== 'boolean') p.push(`${at}.emptyAllowed is present but not a boolean`);
             if ('zeroAllowed' in e && (typeof e.zeroAllowed !== 'string' || !e.zeroAllowed.trim())) p.push(`${at}.zeroAllowed is present but not a reason`);
             const extra = Object.keys(e).filter((k) => !['allowed', 'why', 'emptyAllowed', 'zeroAllowed'].includes(k));
             if (extra.length) p.push(`${at} has unknown field(s) ${extra.join(', ')}`);
         }
     }
-    if (isObj(pol.immutableBindings)) {
-        const pins = d.runtimePins['10']?.artifacts ?? {};
+    if (isObj(pol.immutableBindings)) for (const chain of SP550_TOOLING_CHAINS) {
+        const pins = isObj(d.runtimePins[chain]?.artifacts) ? d.runtimePins[chain].artifacts : {};
         for (const [art, bs] of Object.entries(pol.immutableBindings)) {
-            if (!isObj(bs)) { p.push(`readback-policy immutableBindings.${art} is not an object`); continue; }
-            const ranges = (pins[art] as { immutableRanges?: { name?: string }[] } | undefined)?.immutableRanges;
-            if (!Array.isArray(ranges)) { p.push(`readback-policy immutableBindings.${art} names an artifact with no runtime pin`); continue; }
-            const names = new Set(ranges.map((x) => x.name));
-            for (const n of names) if (!Object.prototype.hasOwnProperty.call(bs, n as string)) p.push(`readback-policy immutableBindings.${art} has no entry for immutable ${n}`);
+            if (!isObj(bs)) { if (chain === '10') p.push(`readback-policy immutableBindings.${art} is not an object`); continue; }
+            const pin = pins[art];
+            const ranges = isObj(pin) ? pin.immutableRanges : undefined;
+            if (!Array.isArray(ranges)) { p.push(`readback-policy immutableBindings.${art} names an artifact with no runtime pin on chain ${chain}`); continue; }
+            // Coverage is by immutable NAME (spec §4), on every chain's pins (Codex B1 r2 M1).
+            const names = new Set(ranges.filter((x): x is { name: string } => isObj(x) && typeof x.name === 'string').map((x) => x.name));
+            for (const n of names) if (!Object.prototype.hasOwnProperty.call(bs, n)) p.push(`readback-policy immutableBindings.${art} has no entry for immutable ${n} (chain ${chain})`);
             for (const [n, e] of Object.entries(bs)) {
                 const at = `readback-policy immutableBindings.${art}.${n}`;
-                if (!names.has(n)) { p.push(`${at} names no immutable of ${art} (stale)`); continue; }
+                if (!names.has(n)) { p.push(`${at} names no immutable of ${art} on chain ${chain} (stale)`); continue; }
+                if (chain !== '10') continue; // the entry's own shape is checked once
                 if (!isObj(e)) { p.push(`${at} is not an object`); continue; }
                 const kinds = ['allowed', 'expectedUint', 'codehashOf', 'chainId', 'unbound'].filter((k) => k in e);
                 if (kinds.length !== 1) p.push(`${at} has ${kinds.length ? kinds.join(' + ') : 'no'} binding kind (exactly one of allowed / expectedUint / codehashOf / chainId / unbound)`);
@@ -206,7 +219,7 @@ function policyShapeProblems(d: Sp550ToolingData): string[] {
                 if (kinds[0] === 'chainId' && e.chainId !== true) p.push(`${at}.chainId is not true`);
             }
         }
-        for (const art of Object.keys(pins)) if (!isObj(pol.immutableBindings[art])) p.push(`readback-policy immutableBindings has no section for pinned artifact ${art}`);
+        for (const art of Object.keys(pins)) if (!isObj(pol.immutableBindings[art])) p.push(`readback-policy immutableBindings has no section for pinned artifact ${art} (chain ${chain})`);
     }
     return p;
 }
@@ -228,9 +241,9 @@ export function sp550ToolingProblems(d: Sp550ToolingData = SP550_TOOLING_DATA): 
     // Every artifact readback-artifacts names has a runtime pin (on every chain) and a policy section.
     for (const [key, art] of Object.entries(d.artifacts)) {
         if (art === null) continue;
-        for (const c of SP550_TOOLING_CHAINS) if (!isObj(d.runtimePins[c]?.artifacts?.[art])) p.push(`readback-artifacts maps ${key} to ${art}, which has no runtime pin on chain ${c}`);
-        if (!isObj((POLICY.getters as Record<string, unknown>)[art])) p.push(`readback-policy has no getters section for ${art} (${key})`);
-        if (!isObj((POLICY.immutableBindings as Record<string, unknown>)[art])) p.push(`readback-policy has no immutableBindings section for ${art} (${key})`);
+        for (const c of SP550_TOOLING_CHAINS) if (!isObj(d.runtimePins[c]?.artifacts) || !isObj(d.runtimePins[c].artifacts[art])) p.push(`readback-artifacts maps ${key} to ${art}, which has no runtime pin on chain ${c}`);
+        if (!isObj(POLICY.getters) || !isObj(POLICY.getters[art])) p.push(`readback-policy has no getters section for ${art} (${key})`);
+        if (!isObj(POLICY.immutableBindings) || !isObj(POLICY.immutableBindings[art])) p.push(`readback-policy has no immutableBindings section for ${art} (${key})`);
     }
     // A proxy key adds its implementation's release row only if it really is that proxy (Codex B1 r1 M3).
     for (const [proxy, impl] of Object.entries(SP550_TOOLING_PROXY_OF)) {
