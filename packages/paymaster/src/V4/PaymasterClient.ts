@@ -35,6 +35,13 @@ export type SubmitGaslessOptions = {
      */
     superPaymasterFlags?: number;
     /**
+     * SuperPaymaster only: the most the operator's token exchangeRate may be when the op is validated. It goes into
+     * paymasterAndData's maxRate word, and validation fails if `token.exchangeRate() > maxRate` (SuperPaymaster.sol
+     * 324-336 @ rc.8), so a rate committed here is enforced on chain. Unset: type(uint256).max, no rate commitment —
+     * the bytes are exactly as before this option existed.
+     */
+    maxRate?: bigint;
+    /**
      * 5.5.0, superPaymasterFlags unset: decide SP_RENEW per op from the token's previewLock
      * (default true). false = never set it (flags 0, the behaviour before this option existed).
      */
@@ -87,6 +94,13 @@ export type EstimateGasOptions = {
     factoryData?: Hex;
     /** SuperPaymaster 5.5.0 flags byte — must match the submitted op, or a user whose cap needs SP_RENEW fails validation during estimation. */
     superPaymasterFlags?: number;
+    /**
+     * SuperPaymaster only: the most the operator's token exchangeRate may be when the op is validated. It goes into
+     * paymasterAndData's maxRate word, and validation fails if `token.exchangeRate() > maxRate` (SuperPaymaster.sol
+     * 324-336 @ rc.8), so a rate committed here is enforced on chain. Unset: type(uint256).max, no rate commitment —
+     * the bytes are exactly as before this option existed.
+     */
+    maxRate?: bigint;
     /** As SubmitGaslessOptions.superPaymasterAutoRenew: decided here for the estimation op's own limits. */
     superPaymasterAutoRenew?: boolean;
     /**
@@ -511,7 +525,8 @@ export class PaymasterClient {
                 verificationGasLimit: estSp.pmVerificationGas,
                 postOpGasLimit: estSp.pmPostOpGas,
                 token: sp.token,
-                flags: options.superPaymasterFlags
+                flags: options.superPaymasterFlags,
+                maxRate: options.maxRate,
              });
         } else {
                      paymasterAndData = buildPaymasterData(paymasterAddress, token, {
@@ -572,7 +587,7 @@ export class PaymasterClient {
                 // Same length as the flags-0 layout, so preVerificationGas above still holds.
                 partialUserOp.paymasterAndData = buildSuperPaymasterData(paymasterAddress, options.operator, {
                     verificationGasLimit: estSp.pmVerificationGas, postOpGasLimit: estSp.pmPostOpGas,
-                    token: estSp.ctx.token, flags: SUPER_PAYMASTER_FLAGS.SP_RENEW,
+                    token: estSp.ctx.token, flags: SUPER_PAYMASTER_FLAGS.SP_RENEW, maxRate: options.maxRate,
                 });
             }
         }
@@ -771,6 +786,7 @@ export class PaymasterClient {
                     airAccountSig: options?.airAccountSig, // forward so the estimation dummy has the same format (#115 H-1)
                     superPaymasterFlags: options?.superPaymasterFlags,
                     superPaymasterAutoRenew: options?.superPaymasterAutoRenew,
+                    maxRate: options?.maxRate, // the estimated op carries the same rate commitment as the signed one
                     sponsorship: spCtx, // one op, one resolve — do not re-read across a 5.4.2→5.5.0 upgrade
                     nonce,
                     maxFeePerGas: options?.maxFeePerGas,
@@ -845,7 +861,8 @@ export class PaymasterClient {
                 verificationGasLimit: gasLimits.paymasterVerificationGasLimit,
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit,
                 token: spCtx.token,
-                flags: options?.superPaymasterFlags
+                flags: options?.superPaymasterFlags,
+                maxRate: options?.maxRate,
             });
         } else {
             // MATH: Target Efficiency = PVG / (PVG + VGL + PMVGL) >= 0.4
@@ -932,7 +949,8 @@ export class PaymasterClient {
                 verificationGasLimit: gasLimits.paymasterVerificationGasLimit!,
                 postOpGasLimit: gasLimits.paymasterPostOpGasLimit!,
                 token: spCtx.token,
-                flags: d.spRenew ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0
+                flags: d.spRenew ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0,
+                maxRate: options.maxRate
             });
         };
         // The one place this client signs (first signature and every re-sign of a retry): the cost ceiling and the

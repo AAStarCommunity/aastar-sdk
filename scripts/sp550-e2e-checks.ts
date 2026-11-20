@@ -440,6 +440,17 @@ export type SignTimePricing = { ethUsdPrice: bigint; priceDecimals: bigint; aPNT
  * gates signing, with the plan's headroom: cachedPrice x 10000 <= priceCap x (10000 - priceHeadroomBPS), integers, no
  * division. A price that crosses priceCap after signing is a funding residual (FU-129), not a safety one.
  */
+/**
+ * The maxRate every sponsored op commits to: the plan's exchangeRate (DSR 2026-11-20). SuperPaymaster rejects the op at
+ * validation if token.exchangeRate() > maxRate, so the rate the cost bound assumes is enforced on chain. A plan without
+ * a positive exchangeRate that fits a uint256 refuses the run: no op is signed without the commitment.
+ */
+export function maxRateFromPlan(plan: Pick<SdkLivePlan, 'exchangeRate'> | undefined): bigint {
+    const r = plan?.exchangeRate;
+    if (typeof r !== 'bigint' || r <= 0n || r > (1n << 256n) - 1n) throw new Error(`refusing to sign: the plan has no usable exchangeRate to commit as maxRate (got ${String(r)})`);
+    return r;
+}
+
 export function signTimeCostProblems(maxCostWei: bigint, now: SignTimePricing, plan: SdkLivePlan, lock: (i: any) => { a0: bigint; Amax: bigint; X: bigint }): string[] {
     const p: string[] = [];
     if (now.priceDecimals !== plan.priceDecimals) p.push(`SP cachedPrice decimals ${now.priceDecimals} != plan priceDecimals ${plan.priceDecimals}`);

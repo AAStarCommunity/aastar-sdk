@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### A sponsored op can commit to an exchange-rate ceiling; the live runner commits the plan's rate
+
+- `PaymasterClient.submitGaslessUserOperation` / `estimateUserOperationGas*` and `createEndUserClient().executeGasless`
+  take an optional `maxRate`. It is written into the maxRate word of both the estimated and the signed op's
+  paymasterAndData, and SuperPaymaster rejects the op at validation if `token.exchangeRate() > maxRate`
+  (SuperPaymaster.sol 324-336 @ rc.8), so the rate is enforced on chain, after signing too. Unset: type(uint256).max,
+  no rate commitment, and the bytes are exactly as before.
+- `scripts/sp550-live-e2e.ts` passes the plan's exchangeRate as `maxRate` for S1, S1r, S3b and C12
+  (`maxRateFromPlan`); a plan without a usable exchangeRate refuses the run. The off-chain check at the key stays.
+
 ### No UserOperation from a repo script on a real-money chain without a per-UserOp cost ceiling
 
 - The chain is the one the endpoints REPORT, not a network name or a constant in the script, and only an explicit

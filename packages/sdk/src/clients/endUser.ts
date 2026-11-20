@@ -46,6 +46,11 @@ export type ExecuteGaslessArgs = {
     maxFeePerGas?: bigint;
     maxPriorityFeePerGas?: bigint;
     onGasDecided?: (d: SelfBundledGasDecision) => void;
+    /**
+     * The most the operator's token exchangeRate may be at validation (paymasterAndData's maxRate word; SuperPaymaster
+     * rejects the op if `token.exchangeRate() > maxRate`). Unset: type(uint256).max, no rate commitment, bytes unchanged.
+     */
+    maxRate?: bigint;
 } & UserOpSignGuardOptions;
 
 export type EndUserClient = Client<Transport, Chain, Account | undefined> & PublicActions<Transport, Chain, Account | undefined> & WalletActions<Chain, Account | undefined> & RegistryActions & SBTActions & SuperPaymasterActions & PaymasterActions & {
@@ -298,7 +303,7 @@ export function createEndUserClient({
                 // Only the bundler's usable fields (never local defaults): explicit fields fill what it left out.
                 const est = await PaymasterClient.estimateUserOperationGasFields(client as any, client as any, accountAddress, entryPointAddress,
                     usedAddresses.superPaymaster, '0x0000000000000000000000000000000000000000', estimateBundlerUrl, executeData,
-                    { operator, sponsorship: sp, superPaymasterFlags: 0, superPaymasterAutoRenew: false, nonce,
+                    { operator, sponsorship: sp, superPaymasterFlags: 0, superPaymasterAutoRenew: false, nonce, maxRate: args.maxRate,
                         maxFeePerGas: fees.maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
                 estimate = Object.fromEntries(Object.entries(est).filter((e): e is [string, bigint] => typeof e[1] === 'bigint'));
                 for (const k of missing) {
@@ -329,6 +334,7 @@ export function createEndUserClient({
                 verificationGasLimit: L.paymasterVerificationGasLimit,
                 postOpGasLimit: L.paymasterPostOpGasLimit,
                 token: sp.token,
+                maxRate: args.maxRate,
             });
 
             // 6. Construct UserOperation v0.7

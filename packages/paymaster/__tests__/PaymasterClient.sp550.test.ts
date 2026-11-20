@@ -1724,6 +1724,37 @@ describe('cost ceiling on what is signed (DSR: the missing upper bound at the si
         expect(withUndefined.signs).toEqual(without.signs);
         expect(JSON.stringify(withUndefined.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v))).toBe(JSON.stringify(without.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v)));
     });
+    it('maxRate: the committed rate is the maxRate word of every op sent — estimate and signed op alike (DSR 2026-11-20)', async () => {
+        /** maxRate = paymasterData[20:52] on the 5.5.0 layout ([operator 20][maxRate 32][token 20][flags 1]). */
+        const rateOf = (op: any) => { const d: string = (op.paymasterData ?? '0x').slice(2); expect(d.length).toBe(73 * 2); return BigInt('0x' + d.slice(40, 104)); };
+        const RATE = 1_333_333_333_333_333_333n;
+        for (const frozen of [true, false]) {
+            SuperPaymasterInflightGuard.clearAll();
+            const seen: any[] = [];
+            const { submit } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+            await submit({ ...(frozen ? { frozenGas: FROZEN } : {}), ...FEE, maxRate: RATE });
+            const ops = seen.filter((x) => x.method === 'eth_sendUserOperation' || x.method === 'eth_estimateUserOperationGas');
+            expect(ops.some((x) => x.method === 'eth_sendUserOperation')).toBe(true);
+            if (!frozen) expect(ops.some((x) => x.method === 'eth_estimateUserOperationGas')).toBe(true);
+            for (const x of ops) expect(rateOf(x.op), `${x.method} (frozen=${frozen})`).toBe(RATE);
+        }
+    });
+    it('maxRate unset: the word is type(uint256).max, and `maxRate: undefined` sends byte-identically to omitting it', async () => {
+        const run = async (extra: Record<string, unknown>) => {
+            SuperPaymasterInflightGuard.clearAll();
+            const seen: any[] = [];
+            const { submit, signs } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+            await submit({ ...FEE, ...extra });
+            return { signs: signs.flat(), seen };
+        };
+        const without = await run({});
+        const withUndefined = await run({ maxRate: undefined });
+        const send = without.seen.find((x) => x.method === 'eth_sendUserOperation')!.op;
+        expect(BigInt('0x' + String(send.paymasterData).slice(2).slice(40, 104))).toBe((1n << 256n) - 1n);
+        expect(withUndefined.signs).toEqual(without.signs);
+        const j = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? `${x}n` : x));
+        expect(j(withUndefined.seen)).toBe(j(without.seen));
+    });
     it('a non-positive ceiling is refused, not read as "off"', async () => {
         await expect(harness(bundler([])).submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: 0n })).rejects.toThrow(/maxUserOpCostWei must be a positive bigint/);
     });
