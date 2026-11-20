@@ -1,0 +1,193 @@
+#!/usr/bin/env tsx
+/**
+ * Provenance gate for SP's vendored DeployLive read-back tooling data (Part B1, DSR 2026-11-20).
+ *
+ * The data under packages/core/src/sp550-tooling comes from SP main 12b5ef80 (the #657 merge); the contracts it
+ * describes stay on tag v5.5.0-rc.8 = 5a150f6a. Two pins are sound only if the contracts did not change between
+ * them, which is checked here rather than assumed:
+ *
+ *   offline (always):
+ *     - each vendored file's git blob id equals the pinned one, and the directory holds exactly those files;
+ *     - the spec's sha256 equals SP550_READBACK_SPEC_SHA256;
+ *     - the three chains' runtime-pins (and creation-pins) are byte-identical, and each runtime-pins file's
+ *       creationPinsSha256 is the sha256 of its creation-pins file;
+ *     - sp550ToolingProblems() is empty (schemas, the agreed rule text, the release table, providers);
+ *   upstream (SP_REPO checkout; required with --strict or REQUIRE_UPSTREAM=1):
+ *     - the tag still resolves to the contracts commit, and the tooling commit exists;
+ *     - every compilation input (SAME_AT_BOTH_PINS: sources, dependency gitlinks, foundry.toml, .gitmodules) is the same
+ *       object at both commits, and no .sol file, submodule gitlink or build config changed anywhere between them;
+ *     - each file's blob at the tooling commit is the pinned one.
+ *
+ *   pnpm run check:sp550-tooling
+ *   SP_REPO=../SuperPaymaster pnpm run check:sp550-tooling --strict
+ */
+import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import {
+    SP550_READBACK_SPEC_SHA256, SP550_RUNTIME_PINS, SP550_TOOLING_CHAINS, SP550_TOOLING_FILES, SP550_TOOLING_PIN,
+    sp550ToolingProblems,
+} from '../packages/core/src/sp550Tooling.js';
+
+/** The git object id of a blob: sha1("blob <len>\0" + bytes), as `git hash-object` computes it. */
+export const gitBlobId = (b: Uint8Array) => createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex');
+const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
+
+/** The SDK checkout this script belongs to. */
+export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+/** The directory core imports the data from: the only one the CLI checks (Codex B1 r1 M2). */
+export const VENDORED_DIR = path.join(REPO_ROOT, 'packages/core/src/sp550-tooling');
+
+/**
+ * The compilation inputs that must be identical at both pins for them to describe the same contracts, a superset of
+ * what foundry.toml reads: `src` (contracts/src), the `libs` and remapping targets (contracts/lib,
+ * singleton-paymaster), the directory holding the one pinned artifact that is not in `src`
+ * (contracts/script/v3/TimelockHandoverBootstrap.sol), the build config itself and the submodule list (Codex B1 r2 M4,
+ * r3 M1). A second, structural check stands beside it: compileInputChanges (no .sol, gitlink or build config changed
+ * anywhere in the tree).
+ */
+export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-paymaster', 'contracts/script', 'foundry.toml', '.gitmodules'] as const;
+/** A build-config file anywhere in the tree (it can change how sources resolve or compile). */
+const BUILD_CONFIG = /(^|\/)(foundry\.toml|remappings\.txt|\.gitmodules)$/;
+
+/**
+ * Changes between two commits that could change a compiled artifact: a Solidity source anywhere (whichever copy the
+ * compiler selects, through any chain of imports), a submodule gitlink or a symlink (mode 160000 / 120000 on either
+ * side — a re-pointed directory link changes the sources read without changing any .sol blob), or a build config. Paths
+ * come from `git diff --raw -z`, so tabs, quotes and non-ASCII names are read as they are (Codex B1 r5 M1).
+ *
+ * Not claimed: that nothing outside the tree can change a build (a compiler binary, the environment). This check says
+ * the two pins hold the same build inputs; what was actually deployed is compared against the runtime pins on chain,
+ * by masked runtime code, in Part B4.
+ */
+export function compileInputChanges(git: Git, from: string, to: string): string[] {
+    const raw = git(['diff', '--raw', '-z', '--no-renames', '--no-abbrev', from, to]);
+    const out: string[] = [];
+    const parts = raw.split('\0');
+    if (parts.length && parts[parts.length - 1] === '') parts.pop();
+    for (let i = 0; i < parts.length; i += 2) {
+        const meta = parts[i].replace(/^\n/, '');
+        const file = parts[i + 1];
+        const m = /^:(\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*$/.exec(meta);
+        if (!m || file === undefined) { out.push(`unparsed git diff record ${JSON.stringify(meta)}`); continue; }
+        const [, oldMode, newMode] = m;
+        if (/\.sol$/i.test(file)) out.push(`${file} (a Solidity source) changed between the pins`);
+        else if (oldMode === '160000' || newMode === '160000') out.push(`${file} (a submodule gitlink) changed between the pins`);
+        else if (oldMode === '120000' || newMode === '120000') out.push(`${file} (a symlink) changed between the pins`);
+        else if (BUILD_CONFIG.test(file)) out.push(`${file} (build config) changed between the pins`);
+    }
+    return out;
+}
+
+/** Each path component from `root` down to `dir` (both inclusive of what lies between) that is a symlink. */
+export function symlinkedComponents(root: string, dir: string): string[] {
+    const rel = path.relative(root, dir);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) return [`${dir} is not under ${root}`];
+    const out: string[] = [];
+    let cur = root;
+    for (const part of rel.split(path.sep).filter(Boolean)) {
+        cur = path.join(cur, part);
+        const st = fs.lstatSync(cur, { throwIfNoEntry: false });
+        if (st?.isSymbolicLink()) out.push(`${path.relative(root, cur)} is a symlink`);
+    }
+    return out;
+}
+
+/**
+ * Offline problems for a tooling directory. `structural` is the data-level check (sp550ToolingProblems on what core
+ * imports); a test passes another to prove it is wired in. Returns what it checked, too.
+ */
+export function offlineProblems(dir: string, structural: () => string[] = sp550ToolingProblems, root?: string): { problems: string[]; checked: number } {
+    const p: string[] = [];
+    let checked = 0;
+    // An ancestor symlink would let git store a link instead of the vendored subtree (Codex B1 r2 M3).
+    if (root) { checked++; p.push(...symlinkedComponents(root, dir)); }
+    const want = Object.keys(SP550_TOOLING_FILES).sort();
+    const dirStat = fs.existsSync(dir) ? fs.lstatSync(dir) : undefined;
+    if (!dirStat || !dirStat.isDirectory() || dirStat.isSymbolicLink()) return { problems: [`${dir} is not a real directory`], checked: 1 };
+    const have = fs.readdirSync(dir).sort();
+    for (const f of have) if (!want.includes(f)) p.push(`${f} is in ${path.basename(dir)}/ but not in SP550_TOOLING_FILES`);
+    const bytes: Record<string, Buffer> = {};
+    for (const f of want) {
+        const file = path.join(dir, f);
+        const st = fs.lstatSync(file, { throwIfNoEntry: false });
+        if (!st) { p.push(`${f} is missing`); continue; }
+        // A symlink to identical bytes would pass a content check, but git stores it as a path (Codex B1 r1 M1).
+        if (!st.isFile() || st.isSymbolicLink()) { p.push(`${f} is not a regular file`); continue; }
+        bytes[f] = fs.readFileSync(file);
+        const id = gitBlobId(bytes[f]);
+        checked++;
+        if (id !== SP550_TOOLING_FILES[f].gitBlob) p.push(`${f}: blob ${id} is not the pinned ${SP550_TOOLING_FILES[f].gitBlob} (${SP550_TOOLING_FILES[f].upstream} at ${SP550_TOOLING_PIN.toolingCommit.slice(0, 8)})`);
+    }
+    const spec = bytes['deploylive-readback-runtime-pins.md'];
+    if (spec) { checked++; if (sha256(spec) !== SP550_READBACK_SPEC_SHA256) p.push(`the spec's sha256 ${sha256(spec)} is not the pinned ${SP550_READBACK_SPEC_SHA256}`); }
+    for (const kind of ['runtime-pins', 'creation-pins'] as const) {
+        const files = SP550_TOOLING_CHAINS.map((c) => bytes[`${kind}.${c}.json`]);
+        if (files.every(Boolean)) { checked++; if (!files.every((b) => b.equals(files[0]))) p.push(`the three ${kind} files are not byte-identical (the expectation is chain-independent)`); }
+    }
+    for (const c of SP550_TOOLING_CHAINS) {
+        const cp = bytes[`creation-pins.${c}.json`];
+        if (!cp) continue;
+        checked++;
+        const recorded = SP550_RUNTIME_PINS[c].creationPinsSha256;
+        if (recorded !== `0x${sha256(cp)}`) p.push(`runtime-pins.${c} records creationPinsSha256 ${recorded}, but creation-pins.${c}.json hashes to 0x${sha256(cp)}`);
+    }
+    checked++;
+    p.push(...structural());
+    return { problems: p, checked };
+}
+
+/** `git -C <repo> <args>`, trimmed; throws on failure. Injected so the upstream rules can be tested without a checkout. */
+export type Git = (args: string[]) => string;
+export const gitIn = (repo: string): Git => (args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+
+/** Upstream problems, through `git`. */
+export function upstreamProblems(git: Git): { problems: string[]; checked: number } {
+    const p: string[] = [];
+    let checked = 0;
+    const { contractsTag, contractsCommit, toolingCommit } = SP550_TOOLING_PIN;
+    const tryGit = (args: string[]): string | undefined => { try { return git(args); } catch { return undefined; } };
+    const tag = tryGit(['rev-parse', `${contractsTag}^{commit}`]);
+    checked++;
+    if (tag !== contractsCommit) p.push(`tag ${contractsTag} resolves to ${tag ?? 'nothing'}, not ${contractsCommit} (a moved tag fails; it does not re-pin)`);
+    const tooling = tryGit(['rev-parse', `${toolingCommit}^{commit}`]);
+    checked++;
+    if (tooling !== toolingCommit) { p.push(`the tooling commit ${toolingCommit} is not in the upstream checkout (fetch SP main)`); return { problems: p, checked }; }
+    for (const sub of SAME_AT_BOTH_PINS) {
+        const a = tryGit(['rev-parse', `${contractsCommit}:${sub}`]);
+        const b = tryGit(['rev-parse', `${toolingCommit}:${sub}`]);
+        checked++;
+        if (!a || !b || a !== b) p.push(`${sub} differs between the contracts tag (${a ?? 'missing'}) and the tooling commit (${b ?? 'missing'}): the two pins are not about the same contracts`);
+    }
+    // No compilation input changed anywhere in the tree between the pins.
+    checked++;
+    let changes: string[];
+    try { changes = compileInputChanges(git, contractsCommit, toolingCommit); } catch (e) { changes = [`git diff between the pins failed: ${(e as Error).message}`]; }
+    p.push(...changes);
+    for (const [f, v] of Object.entries(SP550_TOOLING_FILES)) {
+        const id = tryGit(['rev-parse', `${toolingCommit}:${v.upstream}`]);
+        checked++;
+        if (id !== v.gitBlob) p.push(`${v.upstream} at the tooling commit is blob ${id ?? 'missing'}, not the pinned ${v.gitBlob} (${f})`);
+    }
+    return { problems: p, checked };
+}
+
+function main() {
+    const args = process.argv.slice(2);
+    if (args.length > 1 || args.some((a) => a !== '--strict')) { console.error(`FAIL: unknown argument(s) ${JSON.stringify(args)}; the only option is --strict`); process.exit(2); }
+    const strict = args.length === 1;
+    const requireUpstream = strict || process.env.REQUIRE_UPSTREAM === '1';
+    const off = offlineProblems(VENDORED_DIR, sp550ToolingProblems, REPO_ROOT);
+    const repo = path.resolve(process.env.SP_REPO ?? '../SuperPaymaster');
+    let up: { problems: string[]; checked: number } | undefined;
+    if (fs.existsSync(path.join(repo, '.git'))) up = upstreamProblems(gitIn(repo));
+    else if (requireUpstream) { console.error(`FAIL: no SuperPaymaster checkout at ${repo} (--strict / REQUIRE_UPSTREAM=1 require it)`); process.exit(1); }
+    const problems = [...off.problems, ...(up?.problems ?? [])];
+    if (problems.length) { console.error(`check:sp550-tooling FAIL\n - ${problems.join('\n - ')}`); process.exit(1); }
+    console.log(`check:sp550-tooling PASS — offline: ${off.checked} check(s); upstream: ${up ? `${up.checked} check(s) at ${SP550_TOOLING_PIN.toolingCommit.slice(0, 8)} vs ${SP550_TOOLING_PIN.contractsTag}` : 'SKIP (no SP checkout)'}`);
+}
+
+const invoked = process.argv[1] ? (() => { try { return fs.realpathSync(process.argv[1]); } catch { return undefined; } })() : undefined;
+if (invoked && invoked === fs.realpathSync(fileURLToPath(import.meta.url))) main();
