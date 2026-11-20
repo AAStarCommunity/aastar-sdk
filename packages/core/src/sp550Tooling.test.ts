@@ -62,6 +62,28 @@ describe('SP DeployLive read-back tooling data (Part B1)', () => {
         ['a release key whose only config key is removed', (d) => { delete (d.artifacts as any).sbt; }, /MySBT maps to no config key/],
         ['a provider with a bare (non-dot-prefixed) suffix', (d) => { (d.providers as any).alchemy = ['alchemy.com']; }, /alchemy has a malformed suffix list/],
         ['a provider with no suffix', (d) => { (d.providers as any).infura = []; }, /infura has a malformed suffix list/],
+        // Codex B1 r1 M3: proxy rows must really be proxies; a config key belongs to one release key.
+        ['a proxy row whose proxy key is missing', (d) => { delete (d.artifacts as any).registry; }, /registry is undefined, not ERC1967Proxy/],
+        ['a proxy key mapped to another artifact', (d) => { (d.artifacts as any).registry = 'MySBT'; }, /registry is "MySBT", not ERC1967Proxy/],
+        ['an implementation key mapped to the proxy artifact', (d) => { (d.artifacts as any).spImpl = 'ERC1967Proxy'; }, /spImpl \(the implementation behind superPaymaster\) is "ERC1967Proxy"/],
+        // A proxy key mapped straight to a release artifact is that artifact's row AND (through the proxy rule) its impl's.
+        ['one config key versioned by two release keys', (d) => { (d.artifacts as any).registry = 'MySBT'; }, /config key registry is versioned by both (MySBT and Registry|Registry and MySBT)/],
+        // Codex B1 r1 L2
+        ['an absent key with an empty reason', (d) => { (d.releaseAbsent as any).GToken = ' '; }, /GToken has no reason/],
+        // Codex B1 r1 M4: the fields B2 compares, and complete policy sections.
+        ['a runtime pin replaced by {}', (d) => { (d.runtimePins['10'] as any).artifacts.MySBT = {}; }, /runtime-pins\.10 MySBT\.optimizerRuns is not a decimal string/],
+        ['a runtime pin with a short masked keccak', (d) => { (d.runtimePins['10'] as any).artifacts.MySBT.maskedRuntimeKeccak = '0x12'; }, /MySBT\.maskedRuntimeKeccak is not a 32-byte hash/],
+        ['hasImmutables disagreeing with the ranges', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.hasImmutables = false; }, /SuperPaymaster\.hasImmutables disagrees/],
+        ['an immutable range with another length', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0].length = '20'; }, /SuperPaymaster\.immutableRanges\[0\] is malformed/],
+        ['an immutable without a policy binding', (d) => { const r = (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges[0].name; delete (d.policy.immutableBindings as any).SuperPaymaster[r]; }, /immutableBindings\.SuperPaymaster has no entry for immutable/],
+        ['a policy binding for no immutable (stale)', (d) => { (d.policy.immutableBindings as any).SuperPaymaster.NOT_AN_IMMUTABLE = { allowed: ['zero'], why: 'x' }; }, /NOT_AN_IMMUTABLE names no immutable of SuperPaymaster \(stale\)/],
+        ['a binding with two kinds', (d) => { const b = (d.policy.immutableBindings as any).GTokenAuthorization._cap; b.allowed = ['zero']; }, /_cap has expectedUint \+ allowed binding kind|_cap has allowed \+ expectedUint binding kind/],
+        ['an unbound with extra fields', (d) => { const bs = (d.policy.immutableBindings as any).APNTsCapped; const k = Object.keys(bs).find((n) => 'unbound' in bs[n])!; bs[k].why = 'x'; }, /must be exactly \{"unbound": "<reason>"\}/],
+        ['a getter entry with an unknown label', (d) => { const gs = (d.policy.getters as any).MySBT; const g = Object.keys(gs)[0]; gs[g].allowed = ['config:*']; }, /getters\.MySBT\..*\.allowed is not a list of/],
+        ['a getter entry with an unknown field', (d) => { const gs = (d.policy.getters as any).MySBT; const g = Object.keys(gs)[0]; gs[g].allowAll = true; }, /has unknown field\(s\) allowAll/],
+        ['a getter entry without why', (d) => { const gs = (d.policy.getters as any).MySBT; const g = Object.keys(gs)[0]; delete gs[g].why; }, /getters\.MySBT\..* has no why/],
+        ['a policy without zeroAllowedConfigKeys', (d) => { delete (d.policy as any).zeroAllowedConfigKeys; }, /readback-policy has no zeroAllowedConfigKeys object/],
+        ['a policy without unreadableAllowed', (d) => { delete (d.policy as any).unreadableAllowed; }, /readback-policy has no unreadableAllowed object/],
     ])('%s fails', (_l, mutate, why) => {
         const d = clone();
         mutate(d);

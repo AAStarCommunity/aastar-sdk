@@ -3,7 +3,7 @@ import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { gitBlobId, offlineProblems, upstreamProblems, type Git } from './check-sp550-tooling.js';
+import { gitBlobId, offlineProblems, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
 import { SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
@@ -18,8 +18,21 @@ const withCopy = (edit: (d: string) => void) => {
 };
 
 describe('check:sp550-tooling offline: the vendored bytes are the pinned blobs', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('the vendored directory passes', () => {
+    it('the vendored directory passes, and it is the one core imports from', () => {
+        expect(VENDORED_DIR).toBe(DIR);
         expect(offlineProblems(DIR).problems).toEqual([]);
+    });
+    it('the structural check is wired in: its problems are the CLI\'s problems (Codex B1 r1 L1)', () => {
+        expect(offlineProblems(DIR, () => ['structural X']).problems).toEqual(['structural X']);
+    });
+    it('a symlink to identical bytes, a directory where a file should be, or a symlinked directory fails (Codex B1 r1 M1)', () => {
+        const outside = path.join(os.tmpdir(), `sp550-real-${process.pid}-${Date.now()}.json`);
+        try {
+            expect(withCopy((d) => { const f = path.join(d, 'readback-providers.json'); fs.renameSync(f, outside); fs.symlinkSync(outside, f); })).toEqual(expect.arrayContaining([expect.stringMatching(/readback-providers\.json is not a regular file/)]));
+        } finally { fs.rmSync(outside, { force: true }); }
+        expect(withCopy((d) => { const f = path.join(d, 'external-deps.10.json'); fs.rmSync(f); fs.mkdirSync(f); })).toEqual(expect.arrayContaining([expect.stringMatching(/external-deps\.10\.json is not a regular file/)]));
+        const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sp550-tooling-link-'));
+        try { const l = path.join(d, 'link'); fs.symlinkSync(DIR, l); expect(offlineProblems(l).problems).toEqual([expect.stringMatching(/is not a real directory/)]); } finally { fs.rmSync(d, { recursive: true, force: true }); }
     });
     it('gitBlobId is git hash-object', () => {
         expect(gitBlobId(Buffer.from('hello\n'))).toBe('ce013625030ba8dba906f756967f9e9ca394464a');
@@ -69,6 +82,10 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
 describe('check:sp550-tooling CLI', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const run = (args: string[], env: Record<string, string> = {}) =>
         spawnSync('pnpm', ['exec', 'tsx', 'scripts/check-sp550-tooling.ts', ...args], { encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS, env: { ...process.env, ...env } });
+    it('an SP550_TOOLING_DIR in the environment does not redirect the CLI (Codex B1 r1 M2)', () => {
+        const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sp550-tooling-empty-'));
+        try { const r = run([], { SP_REPO: '/nonexistent-sp-repo', SP550_TOOLING_DIR: d }); expect(r.status, r.stderr).toBe(0); } finally { fs.rmSync(d, { recursive: true, force: true }); }
+    });
     it('passes offline and says it skipped upstream', () => {
         const r = run([], { SP_REPO: '/nonexistent-sp-repo' });
         expect(r.status, r.stderr).toBe(0);

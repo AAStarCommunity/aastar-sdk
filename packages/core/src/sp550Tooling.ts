@@ -80,7 +80,8 @@ export const SP550_READBACK_PROVIDERS: Readonly<Record<string, readonly string[]
 export const SP550_RUNTIME_PINS: Readonly<Record<Sp550ToolingChain, typeof RUNTIME_PINS_10>> = {
     '10': RUNTIME_PINS_10, '11155111': RUNTIME_PINS_11155111, '31337': RUNTIME_PINS_31337,
 };
-export const SP550_EXTERNAL_DEPS: Readonly<Record<Sp550ToolingChain, Record<string, string>>> = {
+/** Per chain: external addresses (EntryPoint, feeds, …) plus metadata fields (`source`, a nested record); B2 reads the addresses. */
+export const SP550_EXTERNAL_DEPS: Readonly<Record<Sp550ToolingChain, Readonly<Record<string, unknown>>>> = {
     '10': EXTERNAL_DEPS_10, '11155111': EXTERNAL_DEPS_11155111, '31337': EXTERNAL_DEPS_31337,
 };
 /** The 22-key release table at the tooling commit (the tag's 6-key table stays what the current gate uses). */
@@ -136,6 +137,80 @@ export const SP550_TOOLING_DATA: Sp550ToolingData = {
     providers: SP550_READBACK_PROVIDERS,
 };
 
+const HEX32 = /^0x[0-9a-f]{64}$/;
+const DEC = /^(0|[1-9][0-9]*)$/;
+const LABEL = /^(config:[A-Za-z0-9_]+|external:[A-Za-z0-9_]+|zero)$/;
+const strArr = (x: unknown): x is string[] => Array.isArray(x) && x.every((y) => typeof y === 'string');
+
+/** Each runtime pin has the fields B2 compares, and its immutable ranges are well-formed. */
+function runtimePinShapeProblems(d: Sp550ToolingData): string[] {
+    const p: string[] = [];
+    for (const c of SP550_TOOLING_CHAINS) {
+        for (const [art, raw] of Object.entries(d.runtimePins[c]?.artifacts ?? {})) {
+            const a = raw as Record<string, unknown>;
+            const at = `runtime-pins.${c} ${art}`;
+            if (!isObj(a)) { p.push(`${at} is not an object`); continue; }
+            for (const f of ['optimizerRuns', 'runtimeLength'] as const) if (typeof a[f] !== 'string' || !DEC.test(a[f] as string)) p.push(`${at}.${f} is not a decimal string`);
+            for (const f of ['maskedRuntimeKeccak', 'rawRuntimeKeccak'] as const) if (typeof a[f] !== 'string' || !HEX32.test(a[f] as string)) p.push(`${at}.${f} is not a 32-byte hash`);
+            if (typeof a.hasImmutables !== 'boolean') p.push(`${at}.hasImmutables is not a boolean`);
+            if (!Array.isArray(a.immutableRanges)) { p.push(`${at}.immutableRanges is not an array`); continue; }
+            if (a.hasImmutables !== (a.immutableRanges.length > 0)) p.push(`${at}.hasImmutables disagrees with its ${a.immutableRanges.length} immutable range(s)`);
+            if (!a.immutableRanges.length && a.maskedRuntimeKeccak !== a.rawRuntimeKeccak) p.push(`${at} has no immutables but its masked and raw keccaks differ`);
+            for (const [i, rg] of (a.immutableRanges as unknown[]).entries()) {
+                const q = rg as Record<string, unknown>;
+                if (!isObj(q) || typeof q.start !== 'string' || !DEC.test(q.start) || q.length !== '32' || typeof q.name !== 'string' || !q.name || typeof q.type !== 'string' || typeof q.id !== 'string') p.push(`${at}.immutableRanges[${i}] is malformed (start / length 32 / name / type / id)`);
+            }
+        }
+    }
+    return p;
+}
+
+/** The policy has every section B2 consumes, entries of the agreed shapes, and immutable bindings that cover exactly each artifact's immutables. */
+function policyShapeProblems(d: Sp550ToolingData): string[] {
+    const p: string[] = [];
+    const pol = d.policy as Record<string, unknown>;
+    for (const sec of ['getters', 'immutableBindings', 'unreadableAllowed', 'zeroAllowedConfigKeys'] as const) if (!isObj(pol[sec])) p.push(`readback-policy has no ${sec} object`);
+    if (isObj(pol.zeroAllowedConfigKeys)) for (const [k, why] of Object.entries(pol.zeroAllowedConfigKeys)) if (typeof why !== 'string' || !why.trim()) p.push(`readback-policy zeroAllowedConfigKeys.${k} has no reason`);
+    if (isObj(pol.getters)) for (const [art, gs] of Object.entries(pol.getters)) {
+        if (!isObj(gs)) { p.push(`readback-policy getters.${art} is not an object`); continue; }
+        for (const [g, e] of Object.entries(gs)) {
+            const at = `readback-policy getters.${art}.${g}`;
+            if (!isObj(e)) { p.push(`${at} is not an object`); continue; }
+            if (!strArr(e.allowed) || e.allowed.some((l) => !LABEL.test(l))) p.push(`${at}.allowed is not a list of config: / external: / zero labels`);
+            if (typeof e.why !== 'string' || !e.why.trim()) p.push(`${at} has no why`);
+            if ('emptyAllowed' in e && e.emptyAllowed !== true) p.push(`${at}.emptyAllowed is present but not true`);
+            if ('zeroAllowed' in e && (typeof e.zeroAllowed !== 'string' || !e.zeroAllowed.trim())) p.push(`${at}.zeroAllowed is present but not a reason`);
+            const extra = Object.keys(e).filter((k) => !['allowed', 'why', 'emptyAllowed', 'zeroAllowed'].includes(k));
+            if (extra.length) p.push(`${at} has unknown field(s) ${extra.join(', ')}`);
+        }
+    }
+    if (isObj(pol.immutableBindings)) {
+        const pins = d.runtimePins['10']?.artifacts ?? {};
+        for (const [art, bs] of Object.entries(pol.immutableBindings)) {
+            if (!isObj(bs)) { p.push(`readback-policy immutableBindings.${art} is not an object`); continue; }
+            const ranges = (pins[art] as { immutableRanges?: { name?: string }[] } | undefined)?.immutableRanges;
+            if (!Array.isArray(ranges)) { p.push(`readback-policy immutableBindings.${art} names an artifact with no runtime pin`); continue; }
+            const names = new Set(ranges.map((x) => x.name));
+            for (const n of names) if (!Object.prototype.hasOwnProperty.call(bs, n as string)) p.push(`readback-policy immutableBindings.${art} has no entry for immutable ${n}`);
+            for (const [n, e] of Object.entries(bs)) {
+                const at = `readback-policy immutableBindings.${art}.${n}`;
+                if (!names.has(n)) { p.push(`${at} names no immutable of ${art} (stale)`); continue; }
+                if (!isObj(e)) { p.push(`${at} is not an object`); continue; }
+                const kinds = ['allowed', 'expectedUint', 'codehashOf', 'chainId', 'unbound'].filter((k) => k in e);
+                if (kinds.length !== 1) p.push(`${at} has ${kinds.length ? kinds.join(' + ') : 'no'} binding kind (exactly one of allowed / expectedUint / codehashOf / chainId / unbound)`);
+                else if (kinds[0] === 'unbound') { if (typeof e.unbound !== 'string' || !e.unbound.trim() || Object.keys(e).length !== 1) p.push(`${at} must be exactly {"unbound": "<reason>"}`); }
+                else if (typeof e.why !== 'string' || !e.why.trim()) p.push(`${at} has no why`);
+                if (kinds[0] === 'allowed' && (!strArr(e.allowed) || !e.allowed.length || e.allowed.some((l) => !LABEL.test(l)))) p.push(`${at}.allowed is not a non-empty list of labels`);
+                if (kinds[0] === 'expectedUint' && (typeof e.expectedUint !== 'string' || !DEC.test(e.expectedUint))) p.push(`${at}.expectedUint is not a decimal string`);
+                if (kinds[0] === 'codehashOf' && (typeof e.codehashOf !== 'string' || !/^config:[A-Za-z0-9_]+$/.test(e.codehashOf))) p.push(`${at}.codehashOf is not a config: label`);
+                if (kinds[0] === 'chainId' && e.chainId !== true) p.push(`${at}.chainId is not true`);
+            }
+        }
+        for (const art of Object.keys(pins)) if (!isObj(pol.immutableBindings[art])) p.push(`readback-policy immutableBindings has no section for pinned artifact ${art}`);
+    }
+    return p;
+}
+
 /**
  * Structural problems with the vendored tooling data (empty = sound). Bytes are scripts/check-sp550-tooling.ts's job;
  * this checks what the data must say for B to use it.
@@ -157,6 +232,11 @@ export function sp550ToolingProblems(d: Sp550ToolingData = SP550_TOOLING_DATA): 
         if (!isObj((POLICY.getters as Record<string, unknown>)[art])) p.push(`readback-policy has no getters section for ${art} (${key})`);
         if (!isObj((POLICY.immutableBindings as Record<string, unknown>)[art])) p.push(`readback-policy has no immutableBindings section for ${art} (${key})`);
     }
+    // A proxy key adds its implementation's release row only if it really is that proxy (Codex B1 r1 M3).
+    for (const [proxy, impl] of Object.entries(SP550_TOOLING_PROXY_OF)) {
+        if (d.artifacts[proxy] !== 'ERC1967Proxy') p.push(`readback-artifacts: ${proxy} is ${JSON.stringify(d.artifacts[proxy])}, not ERC1967Proxy, so it cannot inherit ${impl}'s release row`);
+        if (typeof d.artifacts[impl] !== 'string' || d.artifacts[impl] === 'ERC1967Proxy') p.push(`readback-artifacts: ${impl} (the implementation behind ${proxy}) is ${JSON.stringify(d.artifacts[impl])}`);
+    }
     // The tag's 6-key table (what the current gate uses) is a subset of the tooling table, value for value.
     for (const [k, v] of Object.entries(d.tagRelease)) {
         if (d.toolingRelease[k] !== v) p.push(`release-versions: the tag's ${k}=${JSON.stringify(v)} is ${JSON.stringify(d.toolingRelease[k])} in the tooling table`);
@@ -169,9 +249,17 @@ export function sp550ToolingProblems(d: Sp550ToolingData = SP550_TOOLING_DATA): 
         if (map[k].length && absent) p.push(`release-versions: ${k} maps to ${map[k].join(', ')} but is listed absent`);
         if (!map[k].length && !absent) p.push(`release-versions: ${k} maps to no config key and is not listed absent`);
     }
-    for (const k of Object.keys(d.releaseAbsent)) {
+    for (const [k, why] of Object.entries(d.releaseAbsent)) {
         if (!Object.prototype.hasOwnProperty.call(d.toolingRelease, k)) p.push(`SP550_TOOLING_RELEASE_ABSENT lists ${k}, which the tooling release table no longer has`);
+        if (typeof why !== 'string' || !why.trim()) p.push(`SP550_TOOLING_RELEASE_ABSENT: ${k} has no reason`);
     }
+    // One config key is versioned by one release key.
+    const owner = new Map<string, string>();
+    for (const [k, keys] of Object.entries(map)) for (const ck of keys) {
+        if (owner.has(ck)) p.push(`release-versions: config key ${ck} is versioned by both ${owner.get(ck)} and ${k}`);
+        else owner.set(ck, k);
+    }
+    p.push(...runtimePinShapeProblems(d), ...policyShapeProblems(d));
     for (const [name, sfx] of Object.entries(d.providers)) {
         if (!Array.isArray(sfx) || !sfx.length || sfx.some((x) => typeof x !== 'string' || !/^\.[a-z0-9.-]+$/.test(x))) p.push(`readback-providers: ${name} has a malformed suffix list`);
     }

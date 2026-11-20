@@ -34,17 +34,28 @@ import {
 export const gitBlobId = (b: Uint8Array) => createHash('sha1').update(`blob ${b.length}\0`).update(b).digest('hex');
 const sha256 = (b: Uint8Array) => createHash('sha256').update(b).digest('hex');
 
-/** Offline problems for a tooling directory (the vendored one by default). Returns what it checked, too. */
-export function offlineProblems(dir: string): { problems: string[]; checked: number } {
+/** The directory core imports the data from: the only one the CLI checks (Codex B1 r1 M2). */
+export const VENDORED_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../packages/core/src/sp550-tooling');
+
+/**
+ * Offline problems for a tooling directory. `structural` is the data-level check (sp550ToolingProblems on what core
+ * imports); a test passes another to prove it is wired in. Returns what it checked, too.
+ */
+export function offlineProblems(dir: string, structural: () => string[] = sp550ToolingProblems): { problems: string[]; checked: number } {
     const p: string[] = [];
     let checked = 0;
     const want = Object.keys(SP550_TOOLING_FILES).sort();
-    const have = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
+    const dirStat = fs.existsSync(dir) ? fs.lstatSync(dir) : undefined;
+    if (!dirStat || !dirStat.isDirectory() || dirStat.isSymbolicLink()) return { problems: [`${dir} is not a real directory`], checked: 1 };
+    const have = fs.readdirSync(dir).sort();
     for (const f of have) if (!want.includes(f)) p.push(`${f} is in ${path.basename(dir)}/ but not in SP550_TOOLING_FILES`);
     const bytes: Record<string, Buffer> = {};
     for (const f of want) {
         const file = path.join(dir, f);
-        if (!fs.existsSync(file)) { p.push(`${f} is missing`); continue; }
+        const st = fs.lstatSync(file, { throwIfNoEntry: false });
+        if (!st) { p.push(`${f} is missing`); continue; }
+        // A symlink to identical bytes would pass a content check, but git stores it as a path (Codex B1 r1 M1).
+        if (!st.isFile() || st.isSymbolicLink()) { p.push(`${f} is not a regular file`); continue; }
         bytes[f] = fs.readFileSync(file);
         const id = gitBlobId(bytes[f]);
         checked++;
@@ -63,9 +74,8 @@ export function offlineProblems(dir: string): { problems: string[]; checked: num
         const recorded = SP550_RUNTIME_PINS[c].creationPinsSha256;
         if (recorded !== `0x${sha256(cp)}`) p.push(`runtime-pins.${c} records creationPinsSha256 ${recorded}, but creation-pins.${c}.json hashes to 0x${sha256(cp)}`);
     }
-    const structural = sp550ToolingProblems();
     checked++;
-    p.push(...structural);
+    p.push(...structural());
     return { problems: p, checked };
 }
 
@@ -104,8 +114,7 @@ function main() {
     if (args.length > 1 || args.some((a) => a !== '--strict')) { console.error(`FAIL: unknown argument(s) ${JSON.stringify(args)}; the only option is --strict`); process.exit(2); }
     const strict = args.length === 1;
     const requireUpstream = strict || process.env.REQUIRE_UPSTREAM === '1';
-    const dir = path.resolve(process.env.SP550_TOOLING_DIR ?? 'packages/core/src/sp550-tooling');
-    const off = offlineProblems(dir);
+    const off = offlineProblems(VENDORED_DIR);
     const repo = path.resolve(process.env.SP_REPO ?? '../SuperPaymaster');
     let up: { problems: string[]; checked: number } | undefined;
     if (fs.existsSync(path.join(repo, '.git'))) up = upstreamProblems(gitIn(repo));
