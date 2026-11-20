@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### SP's DeployLive read-back tooling data, vendored with its provenance (Part B1)
+
+- `packages/core/src/sp550-tooling/`: SP's readback policy, artifacts, non-contracts and providers, the runtime and
+  creation pins for chains 10 / 11155111 / 31337, the external deps, the 22-key release table and the spec. Each is the
+  git blob at SP main 12b5ef80 (the merge of #657), byte for byte. The contracts stay pinned to tag v5.5.0-rc.8
+  (5a150f6a).
+- `sp550Tooling.ts` (core, browser-safe): the pins, the agreed policy `rule` text, and structural checks. The release
+  key → config key map is derived from `readback-artifacts.json`, not written by hand, and a test holds it equal to the
+  mapping SP stated. A key that maps nowhere must be listed absent with a reason (GToken).
+- `pnpm run check:sp550-tooling` (`--strict` needs an SP checkout):
+  - offline: the blob ids, the spec sha256, the three chains' runtime and creation pins byte-identical, and
+    `creationPinsSha256`;
+  - upstream: the tag still resolves to the contracts commit, and `contracts/src` / `foundry.toml` are the same tree /
+    blob at both pins, so the two pins are about the same contracts.
+- Nothing reads a chain yet, and the pin-fill `--write` stays refused (`SP550_WIRING_ALLOWLIST_ENFORCED` unchanged);
+  that unlocks only in B4.
+
 ### No UserOperation from a repo script on a real-money chain without a per-UserOp cost ceiling
 
 - The chain is the one the endpoints REPORT, not a network name or a constant in the script, and only an explicit
