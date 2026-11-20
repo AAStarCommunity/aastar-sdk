@@ -4,7 +4,7 @@
  * (packages/core/src/sp550Cutover.ts / sp550Deployments.ts, or a --pins JSON file) against the
  * chain, field by field.
  *
- *   pnpm exec tsx scripts/check-sp550-cutover.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> \
+ *   pnpm exec tsx scripts/check-sp550-cutover.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> \
  *       --rpc <url> [--rpc2 <url>] [--pins <file.json>] [--block <n|finalized|latest>] [--allow-rc]
  *
  * The network alone selects the pins and the deploy mode: `upgrade` (Sepolia, in-place 5.4.2 ->
@@ -28,7 +28,7 @@ import * as fs from 'fs';
 import { createPublicClient, http } from 'viem';
 import { runSp550CutoverGate, type GateRpc } from '../packages/core/src/sp550CutoverGate.js';
 
-const USAGE = 'usage: check-sp550-cutover.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --rpc <url> [--rpc2 <url>] [--pins <file.json>] [--block <n|finalized|latest>] [--allow-rc]';
+const USAGE = 'usage: check-sp550-cutover.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> --rpc <url> [--rpc2 <url>] [--pins <file.json>] [--block <n|finalized|latest>] [--allow-rc]';
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };
 

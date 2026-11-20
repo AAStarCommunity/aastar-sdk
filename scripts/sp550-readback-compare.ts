@@ -3,7 +3,7 @@
  * Compare SP's read-back file ("aoa-a7-readback/1") with the SDK pins and the SDK's own reads
  * (scripts/sp550-readback-compare-core.ts). Read-only; sends nothing.
  *
- *   pnpm exec tsx scripts/sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> \
+ *   pnpm exec tsx scripts/sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> \
  *       --readback <a7-readback.json> --pins <pins.json> --rpc <url> [--rpc2 <url>] [--allow-rc] \
  *       [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]
  *
@@ -25,7 +25,7 @@ import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { OWNERSHIP_2STEP_SLOT, aggregateAmsterdam, classifyCallError, probeProblems, readbackProblems, type Measured, type Observed, type ReadKind } from './sp550-readback-compare-core.js';
 import { isLoopbackUrl, parseManifestPins } from './sp550-pin-fill-core.js';
 
-const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
+const USAGE = 'usage: sp550-readback-compare.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> --readback <file> --pins <file> --rpc <url> [--rpc2 <url>] [--allow-rc] [--fork-block <n> --dump-sha256 <hex> --anvil-commit <sha> [--probe]] [--hardfork <name>] [--sp-commit <sha>]';
 const ERC1967_IMPL_SLOT = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc' as const;
 const args = process.argv.slice(2);
 const arg = (k: string) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : undefined; };

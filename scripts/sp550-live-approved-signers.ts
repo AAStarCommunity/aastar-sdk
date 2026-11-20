@@ -5,10 +5,12 @@
  * and neither can add one. The public-key scan (sp550-live-signer.ts isPublicTestAccount) stays as a second line.
  *
  * Sepolia: the paper rehearsal owner (account 0xE8Eaad6A…898b = SimpleAccountFactory v0.7 getAddress(owner, salt 0)).
+ * OP Sepolia: the same owner, for the op-sepolia-rc8 rehearsal (DSR 2026-11-21); the same quiet-period rule applies.
  * OP Mainnet gets its address in a separate PR once the author names it.
  */
 export const SP550_LIVE_APPROVED_SIGNERS: Readonly<Record<number, readonly string[]>> = Object.freeze({
     11155111: Object.freeze(['0x51Ac694981b6CEa06aA6c51751C227aac5F6b8A3']),
+    11155420: Object.freeze(['0x51Ac694981b6CEa06aA6c51751C227aac5F6b8A3']),
 });
 
 /** Why `address` may not sign live on `chainId`, or undefined when the table lists it. */

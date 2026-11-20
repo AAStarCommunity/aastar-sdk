@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### `op-sepolia-rc8`: the rc.8 rehearsal moves to OP Sepolia, next to its existing stack
+
+- New SP 5.5.0 network `op-sepolia-rc8` (chain 11155420, `fresh`, `coexist: true`, `allowRc: true`), the same way
+  `sepolia-rc8` sits on Sepolia (DSR 2026-11-21). Its pins live in `SP550_COEXIST_PINS['op-sepolia-rc8']`, empty until
+  the post-deploy read-back, so every consumer fails closed. It never enters `CANONICAL_ADDRESSES`: OP Sepolia's default
+  book, and every caller of it, is unchanged.
+- It reads the same rc.8 contracts as `sepolia-rc8`: the rc.8 release-version table and the rc.8 Registry and
+  GTokenAuthorization ABIs (no BLSValidator). It reuses none of the shipped OP Sepolia stack's SP-owned addresses.
+- The live E2E's approved-signer table lists chain 11155420 with the same single signer as Sepolia.
+- `sepolia-rc8` is unchanged (pins still empty).
+- **Behaviour change:** `requireSp550FreshDeployPins(11155420)` now throws "chain 11155420 has no chain-keyed fresh
+  SP 5.5.0 stack", because the chain hosts a coexisting stack, instead of naming the empty pins. Both refuse. A
+  chain-keyed OP Sepolia release needs this entry removed first (FU-136).
+
 ### The ERC-8004 agent registries are optional in a fresh 5.5.0 pin set
 
 - `agentIdentityRegistry`, `agentReputationRegistry` and `agentValidationRegistry` move from `sp` to `sp-optional` in

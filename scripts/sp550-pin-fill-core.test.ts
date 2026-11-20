@@ -583,7 +583,7 @@ describe('sp550-pin-fill --write refuses until the FU-124 getter allow-list exis
         const { SP550_WIRING_EXPECTED, sp550WiringAllowListReady } = await import('../packages/core/src/sp550CutoverGate.js');
         expect(Object.keys(SP550_WIRING_EXPECTED)).toEqual([]);
         expect(sp550WiringAllowListReady()).toBe(false);
-        for (const network of ['sepolia', 'sepolia-rc8', 'op-sepolia', 'op-mainnet']) {
+        for (const network of ['sepolia', 'sepolia-rc8', 'op-sepolia', 'op-sepolia-rc8', 'op-mainnet']) {
             const r = spawnSync('pnpm', ['exec', 'tsx', 'scripts/sp550-pin-fill.ts', '--network', network, '--manifest', '/nonexistent.json', '--write'],
                 { cwd: path.resolve(import.meta.dirname, '..'), encoding: 'utf8', timeout: SPAWN_VERDICT_TIMEOUT_MS - 5_000 });
             expect(r.status, network).toBe(2);

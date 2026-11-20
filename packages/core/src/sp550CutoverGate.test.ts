@@ -1097,3 +1097,62 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         });
     });
 });
+
+describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing one (DSR 2026-11-21)', () => {
+    const shippedOpSepolia = structuredClone((CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id]);
+    const shippedSnapshot = JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id]);
+
+    it('resolves as fresh + coexist on chain 11155420, next to the chain-keyed op-sepolia entry', () => {
+        expect(resolveSp550Network('op-sepolia-rc8')).toEqual({ network: 'op-sepolia-rc8', chainId: optimismSepolia.id, mode: 'fresh', coexist: true, allowRc: true });
+        expect(resolveSp550Network('op-sepolia').coexist).toBe(false);
+        expect(sp550PinsFor('op-sepolia-rc8')).toMatchObject({ table: 'SP550_COEXIST_PINS', key: 'op-sepolia-rc8' });
+        expect(sp550PinsFor('op-sepolia')).toMatchObject({ table: 'SP550_FRESH_DEPLOY_PINS', key: String(optimismSepolia.id) });
+    });
+
+    it('its shipped table entry is empty, so the gate and sp550AddressSet fail closed; sepolia-rc8 is untouched', async () => {
+        expect(SP550_COEXIST_PINS['op-sepolia-rc8']).toEqual({});
+        expect(SP550_COEXIST_PINS['sepolia-rc8']).toEqual({});
+        expect(() => sp550AddressSet('op-sepolia-rc8')).toThrow(/fresh-deploy pins for chain 11155420 are not usable/);
+        const m = deployment(optimismSepolia.id, 'fresh');
+        expect((await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m) })).exitCode).toBe(1);
+    });
+
+    it('the gate holds its pins against the shipped OP Sepolia book overlaid with them; against the shipped book itself they fail', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: m.pins });
+        expect(r.results.filter((c) => !c.ok)).toEqual([]);
+        expect(r.exitCode).toBe(0);
+        expect(r.header).toContain('coexisting stack');
+        const raw = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: m.pins, book: shippedOpSepolia });
+        expect(raw.exitCode).toBe(1);
+        expect(raw.results.find((c) => c.check === 'pins.superPaymaster == SDK book superPaymaster')?.ok).toBe(false);
+    });
+
+    it('sp550AddressSet: SP entries from the pins, OP Sepolia\'s external entries shipped, and the default book unchanged', () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const set = sp550AddressSet('op-sepolia-rc8', m.pins);
+        const a = set.addresses as Record<string, string>;
+        expect(set.chainId).toBe(optimismSepolia.id);
+        for (const [k, v] of Object.entries(m.pins.addresses)) expect(a[k]).toBe(v);
+        expect(a.entryPoint).toBe(shippedOpSepolia.entryPoint);
+        expect(a.priceFeed).toBe(shippedOpSepolia.priceFeed);
+        expect(a.simpleAccountFactory).toBe(shippedOpSepolia.simpleAccountFactory);
+        expect(a.superPaymaster).not.toBe(shippedOpSepolia.superPaymaster);
+        expect(a.timelockControllerLegacy).toBe('0x0000000000000000000000000000000000000000');
+        expect(JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id])).toBe(shippedSnapshot);
+    });
+
+    it('may not reuse an SP-owned address of the shipped OP Sepolia stack', () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const old = shippedOpSepolia.staking as Address;
+        const pins = { ...m.pins, addresses: { ...m.pins.addresses, staking: old } };
+        expect(sp550CoexistOverlapProblems('op-sepolia-rc8', pins)).toEqual([expect.stringMatching(/addresses\.staking .* is the shipped stack's staking/)]);
+        expect(sp550CoexistOverlapProblems('op-sepolia-rc8', m.pins)).toEqual([]);
+    });
+
+    it('reads its rc.8 contracts with the rc.8 ABIs and the rc.8 release-version table, like sepolia-rc8', () => {
+        expect(sp550WiringScanAbi('op-sepolia-rc8')).toEqual(sp550WiringScanAbi('sepolia-rc8'));
+        expect(SP550_RELEASE_VERSIONS['op-sepolia-rc8']).toBe(SP550_RELEASE_VERSIONS['sepolia-rc8']);
+        expect(sp550HoldFor('op-sepolia-rc8')).toBeUndefined();
+    });
+});

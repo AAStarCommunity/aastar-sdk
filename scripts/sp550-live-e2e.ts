@@ -17,7 +17,7 @@
  * Everything chain-specific comes from the config file and the SDK pins — nothing here names a
  * chain, an RPC, or an address:
  *   {
- *     "network": "sepolia" | "sepolia-rc8" | "op-sepolia" | "op-mainnet",   // sepolia-rc8: the coexisting rc.8 stack
+ *     "network": "sepolia" | "sepolia-rc8" | "op-sepolia" | "op-sepolia-rc8" | "op-mainnet",   // *-rc8: a coexisting rc.8 stack
  *     "mode": "fork" | "live",
  *     "rpcUrls": ["<rpc>", "<rpc2>"],     // the read-back gate's RPCs; the first one sends
  *     "bundlerUrl": "<bundler>",
