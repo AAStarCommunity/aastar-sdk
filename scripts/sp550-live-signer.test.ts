@@ -384,6 +384,10 @@ describe('approved live signers (Daybreak H1): the committed table, not a key sc
         expect(liveSignerApprovalProblem(11155111, '0x' + '12'.repeat(20))).toMatch(/not an approved signer/);
         expect(liveSignerApprovalProblem(11155111, SP550_LIVE_APPROVED_SIGNERS[11155111][0].toLowerCase())).toBeUndefined();
         expect(liveSignerApprovalProblem(10, SP550_LIVE_APPROVED_SIGNERS[11155111][0])).toMatch(/no approved signer for chain 10/);
+        // OP Sepolia (op-sepolia-rc8, DSR 2026-11-21): the same single owner, and nothing else.
+        expect(SP550_LIVE_APPROVED_SIGNERS[11155420]).toEqual(['0x51Ac694981b6CEa06aA6c51751C227aac5F6b8A3']);
+        expect(liveSignerApprovalProblem(11155420, '0x51ac694981b6cea06aa6c51751c227aac5f6b8a3')).toBeUndefined();
+        expect(liveSignerApprovalProblem(11155420, '0x' + '12'.repeat(20))).toMatch(/not an approved signer for chain 11155420/);
         expect(liveSignerApprovalProblem(11155111, '0x' + '12'.repeat(20), { 11155111: [] })).toMatch(/no approved signer/);
     });
     it('the table is frozen: a run cannot add to it', () => {

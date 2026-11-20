@@ -3,7 +3,7 @@
  * SP 5.5.0 pin fill (read-only on chain): turns SP's step-13 manifest pins JSON into the SDK's pin
  * table entry and address-book switch, so neither is typed by hand.
  *
- *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> \
+ *   pnpm exec tsx scripts/sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> --manifest <pins.json> \
  *       --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] \
  *       [--write --sp-readback-commit <sha> [--sp-readback-path <path>]]   (path default: deployments/release/rc<N>/<network>.readback.live.json from pins.tag)
  *
@@ -44,7 +44,7 @@ import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js'
 import { loadReadbackValidator } from './sp550-readback-compare-core.js';
 import { applyBookSwitch, bookSwitch, changedEntries, spCommitOnMain, spCompareApiPath, upgradeBookProblems, SP_REPO, isLoopbackHost, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, addressesOverlap, withTimelockLegacy, writeAll, pinFillPreflightRefusal, parseManifestPins, renderPinsLiteral, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
 
-const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
+const USAGE = 'usage: sp550-pin-fill.ts --network <sepolia|sepolia-rc8|op-sepolia|op-sepolia-rc8|op-mainnet> --manifest <pins.json> --rpc <url> [--rpc2 <url>] [--block <n|finalized|latest>] [--allow-rc] [--write]';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const FILES = {
     upgrade: path.join(ROOT, 'packages/core/src/sp550Cutover.ts'),

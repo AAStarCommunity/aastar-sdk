@@ -38,6 +38,8 @@ export const SP550_NETWORKS = {
     sepolia: { chainId: sepolia.id, mode: 'upgrade', coexist: false, allowRc: false },
     'sepolia-rc8': { chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true },
     'op-sepolia': { chainId: optimismSepolia.id, mode: 'fresh', coexist: false, allowRc: false },
+    // DSR 2026-11-21: the rc.8 rehearsal moved to OP Sepolia, next to its existing stack (the default book stays it).
+    'op-sepolia-rc8': { chainId: optimismSepolia.id, mode: 'fresh', coexist: true, allowRc: true },
     'op-mainnet': { chainId: optimism.id, mode: 'fresh', coexist: false, allowRc: false },
 } as const satisfies Record<string, { chainId: number; mode: Sp550DeployMode; coexist: boolean; allowRc: boolean }>;
 
@@ -155,6 +157,7 @@ export const SP550_FRESH_DEPLOY_PINS: Record<number, Sp550FreshDeployPins> = {
  */
 export const SP550_COEXIST_PINS: Record<Sp550CoexistNetwork, Sp550FreshDeployPins> = {
     'sepolia-rc8': {},
+    'op-sepolia-rc8': {},
 };
 
 /** The pin table entry the gate and the consumers read for a network: by name for a coexisting stack, else by chain. */
@@ -237,7 +240,7 @@ export function requireDeployedAddress(set: Record<string, unknown> | undefined,
  * stack's token, staking or SBT would make a hybrid that the gate's wiring reads do not all reach. Sharing an entry
  * on purpose is a reviewed entry in SP550_COEXIST_SHARED_KEYS, none today.
  */
-export const SP550_COEXIST_SHARED_KEYS: Record<Sp550CoexistNetwork, readonly string[]> = { 'sepolia-rc8': [] };
+export const SP550_COEXIST_SHARED_KEYS: Record<Sp550CoexistNetwork, readonly string[]> = { 'sepolia-rc8': [], 'op-sepolia-rc8': [] };
 export function sp550CoexistOverlapProblems(network: Sp550CoexistNetwork, pins: Sp550FreshDeployPins | undefined): string[] {
     const n = SP550_NETWORKS[network] as { chainId: number } | undefined;
     if (!n || !pins) return [];
@@ -257,6 +260,8 @@ export function sp550CoexistOverlapProblems(network: Sp550CoexistNetwork, pins: 
 /** SP's release-version table for each coexisting stack (the tag's deployments/release-versions.<rc>.json). */
 export const SP550_RELEASE_VERSIONS: Record<Sp550CoexistNetwork, Readonly<Record<string, string>>> = {
     'sepolia-rc8': SP550_RELEASE_VERSIONS_RC8 as Record<string, string>,
+    // The same rc.8 contracts (SP contracts/src unchanged since the tag), deployed on OP Sepolia.
+    'op-sepolia-rc8': SP550_RELEASE_VERSIONS_RC8 as Record<string, string>,
 };
 /** Where each release-versions contract sits in a pin set (top-level pin or address-book key). */
 export const SP550_RELEASE_VERSION_ENTRY: Readonly<Record<string, string>> = {
@@ -425,7 +430,8 @@ export function requireSp550FreshDeployPins(
     opts: { allowRc?: boolean } = {},
 ): Sp550ValidatedPins<Sp550FreshDeployPins> {
     // By chain only for a chain whose fresh stack is its own: a chain that also hosts a coexisting stack is validated by
-    // network (sp550AddressSet), or its holds and overlap rules would be skipped.
+    // network (sp550AddressSet), or its holds and overlap rules would be skipped. OP Sepolia hosts op-sepolia-rc8, so
+    // chain 11155420 throws here until that entry is removed (FU-136, before a chain-keyed OP Sepolia release).
     const hosts = Object.values(SP550_NETWORKS).filter((x) => x.chainId === chainId);
     if (hosts.some((x) => x.coexist) || !hosts.some((x) => x.mode === 'fresh' && !x.coexist)) {
         throw new Error(`chain ${chainId} has no chain-keyed fresh SP 5.5.0 stack; validate a coexisting stack by network (sp550AddressSet / sp550NetworkPinProblems)`);

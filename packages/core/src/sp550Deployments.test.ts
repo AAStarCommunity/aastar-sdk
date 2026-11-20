@@ -35,6 +35,7 @@ describe('SP 5.5.0 network selection', () => {
         expect(resolveSp550Network('sepolia')).toEqual({ network: 'sepolia', chainId: sepolia.id, mode: 'upgrade', coexist: false, allowRc: false });
         expect(resolveSp550Network('sepolia-rc8')).toEqual({ network: 'sepolia-rc8', chainId: sepolia.id, mode: 'fresh', coexist: true, allowRc: true });
         expect(resolveSp550Network('op-sepolia')).toEqual({ network: 'op-sepolia', chainId: optimismSepolia.id, mode: 'fresh', coexist: false, allowRc: false });
+        expect(resolveSp550Network('op-sepolia-rc8')).toEqual({ network: 'op-sepolia-rc8', chainId: optimismSepolia.id, mode: 'fresh', coexist: true, allowRc: true });
         expect(resolveSp550Network('op-mainnet')).toEqual({ network: 'op-mainnet', chainId: optimism.id, mode: 'fresh', coexist: false, allowRc: false });
     });
     it.each([undefined, '', 'optimism', 'mainnet', 'toString', '__proto__'])('refuses an unknown network name: %s', (n) => {
@@ -53,6 +54,8 @@ describe('SP 5.5.0 network selection', () => {
             expect(pins).toEqual({});
             if (!n.coexist) expect(pins).toBe(SP550_FRESH_DEPLOY_PINS[n.chainId]);
             if (n.coexist) expect(sp550NetworkPinProblems(name as keyof typeof SP550_NETWORKS, pins).problems).toContain('addresses.registry: unpinned');
+            // OP Sepolia also hosts op-sepolia-rc8, so its chain-keyed validator refuses the chain itself (FU-136).
+            else if (n.chainId === optimismSepolia.id) expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/no chain-keyed fresh SP 5\.5\.0 stack/);
             else expect(() => requireSp550FreshDeployPins(n.chainId, pins)).toThrow(/addresses\.registry: unpinned/);
         }
     });
@@ -64,8 +67,19 @@ describe('SP 5.5.0 fresh-deploy pins fail closed', () => {
             for (const k of Object.keys(CANONICAL_ADDRESSES[id])) expect(SP550_ADDRESS_OWNER).toHaveProperty(k);
         }
     });
+    // OP Mainnet is the only chain-keyed fresh stack left (OP Sepolia hosts op-sepolia-rc8), so the unheld path is
+    // exercised there with its hold lifted for the test.
+    const withoutOpMainnetHold = <T>(fn: () => T): T => {
+        const saved = SP550_RELEASE_HOLDS[optimism.id];
+        delete SP550_RELEASE_HOLDS[optimism.id];
+        try { return fn(); } finally { SP550_RELEASE_HOLDS[optimism.id] = saved; }
+    };
     it('a complete set is returned when the chain has no hold', () => {
-        expect(requireSp550FreshDeployPins(optimismSepolia.id, FULL)).toBe(FULL);
+        expect(withoutOpMainnetHold(() => requireSp550FreshDeployPins(optimism.id, FULL))).toBe(FULL);
+    });
+    it('a chain that hosts a coexisting stack has no chain-keyed fresh stack: OP Sepolia (op-sepolia-rc8, FU-136)', () => {
+        expect(() => requireSp550FreshDeployPins(optimismSepolia.id, FULL)).toThrow(/chain 11155420 has no chain-keyed fresh SP 5\.5\.0 stack/);
+        expect(() => requireSp550FreshDeployPins(optimismSepolia.id, FULL, { allowRc: true })).toThrow(/no chain-keyed fresh SP 5\.5\.0 stack/);
     });
     it('OP Mainnet stays held even with complete pins, and no option lifts the hold', () => {
         expect(SP550_RELEASE_HOLDS[optimism.id]).toMatch(/3\.2\.2/);
@@ -188,7 +202,10 @@ describe('validated getters accept a DisclosureRegistry declared absent (author 
     };
     it('fresh', () => {
         const pins = drop(FULL);
-        const got = requireSp550FreshDeployPins(optimismSepolia.id, pins);
+        const saved = SP550_RELEASE_HOLDS[optimism.id];
+        delete SP550_RELEASE_HOLDS[optimism.id];
+        let got;
+        try { got = requireSp550FreshDeployPins(optimism.id, pins); } finally { SP550_RELEASE_HOLDS[optimism.id] = saved; }
         expect(got.disclosureRegistry).toBeUndefined();
         expect(got.absent).toContain('disclosureRegistry');
     });
