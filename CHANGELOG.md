@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### The ERC-8004 agent registries are optional in a fresh 5.5.0 pin set
+
+- `agentIdentityRegistry`, `agentReputationRegistry` and `agentValidationRegistry` move from `sp` to `sp-optional` in
+  `SP550_ADDRESS_OWNER`. The Sepolia rc.8 release deploys none of them (DeployLive `ENABLE_AGENT_REGISTRIES=0`, SP wired
+  to zero), so before this a complete pin set for `sepolia-rc8` could not be written and the gate failed it.
+- A pin set must still name each one or declare it in `absent`. Declared absent, the gate holds `SP.agentIdentityRegistry()`
+  and `SP.agentReputationRegistry()` to the zero address. Pinned, the check is unchanged. SP 5.5.x has no
+  `agentValidationRegistry` getter, so that key's absence is accounted for only by the pins.
+- The DeployLive fork rehearsal treats a zero registry as not deployed instead of missing.
+
 ### A sponsored op can commit to an exchange-rate ceiling; the live runner commits the plan's rate
 
 - `PaymasterClient.submitGaslessUserOperation` / `estimateUserOperationGas*` and `createEndUserClient().executeGasless`

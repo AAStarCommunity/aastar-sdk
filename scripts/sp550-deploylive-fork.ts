@@ -86,6 +86,9 @@ export async function forkAddressSetProblems(read: ForkReader, set: ForkAddressS
         ['SP.entryPoint()', await r(sp, SuperPaymasterV550ABI, 'entryPoint'), a.entryPoint],
         ['SP.APNTS_TOKEN()', await r(sp, SuperPaymasterV550ABI, 'APNTS_TOKEN'), a.aPNTs],
         ['SP.xpntsFactory()', await r(sp, SuperPaymasterV550ABI, 'xpntsFactory'), a.xPNTsFactory],
+        // The ERC-8004 pointers: the config's registry, or zero when it deploys none (SP has no validation getter).
+        ['SP.agentIdentityRegistry()', await r(sp, SuperPaymasterV550ABI, 'agentIdentityRegistry'), a.agentIdentityRegistry],
+        ['SP.agentReputationRegistry()', await r(sp, SuperPaymasterV550ABI, 'agentReputationRegistry'), a.agentReputationRegistry],
         ['Registry.SUPER_PAYMASTER()', await r(a.registry, RegistryABI, 'SUPER_PAYMASTER'), sp],
         ['Registry.GTOKEN_STAKING()', await r(a.registry, RegistryABI, 'GTOKEN_STAKING'), a.staking],
         ['Registry.MYSBT()', await r(a.registry, RegistryABI, 'MYSBT'), a.sbt],
