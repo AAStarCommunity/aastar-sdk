@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { gitBlobId, offlineProblems, REPO_ROOT, SAME_AT_BOTH_PINS, symlinkedComponents, upstreamProblems, VENDORED_DIR, type Git } from './check-sp550-tooling.js';
-import { SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
+import { SP550_RUNTIME_PINS, SP550_TOOLING_FILES, SP550_TOOLING_PIN } from '../packages/core/src/sp550Tooling.js';
 
 const SPAWN_VERDICT_TIMEOUT_MS = 60_000;
 const DIR = path.resolve('packages/core/src/sp550-tooling');
@@ -72,10 +72,14 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         if (q === `rev-parse ${toolingCommit}^{commit}`) return toolingCommit;
         for (const [i, sub] of SAME_AT_BOTH_PINS.entries()) if (q === `rev-parse ${contractsCommit}:${sub}` || q === `rev-parse ${toolingCommit}:${sub}`) return String(i).repeat(40);
         for (const v of Object.values(SP550_TOOLING_FILES)) if (q === `rev-parse ${toolingCommit}:${v.upstream}`) return v.gitBlob;
+        // `git grep -l -E <contract X> <commit> -- *.sol`: each pinned artifact defined under contracts/src by default.
+        if (args[0] === 'grep') { const art = /contract\[\[:space:\]\]\+(\w+)/.exec(args[3])![1]; return `${toolingCommit}:contracts/src/${art}.sol`; }
         throw new Error(`unexpected git ${q}`);
     };
-    it('an upstream that matches passes', () => {
-        expect(upstreamProblems(fakeGit()).problems).toEqual([]);
+    it('an upstream that matches passes, and every pinned artifact was located', () => {
+        const r = upstreamProblems(fakeGit());
+        expect(r.problems).toEqual([]);
+        expect(r.checked).toBeGreaterThanOrEqual(Object.keys(SP550_RUNTIME_PINS['10'].artifacts).length);
     });
     it.each<[string, Record<string, string | undefined>, RegExp]>([
         ['a moved tag', { [`rev-parse ${contractsTag}^{commit}`]: 'c'.repeat(40) }, /tag v5\.5\.0-rc\.8 resolves to c+, not/],
@@ -87,6 +91,10 @@ describe('check:sp550-tooling upstream: two pins about the same contracts', { ti
         ['only a dependency gitlink changed (contracts/lib)', { [`rev-parse ${toolingCommit}:contracts/lib`]: 'e'.repeat(40) }, /contracts\/lib differs/],
         ['only the singleton-paymaster dependency changed', { [`rev-parse ${toolingCommit}:singleton-paymaster`]: 'e'.repeat(40) }, /singleton-paymaster differs/],
         ['only the submodule list changed', { [`rev-parse ${toolingCommit}:.gitmodules`]: 'e'.repeat(40) }, /\.gitmodules differs/],
+        // Codex B1 r3 M1: every pinned artifact's defining source lies inside the compared inputs.
+        ['an artifact defined only outside the compared inputs', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+TimelockHandoverBootstrap([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: `${toolingCommit}:script/rehearsal/TimelockHandoverBootstrap.sol` }, /contract TimelockHandoverBootstrap is defined only in script\/rehearsal\/TimelockHandoverBootstrap\.sol, outside the inputs compared/],
+        ['an artifact no source defines', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+MySBT([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: undefined }, /no source at the tooling commit defines contract MySBT/],
+        ['an artifact defined only in docs / tests', { [`grep -l -E ^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+MySBT([[:space:]]|\\{|$) ${toolingCommit} -- *.sol`]: `${toolingCommit}:docs/x/MySBT.sol\n${toolingCommit}:contracts/test/MySBT.sol` }, /no source at the tooling commit defines contract MySBT/],
         ['a compilation input missing at one pin', { [`rev-parse ${contractsCommit}:contracts/lib`]: undefined }, /contracts\/lib differs between the contracts tag \(missing\)/],
         ['an upstream blob that is not the pinned one', { [`rev-parse ${toolingCommit}:deployments/readback-policy.json`]: 'f'.repeat(40) }, /deployments\/readback-policy\.json at the tooling commit is blob f+, not the pinned/],
     ])('%s fails', (_l, over, why) => {

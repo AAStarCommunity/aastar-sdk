@@ -142,10 +142,17 @@ const DEC = /^(0|[1-9][0-9]*)$/;
 const LABEL = /^(config:[A-Za-z0-9_]+|external:[A-Za-z0-9_]+|zero)$/;
 const strArr = (x: unknown): x is string[] => Array.isArray(x) && x.every((y) => typeof y === 'string');
 
+/** The release build (spec §1): solc 0.8.33, viaIR, cancun; optimizer runs 500, except these at 200. */
+export const SP550_RELEASE_COMPILER = { solc: '0.8.33', viaIR: true, evmVersion: 'cancun' } as const;
+export const SP550_RELEASE_RUNS_200: ReadonlySet<string> = new Set(['Registry', 'TimelockHandoverBootstrap']);
+
 /** Each runtime pin has the fields B2 compares, and its immutable ranges are well-formed. */
 function runtimePinShapeProblems(d: Sp550ToolingData): string[] {
     const p: string[] = [];
     for (const c of SP550_TOOLING_CHAINS) {
+        // Compiler provenance (Codex B1 r3 M2).
+        const comp = (d.runtimePins[c] as { compiler?: unknown } | undefined)?.compiler;
+        if (!isObj(comp) || Object.keys(comp).length !== 3 || comp.solc !== SP550_RELEASE_COMPILER.solc || comp.viaIR !== SP550_RELEASE_COMPILER.viaIR || comp.evmVersion !== SP550_RELEASE_COMPILER.evmVersion) p.push(`runtime-pins.${c} compiler is ${JSON.stringify(comp)}, not the release build ${JSON.stringify(SP550_RELEASE_COMPILER)}`);
         const arts = d.runtimePins[c]?.artifacts;
         if (!isObj(arts)) { p.push(`runtime-pins.${c} has no artifacts object`); continue; }
         for (const [art, raw] of Object.entries(arts)) {
@@ -153,6 +160,8 @@ function runtimePinShapeProblems(d: Sp550ToolingData): string[] {
             const at = `runtime-pins.${c} ${art}`;
             if (!isObj(a)) { p.push(`${at} is not an object`); continue; }
             for (const f of ['optimizerRuns', 'runtimeLength'] as const) if (typeof a[f] !== 'string' || !DEC.test(a[f] as string)) p.push(`${at}.${f} is not a decimal string`);
+            const runs = SP550_RELEASE_RUNS_200.has(art) ? '200' : '500';
+            if (a.optimizerRuns !== runs) p.push(`${at}.optimizerRuns is ${JSON.stringify(a.optimizerRuns)}, not the release build's ${runs}`);
             const codeLen = typeof a.runtimeLength === 'string' && DEC.test(a.runtimeLength) ? BigInt(a.runtimeLength) : undefined;
             if (codeLen === 0n) p.push(`${at}.runtimeLength is 0 (empty code fails closed)`);
             for (const f of ['maskedRuntimeKeccak', 'rawRuntimeKeccak'] as const) if (typeof a[f] !== 'string' || !HEX32.test(a[f] as string)) p.push(`${at}.${f} is not a 32-byte hash`);
@@ -181,6 +190,11 @@ function policyShapeProblems(d: Sp550ToolingData): string[] {
     const pol = d.policy as Record<string, unknown>;
     for (const sec of ['getters', 'immutableBindings', 'unreadableAllowed', 'zeroAllowedConfigKeys'] as const) if (!isObj(pol[sec])) p.push(`readback-policy has no ${sec} object`);
     if (isObj(pol.zeroAllowedConfigKeys)) for (const [k, why] of Object.entries(pol.zeroAllowedConfigKeys)) if (typeof why !== 'string' || !why.trim()) p.push(`readback-policy zeroAllowedConfigKeys.${k} has no reason`);
+    // unreadableAllowed: {Artifact: {getter: reason}} (Codex B1 r3 L2).
+    if (isObj(pol.unreadableAllowed)) for (const [art, gs] of Object.entries(pol.unreadableAllowed)) {
+        if (!isObj(gs)) { p.push(`readback-policy unreadableAllowed.${art} is not an object`); continue; }
+        for (const [g, why] of Object.entries(gs)) if (typeof why !== 'string' || !why.trim()) p.push(`readback-policy unreadableAllowed.${art}.${g} has no reason`);
+    }
     if (isObj(pol.getters)) for (const [art, gs] of Object.entries(pol.getters)) {
         if (!isObj(gs)) { p.push(`readback-policy getters.${art} is not an object`); continue; }
         for (const [g, e] of Object.entries(gs)) {
@@ -190,6 +204,8 @@ function policyShapeProblems(d: Sp550ToolingData): string[] {
             if (typeof e.why !== 'string' || !e.why.trim()) p.push(`${at} has no why`);
             if ('emptyAllowed' in e && typeof e.emptyAllowed !== 'boolean') p.push(`${at}.emptyAllowed is present but not a boolean`);
             if ('zeroAllowed' in e && (typeof e.zeroAllowed !== 'string' || !e.zeroAllowed.trim())) p.push(`${at}.zeroAllowed is present but not a reason`);
+            // A field B does not implement may carry semantics B would silently ignore: unknown fields fail closed, even
+            // though the spec lets /1 grow by addition (an added field is adopted here deliberately, by a re-pin).
             const extra = Object.keys(e).filter((k) => !['allowed', 'why', 'emptyAllowed', 'zeroAllowed'].includes(k));
             if (extra.length) p.push(`${at} has unknown field(s) ${extra.join(', ')}`);
         }

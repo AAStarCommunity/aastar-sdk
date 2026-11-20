@@ -41,11 +41,15 @@ export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url
 export const VENDORED_DIR = path.join(REPO_ROOT, 'packages/core/src/sp550-tooling');
 
 /**
- * The compilation inputs that must be identical at both pins for them to describe the same contracts: the sources, the
- * dependency gitlinks / trees the remappings point into, the build config holding those remappings, and the submodule
- * list (Codex B1 r2 M4).
+ * The compilation inputs that must be identical at both pins for them to describe the same contracts, a superset of
+ * what foundry.toml reads: `src` (contracts/src), the `libs` and remapping targets (contracts/lib,
+ * singleton-paymaster), the directory holding the one pinned artifact that is not in `src`
+ * (contracts/script/v3/TimelockHandoverBootstrap.sol), the build config itself and the submodule list (Codex B1 r2 M4,
+ * r3 M1). upstreamProblems also locates every pinned artifact's defining source and fails if none lies inside these.
  */
-export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-paymaster', 'foundry.toml', '.gitmodules'] as const;
+export const SAME_AT_BOTH_PINS = ['contracts/src', 'contracts/lib', 'singleton-paymaster', 'contracts/script', 'foundry.toml', '.gitmodules'] as const;
+/** Where a `contract X` text match is not a compilation input of a release artifact. */
+const NOT_A_SOURCE = /(^|\/)(docs|test|tests|fixtures?)(\/|$)/i;
 
 /** Each path component from `root` down to `dir` (both inclusive of what lies between) that is a symlink. */
 export function symlinkedComponents(root: string, dir: string): string[] {
@@ -126,6 +130,14 @@ export function upstreamProblems(git: Git): { problems: string[]; checked: numbe
         const b = tryGit(['rev-parse', `${toolingCommit}:${sub}`]);
         checked++;
         if (!a || !b || a !== b) p.push(`${sub} differs between the contracts tag (${a ?? 'missing'}) and the tooling commit (${b ?? 'missing'}): the two pins are not about the same contracts`);
+    }
+    // Every pinned artifact is defined in a source the two pins are compared on (a new artifact elsewhere fails).
+    for (const art of Object.keys(SP550_RUNTIME_PINS['10'].artifacts)) {
+        const out = tryGit(['grep', '-l', '-E', `^[[:space:]]*(abstract[[:space:]]+)?contract[[:space:]]+${art}([[:space:]]|\\{|$)`, toolingCommit, '--', '*.sol']);
+        const files = (out ?? '').split('\n').map((l) => l.trim().replace(`${toolingCommit}:`, '')).filter((f) => f && !NOT_A_SOURCE.test(f));
+        checked++;
+        if (!files.length) p.push(`no source at the tooling commit defines contract ${art}`);
+        else if (!files.some((f) => SAME_AT_BOTH_PINS.some((root) => f === root || f.startsWith(`${root}/`)))) p.push(`contract ${art} is defined only in ${files.join(', ')}, outside the inputs compared at both pins`);
     }
     for (const [f, v] of Object.entries(SP550_TOOLING_FILES)) {
         const id = tryGit(['rev-parse', `${toolingCommit}:${v.upstream}`]);

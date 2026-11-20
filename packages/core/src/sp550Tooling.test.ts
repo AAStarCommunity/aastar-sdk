@@ -93,6 +93,16 @@ describe('SP DeployLive read-back tooling data (Part B1)', () => {
         ['overlapping ranges', (d) => { const rs = (d.runtimePins['10'] as any).artifacts.SuperPaymaster.immutableRanges; rs[1].start = String(Number(rs[0].start) + 16); }, /before the previous range ends.*unsorted or overlapping/],
         ['a zero runtime length', (d) => { (d.runtimePins['10'] as any).artifacts.MySBT.runtimeLength = '0'; }, /MySBT\.runtimeLength is 0/],
         // Codex B1 r2 L1: emptyAllowed is a boolean (false is valid; only true grants).
+        // Codex B1 r3 M2: compiler provenance and per-artifact optimizer runs.
+        ['a runtime-pins file with no compiler', (d) => { delete (d.runtimePins['10'] as any).compiler; }, /runtime-pins\.10 compiler is undefined, not the release build/],
+        ['another solc', (d) => { (d.runtimePins['11155111'] as any).compiler.solc = '0.4.0'; }, /runtime-pins\.11155111 compiler is .*0\.4\.0/],
+        ['viaIR off', (d) => { (d.runtimePins['31337'] as any).compiler.viaIR = false; }, /runtime-pins\.31337 compiler is/],
+        ['an extra compiler field', (d) => { (d.runtimePins['10'] as any).compiler.optimizer = true; }, /runtime-pins\.10 compiler is/],
+        ['Registry at 500 runs', (d) => { (d.runtimePins['10'] as any).artifacts.Registry.optimizerRuns = '500'; }, /Registry\.optimizerRuns is "500", not the release build's 200/],
+        ['SuperPaymaster at 200 runs', (d) => { (d.runtimePins['10'] as any).artifacts.SuperPaymaster.optimizerRuns = '200'; }, /SuperPaymaster\.optimizerRuns is "200", not the release build's 500/],
+        // Codex B1 r3 L2: unreadableAllowed entries.
+        ['an unreadableAllowed entry with a non-string reason', (d) => { (d.policy as any).unreadableAllowed = { MySBT: { owner: 42 } }; }, /unreadableAllowed\.MySBT\.owner has no reason/],
+        ['an unreadableAllowed artifact that is not an object', (d) => { (d.policy as any).unreadableAllowed = { MySBT: 'x' }; }, /unreadableAllowed\.MySBT is not an object/],
         ['a non-boolean emptyAllowed', (d) => { (d.policy.getters as any).Paymaster.getSupportedTokens.emptyAllowed = 'yes'; }, /emptyAllowed is present but not a boolean/],
     ])('%s fails', (_l, mutate, why) => {
         const d = clone();
