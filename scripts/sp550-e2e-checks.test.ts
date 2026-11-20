@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'url';
 import { describe, it, expect, afterEach } from 'vitest';
 import { createHash } from 'crypto';
 import { spawnSync } from 'child_process';
@@ -13,6 +14,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
+import { maxRateFromPlan } from './sp550-e2e-checks.js';
 
 // This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
@@ -365,6 +367,29 @@ describe('per-op cost cap against SP\'s frozen plan (DSR)', { timeout: SPAWN_VER
         ['plans naming two X tokens', bundle({}, { ...phaseC, addresses: { X: A(0x78) } }), /do not name one X token/],
     ])('refused: %s', (_n, b, why) => {
         expect(sdkLivePlanProblems(b, W).problems).toContainEqual(expect.stringMatching(why as RegExp));
+    });
+    // DSR 2026-11-20: every sponsored op commits to the plan's exchangeRate as maxRate.
+    it('a plan without an exchangeRate is refused, so no op is signed without the rate commitment', () => {
+        const b = bundle(); delete (b.shared.sdkLive as any).exchangeRate;
+        expect(sdkLivePlanProblems(b, W).problems).toContainEqual(expect.stringMatching(/exchangeRate/));
+    });
+    it('maxRateFromPlan: the committed maxRate is exactly the plan\'s exchangeRate', () => {
+        expect(maxRateFromPlan(sdkLivePlanProblems(bundle(), W).plan)).toBe(1333333333333333333n);
+    });
+    it.each([['no plan', undefined], ['no exchangeRate', {}], ['zero', { exchangeRate: 0n }], ['negative', { exchangeRate: -1n }], ['beyond uint256', { exchangeRate: 1n << 256n }], ['a number', { exchangeRate: 1 }]])('maxRateFromPlan refuses %s', (_l, plan) => {
+        expect(() => maxRateFromPlan(plan as any)).toThrow(/refusing to sign: the plan has no usable exchangeRate/);
+    });
+    it('the live runner commits the plan rate on every sponsored path: submitOpts (S1, S1r, S3b) and C12\'s executeGasless', () => {
+        const src = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'sp550-live-e2e.ts'), 'utf8');
+        expect(src).toMatch(/const committedMaxRate = maxRateFromPlan\(sdkPlan\);/);
+        const submitOpts = src.slice(src.indexOf('const submitOpts = '), src.indexOf('const op = async'));
+        expect(submitOpts).toMatch(/maxRate: committedMaxRate/);
+        const c12 = src.slice(src.indexOf('await eu.executeGasless({'), src.indexOf('await eu.executeGasless({') + 600);
+        expect(c12).toMatch(/maxRate: committedMaxRate/);
+        // Every sponsored submit in the runner goes through submitOpts (S1 / S1r / S3b), none builds its own options.
+        const submits = src.match(/PaymasterClient\.submitGaslessUserOperation\([^;]*/g) ?? [];
+        expect(submits.length).toBeGreaterThan(0);
+        for (const x of submits) expect(x).toMatch(/submitOpts\(/);
     });
     const plan = sdkLivePlanProblems(bundle(), W).plan!;
     const now = { ethUsdPrice: 350000000000n, priceDecimals: 8n, aPNTsPriceUSD: 29999999999999999n, protocolFeeBPS: 137n, exchangeRate: 1333333333333333333n };

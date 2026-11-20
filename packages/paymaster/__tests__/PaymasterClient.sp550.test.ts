@@ -1277,6 +1277,55 @@ describe('PaymasterClient × SP 5.5.0: inline renewal (SP_RENEW) decided per op'
         expect(finals[2]).toBeGreaterThan(finals[1]);
         expect(c.sent[0].a0).toBe(finals[2]);
     });
+
+    // Codex maxRate r1 M: the commitment survives every rebuild of paymasterAndData — the SP_RENEW estimation rebuild,
+    // the final-op renewal refresh, explicit flags / auto-renew off, and the re-sign after a fee bump.
+    describe('maxRate is the RATE word of every op estimated and sent, on every rebuild path (DSR 2026-11-20)', () => {
+        const RATE = 1_333_333_333_333_333_333n;
+        const rateOf = (op: any) => { const d: string = (op.paymasterData ?? '0x').slice(2); return d.length === 73 * 2 ? BigInt('0x' + d.slice(40, 104)) : undefined; };
+        const recording = (inner: Bundler, seen: any[]): Bundler => async (method, op) => { seen.push({ method, op }); return inner(method, op); };
+        const allCarry = (seen: any[]) => {
+            const ops = seen.filter((x) => x.method === 'eth_estimateUserOperationGas' || x.method === 'eth_sendUserOperation');
+            expect(ops.length).toBeGreaterThan(0);
+            for (const x of ops) expect(rateOf(x.op), x.method).toBe(RATE);
+            return ops;
+        };
+        it('exhausted epoch: the SP_RENEW estimation rebuild and the renewed final op both carry it', async () => {
+            const c = chain({ cap: CAP, used: CAP });
+            const seen: any[] = [];
+            const { submit, calls } = harness(recording(c.bundler, seen), { readContract: c.readContract });
+            await expect(submit({ maxRate: RATE })).resolves.toBe(OP_HASH);
+            expect(calls.slice(-2).map((x) => x.flags)).toEqual([SUPER_PAYMASTER_FLAGS.SP_RENEW, SUPER_PAYMASTER_FLAGS.SP_RENEW]);
+            allCarry(seen);
+        });
+        it('room left (no renewal): the plain op carries it', async () => {
+            const c = chain({ cap: CAP, used: 0n });
+            const seen: any[] = [];
+            const { submit } = harness(recording(c.bundler, seen), { readContract: c.readContract });
+            await expect(submit({ maxRate: RATE })).resolves.toBe(OP_HASH);
+            allCarry(seen);
+        });
+        it.each([['an explicit superPaymasterFlags', { superPaymasterFlags: 0 }], ['superPaymasterAutoRenew: false', { superPaymasterAutoRenew: false }]])('%s: the op built without the renewal refresh carries it', async (_l, extra) => {
+            const c = chain({ cap: CAP, used: 0n });
+            const seen: any[] = [];
+            const { submit } = harness(recording(c.bundler, seen), { readContract: c.readContract });
+            await expect(submit({ maxRate: RATE, ...extra })).resolves.toBe(OP_HASH);
+            allCarry(seen);
+        });
+        it('a fee bump after "replacement underpriced": the first send and the re-signed op both carry it', async () => {
+            let underpriced = true;
+            const c = chain({ cap: CAP, used: 0n });
+            const inner: Bundler = async (method, op) => {
+                if (method === 'eth_sendUserOperation' && underpriced) { underpriced = false; return { error: { code: -32602, message: 'replacement underpriced' } }; }
+                return c.bundler(method, op);
+            };
+            const seen: any[] = [];
+            const { submit } = harness(recording(inner, seen), { readContract: c.readContract });
+            await expect(submit({ maxRate: RATE })).resolves.toBe(OP_HASH);
+            const sends = allCarry(seen).filter((x) => x.method === 'eth_sendUserOperation');
+            expect(sends).toHaveLength(2);
+        });
+    });
 });
 
 describe('gas limits = estimate × coefficient, contract floors from the chain, frozen limits as given', () => {
@@ -1723,6 +1772,37 @@ describe('cost ceiling on what is signed (DSR: the missing upper bound at the si
         expect(without.signs).toHaveLength(1);
         expect(withUndefined.signs).toEqual(without.signs);
         expect(JSON.stringify(withUndefined.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v))).toBe(JSON.stringify(without.seen, (_k, v) => (typeof v === 'bigint' ? `${v}n` : v)));
+    });
+    it('maxRate: the committed rate is the maxRate word of every op sent — estimate and signed op alike (DSR 2026-11-20)', async () => {
+        /** maxRate = paymasterData[20:52] on the 5.5.0 layout ([operator 20][maxRate 32][token 20][flags 1]). */
+        const rateOf = (op: any) => { const d: string = (op.paymasterData ?? '0x').slice(2); expect(d.length).toBe(73 * 2); return BigInt('0x' + d.slice(40, 104)); };
+        const RATE = 1_333_333_333_333_333_333n;
+        for (const frozen of [true, false]) {
+            SuperPaymasterInflightGuard.clearAll();
+            const seen: any[] = [];
+            const { submit } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+            await submit({ ...(frozen ? { frozenGas: FROZEN } : {}), ...FEE, maxRate: RATE });
+            const ops = seen.filter((x) => x.method === 'eth_sendUserOperation' || x.method === 'eth_estimateUserOperationGas');
+            expect(ops.some((x) => x.method === 'eth_sendUserOperation')).toBe(true);
+            if (!frozen) expect(ops.some((x) => x.method === 'eth_estimateUserOperationGas')).toBe(true);
+            for (const x of ops) expect(rateOf(x.op), `${x.method} (frozen=${frozen})`).toBe(RATE);
+        }
+    });
+    it('maxRate unset: the word is type(uint256).max, and `maxRate: undefined` sends byte-identically to omitting it', async () => {
+        const run = async (extra: Record<string, unknown>) => {
+            SuperPaymasterInflightGuard.clearAll();
+            const seen: any[] = [];
+            const { submit, signs } = harness(async (method: string, op: any) => { seen.push({ method, op }); return method === 'eth_estimateUserOperationGas' ? ESTIMATE : { result: OP_HASH }; });
+            await submit({ ...FEE, ...extra });
+            return { signs: signs.flat(), seen };
+        };
+        const without = await run({});
+        const withUndefined = await run({ maxRate: undefined });
+        const send = without.seen.find((x) => x.method === 'eth_sendUserOperation')!.op;
+        expect(BigInt('0x' + String(send.paymasterData).slice(2).slice(40, 104))).toBe((1n << 256n) - 1n);
+        expect(withUndefined.signs).toEqual(without.signs);
+        const j = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? `${x}n` : x));
+        expect(j(withUndefined.seen)).toBe(j(without.seen));
     });
     it('a non-positive ceiling is refused, not read as "off"', async () => {
         await expect(harness(bundler([])).submit({ frozenGas: FROZEN, ...FEE, maxUserOpCostWei: 0n })).rejects.toThrow(/maxUserOpCostWei must be a positive bigint/);

@@ -107,7 +107,7 @@ import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
-import { CostApprovals, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -665,8 +665,12 @@ async function main() {
         // of the last wiring re-check (costAtKey), so a price change after this hook cannot slip through.
         costApprovals.approve(v.userOpHash, v.maxCostWei);
     };
+    // Every sponsored op commits to the plan's exchangeRate in paymasterAndData's maxRate word: SuperPaymaster rejects
+    // the op at validation if token.exchangeRate() > maxRate, so the rate the cost bound assumes is enforced on chain,
+    // after signing too (DSR 2026-11-20). The off-chain check at the key (signTimeCostProblems) stays.
+    const committedMaxRate = maxRateFromPlan(sdkPlan);
     const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
-        maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook,
+        maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, maxRate: committedMaxRate,
         ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
     const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
         if (o.spaced !== false) await spaced();
@@ -860,7 +864,7 @@ async function main() {
             signBudget = 2; beforeSign = () => recheck('C12'); allowTx = true;
             const tx = (await eu.executeGasless({
                 target: taskToken ?? operator, data: taskToken ? encodeFunctionData({ abi: ERC20ABI, functionName: 'transfer', args: [DEAD, 1n] }) : '0x', operator,
-                estimateBundlerUrl: bundlerUrl, maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
+                estimateBundlerUrl: bundlerUrl, maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, maxRate: committedMaxRate, ...(frozenGas ? { gas: frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}),
                 onGasDecided: (d: any) => { c12 = d; },
             }).finally(() => { signBudget = Infinity; beforeSign = undefined; allowTx = false; st.expect = undefined; st.txNonceNow = undefined; })) as Hex;
             const rc = await pub.waitForTransactionReceipt({ hash: tx });

@@ -113,6 +113,32 @@ describe('createEndUserClient().executeGasless builds a paymasterAndData the dep
         expect(at(pmd, 124, 125)).toBe('0x00');
     });
 
+    it('maxRate: the signed op and the estimated op carry it in the maxRate word; unset, the word is type(uint256).max (DSR 2026-11-20)', async () => {
+        const RATE = 1_333_333_333_333_333_333n;
+        const set = harness('SuperPaymaster-5.5.0', { minPostOpGas: 350_000n });
+        await set.c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT, maxRate: RATE });
+        expect(BigInt(at(set.paymasterAndData(), 72, 104))).toBe(RATE);
+        const unset = harness('SuperPaymaster-5.5.0', { minPostOpGas: 350_000n });
+        await unset.c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT });
+        expect(BigInt(at(unset.paymasterAndData(), 72, 104))).toBe((1n << 256n) - 1n);
+        // The estimate request (estimateBundlerUrl, no explicit gas) carries the same word as the op that is signed.
+        const estimated = harness('SuperPaymaster-5.5.0', { minPostOpGas: 500_000n });
+        const est = { preVerificationGas: '0xea60', verificationGasLimit: '0x11170', callGasLimit: '0x9c40', paymasterVerificationGasLimit: '0x30d40', paymasterPostOpGasLimit: '0x186a0' };
+        const estimateOps: any[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_u: string, init: any) => {
+            const body = JSON.parse(init.body);
+            if (body.method !== 'eth_estimateUserOperationGas') throw new Error(`unexpected bundler ${body.method}`);
+            estimateOps.push(body.params[0]);
+            return new Response(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: est }), { status: 200, headers: { 'content-type': 'application/json' } });
+        }));
+        try {
+            await estimated.c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, estimateBundlerUrl: 'http://127.0.0.1:4337', maxRate: RATE });
+        } finally { vi.unstubAllGlobals(); }
+        expect(estimateOps).toHaveLength(1);
+        expect(BigInt('0x' + String(estimateOps[0].paymasterData).slice(2).slice(40, 104))).toBe(RATE);
+        expect(BigInt(at(estimated.paymasterAndData(), 72, 104))).toBe(RATE);
+    });
+
     it('an unconfigured operator fails before anything is signed or sent', async () => {
         const { c } = harness('SuperPaymaster-5.5.0', { configured: false });
         await expect(c.executeGasless({ target: TOKEN, data: '0x1234', operator: OPERATOR, gas: EXPLICIT })).rejects.toThrow(/not configured/);
