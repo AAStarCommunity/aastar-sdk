@@ -774,3 +774,24 @@ describe('inclusionBaseFee: by block hash, never a guessed 0 (Codex r1 M1)', { t
         expect(await inclusionBaseFee({ getBlock: async () => ({ baseFeePerGas: 250n }) }, rc)).toMatch(/answered no hash/);
     });
 });
+
+describe('the runner\'s call sites pass the parsed config on (source guard, Codex r3 M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    // A source-level guard, like the URL-redaction one above: the helpers are tested for behaviour, and this holds the
+    // two production call sites to passing them what the config parsed. It is not a behavioural test of the runner.
+    const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
+    it('feePolicy is parsed once and every PaymasterClient op goes through submitOptionsFor with it', () => {
+        expect(src).toMatch(/const fp = parseFeePolicy\(cfg\.feePolicy\);\s*\n\s*if \(fp\.problem\) refuse\(fp\.problem\);\s*\n\s*const feePolicy = fp\.feePolicy;/);
+        expect(src).toMatch(/const submitOpts = \(onGasDecided: \(d: GasDecision\) => void\) => submitOptionsFor\(\{[^}]*\}, \{ frozenGas, gasLimitCoefficientBps, feePolicy \}\);/);
+        // The only PaymasterClient submissions take submitOpts(...) (S1, S3b through op(); S1r spreads it).
+        const submits = src.split('\n').filter((l) => l.includes('PaymasterClient.submitGaslessUserOperation('));
+        expect(submits).toHaveLength(2);
+        for (const c of submits) expect(c).toMatch(/submitOpts\(/);
+    });
+    it('skipS3b is parsed for the run\'s chain, before signing, and handed to runS3bCell; S3b is not sent anywhere else', () => {
+        expect(src).toMatch(/const sk = parseSkipS3b\(cfg\.skipS3b, net\.chainId\);\s*\n\s*if \(sk\.problem\) refuse\(sk\.problem\);\s*\n\s*const skipS3bReason = sk\.reason;/);
+        expect(src.indexOf('parseSkipS3b(cfg.skipS3b')).toBeLessThan(src.indexOf('loadLiveSigner('));
+        expect(src).toMatch(/await runS3bCell\(\{\s*\n\s*skipReason: skipS3bReason,/);
+        expect(src.match(/runS3bCell\(/g)).toHaveLength(1);
+        expect(src).not.toMatch(/`S3b (setup|spend)/);
+    });
+});
