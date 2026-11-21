@@ -182,7 +182,8 @@ set +e
 rc=${PIPESTATUS[0]}
 set -e
 [ "$rc" = 0 ] || fail "E2E exited $rc (e2e.log)"
-grep -q '^PASS' "$OUT/e2e.log" || fail "E2E exited 0 without a PASS line (e2e.log)"
+# The whole line: a run with a cell not run ends on "PASS (3 of 4 cells run; …)", which is not an A7 pass.
+grep -qx 'PASS' "$OUT/e2e.log" || fail "E2E exited 0 without a bare PASS line (a cell not run, or no verdict; e2e.log)"
 grep -q '^RESULT A7 FRESH ACCOUNT:' "$OUT/e2e.log" || fail "E2E passed without the A7 FRESH ACCOUNT result (requireFreshAccount; e2e.log)"
 log "stage 4 ok: $(grep -c '^RESULT' "$OUT/e2e.log") RESULT lines (e2e.log)"
 log "A7 PASS"

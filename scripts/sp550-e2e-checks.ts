@@ -787,6 +787,15 @@ export function parseSkipS3b(v: unknown, chainId: number): { reason?: string; pr
 }
 
 /**
+ * The run's last line. All four cells (S1, S1r, S3b, C12) ran and passed: exactly "PASS", as before. S3b skipped
+ * (skipS3b): a qualified line that never reads as a bare PASS (DSR 2026-11-21, boundary 2), so a consumer matching
+ * the whole line "PASS" does not count a run with a cell not run as a full pass.
+ */
+export function finalVerdictLine(s3b: { status: 'NOT RUN' | 'PASS' }, skipReason?: string): string {
+    return s3b.status === 'NOT RUN' ? `PASS (3 of 4 cells run; S3b NOT RUN: ${skipReason ?? '(no reason)'})` : 'PASS';
+}
+
+/**
  * The base fee of the block a receipt names, read BY HASH (a reorg cannot swap in another block's fee). A missing
  * block or a block without a base fee is unknown, returned as a problem string, never taken as 0.
  */

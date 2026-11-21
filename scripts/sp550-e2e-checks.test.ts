@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
-import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem, submitOptionsFor, runS3bCell, inclusionBaseFee } from './sp550-e2e-checks.js';
+import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem, submitOptionsFor, runS3bCell, inclusionBaseFee, finalVerdictLine } from './sp550-e2e-checks.js';
 
 // This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
@@ -790,8 +790,26 @@ describe('the runner\'s call sites pass the parsed config on (source guard, Code
     it('skipS3b is parsed for the run\'s chain, before signing, and handed to runS3bCell; S3b is not sent anywhere else', () => {
         expect(src).toMatch(/const sk = parseSkipS3b\(cfg\.skipS3b, net\.chainId\);\s*\n\s*if \(sk\.problem\) refuse\(sk\.problem\);\s*\n\s*const skipS3bReason = sk\.reason;/);
         expect(src.indexOf('parseSkipS3b(cfg.skipS3b')).toBeLessThan(src.indexOf('loadLiveSigner('));
-        expect(src).toMatch(/await runS3bCell\(\{\s*\n\s*skipReason: skipS3bReason,/);
+        expect(src).toMatch(/s3b = await runS3bCell\(\{\s*\n\s*skipReason: skipS3bReason,/);
+        // The last line comes from finalVerdictLine with S3b's outcome; no bare PASS is printed anywhere else.
+        expect(src).toMatch(/console\.log\(`\\n\$\{finalVerdictLine\(s3b, skipS3bReason\)\}`\);/);
+        expect(src).not.toMatch(/console\.log\('\\nPASS'\)/);
         expect(src.match(/runS3bCell\(/g)).toHaveLength(1);
         expect(src).not.toMatch(/`S3b (setup|spend)/);
+    });
+});
+
+describe('finalVerdictLine: no bare PASS when a cell did not run (DSR 2026-11-21)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('all four cells: exactly "PASS", as before', () => expect(finalVerdictLine({ status: 'PASS' })).toBe('PASS'));
+    it('S3b skipped: a qualified line, which a whole-line match on PASS (run-a7.sh grep -x) does not accept', () => {
+        const line = finalVerdictLine({ status: 'NOT RUN' }, 'OP: SP_CAP_FLOOR ~6000 ops away');
+        expect(line).toBe('PASS (3 of 4 cells run; S3b NOT RUN: OP: SP_CAP_FLOOR ~6000 ops away)');
+        expect(line).not.toBe('PASS');
+        expect(/^PASS$/m.test(line)).toBe(false);
+    });
+    it('run-a7.sh matches the whole line', () => {
+        const sh = readFileSync(join(__dirname, 'sp550-fork/run-a7.sh'), 'utf8');
+        expect(sh).toMatch(/grep -qx 'PASS' "\$OUT\/e2e\.log"/);
+        expect(sh).not.toMatch(/grep -q '\^PASS'/);
     });
 });

@@ -112,7 +112,7 @@ import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
-import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, parseFeePolicy, submitOptionsFor, runS3bCell, parseSkipS3b, actualCostProblem, userOpGasPriceV07, inclusionBaseFee } from './sp550-e2e-checks.js';
+import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, parseFeePolicy, submitOptionsFor, runS3bCell, finalVerdictLine, parseSkipS3b, actualCostProblem, userOpGasPriceV07, inclusionBaseFee } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -770,6 +770,8 @@ async function main() {
         return { flags, renewedInline, before, after, txHash, decision };
     };
 
+    // S3b's outcome, for the last line (finalVerdictLine); fail() exits before it is read on any failure.
+    let s3b: { status: 'NOT RUN' | 'PASS' } = { status: 'PASS' };
     try {
         // ---- 4. S1 ----
         const s1 = await op('S1 PaymasterClient.submitGaslessUserOperation', noop);
@@ -836,7 +838,7 @@ async function main() {
         }
 
         // ---- 5. S3b inline renewal (runS3bCell; skipS3b sends nothing and reports NOT RUN) ----
-        await runS3bCell({
+        s3b = await runS3bCell({
             skipReason: skipS3bReason, maxOps, s1, op, state, noop, result, fail, flagsOffset: SUPER_PAYMASTER_PMD_OFFSETS.FLAGS,
             floor: async () => BigInt(await tok('SP_CAP_FLOOR')),
             setupCallData: (floor) => encodeFunctionData({
@@ -919,7 +921,8 @@ async function main() {
         untapBundler();
         stopForkBundler();
     }
-    console.log('\nPASS');
+    // DSR 2026-11-21: a run with S3b NOT RUN ends on a qualified line, never on a bare PASS.
+    console.log(`\n${finalVerdictLine(s3b, skipS3bReason)}`);
 }
 
 main().catch((e) => fail(String(e?.shortMessage ?? e?.message ?? e)));
