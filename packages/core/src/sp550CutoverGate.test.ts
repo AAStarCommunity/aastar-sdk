@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
+import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, GTokenAuthorizationRc8ABI, RegistryRc8ABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
 import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, zeroAddress, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
@@ -1157,7 +1157,10 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
         expect(SP550_COEXIST_PINS['sepolia-rc8']).toEqual({});
         expect(() => sp550AddressSet('op-sepolia-rc8')).toThrow(/fresh-deploy pins for chain 11155420 are not usable/);
         const m = deployment(optimismSepolia.id, 'fresh');
-        expect((await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m) })).exitCode).toBe(1);
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m) });
+        expect(r.exitCode).toBe(1);
+        // The pins check itself must be the one that fails, not only something downstream of the empty entry.
+        expect(failed(r)).toContain('pins complete and well-formed');
     });
 
     it('the gate holds its pins against the shipped OP Sepolia book overlaid with them; against the shipped book itself they fail', async () => {
@@ -1166,6 +1169,9 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
         expect(r.results.filter((c) => !c.ok)).toEqual([]);
         expect(r.exitCode).toBe(0);
         expect(r.header).toContain('coexisting stack');
+        // A complete set with one required pin dropped is refused by the pins check.
+        const { spImpl: _drop, ...short } = m.pins;
+        expect(failed(await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: short as any }))).toContain('pins complete and well-formed');
         const raw = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: m.pins, book: shippedOpSepolia });
         expect(raw.exitCode).toBe(1);
         expect(raw.results.find((c) => c.check === 'pins.superPaymaster == SDK book superPaymaster')?.ok).toBe(false);
@@ -1194,8 +1200,26 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
     });
 
     it('reads its rc.8 contracts with the rc.8 ABIs and the rc.8 release-version table, like sepolia-rc8', () => {
-        expect(sp550WiringScanAbi('op-sepolia-rc8')).toEqual(sp550WiringScanAbi('sepolia-rc8'));
+        // Asserted against the rc.8 ABIs themselves, not only against sepolia-rc8 (both rows could be wrong alike).
+        const abi = sp550WiringScanAbi('op-sepolia-rc8');
+        expect(abi.registryImpl).toBe(RegistryRc8ABI);
+        expect(abi['addresses.registry']).toBe(RegistryRc8ABI);
+        expect(abi['addresses.gToken']).toBe(GTokenAuthorizationRc8ABI);
+        expect(abi['addresses.blsValidator']).toBeNull();
+        expect(abi).toEqual(sp550WiringScanAbi('sepolia-rc8'));
+        expect(SP550_RELEASE_VERSIONS['op-sepolia-rc8']).toEqual(RELEASE);
         expect(SP550_RELEASE_VERSIONS['op-sepolia-rc8']).toBe(SP550_RELEASE_VERSIONS['sepolia-rc8']);
         expect(sp550HoldFor('op-sepolia-rc8')).toBeUndefined();
+    });
+
+    it('allowRc: a v5.5.0-rc.N tag passes on op-sepolia-rc8 without --allow-rc, and is refused on the chain-keyed op-sepolia', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const rc = { ...m.pins, tag: 'v5.5.0-rc.8' };
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', rc).problems).toEqual([]);
+        expect(sp550NetworkPinProblems('op-sepolia', rc).problems).toContainEqual(expect.stringMatching(/^tag: "v5\.5\.0-rc\.8" is not v5\.5\.0$/));
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: rc });
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')?.ok).toBe(true);
+        // allowRc widens the tag only to rc.N of 5.5.0.
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', { ...m.pins, tag: 'v5.5.1-rc.1' }).problems).toContainEqual(expect.stringMatching(/^tag: /));
     });
 });
