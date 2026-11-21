@@ -14,9 +14,12 @@ All notable changes to this project will be documented in this file.
   (`sepolia-rc8`, `op-sepolia-rc8`, `op-sepolia`, `op-mainnet`), not accepted in an upgrade manifest. The gate checks
   `X402Facilitator.XPNTS_FACTORY()`, `GTokenAuthorization.factory()`, its `REGISTRY()` and `SUPERPAYMASTER()`, its codehash,
   and scans its address getters; it may not share an address with the V2 factory.
-- Scope note: X402's direct-path whitelist is `XPNTS_FACTORY.isXPNTs(asset)`, i.e. tokens issued by the 3.x factory. A
-  production DeployLive issues none (aPNTs is APNTsCapped, deployed directly, `DeployLive.s.sol:214-216`); on OP Sepolia
-  the 3.x factory's `getDeployedCount()` is 0 and `isXPNTs(aPNTs)` is false. A community's V2 xPNTs is not on it either.
+- Scope note (DSR 2026-11-21): X402 direct payment is treated as not enabled in 5.5.0. Its asset whitelist is
+  `XPNTS_FACTORY.isXPNTs(asset)`, i.e. tokens issued by the 3.x factory, and a production DeployLive issues none (aPNTs is
+  APNTsCapped, deployed directly, `DeployLive.s.sol:214-216`); on OP Sepolia the 3.x factory's `getDeployedCount()` is 0
+  and `isXPNTs(aPNTs)` is false. A community's V2 xPNTs is not on it either. The path needs both a token issued through
+  the 3.x factory and an approved facilitator before it can be used. The EIP-3009 `settleX402Payment` path was not
+  checked.
 - SP's read-back names this contract `contracts.xPNTsFactory`; the comparator and the `--write` cross-check map the pin
   to that key (`TOP_LEVEL_CONTRACT_KEYS`).
 
