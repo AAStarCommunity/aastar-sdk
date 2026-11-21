@@ -713,6 +713,66 @@ export function parseFeePolicy(v: unknown): { feePolicy?: { priorityFeePercentil
 export const feePolicyOption = (p: { priorityFeePercentile: number; feeHistoryBlocks: number } | undefined) => (p ? { feePolicy: p } : {});
 
 /**
+ * The runner's submit options for every PaymasterClient op (S1, S1r, S3b): the fixed `base`, then frozenGas, the gas
+ * coefficient and the fee policy, each only when configured. Omitted options add no key (the options before feePolicy
+ * existed are reproduced key for key).
+ */
+export function submitOptionsFor<B extends object, F extends object>(base: B, o: { frozenGas?: F; gasLimitCoefficientBps?: bigint; feePolicy?: { priorityFeePercentile: number; feeHistoryBlocks: number } }) {
+    return { ...base, ...(o.frozenGas ? { frozenGas: o.frozenGas } : {}), ...(o.gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps: o.gasLimitCoefficientBps } : {}), ...feePolicyOption(o.feePolicy) };
+}
+
+/** What the S3b cell needs from the runner (injected, so the cell's sends can be tested). */
+export interface S3bCellDeps<R extends { flags: number; txHash: string }> {
+    /** skipS3b's reason; undefined = run S3b. */
+    skipReason?: string;
+    maxOps: number;
+    s1: R;
+    op: (label: string, callData: Hex) => Promise<R>;
+    state: () => Promise<{ cap: bigint; used: bigint }>;
+    floor: () => Promise<bigint>;
+    /** execute(token, 0, setAutoAllowance(SP, floor)). */
+    setupCallData: (floor: bigint) => Hex;
+    noop: Hex;
+    flagsOffset: number;
+    result: (line: string) => void;
+    fail: (m: string) => never;
+}
+
+/**
+ * S3b inline renewal. Run: lower the SP allowance to the floor if needed (a sponsored op of its own), then spend until
+ * an op carries SP_RENEW, within maxOps. Skipped (skipS3b, DSR 2026-11-21 ruling B): nothing is sent, the setup op
+ * included, and the row says NOT RUN with the reason; it is never reported as passed.
+ */
+export async function runS3bCell<R extends { flags: number; txHash: string }>(d: S3bCellDeps<R>): Promise<{ status: 'NOT RUN' | 'PASS'; renewal?: R }> {
+    const SP_RENEW = SUPER_PAYMASTER_FLAGS.SP_RENEW;
+    if (d.skipReason !== undefined) {
+        // Setup included: no allowance is lowered without the spends that follow it.
+        const s = await d.state();
+        d.result(`S3b inline renewal: NOT RUN (skipS3b: ${d.skipReason}) — not counted as passed; S3b setup not sent, allowance ${s.used}/${s.cap} left as is` +
+            `${d.s1.flags & SP_RENEW ? ' · note: S1 itself carried SP_RENEW (recorded in its own row)' : ''}`);
+        return { status: 'NOT RUN' };
+    }
+    let renewal = d.s1.flags & SP_RENEW ? d.s1 : undefined;
+    if (!renewal) {
+        const floor = await d.floor();
+        if ((await d.state()).cap > floor) {
+            // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
+            // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
+            const setup = await d.op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, d.setupCallData(floor));
+            if (setup.flags & SP_RENEW) renewal = setup;
+        }
+        for (let i = 1; i <= d.maxOps && !renewal; i++) {
+            const r = await d.op(`S3b spend ${i}/${d.maxOps}`, d.noop);
+            if (r.flags & SP_RENEW) renewal = r;
+        }
+    }
+    if (!renewal) return d.fail(`S3b: no op needed SP_RENEW within ${d.maxOps} ops (raise maxOps; the allowance used is ${(await d.state()).used})`);
+    // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
+    d.result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${d.flagsOffset}] of tx ${renewal.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
+    return { status: 'PASS', renewal };
+}
+
+/**
  * The run config's skipS3b (DSR 2026-11-21, ruling B): { reason: non-empty string }. Omitted -> S3b runs as before.
  * A skipped S3b is reported NOT RUN with the reason, never as a pass, and its setup op is not sent either.
  */
@@ -722,6 +782,18 @@ export function parseSkipS3b(v: unknown): { reason?: string; problem?: string } 
     const r = (v as { reason?: unknown }).reason;
     if (typeof r !== 'string' || r.trim() === '') return { problem: 'skipS3b.reason must be a non-empty string: a skipped cell is reported with why it did not run' };
     return { reason: r.trim() };
+}
+
+/**
+ * The base fee of the block a receipt names, read BY HASH (a reorg cannot swap in another block's fee). A missing
+ * block or a block without a base fee is unknown, returned as a problem string, never taken as 0.
+ */
+export async function inclusionBaseFee(client: { getBlock: (a: { blockHash: Hex }) => Promise<{ hash?: Hex | null; baseFeePerGas?: bigint | null }> }, rc: { blockHash: Hex; blockNumber: bigint }): Promise<bigint | string> {
+    let b;
+    try { b = await client.getBlock({ blockHash: rc.blockHash }); } catch (e: any) { return `inclusion block ${rc.blockNumber} (${rc.blockHash}) not readable by hash: ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 120)}; the receipt may be orphaned`; }
+    if (b?.hash && b.hash.toLowerCase() !== rc.blockHash.toLowerCase()) return `inclusion block by hash ${rc.blockHash} answered ${b.hash}`;
+    if (b?.baseFeePerGas === undefined || b.baseFeePerGas === null) return `inclusion block ${rc.blockNumber} (${rc.blockHash}) reports no base fee; the charged price is unknown`;
+    return BigInt(b.baseFeePerGas);
 }
 
 /**

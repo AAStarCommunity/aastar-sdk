@@ -112,7 +112,7 @@ import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
-import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, parseFeePolicy, feePolicyOption, parseSkipS3b, actualCostProblem, userOpGasPriceV07 } from './sp550-e2e-checks.js';
+import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, parseFeePolicy, submitOptionsFor, runS3bCell, parseSkipS3b, actualCostProblem, userOpGasPriceV07, inclusionBaseFee } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -683,9 +683,8 @@ async function main() {
     // the op at validation if token.exchangeRate() > maxRate, so the rate the cost bound assumes is enforced on chain,
     // after signing too (DSR 2026-11-20). The off-chain check at the key (signTimeCostProblems) stays.
     const committedMaxRate = maxRateFromPlan(sdkPlan);
-    const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
-        maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, maxRate: committedMaxRate,
-        ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}), ...feePolicyOption(feePolicy) });
+    const submitOpts = (onGasDecided: (d: GasDecision) => void) => submitOptionsFor({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
+        maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, maxRate: committedMaxRate }, { frozenGas, gasLimitCoefficientBps, feePolicy });
     const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
         if (o.spaced !== false) await spaced();
         SuperPaymasterInflightGuard.clearAll();
@@ -728,9 +727,10 @@ async function main() {
         const rc = { success: ev.success as boolean, nonce: BigInt(ev.nonce), actualGasUsed: BigInt(ev.actualGasUsed), actualGasCost: BigInt(ev.actualGasCost) };
         const bundled = await onChainOp(txHash, rc.nonce);
         // DSR 2026-11-21: what the op was charged per gas, from its own receipt and inclusion block.
-        const inclusionBaseFee = BigInt((await pub.getBlock({ blockNumber: chainRc.blockNumber })).baseFeePerGas ?? 0n);
-        const paid = userOpGasPriceV07(bundled.maxFeePerGas, bundled.maxPriorityFeePerGas, inclusionBaseFee);
-        const costProblem = actualCostProblem(rc, bundled, inclusionBaseFee);
+        const baseFee = await inclusionBaseFee(pub, chainRc);
+        if (typeof baseFee === 'string') fail(`${label}: ${baseFee}`);
+        const paid = userOpGasPriceV07(bundled.maxFeePerGas, bundled.maxPriorityFeePerGas, baseFee as bigint);
+        const costProblem = actualCostProblem(rc, bundled, baseFee as bigint);
         const { flags, postOpGasLimit } = bundled;
         const logs = chainRc.logs as any[];
         // Efficiency (B5): the bundler's own check compares actual use with the limits it was given.
@@ -745,7 +745,7 @@ async function main() {
             `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
             `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} actualGasUsed=${actualGasUsed} efficiency=${efficiency} · ${gasRow(decision)} · ` +
-            `charged per gas ${paid} = min(maxFee, baseFee ${inclusionBaseFee} + priority) actualGasCost=${rc.actualGasCost} · ` +
+            `charged per gas ${paid} = min(maxFee, baseFee ${baseFee} + priority) actualGasCost=${rc.actualGasCost} · ` +
             `checked at block ${lastCheckBlock}, included in block ${chainRc.blockNumber} · tx ${txHash}`);
         if (decision === undefined) fail(`${label}: the SDK reported no gas decision (onGasDecided) for a sent op`);
         // What was bundled must be what the decision says (not only what the callback reported), and frozen = verbatim.
@@ -835,34 +835,15 @@ async function main() {
             lastSent = Date.now(); // the next op waits a full interval
         }
 
-        // ---- 5. S3b inline renewal ----
-        if (skipS3bReason !== undefined) {
-            // Setup included: no allowance is lowered without the spends that follow it.
-            const sNow = await state();
-            result(`S3b inline renewal: NOT RUN (skipS3b: ${skipS3bReason}) — not counted as passed; S3b setup not sent, allowance ${sNow.used}/${sNow.cap} left as is` +
-                `${s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? ' · note: S1 itself carried SP_RENEW (recorded in its own row)' : ''}`);
-        } else {
-            let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
-            if (!renewal) {
-                const floor = BigInt(await tok('SP_CAP_FLOOR'));
-                if ((await state()).cap > floor) {
-                    // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
-                    // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
-                    const setup = await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
-                        abi: SimpleAccountABI, functionName: 'execute',
-                        args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
-                    }));
-                    if (setup.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = setup;
-                }
-                for (let i = 1; i <= maxOps && !renewal; i++) {
-                    const r = await op(`S3b spend ${i}/${maxOps}`, noop);
-                    if (r.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = r;
-                }
-            }
-            if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
-            // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
-            result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
-        }
+        // ---- 5. S3b inline renewal (runS3bCell; skipS3b sends nothing and reports NOT RUN) ----
+        await runS3bCell({
+            skipReason: skipS3bReason, maxOps, s1, op, state, noop, result, fail, flagsOffset: SUPER_PAYMASTER_PMD_OFFSETS.FLAGS,
+            floor: async () => BigInt(await tok('SP_CAP_FLOOR')),
+            setupCallData: (floor) => encodeFunctionData({
+                abi: SimpleAccountABI, functionName: 'execute',
+                args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
+            }),
+        });
 
         // ---- 6. C12: createEndUserClient().executeGasless, self-bundled handleOps from the user's EOA (paid in ETH) ----
         await spaced();
@@ -917,12 +898,14 @@ async function main() {
             if (mined.paymaster !== getAddress(sp)) fail(`C12: mined paymaster ${mined.paymaster} is not ${sp}`);
             const outer = await pub.getTransaction({ hash: tx });
             if (outer.gas !== c12.handleOps.gasLimit) fail(`C12: handleOps gas ${outer.gas} is not the reported ${c12.handleOps.gasLimit}`);
+            // DSR 2026-11-21: what the op was charged per gas, from its own receipt and inclusion block (recorded before
+            // the success check, so a failed but included op still shows its charge).
+            const c12Base = await inclusionBaseFee(pub, rc);
+            if (typeof c12Base === 'string') fail(`C12: ${c12Base}`);
+            const c12Cost = ev ? { actualGasCost: BigInt(ev.actualGasCost), actualGasUsed: BigInt(ev.actualGasUsed) } : undefined;
+            if (c12Cost) result(`C12: charged per gas ${userOpGasPriceV07(mined.maxFeePerGas, mined.maxPriorityFeePerGas, c12Base as bigint)} = min(maxFee ${mined.maxFeePerGas}, baseFee ${c12Base} + priority ${mined.maxPriorityFeePerGas}) actualGasCost=${c12Cost.actualGasCost} actualGasUsed=${c12Cost.actualGasUsed} (default fee policy: the C12 path takes no feePolicy)`);
             if (rc.status !== 'success' || ev?.success !== true) fail('C12: the self-bundled op did not succeed');
-            // DSR 2026-11-21: what the op was charged per gas, from its own receipt and inclusion block.
-            const c12Base = BigInt((await pub.getBlock({ blockNumber: rc.blockNumber })).baseFeePerGas ?? 0n);
-            const c12Cost = { actualGasCost: BigInt(ev.actualGasCost), actualGasUsed: BigInt(ev.actualGasUsed) };
-            result(`C12: charged per gas ${userOpGasPriceV07(mined.maxFeePerGas, mined.maxPriorityFeePerGas, c12Base)} = min(maxFee ${mined.maxFeePerGas}, baseFee ${c12Base} + priority ${mined.maxPriorityFeePerGas}) actualGasCost=${c12Cost.actualGasCost} actualGasUsed=${c12Cost.actualGasUsed} (default fee policy: the C12 path takes no feePolicy)`);
-            const c12CostProblem = actualCostProblem(c12Cost, mined, c12Base);
+            const c12CostProblem = actualCostProblem(c12Cost!, mined, c12Base as bigint);
             if (c12CostProblem) fail(`C12: ${c12CostProblem}`);
             await settledUnderSnapshot('C12', rc.blockNumber);
             if (getAddress(rc.from) !== getAddress(base.address)) fail(`C12: handleOps was sent by ${rc.from}, not the user's EOA`);

@@ -2,6 +2,18 @@
 
 **This is a calculation, not an execution result.** It uses chain reads at one block and the contract's own formulas. No operation was sent to produce it. DSR ruled (B) on 2026-11-21: S3b does not run on OP networks (`skipS3b` in the run config), and the run reports it as NOT RUN.
 
+## Sources, and what this repo can verify
+
+| Input | Source | Verifiable from this repo? |
+|---|---|---|
+| The reservation formula | `packages/paymaster/src/SuperPaymaster/v550.ts` `superPaymasterLock` | Yes |
+| The chain reads in the table below | Read-only `eth_call` / `eth_feeHistory` on the Tenderly OP Sepolia gateway, 2026-11-21, by the SDK session | Repeatable at that block. No raw dump is committed. |
+| Contract lines (xPNTsV2Base.sol, xPNTsTokenV2.sol, xPNTsTokenV2Ext.sol, SuperPaymaster.sol) | SuperPaymaster repo at tag `v5.5.0-rc.8` (`5a150f6a`). The OP Sepolia stack was deployed from `99a38d8d`, which DSR reports has the same `contracts/src`. | No. This repo vendors ABIs, not the Solidity sources. |
+| `actualGasUsed` 337,807–406,110 | SP's fork calibration of its SP arm (fork of block 51716429, deploy commit 99a38d8d), reported by the SP session | No. External input. |
+| Planner `PC_PRICE_CAP` = 3500 USD, the budget gate `(N+5) × Amax ≤ 5000e18`, N = sdkRuns × (4 + maxOps) | SP's planner (`plan_three_arm.py`, `manifest_exec.py` in the SP tooling), reported by the SP session | No. External input. |
+
+The conclusions below hold under these inputs. The sections on the actual charge and on alternative (A) depend on the external ones.
+
 ## Inputs (OP Sepolia, chain 11155420, block 51717913, Tenderly public gateway)
 
 | Read | Value |
@@ -20,7 +32,7 @@
 ## The reservation a0 (per op)
 
 SP reserves `Amax = ceil(ceil(maxCost × price × 1e18 / (10^dec × aPNTsPriceUSD)) × (1 + fee + buffer))`, where `maxCost = (PVG + VGL + CGL + pmVGL + pmPostOp) × maxFeePerGas`.
-- The sum of the limits is **estimated**, not measured, at 1.2e6–2.0e6 gas. The real value is the bundler's estimate × 1.5, with postOp at least 500k.
+- The sum of the limits is **estimated**, not measured, at 1.2e6–2.0e6 gas. In the runner (no frozenGas), verification, call and paymaster limits are the bundler's estimate × 1.5. preVerificationGas is the estimate as is (× 1.0, `scaleLimits` in `packages/paymaster/src/V4/gasPolicy.ts`). paymasterPostOpGasLimit is raised to SP's `minPostOpGas` (500,000 in the rc.8 `gasParams`) when below it.
 - That gives maxCost 6.0e11–1.0e12 wei, and **Amax ≈ 0.056e18–0.094e18 aPNTs**.
 
 ## The actual charge (per op)

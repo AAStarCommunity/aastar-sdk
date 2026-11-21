@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
-import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem } from './sp550-e2e-checks.js';
+import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem, submitOptionsFor, runS3bCell, inclusionBaseFee } from './sp550-e2e-checks.js';
 
 // This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
@@ -637,12 +637,22 @@ describe('the cost path, behaviourally (Daybreak #470 L3)', { timeout: SPAWN_VER
     });
 });
 
-describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults', () => {
-    it('omitted yields no policy, and the submit options gain no key at all (byte-for-byte the previous options)', () => {
+describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('omitted yields no policy, and submitOptionsFor (the runner\'s submit options) is key for key the previous construction', () => {
         expect(parseFeePolicy(undefined)).toEqual({});
-        const before = { operator: '0x1', requireEstimate: true };
-        expect(JSON.stringify({ ...before, ...feePolicyOption(parseFeePolicy(undefined).feePolicy) })).toBe(JSON.stringify(before));
-        expect({ ...before, ...feePolicyOption({ priorityFeePercentile: 75, feeHistoryBlocks: 20 }) }).toEqual({ ...before, feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        const base = { operator: '0x1', onGasDecided: () => {}, requireEstimate: true, noDirectSendFallback: true, maxUserOpCostWei: 5n, beforeSignUserOp: async () => {}, maxRate: 7n };
+        const frozenGas = { verificationGasLimit: 1n };
+        // The expression the runner used before feePolicy existed, for each combination of the two older options.
+        const previous = (fg: unknown, c: bigint | undefined) => ({ ...base, ...(fg ? { frozenGas: fg } : {}), ...(c !== undefined ? { gasLimitCoefficientBps: c } : {}) });
+        const keys = (o: object) => Object.entries(o).map(([k, v]) => [k, typeof v === 'function' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? `${x}n` : x))]);
+        for (const fg of [undefined, frozenGas]) for (const c of [undefined, 15_000n]) {
+            const got = submitOptionsFor(base, { frozenGas: fg, gasLimitCoefficientBps: c, feePolicy: parseFeePolicy(undefined).feePolicy });
+            expect(keys(got)).toEqual(keys(previous(fg, c)));
+            expect('feePolicy' in got).toBe(false);
+        }
+        const withPolicy = submitOptionsFor(base, { feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(withPolicy).toEqual({ ...base, feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(feePolicyOption(undefined)).toEqual({});
     });
     it('a full policy passes through unchanged', () => {
         expect(parseFeePolicy({ priorityFeePercentile: 75, feeHistoryBlocks: 20 })).toEqual({ feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
@@ -660,7 +670,7 @@ describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults
     ])('refuses %s', (_n, v) => expect(parseFeePolicy(v).problem).toMatch(/^feePolicy/));
 });
 
-describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted = S3b runs as before', () => {
+describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted = S3b runs as before', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('omitted: no skip', () => expect(parseSkipS3b(undefined)).toEqual({}));
     it('a reason is required and kept', () => {
         expect(parseSkipS3b({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' })).toEqual({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' });
@@ -672,7 +682,7 @@ describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted =
     ])('refuses %s', (_n, v) => expect(parseSkipS3b(v).problem).toMatch(/^skipS3b/));
 });
 
-describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)', () => {
+describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     it('min(maxFee, baseFee + priority); maxFee when it equals the priority', () => {
         expect(userOpGasPriceV07(2_900_000_000n, 500_000n, 250n)).toBe(500_250n); // the renewal override: the price is unchanged
         expect(userOpGasPriceV07(1_000n, 900n, 250n)).toBe(1_000n);
@@ -682,5 +692,70 @@ describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)
         const fees = { maxFeePerGas: 2_900_000_000n, maxPriorityFeePerGas: 500_000n };
         expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 500_250n }, fees, 250n)).toBeUndefined();
         expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 2_900_000_000n }, fees, 250n)).toMatch(/actualGasCost .* != actualGasUsed/);
+    });
+});
+
+describe('runS3bCell: what S3b sends, skipped or not (Codex r1 M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const R = (flags: number, txHash = '0x' + 'aa'.repeat(32)) => ({ flags, txHash });
+    const harness = (o: { skipReason?: string; s1Flags?: number; cap?: bigint; floor?: bigint; renewAt?: number; maxOps?: number }) => {
+        const sent: string[] = []; const lines: string[] = [];
+        let n = 0;
+        const deps = {
+            skipReason: o.skipReason, maxOps: o.maxOps ?? 3, s1: R(o.s1Flags ?? 0), noop: '0x01' as Hex, flagsOffset: 124,
+            op: async (label: string) => { sent.push(label); n++; return R(n === o.renewAt ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0); },
+            state: async () => ({ cap: o.cap ?? 5_000n * 10n ** 18n, used: 1n }),
+            floor: async () => o.floor ?? 250n * 10n ** 18n,
+            setupCallData: () => '0x02' as Hex,
+            result: (l: string) => { lines.push(l); },
+            fail: (m: string): never => { throw new Error(m); },
+        };
+        return { deps, sent, lines };
+    };
+    it('skipped: no op at all (setup included), a NOT RUN row with the reason, status NOT RUN', async () => {
+        const h = harness({ skipReason: 'OP: SP_CAP_FLOOR is ~6000 ops away' });
+        expect(await runS3bCell(h.deps)).toEqual({ status: 'NOT RUN' });
+        expect(h.sent).toEqual([]);
+        expect(h.lines).toHaveLength(1);
+        expect(h.lines[0]).toMatch(/^S3b inline renewal: NOT RUN \(skipS3b: OP: SP_CAP_FLOOR is ~6000 ops away\) — not counted as passed; S3b setup not sent/);
+        expect(h.lines[0]).not.toMatch(/SP_RENEW chosen|success=true/);
+    });
+    it('omitted: the setup op lowers the cap, then spends until SP_RENEW, as before', async () => {
+        const h = harness({ renewAt: 3 });
+        const r = await runS3bCell(h.deps);
+        expect(r.status).toBe('PASS');
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)', 'S3b spend 1/3', 'S3b spend 2/3']);
+        expect(h.lines.at(-1)).toMatch(/^S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData\[124\]/);
+    });
+    it('omitted, cap already at the floor: no setup op', async () => {
+        const h = harness({ cap: 250n * 10n ** 18n, renewAt: 1 });
+        await runS3bCell(h.deps);
+        expect(h.sent).toEqual(['S3b spend 1/3']);
+    });
+    it('omitted, S1 already carried SP_RENEW: nothing more is sent', async () => {
+        const h = harness({ s1Flags: SUPER_PAYMASTER_FLAGS.SP_RENEW });
+        expect((await runS3bCell(h.deps)).status).toBe('PASS');
+        expect(h.sent).toEqual([]);
+    });
+    it('omitted, no renewal within maxOps: fails', async () => {
+        const h = harness({ maxOps: 2 });
+        await expect(runS3bCell(h.deps)).rejects.toThrow(/S3b: no op needed SP_RENEW within 2 ops/);
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)', 'S3b spend 1/2', 'S3b spend 2/2']);
+    });
+});
+
+describe('inclusionBaseFee: by block hash, never a guessed 0 (Codex r1 M1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const rc = { blockHash: ('0x' + 'bb'.repeat(32)) as Hex, blockNumber: 7n };
+    it('reads the block by the receipt\'s hash', async () => {
+        const asked: unknown[] = [];
+        expect(await inclusionBaseFee({ getBlock: async (a) => { asked.push(a); return { hash: rc.blockHash, baseFeePerGas: 250n }; } }, rc)).toBe(250n);
+        expect(asked).toEqual([{ blockHash: rc.blockHash }]);
+    });
+    it('an explicit 0 base fee is a value', async () => {
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: rc.blockHash, baseFeePerGas: 0n }) }, rc)).toBe(0n);
+    });
+    it('no base fee, another block, or an unreadable (orphaned) block is a problem', async () => {
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: rc.blockHash, baseFeePerGas: null }) }, rc)).toMatch(/reports no base fee/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: ('0x' + 'cc'.repeat(32)) as Hex, baseFeePerGas: 1n }) }, rc)).toMatch(/answered 0xcc/);
+        expect(await inclusionBaseFee({ getBlock: async () => { throw new Error('block not found'); } }, rc)).toMatch(/not readable by hash.*orphaned/);
     });
 });
