@@ -344,6 +344,8 @@ export function sp550FreshPinProblems(pins: Sp550FreshDeployPins | undefined, op
         // disclosureRegistry is a top-level pin, not a book key (sp550PinProblems checks it).
         if (k !== 'disclosureRegistry' && SP550_ADDRESS_OWNER[k as AddressBookKey] !== 'sp-optional') problems.push(`absent: ${k} is not an sp-optional key`);
     }
+    // DSR 2026-11-21: X402Facilitator and GTokenAuthorization name the 3.x factory, which a fresh deploy keeps.
+    if (pins !== undefined && pins.xPNTsFactoryV1 === undefined) problems.push('xPNTsFactoryV1: unpinned (the 3.x xPNTsFactory X402Facilitator and GTokenAuthorization are bound to)');
     problems.push(...sp550BookOwnershipProblems(pins));
     if (pins?.superPaymaster && book.superPaymaster && pins.superPaymaster.toLowerCase() !== book.superPaymaster.toLowerCase()) {
         problems.push(`superPaymaster ${pins.superPaymaster} != addresses.superPaymaster ${book.superPaymaster}`);
@@ -416,7 +418,9 @@ export const requireSp550CutoverPins = requireSp550UpgradePins;
 
 /** Everything wrong with an in-place upgrade's pin set (empty array = usable, hold aside). */
 export function sp550UpgradePinProblems(pins: Sp550CutoverPins | undefined, opts: { allowRc?: boolean } = {}): string[] {
-    return [...sp550PinProblems(pins, opts), ...sp550UpgradeAddressProblems(pins), ...sp550BookOwnershipProblems(pins), ...sp550PinAliasProblems(pins)];
+    // xPNTsFactoryV1 is a fresh stack's 3.x factory: an upgrade keeps its factories, and its gate never checks that pin's wiring.
+    const freshOnly = pins?.xPNTsFactoryV1 !== undefined ? ['xPNTsFactoryV1: a fresh-deploy pin; an upgrade does not pin it'] : [];
+    return [...sp550PinProblems(pins, opts), ...freshOnly, ...sp550UpgradeAddressProblems(pins), ...sp550BookOwnershipProblems(pins), ...sp550PinAliasProblems(pins)];
 }
 
 /**

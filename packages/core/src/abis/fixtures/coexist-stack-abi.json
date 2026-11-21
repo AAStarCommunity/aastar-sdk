@@ -545,6 +545,58 @@
         }
       ]
     },
+    "xPNTsFactory.json": {
+      "artifact": "xPNTsFactory.sol/xPNTsFactory.json",
+      "compiledScanned": [
+        "REGISTRY",
+        "SUPERPAYMASTER",
+        "getAllTokens",
+        "implementation",
+        "owner"
+      ],
+      "entries": [
+        {
+          "type": "function",
+          "name": "REGISTRY",
+          "compiled": {
+            "signature": "REGISTRY() returns (address) view",
+            "selector": "0x06433b1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "SUPERPAYMASTER",
+          "compiled": {
+            "signature": "SUPERPAYMASTER() returns (address) view",
+            "selector": "0x5ae48ba4"
+          }
+        },
+        {
+          "type": "function",
+          "name": "getAllTokens",
+          "compiled": {
+            "signature": "getAllTokens() returns (address[] tokens) view",
+            "selector": "0x2a5c792a"
+          }
+        },
+        {
+          "type": "function",
+          "name": "implementation",
+          "compiled": {
+            "signature": "implementation() returns (address) view",
+            "selector": "0x5c60da1b"
+          }
+        },
+        {
+          "type": "function",
+          "name": "owner",
+          "compiled": {
+            "signature": "owner() returns (address) view",
+            "selector": "0x8da5cb5b"
+          }
+        }
+      ]
+    },
     "TimelockController.json": {
       "artifact": "TimelockController.sol/TimelockController.default.json",
       "compiledScanned": [],

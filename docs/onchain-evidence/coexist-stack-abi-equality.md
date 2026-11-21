@@ -57,6 +57,11 @@ Entries: the explicit calls of the read-back gate and the four live cells (S1, S
 | X402Facilitator.json | function REGISTRY | `REGISTRY() returns (address) view` | `REGISTRY() returns (address) view` | yes |
 | X402Facilitator.json | function XPNTS_FACTORY | `XPNTS_FACTORY() returns (address) view` | `XPNTS_FACTORY() returns (address) view` | yes |
 | X402Facilitator.json | function owner | `owner() returns (address) view` | `owner() returns (address) view` | yes |
+| xPNTsFactory.json | function REGISTRY | `REGISTRY() returns (address) view` | `REGISTRY() returns (address) view` | yes |
+| xPNTsFactory.json | function SUPERPAYMASTER | `SUPERPAYMASTER() returns (address) view` | `SUPERPAYMASTER() returns (address) view` | yes |
+| xPNTsFactory.json | function getAllTokens | `getAllTokens() returns (address[] tokens) view` | `getAllTokens() returns (address[] tokens) view` | yes |
+| xPNTsFactory.json | function implementation | `implementation() returns (address) view` | `implementation() returns (address) view` | yes |
+| xPNTsFactory.json | function owner | `owner() returns (address) view` | `owner() returns (address) view` | yes |
 | MicroPaymentChannel.json | function eip712Domain | `eip712Domain() returns (bytes1 fields,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt,uint256[] extensions) view` | `eip712Domain() returns (bytes1 fields,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt,uint256[] extensions) view` | yes |
 | MicroPaymentChannel.json | function owner | `owner() returns (address) view` | `owner() returns (address) view` | yes |
 
