@@ -8,7 +8,7 @@ import { sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js'
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
 import {
     AMSTERDAM_PROBE_PREDICATE, READBACK_CONTRACT_FIELDS, aggregateAmsterdam, VERSION_NOT_IN_INTERFACE, recordedProbeProblems, READBACK_HEADER_FIELDS, READBACK_SCHEMA, READBACK_SCHEMA_FILE,
-    classifyCallError, contractKeyOf, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
+    classifyCallError, contractKeyOf, readbackComparisonSet, isNotDeployedPlaceholder, loadReadbackValidator, probeProblems, readbackProblems, type ChainReader, type Measured, type Observed,
 } from './sp550-readback-compare-core.js';
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
@@ -397,6 +397,23 @@ describe('classifyCallError on real viem error graphs', () => {
     it('a transport failure is an error, never "reverted"', () => {
         expect(classifyCallError(wrap(new BaseError('fetch failed'))).kind).toBe('error');
         expect(classifyCallError(new Error('socket hang up'))).toEqual({ kind: 'error', detail: 'Error: socket hang up' });
+    });
+});
+
+describe('the 3.x factory pin is compared as SP names it: contracts.xPNTsFactory (Codex r2 L1)', () => {
+    it('the comparison set readbackProblems uses files xPNTsFactoryV1 under xPNTsFactory, V2 and its book alias under xPNTsFactoryV2', () => {
+        const V1 = A(0x1d);
+        const pins = { ...PINS, xPNTsFactoryV1: V1, addresses: { ...PINS.addresses, xPNTsFactory: PINS.xPNTsFactoryV2 } };
+        const set = readbackComparisonSet(pinnedOf(pins) as [string, string][]);
+        expect(set.filter(([k]) => k === 'xPNTsFactory')).toEqual([['xPNTsFactory', V1, 'xPNTsFactoryV1']]);
+        expect(set.filter(([k]) => k === 'xPNTsFactoryV2')).toEqual([['xPNTsFactoryV2', PINS.xPNTsFactoryV2, 'xPNTsFactoryV2']]);
+        expect(set.some(([k]) => k === 'xPNTsFactoryV1')).toBe(false);
+        // One contract key per pin: the book alias addresses.xPNTsFactory does not collide with the 3.x factory's key.
+        expect(new Set(set.map(([k]) => k)).size).toBe(set.length);
+    });
+    it('an upgrade read-back refuses the fresh-only pin before comparing', async () => {
+        const pins = { ...PINS, xPNTsFactoryV1: A(0x1d), codehashes: { ...PINS.codehashes, xPNTsFactoryV1: H(0x1d) } };
+        expect(await run(good(), { pins })).toEqual(['pins: xPNTsFactoryV1: a fresh-deploy pin; an upgrade does not pin it']);
     });
 });
 
