@@ -1152,12 +1152,24 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
         expect(sp550PinsFor('op-sepolia')).toMatchObject({ table: 'SP550_FRESH_DEPLOY_PINS', key: String(optimismSepolia.id) });
     });
 
-    it('its shipped table entry is empty, so the gate and sp550AddressSet fail closed; sepolia-rc8 is untouched', async () => {
-        expect(SP550_COEXIST_PINS['op-sepolia-rc8']).toEqual({});
+    it('its shipped entry is the read-back pin set (2026-11-21): well-formed, usable by sp550AddressSet; sepolia-rc8 stays empty', () => {
+        const shipped = SP550_COEXIST_PINS['op-sepolia-rc8'];
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', shipped)).toEqual({ problems: [], hold: undefined });
+        // The values that tie it to this deployment (the rest is held by the live gate at the read-back).
+        expect(shipped.superPaymaster).toBe('0x3C73Dd3C576a594Dd1e7afDEEc9f8757C35A31E7');
+        expect(shipped.addresses?.registry).toBe('0x4b71DB19fBA1a506E0b8ee729B6DC2001Aa19895');
+        expect(shipped.xPNTsFactoryV1).toBe('0xAA920BaA1833192c8D9393E43274dEA827d8174D');
+        expect(shipped.readbackBlock).toBe(51714812n);
+        const set = sp550AddressSet('op-sepolia-rc8');
+        expect(set.chainId).toBe(optimismSepolia.id);
+        expect((set.addresses as Record<string, string>).superPaymaster).toBe(shipped.superPaymaster);
+        expect(JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id])).toBe(shippedSnapshot);
         expect(SP550_COEXIST_PINS['sepolia-rc8']).toEqual({});
-        expect(() => sp550AddressSet('op-sepolia-rc8')).toThrow(/fresh-deploy pins for chain 11155420 are not usable/);
+    });
+
+    it('an empty entry still fails closed, on the pins check itself', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
-        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m) });
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: {} });
         expect(r.exitCode).toBe(1);
         // The pins check itself must be the one that fails, not only something downstream of the empty entry.
         expect(failed(r)).toContain('pins complete and well-formed');

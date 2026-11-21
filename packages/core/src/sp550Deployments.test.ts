@@ -47,11 +47,12 @@ describe('SP 5.5.0 network selection', () => {
         expect(() => assertSp550ChainId('op-sepolia', sepolia.id)).toThrow(/expects chainId 11155420/);
         expect(() => assertSp550ChainId('op-mainnet', optimism.id)).not.toThrow();
     });
-    it('every fresh network has a (fail-closed) pin entry, and none is pre-wired', () => {
+    it('every fresh network has a (fail-closed) pin entry, and none is pre-wired but op-sepolia-rc8 (its read-back, 2026-11-21)', () => {
         for (const [name, n] of Object.entries(SP550_NETWORKS)) {
             if (n.mode !== 'fresh') continue;
             // A coexisting stack's entry is by network name (SP550_COEXIST_PINS), a chain's by chainId.
             const { pins } = sp550PinsFor(name as keyof typeof SP550_NETWORKS);
+            if (name === 'op-sepolia-rc8') { expect(sp550NetworkPinProblems(name, pins).problems).toEqual([]); continue; }
             expect(pins).toEqual({});
             if (!n.coexist) expect(pins).toBe(SP550_FRESH_DEPLOY_PINS[n.chainId]);
             if (n.coexist) expect(sp550NetworkPinProblems(name as keyof typeof SP550_NETWORKS, pins).problems).toContain('addresses.registry: unpinned');
