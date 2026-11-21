@@ -5,7 +5,10 @@
  * and neither can add one. The public-key scan (sp550-live-signer.ts isPublicTestAccount) stays as a second line.
  *
  * Sepolia: the paper rehearsal owner (account 0xE8Eaad6A…898b = SimpleAccountFactory v0.7 getAddress(owner, salt 0)).
- * OP Sepolia: the same owner, for the op-sepolia-rc8 rehearsal (DSR 2026-11-21); the same quiet-period rule applies.
+ * OP Sepolia: the same owner, for the op-sepolia-rc8 rehearsal (DSR 2026-11-21). Quiet period: from the predict that the
+ * PoP exported from DVT is based on, until the DeployLive broadcast completes, this address sends no transaction; while
+ * C12 runs, any other automation using this address is paused. The rule is defined in SP's deploy-day checklist
+ * (DEPLOYLIVE_HANDOFF, section "开始前确认"), not in this repo. FU-136 removes this row with op-sepolia-rc8.
  * OP Mainnet gets its address in a separate PR once the author names it.
  */
 export const SP550_LIVE_APPROVED_SIGNERS: Readonly<Record<number, readonly string[]>> = Object.freeze({

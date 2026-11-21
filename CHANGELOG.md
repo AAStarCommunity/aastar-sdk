@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### `op-sepolia-rc8` pins: the rc.8 rehearsal stack on OP Sepolia is pinned
+
+- `SP550_COEXIST_PINS['op-sepolia-rc8']` now holds SP's read-back of the OP Sepolia DeployLive (SP 99a38d8d, read-back
+  block 51714812). It is hand-written from the `sp550-pin-fill` preview, verbatim, under DSR's one-time ruling; `--write`
+  stays refused. The source was SP's `pins.op-sepolia-rc8.v2.json` (sha256 `3c8b50e0…db65`), and the gate passed on two
+  providers at finalized block 51718521. `sp550AddressSet('op-sepolia-rc8')` now resolves;
+  `CANONICAL_ADDRESSES[11155420]` and `sepolia-rc8` (still empty) are unchanged.
+- The three Lows from #477: FU-136 also removes the 11155420 signer row; the quiet-period rule is written out where the
+  signer table names it (defined in SP's DEPLOYLIVE_HANDOFF, not here); direct assertions for the pins check, the rc.8
+  scan ABIs and `allowRc`.
+
 ### `sp550-live-e2e`: optional `feePolicy`, `skipS3b` for OP networks, and each op's charged price from its receipt
 
 - `feePolicy` (`{ priorityFeePercentile, feeHistoryBlocks }`, optional) is passed as is to PaymasterClient's
@@ -17,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Every sponsored op and C12 now records what it was charged per gas, `min(maxFee, baseFee + priority)` at its inclusion
   block (read by the receipt's block hash; a missing block or base fee fails the run), and the run fails unless
   `UserOperationEvent.actualGasCost == actualGasUsed × that price`.
+
 ### SP 5.5.0 gate: X402Facilitator and GTokenAuthorization are held to the 3.x xPNTsFactory (`xPNTsFactoryV1`)
 
 - A fresh stack keeps two factories (SP `D5-deploy-migration.md` §1, `DeployLive.s.sol:467/479`): SuperPaymaster uses

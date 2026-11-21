@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
+import { AOAProtocolRegistryABI, APNTsCappedABI, GlobalTierSourceABI, GTokenAuthorizationRc8ABI, RegistryRc8ABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI } from './abis/index.js';
 import { COEXIST_STACK_ENTRIES } from './abis/coexistStackAbi.js';
 import { keccak256, pad, toHex, zeroAddress, type Address, type Hex } from 'viem';
 import { optimism, optimismSepolia, sepolia } from 'viem/chains';
@@ -1152,12 +1152,27 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
         expect(sp550PinsFor('op-sepolia')).toMatchObject({ table: 'SP550_FRESH_DEPLOY_PINS', key: String(optimismSepolia.id) });
     });
 
-    it('its shipped table entry is empty, so the gate and sp550AddressSet fail closed; sepolia-rc8 is untouched', async () => {
-        expect(SP550_COEXIST_PINS['op-sepolia-rc8']).toEqual({});
+    it('its shipped entry is the read-back pin set (2026-11-21): well-formed, usable by sp550AddressSet; sepolia-rc8 stays empty', () => {
+        const shipped = SP550_COEXIST_PINS['op-sepolia-rc8'];
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', shipped)).toEqual({ problems: [], hold: undefined });
+        // The values that tie it to this deployment (the rest is held by the live gate at the read-back).
+        expect(shipped.superPaymaster).toBe('0x3C73Dd3C576a594Dd1e7afDEEc9f8757C35A31E7');
+        expect(shipped.addresses?.registry).toBe('0x4b71DB19fBA1a506E0b8ee729B6DC2001Aa19895');
+        expect(shipped.xPNTsFactoryV1).toBe('0xAA920BaA1833192c8D9393E43274dEA827d8174D');
+        expect(shipped.readbackBlock).toBe(51714812n);
+        const set = sp550AddressSet('op-sepolia-rc8');
+        expect(set.chainId).toBe(optimismSepolia.id);
+        expect((set.addresses as Record<string, string>).superPaymaster).toBe(shipped.superPaymaster);
+        expect(JSON.stringify((CANONICAL_ADDRESSES as Record<number, any>)[optimismSepolia.id])).toBe(shippedSnapshot);
         expect(SP550_COEXIST_PINS['sepolia-rc8']).toEqual({});
-        expect(() => sp550AddressSet('op-sepolia-rc8')).toThrow(/fresh-deploy pins for chain 11155420 are not usable/);
+    });
+
+    it('an empty entry still fails closed, on the pins check itself', async () => {
         const m = deployment(optimismSepolia.id, 'fresh');
-        expect((await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m) })).exitCode).toBe(1);
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: {} });
+        expect(r.exitCode).toBe(1);
+        // The pins check itself must be the one that fails, not only something downstream of the empty entry.
+        expect(failed(r)).toContain('pins complete and well-formed');
     });
 
     it('the gate holds its pins against the shipped OP Sepolia book overlaid with them; against the shipped book itself they fail', async () => {
@@ -1166,6 +1181,9 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
         expect(r.results.filter((c) => !c.ok)).toEqual([]);
         expect(r.exitCode).toBe(0);
         expect(r.header).toContain('coexisting stack');
+        // A complete set with one required pin dropped is refused by the pins check.
+        const { spImpl: _drop, ...short } = m.pins;
+        expect(failed(await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: short as any }))).toContain('pins complete and well-formed');
         const raw = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: m.pins, book: shippedOpSepolia });
         expect(raw.exitCode).toBe(1);
         expect(raw.results.find((c) => c.check === 'pins.superPaymaster == SDK book superPaymaster')?.ok).toBe(false);
@@ -1194,8 +1212,26 @@ describe('op-sepolia-rc8: the rc.8 stack coexisting with OP Sepolia\'s existing 
     });
 
     it('reads its rc.8 contracts with the rc.8 ABIs and the rc.8 release-version table, like sepolia-rc8', () => {
-        expect(sp550WiringScanAbi('op-sepolia-rc8')).toEqual(sp550WiringScanAbi('sepolia-rc8'));
+        // Asserted against the rc.8 ABIs themselves, not only against sepolia-rc8 (both rows could be wrong alike).
+        const abi = sp550WiringScanAbi('op-sepolia-rc8');
+        expect(abi.registryImpl).toBe(RegistryRc8ABI);
+        expect(abi['addresses.registry']).toBe(RegistryRc8ABI);
+        expect(abi['addresses.gToken']).toBe(GTokenAuthorizationRc8ABI);
+        expect(abi['addresses.blsValidator']).toBeNull();
+        expect(abi).toEqual(sp550WiringScanAbi('sepolia-rc8'));
+        expect(SP550_RELEASE_VERSIONS['op-sepolia-rc8']).toEqual(RELEASE);
         expect(SP550_RELEASE_VERSIONS['op-sepolia-rc8']).toBe(SP550_RELEASE_VERSIONS['sepolia-rc8']);
         expect(sp550HoldFor('op-sepolia-rc8')).toBeUndefined();
+    });
+
+    it('allowRc: a v5.5.0-rc.N tag passes on op-sepolia-rc8 without --allow-rc, and is refused on the chain-keyed op-sepolia', async () => {
+        const m = deployment(optimismSepolia.id, 'fresh');
+        const rc = { ...m.pins, tag: 'v5.5.0-rc.8' };
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', rc).problems).toEqual([]);
+        expect(sp550NetworkPinProblems('op-sepolia', rc).problems).toContainEqual(expect.stringMatching(/^tag: "v5\.5\.0-rc\.8" is not v5\.5\.0$/));
+        const r = await rawGate({ network: 'op-sepolia-rc8', rpcs: twin(m), pins: rc });
+        expect(r.results.find((c) => c.check === 'pins complete and well-formed')?.ok).toBe(true);
+        // allowRc widens the tag only to rc.N of 5.5.0.
+        expect(sp550NetworkPinProblems('op-sepolia-rc8', { ...m.pins, tag: 'v5.5.1-rc.1' }).problems).toContainEqual(expect.stringMatching(/^tag: /));
     });
 });
