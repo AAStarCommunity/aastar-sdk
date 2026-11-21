@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
-import { maxRateFromPlan } from './sp550-e2e-checks.js';
+import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem, submitOptionsFor, runS3bCell, inclusionBaseFee, finalVerdictLine } from './sp550-e2e-checks.js';
 
 // This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
@@ -634,5 +634,182 @@ describe('the cost path, behaviourally (Daybreak #470 L3)', { timeout: SPAWN_VER
         const io: any = { approvals: new CostApprovals(), budget: () => ({ used: 0, limit: 1 }), takeSlot: () => {}, beforeSign: async () => {}, costAtKey: async () => {}, fresh: async () => {}, sign: async () => { keys++; return '0x' as Hex; } };
         await expect(guardedSignMessage({ message: { raw: ('0x' + 'ee'.repeat(32)) as Hex } }, io)).rejects.toThrow(/no cost check approved/);
         expect(keys).toBe(0);
+    });
+});
+
+describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('omitted yields no policy, and submitOptionsFor (the runner\'s submit options) is key for key the previous construction', () => {
+        expect(parseFeePolicy(undefined)).toEqual({});
+        const base = { operator: '0x1', onGasDecided: () => {}, requireEstimate: true, noDirectSendFallback: true, maxUserOpCostWei: 5n, beforeSignUserOp: async () => {}, maxRate: 7n };
+        const frozenGas = { verificationGasLimit: 1n };
+        // The expression the runner used before feePolicy existed, for each combination of the two older options.
+        const previous = (fg: unknown, c: bigint | undefined) => ({ ...base, ...(fg ? { frozenGas: fg } : {}), ...(c !== undefined ? { gasLimitCoefficientBps: c } : {}) });
+        const keys = (o: object) => Object.entries(o).map(([k, v]) => [k, typeof v === 'function' ? v : JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? `${x}n` : x))]);
+        for (const fg of [undefined, frozenGas]) for (const c of [undefined, 15_000n]) {
+            const got = submitOptionsFor(base, { frozenGas: fg, gasLimitCoefficientBps: c, feePolicy: parseFeePolicy(undefined).feePolicy });
+            expect(keys(got)).toEqual(keys(previous(fg, c)));
+            expect('feePolicy' in got).toBe(false);
+        }
+        const withPolicy = submitOptionsFor(base, { feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(withPolicy).toEqual({ ...base, feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(feePolicyOption(undefined)).toEqual({});
+    });
+    it('a full policy passes through unchanged', () => {
+        expect(parseFeePolicy({ priorityFeePercentile: 75, feeHistoryBlocks: 20 })).toEqual({ feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(parseFeePolicy({ priorityFeePercentile: 0, feeHistoryBlocks: 1 }).feePolicy).toEqual({ priorityFeePercentile: 0, feeHistoryBlocks: 1 });
+    });
+    it.each([
+        ['an unknown key', { priorityFeePercentile: 75, feeHistoryBlocks: 20, floor: 1 }],
+        ['a missing field', { priorityFeePercentile: 75 }],
+        ['a percentile above 100', { priorityFeePercentile: 101, feeHistoryBlocks: 20 }],
+        ['a fractional percentile', { priorityFeePercentile: 7.5, feeHistoryBlocks: 20 }],
+        ['zero blocks', { priorityFeePercentile: 75, feeHistoryBlocks: 0 }],
+        ['a string', { priorityFeePercentile: '75', feeHistoryBlocks: 20 }],
+        ['an array', [75, 20]],
+        ['null', null],
+    ])('refuses %s', (_n, v) => expect(parseFeePolicy(v).problem).toMatch(/^feePolicy/));
+});
+
+describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted = S3b runs as before', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('omitted: no skip, on any chain', () => { for (const c of [11155111, 11155420, 10]) expect(parseSkipS3b(undefined, c)).toEqual({}); });
+    it('refused outside OP: Sepolia (and any other chain) runs S3b', () => {
+        expect(parseSkipS3b({ reason: 'x' }, 11155111).problem).toMatch(/^skipS3b is for OP networks only .* chain 11155111 runs S3b/);
+        expect(parseSkipS3b({ reason: 'x' }, 31337).problem).toMatch(/^skipS3b is for OP networks only/);
+        expect(parseSkipS3b({ reason: 'x' }, 10)).toEqual({ reason: 'x' });
+    });
+    it('a reason is required and kept', () => {
+        expect(parseSkipS3b({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' }, 11155420)).toEqual({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' });
+        expect(parseSkipS3b({ reason: '  trimmed  ' }, 11155420).reason).toBe('trimmed');
+    });
+    it.each([
+        ['true', true], ['an empty reason', { reason: '' }], ['a blank reason', { reason: '   ' }], ['no reason', {}],
+        ['a non-string reason', { reason: 1 }], ['an unknown key', { reason: 'x', pass: true }], ['an array', ['x']], ['null', null],
+    ])('refuses %s', (_n, v) => expect(parseSkipS3b(v, 11155420).problem).toMatch(/^skipS3b/));
+});
+
+describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('min(maxFee, baseFee + priority); maxFee when it equals the priority', () => {
+        expect(userOpGasPriceV07(2_900_000_000n, 500_000n, 250n)).toBe(500_250n); // the renewal override: the price is unchanged
+        expect(userOpGasPriceV07(1_000n, 900n, 250n)).toBe(1_000n);
+        expect(userOpGasPriceV07(900n, 900n, 250n)).toBe(900n);
+    });
+    it('actualGasCost must equal actualGasUsed x that price', () => {
+        const fees = { maxFeePerGas: 2_900_000_000n, maxPriorityFeePerGas: 500_000n };
+        expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 500_250n }, fees, 250n)).toBeUndefined();
+        expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 2_900_000_000n }, fees, 250n)).toMatch(/actualGasCost .* != actualGasUsed/);
+    });
+});
+
+describe('runS3bCell: what S3b sends, skipped or not (Codex r1 M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const R = (flags: number, txHash = '0x' + 'aa'.repeat(32)) => ({ flags, txHash });
+    const harness = (o: { skipReason?: string; s1Flags?: number; cap?: bigint; floor?: bigint; renewAt?: number; maxOps?: number }) => {
+        const sent: string[] = []; const lines: string[] = []; const data: Hex[] = []; const floorsAsked: bigint[] = [];
+        let n = 0;
+        const deps = {
+            skipReason: o.skipReason, maxOps: o.maxOps ?? 3, s1: R(o.s1Flags ?? 0), noop: '0x01' as Hex, flagsOffset: 124,
+            op: async (label: string, callData: Hex) => { sent.push(label); data.push(callData); n++; return R(n === o.renewAt ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0); },
+            state: async () => ({ cap: o.cap ?? 5_000n * 10n ** 18n, used: 1n }),
+            floor: async () => o.floor ?? 250n * 10n ** 18n,
+            setupCallData: (f: bigint) => { floorsAsked.push(f); return '0x02' as Hex; },
+            result: (l: string) => { lines.push(l); },
+            fail: (m: string): never => { throw new Error(m); },
+        };
+        return { deps, sent, lines, data, floorsAsked };
+    };
+    it('skipped: no op at all (setup included), a NOT RUN row with the reason, status NOT RUN', async () => {
+        const h = harness({ skipReason: 'OP: SP_CAP_FLOOR is ~6000 ops away' });
+        expect(await runS3bCell(h.deps)).toEqual({ status: 'NOT RUN' });
+        expect(h.sent).toEqual([]);
+        expect(h.lines).toHaveLength(1);
+        expect(h.lines[0]).toMatch(/^S3b inline renewal: NOT RUN \(skipS3b: OP: SP_CAP_FLOOR is ~6000 ops away\) — not counted as passed; S3b setup not sent/);
+        expect(h.lines[0]).not.toMatch(/SP_RENEW chosen|success=true/);
+    });
+    it('omitted: the setup op lowers the cap, then spends until SP_RENEW, as before', async () => {
+        const h = harness({ renewAt: 3 });
+        const r = await runS3bCell(h.deps);
+        expect(r.status).toBe('PASS');
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)', 'S3b spend 1/3', 'S3b spend 2/3']);
+        // The setup op carries setupCallData(floor) for the floor read; every spend carries the task call.
+        expect(h.floorsAsked).toEqual([250n * 10n ** 18n]);
+        expect(h.data).toEqual(['0x02', '0x01', '0x01']);
+        expect(h.lines.at(-1)).toMatch(/^S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData\[124\]/);
+    });
+    it('omitted, the setup op itself carries SP_RENEW: that is the renewal, no spend follows', async () => {
+        const h = harness({ renewAt: 1 });
+        expect((await runS3bCell(h.deps)).status).toBe('PASS');
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)']);
+    });
+    it('omitted, cap already at the floor: no setup op', async () => {
+        const h = harness({ cap: 250n * 10n ** 18n, renewAt: 1 });
+        await runS3bCell(h.deps);
+        expect(h.sent).toEqual(['S3b spend 1/3']);
+    });
+    it('omitted, S1 already carried SP_RENEW: nothing more is sent', async () => {
+        const h = harness({ s1Flags: SUPER_PAYMASTER_FLAGS.SP_RENEW });
+        expect((await runS3bCell(h.deps)).status).toBe('PASS');
+        expect(h.sent).toEqual([]);
+    });
+    it('omitted, no renewal within maxOps: fails', async () => {
+        const h = harness({ maxOps: 2 });
+        await expect(runS3bCell(h.deps)).rejects.toThrow(/S3b: no op needed SP_RENEW within 2 ops/);
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)', 'S3b spend 1/2', 'S3b spend 2/2']);
+    });
+});
+
+describe('inclusionBaseFee: by block hash, never a guessed 0 (Codex r1 M1)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    const rc = { blockHash: ('0x' + 'bb'.repeat(32)) as Hex, blockNumber: 7n };
+    it('reads the block by the receipt\'s hash', async () => {
+        const asked: unknown[] = [];
+        expect(await inclusionBaseFee({ getBlock: async (a) => { asked.push(a); return { hash: rc.blockHash, baseFeePerGas: 250n }; } }, rc)).toBe(250n);
+        expect(asked).toEqual([{ blockHash: rc.blockHash }]);
+    });
+    it('an explicit 0 base fee is a value', async () => {
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: rc.blockHash, baseFeePerGas: 0n }) }, rc)).toBe(0n);
+    });
+    it('no base fee, another block, or an unreadable (orphaned) block is a problem', async () => {
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: rc.blockHash, baseFeePerGas: null }) }, rc)).toMatch(/reports no base fee/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: ('0x' + 'cc'.repeat(32)) as Hex, baseFeePerGas: 1n }) }, rc)).toMatch(/answered 0xcc/);
+        expect(await inclusionBaseFee({ getBlock: async () => { throw new Error('block not found'); } }, rc)).toMatch(/not readable by hash.*orphaned/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: null, baseFeePerGas: 250n }) }, rc)).toMatch(/answered no hash/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ baseFeePerGas: 250n }) }, rc)).toMatch(/answered no hash/);
+    });
+});
+
+describe('the runner\'s call sites pass the parsed config on (source guard, Codex r3 M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    // A source-level guard, like the URL-redaction one above: the helpers are tested for behaviour, and this holds the
+    // two production call sites to passing them what the config parsed. It is not a behavioural test of the runner.
+    const src = readFileSync(join(__dirname, 'sp550-live-e2e.ts'), 'utf8');
+    it('feePolicy is parsed once and every PaymasterClient op goes through submitOptionsFor with it', () => {
+        expect(src).toMatch(/const fp = parseFeePolicy\(cfg\.feePolicy\);\s*\n\s*if \(fp\.problem\) refuse\(fp\.problem\);\s*\n\s*const feePolicy = fp\.feePolicy;/);
+        expect(src).toMatch(/const submitOpts = \(onGasDecided: \(d: GasDecision\) => void\) => submitOptionsFor\(\{[^}]*\}, \{ frozenGas, gasLimitCoefficientBps, feePolicy \}\);/);
+        // The only PaymasterClient submissions take submitOpts(...) (S1, S3b through op(); S1r spreads it).
+        const submits = src.split('\n').filter((l) => l.includes('PaymasterClient.submitGaslessUserOperation('));
+        expect(submits).toHaveLength(2);
+        for (const c of submits) expect(c).toMatch(/submitOpts\(/);
+    });
+    it('skipS3b is parsed for the run\'s chain, before signing, and handed to runS3bCell; S3b is not sent anywhere else', () => {
+        expect(src).toMatch(/const sk = parseSkipS3b\(cfg\.skipS3b, net\.chainId\);\s*\n\s*if \(sk\.problem\) refuse\(sk\.problem\);\s*\n\s*const skipS3bReason = sk\.reason;/);
+        expect(src.indexOf('parseSkipS3b(cfg.skipS3b')).toBeLessThan(src.indexOf('loadLiveSigner('));
+        expect(src).toMatch(/s3b = await runS3bCell\(\{\s*\n\s*skipReason: skipS3bReason,/);
+        // The last line comes from finalVerdictLine with S3b's outcome; no bare PASS is printed anywhere else.
+        expect(src).toMatch(/console\.log\(`\\n\$\{finalVerdictLine\(s3b, skipS3bReason\)\}`\);/);
+        expect(src).not.toMatch(/console\.log\('\\nPASS'\)/);
+        expect(src.match(/runS3bCell\(/g)).toHaveLength(1);
+        expect(src).not.toMatch(/`S3b (setup|spend)/);
+    });
+});
+
+describe('finalVerdictLine: no bare PASS when a cell did not run (DSR 2026-11-21)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
+    it('all four cells: exactly "PASS", as before', () => expect(finalVerdictLine({ status: 'PASS' })).toBe('PASS'));
+    it('S3b skipped: a qualified line, which a whole-line match on PASS (run-a7.sh grep -x) does not accept', () => {
+        const line = finalVerdictLine({ status: 'NOT RUN' }, 'OP: SP_CAP_FLOOR ~6000 ops away');
+        expect(line).toBe('PASS (3 of 4 cells run; S3b NOT RUN: OP: SP_CAP_FLOOR ~6000 ops away)');
+        expect(line).not.toBe('PASS');
+        expect(/^PASS$/m.test(line)).toBe(false);
+    });
+    it('run-a7.sh matches the whole line', () => {
+        const sh = readFileSync(join(__dirname, 'sp550-fork/run-a7.sh'), 'utf8');
+        expect(sh).toMatch(/grep -qx 'PASS' "\$OUT\/e2e\.log"/);
+        expect(sh).not.toMatch(/grep -q '\^PASS'/);
     });
 });

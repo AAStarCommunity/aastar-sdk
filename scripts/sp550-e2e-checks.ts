@@ -693,3 +693,133 @@ export function checkoutContains(repoDir: string, commit: string, git: (args: st
     if (!/^[0-9a-f]{40}$/.test(commit)) return false;
     return git(['merge-base', '--is-ancestor', commit, 'HEAD'], repoDir) === 0;
 }
+
+/**
+ * The run config's optional fee policy (DSR 2026-11-21), passed as is to PaymasterClient's options.feePolicy for the
+ * ops this runner submits through it (S1, S1r, S3b). Omitted -> undefined, and the SDK defaults apply unchanged.
+ * No floor, no retry: a priority of 0 is sent as computed.
+ */
+export function parseFeePolicy(v: unknown): { feePolicy?: { priorityFeePercentile: number; feeHistoryBlocks: number }; problem?: string } {
+    if (v === undefined) return {};
+    const keys = ['priorityFeePercentile', 'feeHistoryBlocks'];
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => !keys.includes(k))) return { problem: `feePolicy must be { priorityFeePercentile, feeHistoryBlocks } (got ${JSON.stringify(v)})` };
+    const { priorityFeePercentile: p, feeHistoryBlocks: b } = v as Record<string, unknown>;
+    if (!Number.isInteger(p) || (p as number) < 0 || (p as number) > 100) return { problem: `feePolicy.priorityFeePercentile must be an integer from 0 to 100 (got ${JSON.stringify(p)})` };
+    if (!Number.isInteger(b) || (b as number) < 1 || (b as number) > 1024) return { problem: `feePolicy.feeHistoryBlocks must be an integer from 1 to 1024 (got ${JSON.stringify(b)})` };
+    return { feePolicy: { priorityFeePercentile: p as number, feeHistoryBlocks: b as number } };
+}
+
+/** The submit-option fragment for a parsed fee policy: nothing at all when it is omitted (the SDK defaults, unchanged). */
+export const feePolicyOption = (p: { priorityFeePercentile: number; feeHistoryBlocks: number } | undefined) => (p ? { feePolicy: p } : {});
+
+/**
+ * The runner's submit options for every PaymasterClient op (S1, S1r, S3b): the fixed `base`, then frozenGas, the gas
+ * coefficient and the fee policy, each only when configured. Omitted options add no key (the options before feePolicy
+ * existed are reproduced key for key).
+ */
+export function submitOptionsFor<B extends object, F extends object>(base: B, o: { frozenGas?: F; gasLimitCoefficientBps?: bigint; feePolicy?: { priorityFeePercentile: number; feeHistoryBlocks: number } }) {
+    return { ...base, ...(o.frozenGas ? { frozenGas: o.frozenGas } : {}), ...(o.gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps: o.gasLimitCoefficientBps } : {}), ...feePolicyOption(o.feePolicy) };
+}
+
+/** What the S3b cell needs from the runner (injected, so the cell's sends can be tested). */
+export interface S3bCellDeps<R extends { flags: number; txHash: string }> {
+    /** skipS3b's reason; undefined = run S3b. */
+    skipReason?: string;
+    maxOps: number;
+    s1: R;
+    op: (label: string, callData: Hex) => Promise<R>;
+    state: () => Promise<{ cap: bigint; used: bigint }>;
+    floor: () => Promise<bigint>;
+    /** execute(token, 0, setAutoAllowance(SP, floor)). */
+    setupCallData: (floor: bigint) => Hex;
+    noop: Hex;
+    flagsOffset: number;
+    result: (line: string) => void;
+    fail: (m: string) => never;
+}
+
+/**
+ * S3b inline renewal. Run: lower the SP allowance to the floor if needed (a sponsored op of its own), then spend until
+ * an op carries SP_RENEW, within maxOps. Skipped (skipS3b, DSR 2026-11-21 ruling B): nothing is sent, the setup op
+ * included, and the row says NOT RUN with the reason; it is never reported as passed.
+ */
+export async function runS3bCell<R extends { flags: number; txHash: string }>(d: S3bCellDeps<R>): Promise<{ status: 'NOT RUN' | 'PASS'; renewal?: R }> {
+    const SP_RENEW = SUPER_PAYMASTER_FLAGS.SP_RENEW;
+    if (d.skipReason !== undefined) {
+        // Setup included: no allowance is lowered without the spends that follow it.
+        const s = await d.state();
+        d.result(`S3b inline renewal: NOT RUN (skipS3b: ${d.skipReason}) — not counted as passed; S3b setup not sent, allowance ${s.used}/${s.cap} left as is` +
+            `${d.s1.flags & SP_RENEW ? ' · note: S1 itself carried SP_RENEW (recorded in its own row)' : ''}`);
+        return { status: 'NOT RUN' };
+    }
+    let renewal = d.s1.flags & SP_RENEW ? d.s1 : undefined;
+    if (!renewal) {
+        const floor = await d.floor();
+        if ((await d.state()).cap > floor) {
+            // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
+            // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
+            const setup = await d.op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, d.setupCallData(floor));
+            if (setup.flags & SP_RENEW) renewal = setup;
+        }
+        for (let i = 1; i <= d.maxOps && !renewal; i++) {
+            const r = await d.op(`S3b spend ${i}/${d.maxOps}`, d.noop);
+            if (r.flags & SP_RENEW) renewal = r;
+        }
+    }
+    if (!renewal) return d.fail(`S3b: no op needed SP_RENEW within ${d.maxOps} ops (raise maxOps; the allowance used is ${(await d.state()).used})`);
+    // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
+    d.result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${d.flagsOffset}] of tx ${renewal.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
+    return { status: 'PASS', renewal };
+}
+
+/**
+ * The run config's skipS3b (DSR 2026-11-21, ruling B): { reason: non-empty string }. Omitted -> S3b runs as before.
+ * A skipped S3b is reported NOT RUN with the reason, never as a pass, and its setup op is not sent either.
+ */
+export const SKIP_S3B_CHAIN_IDS: readonly number[] = [10, 11155420]; // OP Mainnet, OP Sepolia (DSR ruling B is for OP only)
+export function parseSkipS3b(v: unknown, chainId: number): { reason?: string; problem?: string } {
+    if (v === undefined) return {};
+    if (!SKIP_S3B_CHAIN_IDS.includes(chainId)) return { problem: `skipS3b is for OP networks only (chain ${SKIP_S3B_CHAIN_IDS.join(' / ')}); chain ${chainId} runs S3b` };
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => k !== 'reason')) return { problem: `skipS3b must be { reason: "<why>" } (got ${JSON.stringify(v)})` };
+    const r = (v as { reason?: unknown }).reason;
+    if (typeof r !== 'string' || r.trim() === '') return { problem: 'skipS3b.reason must be a non-empty string: a skipped cell is reported with why it did not run' };
+    return { reason: r.trim() };
+}
+
+/**
+ * The run's last line. All four cells (S1, S1r, S3b, C12) ran and passed: exactly "PASS", as before. S3b skipped
+ * (skipS3b): a qualified line that never reads as a bare PASS (DSR 2026-11-21, boundary 2), so a consumer matching
+ * the whole line "PASS" does not count a run with a cell not run as a full pass.
+ */
+export function finalVerdictLine(s3b: { status: 'NOT RUN' | 'PASS' }, skipReason?: string): string {
+    return s3b.status === 'NOT RUN' ? `PASS (3 of 4 cells run; S3b NOT RUN: ${skipReason ?? '(no reason)'})` : 'PASS';
+}
+
+/**
+ * The base fee of the block a receipt names, read BY HASH (a reorg cannot swap in another block's fee). A missing
+ * block or a block without a base fee is unknown, returned as a problem string, never taken as 0.
+ */
+export async function inclusionBaseFee(client: { getBlock: (a: { blockHash: Hex }) => Promise<{ hash?: Hex | null; baseFeePerGas?: bigint | null }> }, rc: { blockHash: Hex; blockNumber: bigint }): Promise<bigint | string> {
+    let b;
+    try { b = await client.getBlock({ blockHash: rc.blockHash }); } catch (e: any) { return `inclusion block ${rc.blockNumber} (${rc.blockHash}) not readable by hash: ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 120)}; the receipt may be orphaned`; }
+    if (typeof b?.hash !== 'string' || b.hash.toLowerCase() !== rc.blockHash.toLowerCase()) return `inclusion block by hash ${rc.blockHash} answered ${b?.hash === undefined || b?.hash === null ? 'no hash' : b.hash}`;
+    if (b?.baseFeePerGas === undefined || b.baseFeePerGas === null) return `inclusion block ${rc.blockNumber} (${rc.blockHash}) reports no base fee; the charged price is unknown`;
+    return BigInt(b.baseFeePerGas);
+}
+
+/**
+ * EntryPoint v0.7's per-gas price for an op (EntryPoint.sol getUserOpGasPrice): maxFee when maxFee == priority, else
+ * min(maxFee, priority + block.basefee). Used to show, from each op's own receipt, what it was actually charged.
+ */
+export function userOpGasPriceV07(maxFeePerGas: bigint, maxPriorityFeePerGas: bigint, baseFeePerGas: bigint): bigint {
+    if (maxFeePerGas === maxPriorityFeePerGas) return maxFeePerGas;
+    const p = maxPriorityFeePerGas + baseFeePerGas;
+    return p < maxFeePerGas ? p : maxFeePerGas;
+}
+
+/** UserOperationEvent.actualGasCost must equal actualGasUsed x the v0.7 gas price at the inclusion block. */
+export function actualCostProblem(ev: { actualGasCost: bigint; actualGasUsed: bigint }, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }, baseFeePerGas: bigint): string | undefined {
+    const price = userOpGasPriceV07(fees.maxFeePerGas, fees.maxPriorityFeePerGas, baseFeePerGas);
+    return ev.actualGasCost === ev.actualGasUsed * price ? undefined
+        : `actualGasCost ${ev.actualGasCost} != actualGasUsed ${ev.actualGasUsed} x min(maxFee ${fees.maxFeePerGas}, baseFee ${baseFeePerGas} + priority ${fees.maxPriorityFeePerGas}) = ${ev.actualGasUsed * price}`;
+}
