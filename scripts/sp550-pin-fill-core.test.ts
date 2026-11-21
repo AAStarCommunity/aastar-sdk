@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { pinFillPreflightRefusal, PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { pinFillPreflightRefusal, PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan, renderPinsLiteral } from './sp550-pin-fill-core.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -22,7 +22,7 @@ const MANIFEST = {
     spAdminExtension: A(0x1a), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0x1b), disclosureRegistry: A(0x1c), timelockController: 'n/a:none',
     addresses: { registry: A(0x21), policyRegistry: A(0x22), blsAggregator: A(0x23), dvtValidator: A(0x24), reputationSystem: A(0x25) },
 } as Record<string, any>;
-MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as any).map(([k], i) =>
+MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as any).filter(([, a]) => a !== undefined).map(([k], i) =>
     [k, k === 'spImpl' ? MANIFEST.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
 
 /** Write `source` next to the real module so its imports resolve, import it, delete it. */
@@ -45,6 +45,14 @@ describe('parseManifestPins: the manifest is read the way the gate reads --pins,
         expect(() => parseManifestPins({ ...MANIFEST, lens: A(1) }, 'upgrade')).toThrow(/unknown key\(s\) for a upgrade deploy: lens/);
         expect(() => parseManifestPins({ ...MANIFEST, absent: ['pnts'] }, 'upgrade')).toThrow(/declares absence only for the timelock/);
         expect(parseManifestPins({ ...MANIFEST, addresses: {}, absent: [] }, 'fresh').addresses).toEqual({});
+    });
+    it('xPNTsFactoryV1 (the 3.x factory, DSR 2026-11-21) is a fresh-deploy key: passed through and rendered there, refused for an upgrade', () => {
+        const fresh = { ...MANIFEST, xPNTsFactoryV1: A(0x1d), codehashes: { ...MANIFEST.codehashes, xPNTsFactoryV1: '0x' + 'cd'.repeat(32) } };
+        const p = parseManifestPins(fresh, 'fresh');
+        expect(p.xPNTsFactoryV1).toBe(A(0x1d));
+        expect(p.codehashes?.xPNTsFactoryV1).toBe('0x' + 'cd'.repeat(32));
+        expect(renderPinsLiteral(p)).toContain(`xPNTsFactoryV1: ${JSON.stringify(getAddress(A(0x1d)))},`);
+        expect(() => parseManifestPins(fresh, 'upgrade')).toThrow(/unknown key\(s\) for a upgrade deploy: xPNTsFactoryV1/);
     });
     it('a readbackBlock that is not a block number is refused', () => {
         for (const rb of [-1, 1.5, '0x10', 'latest', 2 ** 60]) expect(() => parseManifestPins({ ...MANIFEST, readbackBlock: rb }, 'upgrade')).toThrow(/readbackBlock/);
@@ -79,7 +87,7 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
         const pins = parseManifestPins(MANIFEST, 'upgrade');
         const m = await load('cut', fillPinsTable(source, 'SP550_CUTOVER_PINS', 11155111, pins));
         const got = m.SP550_CUTOVER_PINS[11155111];
-        const checksummed = Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([k]) => !k.startsWith('addresses.')).map(([k, a]) => [k, getAddress(a as string)]));
+        const checksummed = Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([k, a]) => !k.startsWith('addresses.') && a !== undefined).map(([k, a]) => [k, getAddress(a as string)]));
         const book = Object.fromEntries(Object.entries(pins.addresses!).map(([k, a]) => [k, getAddress(a!)]));
         expect(got).toEqual({ ...pins, ...checksummed, addresses: book });
         expect(sp550PinProblems(got, { allowRc: true })).toEqual([]);

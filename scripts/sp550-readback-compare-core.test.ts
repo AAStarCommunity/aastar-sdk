@@ -13,6 +13,8 @@ import {
 
 const A = (n: number) => ('0x' + n.toString(16).padStart(40, '0')) as `0x${string}`;
 const H = (n: number) => ('0x' + n.toString(16).padStart(2, '0').repeat(32)) as `0x${string}`;
+/** The pinned entries this upgrade-shaped fixture sets (a fresh-only field such as xPNTsFactoryV1 stays unset). */
+const pinnedOf = (p: any) => sp550PinnedAddressEntries(p).filter(([, a]) => a !== undefined);
 const PINS: any = {
     tag: 'v5.5.0-rc.8', spVersion: 'SuperPaymaster-5.5.1', superPaymaster: A(0x10), spImpl: A(0x11), spImplCodehash: H(0x11),
     spAdminExtension: A(0x12), superPaymasterLens: A(0x13), lensVersion: 'SuperPaymasterLens-1.2.2', xPNTsFactoryV2: A(0x14),
@@ -20,7 +22,7 @@ const PINS: any = {
     registryImpl: A(0x1b), disclosureRegistry: A(0x1c), readbackBlock: 500n,
     addresses: { registry: A(0x21), policyRegistry: A(0x22), blsAggregator: A(0x23), dvtValidator: A(0x24), reputationSystem: A(0x25) },
 };
-PINS.codehashes = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [k, k === 'spImpl' ? PINS.spImplCodehash : H(parseInt((a as string).slice(-2), 16))]));
+PINS.codehashes = Object.fromEntries(pinnedOf(PINS).map(([k, a]) => [k, k === 'spImpl' ? PINS.spImplCodehash : H(parseInt((a as string).slice(-2), 16))]));
 const DUMP = 'ab'.repeat(32);
 const ANVIL = '4e8874b2bdc840929585ca73e170993c50a4a531';
 const CTX = { chainId: 11155111, mode: 'upgrade' as const, network: 'sepolia' as const, source: 'fork' as const, allowRc: true, forkBlock: 400n, dumpSha256: DUMP, hardfork: 'amsterdam', anvilCommit: ANVIL, spCommit: 'c0ffee'.padEnd(40, '0') };
@@ -34,11 +36,11 @@ const CHAIN: Record<string, Partial<Record<'version' | 'owner' | 'pendingOwner',
     [A(0x21)]: { version: { kind: 'value', value: 'Registry-5.10.0' }, owner: { kind: 'value', value: A(0xb0) }, pendingOwner: { kind: 'value', value: A(0) } },
 };
 // Every other pinned contract has a version() except the two that have none by design (spAdminExtension, xPNTsTokenV2Ext).
-for (const [k, a] of sp550PinnedAddressEntries(PINS)) {
+for (const [k, a] of pinnedOf(PINS)) {
     if (!CHAIN[a as string] && k !== 'spAdminExtension' && k !== 'xPNTsTokenV2Ext') CHAIN[a as string] = { version: { kind: 'value', value: `${k}-1.0.0` } };
 }
 /** Code on chain: each pinned address holds the code its pin names. */
-const CODE: Record<string, string> = Object.fromEntries(sp550PinnedAddressEntries(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
+const CODE: Record<string, string> = Object.fromEntries(pinnedOf(PINS).map(([k, a]) => [(a as string).toLowerCase(), PINS.codehashes[k]]));
 const SLOTS: Record<string, string> = { [A(0x10)]: A(0x11), [A(0x21)]: A(0x1b) };
 let PENDING_SLOT: Record<string, string> = { [A(0x21)]: A(0) };
 let AMSTERDAM: Observed = { kind: 'value', value: JSON.stringify({ blockAccessListHash: true, slotNumber: true, ethConfigs: [{ activationTime: 1791294816, forkId: '0x6c1d9423' }] }) };
@@ -55,7 +57,7 @@ const reader = (chain = CHAIN, code = CODE, slots = SLOTS, blockHash = BLOCK_HAS
 /** A fork read-back that is schema-valid and agrees with PINS and CHAIN. */
 function good(): any {
     const contracts: Record<string, any> = {};
-    for (const [pinName, a] of sp550PinnedAddressEntries(PINS)) {
+    for (const [pinName, a] of pinnedOf(PINS)) {
         if (pinName === 'spImpl' || pinName === 'registryImpl') continue; // covered by the proxies' fields
         const onChain = CHAIN[a as string] ?? {};
         contracts[contractKeyOf(pinName)] = {

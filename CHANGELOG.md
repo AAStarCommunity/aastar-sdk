@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### SP 5.5.0 gate: X402Facilitator and GTokenAuthorization are held to the 3.x xPNTsFactory (`xPNTsFactoryV1`)
+
+- A fresh stack keeps two factories (SP `D5-deploy-migration.md` §1, `DeployLive.s.sol:467/479`): SuperPaymaster uses
+  `xPNTsFactoryV2` (the book's `xPNTsFactory`), while the 3.x factory deploys the protocol aPNTs and is bound into
+  GTokenAuthorization's `factory` and X402Facilitator's `XPNTS_FACTORY`. The gate held the facilitator to the V2 factory,
+  which a correct rc.8 deploy fails (the op-sepolia-rc8 preview, DSR 2026-11-21: expectation wrong, not the deploy).
+- New pin `xPNTsFactoryV1` (top level, with `codehashes.xPNTsFactoryV1`): required for every fresh network
+  (`sepolia-rc8`, `op-sepolia-rc8`, `op-sepolia`, `op-mainnet`), not accepted in an upgrade manifest. The gate checks
+  `X402Facilitator.XPNTS_FACTORY()`, `GTokenAuthorization.factory()`, its `REGISTRY()` and `SUPERPAYMASTER()`, its codehash,
+  and scans its address getters; it may not share an address with the V2 factory.
+- Scope note (design, not a defect): in 5.5.0, X402's direct path whitelists tokens of the 3.x factory only (aPNTs); a
+  community's V2 xPNTs is not on it.
+
 ### `op-sepolia-rc8`: the rc.8 rehearsal moves to OP Sepolia, next to its existing stack
 
 - New SP 5.5.0 network `op-sepolia-rc8` (chain 11155420, `fresh`, `coexist: true`, `allowRc: true`), the same way

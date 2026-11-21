@@ -24,7 +24,7 @@ const UPGRADE_KEYS = [
     'xPNTsFactoryV2', 'xPNTsTokenV2Impl', 'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped',
     'registryImpl', 'disclosureRegistry', 'addresses', 'readbackBlock', 'codehashes',
 ] as const;
-const FRESH_KEYS = [...UPGRADE_KEYS, 'absent'] as const;
+const FRESH_KEYS = [...UPGRADE_KEYS, 'xPNTsFactoryV1', 'absent'] as const;
 /** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (derived from the comparator's table: one source). */
 export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(BOOK_KEY_CONTRACT_ALIASES).map(([k, v]) => [k, `contracts.${v}`]));
 
