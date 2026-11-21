@@ -671,15 +671,20 @@ describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults
 });
 
 describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted = S3b runs as before', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
-    it('omitted: no skip', () => expect(parseSkipS3b(undefined)).toEqual({}));
+    it('omitted: no skip, on any chain', () => { for (const c of [11155111, 11155420, 10]) expect(parseSkipS3b(undefined, c)).toEqual({}); });
+    it('refused outside OP: Sepolia (and any other chain) runs S3b', () => {
+        expect(parseSkipS3b({ reason: 'x' }, 11155111).problem).toMatch(/^skipS3b is for OP networks only .* chain 11155111 runs S3b/);
+        expect(parseSkipS3b({ reason: 'x' }, 31337).problem).toMatch(/^skipS3b is for OP networks only/);
+        expect(parseSkipS3b({ reason: 'x' }, 10)).toEqual({ reason: 'x' });
+    });
     it('a reason is required and kept', () => {
-        expect(parseSkipS3b({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' })).toEqual({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' });
-        expect(parseSkipS3b({ reason: '  trimmed  ' }).reason).toBe('trimmed');
+        expect(parseSkipS3b({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' }, 11155420)).toEqual({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' });
+        expect(parseSkipS3b({ reason: '  trimmed  ' }, 11155420).reason).toBe('trimmed');
     });
     it.each([
         ['true', true], ['an empty reason', { reason: '' }], ['a blank reason', { reason: '   ' }], ['no reason', {}],
         ['a non-string reason', { reason: 1 }], ['an unknown key', { reason: 'x', pass: true }], ['an array', ['x']], ['null', null],
-    ])('refuses %s', (_n, v) => expect(parseSkipS3b(v).problem).toMatch(/^skipS3b/));
+    ])('refuses %s', (_n, v) => expect(parseSkipS3b(v, 11155420).problem).toMatch(/^skipS3b/));
 });
 
 describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
@@ -698,18 +703,18 @@ describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)
 describe('runS3bCell: what S3b sends, skipped or not (Codex r1 M2)', { timeout: SPAWN_VERDICT_TIMEOUT_MS }, () => {
     const R = (flags: number, txHash = '0x' + 'aa'.repeat(32)) => ({ flags, txHash });
     const harness = (o: { skipReason?: string; s1Flags?: number; cap?: bigint; floor?: bigint; renewAt?: number; maxOps?: number }) => {
-        const sent: string[] = []; const lines: string[] = [];
+        const sent: string[] = []; const lines: string[] = []; const data: Hex[] = []; const floorsAsked: bigint[] = [];
         let n = 0;
         const deps = {
             skipReason: o.skipReason, maxOps: o.maxOps ?? 3, s1: R(o.s1Flags ?? 0), noop: '0x01' as Hex, flagsOffset: 124,
-            op: async (label: string) => { sent.push(label); n++; return R(n === o.renewAt ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0); },
+            op: async (label: string, callData: Hex) => { sent.push(label); data.push(callData); n++; return R(n === o.renewAt ? SUPER_PAYMASTER_FLAGS.SP_RENEW : 0); },
             state: async () => ({ cap: o.cap ?? 5_000n * 10n ** 18n, used: 1n }),
             floor: async () => o.floor ?? 250n * 10n ** 18n,
-            setupCallData: () => '0x02' as Hex,
+            setupCallData: (f: bigint) => { floorsAsked.push(f); return '0x02' as Hex; },
             result: (l: string) => { lines.push(l); },
             fail: (m: string): never => { throw new Error(m); },
         };
-        return { deps, sent, lines };
+        return { deps, sent, lines, data, floorsAsked };
     };
     it('skipped: no op at all (setup included), a NOT RUN row with the reason, status NOT RUN', async () => {
         const h = harness({ skipReason: 'OP: SP_CAP_FLOOR is ~6000 ops away' });
@@ -724,7 +729,15 @@ describe('runS3bCell: what S3b sends, skipped or not (Codex r1 M2)', { timeout: 
         const r = await runS3bCell(h.deps);
         expect(r.status).toBe('PASS');
         expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)', 'S3b spend 1/3', 'S3b spend 2/3']);
+        // The setup op carries setupCallData(floor) for the floor read; every spend carries the task call.
+        expect(h.floorsAsked).toEqual([250n * 10n ** 18n]);
+        expect(h.data).toEqual(['0x02', '0x01', '0x01']);
         expect(h.lines.at(-1)).toMatch(/^S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData\[124\]/);
+    });
+    it('omitted, the setup op itself carries SP_RENEW: that is the renewal, no spend follows', async () => {
+        const h = harness({ renewAt: 1 });
+        expect((await runS3bCell(h.deps)).status).toBe('PASS');
+        expect(h.sent).toEqual(['S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=250000000000000000000)']);
     });
     it('omitted, cap already at the floor: no setup op', async () => {
         const h = harness({ cap: 250n * 10n ** 18n, renewAt: 1 });
@@ -757,5 +770,7 @@ describe('inclusionBaseFee: by block hash, never a guessed 0 (Codex r1 M1)', { t
         expect(await inclusionBaseFee({ getBlock: async () => ({ hash: rc.blockHash, baseFeePerGas: null }) }, rc)).toMatch(/reports no base fee/);
         expect(await inclusionBaseFee({ getBlock: async () => ({ hash: ('0x' + 'cc'.repeat(32)) as Hex, baseFeePerGas: 1n }) }, rc)).toMatch(/answered 0xcc/);
         expect(await inclusionBaseFee({ getBlock: async () => { throw new Error('block not found'); } }, rc)).toMatch(/not readable by hash.*orphaned/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ hash: null, baseFeePerGas: 250n }) }, rc)).toMatch(/answered no hash/);
+        expect(await inclusionBaseFee({ getBlock: async () => ({ baseFeePerGas: 250n }) }, rc)).toMatch(/answered no hash/);
     });
 });

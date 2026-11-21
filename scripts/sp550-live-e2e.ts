@@ -216,7 +216,7 @@ async function main() {
     const feePolicy = fp.feePolicy;
     // DSR 2026-11-21 (ruling B): on OP the allowance floor (SP_CAP_FLOOR, 250 aPNTs) is thousands of default-fee ops away,
     // so S3b cannot reach SP_RENEW there. It may be skipped, with a stated reason; skipped is NOT RUN, never a pass.
-    const sk = parseSkipS3b(cfg.skipS3b);
+    const sk = parseSkipS3b(cfg.skipS3b, net.chainId);
     if (sk.problem) refuse(sk.problem);
     const skipS3bReason = sk.reason;
     // M1: the release gasParams tuple, shape-checked before anything is read (compared with the snapshot below).

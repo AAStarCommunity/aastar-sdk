@@ -776,8 +776,10 @@ export async function runS3bCell<R extends { flags: number; txHash: string }>(d:
  * The run config's skipS3b (DSR 2026-11-21, ruling B): { reason: non-empty string }. Omitted -> S3b runs as before.
  * A skipped S3b is reported NOT RUN with the reason, never as a pass, and its setup op is not sent either.
  */
-export function parseSkipS3b(v: unknown): { reason?: string; problem?: string } {
+export const SKIP_S3B_CHAIN_IDS: readonly number[] = [10, 11155420]; // OP Mainnet, OP Sepolia (DSR ruling B is for OP only)
+export function parseSkipS3b(v: unknown, chainId: number): { reason?: string; problem?: string } {
     if (v === undefined) return {};
+    if (!SKIP_S3B_CHAIN_IDS.includes(chainId)) return { problem: `skipS3b is for OP networks only (chain ${SKIP_S3B_CHAIN_IDS.join(' / ')}); chain ${chainId} runs S3b` };
     if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => k !== 'reason')) return { problem: `skipS3b must be { reason: "<why>" } (got ${JSON.stringify(v)})` };
     const r = (v as { reason?: unknown }).reason;
     if (typeof r !== 'string' || r.trim() === '') return { problem: 'skipS3b.reason must be a non-empty string: a skipped cell is reported with why it did not run' };
@@ -791,7 +793,7 @@ export function parseSkipS3b(v: unknown): { reason?: string; problem?: string } 
 export async function inclusionBaseFee(client: { getBlock: (a: { blockHash: Hex }) => Promise<{ hash?: Hex | null; baseFeePerGas?: bigint | null }> }, rc: { blockHash: Hex; blockNumber: bigint }): Promise<bigint | string> {
     let b;
     try { b = await client.getBlock({ blockHash: rc.blockHash }); } catch (e: any) { return `inclusion block ${rc.blockNumber} (${rc.blockHash}) not readable by hash: ${String(e?.shortMessage ?? e?.message ?? e).slice(0, 120)}; the receipt may be orphaned`; }
-    if (b?.hash && b.hash.toLowerCase() !== rc.blockHash.toLowerCase()) return `inclusion block by hash ${rc.blockHash} answered ${b.hash}`;
+    if (typeof b?.hash !== 'string' || b.hash.toLowerCase() !== rc.blockHash.toLowerCase()) return `inclusion block by hash ${rc.blockHash} answered ${b?.hash === undefined || b?.hash === null ? 'no hash' : b.hash}`;
     if (b?.baseFeePerGas === undefined || b.baseFeePerGas === null) return `inclusion block ${rc.blockNumber} (${rc.blockHash}) reports no base fee; the charged price is unknown`;
     return BigInt(b.baseFeePerGas);
 }
