@@ -38,6 +38,13 @@ export interface Sp550CutoverPins {
     /** The exact `SuperPaymasterLens.version()` string (e.g. "SuperPaymasterLens-1.2.2"). */
     lensVersion?: string;
     xPNTsFactoryV2?: Address;
+    /**
+     * The 3.x xPNTsFactory a fresh deploy keeps beside the V2 one (SP D5-deploy-migration.md §1): GTokenAuthorization's
+     * `factory` is bound to it, and X402Facilitator's XPNTS_FACTORY whitelist reads it (DeployLive.s.sol:467/479).
+     * A production DeployLive issues no token from it (aPNTs is APNTsCapped, deployed directly: DeployLive.s.sol:214-216).
+     * SP.xpntsFactory() and the book's xPNTsFactory are the V2 one. Fresh only.
+     */
+    xPNTsFactoryV1?: Address;
     xPNTsTokenV2Impl?: Address;
     xPNTsTokenV2Ext?: Address;
     aoaProtocolRegistry?: Address;
@@ -108,7 +115,7 @@ export const SP550_CUTOVER_PINS: Record<number, Sp550CutoverPins> = {
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 const ADDRESS_FIELDS = [
-    'superPaymaster', 'spImpl', 'spAdminExtension', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsTokenV2Impl',
+    'superPaymaster', 'spImpl', 'spAdminExtension', 'superPaymasterLens', 'xPNTsFactoryV2', 'xPNTsFactoryV1', 'xPNTsTokenV2Impl',
     'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped', 'registryImpl', 'disclosureRegistry',
 ] as const;
 

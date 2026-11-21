@@ -64,9 +64,11 @@ export const AMSTERDAM_ETH_CONFIG: Record<number, { activationTime: number; fork
  */
 export const BOOK_KEY_CONTRACT_ALIASES: Readonly<Record<string, string>> = { staking: 'gTokenStaking' };
 
+/** Top-level pins whose read-back contract key differs: SP's read-back names the 3.x factory `xPNTsFactory` (readback-policy.json). */
+export const TOP_LEVEL_CONTRACT_KEYS: Readonly<Record<string, string>> = { xPNTsFactoryV1: 'xPNTsFactory' };
 /** The read-back's contract key for a pin name: book entries drop their `addresses.` prefix (and follow the alias map). */
 export const contractKeyOf = (pinName: string) => {
-    if (!pinName.startsWith('addresses.')) return pinName;
+    if (!pinName.startsWith('addresses.')) return TOP_LEVEL_CONTRACT_KEYS[pinName] ?? pinName;
     const k = pinName.slice('addresses.'.length);
     return BOOK_KEY_CONTRACT_ALIASES[k] ?? k;
 };
@@ -156,6 +158,15 @@ const OWNED: Record<string, ReadonlyArray<'owner' | 'pendingOwner'>> = {
     registry: ['owner', 'pendingOwner'],
 };
 
+/**
+ * The read-back contracts the comparator compares, as [contract key, pinned address, pin name]: a declared alias's book
+ * entry is compared under its top-level name (dropped here), every other pin under contractKeyOf.
+ */
+export function readbackComparisonSet(entries: readonly (readonly [string, string])[]): (readonly [string, string, string])[] {
+    const aliasBook = new Set(SP550_PIN_ALIASES.map(([, b]) => b));
+    return entries.filter(([k]) => !aliasBook.has(k)).map(([k, a]) => [contractKeyOf(k), a, k] as const);
+}
+
 export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, ctx: ReadbackContext, read: ChainReader,
     validate: (x: unknown) => string[] = loadReadbackValidator()): Promise<string[]> {
     // The pins must be complete first: the comparison set is derived from them.
@@ -241,8 +252,7 @@ export async function readbackProblems(rb: unknown, pins: Sp550FreshDeployPins, 
         // Deduplicated below, so the alias's own codehash pin must be the same one that is compared.
         if (!eq(pins.codehashes?.[book], pins.codehashes?.[top])) p.push(`pins: codehashes.${book} ${show(pins.codehashes?.[book])} != codehashes.${top} ${show(pins.codehashes?.[top])} (declared alias)`);
     }
-    const aliasBook = new Set(SP550_PIN_ALIASES.map(([, b]) => b));
-    const pinned = entries.filter(([k]) => !aliasBook.has(k)).map(([k, a]) => [contractKeyOf(k), a, k] as const);
+    const pinned = readbackComparisonSet(entries);
     const seenKeys = new Set<string>();
     for (const [k, , pinName] of pinned) {
         if (seenKeys.has(k)) p.push(`pins: ${pinName} maps to contracts.${k}, which another pin already names`);

@@ -21,7 +21,7 @@ import { scannedGetters } from './abis/coexistStackAbi.js';
 import { getAddress, keccak256, toHex, zeroAddress, type Address, type PublicClient } from 'viem';
 import {
     AOAProtocolRegistryABI, APNTsCappedABI, BLSAggregatorABI, BLSValidatorABI, DVTValidatorABI, GTokenABI, GTokenStakingABI, GlobalTierSourceABI, MicroPaymentChannelABI, MySBTABI,
-    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, RegistryRc8ABI, GTokenAuthorizationRc8ABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
+    PaymasterABI, PaymasterFactoryABI, PolicyRegistryABI, RegistryABI, RegistryRc8ABI, GTokenAuthorizationRc8ABI, TimelockControllerABI, X402FacilitatorABI, ReputationSystemABI, SuperPaymasterLensABI, SuperPaymasterV550ABI, xPNTsFactoryABI, xPNTsFactoryV2ABI, xPNTsTokenV2ABI,
 } from './abis/index.js';
 import { CANONICAL_ADDRESSES } from './addresses.js';
 import { sp550PinnedAddressEntries } from './sp550Cutover.js';
@@ -75,7 +75,7 @@ const isLoopback = (url: string) => {
 /** The vendored ABI of each pinned entry the wiring scan reads (sp550PinnedAddressEntries names). */
 export const SP550_WIRING_SCAN_ABI: Record<string, unknown> = {
     superPaymaster: SuperPaymasterV550ABI, spImpl: SuperPaymasterV550ABI, superPaymasterLens: SuperPaymasterLensABI,
-    xPNTsFactoryV2: xPNTsFactoryV2ABI, xPNTsTokenV2Impl: xPNTsTokenV2ABI, aoaProtocolRegistry: AOAProtocolRegistryABI,
+    xPNTsFactoryV2: xPNTsFactoryV2ABI, xPNTsFactoryV1: xPNTsFactoryABI, xPNTsTokenV2Impl: xPNTsTokenV2ABI, aoaProtocolRegistry: AOAProtocolRegistryABI,
     globalTierSource: GlobalTierSourceABI, aPNTsCapped: APNTsCappedABI, registryImpl: RegistryABI,
     'addresses.registry': RegistryABI, 'addresses.gToken': GTokenABI, 'addresses.staking': GTokenStakingABI, 'addresses.sbt': MySBTABI,
     'addresses.reputationSystem': ReputationSystemABI, 'addresses.superPaymaster': SuperPaymasterV550ABI,
@@ -348,7 +348,13 @@ export async function runSp550CutoverGate(input: GateInput): Promise<GateResult>
         cmp('xPNTsFactoryV2.REGISTRY() == addresses.registry', await read(pins.xPNTsFactoryV2, xPNTsFactoryV2ABI, 'REGISTRY'), reg);
         cmp('PaymasterFactory.registry() == addresses.registry', await read(book.paymasterFactory as Address | undefined, PaymasterFactoryABI, 'registry'), reg);
         cmp('X402Facilitator.REGISTRY() == addresses.registry', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'REGISTRY'), reg);
-        cmp('X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV2', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'XPNTS_FACTORY'), pins.xPNTsFactoryV2);
+        // The 3.x factory, not the V2 one SP uses (DSR 2026-11-21; SP DeployLive.s.sol:467/479, D5-deploy-migration.md §1):
+        // X402's direct-path whitelist and GTokenAuthorization are bound to it, so it is pinned and its legs checked.
+        const v1 = pins.xPNTsFactoryV1;
+        cmp('X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV1', await read(book.x402Facilitator as Address | undefined, X402FacilitatorABI, 'XPNTS_FACTORY'), v1);
+        cmp('GTokenAuthorization.factory() == pins.xPNTsFactoryV1', await read(book.gToken as Address | undefined, GTokenAuthorizationRc8ABI, 'factory'), v1); // the SDK-wide GToken ABI has no factory()
+        cmp('xPNTsFactoryV1.REGISTRY() == addresses.registry', await read(v1, xPNTsFactoryABI, 'REGISTRY'), reg);
+        cmp('xPNTsFactoryV1.SUPERPAYMASTER() == pins.superPaymaster', await read(v1, xPNTsFactoryABI, 'SUPERPAYMASTER'), pins.superPaymaster);
         cmp('PaymasterV4 impl registry() == addresses.registry', await read(book.paymasterV4Impl as Address | undefined, PaymasterABI, 'registry'), reg);
         cmp('GlobalTierSource.REGISTRY() == addresses.registry', await read(pins.globalTierSource, GlobalTierSourceABI, 'REGISTRY'), reg);
         // Each deployed V4 paymaster instance: its Registry, EntryPoint and price feed are the stack's.

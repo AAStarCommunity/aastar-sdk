@@ -31,6 +31,8 @@ export const COEXIST_STACK_ENTRIES: Record<string, { artifact: string; explicit:
     'DVTValidator.json': { artifact: 'DVTValidator.sol/DVTValidator.json', explicit: fns('BLS_AGGREGATOR', 'REGISTRY'), scanned: true },
     'PolicyRegistry.json': { artifact: 'PolicyRegistry.sol/PolicyRegistry.json', explicit: [], scanned: true },
     'X402Facilitator.json': { artifact: 'X402Facilitator.sol/X402Facilitator.json', explicit: fns('REGISTRY', 'XPNTS_FACTORY'), scanned: true },
+    // The 3.x factory a fresh stack keeps (X402Facilitator.XPNTS_FACTORY, GTokenAuthorization.factory): DSR 2026-11-21.
+    'xPNTsFactory.json': { artifact: 'xPNTsFactory.sol/xPNTsFactory.json', explicit: fns('REGISTRY', 'SUPERPAYMASTER'), scanned: true },
     'TimelockController.json': { artifact: 'TimelockController.sol/TimelockController.default.json', explicit: [], scanned: true },
     'MicroPaymentChannel.json': { artifact: 'MicroPaymentChannel.sol/MicroPaymentChannel.json', explicit: [], scanned: true },
 };

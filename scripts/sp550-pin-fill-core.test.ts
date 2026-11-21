@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getAddress } from 'viem';
-import { pinFillPreflightRefusal, PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan } from './sp550-pin-fill-core.js';
+import { pinFillPreflightRefusal, PINS_FILE_ALIASES, SP_REPO, spCompareApiPath, UPGRADE_SWITCHABLE_KEYS, isLoopbackHost, spCommitOnMain, upgradeBookProblems, addressesOverlap, normalizeIp, applyBookSwitch, bookSwitch, changedEntries, fillPinsTable, isLoopbackUrl, spLiveReadbackProblems, spReadbackApiPath, withTimelockLegacy, writeAll, type WriteIo, parseManifestPins, switchBook, DEPLOYLIVE_ARCHIVE_PENDING, PIN_WRITE_BEFORE_ALLOWLIST, pinFillTargets, pinFillWritePlan, renderPinsLiteral } from './sp550-pin-fill-core.js';
 import { resolveSp550Network } from '../packages/core/src/sp550Deployments.js';
 import { sp550PinProblems, sp550PinnedAddressEntries } from '../packages/core/src/sp550Cutover.js';
 import { CANONICAL_ADDRESSES } from '../packages/core/src/addresses.js';
@@ -22,7 +22,7 @@ const MANIFEST = {
     spAdminExtension: A(0x1a), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0x1b), disclosureRegistry: A(0x1c), timelockController: 'n/a:none',
     addresses: { registry: A(0x21), policyRegistry: A(0x22), blsAggregator: A(0x23), dvtValidator: A(0x24), reputationSystem: A(0x25) },
 } as Record<string, any>;
-MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as any).map(([k], i) =>
+MANIFEST.codehashes = Object.fromEntries(sp550PinnedAddressEntries(MANIFEST as any).filter(([, a]) => a !== undefined).map(([k], i) =>
     [k, k === 'spImpl' ? MANIFEST.spImplCodehash : '0x' + (i + 1).toString(16).padStart(2, '0').repeat(32)]));
 
 /** Write `source` next to the real module so its imports resolve, import it, delete it. */
@@ -45,6 +45,18 @@ describe('parseManifestPins: the manifest is read the way the gate reads --pins,
         expect(() => parseManifestPins({ ...MANIFEST, lens: A(1) }, 'upgrade')).toThrow(/unknown key\(s\) for a upgrade deploy: lens/);
         expect(() => parseManifestPins({ ...MANIFEST, absent: ['pnts'] }, 'upgrade')).toThrow(/declares absence only for the timelock/);
         expect(parseManifestPins({ ...MANIFEST, addresses: {}, absent: [] }, 'fresh').addresses).toEqual({});
+    });
+    it('xPNTsFactoryV1 (the 3.x factory, DSR 2026-11-21) is a fresh-deploy key: passed through and rendered there, refused for an upgrade', () => {
+        const fresh = { ...MANIFEST, xPNTsFactoryV1: A(0x1d), codehashes: { ...MANIFEST.codehashes, xPNTsFactoryV1: '0x' + 'cd'.repeat(32) } };
+        const p = parseManifestPins(fresh, 'fresh');
+        expect(p.xPNTsFactoryV1).toBe(A(0x1d));
+        expect(p.codehashes?.xPNTsFactoryV1).toBe('0x' + 'cd'.repeat(32));
+        const lit = renderPinsLiteral(p);
+        expect(lit).toContain(`xPNTsFactoryV1: ${JSON.stringify(getAddress(A(0x1d)))},`);
+        // Rendered beside xPNTsFactoryV2, in the interface's order (top-level keys only: the nested ones are indented deeper).
+        const top = lit.split('\n').filter((l) => /^        [A-Za-z_]/.test(l)).map((l) => l.trim().split(':')[0]);
+        expect(top.slice(top.indexOf('xPNTsFactoryV2'), top.indexOf('xPNTsFactoryV2') + 3)).toEqual(['xPNTsFactoryV2', 'xPNTsFactoryV1', 'xPNTsTokenV2Impl']);
+        expect(() => parseManifestPins(fresh, 'upgrade')).toThrow(/unknown key\(s\) for a upgrade deploy: xPNTsFactoryV1/);
     });
     it('a readbackBlock that is not a block number is refused', () => {
         for (const rb of [-1, 1.5, '0x10', 'latest', 2 ** 60]) expect(() => parseManifestPins({ ...MANIFEST, readbackBlock: rb }, 'upgrade')).toThrow(/readbackBlock/);
@@ -79,7 +91,7 @@ describe('fillPinsTable on the real sp550Cutover.ts: the written entry IS the ma
         const pins = parseManifestPins(MANIFEST, 'upgrade');
         const m = await load('cut', fillPinsTable(source, 'SP550_CUTOVER_PINS', 11155111, pins));
         const got = m.SP550_CUTOVER_PINS[11155111];
-        const checksummed = Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([k]) => !k.startsWith('addresses.')).map(([k, a]) => [k, getAddress(a as string)]));
+        const checksummed = Object.fromEntries(sp550PinnedAddressEntries(pins).filter(([k, a]) => !k.startsWith('addresses.') && a !== undefined).map(([k, a]) => [k, getAddress(a as string)]));
         const book = Object.fromEntries(Object.entries(pins.addresses!).map(([k, a]) => [k, getAddress(a!)]));
         expect(got).toEqual({ ...pins, ...checksummed, addresses: book });
         expect(sp550PinProblems(got, { allowRc: true })).toEqual([]);
@@ -281,6 +293,17 @@ describe("--write's cross-check against SP's own live read-back (DSR, H3)", { ti
     ])('a disagreement stops --write: %s', (_n, mutate, msg) => {
         const rb = live(); mutate(rb);
         expect(spLiveReadbackProblems(rb, pins, 11155111, entries)).toEqual(expect.arrayContaining([expect.stringMatching(msg)]));
+    });
+    it('xPNTsFactoryV1 is read back under SP\'s own name for it, contracts.xPNTsFactory (Codex review of the 3.x pin)', () => {
+        const v1: any = { ...pins, xPNTsFactoryV1: A(0x1d), codehashes: { ...pins.codehashes, xPNTsFactoryV1: '0x' + 'cd'.repeat(32) } };
+        const rb = live();
+        rb.contracts.xPNTsFactory = { address: A(0x1d), codehash: '0x' + 'cd'.repeat(32) };
+        expect(spLiveReadbackProblems(rb, v1, 11155111, sp550PinnedAddressEntries(v1))).toEqual([]);
+        rb.contracts.xPNTsFactory.codehash = '0x' + '99'.repeat(32);
+        expect(spLiveReadbackProblems(rb, v1, 11155111, sp550PinnedAddressEntries(v1))).toEqual([expect.stringMatching(/contracts\.xPNTsFactory\.codehash .* != pins\.codehashes\.xPNTsFactoryV1/)]);
+        const named = live();
+        named.contracts.xPNTsFactoryV1 = { address: A(0x1d), codehash: '0x' + 'cd'.repeat(32) };
+        expect(spLiveReadbackProblems(named, v1, 11155111, sp550PinnedAddressEntries(v1))).toEqual([expect.stringMatching(/contracts\.xPNTsFactory missing \(pins\.xPNTsFactoryV1\)/)]);
     });
     it('fresh aliases (addresses.aPNTs / xPNTsFactory / superPaymaster) are read back under their top-level names (Codex r9)', () => {
         const aliased: any = { ...pins, addresses: { ...pins.addresses, aPNTs: pins.aPNTsCapped, xPNTsFactory: pins.xPNTsFactoryV2, superPaymaster: pins.superPaymaster },

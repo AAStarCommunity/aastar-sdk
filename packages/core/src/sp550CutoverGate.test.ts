@@ -35,7 +35,7 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
     const book = Object.fromEntries([...SP550_FRESH_REQUIRED_ADDRESS_KEYS, ...AGENT_REGISTRY_KEYS].map((k, i) => [k, A(0x100 + i)])) as Record<string, Address>;
     const p = {
         sp: book.superPaymaster, impl: A(1), lens: A(3), factory: A(4), tokenImpl: A(5), ext: A(6), aoa: A(7), tier: A(8), apnts: book.aPNTs,
-        admin: A(0xa), registryImpl: A(0xb), disclosure: A(0xc),
+        admin: A(0xa), registryImpl: A(0xb), disclosure: A(0xc), factoryV1: A(0xd),
     };
     // An upgrade certifies the SP-owned entries every read-back names; a fresh deploy the whole SP-owned book.
     // A fresh book's xPNTsFactory IS the V2 factory (sp550FreshPinProblems), so the fixture pins it rather than declaring it absent.
@@ -46,10 +46,10 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         xPNTsFactoryV2: p.factory, xPNTsTokenV2Impl: p.tokenImpl, xPNTsTokenV2Ext: p.ext, aoaProtocolRegistry: p.aoa,
         globalTierSource: p.tier, aPNTsCapped: p.apnts, readbackBlock: HEAD - 10n,
         spAdminExtension: p.admin, lensVersion: LENS_VERSION, registryImpl: p.registryImpl, disclosureRegistry: p.disclosure,
-        addresses: certified, ...(mode === 'fresh' ? { absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory' && !(AGENT_REGISTRY_KEYS as readonly string[]).includes(k)) } : {}),
+        addresses: certified, ...(mode === 'fresh' ? { xPNTsFactoryV1: p.factoryV1 } : {}), ...(mode === 'fresh' ? { absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory' && !(AGENT_REGISTRY_KEYS as readonly string[]).includes(k)) } : {}),
     };
     // The read-back runtime codehash of every pinned address (the model serves codeOf(address)).
-    const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
+    const pins = { ...base, codehashes: Object.fromEntries(sp550PinnedAddressEntries(base).filter(([, a]) => a !== undefined).map(([k, a]) => [k, keccak256(codeOf(a as Address))])) as Record<string, Hex> };
     const reads: Record<string, unknown> = {
         [`${p.sp}.version`]: SP_VERSION, [`${p.sp}.EXTENSION`]: p.admin, [`${p.lens}.version`]: LENS_VERSION, [`${p.sp}.APNTS_TOKEN`]: p.apnts, [`${p.sp}.xpntsFactory`]: p.factory,
         [`${p.sp}.REGISTRY`]: book.registry, [`${p.sp}.BLS_AGGREGATOR`]: book.blsAggregator,
@@ -74,7 +74,9 @@ function deployment(chainId: number, mode: 'fresh' | 'upgrade') {
         [`${book.staking}.REGISTRY`]: book.registry, [`${book.staking}.GTOKEN`]: book.gToken,
         [`${book.sbt}.REGISTRY`]: book.registry, [`${book.sbt}.GTOKEN_STAKING`]: book.staking, [`${book.sbt}.GTOKEN`]: book.gToken,
         [`${p.factory}.REGISTRY`]: book.registry, [`${book.paymasterFactory}.registry`]: book.registry, [`${book.x402Facilitator}.REGISTRY`]: book.registry,
-        [`${book.x402Facilitator}.XPNTS_FACTORY`]: p.factory, [`${book.paymasterV4Impl}.registry`]: book.registry, [`${p.tier}.REGISTRY`]: book.registry,
+        // X402 and GTokenAuthorization name the 3.x factory, not the V2 one (SP DeployLive.s.sol:467/479).
+        [`${book.x402Facilitator}.XPNTS_FACTORY`]: p.factoryV1, [`${book.gToken}.factory`]: p.factoryV1,
+        [`${p.factoryV1}.REGISTRY`]: book.registry, [`${p.factoryV1}.SUPERPAYMASTER`]: p.sp, [`${book.paymasterV4Impl}.registry`]: book.registry, [`${p.tier}.REGISTRY`]: book.registry,
     };
     // The SDK book that ships with these pins: a fresh stack's book IS the pinned SP-owned entries
     // (plus the external ones); an upgrade's book keeps its proxy and switches aPNTs / the factory.
@@ -938,7 +940,48 @@ describe('sepolia-rc8: a fresh stack coexisting with Sepolia 5.4.2 (DSR 2026-11-
         m = deployment(sepolia.id, 'fresh');
         m.reads[`${m.pins.addresses.x402Facilitator}.XPNTS_FACTORY`] = A(0xbeef); // not a pin, not the shipped stack
         r = await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins });
-        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV2']);
+        expect(r.results.filter((c) => !c.ok).map((c) => c.check)).toEqual(['X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV1']);
+    });
+
+    // DSR 2026-11-21 (op-sepolia-rc8 preview): X402Facilitator and GTokenAuthorization are bound to the 3.x factory by
+    // design (SP DeployLive.s.sol:467/479, D5-deploy-migration.md §1); SP.xpntsFactory() is the V2 one.
+    it('the 3.x factory: X402 and GTokenAuthorization must name pins.xPNTsFactoryV1, which is wired to this stack', async () => {
+        const run = async (m: Model) => failed(await rawGate({ network: 'sepolia-rc8', rpcs: twin(m), pins: m.pins }));
+        let m = deployment(sepolia.id, 'fresh');
+        expect(await run(m)).toEqual([]);
+        // The facilitator on the V2 factory (the expectation this replaces) fails.
+        m.reads[`${m.pins.addresses.x402Facilitator}.XPNTS_FACTORY`] = m.pins.xPNTsFactoryV2;
+        expect(await run(m)).toEqual(['X402Facilitator.XPNTS_FACTORY() == pins.xPNTsFactoryV1']);
+        m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.addresses.gToken}.factory`] = m.pins.xPNTsFactoryV2;
+        expect(await run(m)).toEqual(['GTokenAuthorization.factory() == pins.xPNTsFactoryV1']);
+        m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.xPNTsFactoryV1}.REGISTRY`] = shippedSepolia.registry;
+        expect(await run(m)).toContainEqual('xPNTsFactoryV1.REGISTRY() == addresses.registry');
+        m = deployment(sepolia.id, 'fresh');
+        m.reads[`${m.pins.xPNTsFactoryV1}.SUPERPAYMASTER`] = A(0xbeef);
+        expect(await run(m)).toEqual(['xPNTsFactoryV1.SUPERPAYMASTER() == pins.superPaymaster']);
+        // Its code is held to its read-back codehash like every pinned address.
+        m = deployment(sepolia.id, 'fresh');
+        m.code[m.pins.xPNTsFactoryV1 as string] = '0x6080dead';
+        expect(await run(m)).toContainEqual(expect.stringMatching(/codehashes\.xPNTsFactoryV1/));
+    });
+
+    it('the 3.x factory pin is required for a fresh stack, needs its codehash, and may not be the V2 factory', () => {
+        const m = deployment(sepolia.id, 'fresh');
+        const { xPNTsFactoryV1: _v1, ...noV1 } = m.pins as any;
+        delete noV1.codehashes; noV1.codehashes = { ...m.pins.codehashes }; delete noV1.codehashes.xPNTsFactoryV1;
+        expect(sp550NetworkPinProblems('sepolia-rc8', noV1).problems).toContainEqual(expect.stringMatching(/^xPNTsFactoryV1: unpinned/));
+        const noHash = { ...m.pins, codehashes: { ...m.pins.codehashes } } as any; delete noHash.codehashes.xPNTsFactoryV1;
+        expect(sp550NetworkPinProblems('sepolia-rc8', noHash).problems).toContainEqual(expect.stringMatching(/^codehashes\.xPNTsFactoryV1: unpinned/));
+        const same = { ...m.pins, xPNTsFactoryV1: m.pins.xPNTsFactoryV2, codehashes: { ...m.pins.codehashes, xPNTsFactoryV1: m.pins.codehashes.xPNTsFactoryV2 } };
+        expect(sp550NetworkPinProblems('sepolia-rc8', same).problems).toContainEqual(expect.stringMatching(/xPNTsFactoryV2 and xPNTsFactoryV1 are the same address/));
+        expect(sp550NetworkPinProblems('sepolia-rc8', m.pins).problems).toEqual([]);
+        // An upgrade keeps its factories: the pin is refused there.
+        const up = deployment(sepolia.id, 'upgrade');
+        expect(sp550NetworkPinProblems('sepolia', up.pins).problems).toEqual([]);
+        const upV1 = { ...up.pins, xPNTsFactoryV1: A(0xd), codehashes: { ...up.pins.codehashes, xPNTsFactoryV1: keccak256(codeOf(A(0xd))) } };
+        expect(sp550NetworkPinProblems('sepolia', upV1).problems).toEqual(['xPNTsFactoryV1: a fresh-deploy pin; an upgrade does not pin it']);
     });
 
     it('a chain-keyed fresh stack still passes after its switch put the pinned addresses into CANONICAL_ADDRESSES (Codex r5 H2)', async () => {

@@ -8,7 +8,7 @@ import * as path from 'path';
 import { getAddress, isAddress } from 'viem';
 import { SP550_CERTIFIED_ADDRESS_KEYS, type Sp550CutoverPins } from '../packages/core/src/sp550Cutover.js';
 import { SP550_PIN_ALIASES, sp550PinsFor, type Sp550FreshDeployPins, type Sp550NetworkEntry } from '../packages/core/src/sp550Deployments.js';
-import { BOOK_KEY_CONTRACT_ALIASES, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
+import { BOOK_KEY_CONTRACT_ALIASES, contractKeyOf, isNotDeployedPlaceholder } from './sp550-readback-compare-core.js';
 import { sp550WiringAllowListReady } from '../packages/core/src/sp550CutoverGate.js';
 export { isNotDeployedPlaceholder };
 import { isIP } from 'net';
@@ -24,7 +24,8 @@ const UPGRADE_KEYS = [
     'xPNTsFactoryV2', 'xPNTsTokenV2Impl', 'xPNTsTokenV2Ext', 'aoaProtocolRegistry', 'globalTierSource', 'aPNTsCapped',
     'registryImpl', 'disclosureRegistry', 'addresses', 'readbackBlock', 'codehashes',
 ] as const;
-const FRESH_KEYS = [...UPGRADE_KEYS, 'absent'] as const;
+// xPNTsFactoryV1 is fresh-only; it sits beside xPNTsFactoryV2, which is also the order renderPinsLiteral writes.
+const FRESH_KEYS = [...UPGRADE_KEYS.slice(0, UPGRADE_KEYS.indexOf('xPNTsFactoryV2') + 1), 'xPNTsFactoryV1', ...UPGRADE_KEYS.slice(UPGRADE_KEYS.indexOf('xPNTsFactoryV2') + 1), 'absent'] as const;
 /** Book key -> read-back contract key, as SP's pins files declare it in `_aliases` (derived from the comparator's table: one source). */
 export const PINS_FILE_ALIASES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(BOOK_KEY_CONTRACT_ALIASES).map(([k, v]) => [k, `contracts.${v}`]));
 
@@ -435,7 +436,7 @@ export function spLiveReadbackProblems(rb: any, pins: Sp550FreshDeployPins, chai
             if (!eqi(e?.[proxy[2]], h[name])) p.push(`SP read-back: contracts.${proxy[0]}.${proxy[2]} ${JSON.stringify(e?.[proxy[2]])} != pins.codehashes.${name} ${h[name]}`);
             continue;
         }
-        const key = name.startsWith('addresses.') ? (PINS_FILE_ALIASES[name.slice('addresses.'.length)]?.replace(/^contracts\./, '') ?? name.slice('addresses.'.length)) : name;
+        const key = contractKeyOf(name); // the comparator's naming: book aliases and top-level renames (xPNTsFactoryV1)
         const e = c[key];
         if (!e) { p.push(`SP read-back: contracts.${key} missing (pins.${name})`); continue; }
         if (!eqi(e.address, addr)) p.push(`SP read-back: contracts.${key}.address ${JSON.stringify(e.address)} != pins.${name} ${addr}`);

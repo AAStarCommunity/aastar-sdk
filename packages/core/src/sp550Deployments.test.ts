@@ -15,6 +15,7 @@ const FULL = {
     superPaymasterLens: A(3), xPNTsFactoryV2: A(4), xPNTsTokenV2Impl: A(5), xPNTsTokenV2Ext: A(6),
     aoaProtocolRegistry: A(7), globalTierSource: A(8), aPNTsCapped: BOOK.aPNTs, readbackBlock: 12_000_000n,
     spAdminExtension: A(0xa), lensVersion: 'SuperPaymasterLens-1.2.2', registryImpl: A(0xb), disclosureRegistry: A(0xc),
+    xPNTsFactoryV1: A(0xd), // the 3.x factory a fresh deploy keeps (X402Facilitator / GTokenAuthorization)
     // The book's aPNTs / xPNTsFactory are the aPNTsCapped / xPNTsFactoryV2 contracts (sp550FreshPinProblems).
     addresses: { ...BOOK, xPNTsFactory: A(4) } as Record<string, `0x${string}`>,
     absent: SP550_FRESH_OPTIONAL_ADDRESS_KEYS.filter((k) => k !== 'xPNTsFactory'),
@@ -170,7 +171,8 @@ describe('requireSp550UpgradePins: the full upgrade rule set for consumers (Grok
     const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
     const UP: any = { ...FULL, superPaymaster: A(0x2ff), addresses: book, absent: undefined };
     delete UP.absent;
-    UP.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.'))),
+    delete UP.xPNTsFactoryV1; // a fresh-only pin
+    UP.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.') && k !== 'xPNTsFactoryV1')),
         ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x70 + i).toString(16).repeat(32)])) };
     it('a complete upgrade set passes both', () => {
         expect(requireSp550UpgradePins(11155111, UP, { allowRc: true })).toBe(UP);
@@ -211,10 +213,10 @@ describe('validated getters accept a DisclosureRegistry declared absent (author 
     });
     it('upgrade', () => {
         const book = Object.fromEntries(SP550_CERTIFIED_ADDRESS_KEYS.map((k, i) => [k, A(0x300 + i)]));
-        const { absent: _a, ...up } = FULL as any;
+        const { absent: _a, xPNTsFactoryV1: _v1, ...up } = FULL as any; // xPNTsFactoryV1: a fresh-only pin
         up.superPaymaster = A(0x2ff);
         up.addresses = book;
-        up.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.'))),
+        up.codehashes = { ...Object.fromEntries(Object.entries((FULL as any).codehashes).filter(([k]) => !k.startsWith('addresses.') && k !== 'xPNTsFactoryV1')),
             ...Object.fromEntries(Object.keys(book).map((k, i) => [`addresses.${k}`, '0x' + (0x70 + i).toString(16).repeat(32)])) };
         const pins = drop(up);
         expect(requireSp550UpgradePins(sepolia.id, pins, { allowRc: true }).disclosureRegistry).toBeUndefined();

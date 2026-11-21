@@ -17,6 +17,24 @@ All notable changes to this project will be documented in this file.
 - Every sponsored op and C12 now records what it was charged per gas, `min(maxFee, baseFee + priority)` at its inclusion
   block (read by the receipt's block hash; a missing block or base fee fails the run), and the run fails unless
   `UserOperationEvent.actualGasCost == actualGasUsed × that price`.
+### SP 5.5.0 gate: X402Facilitator and GTokenAuthorization are held to the 3.x xPNTsFactory (`xPNTsFactoryV1`)
+
+- A fresh stack keeps two factories (SP `D5-deploy-migration.md` §1, `DeployLive.s.sol:467/479`): SuperPaymaster uses
+  `xPNTsFactoryV2` (the book's `xPNTsFactory`), while the 3.x factory is bound into GTokenAuthorization's `factory` and
+  X402Facilitator's `XPNTS_FACTORY`. The gate held the facilitator to the V2 factory,
+  which a correct rc.8 deploy fails (the op-sepolia-rc8 preview, DSR 2026-11-21: expectation wrong, not the deploy).
+- New pin `xPNTsFactoryV1` (top level, with `codehashes.xPNTsFactoryV1`): required for every fresh network
+  (`sepolia-rc8`, `op-sepolia-rc8`, `op-sepolia`, `op-mainnet`), not accepted in an upgrade manifest. The gate checks
+  `X402Facilitator.XPNTS_FACTORY()`, `GTokenAuthorization.factory()`, its `REGISTRY()` and `SUPERPAYMASTER()`, its codehash,
+  and scans its address getters; it may not share an address with the V2 factory.
+- Scope note (DSR 2026-11-21): X402 direct payment is treated as not enabled in 5.5.0. Its asset whitelist is
+  `XPNTS_FACTORY.isXPNTs(asset)`, i.e. tokens issued by the 3.x factory, and a production DeployLive issues none (aPNTs is
+  APNTsCapped, deployed directly, `DeployLive.s.sol:214-216`); on OP Sepolia the 3.x factory's `getDeployedCount()` is 0
+  and `isXPNTs(aPNTs)` is false. A community's V2 xPNTs is not on it either. The path needs both a token issued through
+  the 3.x factory and an approved facilitator before it can be used. The EIP-3009 `settleX402Payment` path was not
+  checked.
+- SP's read-back names this contract `contracts.xPNTsFactory`; the comparator and the `--write` cross-check map the pin
+  to that key (`TOP_LEVEL_CONTRACT_KEYS`).
 
 ### `op-sepolia-rc8`: the rc.8 rehearsal moves to OP Sepolia, next to its existing stack
 
