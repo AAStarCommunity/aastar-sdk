@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### `sp550-live-e2e`: optional `feePolicy`, `skipS3b` for OP networks, and each op's charged price from its receipt
+
+- `feePolicy` (`{ priorityFeePercentile, feeHistoryBlocks }`, optional) is passed as is to PaymasterClient's
+  `options.feePolicy` for S1, S1r and S3b. Omitted, the submit options are exactly as before (asserted). No floor, no
+  retry. The `op-sepolia-rc8` config uses p75 / 20 blocks, the SP planner's rule (DSR 2026-11-21). C12
+  (`createEndUserClient().executeGasless`) takes no fee policy and keeps the SDK default (p50 / 10); its row says so.
+- `skipS3b` (`{ reason }`, a non-empty reason required): S3b, its setup op included, is not sent and is reported
+  `NOT RUN (skipS3b: <reason>)`, never as a pass. Omitted, S3b runs as before. DSR ruled (B) for OP networks: the SP
+  allowance floor (250 aPNTs) is about 6,000 default-fee ops away there; the numbers, labelled as a calculation, are in
+  `docs/onchain-evidence/op-sepolia-s3b-renewal-reachability.md`.
+- Every sponsored op and C12 now records what it was charged per gas, `min(maxFee, baseFee + priority)` at its inclusion
+  block, and the run fails unless `UserOperationEvent.actualGasCost == actualGasUsed × that price`.
+
 ### `op-sepolia-rc8`: the rc.8 rehearsal moves to OP Sepolia, next to its existing stack
 
 - New SP 5.5.0 network `op-sepolia-rc8` (chain 11155420, `fresh`, `coexist: true`, `allowRc: true`), the same way

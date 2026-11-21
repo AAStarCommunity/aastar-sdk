@@ -42,6 +42,10 @@
  *     "taskToken"?: "0x…",                  // T: each op calls execute(T, 0, transfer(0x…dEaD, 1)); its balance is a precondition
  *     "frozenGas"?: { "verificationGasLimit": "…", … all five },  // a data collection: limits used verbatim, recorded per row
  *     "gasLimitCoefficientBps"?: 15000,     // the SDK's default when omitted; recorded per row
+ *     "feePolicy"?: { "priorityFeePercentile": 75, "feeHistoryBlocks": 20 },  // passed as is to PaymasterClient's
+ *                                            // options.feePolicy (S1, S1r, S3b); omitted = the SDK defaults, unchanged
+ *     "skipS3b"?: { "reason": "…" },        // OP networks only (DSR 2026-11-21): S3b, setup included, is NOT RUN and
+ *                                            // reported so, never counted as passed; omitted = S3b runs as before
  *     "requireFreshAccount"?: true          // mode fork (A7): the account must not exist before the run, and S1
  *                                            // (its first sponsored op: fresh lock / allowance slots) must succeed
  *   }
@@ -59,7 +63,8 @@
  *  5. S3b: lower the SP auto allowance to SP_CAP_FLOOR (a sponsored op of its own) if needed, then
  *     send ops until one carries SP_RENEW. For that op it asserts, from the chain: the flags byte
  *     in the bundled handleOps calldata, UserOperationEvent.success, AllowanceRenewed(user, SP,
- *     bySP=true) in the same receipt, and autoRenewUsed 0 -> 1.
+ *     bySP=true) in the same receipt, and autoRenewUsed 0 -> 1. With skipS3b (OP, DSR 2026-11-21) neither the setup
+ *     nor a spend is sent, and S3b is reported NOT RUN with the configured reason.
  *
  * Every op prints one RESULT line: success, S_user (signMessage calls), estimates / sends, the flags
  * byte, allowance and autoRenewUsed changes, AllowanceRenewed(bySP), the bundled postOpGasLimit, tx hash.
@@ -107,7 +112,7 @@ import { liveSignerApprovalProblem } from './sp550-live-approved-signers.js';
 import { forkSetup } from './sp550-e2e-fork-setup.js';
 import { applyBookSwitch, bookSwitch, parseManifestPins, upgradeBookProblems } from './sp550-pin-fill-core.js';
 import { forkAddressSetFromDeployLive, forkAddressSetProblems, isAnvilClient } from './sp550-deploylive-fork.js';
-import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall } from './sp550-e2e-checks.js';
+import { CostApprovals, maxRateFromPlan, checkoutContains, childEnv, guardedSignMessage, headFreshnessProblem, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, gasParamsDiff, gasParamsOf, sdkLivePlanProblems, signTimeCostProblems, type SdkLivePlan, gasSourceClient, redactUrls, signC12Transaction, snapshotChanges, type C12SignState, isSpRelayedRenewal, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, parseFeePolicy, feePolicyOption, parseSkipS3b, actualCostProblem, userOpGasPriceV07 } from './sp550-e2e-checks.js';
 
 const ZERO = '0x0000000000000000000000000000000000000000' as Address;
 const ANVIL_MNEMONIC = 'test test test test test test test test test test test junk';
@@ -205,6 +210,15 @@ async function main() {
     // A spending bound: a finite integer 1..32, validated before anything is read or signed.
     const maxOps = cfg.maxOps === undefined ? 8 : Number(cfg.maxOps);
     if (!Number.isSafeInteger(maxOps) || maxOps < 1 || maxOps > 32) refuse(`maxOps must be an integer from 1 to 32 (got ${JSON.stringify(cfg.maxOps)})`);
+    // DSR 2026-11-21: an optional fee policy, wired to the SDK's options.feePolicy as is (no floor, no retry).
+    const fp = parseFeePolicy(cfg.feePolicy);
+    if (fp.problem) refuse(fp.problem);
+    const feePolicy = fp.feePolicy;
+    // DSR 2026-11-21 (ruling B): on OP the allowance floor (SP_CAP_FLOOR, 250 aPNTs) is thousands of default-fee ops away,
+    // so S3b cannot reach SP_RENEW there. It may be skipped, with a stated reason; skipped is NOT RUN, never a pass.
+    const sk = parseSkipS3b(cfg.skipS3b);
+    if (sk.problem) refuse(sk.problem);
+    const skipS3bReason = sk.reason;
     // M1: the release gasParams tuple, shape-checked before anything is read (compared with the snapshot below).
     if (cfg.expectMinPostOpGas !== undefined) refuse('expectMinPostOpGas is replaced by expectGasParams { minPostOpGas, settleGasBound, cWrap, cPostop }');
     const GP_KEYS = ['minPostOpGas', 'settleGasBound', 'cWrap', 'cPostop'] as const;
@@ -671,7 +685,7 @@ async function main() {
     const committedMaxRate = maxRateFromPlan(sdkPlan);
     const submitOpts = (onGasDecided: (d: GasDecision) => void) => ({ operator, onGasDecided, requireEstimate: true, noDirectSendFallback: true,
         maxUserOpCostWei: opMaxCostWei, beforeSignUserOp: costHook, maxRate: committedMaxRate,
-        ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}) });
+        ...(frozenGas ? { frozenGas } : {}), ...(gasLimitCoefficientBps !== undefined ? { gasLimitCoefficientBps } : {}), ...feePolicyOption(feePolicy) });
     const op = async (label: string, callData: Hex, o: { spaced?: boolean } = {}) => {
         if (o.spaced !== false) await spaced();
         SuperPaymasterInflightGuard.clearAll();
@@ -711,8 +725,12 @@ async function main() {
             try { const d: any = decodeEventLog({ abi: EntryPointABI as Abi, data: l.data, topics: l.topics }); if (d.eventName === 'UserOperationEvent' && d.args.userOpHash.toLowerCase() === opHash.toLowerCase() && getAddress(d.args.sender) === account) ev = d.args; } catch { /* other events */ }
         }
         if (!ev) fail(`${label}: no EntryPoint UserOperationEvent for ${opHash} in tx ${txHash}`);
-        const rc = { success: ev.success as boolean, nonce: BigInt(ev.nonce), actualGasUsed: BigInt(ev.actualGasUsed) };
+        const rc = { success: ev.success as boolean, nonce: BigInt(ev.nonce), actualGasUsed: BigInt(ev.actualGasUsed), actualGasCost: BigInt(ev.actualGasCost) };
         const bundled = await onChainOp(txHash, rc.nonce);
+        // DSR 2026-11-21: what the op was charged per gas, from its own receipt and inclusion block.
+        const inclusionBaseFee = BigInt((await pub.getBlock({ blockNumber: chainRc.blockNumber })).baseFeePerGas ?? 0n);
+        const paid = userOpGasPriceV07(bundled.maxFeePerGas, bundled.maxPriorityFeePerGas, inclusionBaseFee);
+        const costProblem = actualCostProblem(rc, bundled, inclusionBaseFee);
         const { flags, postOpGasLimit } = bundled;
         const logs = chainRc.logs as any[];
         // Efficiency (B5): the bundler's own check compares actual use with the limits it was given.
@@ -727,6 +745,7 @@ async function main() {
             `flags=0x${flags.toString(16).padStart(2, '0')} (SDK-selected) ` +
             `allowance used ${before.used}->${after.used}/${after.cap} autoRenewUsed ${before.renewUsed}->${after.renewUsed} ` +
             `AllowanceRenewed(bySP)=${renewedInline} postOpGasLimit=${postOpGasLimit} actualGasUsed=${actualGasUsed} efficiency=${efficiency} · ${gasRow(decision)} · ` +
+            `charged per gas ${paid} = min(maxFee, baseFee ${inclusionBaseFee} + priority) actualGasCost=${rc.actualGasCost} · ` +
             `checked at block ${lastCheckBlock}, included in block ${chainRc.blockNumber} · tx ${txHash}`);
         if (decision === undefined) fail(`${label}: the SDK reported no gas decision (onGasDecided) for a sent op`);
         // What was bundled must be what the decision says (not only what the callback reported), and frozen = verbatim.
@@ -736,6 +755,7 @@ async function main() {
         if (bundled.paymaster !== getAddress(sp)) fail(`${label}: bundled paymaster ${bundled.paymaster} is not ${sp}`);
         if (frozenGas && FIELDS.some((k) => bundled.limits[k] !== frozenGas![k])) fail(`${label}: frozenGas was not used verbatim (${gasRow(decision)})`);
         if (rc.success !== true) fail(`${label}: UserOperationEvent.success=${rc.success}`);
+        if (costProblem) fail(`${label}: ${costProblem}`);
         // The floor the SDK applies, held on what was actually bundled (not on the getter alone).
         if (postOpGasLimit < expectMinPostOpGas) fail(`${label}: bundled paymasterPostOpGasLimit ${postOpGasLimit} < minPostOpGas ${expectMinPostOpGas}`);
         await settledUnderSnapshot(label, chainRc.blockNumber);
@@ -816,26 +836,33 @@ async function main() {
         }
 
         // ---- 5. S3b inline renewal ----
-        let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
-        if (!renewal) {
-            const floor = BigInt(await tok('SP_CAP_FLOOR'));
-            if ((await state()).cap > floor) {
-                // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
-                // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
-                const setup = await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
-                    abi: SimpleAccountABI, functionName: 'execute',
-                    args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
-                }));
-                if (setup.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = setup;
+        if (skipS3bReason !== undefined) {
+            // Setup included: no allowance is lowered without the spends that follow it.
+            const sNow = await state();
+            result(`S3b inline renewal: NOT RUN (skipS3b: ${skipS3bReason}) — not counted as passed; S3b setup not sent, allowance ${sNow.used}/${sNow.cap} left as is` +
+                `${s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? ' · note: S1 itself carried SP_RENEW (recorded in its own row)' : ''}`);
+        } else {
+            let renewal = s1.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW ? s1 : undefined;
+            if (!renewal) {
+                const floor = BigInt(await tok('SP_CAP_FLOOR'));
+                if ((await state()).cap > floor) {
+                    // The setup op is itself sponsored: if the SDK chose SP_RENEW for it, op() already verified the renewal
+                    // (AllowanceRenewed bySP, autoRenewUsed +1) and that IS the behaviour under test — counted, no more spending.
+                    const setup = await op(`S3b setup: setAutoAllowance(SP, SP_CAP_FLOOR=${floor})`, encodeFunctionData({
+                        abi: SimpleAccountABI, functionName: 'execute',
+                        args: [token, 0n, encodeFunctionData({ abi: xPNTsTokenV2ABI, functionName: 'setAutoAllowance', args: [sp, floor] })],
+                    }));
+                    if (setup.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = setup;
+                }
+                for (let i = 1; i <= maxOps && !renewal; i++) {
+                    const r = await op(`S3b spend ${i}/${maxOps}`, noop);
+                    if (r.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = r;
+                }
             }
-            for (let i = 1; i <= maxOps && !renewal; i++) {
-                const r = await op(`S3b spend ${i}/${maxOps}`, noop);
-                if (r.flags & SUPER_PAYMASTER_FLAGS.SP_RENEW) renewal = r;
-            }
+            if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
+            // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
+            result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
         }
-        if (!renewal) fail(`S3b: no op needed SP_RENEW within ${maxOps} ops (raise maxOps; the allowance used is ${(await state()).used})`);
-        // renewalConsistencyProblems already held this op to: AllowanceRenewed(bySP=true), autoRenewUsed +1.
-        result(`S3b inline renewal: SP_RENEW chosen by the SDK, in paymasterAndData[${SUPER_PAYMASTER_PMD_OFFSETS.FLAGS}] of tx ${renewal!.txHash}; success=true; AllowanceRenewed(bySP=true); autoRenewUsed +1; user signatures for the op incl. the renewal: 1`);
 
         // ---- 6. C12: createEndUserClient().executeGasless, self-bundled handleOps from the user's EOA (paid in ETH) ----
         await spaced();
@@ -891,6 +918,12 @@ async function main() {
             const outer = await pub.getTransaction({ hash: tx });
             if (outer.gas !== c12.handleOps.gasLimit) fail(`C12: handleOps gas ${outer.gas} is not the reported ${c12.handleOps.gasLimit}`);
             if (rc.status !== 'success' || ev?.success !== true) fail('C12: the self-bundled op did not succeed');
+            // DSR 2026-11-21: what the op was charged per gas, from its own receipt and inclusion block.
+            const c12Base = BigInt((await pub.getBlock({ blockNumber: rc.blockNumber })).baseFeePerGas ?? 0n);
+            const c12Cost = { actualGasCost: BigInt(ev.actualGasCost), actualGasUsed: BigInt(ev.actualGasUsed) };
+            result(`C12: charged per gas ${userOpGasPriceV07(mined.maxFeePerGas, mined.maxPriorityFeePerGas, c12Base)} = min(maxFee ${mined.maxFeePerGas}, baseFee ${c12Base} + priority ${mined.maxPriorityFeePerGas}) actualGasCost=${c12Cost.actualGasCost} actualGasUsed=${c12Cost.actualGasUsed} (default fee policy: the C12 path takes no feePolicy)`);
+            const c12CostProblem = actualCostProblem(c12Cost, mined, c12Base);
+            if (c12CostProblem) fail(`C12: ${c12CostProblem}`);
             await settledUnderSnapshot('C12', rc.blockNumber);
             if (getAddress(rc.from) !== getAddress(base.address)) fail(`C12: handleOps was sent by ${rc.from}, not the user's EOA`);
             if (signs !== 1) fail(`C12: signMessage ${signs} times; one signature for the op`);

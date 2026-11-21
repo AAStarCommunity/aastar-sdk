@@ -693,3 +693,50 @@ export function checkoutContains(repoDir: string, commit: string, git: (args: st
     if (!/^[0-9a-f]{40}$/.test(commit)) return false;
     return git(['merge-base', '--is-ancestor', commit, 'HEAD'], repoDir) === 0;
 }
+
+/**
+ * The run config's optional fee policy (DSR 2026-11-21), passed as is to PaymasterClient's options.feePolicy for the
+ * ops this runner submits through it (S1, S1r, S3b). Omitted -> undefined, and the SDK defaults apply unchanged.
+ * No floor, no retry: a priority of 0 is sent as computed.
+ */
+export function parseFeePolicy(v: unknown): { feePolicy?: { priorityFeePercentile: number; feeHistoryBlocks: number }; problem?: string } {
+    if (v === undefined) return {};
+    const keys = ['priorityFeePercentile', 'feeHistoryBlocks'];
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => !keys.includes(k))) return { problem: `feePolicy must be { priorityFeePercentile, feeHistoryBlocks } (got ${JSON.stringify(v)})` };
+    const { priorityFeePercentile: p, feeHistoryBlocks: b } = v as Record<string, unknown>;
+    if (!Number.isInteger(p) || (p as number) < 0 || (p as number) > 100) return { problem: `feePolicy.priorityFeePercentile must be an integer from 0 to 100 (got ${JSON.stringify(p)})` };
+    if (!Number.isInteger(b) || (b as number) < 1 || (b as number) > 1024) return { problem: `feePolicy.feeHistoryBlocks must be an integer from 1 to 1024 (got ${JSON.stringify(b)})` };
+    return { feePolicy: { priorityFeePercentile: p as number, feeHistoryBlocks: b as number } };
+}
+
+/** The submit-option fragment for a parsed fee policy: nothing at all when it is omitted (the SDK defaults, unchanged). */
+export const feePolicyOption = (p: { priorityFeePercentile: number; feeHistoryBlocks: number } | undefined) => (p ? { feePolicy: p } : {});
+
+/**
+ * The run config's skipS3b (DSR 2026-11-21, ruling B): { reason: non-empty string }. Omitted -> S3b runs as before.
+ * A skipped S3b is reported NOT RUN with the reason, never as a pass, and its setup op is not sent either.
+ */
+export function parseSkipS3b(v: unknown): { reason?: string; problem?: string } {
+    if (v === undefined) return {};
+    if (!v || typeof v !== 'object' || Array.isArray(v) || Object.keys(v).some((k) => k !== 'reason')) return { problem: `skipS3b must be { reason: "<why>" } (got ${JSON.stringify(v)})` };
+    const r = (v as { reason?: unknown }).reason;
+    if (typeof r !== 'string' || r.trim() === '') return { problem: 'skipS3b.reason must be a non-empty string: a skipped cell is reported with why it did not run' };
+    return { reason: r.trim() };
+}
+
+/**
+ * EntryPoint v0.7's per-gas price for an op (EntryPoint.sol getUserOpGasPrice): maxFee when maxFee == priority, else
+ * min(maxFee, priority + block.basefee). Used to show, from each op's own receipt, what it was actually charged.
+ */
+export function userOpGasPriceV07(maxFeePerGas: bigint, maxPriorityFeePerGas: bigint, baseFeePerGas: bigint): bigint {
+    if (maxFeePerGas === maxPriorityFeePerGas) return maxFeePerGas;
+    const p = maxPriorityFeePerGas + baseFeePerGas;
+    return p < maxFeePerGas ? p : maxFeePerGas;
+}
+
+/** UserOperationEvent.actualGasCost must equal actualGasUsed x the v0.7 gas price at the inclusion block. */
+export function actualCostProblem(ev: { actualGasCost: bigint; actualGasUsed: bigint }, fees: { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint }, baseFeePerGas: bigint): string | undefined {
+    const price = userOpGasPriceV07(fees.maxFeePerGas, fees.maxPriorityFeePerGas, baseFeePerGas);
+    return ev.actualGasCost === ev.actualGasUsed * price ? undefined
+        : `actualGasCost ${ev.actualGasCost} != actualGasUsed ${ev.actualGasUsed} x min(maxFee ${fees.maxFeePerGas}, baseFee ${baseFeePerGas} + priority ${fees.maxPriorityFeePerGas}) = ${ev.actualGasUsed * price}`;
+}

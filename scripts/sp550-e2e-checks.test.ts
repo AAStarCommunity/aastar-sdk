@@ -14,7 +14,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { encodeSuperPaymasterData, SUPER_PAYMASTER_FLAGS } from '../packages/core/src/superPaymasterData.js';
 import { isSpRelayedRenewal, flagsFromPaymasterData, opSigningProblems, renewalConsistencyProblems, tapBundler, type BundlerCall, gasSourceClient, CostApprovals, checkoutContains, guardedSignMessage, headFreshnessProblem, MAX_BLOCKS_SINCE_CHECK, readPlanFile, readPricingAt, livePlanGateProblems, maxCostDigitsProblem, parsePlanJson, sdkLivePlanProblems, signTimeCostProblems, c12TransactionProblems, gasParamsDiff, gasParamsOf, packedUserOpHashV07, redactUrls, signC12Transaction, snapshotChanges, type C12SignState } from './sp550-e2e-checks.js';
-import { maxRateFromPlan } from './sp550-e2e-checks.js';
+import { maxRateFromPlan, feePolicyOption, parseFeePolicy, parseSkipS3b, userOpGasPriceV07, actualCostProblem } from './sp550-e2e-checks.js';
 
 // This file spawns git (checkoutContains): every top-level describe carries an explicit timeout.
 const SPAWN_VERDICT_TIMEOUT_MS = 30_000;
@@ -634,5 +634,53 @@ describe('the cost path, behaviourally (Daybreak #470 L3)', { timeout: SPAWN_VER
         const io: any = { approvals: new CostApprovals(), budget: () => ({ used: 0, limit: 1 }), takeSlot: () => {}, beforeSign: async () => {}, costAtKey: async () => {}, fresh: async () => {}, sign: async () => { keys++; return '0x' as Hex; } };
         await expect(guardedSignMessage({ message: { raw: ('0x' + 'ee'.repeat(32)) as Hex } }, io)).rejects.toThrow(/no cost check approved/);
         expect(keys).toBe(0);
+    });
+});
+
+describe('feePolicy config (DSR 2026-11-21): wired as is, omitted = SDK defaults', () => {
+    it('omitted yields no policy, and the submit options gain no key at all (byte-for-byte the previous options)', () => {
+        expect(parseFeePolicy(undefined)).toEqual({});
+        const before = { operator: '0x1', requireEstimate: true };
+        expect(JSON.stringify({ ...before, ...feePolicyOption(parseFeePolicy(undefined).feePolicy) })).toBe(JSON.stringify(before));
+        expect({ ...before, ...feePolicyOption({ priorityFeePercentile: 75, feeHistoryBlocks: 20 }) }).toEqual({ ...before, feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+    });
+    it('a full policy passes through unchanged', () => {
+        expect(parseFeePolicy({ priorityFeePercentile: 75, feeHistoryBlocks: 20 })).toEqual({ feePolicy: { priorityFeePercentile: 75, feeHistoryBlocks: 20 } });
+        expect(parseFeePolicy({ priorityFeePercentile: 0, feeHistoryBlocks: 1 }).feePolicy).toEqual({ priorityFeePercentile: 0, feeHistoryBlocks: 1 });
+    });
+    it.each([
+        ['an unknown key', { priorityFeePercentile: 75, feeHistoryBlocks: 20, floor: 1 }],
+        ['a missing field', { priorityFeePercentile: 75 }],
+        ['a percentile above 100', { priorityFeePercentile: 101, feeHistoryBlocks: 20 }],
+        ['a fractional percentile', { priorityFeePercentile: 7.5, feeHistoryBlocks: 20 }],
+        ['zero blocks', { priorityFeePercentile: 75, feeHistoryBlocks: 0 }],
+        ['a string', { priorityFeePercentile: '75', feeHistoryBlocks: 20 }],
+        ['an array', [75, 20]],
+        ['null', null],
+    ])('refuses %s', (_n, v) => expect(parseFeePolicy(v).problem).toMatch(/^feePolicy/));
+});
+
+describe('skipS3b (DSR 2026-11-21, ruling B): explicit, with a reason; omitted = S3b runs as before', () => {
+    it('omitted: no skip', () => expect(parseSkipS3b(undefined)).toEqual({}));
+    it('a reason is required and kept', () => {
+        expect(parseSkipS3b({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' })).toEqual({ reason: 'OP: SP_CAP_FLOOR is thousands of default-fee ops away' });
+        expect(parseSkipS3b({ reason: '  trimmed  ' }).reason).toBe('trimmed');
+    });
+    it.each([
+        ['true', true], ['an empty reason', { reason: '' }], ['a blank reason', { reason: '   ' }], ['no reason', {}],
+        ['a non-string reason', { reason: 1 }], ['an unknown key', { reason: 'x', pass: true }], ['an array', ['x']], ['null', null],
+    ])('refuses %s', (_n, v) => expect(parseSkipS3b(v).problem).toMatch(/^skipS3b/));
+});
+
+describe('EntryPoint v0.7 gas price, held on each op\'s receipt (DSR 2026-11-21)', () => {
+    it('min(maxFee, baseFee + priority); maxFee when it equals the priority', () => {
+        expect(userOpGasPriceV07(2_900_000_000n, 500_000n, 250n)).toBe(500_250n); // the renewal override: the price is unchanged
+        expect(userOpGasPriceV07(1_000n, 900n, 250n)).toBe(1_000n);
+        expect(userOpGasPriceV07(900n, 900n, 250n)).toBe(900n);
+    });
+    it('actualGasCost must equal actualGasUsed x that price', () => {
+        const fees = { maxFeePerGas: 2_900_000_000n, maxPriorityFeePerGas: 500_000n };
+        expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 500_250n }, fees, 250n)).toBeUndefined();
+        expect(actualCostProblem({ actualGasUsed: 400_000n, actualGasCost: 400_000n * 2_900_000_000n }, fees, 250n)).toMatch(/actualGasCost .* != actualGasUsed/);
     });
 });
