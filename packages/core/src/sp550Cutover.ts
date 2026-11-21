@@ -39,9 +39,10 @@ export interface Sp550CutoverPins {
     lensVersion?: string;
     xPNTsFactoryV2?: Address;
     /**
-     * The 3.x xPNTsFactory a fresh deploy keeps beside the V2 one (SP D5-deploy-migration.md §1): it deploys the
-     * protocol aPNTs, GTokenAuthorization's `factory` is bound to it, and X402Facilitator's XPNTS_FACTORY whitelist
-     * reads it (DeployLive.s.sol:467/479). SP.xpntsFactory() and the book's xPNTsFactory are the V2 one. Fresh only.
+     * The 3.x xPNTsFactory a fresh deploy keeps beside the V2 one (SP D5-deploy-migration.md §1): GTokenAuthorization's
+     * `factory` is bound to it, and X402Facilitator's XPNTS_FACTORY whitelist reads it (DeployLive.s.sol:467/479).
+     * A production DeployLive issues no token from it (aPNTs is APNTsCapped, deployed directly: DeployLive.s.sol:214-216).
+     * SP.xpntsFactory() and the book's xPNTsFactory are the V2 one. Fresh only.
      */
     xPNTsFactoryV1?: Address;
     xPNTsTokenV2Impl?: Address;

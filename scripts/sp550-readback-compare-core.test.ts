@@ -405,6 +405,9 @@ describe('book keys renamed in the read-back (SP: staking -> gTokenStaking)', ()
         expect(contractKeyOf('addresses.staking')).toBe('gTokenStaking');
         expect(contractKeyOf('addresses.registry')).toBe('registry');
         expect(contractKeyOf('superPaymaster')).toBe('superPaymaster');
+        // The 3.x factory pin is named xPNTsFactory in SP's read-back (readback-policy.json); V2 keeps its own name.
+        expect(contractKeyOf('xPNTsFactoryV1')).toBe('xPNTsFactory');
+        expect(contractKeyOf('xPNTsFactoryV2')).toBe('xPNTsFactoryV2');
     });
 });
 
